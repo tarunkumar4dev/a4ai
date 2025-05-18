@@ -1,0 +1,5 @@
+
+project_id = "dcmnzvjftmdbywrjkust"
+
+[functions.generate-test]
+verify_jwt = true
