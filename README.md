@@ -1,73 +1,64 @@
-# Welcome to your Lovable project
+a4ai – AI-Powered Solutions Platform
+Accelerating Innovation with Artificial Intelligence
 
-## Project info
+Project Overview
+Live URL: https://a4ai.in
+Mission: Democratizing AI tools for businesses and developers.
 
-**URL**: https://lovable.dev/projects/da4fde98-a178-4daf-9f35-89d2ecc81f7c
+Development Workflow
+1. Collaborative Editing
+Via GitHub:
 
-## How can I edit this code?
+bash
+git clone https://github.com/[your-org]/a4ai.git
+cd a4ai
+npm install
+npm run dev  # Local dev server (http://localhost:5173)
+Direct GitHub Edits:
+Edit files via GitHub UI (pencil icon) for quick fixes.
 
-There are several ways of editing your application.
+2. Tech Stack
+Frontend: React + TypeScript (Vite)
 
-**Use Lovable**
+Styling: Tailwind CSS + shadcn/ui
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/da4fde98-a178-4daf-9f35-89d2ecc81f7c) and start prompting.
+Deployment: Vercel (CI/CD via GitHub)
 
-Changes made via Lovable will be committed automatically to this repo.
+Production Deployment
+Automated Deploys
+Push to main branch triggers Vercel production deployment.
 
-**Use your preferred IDE**
+Manual redeploys: Vercel Dashboard.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Custom Domain (Hostinger)
+Configured via Vercel:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+txt
+CNAME: a4ai.in → cname.vercel-dns.com
+Domain Settings Guide.
 
-Follow these steps:
+Team Guidelines
+Code Standards
+Commits: Follow Conventional Commits.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+Branches: feature/, fix/, release/ prefixes.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+Critical Files
+src/: Core application logic.
 
-# Step 3: Install the necessary dependencies.
-npm i
+public/: Assets (favicon: ICON.ico).
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+vite.config.ts: Build configuration.
 
-**Edit a file directly in GitHub**
+Support & Maintenance
+Issues?
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Check Vercel Deployment Logs.
 
-**Use GitHub Codespaces**
+Clear cache: npm run clean && npm run build.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Scale Up:
 
-## What technologies are used for this project?
+Enable Vercel Analytics for performance monitoring.
 
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/da4fde98-a178-4daf-9f35-89d2ecc81f7c) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+© 2024 a4ai Technologies | Privacy Policy | Contact
