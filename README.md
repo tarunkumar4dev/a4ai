@@ -67,7 +67,7 @@ Here's a professional, production-ready rewrite for your **a4ai** project docume
 
 ---
 
-**© 2024 a4ai Technologies** | [Privacy Policy](#) | [Contact](#)  
+**© 2025 a4ai Technologies** | [Privacy Policy](#) | [Contact](#)  
 
 --- 
 
