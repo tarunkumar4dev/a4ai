@@ -48,7 +48,7 @@ const SignupPage = () => {
       setIsLoading(false);
       toast({
         title: "Account created with Google",
-        description: "Welcome to Zolvio.ai!",
+        description: "Welcome to a4ai!",
       });
       navigate("/dashboard");
     }, 1500);
@@ -60,12 +60,12 @@ const SignupPage = () => {
         <div className="mx-auto w-full max-w-md">
           <div className="text-center">
             <Link to="/" className="inline-block">
-              <span className="text-2xl font-extrabold logo">Zolvio.ai</span>
+              <span className="text-2xl font-extrabold logo">a4ai</span>
             </Link>
             <h2 className="mt-6 text-3xl font-bold">Create your account</h2>
             <p className="mt-2 text-gray-600">
               Already have an account?{" "}
-              <Link to="/login" className="text-zolvio-purple hover:underline">
+              <Link to="/login" className="text-a4ai-purple hover:underline">
                 Sign in
               </Link>
             </p>
@@ -165,11 +165,11 @@ const SignupPage = () => {
                 />
                 <label htmlFor="acceptTerms" className="ml-2 text-sm text-gray-600">
                   I agree to the{" "}
-                  <Link to="/terms" className="text-zolvio-purple hover:underline">
+                  <Link to="/terms" className="text-a4ai-purple hover:underline">
                     Terms of Service
                   </Link>{" "}
                   and{" "}
-                  <Link to="/privacy" className="text-zolvio-purple hover:underline">
+                  <Link to="/privacy" className="text-a4ai-purple hover:underline">
                     Privacy Policy
                   </Link>
                 </label>
@@ -178,7 +178,7 @@ const SignupPage = () => {
               <Button
                 type="submit"
                 disabled={isLoading || !formValues.acceptTerms}
-                className="w-full bg-zolvio-purple hover:bg-zolvio-purple-hover"
+                className="w-full bg-a4ai-purple hover:bg-a4ai-purple-hover"
               >
                 {isLoading ? "Creating account..." : "Create account"}
               </Button>
@@ -188,10 +188,10 @@ const SignupPage = () => {
       </div>
       
       {/* Right side with image or pattern */}
-      <div className="hidden lg:block relative flex-1 bg-zolvio-purple">
+      <div className="hidden lg:block relative flex-1 bg-a4ai-purple">
         <div className="absolute inset-0 flex items-center justify-center text-white">
           <div className="max-w-md text-center p-8">
-            <h2 className="text-3xl font-bold mb-6">Join Zolvio.ai Today</h2>
+            <h2 className="text-3xl font-bold mb-6">Join a4ai Today</h2>
             <p className="text-xl">
               Create customized, high-quality test papers in minutes using the power of AI.
             </p>

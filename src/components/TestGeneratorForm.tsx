@@ -84,7 +84,7 @@ const TestGeneratorForm = () => {
         <div className="flex flex-col sm:flex-row items-center gap-4">
           <Button 
             type="submit" 
-            className="w-full sm:w-auto bg-zolvio-purple hover:bg-zolvio-purple-hover"
+            className="w-full sm:w-auto bg-a4ai-purple hover:bg-a4ai-purple-hover"
             disabled={isLoading}
           >
             {isLoading ? "Generating..." : "Generate Test Paper"}
