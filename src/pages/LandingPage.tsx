@@ -24,8 +24,8 @@ const LandingPage = () => {
   const founders = [
     {
       name: "Tarun",
-      role: "Co-Founder, CEO",
-      description: "Visionary leader driving company strategy and growth",
+      role: "Team Member",
+      description: "Tech Team",
       initials: "TA",
       image: "/images/tarun_a4ai.jpeg",
       linkedin: "#",
@@ -33,8 +33,8 @@ const LandingPage = () => {
     },
     {
       name: "Yash",
-      role: "Co-Founder, CTO",
-      description: "Tech innovator building our cutting-edge platform",
+      role: "Team Member",
+      description: "Tech Team",
       initials: "YA",
       image: "/images/yash_a4ai.jpeg",
       linkedin: "#",
@@ -42,8 +42,8 @@ const LandingPage = () => {
     },
     {
       name: "Aakash",
-      role: "Co-Founder, Market Head",
-      description: "Marketing expert connecting us with our audience",
+      role: "Team Member",
+      description: "Operations Team",
       initials: "AK",
       image: "/images/aakash_a4ai.jpg",
       linkedin: "#",
@@ -51,8 +51,8 @@ const LandingPage = () => {
     },
     {
       name: "Krishna",
-      role: "Co-Founder, Operations Lead",
-      description: "Operations maestro ensuring everything runs smoothly",
+      role: "Team Member",
+      description: "Operations Team",
       initials: "KR",
       image: "/images/krishna_a4ai.jpg",
       linkedin: "#",

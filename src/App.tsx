@@ -13,16 +13,16 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
 import TestGeneratorPage from "./pages/TestGeneratorPage";
-import PricingPage from "./pages/pricing";
-import NotFound from "./pages/NotFound";
-import DemoPage from "./pages/demo";
-import APIPage from "./pages/api";
-import DocumentationPage from "./pages/documentation";
-import HelpCentrePage from "./pages/help";
-import BlogPage from "./pages/blogs";
-import CaseStudiesPage from "./pages/case studies";
-import CareersPage from "./pages/careers";
-import PrivacyPolicyPage from "./pages/privacy";
+// import PricingPage from "./pages/pricing";
+// import NotFound from "./pages/NotFound";
+// import DemoPage from "./pages/demo";
+// import APIPage from "./pages/api";
+// import DocumentationPage from "./pages/documentation";
+// import HelpCentrePage from "./pages/help";
+// import BlogPage from "./pages/blogs";
+// import CaseStudiesPage from "./pages/case studies";
+// import CareersPage from "./pages/careers";
+// import PrivacyPolicyPage from "./pages/privacy";
 
 const queryClient = new QueryClient();
 
@@ -41,7 +41,7 @@ const App = () => (
           <Route path="/features" element={<FeaturesPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
+          {/* <Route path="/pricing" element={<PricingPage />} />
           <Route path="/demo" element={<DemoPage />} />
           <Route path="/api" element={<APIPage />} />
           <Route path="*" element={<NotFound />} />
@@ -50,7 +50,7 @@ const App = () => (
           <Route path="/case studies" element={<CaseStudiesPage />} />
           <Route path="/blogs" element={<BlogPage />} />
           <Route path="/careers" element={<CareersPage />} />
-          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/privacy" element={<PrivacyPolicyPage />} /> */}
 
         </Routes>
       </BrowserRouter>
