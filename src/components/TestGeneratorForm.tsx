@@ -1,65 +1,104 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { TestFormValues } from "@/utils/testGeneratorOptions";
-import { generateTest } from "@/utils/testGeneratorService";
+import { Loader2 } from "lucide-react";
+
 import TestFormSection from "./TestFormSection";
 import ErrorMessage from "./ErrorMessage";
 import GeneratedTest from "./GeneratedTest";
 
-const TestGeneratorForm = () => {
+interface TestGeneratorFormProps {
+  onGenerate: (formData: {
+    subject: string;
+    topic?: string;
+    difficulty: string;
+    questionType: string;
+    questionCount: number;
+    outputFormat: string;
+    additionalRequirements?: string;
+  }) => Promise<{
+    test: string;
+    provider: string;
+  }>;
+}
+
+const TestGeneratorForm = ({ onGenerate }: TestGeneratorFormProps) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [generatedTest, setGeneratedTest] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
+
   const [formValues, setFormValues] = useState<TestFormValues>({
     subject: "",
     topic: "",
     difficulty: "",
     questionType: "",
     questionCount: "",
-    outputFormat: "",
+    outputFormat: "plain text",
     additionalRequirements: "",
   });
 
   const handleChange = (field: string, value: string) => {
     setFormValues({ ...formValues, [field]: value });
-    // Clear error when user starts changing fields after an error
     if (error) setError(null);
   };
 
+  const isFormValid =
+    formValues.subject &&
+    formValues.difficulty &&
+    formValues.questionType &&
+    formValues.questionCount &&
+    formValues.outputFormat;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isFormValid) return;
+
     setIsLoading(true);
     setGeneratedTest("");
     setError(null);
     setProvider(null);
-    
+
     try {
       toast({
         title: "Test Generation Started",
-        description: "Your test paper is being generated. This may take a moment.",
+        description: "Your test paper is being generated. Please wait...",
       });
-      
-      const data = await generateTest(formValues);
-      
-      setGeneratedTest(data.test);
-      setProvider(data.provider || null);
-      
-      toast({
-        title: "Test Generated Successfully",
-        description: data.provider === "openai" 
-          ? "Your test was generated using OpenAI as a fallback." 
-          : "Your test paper is ready to view and download.",
-      });
-    } catch (err) {
+
+      const formData = {
+        subject: formValues.subject,
+        topic: formValues.topic || undefined,
+        difficulty: formValues.difficulty,
+        questionType: formValues.questionType,
+        questionCount: parseInt(formValues.questionCount),
+        outputFormat: formValues.outputFormat,
+        additionalRequirements: formValues.additionalRequirements || undefined,
+      };
+
+      console.log("Form Data Sent:", formData);
+
+      const result = await onGenerate(formData);
+
+      if (result?.test) {
+        setGeneratedTest(result.test);
+        setProvider(result.provider || null);
+
+        toast({
+          title: "✅ Test Generated",
+          description: "Your test has been generated successfully!",
+        });
+      } else {
+        throw new Error("No test content received.");
+      }
+    } catch (err: any) {
       console.error("Test generation error:", err);
-      const errorMessage = err instanceof Error ? err.message : "There was an error generating your test. Please try again.";
+      const errorMessage =
+        err?.message || "Something went wrong while generating the test.";
       setError(errorMessage);
       toast({
-        title: "Generation Failed",
+        title: "❌ Test generation failed",
         description: errorMessage,
         variant: "destructive",
       });
@@ -70,33 +109,44 @@ const TestGeneratorForm = () => {
 
   const handleRetry = () => {
     setError(null);
-    handleSubmit(new Event('submit') as any);
+    setIsLoading(false);
+    setGeneratedTest("");
+    setProvider(null);
   };
 
   return (
-    <div>
+    <div className="max-w-3xl mx-auto">
       <form onSubmit={handleSubmit} className="space-y-6">
-        <TestFormSection 
-          formValues={formValues}
-          handleChange={handleChange}
-        />
-        
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <Button 
-            type="submit" 
-            className="w-full sm:w-auto bg-a4ai-purple hover:bg-a4ai-purple-hover"
-            disabled={isLoading}
+        <TestFormSection formValues={formValues} handleChange={handleChange} />
+
+        <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
+          <Button
+            type="submit"
+            className={`w-full sm:w-auto min-w-[200px] transition-all ${
+              !isFormValid || isLoading
+                ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 text-white shadow-md"
+            }`}
+            disabled={!isFormValid || isLoading}
           >
-            {isLoading ? "Generating..." : "Generate Test Paper"}
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating...
+              </div>
+            ) : (
+              "Generate Test Paper"
+            )}
           </Button>
-          <p className="text-sm text-gray-500">
+
+          <p className="text-sm text-gray-500 text-center sm:text-left">
             This will use 1 of your 10 free generations this month
           </p>
         </div>
       </form>
 
       {error && (
-        <ErrorMessage 
+        <ErrorMessage
           error={error}
           onRetry={handleRetry}
           isLoading={isLoading}
@@ -104,7 +154,7 @@ const TestGeneratorForm = () => {
       )}
 
       {generatedTest && !error && (
-        <GeneratedTest 
+        <GeneratedTest
           generatedTest={generatedTest}
           provider={provider}
           subject={formValues.subject}

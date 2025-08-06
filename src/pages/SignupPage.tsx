@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabaseClient";
 
 const SignupPage = () => {
-   const navigate = useNavigate();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [formValues, setFormValues] = useState({
@@ -19,39 +19,66 @@ const SignupPage = () => {
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormValues({ 
-      ...formValues, 
-      [e.target.name]: e.target.type === "checkbox" ? e.target.checked : e.target.value 
+    setFormValues({
+      ...formValues,
+      [e.target.name]:
+        e.target.type === "checkbox" ? e.target.checked : e.target.value,
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simulate registration
-    setTimeout(() => {
-      setIsLoading(false);
+
+    try {
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email: formValues.email,
+        password: formValues.password,
+        options: {
+          data: {
+            full_name: formValues.name,
+            role: "teacher", // or student/admin later
+          },
+        },
+      });
+
+      if (signUpError || !user) throw signUpError;
+
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: user.id,
+        email: formValues.email,
+        full_name: formValues.name,
+        role: "teacher", // or student/admin
+      });
+
+      if (profileError) throw profileError;
+
       toast({
         title: "Account created successfully",
-        description: "Welcome to Zolvio.ai!",
+        description: "Welcome to a4ai.ai!",
       });
+
       navigate("/dashboard");
-    }, 1500);
+    } catch (error: any) {
+      toast({
+        title: "Signup failed",
+        description: error.message || "Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleGoogleSignup = () => {
+  const handleGoogleSignup = async () => {
     setIsLoading(true);
-    
-    // Simulate Google authentication
-    setTimeout(() => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+      if (error) throw error;
+    } catch (error: any) {
+      toast({ title: "Google signup failed", description: error.message });
+    } finally {
       setIsLoading(false);
-      toast({
-        title: "Account created with Google",
-        description: "Welcome to a4ai!",
-      });
-      navigate("/dashboard");
-    }, 1500);
+    }
   };
 
   return (
@@ -104,7 +131,9 @@ const SignupPage = () => {
                 <div className="w-full border-t border-gray-300" />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-gray-50 px-2 text-gray-500">Or continue with</span>
+                <span className="bg-gray-50 px-2 text-gray-500">
+                  Or continue with
+                </span>
               </div>
             </div>
 
@@ -122,7 +151,7 @@ const SignupPage = () => {
                   className="mt-1"
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="email">Email address</Label>
                 <Input
@@ -155,12 +184,15 @@ const SignupPage = () => {
               </div>
 
               <div className="flex items-center">
-                <Checkbox 
-                  id="acceptTerms" 
+                <Checkbox
+                  id="acceptTerms"
                   name="acceptTerms"
                   checked={formValues.acceptTerms}
-                  onCheckedChange={(checked) => 
-                    setFormValues({...formValues, acceptTerms: checked as boolean})
+                  onCheckedChange={(checked) =>
+                    setFormValues({
+                      ...formValues,
+                      acceptTerms: checked as boolean,
+                    })
                   }
                 />
                 <label htmlFor="acceptTerms" className="ml-2 text-sm text-gray-600">
@@ -186,7 +218,7 @@ const SignupPage = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Right side with image or pattern */}
       <div className="hidden lg:block relative flex-1 bg-a4ai-purple">
         <div className="absolute inset-0 flex items-center justify-center text-white">
