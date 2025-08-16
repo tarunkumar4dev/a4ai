@@ -22,11 +22,9 @@ import CreateContestPage from "./pages/CreateContestPage";
 import JoinContestPage from "./pages/JoinContestPage";
 import ContestLivePage from "./pages/ContestLivePage";
 import LeaderboardPage from "./pages/LeaderboardPage";
-import Comingsoon from "./pages/Comingsoon";
+// ⛔️ Removed Comingsoon import
 
 const queryClient = new QueryClient();
-const isProduction = import.meta.env.MODE === 'production';
-const showLanding = import.meta.env.VITE_SHOW_LAUNCH_PAGE === 'true';
 
 const App = () => {
   // ✅ Session Persistence + Profile Creation after Google OAuth
@@ -59,7 +57,10 @@ const App = () => {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  if (isProduction && showLanding) return <Comingsoon />;
+  // ⛔️ Removed Comingsoon gate
+  // const isProduction = import.meta.env.MODE === 'production';
+  // const showLanding = import.meta.env.VITE_SHOW_LAUNCH_PAGE === 'true';
+  // if (isProduction && showLanding) return <Comingsoon />;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -74,20 +75,73 @@ const App = () => {
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/signup" element={<SignupPage />} />
-                  <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
-                  <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} />
-                  <Route path="/dashboard/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <PrivateRoute>
+                        <DashboardPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/test-generator"
+                    element={
+                      <PrivateRoute>
+                        <TestGeneratorPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/contests"
+                    element={
+                      <PrivateRoute>
+                        <ContestLandingPage />
+                      </PrivateRoute>
+                    }
+                  />
                   <Route path="/features" element={<FeaturesPage />} />
                   <Route path="/about" element={<AboutPage />} />
                   <Route path="/contact" element={<ContactPage />} />
-                  <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
-                  <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
-                  <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
-
-                  {/* ✅ ✅ Fixed Route with dynamic contest ID */}
-                  <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
-
-                  <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />
+                  <Route
+                    path="/contests"
+                    element={
+                      <PrivateRoute>
+                        <ContestLandingPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/contests/create"
+                    element={
+                      <PrivateRoute>
+                        <CreateContestPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/contests/join"
+                    element={
+                      <PrivateRoute>
+                        <JoinContestPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/contests/live/:contestId"
+                    element={
+                      <PrivateRoute>
+                        <ContestLivePage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/contests/leaderboard"
+                    element={
+                      <PrivateRoute>
+                        <LeaderboardPage />
+                      </PrivateRoute>
+                    }
+                  />
                 </Routes>
               </Suspense>
             </BrowserRouter>
@@ -99,4 +153,3 @@ const App = () => {
 };
 
 export default App;
-
