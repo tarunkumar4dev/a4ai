@@ -1,13 +1,21 @@
-const ScreenSharePermission = ({ onGranted }) => {
-    const handleRequest = async () => {
-      try {
-        // This will prompt the user to share their screen
-        await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
-        onGranted();
-      } catch {
-        alert("Screen sharing permission is required.");
-      }
-    };
-    return <button onClick={handleRequest}>Allow Screen Share</button>;
+type Props = { onGranted: (stream: MediaStream) => void };
+
+const ScreenSharePermission = ({ onGranted }: Props) => {
+  const ask = async () => {
+    try {
+      const anyMedia = navigator.mediaDevices as any;
+      if (!anyMedia?.getDisplayMedia) throw new Error("Screen share not supported");
+      const stream: MediaStream = await anyMedia.getDisplayMedia({ video: true });
+      onGranted(stream);
+    } catch (e) {
+      console.warn("Screen share permission denied", e);
+      alert("Screen sharing permission is required to start the contest.");
+    }
   };
-  export default ScreenSharePermission;
+  return (
+    <button className="px-4 py-2 rounded border bg-white hover:bg-gray-50" onClick={ask}>
+      Allow Screen Share
+    </button>
+  );
+};
+export default ScreenSharePermission;

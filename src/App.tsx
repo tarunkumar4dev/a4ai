@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -6,9 +6,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import PrivateRoute from "@/components/PrivateRoute";
+import { ThemeProvider } from "@/context/ThemeContext";
 
-// Pages
-import LandingPage from "./pages/LandingPage";
+// Pages (code-split)
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -62,33 +63,40 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
-            <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} />
-            <Route path="/dashboard/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
-            <Route path="/features" element={<FeaturesPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/contact" element={<ContactPage />} />
-            <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
-            <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
-            <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
+      <ThemeProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors">
+            <BrowserRouter>
+              <Suspense fallback={<div className="p-8 text-center text-sm text-gray-500">Loading…</div>}>
+                <Routes>
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignupPage />} />
+                  <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+                  <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} />
+                  <Route path="/dashboard/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
+                  <Route path="/features" element={<FeaturesPage />} />
+                  <Route path="/about" element={<AboutPage />} />
+                  <Route path="/contact" element={<ContactPage />} />
+                  <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
+                  <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
+                  <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
 
-            {/* ✅ ✅ Fixed Route with dynamic contest ID */}
-            <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
+                  {/* ✅ ✅ Fixed Route with dynamic contest ID */}
+                  <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
 
-            <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+                  <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          </div>
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 };
 
 export default App;
+

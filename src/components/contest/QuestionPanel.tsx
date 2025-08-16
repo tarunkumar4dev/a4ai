@@ -1,66 +1,72 @@
-import { useState } from "react";
+import { ContestQuestion } from "@/hooks/useContestQuestions";
 
-interface Question {
-  id: string;
-  text: string;
-  options: string[];
-}
+type Props = {
+  questions: ContestQuestion[];
+  answers: Record<string, string>;
+  currentIndex: number;
+  onSelect: (questionId: string, option: string) => void;
+  onPrev: () => void;
+  onNext: () => void;
+};
 
-export default function QuestionPanel({ contestId }: { contestId: string }) {
-  // TODO: Replace with Supabase fetch later
-  const sampleQuestions: Question[] = [
-    {
-      id: "q1",
-      text: "What is the output of 2 + 2?",
-      options: ["2", "3", "4", "5"],
-    },
-    {
-      id: "q2",
-      text: "Which language is used for styling web pages?",
-      options: ["HTML", "CSS", "JavaScript", "Python"],
-    },
-  ];
-
-  const [answers, setAnswers] = useState<{ [key: string]: string }>({});
-
-  const handleChange = (qid: string, option: string) => {
-    setAnswers((prev) => ({ ...prev, [qid]: option }));
-  };
+export default function QuestionPanel({ questions, answers, currentIndex, onSelect, onPrev, onNext }: Props) {
+  if (!questions.length) return null;
+  const q = questions[currentIndex];
+  const total = questions.length;
 
   return (
-    <div className="w-full space-y-6 mt-8">
-      {sampleQuestions.map((q, index) => (
-        <div
-          key={q.id}
-          className="bg-white p-4 rounded-lg border border-gray-200 shadow"
-        >
-          <h3 className="font-semibold text-lg mb-2">
-            Q{index + 1}. {q.text}
-          </h3>
-          <div className="grid gap-2">
-            {q.options.map((opt) => (
-              <label
-                key={opt}
-                className={`flex items-center gap-2 px-4 py-2 rounded cursor-pointer border ${
-                  answers[q.id] === opt
-                    ? "bg-indigo-100 border-indigo-400"
-                    : "border-gray-200"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name={q.id}
-                  value={opt}
-                  checked={answers[q.id] === opt}
-                  onChange={() => handleChange(q.id, opt)}
-                  className="accent-indigo-600"
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
+    <div className="w-full space-y-4 mt-6">
+      <div className="flex items-center justify-between text-sm text-gray-600">
+        <span>
+          Question {currentIndex + 1} / {total}
+        </span>
+        <span>
+          Unanswered: {total - Object.keys(answers).length}
+        </span>
+      </div>
+
+      <div className="bg-white p-4 rounded-lg border border-gray-200 shadow">
+        <h3 className="font-semibold text-lg mb-3">{q.question_text}</h3>
+        <div className="grid gap-2">
+          {q.options.map((opt) => (
+            <label
+              key={opt}
+              className={`flex items-center gap-2 px-4 py-2 rounded cursor-pointer border ${
+                answers[q.id] === opt ? "bg-indigo-100 border-indigo-400" : "border-gray-200"
+              }`}
+            >
+              <input
+                type="radio"
+                name={q.id}
+                value={opt}
+                checked={answers[q.id] === opt}
+                onChange={() => onSelect(q.id, opt)}
+                className="accent-indigo-600"
+              />
+              {opt}
+            </label>
+          ))}
         </div>
-      ))}
+      </div>
+
+      <div className="flex justify-between">
+        <button
+          type="button"
+          onClick={onPrev}
+          className="px-4 py-2 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+          disabled={currentIndex === 0}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          className="px-4 py-2 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+          disabled={currentIndex === total - 1}
+        >
+          Next
+        </button>
+      </div>
     </div>
   );
 }

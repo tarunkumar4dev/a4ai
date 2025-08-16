@@ -1,11 +1,20 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { motion, useMotionTemplate, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
+import { ArrowRight, Sparkles, Zap, Check, BookOpen, BarChart2 } from "lucide-react";
+import { useInView } from "react-intersection-observer";
 
 const LandingHero = () => {
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
+  const x20 = useTransform(mouseX, (v) => v / 20);
+  const y20 = useTransform(mouseY, (v) => v / 20);
+  const x30 = useTransform(mouseX, (v) => v / 30);
+  const y30 = useTransform(mouseY, (v) => v / 30);
+  const [ref, inView] = useInView({
+    threshold: 0.1,
+    triggerOnce: false
+  });
 
   const handleMouseMove = ({ clientX, clientY, currentTarget }: React.MouseEvent) => {
     const { left, top } = currentTarget.getBoundingClientRect();
@@ -13,106 +22,259 @@ const LandingHero = () => {
     mouseY.set(clientY - top);
   };
 
+  // Floating features animation
+  const floatingFeatures = [
+    { icon: <Zap className="h-5 w-5" />, text: "AI-Powered" },
+    { icon: <BookOpen className="h-5 w-5" />, text: "Curriculum-Aligned" },
+    { icon: <BarChart2 className="h-5 w-5" />, text: "Real Analytics" },
+    { icon: <Check className="h-5 w-5" />, text: "Instant Generation" }
+  ];
+
   return (
     <div
-      className="relative bg-gradient-to-br from-[#f8fafc] to-white py-16 md:py-24 overflow-hidden group"
+      ref={ref}
+      className="relative bg-gradient-to-br from-[#f8fafc] to-white dark:from-gray-950 dark:to-gray-900 py-16 md:py-32 overflow-hidden group isolate"
       onMouseMove={handleMouseMove}
     >
-      {/* Modern hover effect layer */}
+      {/* Advanced 3D gradient background */}
       <motion.div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+        className="absolute inset-0 opacity-20 pointer-events-none"
         style={{
-          background: useMotionTemplate`radial-gradient(600px at ${mouseX}px ${mouseY}px, rgba(99, 102, 241, 0.1), transparent 80%)`
+          background: useMotionTemplate`
+            radial-gradient(
+              800px at ${mouseX}px ${mouseY}px,
+              rgba(99, 102, 241, 0.15),
+              transparent 80%
+            )
+          `,
+          transform: "translateZ(0)"
+        }}
+        animate={{
+          opacity: inView ? 0.2 : 0
+        }}
+        transition={{
+          duration: 1.5,
+          ease: "easeOut"
         }}
       />
 
-      {/* Dynamic gradient background */}
+      {/* Dynamic grid overlay with parallax effect */}
       <motion.div
-        className="absolute inset-0 opacity-10 pointer-events-none"
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
         style={{
-          background: useMotionTemplate`radial-gradient(400px at ${mouseX}px ${mouseY}px, rgba(99, 102, 241, 0.1), transparent 70%)`
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h60v60H0z' fill='none'/%3E%3Cpath d='M0 0l60 60m0-60L0 60' stroke='%232563eb' stroke-width='0.5'/%3E%3C/svg%3E")`,
+          transform: useMotionTemplate`translate(${x20}px, ${y20}px)`
         }}
       />
 
-      {/* Subtle grid overlay for modern look */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBkPSJNMCAwaDQwdjQwSDB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTAgMGwyMCAyME0yMCAwTDAgMjAiIHN0cm9rZT0icmdiYSg5OSwxMDIsMjQxLDAuMDUpIiBzdHJva2Utd2lkdGg9IjEiLz48L3N2Zz4=')]"></div>
-      </div>
+      {/* Floating particles animation */}
+      <AnimatePresence>
+        {inView && (
+          <>
+            {[...Array(15)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute rounded-full bg-indigo-500/10 pointer-events-none"
+                initial={{
+                  opacity: 0,
+                  scale: 0,
+                  x: Math.random() * 100 - 50,
+                  y: Math.random() * 100 - 50
+                }}
+                animate={{
+                  opacity: [0, 0.3, 0],
+                  scale: [0, 1, 0],
+                  x: [
+                    Math.random() * 100 - 50,
+                    Math.random() * 200 - 100,
+                    Math.random() * 300 - 150
+                  ],
+                  y: [
+                    Math.random() * 100 - 50,
+                    Math.random() * 200 - 100,
+                    Math.random() * 300 - 150
+                  ]
+                }}
+                transition={{
+                  duration: 5 + Math.random() * 10,
+                  repeat: Infinity,
+                  ease: "linear",
+                  delay: Math.random() * 5
+                }}
+                style={{
+                  width: `${2 + Math.random() * 4}px`,
+                  height: `${2 + Math.random() * 4}px`
+                }}
+              />
+            ))}
+          </>
+        )}
+      </AnimatePresence>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center">
-          {/* AI-Powered Education Tech Badge with hover effect */}
+          {/* Premium badge with floating animation */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 mb-6 hover:bg-indigo-100 hover:border-indigo-200 transition-colors duration-300 group/badge"
+            initial={{ opacity: 0, y: 20 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-gray-200 shadow-sm mb-8 hover:shadow-md transition-all duration-300 group/badge relative overflow-hidden"
           >
-            <motion.div 
-              className="group-hover/badge:rotate-180 transition-transform duration-500"
-              whileHover={{ scale: 1.2 }}
+            <motion.div
+              className="absolute inset-0 bg-gradient-to-r from-indigo-600/10 to-purple-600/10 opacity-0 group-hover/badge:opacity-100 transition-opacity duration-500"
+              style={{
+                transform: useMotionTemplate`translate(${x30}px, ${y30}px)`
+              }}
+            />
+            <motion.div
+              className="relative z-10 flex items-center gap-2"
+              whileHover={{ scale: 1.05 }}
             >
-              <Sparkles className="h-4 w-4 text-indigo-600" />
+              <motion.div
+                animate={{
+                  rotate: [0, 10, -10, 0],
+                  scale: [1, 1.1, 1]
+                }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  repeatType: "reverse"
+                }}
+              >
+                <Sparkles className="h-5 w-5 text-indigo-600" />
+              </motion.div>
+              <span className="text-sm font-medium bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Think Beyond
+              </span>
             </motion.div>
-            <span className="text-sm font-medium text-indigo-600">AI-Powered Education Technology</span>
           </motion.div>
 
-          {/* Compact headline section with hover scaling */}
+          {/* Main headline with advanced effects */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="mb-8 group/headline"
+            initial={{ opacity: 0, y: 20 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.3 }}
+            className="mb-10 md:mb-14"
           >
             <motion.h1
-              className="text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-tight"
+              className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight"
+              style={{
+                textShadow: "0 4px 12px rgba(99, 102, 241, 0.1)"
+              }}
             >
-              <motion.span 
-                className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent text-4xl md:text-6xl lg:text-7xl inline-block group-hover/headline:scale-[1.02] transition-transform duration-500"
-                whileHover={{ scale: 1.03 }}
+              <motion.span
+                className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent inline-block"
+                animate={inView ? {
+                  backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"]
+                } : {}}
+                transition={{
+                  duration: 8,
+                  repeat: Infinity,
+                  ease: "linear"
+                }}
+                style={{
+                  backgroundSize: "200% 200%"
+                }}
               >
-                Smartest Test Generator Platform
+                Smartest. Tests. Ever.
               </motion.span>
               <br className="hidden md:inline" />
-              <motion.span 
-                className="text-gray-900 inline-block group-hover/headline:scale-[1.02] transition-transform duration-500"
-                whileHover={{ scale: 1.03 }}
+              <motion.span
+                className="text-gray-900 inline-block mt-2 md:mt-4"
+                whileHover={{
+                  scale: 1.02,
+                  transition: { duration: 0.3 }
+                }}
               >
-                Made for the Excellence
+                The Teacher's Assessment Co-Pilot
               </motion.span>
             </motion.h1>
 
             <motion.p
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="mt-4 md:mt-6 text-lg md:text-xl text-gray-600 max-w-2xl mx-auto group-hover:text-gray-700 transition-colors duration-500"
+              animate={inView ? { opacity: 1 } : {}}
+              transition={{ delay: 0.5 }}
+              className="mt-6 md:mt-8 text-lg md:text-xl text-gray-600 max-w-3xl mx-auto"
             >
-              Revolutionizing your assessment process with our AI-powered platform that creates curriculum-aligned tests in minutes.
+              Generate & Host curriculum-perfect tests in 2 minutes.
             </motion.p>
           </motion.div>
 
-          {/* CTA Buttons */}
+          {/* Floating feature pills */}
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="flex flex-col sm:flex-row justify-center gap-3 mb-12"
+            initial={{ opacity: 0 }}
+            animate={inView ? { opacity: 1 } : {}}
+            transition={{ delay: 0.6 }}
+            className="flex flex-wrap justify-center gap-3 mb-12"
+          >
+            {floatingFeatures.map((feature, index) => (
+              <motion.div
+                key={feature.text}
+                className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm rounded-full border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300"
+                whileHover={{ y: -3 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={inView ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 0.7 + index * 0.1 }}
+              >
+                <motion.div
+                  animate={{
+                    rotate: [0, 5, -5, 0],
+                    scale: [1, 1.1, 1]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    repeatType: "reverse",
+                    delay: index * 0.2
+                  }}
+                >
+                  {feature.icon}
+                </motion.div>
+                <span className="text-sm font-medium text-gray-700">
+                  {feature.text}
+                </span>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Enhanced CTA Buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ delay: 0.8 }}
+            className="flex flex-col sm:flex-row justify-center gap-4 mb-16"
           >
             <Link to="/signup">
               <Button
                 size="lg"
-                className="group/button relative overflow-hidden bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300"
+                className="group/button relative overflow-hidden bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-300 px-8 py-6"
               >
-                <span className="relative z-10 flex items-center">
+                <span className="relative z-10 flex items-center text-lg font-semibold">
                   Get Started Free
-                  <ArrowRight className="ml-2 h-4 w-4 group-hover/button:translate-x-1 transition-transform" />
+                  <motion.div
+                    className="ml-3"
+                    animate={{
+                      x: [0, 4, 0],
+                      transition: {
+                        duration: 1.5,
+                        repeat: Infinity
+                      }
+                    }}
+                  >
+                    <ArrowRight className="h-5 w-5" />
+                  </motion.div>
                 </span>
                 <motion.span
-                  className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-purple-700 opacity-0 group-hover/button:opacity-100 transition-opacity"
+                  className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-purple-700 opacity-0 group-hover/button:opacity-100 transition-opacity duration-500"
                   initial={{ x: -100 }}
-                  animate={{ x: 100 }}
-                  transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                  animate={{
+                    x: ["-100%", "100%"],
+                    transition: {
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "linear"
+                    }
+                  }}
                 />
               </Button>
             </Link>
@@ -120,49 +282,118 @@ const LandingHero = () => {
               <Button
                 variant="outline"
                 size="lg"
-                className="group/outline border-gray-300 hover:border-indigo-300 hover:bg-gray-50/50 transition-all duration-300 shadow-sm hover:shadow-md"
+                className="group/outline border-gray-300 hover:border-indigo-300 hover:bg-white/90 transition-all duration-300 shadow-sm hover:shadow-md px-8 py-6"
               >
-                <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent group-hover/outline:bg-gradient-to-r group-hover/outline:from-indigo-700 group-hover/outline:to-purple-700 transition-all duration-300">
-                  Live Demo
+                <span className="relative z-10 text-lg font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent group-hover/outline:from-indigo-700 group-hover/outline:to-purple-700 transition-all duration-300">
+                  Watch Demo
                 </span>
+                <motion.span
+                  className="absolute inset-0 rounded-lg border border-indigo-200 opacity-0 group-hover/outline:opacity-100 transition-opacity duration-500"
+                  style={{
+                    background: useMotionTemplate`radial-gradient(100px at ${mouseX}px ${mouseY}px, rgba(99, 102, 241, 0.1), transparent 80%)`
+                  }}
+                />
               </Button>
             </Link>
           </motion.div>
 
-          {/* Social Proof with hover effects */}
+          {/* Premium Social Proof */}
           <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm group/social"
+            animate={inView ? { opacity: 1 } : {}}
+            transition={{ delay: 1 }}
+            className="flex flex-col items-center justify-center gap-6"
           >
-            <div className="flex items-center gap-2 hover:scale-105 transition-transform duration-300">
-              <div className="flex -space-x-2">
-                {[1, 2, 3].map((item) => (
-                  <motion.img
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+              {/* Animated user avatars */}
+              <motion.div
+                className="flex -space-x-3"
+                whileHover={{ scale: 1.05 }}
+              >
+                {[1, 2, 3, 4].map((item) => (
+                  <motion.div
                     key={item}
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.6 + item * 0.1 }}
-                    src={`https://randomuser.me/api/portraits/${item % 2 === 0 ? 'women' : 'men'}/${item + 20}.jpg`}
-                    className="w-8 h-8 rounded-full border-2 border-white hover:scale-110 transition-transform"
-                    alt="User"
-                    whileHover={{ zIndex: 1, scale: 1.2 }}
-                  />
+                    initial={{ scale: 0, rotate: -45 }}
+                    animate={inView ? { scale: 1, rotate: 0 } : {}}
+                    transition={{
+                      type: "spring",
+                      stiffness: 260,
+                      damping: 20,
+                      delay: 1.1 + item * 0.1
+                    }}
+                    whileHover={{ y: -5, zIndex: 1 }}
+                    className="relative"
+                  >
+                    <img
+                      src={`https://randomuser.me/api/portraits/${item % 2 === 0 ? 'women' : 'men'}/${item + 20}.jpg`}
+                      className="w-12 h-12 rounded-full border-2 border-white shadow-md hover:shadow-lg transition-all"
+                      alt="User"
+                    />
+                    {item === 1 && (
+                      <motion.div
+                        className="absolute -bottom-1 -right-1 bg-indigo-600 rounded-full p-1 shadow-md"
+                        initial={{ scale: 0 }}
+                        animate={inView ? { scale: 1 } : {}}
+                        transition={{ delay: 1.5 }}
+                      >
+                        <Check className="h-3 w-3 text-white" />
+                      </motion.div>
+                    )}
+                  </motion.div>
                 ))}
+              </motion.div>
+
+              <div className="text-center sm:text-left">
+                <motion.p
+                  className="text-gray-600 text-sm"
+                  initial={{ opacity: 0 }}
+                  animate={inView ? { opacity: 1 } : {}}
+                  transition={{ delay: 1.3 }}
+                >
+                  Trusted by educators at
+                </motion.p>
+                <motion.div
+                  className="flex flex-wrap justify-center sm:justify-start gap-x-6 gap-y-2 mt-2"
+                  initial={{ opacity: 0 }}
+                  animate={inView ? { opacity: 1 } : {}}
+                  transition={{ delay: 1.4 }}
+                >
+                  {["Chanakya Institute", "Deep Coaching ", "Education Beast", "DeepJyoti Coaching"].map((item, index) => (
+                    <motion.span
+                      key={item}
+                      className="text-gray-800 font-medium"
+                      whileHover={{ color: "#6366f1" }}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={inView ? { opacity: 1, y: 0 } : {}}
+                      transition={{ duration: 0.3, delay: 1.5 + index * 0.1 }}
+                    >
+                      {item}
+                    </motion.span>
+                  ))}
+                </motion.div>
               </div>
-              <span className="text-gray-600 group-hover/social:text-gray-800 transition-colors duration-300">Trusted by Parents & Educators</span>
             </div>
-            <div className="hidden sm:block w-px h-6 bg-gray-300 group-hover/social:h-8 transition-all duration-300"></div>
-            <div className="flex items-center gap-2 hover:scale-105 transition-transform duration-300">
+
+            {/* Rating with animated stars */}
+            <motion.div
+              className="flex items-center gap-3"
+              initial={{ opacity: 0 }}
+              animate={inView ? { opacity: 1 } : {}}
+              transition={{ delay: 1.6 }}
+            >
               <div className="flex">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <motion.svg
                     key={star}
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.7 + star * 0.05 }}
-                    className="w-4 h-4 text-amber-400 hover:text-amber-500 transition-colors duration-300"
+                    initial={{ scale: 0, rotate: -30 }}
+                    animate={inView ? { scale: 1, rotate: 0 } : {}}
+                    transition={{
+                      type: "spring",
+                      stiffness: 300,
+                      damping: 15,
+                      delay: 1.7 + star * 0.1
+                    }}
+                    className="w-5 h-5 text-amber-400 hover:text-amber-500 transition-colors"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                     whileHover={{ scale: 1.3 }}
@@ -171,19 +402,66 @@ const LandingHero = () => {
                   </motion.svg>
                 ))}
               </div>
-              <span className="text-gray-600 group-hover/social:text-gray-800 transition-colors duration-300">4.9/5 (500+ reviews)</span>
-            </div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={inView ? { opacity: 1 } : {}}
+                transition={{ delay: 1.9 }}
+                className="text-gray-700 font-medium"
+              >
+                4.6/5 (700+ reviews)
+              </motion.div>
+            </motion.div>
           </motion.div>
         </div>
       </div>
 
-      {/* Animated border with hover effect */}
+      {/* Advanced animated border */}
       <motion.div
-        className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-transparent group-hover:via-purple-500 transition-all duration-500"
-        initial={{ scaleX: 0 }}
-        animate={{ scaleX: 1 }}
-        transition={{ duration: 1, ease: "easeOut", delay: 0.8 }}
+        className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-500 to-transparent"
+        initial={{ scaleX: 0, opacity: 0 }}
+        animate={inView ? { scaleX: 1, opacity: 1 } : {}}
+        transition={{
+          scaleX: { duration: 1.5, ease: [0.22, 1, 0.36, 1] },
+          opacity: { duration: 0.5 }
+        }}
       />
+
+      {/* Subtle floating shapes in background */}
+      <AnimatePresence>
+        {inView && (
+          <>
+            <motion.div
+              className="absolute hidden lg:block left-10 top-1/4 w-32 h-32 rounded-full bg-indigo-500/10 blur-xl pointer-events-none"
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{
+                opacity: [0.1, 0.2, 0.1],
+                scale: [1, 1.1, 1],
+                y: [-20, 20, -20]
+              }}
+              transition={{
+                duration: 8,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            />
+            <motion.div
+              className="absolute hidden lg:block right-20 top-1/3 w-24 h-24 rounded-full bg-purple-500/10 blur-xl pointer-events-none"
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{
+                opacity: [0.1, 0.15, 0.1],
+                scale: [1, 1.05, 1],
+                y: [10, -10, 10]
+              }}
+              transition={{
+                duration: 7,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 0.5
+              }}
+            />
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
