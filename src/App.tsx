@@ -1,5 +1,5 @@
 import { useEffect, Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,57 +10,62 @@ import { ThemeProvider } from "@/context/ThemeContext";
 
 // Pages (code-split)
 const LandingPage = lazy(() => import("./pages/LandingPage"));
-import LoginPage from "./pages/LoginPage";
-import SignupPage from "./pages/SignupPage";
-import DashboardPage from "./pages/DashboardPage";
-import TestGeneratorPage from "./pages/TestGeneratorPage";
-import FeaturesPage from "./pages/FeaturesPage";
-import AboutPage from "./pages/AboutPage";
-import ContactPage from "./pages/ContactPage";
-import ContestLandingPage from "./pages/ContestLandingPage";
-import CreateContestPage from "./pages/CreateContestPage";
-import JoinContestPage from "./pages/JoinContestPage";
-import ContestLivePage from "./pages/ContestLivePage";
-import LeaderboardPage from "./pages/LeaderboardPage";
-// ⛔️ Removed Comingsoon import
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SignupPage = lazy(() => import("./pages/SignupPage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
+const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const ContestLandingPage = lazy(() => import("./pages/ContestLandingPage"));
+const CreateContestPage = lazy(() => import("./pages/CreateContestPage"));
+const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
+const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
+const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 
 const queryClient = new QueryClient();
 
-const App = () => {
-  // ✅ Session Persistence + Profile Creation after Google OAuth
+const AuthCallback = () => {
+  const navigate = useNavigate();
+  
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state changed:", session);
-
-      if (event === "SIGNED_IN" && session?.user) {
-        const user = session.user;
-
-        // Check if profile already exists
-        const { data: existingProfile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (!existingProfile) {
-          await supabase.from("profiles").insert({
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata.full_name || user.user_metadata.name || "",
-            role: "teacher",
-          });
-          console.log("🔁 Created profile after Google login/signup");
-        }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/login");
       }
     });
+  }, [navigate]);
 
-    return () => listener.subscription.unsubscribe();
+  return <div className="flex justify-center p-8">Loading...</div>;
+};
+
+const App = () => {
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .single();
+
+          if (!profile) {
+            await supabase.from("profiles").insert({
+              id: session.user.id,
+              email: session.user.email,
+              full_name: session.user.user_metadata.full_name || "New User",
+              role: "teacher",
+            });
+          }
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
-
-  // ⛔️ Removed Comingsoon gate
-  // const isProduction = import.meta.env.MODE === 'production';
-  // const showLanding = import.meta.env.VITE_SHOW_LAUNCH_PAGE === 'true';
-  // if (isProduction && showLanding) return <Comingsoon />;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -72,6 +77,7 @@ const App = () => {
             <BrowserRouter>
               <Suspense fallback={<div className="p-8 text-center text-sm text-gray-500">Loading…</div>}>
                 <Routes>
+                  <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/signup" element={<SignupPage />} />

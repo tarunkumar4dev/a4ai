@@ -37,8 +37,9 @@ const SignupPage = () => {
         options: {
           data: {
             full_name: formValues.name,
-            role: "teacher", // or student/admin later
+            role: "teacher",
           },
+          emailRedirectTo: `${window.location.origin}/dashboard`, // Added email confirmation redirect
         },
       });
 
@@ -48,21 +49,22 @@ const SignupPage = () => {
         id: user.id,
         email: formValues.email,
         full_name: formValues.name,
-        role: "teacher", // or student/admin
+        role: "teacher",
       });
 
       if (profileError) throw profileError;
 
       toast({
         title: "Account created successfully",
-        description: "Welcome to a4ai.ai!",
+        description: "Please check your email to verify your account",
       });
 
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true }); // Added replace: true
     } catch (error: any) {
       toast({
         title: "Signup failed",
         description: error.message || "Please try again.",
+        variant: "destructive", // Added variant for error
       });
     } finally {
       setIsLoading(false);
@@ -72,10 +74,19 @@ const SignupPage = () => {
   const handleGoogleSignup = async () => {
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+      const { error } = await supabase.auth.signInWithOAuth({ 
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`, // Added callback route
+        },
+      });
       if (error) throw error;
     } catch (error: any) {
-      toast({ title: "Google signup failed", description: error.message });
+      toast({ 
+        title: "Google signup failed", 
+        description: error.message,
+        variant: "destructive", // Added variant for error
+      });
     } finally {
       setIsLoading(false);
     }

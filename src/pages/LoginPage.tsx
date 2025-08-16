@@ -19,7 +19,9 @@ const LoginPage = () => {
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) navigate("/dashboard");
+      if (session) {
+        navigate("/dashboard", { replace: true }); // Added replace: true to prevent back navigation
+      }
     };
     checkSession();
   }, [navigate]);
@@ -45,7 +47,7 @@ const LoginPage = () => {
         description: "Redirecting to your dashboard...",
         variant: "success",
       });
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true }); // Added replace: true
     } catch (error) {
       toast({
         title: "Login failed",
@@ -64,7 +66,7 @@ const LoginPage = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: `${window.location.origin}/auth/callback`, // Changed to dedicated callback route
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -77,7 +79,7 @@ const LoginPage = () => {
       // Listen for auth state changes
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session) {
-          navigate("/dashboard");
+          navigate("/dashboard", { replace: true }); // Added replace: true
           subscription.unsubscribe();
         }
       });
