@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [formValues, setFormValues] = useState({
@@ -15,12 +16,19 @@ const LoginPage = () => {
     password: "",
   });
 
-  // Check for existing session on component mount
+  // Handle successful OAuth redirects
+  useEffect(() => {
+    if (location.state?.from === 'oauth-callback') {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [location, navigate]);
+
+  // Check for existing session
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        navigate("/dashboard", { replace: true }); // Added replace: true to prevent back navigation
+        navigate("/dashboard", { replace: true });
       }
     };
     checkSession();
@@ -42,12 +50,7 @@ const LoginPage = () => {
 
       if (error) throw error;
 
-      toast({
-        title: "Successfully logged in",
-        description: "Redirecting to your dashboard...",
-        variant: "success",
-      });
-      navigate("/dashboard", { replace: true }); // Added replace: true
+      navigate("/dashboard", { replace: true });
     } catch (error) {
       toast({
         title: "Login failed",
@@ -66,7 +69,7 @@ const LoginPage = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`, // Changed to dedicated callback route
+          redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -75,15 +78,6 @@ const LoginPage = () => {
       });
 
       if (error) throw error;
-
-      // Listen for auth state changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          navigate("/dashboard", { replace: true }); // Added replace: true
-          subscription.unsubscribe();
-        }
-      });
-
     } catch (error) {
       toast({
         title: "Google login failed",
