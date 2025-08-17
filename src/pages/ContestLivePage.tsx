@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, Lock, Video, Monitor } from "lucide-react";
+import { CheckCircle, Lock, Video } from "lucide-react";
 import CameraPermission from "@/components/contest/CameraPermission";
 import ScreenSharePermission from "@/components/contest/ScreenSharePermission";
 import { Progress } from "@/components/ui/progress";
@@ -22,8 +22,7 @@ export default function ContestLivePage() {
 
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [cameraGranted, setCameraGranted] = useState(false);
-  const [screenGranted, setScreenGranted] = useState(false);
-  const progress = useMemo(() => (cameraGranted ? 50 : 0) + (screenGranted ? 50 : 0), [cameraGranted, screenGranted]);
+  const progress = useMemo(() => cameraGranted ? 100 : 0, [cameraGranted]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [idx, setIdx] = useState(0);
   const allAnswered = useMemo(() => questions.length > 0 && questions.every(q => !!answers[q.id]), [questions, answers]);
@@ -31,7 +30,6 @@ export default function ContestLivePage() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const camStreamRef = useRef<MediaStream | null>(null);
-  const screenStreamRef = useRef<MediaStream | null>(null);
   const [isTabActive, setIsTabActive] = useState(true);
 
   useEffect(() => {
@@ -69,6 +67,7 @@ export default function ContestLivePage() {
 
   const handleCameraGranted = (stream?: MediaStream) => {
     setCameraGranted(true);
+    setPermissionsGranted(true); // Auto-grant permissions since screen share is not required
     if (stream) {
       camStreamRef.current = stream;
       if (videoRef.current) {
@@ -77,22 +76,11 @@ export default function ContestLivePage() {
         videoRef.current.play().catch(() => {});
       }
     }
-    if (screenGranted) setPermissionsGranted(true);
-  };
-
-  const handleScreenGranted = (stream?: MediaStream) => {
-    setScreenGranted(true);
-    if (stream) {
-      screenStreamRef.current = stream;
-    }
-    if (cameraGranted) setPermissionsGranted(true);
   };
 
   const stopStreams = () => {
     camStreamRef.current?.getTracks().forEach(t => t.stop());
-    screenStreamRef.current?.getTracks().forEach(t => t.stop());
     camStreamRef.current = null;
-    screenStreamRef.current = null;
   };
 
   const selectAnswer = (qId: string, value: string) =>
@@ -105,7 +93,6 @@ export default function ContestLivePage() {
       return;
     }
 
-    // Store email inside answers meta; defer scoring
     const payloadAnswers = { ...answers, _meta: { email: user.email } } as any;
 
     await supabase
@@ -175,12 +162,9 @@ export default function ContestLivePage() {
                   </div>
                   <Progress value={progress} className="h-2" />
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4">
                   <PermissionCard icon={<Video className="h-5 w-5 text-indigo-600" />} title="Camera Access" description="Required for identity verification" granted={cameraGranted}>
                     <CameraPermission onGranted={handleCameraGranted} />
-                  </PermissionCard>
-                  <PermissionCard icon={<Monitor className="h-5 w-5 text-indigo-600" />} title="Screen Sharing" description="Required to monitor your work" granted={screenGranted}>
-                    <ScreenSharePermission onGranted={handleScreenGranted} />
                   </PermissionCard>
                 </div>
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
@@ -296,5 +280,3 @@ function PermissionCard({ icon, title, description, granted, children }) {
     </Card>
   );
 }
-
-
