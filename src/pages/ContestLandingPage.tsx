@@ -1,11 +1,7 @@
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import styled, { keyframes } from "styled-components";
 
-// 24th july 2:07AM edited
-
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import styled, { keyframes } from 'styled-components';
-
-// Gradient animation for the header
 const gradientAnimation = keyframes`
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -32,7 +28,7 @@ const MainContent = styled.section`
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 `;
 
-const Sidebar = styled.aside`
+const Aside = styled.aside`
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -48,12 +44,11 @@ const Card = styled.div`
 
 const Header = styled.h1`
   font-size: 2.5rem;
-  color: #4a2c8a;
-  margin-bottom: 1rem;
   background: linear-gradient(90deg, #6e48aa, #9d50bb);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  margin-bottom: 1rem;
 `;
 
 const Subheader = styled.p`
@@ -87,15 +82,11 @@ const PrimaryButton = styled.button`
   }
 `;
 
-const SecondaryButton = styled.button`
+const SecondaryButton = styled(PrimaryButton)`
   background: white;
   color: #6e48aa;
   border: 1px solid #6e48aa;
-  padding: 0.75rem 1.75rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  box-shadow: none;
 
   &:hover {
     background: rgba(110, 72, 170, 0.05);
@@ -103,7 +94,7 @@ const SecondaryButton = styled.button`
   }
 `;
 
-const StatsContainer = styled.div`
+const StatsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
@@ -133,6 +124,22 @@ const StatValue = styled.p`
   font-weight: 700;
   color: #4a2c8a;
   margin: 0.25rem 0;
+`;
+
+const ProgressBar = styled.div`
+  height: 8px;
+  background: rgba(110, 72, 170, 0.1);
+  border-radius: 4px;
+  margin: 0.75rem 0;
+  overflow: hidden;
+`;
+
+const ProgressFill = styled.div<{ width: number }>`
+  height: 100%;
+  width: ${(p) => p.width}%;
+  background: linear-gradient(90deg, #6e48aa, #9d50bb);
+  border-radius: 4px;
+  transition: width 0.5s ease;
 `;
 
 const ContestList = styled.div`
@@ -191,11 +198,6 @@ const Avatar = styled.div`
   box-shadow: 0 4px 10px rgba(110, 72, 170, 0.2);
 `;
 
-const UserInfo = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
 const Username = styled.span`
   font-weight: 700;
   color: #4a2c8a;
@@ -206,29 +208,13 @@ const Handle = styled.span`
   color: #888;
 `;
 
-const ProgressBar = styled.div`
-  height: 8px;
-  background: rgba(110, 72, 170, 0.1);
-  border-radius: 4px;
-  margin: 0.75rem 0;
-  overflow: hidden;
-`;
-
-const ProgressFill = styled.div<{ width: number }>`
-  height: 100%;
-  width: ${props => props.width}%;
-  background: linear-gradient(90deg, #6e48aa, #9d50bb);
-  border-radius: 4px;
-  transition: width 0.5s ease;
-`;
-
-const ContestLandingPage = () => {
+const ContestLandingPage: React.FC = () => {
   const navigate = useNavigate();
 
-  // Mock data - replace with actual data from your backend
+  // TODO: Replace with real data
   const userStats = {
-    username: 'Tarun Kumar',
-    handle: 'tarunkiriddev',
+    username: "Tarun Kumar",
+    handle: "tarunkiriddev",
     rank: 804,
     solved: 160,
     totalProblems: 4000,
@@ -238,35 +224,37 @@ const ContestLandingPage = () => {
     activeDays: 63,
     maxStreak: 11,
     badges: 4,
-    recentBadge: '100 Days Badge 2024'
+    recentBadge: "100 Days Badge 2024"
   };
 
   const contests = [
-    { id: 1, title: 'Weekly Maths Challenge', date: 'Starts in 2 days', participants: 125 },
-    { id: 2, title: 'Physics Masters', date: 'Ongoing', participants: 89 },
-    { id: 3, title: 'Chemistry Sprint', date: 'Ends tomorrow', participants: 210 }
+    { id: "weekly-maths", title: "Weekly Maths Challenge", date: "Starts in 2 days", participants: 125 },
+    { id: "physics-masters", title: "Physics Masters", date: "Ongoing", participants: 89 },
+    { id: "chemistry-sprint", title: "Chemistry Sprint", date: "Ends tomorrow", participants: 210 }
   ];
 
   return (
     <ArenaContainer>
       <MainContent>
         <Header>Welcome to the Arena!</Header>
-        <Subheader>Compete, learn, and win. Here You can Join exciting contests or create your own.</Subheader>
-        
+        <Subheader>Compete, learn, and win. Join exciting contests or create your own.</Subheader>
+
         <ButtonGroup>
-          <PrimaryButton onClick={() => navigate('/contests/join')}>Join a Contest</PrimaryButton>
-          <SecondaryButton onClick={() => navigate('/contests/create')}>Create a Contest</SecondaryButton>
+          <PrimaryButton onClick={() => navigate("/contests/join")}>Join a Contest</PrimaryButton>
+          <SecondaryButton onClick={() => navigate("/contests/create")}>Create a Contest</SecondaryButton>
         </ButtonGroup>
 
-        <StatsContainer>
+        <StatsGrid>
           <StatCard>
             <StatTitle>Problems Solved</StatTitle>
-            <StatValue>{userStats.solved}/{userStats.totalProblems}</StatValue>
+            <StatValue>
+              {userStats.solved}/{userStats.totalProblems}
+            </StatValue>
             <ProgressBar>
               <ProgressFill width={(userStats.solved / userStats.totalProblems) * 100} />
             </ProgressBar>
           </StatCard>
-          
+
           <StatCard>
             <StatTitle>Contest Rating</StatTitle>
             <StatValue>{userStats.rank.toLocaleString()}</StatValue>
@@ -274,25 +262,27 @@ const ContestLandingPage = () => {
               <ProgressFill width={30} />
             </ProgressBar>
           </StatCard>
-          
+
           <StatCard>
             <StatTitle>Active Days</StatTitle>
             <StatValue>{userStats.activeDays}</StatValue>
           </StatCard>
-          
+
           <StatCard>
             <StatTitle>Max Streak</StatTitle>
             <StatValue>{userStats.maxStreak}</StatValue>
           </StatCard>
-        </StatsContainer>
+        </StatsGrid>
 
         <ContestList>
-          <h2 style={{ color: '#4a2c8a', marginBottom: '1.5rem' }}>Featured Contests</h2>
-          {contests.map(contest => (
+          <h2 style={{ color: "#4a2c8a", marginBottom: "1.5rem" }}>Featured Contests</h2>
+          {contests.map((contest) => (
             <ContestItem key={contest.id}>
               <div>
                 <ContestTitle>{contest.title}</ContestTitle>
-                <ContestMeta>{contest.date} • {contest.participants.toLocaleString()} participants</ContestMeta>
+                <ContestMeta>
+                  {contest.date} • {contest.participants.toLocaleString()} participants
+                </ContestMeta>
               </div>
               <PrimaryButton onClick={() => navigate(`/contests/${contest.id}`)}>View</PrimaryButton>
             </ContestItem>
@@ -300,16 +290,16 @@ const ContestLandingPage = () => {
         </ContestList>
       </MainContent>
 
-      <Sidebar>
+      <Aside>
         <Card>
           <UserProfile>
             <Avatar>{userStats.username.charAt(0)}</Avatar>
-            <UserInfo>
+            <div>
               <Username>{userStats.username}</Username>
               <Handle>@{userStats.handle}</Handle>
-            </UserInfo>
+            </div>
           </UserProfile>
-          
+
           <div>
             <StatTitle>Rank</StatTitle>
             <StatValue>#{userStats.rank.toLocaleString()}</StatValue>
@@ -317,26 +307,33 @@ const ContestLandingPage = () => {
         </Card>
 
         <Card>
-          <h3 style={{ color: '#4a2c8a', marginBottom: '1rem' }}>Problem Stats</h3>
+          <h3 style={{ color: "#4a2c8a", marginBottom: "1rem" }}>Problem Stats</h3>
+
           <div>
             <StatTitle>Easy</StatTitle>
-            <StatValue>{userStats.easy.solved}/{userStats.easy.total}</StatValue>
+            <StatValue>
+              {userStats.easy.solved}/{userStats.easy.total}
+            </StatValue>
             <ProgressBar>
               <ProgressFill width={(userStats.easy.solved / userStats.easy.total) * 100} />
             </ProgressBar>
           </div>
-          
-          <div style={{ marginTop: '1.25rem' }}>
+
+          <div style={{ marginTop: "1.25rem" }}>
             <StatTitle>Medium</StatTitle>
-            <StatValue>{userStats.medium.solved}/{userStats.medium.total}</StatValue>
+            <StatValue>
+              {userStats.medium.solved}/{userStats.medium.total}
+            </StatValue>
             <ProgressBar>
               <ProgressFill width={(userStats.medium.solved / userStats.medium.total) * 100} />
             </ProgressBar>
           </div>
-          
-          <div style={{ marginTop: '1.25rem' }}>
+
+          <div style={{ marginTop: "1.25rem" }}>
             <StatTitle>Hard</StatTitle>
-            <StatValue>{userStats.hard.solved}/{userStats.hard.total}</StatValue>
+            <StatValue>
+              {userStats.hard.solved}/{userStats.hard.total}
+            </StatValue>
             <ProgressBar>
               <ProgressFill width={(userStats.hard.solved / userStats.hard.total) * 100} />
             </ProgressBar>
@@ -344,17 +341,17 @@ const ContestLandingPage = () => {
         </Card>
 
         <Card>
-          <h3 style={{ color: '#4a2c8a', marginBottom: '1rem' }}>Achievements</h3>
+          <h3 style={{ color: "#4a2c8a", marginBottom: "1rem" }}>Achievements</h3>
           <div>
             <StatTitle>Badges</StatTitle>
             <StatValue>{userStats.badges}</StatValue>
           </div>
-          <div style={{ marginTop: '1.25rem' }}>
+          <div style={{ marginTop: "1.25rem" }}>
             <StatTitle>Recent Badge</StatTitle>
-            <StatValue style={{ fontSize: '1rem' }}>{userStats.recentBadge}</StatValue>
+            <StatValue style={{ fontSize: "1rem" }}>{userStats.recentBadge}</StatValue>
           </div>
         </Card>
-      </Sidebar>
+      </Aside>
     </ArenaContainer>
   );
 };
