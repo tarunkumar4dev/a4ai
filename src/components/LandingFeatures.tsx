@@ -1,4 +1,7 @@
+// src/components/LandingFeatures.tsx
 import { FileText, Brain, Loader, Target } from "lucide-react";
+import { motion, useMotionTemplate, useMotionValue, useTransform } from "framer-motion";
+import { useState } from "react";
 
 const features = [
   {
@@ -9,41 +12,124 @@ const features = [
   {
     icon: Brain,
     title: "4+ AI Models",
-    description: "Leveraging multiple AI models ensures the highest quality and accuracy for your tests.",
+    description: "Multiple models collaborate for higher quality and fewer hallucinations.",
   },
   {
     icon: Target,
-    title: "99% Accuracy",
-    description: "Our keyword density algorithm ensures questions and answers are accurate and reliable.",
+    title: "99% Alignment",
+    description: "Keyword-scoring & rubric checks keep questions on-target with your syllabus.",
   },
   {
     icon: Loader,
-    title: "Fast Generation",
-    description: "Create complete test papers in minutes, not hours. Save time for what matters most.",
+    title: "Under 2 Minutes",
+    description: "Create a complete, formatted paper and move straight to review.",
   },
 ];
 
-const LandingFeatures = () => {
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 18, scale: 0.98 },
+  show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: "easeOut" } },
+};
+
+export default function LandingFeatures() {
+  // cursor-reactive glow in the section bg
+  const mx = useMotionValue(300);
+  const my = useMotionValue(120);
+  const onMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    mx.set(e.clientX - r.left);
+    my.set(e.clientY - r.top);
+  };
+
+  const glow = useMotionTemplate`
+    radial-gradient(600px 300px at ${mx}px ${my}px, rgba(99,102,241,0.20), transparent 70%),
+    radial-gradient(600px 300px at ${useTransform(mx, v => v + 200)}px ${useTransform(my, v => v + 150)}px, rgba(168,85,247,0.18), transparent 70%)
+  `;
+
   return (
-    <section className="py-20 bg-[#f8f9fa]">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="bg-white shadow-md hover:shadow-lg transition-shadow duration-300 rounded-xl p-6 flex flex-col items-center text-center border border-gray-100"
-            >
-              <div className="h-14 w-14 flex items-center justify-center rounded-lg bg-[#e9ecef] mb-4">
-                <feature.icon className="h-7 w-7 text-[#6f42c1]" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h3>
-              <p className="text-sm text-gray-700">{feature.description}</p>
-            </div>
+    <section onMouseMove={onMouseMove} className="relative py-24 bg-[#f8f9fa] dark:bg-gray-950">
+      {/* soft gradient mesh like hero */}
+      <motion.div
+        aria-hidden
+        className="absolute inset-0 -z-10 opacity-70 dark:opacity-50"
+        style={{ backgroundImage: glow }}
+      />
+
+      <div className="mx-auto max-w-7xl px-6">
+        <motion.div
+          variants={container}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.2 }}
+          className="grid grid-cols-1 gap-6 md:gap-8 sm:grid-cols-2 lg:grid-cols-4"
+        >
+          {features.map((f, i) => (
+            <FeatureCard key={i} {...f} />
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );
-};
+}
 
-export default LandingFeatures;
+function FeatureCard({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: any;
+  title: string;
+  description: string;
+}) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <motion.div
+      variants={item}
+      whileHover={{ y: -6, scale: 1.01 }}
+      onHoverStart={() => setHover(true)}
+      onHoverEnd={() => setHover(false)}
+      className="relative group rounded-2xl p-6 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 shadow-md hover:shadow-xl transition-all"
+    >
+      {/* ✅ gradient ring BEHIND content + transparent padding-box */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 rounded-2xl ring-1 ring-inset ring-transparent
+                   [background:linear-gradient(transparent,transparent)_padding-box,linear-gradient(90deg,rgba(99,102,241,.5),rgba(168,85,247,.5))_border-box]
+                   [border:1px_solid_transparent]"
+      />
+
+      {/* top shine on hover */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute -top-1 left-0 right-0 h-1 rounded-t-2xl bg-gradient-to-r from-indigo-500/0 via-indigo-500/40 to-purple-500/0"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: hover ? 1 : 0 }}
+        transition={{ duration: 0.25 }}
+      />
+
+      {/* content */}
+      <div className="relative z-10">
+        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600/15 to-purple-600/15">
+          <motion.div
+            animate={{ rotate: hover ? 8 : 0, scale: hover ? 1.05 : 1 }}
+            transition={{ type: "spring", stiffness: 260, damping: 18 }}
+          >
+            <Icon className="h-7 w-7 text-indigo-600 dark:text-indigo-400" />
+          </motion.div>
+        </div>
+
+        <h3 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+        <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">{description}</p>
+      </div>
+
+      {/* bottom accent */}
+      <div className="absolute left-0 right-0 -bottom-px h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+    </motion.div>
+  );
+}

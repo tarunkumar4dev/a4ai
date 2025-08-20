@@ -1,5 +1,6 @@
+// src/App.tsx
 import { useEffect, Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,40 +8,47 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import PrivateRoute from "@/components/PrivateRoute";
 import { ThemeProvider } from "@/context/ThemeContext";
+import LandingDemo from "@/components/LandingDemo";
+import FAQ from "@/components/FAQ";
 
-// Pages (code-split)
-const LandingPage = lazy(() => import("./pages/LandingPage"));
-const LoginPage = lazy(() => import("./pages/LoginPage"));
-const SignupPage = lazy(() => import("./pages/SignupPage"));
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
-const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
-const AboutPage = lazy(() => import("./pages/AboutPage"));
-const ContactPage = lazy(() => import("./pages/ContactPage"));
+/* ---------- Lazy pages ---------- */
+const LandingPage        = lazy(() => import("./pages/LandingPage"));
+const LoginPage          = lazy(() => import("./pages/LoginPage"));
+const SignupPage         = lazy(() => import("./pages/SignupPage"));
+const DashboardPage      = lazy(() => import("./pages/DashboardPage"));
+const TestGeneratorPage  = lazy(() => import("./pages/TestGeneratorPage"));
+const FeaturesPage       = lazy(() => import("./pages/FeaturesPage"));
+const AboutPage          = lazy(() => import("./pages/AboutPage"));
+const ContactPage        = lazy(() => import("./pages/ContactPage"));
 const ContestLandingPage = lazy(() => import("./pages/ContestLandingPage"));
-const CreateContestPage = lazy(() => import("./pages/CreateContestPage"));
-const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
-const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
-const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const CreateContestPage  = lazy(() => import("./pages/CreateContestPage"));
+const JoinContestPage    = lazy(() => import("./pages/JoinContestPage"));
+const ContestLivePage    = lazy(() => import("./pages/ContestLivePage"));
+const LeaderboardPage    = lazy(() => import("./pages/LeaderboardPage"));
+const PricingPage        = lazy(() => import("./pages/product/PricingPage"));
+const ApiPage            = lazy(() => import("./pages/product/ApiPage"));
+const ResourcePage       = lazy(() => import("./pages/Resource"));  // ✅ NEW
+
+/* ---------- Utilities ---------- */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [pathname]);
+  return null;
+}
 
 const queryClient = new QueryClient();
 
 const AuthCallback = () => {
   const navigate = useNavigate();
-  
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/dashboard", { replace: true });
-      } else {
-        navigate("/login");
-      }
+      navigate(session ? "/dashboard" : "/login", { replace: true });
     });
   }, [navigate]);
-
   return <div className="flex justify-center p-8">Loading...</div>;
 };
 
+/* ---------- App ---------- */
 const App = () => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -63,7 +71,6 @@ const App = () => {
         }
       }
     );
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -75,78 +82,62 @@ const App = () => {
           <Sonner />
           <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors">
             <BrowserRouter>
+              <ScrollToTop />
               <Suspense fallback={<div className="p-8 text-center text-sm text-gray-500">Loading…</div>}>
                 <Routes>
+                  {/* Auth */}
                   <Route path="/auth/callback" element={<AuthCallback />} />
-                  <Route path="/" element={<LandingPage />} />
-                  <Route path="/login" element={<LoginPage />} />
+
+                  {/* Public marketing */}
+                  <Route path="/"           element={<LandingPage />} />
+                  <Route path="/features"   element={<FeaturesPage />} />
+                  <Route path="/pricing"    element={<PricingPage />} />
+                  <Route path="/api"        element={<ApiPage />} />
+                  <Route path="/resources"  element={<ResourcePage />} /> {/* ✅ Added */}
+                  <Route path="/about"      element={<AboutPage />} />
+                  <Route path="/contact"    element={<ContactPage />} />
+
+                  {/* Standalone sections */}
+                  <Route path="/demo" element={<LandingDemo />} />
+                  <Route path="/faq"  element={<FAQ />} />
+
+                  {/* Auth pages */}
+                  <Route path="/login"  element={<LoginPage />} />
                   <Route path="/signup" element={<SignupPage />} />
+
+                  {/* Protected: Dashboard & contests */}
                   <Route
                     path="/dashboard"
-                    element={
-                      <PrivateRoute>
-                        <DashboardPage />
-                      </PrivateRoute>
-                    }
+                    element={<PrivateRoute><DashboardPage /></PrivateRoute>}
                   />
                   <Route
                     path="/dashboard/test-generator"
-                    element={
-                      <PrivateRoute>
-                        <TestGeneratorPage />
-                      </PrivateRoute>
-                    }
+                    element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>}
                   />
                   <Route
                     path="/dashboard/contests"
-                    element={
-                      <PrivateRoute>
-                        <ContestLandingPage />
-                      </PrivateRoute>
-                    }
+                    element={<PrivateRoute><ContestLandingPage /></PrivateRoute>}
                   />
-                  <Route path="/features" element={<FeaturesPage />} />
-                  <Route path="/about" element={<AboutPage />} />
-                  <Route path="/contact" element={<ContactPage />} />
+
                   <Route
                     path="/contests"
-                    element={
-                      <PrivateRoute>
-                        <ContestLandingPage />
-                      </PrivateRoute>
-                    }
+                    element={<PrivateRoute><ContestLandingPage /></PrivateRoute>}
                   />
                   <Route
                     path="/contests/create"
-                    element={
-                      <PrivateRoute>
-                        <CreateContestPage />
-                      </PrivateRoute>
-                    }
+                    element={<PrivateRoute><CreateContestPage /></PrivateRoute>}
                   />
                   <Route
                     path="/contests/join"
-                    element={
-                      <PrivateRoute>
-                        <JoinContestPage />
-                      </PrivateRoute>
-                    }
+                    element={<PrivateRoute><JoinContestPage /></PrivateRoute>}
                   />
                   <Route
                     path="/contests/live/:contestId"
-                    element={
-                      <PrivateRoute>
-                        <ContestLivePage />
-                      </PrivateRoute>
-                    }
+                    element={<PrivateRoute><ContestLivePage /></PrivateRoute>}
                   />
                   <Route
                     path="/contests/leaderboard"
-                    element={
-                      <PrivateRoute>
-                        <LeaderboardPage />
-                      </PrivateRoute>
-                    }
+                    element={<PrivateRoute><LeaderboardPage /></PrivateRoute>}
                   />
                 </Routes>
               </Suspense>
