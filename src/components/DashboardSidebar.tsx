@@ -1,5 +1,7 @@
-import { Link, useLocation } from "react-router-dom";      // edited 19-06-2025
-import { motion, AnimatePresence } from "framer-motion";
+// src/components/DashboardSidebar.tsx
+import React, { useMemo } from "react";
+import { NavLink, Link, useLocation } from "react-router-dom";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   FileText,
@@ -14,129 +16,319 @@ import {
   Notebook,
   CalendarDays,
   Users2,
-  AlertCircle,
   Sparkles,
   Plus,
 } from "lucide-react";
 
+/* ---------------- Motion presets (shared, consistent) ---------------- */
+const enterFromLeft = {
+  hidden: { x: -12, opacity: 0 },
+  show: (i: number) => ({
+    x: 0,
+    opacity: 1,
+    transition: { delay: 0.02 * i, type: "spring", stiffness: 280, damping: 22 },
+  }),
+};
+
+const hoverLift = { scale: 1.02, x: 6, transition: { type: "spring", stiffness: 320, damping: 16 } };
+
+/* ---------------- Types ---------------- */
 interface SidebarItemProps {
   icon: React.ElementType;
   label: string;
-  href: string;
-  isActive?: boolean;
+  to: string;
   alert?: boolean;
   premium?: boolean;
+  index: number;
 }
 
-const SidebarItem = ({ icon: Icon, label, href, isActive, alert, premium }: SidebarItemProps) => (
-  <motion.div
-    whileHover={{ 
-      scale: 1.02,
-      x: 5,
-      transition: { type: "spring", stiffness: 300, damping: 15 }
-    }}
-    whileTap={{ scale: 0.98 }}
-    className="relative"
-  >
-    {alert && (
-      <motion.span 
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"
-      />
-    )}
-    {premium && (
-      <motion.span
-        animate={{ 
-          rotate: [0, 10, -10, 0],
-          transition: { repeat: Infinity, duration: 2 }
-        }}
-        className="absolute -right-2 -top-2"
+/* ---------------- Memo Sidebar Item ---------------- */
+const SidebarItem = React.memo(function SidebarItem({
+  icon: Icon,
+  label,
+  to,
+  alert,
+  premium,
+  index,
+}: SidebarItemProps) {
+  const prefersReducedMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      custom={index}
+      variants={enterFromLeft}
+      initial="hidden"
+      animate="show"
+      whileHover={!prefersReducedMotion ? hoverLift : undefined}
+      whileTap={!prefersReducedMotion ? { scale: 0.98 } : undefined}
+      className="relative"
+    >
+      {alert && (
+        <motion.span
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"
+          aria-hidden
+        />
+      )}
+
+      {premium && (
+        <motion.span
+          aria-hidden
+          animate={!prefersReducedMotion ? { rotate: [0, 10, -10, 0] } : {}}
+          transition={{ repeat: Infinity, duration: 2.2 }}
+          className="absolute -right-2 -top-2"
+        >
+          <Sparkles className="h-3 w-3 text-amber-400 fill-amber-400" />
+        </motion.span>
+      )}
+
+      <NavLink
+        to={to}
+        className={({ isActive }) =>
+          cn(
+            "group flex items-center gap-3 rounded-lg px-4 py-3 transition-all duration-300",
+            isActive
+              ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg"
+              : "text-gray-700 hover:bg-gray-50 hover:text-purple-600",
+            premium && "border-l-4 border-amber-400"
+          )
+        }
+        aria-label={label}
       >
-        <Sparkles className="h-3 w-3 text-amber-400 fill-amber-400" />
-      </motion.span>
-    )}
-    <Link
-      to={href}
+        {({ isActive }) => (
+          <>
+            <Icon
+              className={cn(
+                "h-5 w-5 transition-transform duration-300",
+                isActive ? "text-white" : "text-gray-400 group-hover:text-purple-500",
+                premium && !isActive && "text-amber-500 group-hover:text-amber-600"
+              )}
+            />
+            <span className="text-[0.95rem] font-medium flex-1">{label}</span>
+            <ChevronRight
+              className={cn(
+                "h-4 w-4 opacity-0 transition-all duration-300",
+                isActive ? "text-white opacity-100" : "group-hover:opacity-100 group-hover:text-purple-500"
+              )}
+              aria-hidden
+            />
+          </>
+        )}
+      </NavLink>
+    </motion.div>
+  );
+});
+
+/* ---------------- Data (memoized) ---------------- */
+const useSidebarData = () =>
+  useMemo(
+    () => ({
+      items: [
+        { icon: LayoutDashboard, label: "Overview", to: "/dashboard" },
+        { icon: FileText, label: "Test Generator", to: "/dashboard/test-generator", alert: true },
+        { icon: Trophy, label: "Contests", to: "/dashboard/contests", premium: true },
+        { icon: BarChart2, label: "Analytics", to: "/dashboard/analytics" },
+        { icon: Users, label: "Students", to: "/dashboard/students", alert: true },
+        { icon: Notebook, label: "Notes", to: "/dashboard/notes" },
+        { icon: Settings, label: "Settings", to: "/dashboard/settings" },
+      ],
+      contestInfo: {
+        title: "Class 10 Science Test 2025",
+        deadline: "2025-07-25",
+        participants: 300,
+        prize1: "₹5,000",
+        prize2: "₹2,000",
+        premium: true,
+      },
+      notesSummary: { unread: 3, recentSubject: "Algebra II", lastUpdated: "2 hours ago", starred: 5 },
+    }),
+    []
+  );
+
+/* ---------------- Featured Contest + Notes (split, memo) ---------------- */
+const FeaturedContest = React.memo(function FeaturedContest({
+  contest,
+}: {
+  contest: {
+    title: string;
+    deadline: string;
+    participants: number;
+    prize1: string;
+    prize2: string;
+    premium?: boolean;
+  };
+}) {
+  const dateStr = new Date(contest.deadline).toLocaleDateString();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", delay: 0.05 }}
       className={cn(
-        "flex items-center gap-3 py-3 px-4 rounded-lg transition-all duration-300 group",
-        isActive
-          ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg"
-          : "text-gray-600 hover:bg-gray-50 hover:text-purple-600",
-        premium && "border-l-4 border-amber-400"
+        "mx-3 mb-4 rounded-xl border p-4",
+        contest.premium
+          ? "bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.10)]"
+          : "bg-gradient-to-br from-yellow-50 to-amber-50 border-amber-200"
       )}
     >
-      <Icon className={cn(
-        "h-5 w-5 transition-transform duration-300",
-        isActive ? "text-white" : "text-gray-400 group-hover:text-purple-500",
-        alert && !isActive ? "text-red-500" : "",
-        premium && "text-amber-500 group-hover:text-amber-600"
-      )} />
-      <span className="text-md font-medium flex-1">{label}</span>
-      <ChevronRight className={cn(
-        "h-4 w-4 opacity-0 transition-all duration-300",
-        isActive ? "text-white opacity-100" : "group-hover:opacity-100 group-hover:text-purple-500"
-      )} />
-    </Link>
-  </motion.div>
-);
+      <div className="mb-2 flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          <Trophy className={cn("h-5 w-5", contest.premium ? "text-amber-600" : "text-amber-500")} />
+          <h3 className="font-semibold text-gray-800">Featured Contest</h3>
+        </div>
+        {contest.premium && (
+          <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+            <Sparkles className="h-3 w-3" /> Premium
+          </span>
+        )}
+      </div>
 
-const DashboardSidebar = () => {
-  const location = useLocation();
-  const currentPath = location.pathname;
+      <p className="mb-1 text-sm font-medium text-gray-800">{contest.title}</p>
 
-  const sidebarItems = [
-    { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
-    { icon: FileText, label: "Test Generator", href: "/dashboard/test-generator", alert: true },
-    { icon: Trophy, label: "Contests", href: "/dashboard/contests", premium: true },
-    { icon: BarChart2, label: "Analytics", href: "/dashboard/analytics" },
-    { icon: Users, label: "Students", href: "/dashboard/students", alert: true },
-    { icon: Notebook, label: "Notes", href: "/dashboard/notes" },
-    { icon: Settings, label: "Settings", href: "/dashboard/settings" },
-  ];
+      <div className="mt-3 space-y-2 text-sm">
+        <div className="flex items-center gap-2 text-gray-600">
+          <CalendarDays className="h-4 w-4 text-amber-500" />
+          <span>Date {dateStr}</span>
+        </div>
+        <div className="flex items-center gap-2 text-gray-600">
+          <Users2 className="h-4 w-4 text-amber-500" />
+          <span>{contest.participants.toLocaleString()} participants</span>
+        </div>
+        <div className="flex items-center gap-2 font-medium text-amber-700">
+          <Zap className="h-4 w-4" />
+          <span>1st Prize: {contest.prize1}</span>
+        </div>
+        <div className="flex items-center gap-2 font-medium text-amber-700">
+          <Zap className="h-4 w-4" />
+          <span>2nd Prize: {contest.prize2}</span>
+        </div>
+        <div className="flex items-center gap-2 font-medium text-amber-700">
+          <Zap className="h-4 w-4" />
+          <span>Goodies to Top 15</span>
+        </div>
+      </div>
 
-  const contestInfo = {
-    title: "Class 10 Science Test 2025",
-    deadline: "2025-07-25",
-    participants: 300,
-    prize1: "₹5,000",
-    prize2: "₹2,000",
-    premium: true,
-  };
+      <Link to="/dashboard/contests" className="block">
+        <motion.button
+          whileHover={{
+            scale: 1.02,
+            boxShadow: contest.premium
+              ? "0 4px 12px rgba(245, 158, 11, 0.30)"
+              : "0 4px 12px rgba(245, 158, 11, 0.20)",
+          }}
+          whileTap={{ scale: 0.98 }}
+          className={cn(
+            "mt-3 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-white transition-all",
+            contest.premium ? "bg-gradient-to-r from-amber-500 to-amber-600 shadow-md" : "bg-gradient-to-r from-amber-400 to-amber-500"
+          )}
+        >
+          <Trophy className="h-4 w-4" />
+          Register Now
+        </motion.button>
+      </Link>
+    </motion.div>
+  );
+});
 
-  const notesSummary = {
-    unread: 3,
-    recentSubject: "Algebra II",
-    lastUpdated: "2 hours ago",
-    starred: 5
-  };
+const NotesQuick = React.memo(function NotesQuick({
+  unread,
+  recentSubject,
+  lastUpdated,
+  starred,
+}: {
+  unread: number;
+  recentSubject: string;
+  lastUpdated: string;
+  starred: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", delay: 0.1 }}
+      className="mx-3 mb-6 rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-4 shadow-[0_4px_12px_rgba(124,58,237,0.1)]"
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Notebook className="h-5 w-5 text-purple-600" />
+          <h3 className="font-semibold text-gray-800">My Notes</h3>
+        </div>
+        <div className="flex gap-1">
+          {unread > 0 && (
+            <span className="rounded-full bg-purple-100 px-2 py-1 text-xs font-medium text-purple-800">{unread} new</span>
+          )}
+          {starred > 0 && (
+            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+              <Sparkles className="h-3 w-3" />
+              {starred}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-3 space-y-2 text-sm text-gray-600">
+        <p>
+          Last updated: <span className="font-medium text-purple-700">{lastUpdated}</span>
+        </p>
+        <p>
+          Recent subject: <span className="font-medium text-purple-700">{recentSubject}</span>
+        </p>
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <Link to="/dashboard/notes" className="flex-1">
+          <motion.button
+            whileHover={{ scale: 1.02, backgroundColor: "rgba(249,250,251,1)" }}
+            whileTap={{ scale: 0.98 }}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white py-2 text-sm text-purple-600 transition-all"
+          >
+            <Bookmark className="h-4 w-4" />
+            View All
+          </motion.button>
+        </Link>
+        <Link to="/dashboard/notes/new" className="flex-1">
+          <motion.button
+            whileHover={{ scale: 1.02, boxShadow: "0 4px 12px rgba(124, 58, 237, 0.2)" }}
+            whileTap={{ scale: 0.98 }}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 py-2 text-sm text-white transition-all"
+          >
+            <Plus className="h-4 w-4" />
+            New Note
+          </motion.button>
+        </Link>
+      </div>
+    </motion.div>
+  );
+});
+
+/* ---------------- Sidebar ---------------- */
+export default function DashboardSidebar() {
+  const { items, contestInfo, notesSummary } = useSidebarData();
+  const location = useLocation(); // (kept to trigger re-render on route change)
+  const prefersReducedMotion = useReducedMotion();
 
   return (
     <motion.aside
-      initial={{ x: -100, opacity: 0 }}
-      animate={{ 
-        x: 0, 
-        opacity: 1,
-        transition: { type: "spring", stiffness: 100, damping: 20 }
-      }}
-      exit={{ x: -100, opacity: 0 }}
-      className="w-64 border-r border-gray-100 bg-white flex flex-col h-screen sticky top-0 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
+      initial={{ x: -90, opacity: 0 }}
+      animate={{ x: 0, opacity: 1, transition: { type: "spring", stiffness: 110, damping: 20 } }}
+      exit={{ x: -90, opacity: 0 }}
+      className="sticky top-0 flex h-screen w-64 flex-col overflow-y-auto border-r border-gray-100 bg-white scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300"
     >
-      {/* Logo Header */}
-      <motion.div 
+      {/* Logo */}
+      <motion.div
         className="p-6"
-        whileHover={{ scale: 1.02 }}
+        whileHover={!prefersReducedMotion ? { scale: 1.02 } : undefined}
         transition={{ type: "spring", stiffness: 400 }}
       >
-        <Link 
-          to="/" 
+        <Link
+          to="/"
           className="flex items-center gap-2 text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent"
         >
           <motion.div
-            animate={{ 
-              rotate: [0, 10, -10, 0],
-              transition: { repeat: Infinity, duration: 3 }
-            }}
+            animate={!prefersReducedMotion ? { rotate: [0, 10, -10, 0] } : {}}
+            transition={{ repeat: Infinity, duration: 3 }}
           >
             <Zap className="h-6 w-6 text-purple-600" />
           </motion.div>
@@ -144,171 +336,25 @@ const DashboardSidebar = () => {
         </Link>
       </motion.div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-2 space-y-1">
-        {sidebarItems.map((item) => (
+      {/* Nav */}
+      <nav className="flex-1 space-y-1 px-3 py-2">
+        {items.map((item, i) => (
           <SidebarItem
-            key={item.href}
+            key={item.to}
             icon={item.icon}
             label={item.label}
-            href={item.href}
-            isActive={currentPath === item.href}
+            to={item.to}
             alert={item.alert}
             premium={item.premium}
+            index={i}
           />
         ))}
       </nav>
 
       <AnimatePresence>
-        {/* Contest Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ 
-            opacity: 1, 
-            y: 0,
-            transition: { delay: 0.2, type: "spring" }
-          }}
-          exit={{ opacity: 0, y: 20 }}
-          className={cn(
-            "p-4 mx-3 mb-4 rounded-xl border",
-            contestInfo.premium 
-              ? "bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.1)]"
-              : "bg-gradient-to-br from-yellow-50 to-amber-50 border-amber-200"
-          )}
-        >
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Trophy className={cn(
-                "h-5 w-5",
-                contestInfo.premium ? "text-amber-600" : "text-amber-500"
-              )} />
-              <h3 className="font-semibold text-gray-800">Featured Contest</h3>
-            </div>
-            {contestInfo.premium && (
-              <span className="text-xs font-medium px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full flex items-center gap-1">
-                <Sparkles className="h-3 w-3" />
-                Premium
-              </span>
-            )}
-          </div>
-          
-          <p className="text-sm font-medium text-gray-800 mb-1">{contestInfo.title}</p>
-          
-          <div className="mt-3 space-y-2 text-sm">
-            <div className="flex items-center gap-2 text-gray-600">
-              <CalendarDays className="h-4 w-4 text-amber-500" />
-              <span>Date {new Date(contestInfo.deadline).toLocaleDateString()}</span>
-            </div>
-            <div className="flex items-center gap-2 text-gray-600">
-              <Users2 className="h-4 w-4 text-amber-500" />
-              <span>{contestInfo.participants.toLocaleString()} participants</span>
-            </div>
-            <div className="flex items-center gap-2 font-medium text-amber-700">
-              <Zap className="h-4 w-4" />
-              <span>1st Prize: {contestInfo.prize1}</span>
-            </div>
-            <div className="flex items-center gap-2 font-medium text-amber-700">
-              <Zap className="h-4 w-4" />
-              <span>2nd Prize: {contestInfo.prize2}</span>
-            </div>
-            <div className="flex items-center gap-2 font-medium text-amber-700">
-              <Zap className="h-4 w-4" />
-              <span>Goodies to Top 15
-                {/* {contestInfo.prize} */}
-                </span>
-            </div>
-          </div>
-
-          <Link to="/dashboard/contests">
-            <motion.button
-              whileHover={{ 
-                scale: 1.02,
-                boxShadow: contestInfo.premium 
-                  ? "0 4px 12px rgba(245, 158, 11, 0.3)"
-                  : "0 4px 12px rgba(245, 158, 11, 0.2)"
-              }}
-              whileTap={{ scale: 0.98 }}
-              className={cn(
-                "w-full mt-3 py-2 text-white rounded-lg transition-all flex items-center justify-center gap-2",
-                contestInfo.premium
-                  ? "bg-gradient-to-r from-amber-500 to-amber-600 shadow-md"
-                  : "bg-gradient-to-r from-amber-400 to-amber-500"
-              )}
-            >
-              <Trophy className="h-4 w-4" />
-              Register Now
-            </motion.button>
-          </Link>
-        </motion.div>
-
-        {/* Notes Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ 
-            opacity: 1, 
-            y: 0,
-            transition: { delay: 0.3, type: "spring" }
-          }}
-          exit={{ opacity: 0, y: 20 }}
-          className="p-4 mx-3 mb-6 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl border border-purple-200 shadow-[0_4px_12px_rgba(124,58,237,0.1)]"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Notebook className="h-5 w-5 text-purple-600" />
-              <h3 className="font-semibold text-gray-800">My Notes</h3>
-            </div>
-            <div className="flex gap-1">
-              {notesSummary.unread > 0 && (
-                <span className="text-xs font-medium px-2 py-1 bg-purple-100 text-purple-800 rounded-full">
-                  {notesSummary.unread} new
-                </span>
-              )}
-              {notesSummary.starred > 0 && (
-                <span className="text-xs font-medium px-2 py-1 bg-amber-100 text-amber-800 rounded-full flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  {notesSummary.starred}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2 text-sm text-gray-600 mb-3">
-            <p>Last updated: <span className="font-medium text-purple-700">{notesSummary.lastUpdated}</span></p>
-            <p>Recent subject: <span className="font-medium text-purple-700">{notesSummary.recentSubject}</span></p>
-          </div>
-
-          <div className="flex gap-2 mt-4">
-            <Link to="/dashboard/notes" className="flex-1">
-              <motion.button
-                whileHover={{ 
-                  scale: 1.02,
-                  backgroundColor: "rgba(249, 250, 251, 1)"
-                }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full py-2 bg-white border border-purple-200 text-purple-600 rounded-lg transition-all flex items-center justify-center gap-2 text-sm"
-              >
-                <Bookmark className="h-4 w-4" />
-                View All
-              </motion.button>
-            </Link>
-            <Link to="/dashboard/notes/new" className="flex-1">
-              <motion.button
-                whileHover={{ 
-                  scale: 1.02,
-                  boxShadow: "0 4px 12px rgba(124, 58, 237, 0.2)"
-                }}
-                whileTap={{ scale: 0.98 }}
-                className="w-full py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg transition-all flex items-center justify-center gap-2 text-sm"
-              >
-                <Plus className="h-4 w-4" />
-                New Note
-              </motion.button>
-            </Link>
-          </div>
-        </motion.div>
+        <FeaturedContest contest={contestInfo} />
+        <NotesQuick {...notesSummary} />
       </AnimatePresence>
     </motion.aside>
   );
-};
-
-export default DashboardSidebar;
+}
