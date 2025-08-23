@@ -1,5 +1,12 @@
 import { useEffect, Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useNavigate,
+  useLocation,
+  Navigate,
+} from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,6 +31,11 @@ const SignupPage         = lazy(() => import("./pages/SignupPage"));
 const DashboardPage      = lazy(() => import("./pages/DashboardPage"));
 const TestGeneratorPage  = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage      = lazy(() => import("./pages/AnalyticsPage"));
+
+/* ---------- NEW: Students / Notes / Settings ---------- */
+const StudentsPage       = lazy(() => import("./pages/StudentsPage"));
+const NotesPage          = lazy(() => import("./pages/NotesPage"));
+const SettingsPage       = lazy(() => import("./pages/SettingsPage"));
 
 /* ---------- Contests ---------- */
 const ContestLandingPage = lazy(() => import("./pages/ContestLandingPage"));
@@ -65,9 +77,15 @@ const LoadingScreen = () => (
 const AuthCallback = () => {
   const navigate = useNavigate();
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      navigate(session ? "/dashboard" : "/login", { replace: true });
-    });
+    (async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        navigate(session ? "/dashboard" : "/login", { replace: true });
+      } catch {
+        navigate("/login", { replace: true });
+      }
+    })();
   }, [navigate]);
   return <LoadingScreen />;
 };
@@ -77,47 +95,62 @@ const NotFound = () => (
   <div className="min-h-[60vh] flex items-center justify-center">
     <div className="text-center">
       <h1 className="text-2xl font-semibold">Page not found</h1>
-      <p className="mt-2 text-gray-600 dark:text-gray-400">The page you’re looking for doesn’t exist.</p>
-      <a href="/" className="mt-4 inline-block rounded-lg bg-indigo-600 text-white px-4 py-2">Go home</a>
+      <p className="mt-2 text-gray-600 dark:text-gray-400">
+        The page you’re looking for doesn’t exist.
+      </p>
+      <a
+        href="/"
+        className="mt-4 inline-block rounded-lg bg-indigo-600 text-white px-4 py-2"
+      >
+        Go home
+      </a>
     </div>
   </div>
 );
 
 /* ---------- App ---------- */
 const App = () => {
-  // Create/ensure profile on sign-in
+  // Ensure profile row exists on sign-in (safe for Google OAuth + email)
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .single();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .single();
 
-        if (!profile) {
-          await supabase.from("profiles").insert({
-            id: session.user.id,
-            email: session.user.email,
-            full_name: session.user.user_metadata?.full_name || "New User",
-            role: "teacher",
-          });
+          if (!profile) {
+            await supabase.from("profiles").insert({
+              id: session.user.id,
+              email: session.user.email,
+              full_name: session.user.user_metadata?.full_name || "New User",
+              role: "teacher",
+            });
+          }
         }
       }
-    });
+    );
     return () => subscription.unsubscribe();
   }, []);
 
-  // Idle-prefetch common public chunks to improve perceived speed
+  // Idle-prefetch commonly visited chunks to improve perceived speed
   useEffect(() => {
     const prefetch = () => {
+      // marketing
       import("./pages/FeaturesPage");
       import("./pages/product/PricingPage");
       import("./pages/company/CareersPage");
       import("./pages/Resources/Documentation");
+      // app/dash
+      import("./pages/StudentsPage");
+      import("./pages/NotesPage");
+      import("./pages/SettingsPage");
     };
-    // requestIdleCallback is not on all browsers; fall back to timeout
-    (window as any).requestIdleCallback ? (window as any).requestIdleCallback(prefetch) : setTimeout(prefetch, 1200);
+    (window as any).requestIdleCallback
+      ? (window as any).requestIdleCallback(prefetch)
+      : setTimeout(prefetch, 1200);
   }, []);
 
   return (
@@ -165,7 +198,7 @@ const App = () => {
                   <Route path="/login"        element={<LoginPage />} />
                   <Route path="/signup"       element={<SignupPage />} />
 
-                  {/* Protected: Dashboard & contests */}
+                  {/* Protected: Dashboard & core app */}
                   <Route
                     path="/dashboard"
                     element={
@@ -190,11 +223,29 @@ const App = () => {
                       </PrivateRoute>
                     }
                   />
+
+                  {/* NEW: Students / Notes / Settings (protected) */}
                   <Route
-                    path="/dashboard/contests"
+                    path="/dashboard/students"
                     element={
                       <PrivateRoute>
-                        <ContestLandingPage />
+                        <StudentsPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/notes"
+                    element={
+                      <PrivateRoute>
+                        <NotesPage />
+                      </PrivateRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/settings"
+                    element={
+                      <PrivateRoute>
+                        <SettingsPage />
                       </PrivateRoute>
                     }
                   />
