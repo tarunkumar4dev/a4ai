@@ -22,7 +22,7 @@ const Footer = () => {
       links: [
         { name: "Documentation", href: "/docs" },
         { name: "Help Center", href: "/help" },
-        { name: "Blog", href: "/blog" }, // change to full URL if external
+        { name: "Blog", href: "/blog" },
         { name: "Case Studies", href: "/case-studies" },
       ],
     },
@@ -37,16 +37,15 @@ const Footer = () => {
     },
   ];
 
-  // ✅ Updated social links
+  // Social links
   const socialLinks = [
-    { icon: Linkedin,  href: "https://www.linkedin.com/company/a4ai-in",          label: "LinkedIn" },
-    { icon: Twitter,   href: "https://x.com/a4aiOfficial",                         label: "X (Twitter)" },
-    { icon: Instagram, href: "https://www.instagram.com/a4ai.in?igsh=ODdpajJjNjkzeXp1", label: "Instagram" },
-    { icon: Github,    href: "https://github.com",                                 label: "GitHub" }, // generic
-    { icon: Mail,      href: "mailto:a4ai.team@gmail.com",                         label: "Email" },
+    { icon: Linkedin,  href: "https://www.linkedin.com/company/a4ai-in",                 label: "LinkedIn" },
+    { icon: Twitter,   href: "https://x.com/a4aiOfficial",                                label: "X (Twitter)" },
+    { icon: Instagram, href: "https://www.instagram.com/a4ai.in?igsh=ODdpajJjNjkzeXp1",  label: "Instagram" },
+    { icon: Github,    href: "https://github.com",                                        label: "GitHub" },
+    { icon: Mail,      href: "mailto:a4ai.team@gmail.com",                                label: "Email" },
   ];
 
-  // Treat http(s) and mailto as external
   const isExternal = (href: string) =>
     href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:");
 
@@ -66,6 +65,7 @@ const Footer = () => {
 
   return (
     <motion.footer
+      role="contentinfo"
       onMouseMove={onMouseMove}
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
@@ -91,16 +91,16 @@ const Footer = () => {
       {/* animated top hairline */}
       <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
 
-      {/* floating orbs */}
+      {/* floating orbs — make them click-through */}
       <motion.span
         aria-hidden
-        className="absolute -top-10 -left-10 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl"
+        className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl"
         animate={{ y: [0, 8, 0] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.span
         aria-hidden
-        className="absolute -bottom-14 -right-10 h-44 w-44 rounded-full bg-purple-500/10 blur-3xl"
+        className="pointer-events-none absolute -bottom-14 -right-10 h-44 w-44 rounded-full bg-purple-500/10 blur-3xl"
         animate={{ y: [0, -10, 0] }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
       />
@@ -135,6 +135,7 @@ const Footer = () => {
                     className="w-full py-2.5 px-4 rounded-[11px] bg-transparent text-sm text-gray-900 dark:text-white focus:outline-none"
                   />
                   <motion.button
+                    type="button"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.96 }}
                     className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
