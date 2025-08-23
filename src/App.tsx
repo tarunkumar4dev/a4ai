@@ -250,7 +250,7 @@ const App = () => {
                     }
                   />
 
-                  {/* Contests */}
+                  {/* Contests (protected) */}
                   <Route
                     path="/contests"
                     element={
@@ -291,6 +291,13 @@ const App = () => {
                       </PrivateRoute>
                     }
                   />
+
+                  {/* ---- Redirect shims so /dashboard/contests* keeps working ---- */}
+                  <Route path="/dashboard/contests" element={<Navigate to="/contests" replace />} />
+                  <Route path="/dashboard/contests/create" element={<Navigate to="/contests/create" replace />} />
+                  <Route path="/dashboard/contests/join" element={<Navigate to="/contests/join" replace />} />
+                  <Route path="/dashboard/contests/live/:contestId" element={<Navigate to="/contests/live/:contestId" replace />} />
+                  <Route path="/dashboard/contests/leaderboard" element={<Navigate to="/contests/leaderboard" replace />} />
 
                   {/* Fallbacks */}
                   <Route path="/home" element={<Navigate to="/" replace />} />
