@@ -12,35 +12,52 @@ export default function AuthCallback() {
   useEffect(() => {
     (async () => {
       try {
-        // 1) Exchange ?code=... for a session (PKCE flow)
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-          window.location.href
-        );
+        const url = new URL(window.location.href);
+        const hasCode = url.searchParams.get("code");
+
+        // If someone hits /auth/callback directly without a code
+        if (!hasCode) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            navigate("/dashboard", { replace: true });
+            return;
+          }
+          navigate("/login", { replace: true });
+          return;
+        }
+
+        // 1) Exchange ?code=... → session (PKCE)
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(url.toString());
         if (exchangeError) throw exchangeError;
 
-        // 2) Confirm we have a logged-in user
+        // 2) Confirm user
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
         if (!user) throw new Error("No user found after authentication");
 
-        // 3) Ensure a profile row exists (adjust columns as per your schema)
+        // 3) Ensure profile row
         const { error: profileError } = await supabase
           .from("profiles")
-          .upsert({
-            id: user.id,
-            email: user.email,
-            full_name: user.user_metadata?.full_name || user.user_metadata?.name || "New User",
-            role: "teacher",
-            updated_at: new Date().toISOString(),
-          });
+          .upsert(
+            {
+              id: user.id,
+              email: user.email,
+              full_name:
+                user.user_metadata?.full_name ||
+                user.user_metadata?.name ||
+                "New User",
+              role: "teacher",
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" }
+          );
         if (profileError) throw profileError;
 
-        // 4) Optional toast
-        toast({ title: "Signed in", description: `Welcome back, ${user.email}` });
+        // 4) Toast (optional)
+        // toast({ title: "Signed in", description: `Welcome back, ${user.email}` });
 
-        // 5) Redirect to intended path if present (?next=/foo) else dashboard
-        const params = new URLSearchParams(location.search);
-        const next = params.get("next") || "/dashboard";
+        // 5) Redirect to ?next or /dashboard
+        const next = url.searchParams.get("next") || "/dashboard";
         navigate(next, { replace: true });
       } catch (err: any) {
         console.error("OAuth callback error:", err);
