@@ -7,13 +7,7 @@ import FAQ from "@/components/FAQ";
 import Footer from "@/components/Footer";
 
 import { Button } from "@/components/ui/button";
-import {
-  motion,
-  useMotionTemplate,
-  useMotionValue,
-} from "framer-motion";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card } from "@/components/ui/card";
+import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check, Sparkles } from "lucide-react";
 
@@ -29,45 +23,6 @@ const container = {
 };
 
 export default function LandingPage() {
-  const founders = [
-    {
-      name: "Tarun",
-      role: "Team Member",
-      description: "Tech Team",
-      initials: "TA",
-      image: "/images/tarun_a4ai.jpeg",
-      linkedin: "#",
-      twitter: "#",
-    },
-    {
-      name: "Yash",
-      role: "Team Member",
-      description: "Tech Team",
-      initials: "YA",
-      image: "/images/yash_a4ai.jpeg",
-      linkedin: "#",
-      twitter: "#",
-    },
-    {
-      name: "Aakash",
-      role: "Team Member",
-      description: "Operations Team",
-      initials: "AK",
-      image: "/images/aakash_a4ai.jpg",
-      linkedin: "#",
-      twitter: "#",
-    },
-    {
-      name: "Krishna",
-      role: "Team Member",
-      description: "Operations Team",
-      initials: "KR",
-      image: "/images/krishna_a4ai.jpg",
-      linkedin: "#",
-      twitter: "#",
-    },
-  ];
-
   return (
     <div className="flex min-h-screen flex-col bg-white dark:bg-gray-950">
       <Navbar />
@@ -130,7 +85,7 @@ export default function LandingPage() {
                   title: "Download Your Test Paper",
                   desc: "Get your professionally formatted test paper ready for distribution.",
                   icon: (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
+                    <svg xmlns="http://www.w3.org/200/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                   ),
@@ -155,8 +110,11 @@ export default function LandingPage() {
           </div>
         </motion.section>
 
-        {/* Team */}
-        <TeamSection founders={founders} />
+        {/* Trust / Security / Logos */}
+        <TrustSecurity />
+
+        {/* Outcomes & Stats */}
+        <Outcomes />
 
         {/* Testimonials */}
         <motion.section
@@ -253,108 +211,112 @@ export default function LandingPage() {
 /* =========================
    Upgraded CTA
    ========================= */
-   function UpgradedCTA() {
-    return (
-      <motion.div variants={fadeUp} className="mx-auto mt-16 max-w-5xl">
-        <div className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-8 shadow-xl backdrop-blur
-                        dark:border-white/10 dark:bg-white/5">
-          {/* decorative frame (always BELOW content) */}
-          <div
-            className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-1 ring-inset ring-transparent
-                       [background:linear-gradient(white,white)_padding-box,linear-gradient(90deg,rgba(99,102,241,.35),rgba(168,85,247,.35))_border-box]
-                       [border:1px_solid_transparent]" />
-  
-          {/* content (always ABOVE frame) */}
-          <div className="relative z-10 text-center text-gray-900 dark:text-gray-100">
-            <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs
-                            tracking-wide text-gray-700 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:text-gray-200">
-              <Sparkles className="h-4 w-4 text-indigo-600" />
-              No credit card required
-            </div>
-  
-            <h3 className="text-2xl font-bold">Create Your First Test in Minutes</h3>
-            <p className="mx-auto mt-2 max-w-2xl text-gray-600 dark:text-gray-300">
-              Start with a topic or paste your syllabus. We’ll generate a fully formatted paper with answer key and rubric checks.
-            </p>
-  
-            <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
-              {["Curriculum-aligned", "Multiple question types", "Instant answer key"].map((b) => (
-                <div key={b} className="flex items-center justify-center gap-2 text-sm">
-                  <Check className="h-4 w-4 text-indigo-600" />
-                  {b}
-                </div>
-              ))}
-            </div>
-  
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link to="/dashboard/test-generator">
-                <Button className="group rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-7 py-6 text-base font-semibold text-white
-                                    hover:from-indigo-700 hover:to-purple-700">
-                  Create Your First Test
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </Button>
-              </Link>
-              <Link to="/demo">
-                <Button variant="outline"
-                        className="rounded-xl border-gray-300/70 px-7 py-6 text-base font-semibold dark:border-white/20">
-                  Watch Demo
-                </Button>
-              </Link>
-            </div>
+function UpgradedCTA() {
+  return (
+    <motion.div variants={fadeUp} className="mx-auto mt-16 max-w-5xl">
+      <div className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-8 shadow-xl backdrop-blur
+                      dark:border-white/10 dark:bg-white/5">
+        {/* decorative frame (always BELOW content) */}
+        <div
+          className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-1 ring-inset ring-transparent
+                     [background:linear-gradient(white,white)_padding-box,linear-gradient(90deg,rgba(99,102,241,.35),rgba(168,85,247,.35))_border-box]
+                     [border:1px_solid_transparent]" />
+
+        {/* content (always ABOVE frame) */}
+        <div className="relative z-10 text-center text-gray-900 dark:text-gray-100">
+          <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs
+                          tracking-wide text-gray-700 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:text-gray-200">
+            <Sparkles className="h-4 w-4 text-indigo-600" />
+            No credit card required
+          </div>
+
+          <h3 className="text-2xl font-bold">Create Your First Test in Minutes</h3>
+          <p className="mx-auto mt-2 max-w-2xl text-gray-600 dark:text-gray-300">
+            Start with a topic or paste your syllabus. We’ll generate a fully formatted paper with answer key and rubric checks.
+          </p>
+
+          <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
+            {["Curriculum-aligned", "Multiple question types", "Instant answer key"].map((b) => (
+              <div key={b} className="flex items-center justify-center gap-2 text-sm">
+                <Check className="h-4 w-4 text-indigo-600" />
+                {b}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link to="/dashboard/test-generator">
+              <Button className="group rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-7 py-6 text-base font-semibold text-white
+                                  hover:from-indigo-700 hover:to-purple-700">
+                Create Your First Test
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </Button>
+            </Link>
+            <Link to="/demo">
+              <Button
+                variant="outline"
+                className="rounded-xl border-gray-300/70 px-7 py-6 text-base font-semibold dark:border-white/20"
+              >
+                Watch Demo
+              </Button>
+            </Link>
           </div>
         </div>
-      </motion.div>
-    );
-  }
-  
+      </div>
+    </motion.div>
+  );
+}
 
 /* =========================
-   Team Section
+   Trust, Security & Logos
    ========================= */
-function TeamSection({
-  founders,
-}: {
-  founders: Array<{
-    name: string;
-    role: string;
-    description: string;
-    initials: string;
-    image: string;
-    linkedin: string;
-    twitter: string;
-  }>;
-}) {
-  const mx = useMotionValue(300);
-  const my = useMotionValue(120);
-  const glow = useMotionTemplate`
-    radial-gradient(700px 350px at ${mx}px ${my}px, rgba(99,102,241,0.10), transparent 70%),
-    radial-gradient(700px 350px at calc(${mx}px + 180px) calc(${my}px + 120px), rgba(168,85,247,0.08), transparent 70%)
-  `;
-  const onMove = (e: React.MouseEvent<HTMLElement>) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    mx.set(e.clientX - r.left);
-    my.set(e.clientY - r.top);
-  };
-
+function TrustSecurity() {
   return (
     <motion.section
-      onMouseMove={onMove}
-      className="relative bg-white py-20 dark:bg-gray-950"
+      className="relative overflow-hidden bg-white py-20 dark:bg-gray-950"
       variants={container}
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, amount: 0.2 }}
     >
-      <motion.div aria-hidden style={{ backgroundImage: glow }} className="pointer-events-none absolute inset-0 -z-10 opacity-90" />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div className="mb-16 text-center" variants={fadeUp}>
-          <h2 className="text-4xl font-extrabold text-gray-900 dark:text-white">Meet Our Team</h2>
-          <p className="mt-4 text-xl text-gray-600 dark:text-gray-300">The brilliant minds behind a4ai</p>
+        {/* Logos / Social proof */}
+        <motion.div variants={fadeUp} className="mb-12">
+          <LogosMarquee />
         </motion.div>
 
-        <motion.div className="grid grid-cols-1 gap-8 sm:gap-10 lg:grid-cols-4" variants={container}>
-          {founders.map((person, i) => (
-            <TeamCard key={person.name} person={person} index={i} />
+        <motion.div variants={fadeUp} className="text-center mb-14">
+          <h2 className="mb-4 bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-4xl font-extrabold text-transparent">
+            Private by Design. Built for Schools.
+          </h2>
+          <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
+            We keep teacher and student data safe with sensible defaults and clear controls.
+          </p>
+        </motion.div>
+
+        {/* Trust cards */}
+        <motion.div
+          className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4"
+          variants={container}
+        >
+          {[
+            { title: "Encryption", desc: "Data encrypted in transit and at rest with modern standards.", icon: "🔒" },
+            { title: "Privacy-First", desc: "No ads, no selling data. You control retention and export.", icon: "🛡️" },
+            { title: "Reliability", desc: "Monitored uptime and graceful fallbacks during peak load.", icon: "⚡" },
+            { title: "Controls", desc: "Role-based access, per-class sharing, and one-click export.", icon: "⚙️" },
+          ].map((c, i) => (
+            <motion.div
+              key={c.title}
+              variants={fadeUp}
+              transition={{ delay: 0.05 * i }}
+              className="rounded-2xl border border-gray-100 bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
+            >
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-indigo-100 text-2xl dark:from-sky-900/40 dark:to-indigo-900/40">
+                {c.icon}
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{c.title}</h3>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{c.desc}</p>
+            </motion.div>
           ))}
         </motion.div>
       </div>
@@ -362,76 +324,109 @@ function TeamSection({
   );
 }
 
-function TeamCard({
-  person,
-  index,
-}: {
-  person: {
-    name: string;
-    role: string;
-    description: string;
-    initials: string;
-    image: string;
-    linkedin: string;
-    twitter: string;
-  };
-  index: number;
-}) {
+/* =========================
+   Logos Marquee (replace with real logos later)
+   ========================= */
+function LogosMarquee() {
   return (
-    <motion.div variants={fadeUp} transition={{ delay: 0.06 * index }} whileHover={{ y: -6 }} className="group relative">
-      <Card className="relative overflow-hidden rounded-2xl border border-black/10 bg-white/80 p-6 shadow-lg backdrop-blur transition-shadow hover:shadow-xl dark:border-white/10 dark:bg-white/[0.06]">
-        {/* gradient frame */}
-        <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-transparent [background:linear-gradient(white,white)_padding-box,linear-gradient(90deg,rgba(99,102,241,.35),rgba(168,85,247,.35))_border-box] [border:1px_solid_transparent]" />
-
-        {/* top glint */}
-        <div className="pointer-events-none absolute -top-1 left-0 right-0 h-1 rounded-t-2xl bg-gradient-to-r from-indigo-500/0 via-indigo-500/40 to-purple-500/0 opacity-0 transition-opacity group-hover:opacity-100" />
-
-        <div className="relative flex flex-col items-center text-center">
-          <div className="relative">
-            <div className="absolute -inset-2 rounded-full bg-gradient-to-br from-indigo-500/15 to-purple-500/15 blur-xl opacity-0 transition-opacity group-hover:opacity-100" />
-            <Avatar className="h-28 w-28 border-4 border-white shadow-lg dark:border-gray-800">
-              <AvatarImage src={person.image} alt={person.name} className="object-cover" />
-              <AvatarFallback className="bg-gradient-to-r from-purple-600 to-indigo-600 text-3xl font-bold text-white">
-                {person.initials}
-              </AvatarFallback>
-            </Avatar>
+    <div className="relative overflow-hidden rounded-xl border border-gray-100 bg-white py-6 dark:border-gray-800 dark:bg-gray-900">
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-white dark:from-gray-900 to-transparent" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-white dark:from-gray-900 to-transparent" />
+      <motion.div
+        initial={{ x: 0 }}
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ duration: 26, repeat: Infinity, ease: "linear" }}
+        className="flex items-center gap-10 whitespace-nowrap px-6"
+      >
+        {Array.from({ length: 2 }).flatMap(() => [
+          "CHANAKYA INSTITUTE OF EDUCATION", "EDUCATION BEAST", "DEEP COACHING CENTRE",
+          "DEEP JYOTI COACHING CENTRE", "ANUPMA INSTITUTE", "DELTA INSTITUTES",
+        ]).map((name, idx) => (
+          <div
+            key={idx}
+            className="inline-flex h-10 items-center rounded-md border border-gray-200 px-4 text-xs font-semibold tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-300"
+          >
+            {name}
           </div>
+        ))}
+      </motion.div>
+    </div>
+  );
+}
 
-          <h3 className="mt-4 text-xl font-bold text-gray-900 dark:text-white">{person.name}</h3>
-          <div className="mt-1 inline-flex items-center gap-2">
-            <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-medium text-gray-700 dark:bg-white/10 dark:text-gray-200">
-              {person.role}
-            </span>
-            <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs text-gray-700 dark:bg白/10 dark:text-gray-200">
-              {person.description}
-            </span>
-          </div>
+/* =========================
+   Outcomes & Stats
+   ========================= */
+function Outcomes() {
+  const stats = [
+    { k: "2000+", v: "Questions Generated", sub: "across subjects & boards" },
+    { k: "5h", v: "Saved / Teacher / Month", sub: "on paper creation & grading" },
+    { k: "95%", v: "Teacher Satisfaction", sub: "internal NPS survey" },
+  ];
 
-          {/* socials */}
-          <div className="mt-4 flex gap-3">
-            <a
-              href={person.linkedin}
-              aria-label={`${person.name} on LinkedIn`}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition-colors hover:bg-indigo-600 hover:text-white dark:bg-gray-800 dark:text-gray-300"
+  return (
+    <motion.section
+      className="bg-gradient-to-b from-gray-50 to-white py-20 dark:from-gray-900 dark:to-gray-950"
+      variants={container}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, amount: 0.2 }}
+    >
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <motion.div className="mb-12 text-center" variants={fadeUp}>
+          <h2 className="mb-3 text-4xl font-extrabold text-gray-900 dark:text-white">
+            Outcomes that matter
+          </h2>
+          <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
+            Less busywork. More teaching time. Better insights for every class.
+          </p>
+        </motion.div>
+
+        <motion.div
+          className="grid grid-cols-1 gap-6 sm:grid-cols-3"
+          variants={container}
+        >
+          {stats.map((s, i) => (
+            <motion.div
+              key={s.v}
+              variants={fadeUp}
+              transition={{ delay: 0.05 * i }}
+              className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-lg dark:border-gray-800 dark:bg-gray-900"
             >
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M19 0h-14C2.239 0 0 2.239 0 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5V5c0-2.761-2.238-5-5-5zM8 19H5V8h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764S5.534 3.204 6.5 3.204c.966 0 1.75.79 1.75 1.764s-.784 1.764-1.75 1.764zM20 19h-3v-5.604c0-3.368-4-3.113-4 0V19h-3V8h3v1.765C14.396 7.179 20 6.988 20 12.24V19z" />
-              </svg>
-            </a>
-            <a
-              href={person.twitter}
-              aria-label={`${person.name} on X`}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition-colors hover:bg-indigo-600 hover:text-white dark:bg-gray-800 dark:text-gray-300"
-            >
-              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743A11.65 11.65 0 012.8 9.713v.052A4.105 4.105 0 006.092 13.787a4.095 4.095 0 01-1.853.07A4.108 4.108 0 008.073 16.707 8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
-              </svg>
-            </a>
-          </div>
-        </div>
+              <div className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-[linear-gradient(90deg,#0ea5e9_0%,#6366f1_50%,#a78bfa_100%)]">
+                {s.k}
+              </div>
+              <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{s.v}</div>
+              <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>
+            </motion.div>
+          ))}
+        </motion.div>
 
-        <div className="absolute -bottom-px left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-      </Card>
-    </motion.div>
+        {/* subtle CTA */}
+        <motion.div
+          variants={fadeUp}
+          className="mx-auto mt-12 max-w-3xl rounded-2xl border border-gray-200 bg-white/70 p-6 text-center shadow-lg backdrop-blur dark:border-gray-800 dark:bg-white/[0.06]"
+        >
+          <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs tracking-wide text-gray-700 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:text-gray-200">
+            <Sparkles className="h-4 w-4 text-sky-600" />
+            Start free — no credit card
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+            See how much time you’ll save this week.
+          </h3>
+          <p className="mt-1 text-gray-600 dark:text-gray-300">
+            Generate your first paper and share it with your class in minutes.
+          </p>
+          <div className="mt-5">
+            <Link to="/signup">
+              <Button className="rounded-xl bg-gradient-to-r from-slate-900 via-sky-900 to-indigo-900 px-7 py-6 text-base font-semibold text-white hover:from-slate-800 hover:via-sky-800 hover:to-indigo-800">
+                Get Started Free
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </motion.section>
   );
 }

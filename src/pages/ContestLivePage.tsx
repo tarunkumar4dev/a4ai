@@ -1,9 +1,24 @@
 import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { motion, AnimatePresence, useMotionTemplate, useMotionValue } from "framer-motion";
-import { CheckCircle2, Lock, Video, AlertTriangle, Eye, Monitor, Timer as TimerIcon } from "lucide-react";
+import {
+  CheckCircle2,
+  Lock,
+  Video,
+  AlertTriangle,
+  Eye,
+  Monitor,
+  Timer as TimerIcon,
+  ArrowRight,
+  ArrowLeft,
+  Grid,
+  ShieldCheck,
+  Maximize2,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -31,12 +46,14 @@ import {
 import { useContestQuestions } from "@/hooks/useContestQuestions";
 
 /**
- * ContestLivePage — polished & proctored
- * - Animated setup gate with progress and camera permission
- * - Live mode: sticky header (contest name, timer, status), camera preview, question panel
- * - Tab-change detection with violation counter
- * - Gentle background glow + dark‑mode
- * - Safe submission with confirmation + beforeunload guard
+ * ContestLivePage — Apple‑clean, modern, gradient UI (proctored)
+ * Highlights:
+ * - Glassy sticky header with gradient status chips & a single source of truth Timer
+ * - Animated background with subtle sky/gray gradients (fits light & dark)
+ * - Setup gate with progress + permission card
+ * - Live mode: camera preview, question navigator grid, keyboard shortcuts, violations
+ * - Tab/visibility monitoring + connection status + fullscreen helper
+ * - Safer submission flow (confirm dialog, beforeunload guard)
  */
 
 type PermissionCardProps = {
@@ -61,21 +78,23 @@ export default function ContestLivePage() {
   const [isTabActive, setIsTabActive] = useState(true);
   const [permissionsOpen, setPermissionsOpen] = useState(true);
   const [violations, setViolations] = useState(0);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
 
-  const allAnswered = useMemo(
-    () => questions.length > 0 && questions.every((q: any) => !!answers[q.id]),
+  // compute
+  const answeredCount = useMemo(() =>
+    questions.reduce((acc: number, q: any) => acc + (answers[q.id] ? 1 : 0), 0),
     [questions, answers]
   );
-  const progress = useMemo(() => (cameraGranted ? 100 : 34), [cameraGranted]);
+  const allAnswered = useMemo(() => questions.length > 0 && answeredCount === questions.length, [questions, answeredCount]);
+  const progressSetup = useMemo(() => (cameraGranted ? 100 : 34), [cameraGranted]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const camStreamRef = useRef<MediaStream | null>(null);
 
-  const [contestGate, setContestGate] = useState<{ allowed: boolean; reason?: string; title?: string }>(
-    { allowed: true }
-  );
+  const [contestGate, setContestGate] = useState<{ allowed: boolean; reason?: string; title?: string }>({ allowed: true });
 
-  // background glow
+  // animated soft background
   const mx = useMotionValue(320);
   const my = useMotionValue(160);
   const onMove = (e: React.MouseEvent<HTMLElement>) => {
@@ -84,24 +103,58 @@ export default function ContestLivePage() {
     my.set(e.clientY - r.top);
   };
   const bg = useMotionTemplate`
-    radial-gradient(900px 450px at ${mx}px ${my}px, hsl(var(--primary)/0.08), transparent 70%),
-    radial-gradient(800px 400px at calc(${mx}px + 220px) calc(${my}px + 140px), hsl(var(--primary)/0.06), transparent 70%)
+    radial-gradient(900px 450px at ${mx}px ${my}px, hsl(var(--primary)/0.08), transparent 60%),
+    radial-gradient(800px 400px at calc(${mx}px + 220px) calc(${my}px + 140px), hsl(var(--primary)/0.06), transparent 65%),
+    linear-gradient(to bottom, rgba(125, 211, 252, 0.08), rgba(203, 213, 225, 0.08))
   `;
 
-  // Tab focus guard
+  // Visibility & focus guard (more strict & accurate across OS)
   useEffect(() => {
     const onBlur = () => {
       setIsTabActive(false);
-      setViolations((v) => v + 1);
+      setViolations(v => v + 1);
       toast.warning("Tab change detected. Please stay on the contest tab.");
     };
     const onFocus = () => setIsTabActive(true);
+    const onVisibility = () => {
+      if (document.hidden) {
+        setIsTabActive(false);
+        setViolations(v => v + 1);
+        toast.warning("You left the contest view.");
+      } else {
+        setIsTabActive(true);
+      }
+    };
     window.addEventListener("blur", onBlur);
     window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
+  }, []);
+
+  // Connection status (helps avoid accidental losses)
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => {
+      setIsOnline(false);
+      toast.error("You are offline. Your changes will sync when reconnected.");
+    };
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  // fullscreen state watcher
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
   // Prevent accidental close while contest running
@@ -160,7 +213,7 @@ export default function ContestLivePage() {
   // Camera permission callback
   const handleCameraGranted = (stream?: MediaStream) => {
     setCameraGranted(true);
-    setPermissionsOpen(false);
+    // Wait for explicit Start Contest click instead of auto-entering live
     if (stream) {
       camStreamRef.current = stream;
       if (videoRef.current) {
@@ -210,6 +263,33 @@ export default function ContestLivePage() {
     submitAttempt();
   };
 
+  const goPrev = () => setIdx(i => Math.max(0, i - 1));
+  const goNext = () => setIdx(i => Math.min(questions.length - 1, i + 1));
+  const goTo = (i: number) => setIdx(Math.min(Math.max(i, 0), questions.length - 1));
+
+  // keyboard shortcuts (←/→, S submit)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (permissionsOpen) return;
+      if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
+      if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
+      if ((e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) || e.key === "Enter") {
+        e.preventDefault();
+        if (allAnswered && !submitting) submitAttempt();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [permissionsOpen, allAnswered, submitting]);
+
+  const requestFullscreen = async () => {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (_) {
+      toast.info("Fullscreen not allowed by the browser.");
+    }
+  };
+
   if (!contestGate.allowed) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
@@ -227,22 +307,27 @@ export default function ContestLivePage() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white dark:from-gray-950 dark:to-gray-900 p-4 md:p-8" onMouseMove={onMove}>
       <motion.div aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundImage: bg }} />
 
-      {/* Sticky top bar when live */}
+      {/* Sticky header */}
       {!permissionsOpen && (
         <div className="sticky top-0 z-30 mb-4">
-          <div className="rounded-xl border bg-white/80 dark:bg-gray-900/70 backdrop-blur px-4 py-3 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-2">
-              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">Live</Badge>
-              <div className="font-medium">{contestGate.title || "Contest"}</div>
-              <div className="ml-3 hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-                <Eye className="h-4 w-4" /> Camera
-                <Monitor className="ml-2 h-4 w-4" /> Tab monitor
-                <AlertTriangle className="ml-2 h-4 w-4 text-amber-500" /> {violations} warnings
+          <div className="rounded-2xl border bg-white/80 dark:bg-gray-900/75 backdrop-blur-xl px-4 py-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-300/40">Live</Badge>
+              <div className="font-medium text-sm sm:text-base tracking-tight">{contestGate.title || "Contest"}</div>
+              <div className="ml-2 hidden md:flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1"><Eye className="h-4 w-4" />Camera</span>
+                <span className="inline-flex items-center gap-1"><Monitor className="h-4 w-4" />Tab monitor</span>
+                <span className="inline-flex items-center gap-1"><ShieldCheck className="h-4 w-4" />Proctoring</span>
+                <span className="inline-flex items-center gap-1"><AlertTriangle className="h-4 w-4 text-amber-500" />{violations} warnings</span>
+                <span className="inline-flex items-center gap-1">{isOnline ? <Wifi className="h-4 w-4"/> : <WifiOff className="h-4 w-4"/>}{isOnline ? "Online" : "Offline"}</span>
               </div>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <TimerIcon className="h-4 w-4" />
               <Timer initialMinutes={meta?.durationMinutes ?? 30} onTimeUp={handleTimeUp} />
+              <Button variant="outline" size="sm" className="ml-2" onClick={requestFullscreen}>
+                <Maximize2 className="h-4 w-4 mr-1" /> {isFullscreen ? "Fullscreen on" : "Go fullscreen"}
+              </Button>
             </div>
           </div>
         </div>
@@ -250,73 +335,106 @@ export default function ContestLivePage() {
 
       <AnimatePresence mode="wait">
         {permissionsOpen ? (
-          <motion.div key="setup" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.25 }} className="max-w-3xl mx-auto">
-            <Card className="border border-indigo-100 shadow-xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+          <motion.div
+            key="setup"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.25 }}
+            className="max-w-3xl mx-auto"
+          >
+            <Card className="border border-sky-100 shadow-xl overflow-hidden rounded-2xl">
+              <CardHeader className="bg-gradient-to-r from-slate-900 via-slate-800 to-sky-900 text-white">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-2xl font-bold">Contest Setup</CardTitle>
-                    <CardDescription className="text-indigo-100">Complete these steps to join the competition</CardDescription>
+                    <CardTitle className="text-2xl font-semibold tracking-tight">Contest Setup</CardTitle>
+                    <CardDescription className="text-slate-200/80">Complete these steps to join the competition</CardDescription>
                   </div>
                   <Lock className="h-6 w-6" />
                 </div>
               </CardHeader>
 
               <CardContent className="p-6 space-y-6">
+                {/* progress */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Setup Progress</span>
-                    <span className="text-sm font-semibold text-indigo-600">{progress}%</span>
+                    <span className="text-sm font-semibold text-sky-700">{progressSetup}%</span>
                   </div>
-                  <Progress value={progress} className="h-2" />
+                  <Progress value={progressSetup} className="h-2" />
                 </div>
 
                 <div className="grid gap-4">
-                  <PermissionCard icon={<Video className="h-5 w-5 text-indigo-600" />} title="Camera Access" description="Required for identity verification" granted={cameraGranted}>
+                  <PermissionCard
+                    icon={<Video className="h-5 w-5 text-sky-600" />}
+                    title="Camera Access"
+                    description="Required for identity verification"
+                    granted={cameraGranted}
+                  >
                     <CameraPermission onGranted={handleCameraGranted} />
                   </PermissionCard>
                 </div>
 
-                <div className="bg-blue-50 dark:bg-blue-950/40 p-4 rounded-lg border border-blue-100 dark:border-blue-900/40">
-                  <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Important Notes</h4>
-                  <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <FeatureCallout icon={<ShieldCheck className="h-4 w-4" />} title="Proctored Environment" text="Tab monitoring and camera are enabled during the contest." />
+                  <FeatureCallout icon={<Grid className="h-4 w-4" />} title="Quick Navigation" text="Use ← / → to move between questions. Ctrl/Cmd + S to submit." />
+                </div>
+
+                <div className="bg-sky-50 dark:bg-sky-950/40 p-4 rounded-lg border border-sky-100 dark:border-sky-900/40">
+                  <h4 className="font-medium text-sky-800 dark:text-sky-200 mb-2">Important Notes</h4>
+                  <ul className="text-sm text-sky-700 dark:text-sky-300 space-y-1 list-disc list-inside">
                     <li>Ensure good lighting for your camera.</li>
-                    <li>Close all unnecessary applications.</li>
-                    <li>Disable notifications during the contest.</li>
+                    <li>Close all unnecessary applications and notifications.</li>
+                    <li>Do not switch tabs or minimize the window.</li>
                   </ul>
                 </div>
               </CardContent>
+              <CardFooter className="bg-slate-50 dark:bg-slate-900/30 px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <Button variant="outline" onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
+                <Button onClick={() => setPermissionsOpen(false)} disabled={!cameraGranted} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+                  Start Contest
+                </Button>
+              </CardFooter>
             </Card>
           </motion.div>
         ) : (
-          <motion.div key="live" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-5xl mx-auto">
-            <Card className="border border-emerald-100 dark:border-emerald-900/40 shadow-xl overflow-hidden">
-              <CardHeader className="bg-emerald-600 text-white">
+          <motion.div key="live" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto">
+            <Card className="border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden rounded-2xl">
+              <CardHeader className="bg-gradient-to-r from-emerald-600 to-sky-600 text-white">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-2xl font-bold">Contest Started</CardTitle>
-                    <CardDescription className="text-emerald-100">Good luck! The competition is now live.</CardDescription>
+                    <CardTitle className="text-2xl font-semibold tracking-tight">Contest Started</CardTitle>
+                    <CardDescription className="text-white/80">Good luck! The competition is now live.</CardDescription>
                   </div>
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
               </CardHeader>
 
               <CardContent className="p-6">
-                <div className="grid lg:grid-cols-[1fr_1.2fr] gap-8 py-4">
-                  {/* Left: camera + time */}
-                  <div className="space-y-3">
-                    <div className={`rounded-lg overflow-hidden border ${isTabActive ? "border-emerald-200 dark:border-emerald-800/60" : "border-amber-300 dark:border-amber-700/60"}`}>
+                <div className="grid lg:grid-cols-[1fr_1.4fr] gap-8 py-2">
+                  {/* Left Column: camera + quick stats + navigator */}
+                  <div className="space-y-4">
+                    <div className={`rounded-xl overflow-hidden border ${isTabActive ? "border-emerald-200 dark:border-emerald-800/60" : "border-amber-300 dark:border-amber-700/60"}`}>
                       <video ref={videoRef} className="w-full aspect-video bg-black" playsInline />
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">Status: {isTabActive ? "Focused" : "Tab switched"}</div>
-                      <Badge variant="secondary">Warnings: {violations}</Badge>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <StatTile label="Status" value={isTabActive ? "Focused" : "Tab switched"} subtle />
+                      <StatTile label="Warnings" value={String(violations)} />
+                      <StatTile label="Answered" value={`${answeredCount}/${questions.length || 0}`} />
+                      <StatTile label="Connectivity" value={isOnline ? "Online" : "Offline"} subtle />
                     </div>
-                    <div className="text-sm text-muted-foreground">Time Remaining</div>
-                    <div className="text-3xl font-bold"><Timer initialMinutes={meta?.durationMinutes ?? 30} onTimeUp={handleTimeUp} /></div>
+
+                    {/* Question Navigator */}
+                    <Navigator
+                      total={questions.length}
+                      currentIndex={idx}
+                      answeredMap={questions.map((q: any) => !!answers[q.id])}
+                      onJump={goTo}
+                    />
                   </div>
 
-                  {/* Right: questions */}
+                  {/* Right Column: questions */}
                   <div>
                     {loading ? (
                       <div className="text-sm text-muted-foreground">Loading questions…</div>
@@ -326,31 +444,40 @@ export default function ContestLivePage() {
                         answers={answers}
                         currentIndex={idx}
                         onSelect={selectAnswer}
-                        onPrev={() => setIdx((i) => Math.max(0, i - 1))}
-                        onNext={() => setIdx((i) => Math.min(questions.length - 1, i + 1))}
+                        onPrev={goPrev}
+                        onNext={goNext}
                       />
                     )}
 
-                    <div className="mt-6">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700" disabled={!allAnswered || submitting}>
-                            {submitting ? "Submitting…" : allAnswered ? "Submit Answers" : "Answer all to submit"}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Submit your answers?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This action cannot be undone. Your camera stream will stop and your attempt will be recorded.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={submitAttempt}>Submit</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                    {/* Action Bar */}
+                    <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                      <div className="flex-1 hidden sm:block">
+                        <Progress value={questions.length ? (answeredCount / questions.length) * 100 : 0} className="h-2" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={goPrev} disabled={idx === 0}><ArrowLeft className="h-4 w-4 mr-1"/>Prev</Button>
+                        <Button variant="outline" onClick={goNext} disabled={idx >= questions.length - 1}>Next<ArrowRight className="h-4 w-4 ml-1"/></Button>
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button size="lg" className="bg-slate-900 hover:bg-slate-800 text-white" disabled={!allAnswered || submitting}>
+                              {submitting ? "Submitting…" : allAnswered ? "Submit Answers" : "Answer all to submit"}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Submit your answers?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. Your camera stream will stop and your attempt will be recorded.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={submitAttempt}>Submit</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -365,7 +492,7 @@ export default function ContestLivePage() {
 
 function PermissionCard({ icon, title, description, granted, children }: PermissionCardProps) {
   return (
-    <Card className={`relative overflow-hidden ${granted ? "border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800/50" : ""}`}>
+    <Card className={`relative overflow-hidden rounded-xl ${granted ? "border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800/50" : ""}`}>
       {granted && (
         <div className="absolute top-2 right-2 bg-emerald-100 dark:bg-emerald-900/40 p-1 rounded-full">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
@@ -373,7 +500,7 @@ function PermissionCard({ icon, title, description, granted, children }: Permiss
       )}
       <CardHeader className="pb-3">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-indigo-100 dark:bg-indigo-900/40 rounded-full">{icon}</div>
+          <div className="p-2 bg-sky-100 dark:bg-sky-900/40 rounded-full">{icon}</div>
           <div>
             <CardTitle className="text-lg">{title}</CardTitle>
             <CardDescription>{description}</CardDescription>
@@ -390,5 +517,58 @@ function PermissionCard({ icon, title, description, granted, children }: Permiss
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/* ---------- Helper UI ---------- */
+function FeatureCallout({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
+  return (
+    <div className="rounded-xl border bg-white/60 dark:bg-gray-900/40 backdrop-blur p-4 flex items-start gap-3">
+      <div className="shrink-0 p-2 rounded-lg bg-gradient-to-br from-sky-100 to-emerald-100 dark:from-sky-900/30 dark:to-emerald-900/20">{icon}</div>
+      <div>
+        <div className="font-medium leading-tight">{title}</div>
+        <div className="text-sm text-muted-foreground">{text}</div>
+      </div>
+    </div>
+  );
+}
+
+function StatTile({ label, value, subtle }: { label: string; value: string; subtle?: boolean }) {
+  return (
+    <div className={`rounded-xl border p-3 ${subtle ? "bg-slate-50/80 dark:bg-slate-900/30" : "bg-white/60 dark:bg-gray-900/40"} backdrop-blur`}>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-lg font-semibold tracking-tight">{value}</div>
+    </div>
+  );
+}
+
+function Navigator({ total, currentIndex, answeredMap, onJump }: { total: number; currentIndex: number; answeredMap: boolean[]; onJump: (i: number) => void; }) {
+  if (!total) return null;
+  return (
+    <div className="rounded-xl border bg-white/60 dark:bg-gray-900/40 backdrop-blur p-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-medium inline-flex items-center gap-2"><Grid className="h-4 w-4"/>Question Navigator</div>
+        <div className="text-xs text-muted-foreground">Use ← / → to move</div>
+      </div>
+      <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-8 gap-2">
+        {Array.from({ length: total }).map((_, i) => {
+          const active = i === currentIndex;
+          const answered = answeredMap[i];
+          return (
+            <button
+              key={i}
+              onClick={() => onJump(i)}
+              className={`aspect-square text-xs rounded-lg border flex items-center justify-center select-none transition-all
+                ${active ? "border-slate-900 bg-slate-900 text-white" : answered ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-200 hover:bg-slate-50"}
+              `}
+              aria-current={active}
+              aria-label={`Go to question ${i + 1}${answered ? ", answered" : ""}`}
+            >
+              {i + 1}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

@@ -1,50 +1,48 @@
 // src/pages/AuthCallback.tsx
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
 
   useEffect(() => {
     (async () => {
       try {
-        // ---- Build a proper URL for Supabase to parse (handles HashRouter) ----
-        const { origin, href, hash } = window.location;
-        let urlForExchange = href;
+        const url = new URL(window.location.href);
+        const hasCode = url.searchParams.get("code");
 
-        // If using HashRouter, the query comes after '#'
-        // e.g. https://a4ai.in/#/auth/callback?code=...&state=...&next=/dashboard
-        const qIndex = hash.indexOf("?");
-        const hasHashQuery = qIndex !== -1;
-        if (hasHashQuery) {
-          const query = hash.slice(qIndex + 1); // "code=...&state=...&next=..."
-          urlForExchange = `${origin}/auth/callback?${query}`;
-        }
-
-        const urlObj = new URL(urlForExchange);
-        const hasCode =
-          urlObj.searchParams.get("code") || urlObj.searchParams.get("access_token");
-
-        // If the page was opened without OAuth params, try existing session or go to /login
+        // If someone hits /auth/callback directly without a code
         if (!hasCode) {
-          const { data: { session } } = await supabase.auth.getSession();
-          navigate(session ? "/dashboard" : "/login", { replace: true });
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session) {
+            navigate("/dashboard", { replace: true });
+            return;
+          }
+          navigate("/login", { replace: true });
           return;
         }
 
-        // ---- Exchange the code for a session (PKCE) ----
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(urlForExchange);
+        // 1) Exchange ?code=... → session (PKCE)
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
+          url.toString()
+        );
         if (exchangeError) throw exchangeError;
 
-        // ---- Confirm user ----
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        // 2) Confirm user
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
         if (userError) throw userError;
         if (!user) throw new Error("No user found after authentication");
 
-        // ---- Ensure profile row (adjust columns as per your schema) ----
+        // 3) Ensure profile row
         const { error: profileError } = await supabase
           .from("profiles")
           .upsert(
@@ -62,30 +60,32 @@ export default function AuthCallback() {
           );
         if (profileError) throw profileError;
 
-        // ---- Redirect to ?next or /dashboard ----
-        const params = hasHashQuery
-          ? new URLSearchParams(hash.slice(qIndex + 1))
-          : urlObj.searchParams;
-        const next = params.get("next") || "/dashboard";
+        // 4) Toast (optional)
+        // toast({ title: "Signed in", description: `Welcome back, ${user.email}` });
 
+        // 5) Redirect to ?next or /dashboard
+        const next = url.searchParams.get("next") || "/dashboard";
         navigate(next, { replace: true });
       } catch (err: any) {
         console.error("OAuth callback error:", err);
         toast({
           title: "Authentication failed",
-          description: err?.message ?? "Something went wrong while signing you in.",
+          description:
+            err?.message ?? "Something went wrong while signing you in.",
           variant: "destructive",
         });
         navigate("/login", { replace: true });
       }
     })();
-  }, [navigate, toast]);
+  }, [navigate, location.search, toast]);
 
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
         <h2 className="text-xl font-semibold">Completing authentication…</h2>
-        <p className="text-gray-500 mt-2">Please wait while we verify your session.</p>
+        <p className="text-gray-500 mt-2">
+          Please wait while we verify your session.
+        </p>
       </div>
     </div>
   );

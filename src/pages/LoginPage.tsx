@@ -18,7 +18,7 @@ const LoginPage = () => {
 
   // Handle successful OAuth redirects
   useEffect(() => {
-    if (location.state?.from === 'oauth-callback') {
+    if (location.state?.from === "oauth-callback") {
       navigate("/dashboard", { replace: true });
     }
   }, [location, navigate]);
@@ -26,7 +26,9 @@ const LoginPage = () => {
   // Check for existing session
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session) {
         navigate("/dashboard", { replace: true });
       }
@@ -41,7 +43,7 @@ const LoginPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: formValues.email,
@@ -54,7 +56,8 @@ const LoginPage = () => {
     } catch (error) {
       toast({
         title: "Login failed",
-        description: error instanceof Error ? error.message : "An error occurred",
+        description:
+          error instanceof Error ? error.message : "An error occurred",
         variant: "destructive",
       });
     } finally {
@@ -64,32 +67,30 @@ const LoginPage = () => {
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
+
     try {
-      const next = new URLSearchParams(location.search).get("next") || "";
-      const nextParam = next ? `?next=${encodeURIComponent(next)}` : "";
-  
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          // 🔴 EDIT: hash-route callback
-          redirectTo: `${window.location.origin}/#/auth/callback${nextParam}`,
-          // (optional)
-          queryParams: { prompt: "select_account" },
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
         },
       });
-  
+
       if (error) throw error;
-      // redirect karega, yahan loading off mat karo
     } catch (error) {
       toast({
         title: "Google login failed",
-        description: error instanceof Error ? error.message : "An error occurred",
+        description:
+          error instanceof Error ? error.message : "An error occurred",
         variant: "destructive",
       });
       setIsLoading(false);
     }
   };
-  
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -106,9 +107,9 @@ const LoginPage = () => {
               Welcome back
             </h2>
             <p className="mt-2 text-sm text-gray-600">
-              Don't have an account?{" "}
-              <Link 
-                to="/signup" 
+              Don&apos;t have an account?{" "}
+              <Link
+                to="/signup"
                 className="font-medium text-purple-600 hover:text-purple-500 hover:underline transition-colors"
               >
                 Sign up
@@ -178,8 +179,8 @@ const LoginPage = () => {
                   <Label htmlFor="password" className="text-gray-700">
                     Password
                   </Label>
-                  <Link 
-                    to="/forgot-password" 
+                  <Link
+                    to="/forgot-password"
                     className="text-sm font-medium text-purple-600 hover:text-purple-500 hover:underline transition-colors"
                   >
                     Forgot password?
@@ -206,9 +207,25 @@ const LoginPage = () => {
                 >
                   {isLoading ? (
                     <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      <svg
+                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
                       </svg>
                       Signing in...
                     </span>
@@ -221,7 +238,7 @@ const LoginPage = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Right side with image */}
       <div className="hidden lg:block relative w-0 flex-1">
         <div className="absolute inset-0 h-full w-full bg-gradient-to-br from-purple-600 to-indigo-600">
@@ -231,13 +248,21 @@ const LoginPage = () => {
                 Elevate Your Teaching Experience
               </h2>
               <p className="text-xl text-purple-100">
-                a4ai helps educators create engaging assessments while saving valuable time.
+                a4ai helps educators create engaging assessments while saving
+                valuable time.
               </p>
               <div className="mt-12 grid grid-cols-3 gap-8 opacity-80">
                 {[1, 2, 3].map((item) => (
-                  <div key={item} className="bg-white/10 backdrop-blur-sm p-4 rounded-xl">
-                    <div className="text-white text-lg font-medium">Feature {item}</div>
-                    <div className="text-purple-100 text-sm mt-2">Description of feature</div>
+                  <div
+                    key={item}
+                    className="bg-white/10 backdrop-blur-sm p-4 rounded-xl"
+                  >
+                    <div className="text-white text-lg font-medium">
+                      Feature {item}
+                    </div>
+                    <div className="text-purple-100 text-sm mt-2">
+                      Description of feature
+                    </div>
                   </div>
                 ))}
               </div>
