@@ -64,20 +64,22 @@ const LoginPage = () => {
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
-    
     try {
+      const next = new URLSearchParams(location.search).get("next") || "";
+      const nextParam = next ? `?next=${encodeURIComponent(next)}` : "";
+  
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          // 🔴 EDIT: hash-route callback
+          redirectTo: `${window.location.origin}/#/auth/callback${nextParam}`,
+          // (optional)
+          queryParams: { prompt: "select_account" },
         },
       });
-
+  
       if (error) throw error;
+      // redirect karega, yahan loading off mat karo
     } catch (error) {
       toast({
         title: "Google login failed",
@@ -87,6 +89,7 @@ const LoginPage = () => {
       setIsLoading(false);
     }
   };
+  
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">

@@ -1,41 +1,50 @@
 // src/pages/AuthCallback.tsx
 import { useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { toast } = useToast();
 
   useEffect(() => {
     (async () => {
       try {
-        const url = new URL(window.location.href);
-        const hasCode = url.searchParams.get("code");
+        // ---- Build a proper URL for Supabase to parse (handles HashRouter) ----
+        const { origin, href, hash } = window.location;
+        let urlForExchange = href;
 
-        // If someone hits /auth/callback directly without a code
+        // If using HashRouter, the query comes after '#'
+        // e.g. https://a4ai.in/#/auth/callback?code=...&state=...&next=/dashboard
+        const qIndex = hash.indexOf("?");
+        const hasHashQuery = qIndex !== -1;
+        if (hasHashQuery) {
+          const query = hash.slice(qIndex + 1); // "code=...&state=...&next=..."
+          urlForExchange = `${origin}/auth/callback?${query}`;
+        }
+
+        const urlObj = new URL(urlForExchange);
+        const hasCode =
+          urlObj.searchParams.get("code") || urlObj.searchParams.get("access_token");
+
+        // If the page was opened without OAuth params, try existing session or go to /login
         if (!hasCode) {
           const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            navigate("/dashboard", { replace: true });
-            return;
-          }
-          navigate("/login", { replace: true });
+          navigate(session ? "/dashboard" : "/login", { replace: true });
           return;
         }
 
-        // 1) Exchange ?code=... → session (PKCE)
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(url.toString());
+        // ---- Exchange the code for a session (PKCE) ----
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(urlForExchange);
         if (exchangeError) throw exchangeError;
 
-        // 2) Confirm user
+        // ---- Confirm user ----
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
         if (!user) throw new Error("No user found after authentication");
 
-        // 3) Ensure profile row
+        // ---- Ensure profile row (adjust columns as per your schema) ----
         const { error: profileError } = await supabase
           .from("profiles")
           .upsert(
@@ -53,11 +62,12 @@ export default function AuthCallback() {
           );
         if (profileError) throw profileError;
 
-        // 4) Toast (optional)
-        // toast({ title: "Signed in", description: `Welcome back, ${user.email}` });
+        // ---- Redirect to ?next or /dashboard ----
+        const params = hasHashQuery
+          ? new URLSearchParams(hash.slice(qIndex + 1))
+          : urlObj.searchParams;
+        const next = params.get("next") || "/dashboard";
 
-        // 5) Redirect to ?next or /dashboard
-        const next = url.searchParams.get("next") || "/dashboard";
         navigate(next, { replace: true });
       } catch (err: any) {
         console.error("OAuth callback error:", err);
@@ -69,7 +79,7 @@ export default function AuthCallback() {
         navigate("/login", { replace: true });
       }
     })();
-  }, [navigate, location.search, toast]);
+  }, [navigate, toast]);
 
   return (
     <div className="flex items-center justify-center min-h-screen">
