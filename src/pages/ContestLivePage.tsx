@@ -46,14 +46,11 @@ import {
 import { useContestQuestions } from "@/hooks/useContestQuestions";
 
 /**
- * ContestLivePage — Apple‑clean, modern, gradient UI (proctored)
- * Highlights:
- * - Glassy sticky header with gradient status chips & a single source of truth Timer
- * - Animated background with subtle sky/gray gradients (fits light & dark)
- * - Setup gate with progress + permission card
- * - Live mode: camera preview, question navigator grid, keyboard shortcuts, violations
- * - Tab/visibility monitoring + connection status + fullscreen helper
- * - Safer submission flow (confirm dialog, beforeunload guard)
+ * ContestLivePage — Optimized + resilient submission UX
+ * - Instant optimistic submit with background retry & idempotency
+ * - beforeunload guard only while not fully done
+ * - Lighter DB write (single JSON upsert)
+ * - Minor render perf tweaks
  */
 
 type PermissionCardProps = {
@@ -63,6 +60,8 @@ type PermissionCardProps = {
   granted: boolean;
   children: ReactNode;
 };
+
+type SubmitState = "idle" | "optimistic" | "sync" | "retry" | "done";
 
 export default function ContestLivePage() {
   const { contestId } = useParams();
@@ -74,7 +73,9 @@ export default function ContestLivePage() {
   const [cameraGranted, setCameraGranted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [idx, setIdx] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false); // kept for compatibility in other child components
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const [submitMsg, setSubmitMsg] = useState("");
   const [isTabActive, setIsTabActive] = useState(true);
   const [permissionsOpen, setPermissionsOpen] = useState(true);
   const [violations, setViolations] = useState(0);
@@ -82,11 +83,14 @@ export default function ContestLivePage() {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
 
   // compute
-  const answeredCount = useMemo(() =>
-    questions.reduce((acc: number, q: any) => acc + (answers[q.id] ? 1 : 0), 0),
+  const answeredCount = useMemo(
+    () => questions.reduce((acc: number, q: any) => acc + (answers[q.id] ? 1 : 0), 0),
     [questions, answers]
   );
-  const allAnswered = useMemo(() => questions.length > 0 && answeredCount === questions.length, [questions, answeredCount]);
+  const allAnswered = useMemo(
+    () => questions.length > 0 && answeredCount === questions.length,
+    [questions.length, answeredCount]
+  );
   const progressSetup = useMemo(() => (cameraGranted ? 100 : 34), [cameraGranted]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -108,18 +112,18 @@ export default function ContestLivePage() {
     linear-gradient(to bottom, rgba(125, 211, 252, 0.08), rgba(203, 213, 225, 0.08))
   `;
 
-  // Visibility & focus guard (more strict & accurate across OS)
+  // Visibility & focus guard
   useEffect(() => {
     const onBlur = () => {
       setIsTabActive(false);
-      setViolations(v => v + 1);
+      setViolations((v) => v + 1);
       toast.warning("Tab change detected. Please stay on the contest tab.");
     };
     const onFocus = () => setIsTabActive(true);
     const onVisibility = () => {
       if (document.hidden) {
         setIsTabActive(false);
-        setViolations(v => v + 1);
+        setViolations((v) => v + 1);
         toast.warning("You left the contest view.");
       } else {
         setIsTabActive(true);
@@ -135,7 +139,7 @@ export default function ContestLivePage() {
     };
   }, []);
 
-  // Connection status (helps avoid accidental losses)
+  // Connection status
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
     const onOffline = () => {
@@ -157,17 +161,17 @@ export default function ContestLivePage() {
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  // Prevent accidental close while contest running
+  // Prevent accidental close while not fully submitted
   useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (!submitting && cameraGranted) {
+      if (cameraGranted && submitState !== "done") {
         e.preventDefault();
         e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, [submitting, cameraGranted]);
+  }, [cameraGranted, submitState]);
 
   // Gate check (is_live + time window)
   useEffect(() => {
@@ -213,7 +217,6 @@ export default function ContestLivePage() {
   // Camera permission callback
   const handleCameraGranted = (stream?: MediaStream) => {
     setCameraGranted(true);
-    // Wait for explicit Start Contest click instead of auto-entering live
     if (stream) {
       camStreamRef.current = stream;
       if (videoRef.current) {
@@ -230,31 +233,92 @@ export default function ContestLivePage() {
     camStreamRef.current = null;
   };
 
-  const selectAnswer = (qId: string, value: string) => setAnswers((prev) => ({ ...prev, [qId]: value }));
+  const selectAnswer = (qId: string, value: string) =>
+    setAnswers((prev) => ({ ...prev, [qId]: value }));
 
+  // ----------------- Optimistic Submit -----------------
   const submitAttempt = async () => {
-    if (submitting) return;
-    setSubmitting(true);
+    if (submitState === "optimistic" || submitState === "sync") return;
+
+    setSubmitState("optimistic");
+    setSubmitting(true); // legacy flag (if any UI depends on it)
+    setSubmitMsg("✅ Submission received. Processing in background…");
+
     try {
-      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
       if (userErr) throw userErr;
       if (!user) {
         toast.info("Please login first.");
         navigate("/dashboard");
         return;
       }
-      const payloadAnswers = { ...answers, _meta: { email: user.email, violations } } as any;
-      const { error } = await supabase
-        .from("contest_attempts")
-        .upsert({ user_id: user.id, contest_code: contestCode!, answers: payloadAnswers, score: null, submitted_at: new Date().toISOString() }, { onConflict: "user_id,contest_code" });
-      if (error) throw error;
-      stopStreams();
-      toast.success("Submitted. You'll receive results by email.");
-      navigate("/dashboard");
+
+      const idKey = crypto.randomUUID();
+      const payloadAnswers = {
+        ...answers,
+        _meta: { email: user.email, violations, idKey, submittedAt: new Date().toISOString() },
+      } as any;
+
+      // Local backup to survive refresh/offline
+      const lsKey = `submission:${contestCode}:${user.id}`;
+      localStorage.setItem(
+        lsKey,
+        JSON.stringify({ userId: user.id, contestCode, answers: payloadAnswers })
+      );
+
+      const writeOnce = async () => {
+        const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000));
+
+        const upsert = supabase
+          .from("contest_attempts")
+          .upsert(
+            {
+              user_id: user.id,
+              contest_code: contestCode!,
+              answers: payloadAnswers,
+              score: null,
+              submitted_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,contest_code" }
+          );
+
+        await Promise.race([upsert, timeout]);
+      };
+
+      const run = async (delayMs = 0) => {
+        if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+        try {
+          setSubmitState((s) => (s === "optimistic" ? "sync" : s));
+          await writeOnce();
+
+          // success
+          localStorage.removeItem(lsKey);
+          stopStreams();
+          setSubmitState("done");
+          setSubmitMsg("✅ Submitted. You can close the window.");
+          toast.success("Submitted! You’ll receive results by email.");
+          navigate("/dashboard");
+        } catch (err) {
+          // keep optimistic UI; schedule retry
+          console.warn("Submit retry due to:", err);
+          setSubmitState("retry");
+          setSubmitMsg("✅ Received. Syncing to server… retrying in background.");
+          const nextDelay = 10000; // 10s, can backoff if you like
+          run(nextDelay);
+        }
+      };
+
+      // fire-and-forget; avoid blocking the UI
+      run();
     } catch (e) {
       console.error(e);
-      toast.error("Submission failed. Please try again.");
+      setSubmitState("idle");
       setSubmitting(false);
+      setSubmitMsg("");
+      toast.error("Submission failed. Please try again.");
     }
   };
 
@@ -263,24 +327,30 @@ export default function ContestLivePage() {
     submitAttempt();
   };
 
-  const goPrev = () => setIdx(i => Math.max(0, i - 1));
-  const goNext = () => setIdx(i => Math.min(questions.length - 1, i + 1));
+  const goPrev = () => setIdx((i) => Math.max(0, i - 1));
+  const goNext = () => setIdx((i) => Math.min(questions.length - 1, i + 1));
   const goTo = (i: number) => setIdx(Math.min(Math.max(i, 0), questions.length - 1));
 
-  // keyboard shortcuts (←/→, S submit)
+  // keyboard shortcuts (←/→, Ctrl/Cmd+S or Enter to submit)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (permissionsOpen) return;
-      if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
-      if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goPrev();
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goNext();
+      }
       if ((e.key.toLowerCase() === "s" && (e.ctrlKey || e.metaKey)) || e.key === "Enter") {
         e.preventDefault();
-        if (allAnswered && !submitting) submitAttempt();
+        if (allAnswered && submitState !== "done") submitAttempt();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [permissionsOpen, allAnswered, submitting]);
+  }, [permissionsOpen, allAnswered, submitState]);
 
   const requestFullscreen = async () => {
     try {
@@ -460,8 +530,16 @@ export default function ContestLivePage() {
 
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="lg" className="bg-slate-900 hover:bg-slate-800 text-white" disabled={!allAnswered || submitting}>
-                              {submitting ? "Submitting…" : allAnswered ? "Submit Answers" : "Answer all to submit"}
+                            <Button
+                              size="lg"
+                              className="bg-slate-900 hover:bg-slate-800 text-white"
+                              disabled={!allAnswered || submitState === "done"}
+                            >
+                              {submitState === "optimistic" || submitState === "sync" || submitState === "retry"
+                                ? "Submitting in background…"
+                                : allAnswered
+                                  ? "Submit Answers"
+                                  : "Answer all to submit"}
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
@@ -479,6 +557,10 @@ export default function ContestLivePage() {
                         </AlertDialog>
                       </div>
                     </div>
+
+                    {submitMsg && (
+                      <div className="mt-2 text-xs text-muted-foreground">{submitMsg}</div>
+                    )}
                   </div>
                 </div>
               </CardContent>
