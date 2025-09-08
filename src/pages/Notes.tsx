@@ -12,8 +12,8 @@ const NotesSection = () => {
   const [showPreview, setShowPreview] = useState(false);
 
   const subjects = {
-    9: ["Maths", "Science", "English", "Social Science"],
-    10: ["Maths", "Science", "English", "Social Science"],
+    9: ["Maths", "Science", "English", "Social Science","Hindi"],
+    10: ["Maths", "Science", "English", "Social Science", "Hindi"],
     11: ["Physics", "Chemistry", "Maths", "Biology", "Computer Science", "English"],
     12: ["Physics", "Chemistry", "Maths", "Biology", "Computer Science", "English"],
   };
