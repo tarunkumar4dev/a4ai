@@ -34,7 +34,7 @@ const AnalyticsPage      = lazy(() => import("./pages/AnalyticsPage"));
 
 /* ---------- NEW: Students / Notes / Settings ---------- */
 const StudentsPage       = lazy(() => import("./pages/StudentsPage"));
-const NotesPage          = lazy(() => import("./pages/NotesPage"));
+const NotesPage          = lazy(() => import("./pages/Notes"));
 const SettingsPage       = lazy(() => import("./pages/SettingsPage"));
 
 /* ---------- Contests ---------- */
@@ -145,7 +145,7 @@ const App = () => {
       import("./pages/Resources/Documentation");
       // app/dash
       import("./pages/StudentsPage");
-      import("./pages/NotesPage");
+      import("./pages/Notes");
       import("./pages/SettingsPage");
     };
     (window as any).requestIdleCallback
