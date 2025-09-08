@@ -1,79 +1,224 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import {
+  Moon,
+  Sun,
+  Search,
+  Upload,
+  Eye,
+  Download,
+  X,
+  FileText,
+  Image as ImageIcon,
+  FileType,
+  Trash2,
+  ChevronDown,
+  Grid as GridIcon,
+  Rows,
+  Sparkles,
+  Star,
+  StarOff,
+  Tag,
+  SlidersHorizontal,
+  Keyboard,
+  CornerDownLeft,
+  Plus,
+  Folder,
+  Pencil,
+  Link as LinkIcon,
+} from "lucide-react";
 
-const NotesSection = () => {
-  const [selectedClass, setSelectedClass] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState("");
-  const [notes, setNotes] = useState({});
-  const [file, setFile] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [darkMode, setDarkMode] = useState(false);
-  const [previewNote, setPreviewNote] = useState(null);
-  const [showPreview, setShowPreview] = useState(false);
+/* -------------------------------------------------------------------------- */
+/*                        Notion-ish Notes Workspace (UI)                     */
+/* -------------------------------------------------------------------------- */
 
-  const subjects = {
-    9: ["Maths", "Science", "English", "Social Science","Hindi"],
-    10: ["Maths", "Science", "English", "Social Science", "Hindi"],
-    11: ["Physics", "Chemistry", "Maths", "Biology", "Computer Science", "English"],
-    12: ["Physics", "Chemistry", "Maths", "Biology", "Computer Science", "English"],
-  };
+type Note = {
+  id: number;
+  name: string;
+  size: string;
+  date: string; // ISO
+  type: string; // mime
+  content: string; // object URL
+  subjectKey: string; // e.g. "11-Physics"
+  pinned?: boolean;
+  tags?: string[];
+};
 
-  // Toggle dark mode
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-  };
+type ViewMode = "grid" | "list";
 
-  // Apply dark mode class to body
+type SortKey = "date" | "name" | "size";
+
+const SUBJECTS: Record<string, string[]> = {
+  "9": ["Maths", "Science", "English", "Social Science"],
+  "10": ["Maths", "Science", "English", "Social Science"],
+  "11": ["Physics", "Chemistry", "Maths", "Biology", "Computer Science", "English"],
+  "12": ["Physics", "Chemistry", "Maths", "Biology", "Computer Science", "English"],
+};
+
+/* --------------------------------- Helpers -------------------------------- */
+const prettyType = (mime: string) => {
+  if (!mime) return "FILE";
+  if (mime.includes("pdf")) return "PDF";
+  if (mime.startsWith("image/")) return mime.split("/")[1]?.toUpperCase();
+  if (mime.includes("msword") || mime.includes("word")) return "DOC";
+  if (mime.includes("excel") || mime.includes("spreadsheet")) return "XLS";
+  if (mime.includes("text/markdown") || mime.endsWith("markdown")) return "MD";
+  if (mime.includes("text")) return "TXT";
+  return mime.split("/")[1]?.toUpperCase() || "FILE";
+};
+
+const iconFor = (mime: string) => {
+  if (mime.startsWith("image/")) return <ImageIcon className="h-5 w-5" />;
+  if (mime.includes("pdf")) return <FileText className="h-5 w-5" />;
+  return <FileType className="h-5 w-5" />;
+};
+
+const useLocalStorage = <T,>(key: string, initial: T) => {
+  const [state, setState] = useState<T>(() => {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : initial;
+  });
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    localStorage.setItem(key, JSON.stringify(state));
+  }, [key, state]);
+  return [state, setState] as const;
+};
+
+/* ------------------------------- Command Pal ------------------------------ */
+function Kbd({ children }: { children: string }) {
+  return (
+    <span className="inline-flex items-center rounded-md border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 dark:text-neutral-300">
+      {children}
+    </span>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Main Component                              */
+/* -------------------------------------------------------------------------- */
+
+export default function NotesSection() {
+  const [darkMode, setDarkMode] = useLocalStorage<boolean>("notes:dark", false);
+  const [selectedClass, setSelectedClass] = useLocalStorage<string>("notes:class", "");
+  const [selectedSubject, setSelectedSubject] = useLocalStorage<string>("notes:subject", "");
+  const [searchQuery, setSearchQuery] = useLocalStorage<string>("notes:q", "");
+  const [layout, setLayout] = useLocalStorage<ViewMode>("notes:layout", "grid");
+  const [notes, setNotes] = useLocalStorage<Note[]>("notes:data", []);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [preview, setPreview] = useState<Note | null>(null);
+  const [showPreview, setShowPreview] = useState<boolean>(false);
+  const [sortKey, setSortKey] = useLocalStorage<SortKey>("notes:sort", "date");
+  const [activeTags, setActiveTags] = useLocalStorage<string[]>("notes:activeTags", []);
+  const [showCmd, setShowCmd] = useState(false);
+  const [renameId, setRenameId] = useState<number | null>(null);
+  const [clipboardInfo, setClipboardInfo] = useState<string | null>(null);
+
+  const dropRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  /* ------------------------------- Theme toggle ------------------------------ */
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", darkMode);
   }, [darkMode]);
 
-  const handleUpload = () => {
-    if (selectedClass && selectedSubject && file) {
-      // Simulate upload progress
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
-        setUploadProgress(progress);
-        if (progress >= 100) {
-          clearInterval(interval);
-          
-          const key = `${selectedClass}-${selectedSubject}`;
-          const newNote = {
-            id: Date.now(),
-            name: file.name,
-            size: (file.size / 1024).toFixed(2) + " KB",
-            date: new Date().toLocaleDateString(),
-            type: file.type,
-            content: URL.createObjectURL(file), // Create a URL for the file content
-          };
-          
-          setNotes((prev) => ({
-            ...prev,
-            [key]: [...(prev[key] || []), newNote],
-          }));
-          
-          setFile(null);
-          setUploadProgress(0);
+  /* -------------------------------- Drag&Drop -------------------------------- */
+  useEffect(() => {
+    const el = dropRef.current;
+    if (!el) return;
+    const onOver = (e: DragEvent) => {
+      e.preventDefault();
+      el.classList.add("ring-2", "ring-purple-500");
+    };
+    const onLeave = () => el.classList.remove("ring-2", "ring-purple-500");
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault();
+      onLeave();
+      if (e.dataTransfer?.files?.[0]) setFile(e.dataTransfer.files[0]);
+    };
+    el.addEventListener("dragover", onOver);
+    el.addEventListener("dragleave", onLeave);
+    el.addEventListener("drop", onDrop);
+    return () => {
+      el.removeEventListener("dragover", onOver);
+      el.removeEventListener("dragleave", onLeave);
+      el.removeEventListener("drop", onDrop);
+    };
+  }, []);
+
+  /* ------------------------------- Keyboard UX ------------------------------ */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowCmd((s) => !s);
+        return;
+      }
+      if (e.key === "/") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") setDarkMode((d) => !d);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "g") setLayout((l) => (l === "grid" ? "list" : "grid"));
+      if (e.key === "Escape") {
+        setShowPreview(false);
+        setShowCmd(false);
+        setRenameId(null);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c" && preview) {
+        navigator.clipboard.writeText(preview.content);
+        setClipboardInfo("Copied preview link");
+        setTimeout(() => setClipboardInfo(null), 1200);
+      }
+      if (e.key === " ") {
+        // Quick look
+        const top = filtered[0];
+        if (top) {
+          e.preventDefault();
+          handleView(top);
         }
-      }, 100);
-    } else {
-      alert("⚠️ Please select class, subject and choose a file.");
-    }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [preview]);
+
+  /* -------------------------------- Uploading -------------------------------- */
+  const handleUpload = () => {
+    if (!selectedClass || !selectedSubject || !file) return alert("⚠️ Select class, subject and a file.");
+    let progress = 0;
+    const key = `${selectedClass}-${selectedSubject}`;
+    const timer = setInterval(() => {
+      progress = Math.min(100, progress + 8 + Math.random() * 12);
+      setUploadProgress(progress);
+      if (progress >= 100) {
+        clearInterval(timer);
+        const newNote: Note = {
+          id: Date.now(),
+          name: file.name,
+          size: `${(file.size / 1024).toFixed(1)} KB`,
+          date: new Date().toISOString(),
+          type: file.type,
+          content: URL.createObjectURL(file),
+          subjectKey: key,
+          tags: [],
+        };
+        setNotes((prev) => [newNote, ...prev]);
+        setFile(null);
+        setUploadProgress(0);
+      }
+    }, 120);
   };
 
-  const handleViewNote = (note) => {
-    setPreviewNote(note);
+  const handleView = (note: Note) => {
+    setPreview(note);
     setShowPreview(true);
   };
 
-  const handleDownloadNote = (note) => {
-    // Create a temporary anchor element
-    const a = document.createElement('a');
+  const handleDownload = (note: Note) => {
+    const a = document.createElement("a");
     a.href = note.content;
     a.download = note.name;
     document.body.appendChild(a);
@@ -81,306 +226,303 @@ const NotesSection = () => {
     document.body.removeChild(a);
   };
 
-  const filteredNotes = selectedClass && selectedSubject 
-    ? (notes[`${selectedClass}-${selectedSubject}`] || []).filter(note => 
-        note.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : [];
+  const handleDelete = (note: Note) => {
+    setNotes((prev) => prev.filter((n) => n.id !== note.id));
+    if (preview?.id === note.id) setShowPreview(false);
+  };
+
+  const togglePin = (note: Note) => setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, pinned: !n.pinned } : n)));
+
+  const addTag = (note: Note, tag: string) => setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, tags: Array.from(new Set([...(n.tags || []), tag])) } : n)));
+
+  const removeTag = (note: Note, tag: string) => setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, tags: (n.tags || []).filter((t) => t !== tag) } : n)));
 
   const clearFilters = () => {
     setSelectedClass("");
     setSelectedSubject("");
     setSearchQuery("");
+    setActiveTags([]);
   };
 
+  /* --------------------------------- Derived -------------------------------- */
+  const filtered = useMemo(() => {
+    const key = selectedClass && selectedSubject ? `${selectedClass}-${selectedSubject}` : null;
+    const list = key ? notes.filter((n) => n.subjectKey === key) : [];
+    const q = searchQuery.trim().toLowerCase();
+    const byQuery = q ? list.filter((n) => n.name.toLowerCase().includes(q) || (n.tags || []).some((t) => t.toLowerCase().includes(q))) : list;
+    const byTags = activeTags.length ? byQuery.filter((n) => activeTags.every((t) => (n.tags || []).includes(t))) : byQuery;
+    const sorted = [...byTags].sort((a, b) => {
+      if (sortKey === "name") return a.name.localeCompare(b.name);
+      if (sortKey === "size") return parseFloat(b.size) - parseFloat(a.size);
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+    sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+    return sorted;
+  }, [notes, selectedClass, selectedSubject, searchQuery, sortKey, activeTags]);
+
+  const allTags = useMemo(() => Array.from(new Set(notes.flatMap((n) => n.tags || []))).sort(), [notes]);
+
+  /* ---------------------------------- JSX ----------------------------------- */
   return (
-    <div className={`min-h-screen p-6 transition-colors duration-300 ${darkMode ? 'dark bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
+    <div className={`min-h-screen p-6 transition-colors duration-300 ${darkMode ? "dark bg-neutral-950" : "bg-gradient-to-br from-slate-50 to-indigo-50"}`}>
       {/* Preview Modal */}
-      {showPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className={`rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                {previewNote?.name}
-              </h3>
-              <button 
-                onClick={() => setShowPreview(false)}
-                className={`p-1 rounded-full ${darkMode ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-200 text-gray-500'}`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4 overflow-auto max-h-[80vh]">
-              {previewNote?.type?.startsWith('image/') ? (
-                <img 
-                  src={previewNote.content} 
-                  alt={previewNote.name} 
-                  className="max-w-full h-auto mx-auto"
-                />
-              ) : (
-                <div className={`p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                  <p className={`text-center ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                    Preview not available for this file type. Download to view.
-                  </p>
+      <AnimatePresence>
+        {showPreview && preview && (
+          <motion.div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl bg-white dark:bg-neutral-900" initial={{ y: 20, scale: 0.98, opacity: 0 }} animate={{ y: 0, scale: 1, opacity: 1 }} exit={{ y: 20, scale: 0.98, opacity: 0 }}>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200 dark:border-neutral-800">
+                <div className="flex items-center gap-2 font-medium text-neutral-800 dark:text-neutral-100 truncate">
+                  {iconFor(preview.type)} <span className="truncate">{preview.name}</span>
                 </div>
-              )}
-            </div>
-            <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
-              <button 
-                onClick={() => handleDownloadNote(previewNote)}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 text-white py-2 px-4 rounded-lg flex items-center"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Download
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-          <div>
-            <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-blue-600 mb-2">
-              Notes Repository 📚
-            </h1>
-            <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-              Access and share study materials for your classes
-            </p>
-          </div>
-          
-          <button 
-            onClick={toggleDarkMode}
-            className={`mt-4 md:mt-0 rounded-full p-2 ${darkMode ? 'bg-gray-700 text-yellow-300' : 'bg-gray-200 text-gray-700'}`}
-          >
-            {darkMode ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-              </svg>
-            )}
-          </button>
-        </div>
-
-        {/* Selection Card */}
-        <div>
-          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} border-0 shadow-lg rounded-2xl overflow-hidden`}>
-            <div className="p-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                <h2 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Upload New Notes
-                </h2>
-                
-                {(selectedClass || selectedSubject || searchQuery) && (
-                  <button 
-                    onClick={clearFilters}
-                    className={`flex items-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Clear Filters
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleDownload(preview)} className="px-3 py-1.5 text-sm rounded-lg bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:opacity-90">
+                    Download
                   </button>
+                  <button onClick={() => setShowPreview(false)} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 overflow-auto max-h-[78vh]">
+                {preview.type.startsWith("image/") ? (
+                  <img src={preview.content} alt={preview.name} className="max-w-full h-auto mx-auto rounded-lg" />
+                ) : preview.type.includes("pdf") ? (
+                  <iframe title="preview" src={preview.content} className="w-full h-[72vh] rounded-lg" />
+                ) : (
+                  <div className="p-6 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-center text-neutral-500 dark:text-neutral-400">
+                    Preview not available for this file type. Download to view.
+                  </div>
                 )}
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className={`text-sm font-medium mb-2 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Class
-                  </label>
-                  <select 
-                    onChange={(e) => setSelectedClass(e.target.value)} 
-                    value={selectedClass}
-                    className={`w-full py-2 px-3 rounded-xl border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`}
-                  >
-                    <option value="">Select Class</option>
-                    {[9, 10, 11, 12].map((cls) => (
-                      <option key={cls} value={cls.toString()}>
-                        Class {cls}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-                {selectedClass && (
-                  <div>
-                    <label className={`text-sm font-medium mb-2 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      Subject
-                    </label>
-                    <select 
-                      onChange={(e) => setSelectedSubject(e.target.value)} 
-                      value={selectedSubject}
-                      className={`w-full py-2 px-3 rounded-xl border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`}
-                    >
-                      <option value="">Select Subject</option>
-                      {subjects[selectedClass]?.map((sub) => (
-                        <option key={sub} value={sub}>
-                          {sub}
-                        </option>
+      {/* Command Palette */}
+      <AnimatePresence>
+        {showCmd && (
+          <motion.div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -10, opacity: 0 }} className="mx-auto mt-24 w-full max-w-xl rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-2xl">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-neutral-200 dark:border-neutral-800">
+                <Search className="h-4 w-4 text-neutral-400" />
+                <input autoFocus placeholder="Type a command… (e.g. Toggle theme, New upload, Grid view)" className="w-full bg-transparent outline-none text-sm" onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const v = (e.target as HTMLInputElement).value.toLowerCase();
+                    if (v.includes("theme")) setDarkMode((d) => !d);
+                    if (v.includes("grid")) setLayout("grid");
+                    if (v.includes("list")) setLayout("list");
+                    if (v.includes("upload")) document.getElementById("notes-file-input")?.click();
+                    if (v.includes("clear")) clearFilters();
+                    setShowCmd(false);
+                  }
+                }} />
+                <Kbd>Enter</Kbd>
+              </div>
+              <div className="p-3 text-xs text-neutral-500 flex items-center gap-2">
+                <Keyboard className="h-3.5 w-3.5" /> Shortcuts: <Kbd>Ctrl/⌘</Kbd>+<Kbd>K</Kbd> Command · <Kbd>/</Kbd> Focus search · <Kbd>Ctrl/⌘</Kbd>+<Kbd>P</Kbd> Theme · <Kbd>Ctrl/⌘</Kbd>+<Kbd>G</Kbd> Layout · <Kbd>Space</Kbd> Quick Look
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="max-w-7xl mx-auto">
+        {/* Header / Breadcrumb */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-800 px-3 py-1 text-xs text-neutral-600 dark:text-neutral-300">
+              <Sparkles className="h-3.5 w-3.5" /> Notion‑grade polish, local demo
+            </div>
+            <h1 className="mt-3 text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-fuchsia-600 to-orange-500">
+              Notes Workspace
+            </h1>
+            <div className="mt-1 text-sm text-neutral-600 dark:text-neutral-300 flex items-center gap-2">
+              <Folder className="h-4 w-4" />
+              <span>Classes</span>
+              <span>›</span>
+              <span>{selectedClass || "—"}</span>
+              <span>›</span>
+              <span>{selectedSubject || "—"}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowCmd(true)} className="hidden md:inline-flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-neutral-800 px-3 py-2 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+              <Search className="h-4 w-4" /> Quick actions <Kbd>Ctrl/⌘</Kbd>+<Kbd>K</Kbd>
+            </button>
+            <button onClick={() => setLayout((l) => (l === "grid" ? "list" : "grid"))} className="rounded-xl border border-neutral-200 dark:border-neutral-800 px-3 py-2 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Toggle layout">
+              {layout === "grid" ? <Rows className="h-5 w-5" /> : <GridIcon className="h-5 w-5" />}
+            </button>
+            <button onClick={() => setDarkMode(!darkMode)} className="rounded-xl border border-neutral-200 dark:border-neutral-800 px-3 py-2 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Toggle theme">
+              {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Upload + Filters */}
+        <div className="rounded-2xl border-0 shadow-lg bg-white dark:bg-neutral-900">
+          <div className="p-6 space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Upload New Notes</h2>
+              {(selectedClass || selectedSubject || searchQuery || activeTags.length) && (
+                <button onClick={clearFilters} className="text-sm text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200">Clear filters</button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Class</label>
+                <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="mt-1 w-full py-2 px-3 rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100">
+                  <option value="">Select Class</option>
+                  {[9, 10, 11, 12].map((c) => (
+                    <option key={c} value={String(c)}>Class {c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Subject</label>
+                <select value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)} disabled={!selectedClass} className="mt-1 w-full py-2 px-3 rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100 disabled:opacity-60">
+                  <option value="">Select Subject</option>
+                  {selectedClass && SUBJECTS[selectedClass]?.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">File</label>
+                <div ref={dropRef} className="mt-1 flex items-center gap-3 rounded-2xl border-2 border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-4 py-3">
+                  <input id="notes-file-input" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="block w-full text-sm text-neutral-600 dark:text-neutral-300 file:mr-4 file:rounded-lg file:border-0 file:bg-neutral-900 file:text-white dark:file:bg-white dark:file:text-neutral-900 file:px-3 file:py-2" />
+                  <button onClick={handleUpload} disabled={!selectedClass || !selectedSubject || !file} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 px-4 py-2 text-white disabled:opacity-60">
+                    <Upload className="h-4 w-4" /> Upload
+                  </button>
+                </div>
+                {uploadProgress > 0 && uploadProgress < 100 && (
+                  <div className="mt-2">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
+                      <div className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                    <p className="mt-1 text-xs text-neutral-500">Uploading… {Math.round(uploadProgress)}%</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+              <div className="relative md:col-span-5">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                <input ref={searchRef} placeholder="Search notes… (press /)" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 pl-9 pr-3 py-2 text-neutral-800 dark:text-neutral-100" />
+              </div>
+              <div className="md:col-span-4 flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-neutral-400" />
+                <span className="text-xs text-neutral-500">Sort</span>
+                <div className="relative">
+                  <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className="appearance-none rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 px-3 py-2 pr-8 text-sm">
+                    <option value="date">Newest</option>
+                    <option value="name">Name</option>
+                    <option value="size">Size</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                </div>
+              </div>
+              <div className="md:col-span-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Tag className="h-4 w-4 text-neutral-400" />
+                  {activeTags.map((t) => (
+                    <button key={t} onClick={() => setActiveTags((arr) => arr.filter((x) => x !== t))} className="rounded-full bg-neutral-200/70 dark:bg-neutral-800 px-2 py-0.5 text-xs text-neutral-700 dark:text-neutral-200">
+                      {t} ✕
+                    </button>
+                  ))}
+                  <div className="relative">
+                    <select onChange={(e) => e.target.value && setActiveTags((arr) => Array.from(new Set([...arr, e.target.value])))} value="" className="appearance-none rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 px-3 py-2 pr-8 text-xs text-neutral-700 dark:text-neutral-200">
+                      <option value="">Filter tags</option>
+                      {allTags.map((t) => (
+                        <option key={t} value={t}>{t}</option>
                       ))}
                     </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className={`text-sm font-medium mb-2 block ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                    File
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type="file"
-                        className={`w-full py-2 px-3 rounded-xl border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`}
-                        onChange={(e) => setFile(e.target.files[0])}
-                      />
-                      {file && (
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    <button 
-                      onClick={handleUpload} 
-                      className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-2 px-4 rounded-xl shadow-md flex items-center"
-                      disabled={!selectedClass || !selectedSubject || !file}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      Upload
-                    </button>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                   </div>
                 </div>
               </div>
-              
-              {uploadProgress > 0 && uploadProgress < 100 && (
-                <div className="mt-2">
-                  <div className={`w-full rounded-full h-2.5 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                    <div 
-                      className="bg-gradient-to-r from-purple-500 to-blue-500 h-2.5 rounded-full transition-all duration-300" 
-                      style={{ width: `${uploadProgress}%` }}
-                    ></div>
-                  </div>
-                  <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Uploading... {uploadProgress}%
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Notes Display */}
-        {selectedClass && selectedSubject && (
+        {/* Notes */}
+        {selectedClass && selectedSubject ? (
           <div className="mt-8">
-            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} border-0 shadow-lg rounded-2xl overflow-hidden`}>
-              <div className="p-6">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                  <h2 className={`text-xl font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                    Notes for Class {selectedClass} - {selectedSubject}
-                    <span className={`text-sm ml-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      ({filteredNotes.length} files)
-                    </span>
-                  </h2>
-                  
-                  <div className="relative w-full md:w-auto">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <input
-                      placeholder="Search notes..."
-                      className={`pl-10 py-2 rounded-xl border w-full md:w-64 ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200'}`}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-                </div>
-                
-                {filteredNotes.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredNotes.map((note) => (
-                      <div
-                        key={note.id}
-                        className={`rounded-xl p-4 border ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'} transition-transform hover:scale-[1.02]`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span className={`text-xs px-2 py-1 rounded-full ${darkMode ? 'text-gray-300 bg-gray-600' : 'text-gray-500 bg-gray-100'}`}>
-                            {note.type.split('/')[1]?.toUpperCase() || "FILE"}
-                          </span>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-neutral-800 dark:text-neutral-100">
+                Notes for Class {selectedClass} – {selectedSubject}
+                <span className="ml-2 align-middle text-sm text-neutral-500">({filtered.length} files)</span>
+              </h2>
+              {clipboardInfo && (
+                <span className="text-xs text-emerald-600 dark:text-emerald-400">{clipboardInfo}</span>
+              )}
+            </div>
+
+            {filtered.length ? (
+              <LayoutGroup>
+                <div className={layout === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
+                  {filtered.map((note) => (
+                    <motion.div key={note.id} layout whileHover={{ y: -2 }} className={`group rounded-2xl border ${layout === "grid" ? "p-4" : "p-3"} bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800`}> 
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-200/60 dark:bg-neutral-700/60">
+                            {iconFor(note.type)}
+                          </div>
+                          <div className="min-w-0">
+                            {renameId === note.id ? (
+                              <input autoFocus defaultValue={note.name} onBlur={(e) => { setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, name: e.target.value } : n))); setRenameId(null); }} className="w-full rounded-md bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-sm" />
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <p className="truncate font-medium text-neutral-800 dark:text-neutral-100 max-w-[16rem]">{note.name}</p>
+                                {note.pinned && (
+                                  <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px]">PINNED</span>
+                                )}
+                              </div>
+                            )}
+                            <p className="text-xs text-neutral-500">{prettyType(note.type)} · {note.size} · {new Date(note.date).toLocaleDateString()}</p>
+                            {note.tags && note.tags.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">{note.tags.map((t) => (<span key={t} className="rounded-full bg-neutral-200/70 dark:bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-700 dark:text-neutral-300">#{t}</span>))}</div>
+                            )}
+                            <div className="mt-2 flex items-center gap-2">
+                              <button onClick={() => addTag(note, prompt("Add tag:") || "")} className="text-xs rounded-md px-2 py-1 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700">Add tag</button>
+                              <button onClick={() => setRenameId(note.id)} className="text-xs rounded-md px-2 py-1 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700"><Pencil className="h-3.5 w-3.5 inline" /> Rename</button>
+                              <button onClick={() => navigator.clipboard.writeText(note.content).then(() => { setClipboardInfo("Copied note link"); setTimeout(() => setClipboardInfo(null), 1200); })} className="text-xs rounded-md px-2 py-1 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700"><LinkIcon className="h-3.5 w-3.5 inline" /> Copy link</button>
+                            </div>
+                          </div>
                         </div>
-                        
-                        <h3 className={`font-medium truncate mb-1 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
-                          {note.name}
-                        </h3>
-                        
-                        <div className="flex items-center justify-between mt-4">
-                          <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                            <div>{note.size}</div>
-                            <div>{note.date}</div>
-                          </div>
-                          
-                          <div className="flex space-x-2">
-                            <button 
-                              onClick={() => handleViewNote(note)}
-                              className={`h-8 w-8 rounded-lg flex items-center justify-center ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'} transition-colors`}
-                              title="View note"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
-                            <button 
-                              onClick={() => handleDownloadNote(note)}
-                              className={`h-8 w-8 rounded-lg flex items-center justify-center ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'} transition-colors`}
-                              title="Download note"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                            </button>
-                          </div>
+                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <button title="Pin" onClick={() => togglePin(note)} className="rounded-lg p-2 hover:bg-neutral-200/60 dark:hover:bg-neutral-800">{note.pinned ? <Star className="h-4 w-4" /> : <StarOff className="h-4 w-4" />}</button>
+                          <button title="Preview" onClick={() => handleView(note)} className="rounded-lg p-2 hover:bg-neutral-200/60 dark:hover:bg-neutral-800"><Eye className="h-4 w-4" /></button>
+                          <button title="Download" onClick={() => handleDownload(note)} className="rounded-lg p-2 hover:bg-neutral-200/60 dark:hover:bg-neutral-800"><Download className="h-4 w-4" /></button>
+                          <button title="Delete" onClick={() => handleDelete(note)} className="rounded-lg p-2 hover:bg-red-100/70 dark:hover:bg-red-900/30"><Trash2 className="h-4 w-4" /></button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    <h3 className={`text-lg font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                      No notes found
-                    </h3>
-                    <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
-                      {searchQuery 
-                        ? "Try a different search term" 
-                        : "Upload the first note for this subject!"}
-                    </p>
-                  </div>
-                )}
+                    </motion.div>
+                  ))}
+                </div>
+              </LayoutGroup>
+            ) : (
+              <div className="rounded-2xl border-0 shadow-md bg-white dark:bg-neutral-900 p-10 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800"><FileText className="h-8 w-8 text-neutral-400" /></div>
+                <h3 className="text-lg font-medium text-neutral-800 dark:text-neutral-100">No notes found</h3>
+                <p className="mt-1 text-neutral-500 dark:text-neutral-400">{searchQuery ? "Try a different search term" : "Upload the first note for this subject!"}</p>
               </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-10 grid place-items-center">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800"><Upload className="h-8 w-8 text-neutral-400" /></div>
+              <p className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Choose a class & subject to begin</p>
+              <p className="text-neutral-500 dark:text-neutral-400">Then drag and drop a file or click Upload.</p>
             </div>
           </div>
         )}
       </div>
     </div>
   );
-};
-
-export default NotesSection;
+}
