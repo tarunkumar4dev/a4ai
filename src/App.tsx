@@ -1,11 +1,11 @@
+// src/App.tsx
 import { useEffect, Suspense, lazy } from "react";
 import {
   BrowserRouter,
   Routes,
   Route,
-  useNavigate,
-  useLocation,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -59,7 +59,9 @@ const PrivacyPolicyPage  = lazy(() => import("./pages/company/PrivacyPolicyPage"
 const TermsPage          = lazy(() => import("./pages/legal/TermsPage"));
 const CookiePolicyPage   = lazy(() => import("./pages/legal/CookiePolicyPage"));
 
-/* ---------- Utilities ---------- */
+/* ---------- Auth callback (correct file path) ---------- */
+const CallbackPage       = lazy(() => import("./pages/auth/callback"));
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -74,23 +76,6 @@ const LoadingScreen = () => (
   <div className="p-8 text-center text-sm text-gray-500">Loading…</div>
 );
 
-const AuthCallback = () => {
-  const navigate = useNavigate();
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        navigate(session ? "/dashboard" : "/login", { replace: true });
-      } catch {
-        navigate("/login", { replace: true });
-      }
-    })();
-  }, [navigate]);
-  return <LoadingScreen />;
-};
-
-/* ---------- NotFound (inline, lightweight) ---------- */
 const NotFound = () => (
   <div className="min-h-[60vh] flex items-center justify-center">
     <div className="text-center">
@@ -108,26 +93,38 @@ const NotFound = () => (
   </div>
 );
 
-/* ---------- App ---------- */
 const App = () => {
-  // Ensure profile row exists on sign-in (safe for Google OAuth + email)
+  // Ensure profile exists for all sign-ins (email/password or OAuth).
+  // Idempotent upsert; do NOT override role here to avoid conflicts.
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
+          const u = session.user;
+          const full_name =
+            (u.user_metadata?.full_name as string | undefined) ??
+            (u.user_metadata?.name as string | undefined) ?? null;
 
-          if (!profile) {
-            await supabase.from("profiles").insert({
-              id: session.user.id,
-              email: session.user.email,
-              full_name: session.user.user_metadata?.full_name || "New User",
-              role: "teacher",
-            });
+          const avatar_url =
+            (u.user_metadata?.avatar_url as string | undefined) ??
+            (u.user_metadata?.picture as string | undefined) ?? null;
+
+          const { error } = await supabase
+            .from("profiles")
+            .upsert(
+              {
+                id: u.id,
+                email: u.email,
+                full_name,
+                avatar_url,
+                // role: "teacher", // ❌ intentionally omitted (use DB default/trigger)
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "id" }
+            );
+
+          if (error) {
+            console.error("profiles upsert (onAuthStateChange) failed:", error);
           }
         }
       }
@@ -135,15 +132,13 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Idle-prefetch commonly visited chunks to improve perceived speed
+  // Idle-prefetch commonly visited chunks
   useEffect(() => {
     const prefetch = () => {
-      // marketing
       import("./pages/FeaturesPage");
       import("./pages/product/PricingPage");
       import("./pages/company/CareersPage");
       import("./pages/Resources/Documentation");
-      // app/dash
       import("./pages/StudentsPage");
       import("./pages/Notes");
       import("./pages/SettingsPage");
@@ -165,7 +160,7 @@ const App = () => {
               <Suspense fallback={<LoadingScreen />}>
                 <Routes>
                   {/* Auth */}
-                  <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/auth/callback" element={<CallbackPage />} />
 
                   {/* Public marketing */}
                   <Route path="/"            element={<LandingPage />} />
@@ -198,7 +193,7 @@ const App = () => {
                   <Route path="/login"        element={<LoginPage />} />
                   <Route path="/signup"       element={<SignupPage />} />
 
-                  {/* Protected: Dashboard & core app */}
+                  {/* Protected */}
                   <Route
                     path="/dashboard"
                     element={
@@ -224,7 +219,7 @@ const App = () => {
                     }
                   />
 
-                  {/* NEW: Students / Notes / Settings (protected) */}
+                  {/* Students / Notes / Settings */}
                   <Route
                     path="/dashboard/students"
                     element={
@@ -250,7 +245,7 @@ const App = () => {
                     }
                   />
 
-                  {/* Contests (protected) */}
+                  {/* Contests */}
                   <Route
                     path="/contests"
                     element={
@@ -292,12 +287,27 @@ const App = () => {
                     }
                   />
 
-                  {/* ---- Redirect shims so /dashboard/contests* keeps working ---- */}
-                  <Route path="/dashboard/contests" element={<Navigate to="/contests" replace />} />
-                  <Route path="/dashboard/contests/create" element={<Navigate to="/contests/create" replace />} />
-                  <Route path="/dashboard/contests/join" element={<Navigate to="/contests/join" replace />} />
-                  <Route path="/dashboard/contests/live/:contestId" element={<Navigate to="/contests/live/:contestId" replace />} />
-                  <Route path="/dashboard/contests/leaderboard" element={<Navigate to="/contests/leaderboard" replace />} />
+                  {/* Redirect shims */}
+                  <Route
+                    path="/dashboard/contests"
+                    element={<Navigate to="/contests" replace />}
+                  />
+                  <Route
+                    path="/dashboard/contests/create"
+                    element={<Navigate to="/contests/create" replace />}
+                  />
+                  <Route
+                    path="/dashboard/contests/join"
+                    element={<Navigate to="/contests/join" replace />}
+                  />
+                  <Route
+                    path="/dashboard/contests/live/:contestId"
+                    element={<Navigate to="/contests/live/:contestId" replace />}
+                  />
+                  <Route
+                    path="/dashboard/contests/leaderboard"
+                    element={<Navigate to="/contests/leaderboard" replace />}
+                  />
 
                   {/* Fallbacks */}
                   <Route path="/home" element={<Navigate to="/" replace />} />

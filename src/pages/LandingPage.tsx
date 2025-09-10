@@ -314,7 +314,7 @@ function TrustSecurity() {
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-indigo-100 text-2xl dark:from-sky-900/40 dark:to-indigo-900/40">
                 {c.icon}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{c.title}</h3>
+              <h3 className="text-lg font-semibold text-gray-900 d  ark:text-white">{c.title}</h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{c.desc}</p>
             </motion.div>
           ))}

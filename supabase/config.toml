@@ -1,5 +1,7 @@
-
 project_id = "dcmnzvjftmdbywrjkust"
+
+[db]
+major_version = 15
 
 [functions.generate-test]
 verify_jwt = true

@@ -1,45 +1,65 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 
-const PrivateRoute = ({ children }: { children: JSX.Element }) => {
+type PrivateRouteProps = { children: React.ReactElement };
+
+const PrivateRoute = ({ children }: PrivateRouteProps) => {
   const location = useLocation();
   const [authChecked, setAuthChecked] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  const mounted = useRef(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    mounted.current = true;
+
+    // Initial check
+    (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted.current) return;
         setHasSession(!!session);
       } catch (error) {
         console.error("Auth check error:", error);
+        if (!mounted.current) return;
         setHasSession(false);
       } finally {
-        setAuthChecked(true);
+        if (mounted.current) setAuthChecked(true);
       }
-    };
+    })();
 
-    checkAuth();
+    // Subscribe to auth state changes (login, logout, token refresh)
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted.current) return;
+      setHasSession(!!session);
+    });
+
+    return () => {
+      mounted.current = false;
+      subscription.subscription.unsubscribe();
+    };
   }, []);
 
   if (!authChecked) {
     return (
       <div className="flex justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500" />
       </div>
     );
   }
 
   if (!hasSession) {
+    const from =
+      `${location.pathname}${location.search ?? ""}${location.hash ?? ""}` || "/dashboard";
+
     return (
-      <Navigate 
-        to="/login" 
-        replace 
-        state={{ 
-          from: location.pathname,
-          message: "Please sign in to access this page"
-        }} 
+      <Navigate
+        to="/login"
+        replace
+        state={{
+          from,
+          message: "Please sign in to access this page",
+        }}
       />
     );
   }
