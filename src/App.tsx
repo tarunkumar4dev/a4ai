@@ -17,6 +17,11 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import LandingDemo from "@/components/LandingDemo";
 import FAQ from "@/components/FAQ";
 
+/* ---------- Vercel Analytics & Speed Insights ---------- */
+import { Analytics } from "@vercel/analytics/react";
+import { injectSpeedInsights } from "@vercel/speed-insights";
+injectSpeedInsights();
+
 /* ---------- Lazy pages (marketing) ---------- */
 const LandingPage        = lazy(() => import("./pages/LandingPage"));
 const FeaturesPage       = lazy(() => import("./pages/FeaturesPage"));
@@ -313,6 +318,9 @@ const App = () => {
                   <Route path="/home" element={<Navigate to="/" replace />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
+
+                {/* Vercel Web Analytics - tracks SPA route changes */}
+                <Analytics />
               </Suspense>
             </BrowserRouter>
           </div>
