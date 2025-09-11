@@ -1,496 +1,302 @@
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import {
-  Check,
-  Minus,
-  Sparkles,
-  Zap,
-  Building2,
-  GraduationCap,
-  ShieldCheck,
-  ArrowRight,
-} from "lucide-react";
-
-/*
-  PricingPage — a4ai
-  - Modern, animated pricing inspired by OpenAI
-  - Two audiences: Individuals and Institutes/Schools
-  - Monthly / Yearly toggle (yearly shows per‑month equivalent and billed‑yearly note)
-  - Plan cards + feature comparison table + FAQ
-  - Fully responsive, dark‑mode friendly
-
-  Tailwind + shadcn/ui + Framer Motion only
-*/
-
-// ----------------------------- Types -----------------------------
-
-type Cycle = "monthly" | "yearly";
-
-type PlanCard = {
-  id: string;
-  name: string;
-  tagline?: string;
-  priceMonthly: number | 0 | null; // null => custom
-  priceYearly: number | 0 | null; // monthly equivalent when billed yearly
-  popular?: boolean;
-  highlight?: boolean;
-  cta?: string; // defaults based on audience
-  features: string[];
-};
-
-type ComparisonRow = {
-  key: string;
-  label: string;
-  entries: Array<boolean | string | number | null>;
-};
-
-// ----------------------------- Data -----------------------------
-
-const INDIVIDUAL_PLANS: PlanCard[] = [
-  {
-    id: "starter",
-    name: "Starter",
-    tagline: "For trying things out",
-    priceMonthly: 0,
-    priceYearly: 0,
-    features: [
-      "20 AI‑generated test papers / month",
-      "Question bank access (core topics)",
-      "Single‑model generation",
-      "Keyword‑based answer checks",
-      "PDF export",
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    tagline: "Best for most students",
-    priceMonthly: 199,
-    priceYearly: 159, // billed yearly
-    popular: true,
-    features: [
-      "150 AI‑generated test papers / month",
-      "Full question bank (all topics)",
-      "Multi‑LLM engine (OpenAI + DeepSeek)",
-      "Precision scoring + answer hints",
-      "PDF + DOCX export",
-      "Personal analytics dashboard",
-      "Email support",
-    ],
-  },
-  {
-    id: "power",
-    name: "Power",
-    tagline: "Creators & power users",
-    priceMonthly: 399,
-    priceYearly: 319, // billed yearly
-    highlight: true,
-    features: [
-      "500 AI‑generated test papers / month",
-      "Advanced question designer",
-      "Multi‑LLM with reranking",
-      "Proctored practice contests (2 / month)",
-      "Brand‑free exports",
-      "Priority support",
-    ],
-  },
-];
-
-const INDIVIDUAL_COMPARISON: ComparisonRow[] = [
-  { key: "papers", label: "Test papers / month", entries: ["20", "150", "500"] },
-  { key: "bank", label: "Question bank coverage", entries: ["Core", "All", "All + Advanced"] },
-  { key: "engine", label: "Multi‑LLM engine", entries: [false, true, true] },
-  { key: "proctor", label: "Proctored practice contests", entries: ["—", "—", "2 / mo"] },
-  { key: "export", label: "PDF / DOCX export", entries: ["PDF", "PDF + DOCX", "PDF + DOCX"] },
-  { key: "support", label: "Support", entries: ["Community", "Email", "Priority"] },
-];
-
-const INSTITUTION_PLANS: PlanCard[] = [
-  {
-    id: "classroom",
-    name: "Classroom",
-    tagline: "Up to 100 students",
-    priceMonthly: 2499,
-    priceYearly: 1999,
-    features: [
-      "100 student seats + 5 staff",
-      "AI proctoring & screen lock",
-      "Contest hosting (2 / month)",
-      "Shared question bank",
-      "Basic branding",
-      "Email support",
-    ],
-  },
-  {
-    id: "campus",
-    name: "Campus Pro",
-    tagline: "Up to 500 students",
-    priceMonthly: 7999,
-    priceYearly: 6399,
-    popular: true,
-    features: [
-      "500 student seats + 20 staff",
-      "Advanced AI proctoring",
-      "Contest hosting (8 / month)",
-      "Custom sections & rubrics",
-      "Custom branding & domains",
-      "Priority support",
-      "Basic uptime SLA (99.5%)",
-    ],
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    tagline: "Unlimited scale + SSO",
-    priceMonthly: null,
-    priceYearly: null,
-    highlight: true,
-    features: [
-      "Unlimited seats (flexible)",
-      "Dedicated success manager",
-      "Private cloud / VPC options",
-      "SSO (Google Workspace / SAML)",
-      "Advanced analytics & APIs",
-      "99.9% uptime SLA",
-    ],
-  },
-];
-
-const INSTITUTION_COMPARISON: ComparisonRow[] = [
-  { key: "seats", label: "Included student seats", entries: ["100", "500", "Custom"] },
-  { key: "staff", label: "Staff / admin seats", entries: ["5", "20", "Custom"] },
-  { key: "proctor", label: "AI proctoring & screen lock", entries: [true, true, true] },
-  { key: "hosting", label: "Contest hosting / month", entries: ["2", "8", "Custom"] },
-  { key: "branding", label: "Custom branding & domains", entries: [false, true, true] },
-  { key: "sso", label: "SSO (Google / SAML)", entries: [false, false, true] },
-  { key: "sla", label: "Uptime SLA", entries: ["—", "99.5%", "99.9%"] },
-  { key: "support", label: "Support", entries: ["Email", "Priority", "Dedicated manager"] },
-];
-
-// ----------------------------- Helpers -----------------------------
-
-const inr = (n: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
-
-function PriceTag({ n, cycle, billedNote }: { n: number | 0; cycle: Cycle; billedNote?: string }) {
-  const isYearly = cycle === "yearly";
-  return (
-    <div className="flex flex-col items-start">
-      <div className="flex items-end gap-1">
-        <div className="text-4xl font-semibold tracking-tight">{inr(n)}</div>
-        <div className="mb-1 text-sm text-muted-foreground">/mo</div>
-      </div>
-      {isYearly && billedNote && (
-        <div className="mt-1 text-xs text-muted-foreground">{billedNote}</div>
-      )}
-    </div>
-  );
-}
-
-function Chip({ children, intent = "default" as "default" | "success" | "warning" }) {
-  const map = {
-    default: "bg-muted text-foreground/90",
-    success: "bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20",
-    warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
-  } as const;
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${map[intent]}`}>{children}</span>
-  );
-}
-
-function FeatureItem({ text }: { text: string }) {
-  return (
-    <li className="flex items-start gap-2 text-sm">
-      <Check className="mt-0.5 h-4 w-4 flex-none" />
-      <span>{text}</span>
-    </li>
-  );
-}
-
-// ----------------------------- Component -----------------------------
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Check, Star, Zap, Award, Users, Building, School } from "lucide-react";
 
 export default function PricingPage() {
-  const [cycle, setCycle] = useState<Cycle>("monthly");
-  const [audience, setAudience] = useState<"individual" | "institutions">("individual");
+  const [audience, setAudience] = useState("individual");
+  const [billingPeriod, setBillingPeriod] = useState("monthly");
+  const navigate = useNavigate();
 
-  const plans = audience === "individual" ? INDIVIDUAL_PLANS : INSTITUTION_PLANS;
-  const rows = audience === "individual" ? INDIVIDUAL_COMPARISON : INSTITUTION_COMPARISON;
-
-  const headerIcon = audience === "individual" ? (
-    <GraduationCap className="h-5 w-5" />
-  ) : (
-    <Building2 className="h-5 w-5" />
-  );
-
-  // compute billed note for yearly
-  const billedNote = (p: PlanCard) => {
-    if (p.priceMonthly === 0) return undefined;
-    if (p.priceYearly && p.priceYearly > 0) {
-      const total = (p.priceYearly ?? 0) * 12;
-      return `billed ${inr(total)} / year`;
-    }
-    return undefined;
+  const plans = {
+    individual: [
+      {
+        name: "Starter",
+        price: { monthly: "₹499", yearly: "₹4,999" },
+        description: "Perfect for individual teachers starting out",
+        features: [
+          "Unlimited Test Generation",
+          "Basic Student Analytics",
+          "Notes Recommendations",
+          "Up to 50 students",
+          "Email support",
+        ],
+        popular: false,
+      },
+      {
+        name: "Teacher Pro",
+        price: { monthly: "₹999", yearly: "₹9,999" },
+        description: "For professional educators",
+        features: [
+          "All Starter features",
+          "Advanced Analytics",
+          "Custom Test Branding",
+          "Up to 200 students",
+          "Priority support",
+          "PDF Export",
+          "Question Bank Access",
+        ],
+        popular: true,
+      },
+      {
+        name: "Master Educator",
+        price: { monthly: "₹1,999", yearly: "₹19,999" },
+        description: "For top-tier teaching professionals",
+        features: [
+          "All Pro features",
+          "Unlimited students",
+          "AI-Powered Insights",
+          "Parent Portal Access",
+          "24/7 Phone support",
+          "Custom Integrations",
+          "Early Feature Access",
+        ],
+        popular: false,
+      },
+    ],
+    institute: [
+      {
+        name: "Institute Basic",
+        price: { monthly: "₹4,999", yearly: "₹49,999" },
+        description: "For small coaching centers",
+        features: [
+          "Up to 5 teachers",
+          "Institute Analytics Dashboard",
+          "Contest Hosting",
+          "Branded Certificates",
+          "Basic Reporting",
+          "500 student capacity",
+        ],
+        popular: false,
+      },
+      {
+        name: "Institute Growth",
+        price: { monthly: "₹8,999", yearly: "₹89,999" },
+        description: "For growing institutes",
+        features: [
+          "All Basic features",
+          "Up to 15 teachers",
+          "Advanced Reporting",
+          "Performance Benchmarking",
+          "1,500 student capacity",
+          "API Access",
+          "Custom Domain",
+        ],
+        popular: true,
+      },
+      {
+        name: "Institute Elite",
+        price: { monthly: "₹14,999", yearly: "₹149,999" },
+        description: "For premium coaching institutes",
+        features: [
+          "All Growth features",
+          "Unlimited teachers",
+          "Unlimited students",
+          "White-label Solution",
+          "Dedicated Account Manager",
+          "SSO Integration",
+          "Custom Development Hours",
+        ],
+        popular: false,
+      },
+    ],
+    school: [
+      {
+        name: "School Standard",
+        price: { monthly: "₹19,999", yearly: "₹199,999" },
+        description: "For small to medium schools",
+        features: [
+          "Up to 25 teachers",
+          "School-wide Dashboard",
+          "Parent & Admin Portals",
+          "Custom Report Cards",
+          "1,000 student capacity",
+          "Basic SIS Integration",
+        ],
+        popular: false,
+      },
+      {
+        name: "School Premium",
+        price: { monthly: "₹34,999", yearly: "₹349,999" },
+        description: "For large schools",
+        features: [
+          "All Standard features",
+          "Up to 75 teachers",
+          "Advanced Analytics Suite",
+          "Custom Integrations",
+          "5,000 student capacity",
+          "Training & Onboarding",
+          "99.9% Uptime SLA",
+        ],
+        popular: true,
+      },
+      {
+        name: "School Enterprise",
+        price: { monthly: "₹59,999", yearly: "₹599,999" },
+        description: "For educational networks & groups",
+        features: [
+          "All Premium features",
+          "Unlimited teachers & students",
+          "Multi-school Management",
+          "Dedicated Infrastructure",
+          "Custom Feature Development",
+          "24/7 Premium Support",
+          "On-site Training",
+        ],
+        popular: false,
+      },
+    ],
   };
 
-  const headerGradient = useMemo(
-    () =>
-      "bg-[radial-gradient(1200px_600px_at_50%_-10%,hsl(var(--primary)/0.18),transparent_60%),radial-gradient(900px_500px_at_80%_0%,hsl(var(--primary)/0.12),transparent_60%)]",
-    []
-  );
+  const savingsNote = billingPeriod === "yearly" ? "(Save 17%)" : "";
 
   return (
-    <div className="relative">
-      {/* Animated background blobs */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.8 }}
-      >
-        <motion.div
-          className={`absolute inset-0 ${headerGradient}`}
-          animate={{ y: [0, -10, 0] }}
-          transition={{ repeat: Infinity, duration: 18, ease: "easeInOut" }}
-        />
-      </motion.div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 text-foreground flex flex-col items-center py-12 px-4">
+      <div className="text-center mb-12 max-w-3xl">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
+          Flexible Plans for Every Educator
+        </h1>
+        <p className="text-lg text-muted-foreground mb-8">
+          Choose the perfect plan for your teaching needs. All plans include a 14-day free trial.
+        </p>
 
-      {/* Header */}
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:py-18">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm backdrop-blur">
-            {headerIcon}
-            <span className="font-medium">a4ai Pricing</span>
-            <Chip intent="success">New</Chip>
-          </div>
-          <h1 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Simple pricing for {audience === "individual" ? "students & self‑learners" : "institutes & schools"}
-          </h1>
-          <p className="mt-3 max-w-2xl text-muted-foreground">
-            Choose a plan that scales with you. Switch between Monthly and Yearly at any time.
-          </p>
-
-          {/* Switchers */}
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            {/* Audience toggle */}
-            <div className="inline-flex rounded-lg border p-1">
-              <button
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                  audience === "individual" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                }`}
-                onClick={() => setAudience("individual")}
-              >
-                Individual
-              </button>
-              <button
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                  audience === "institutions" ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                }`}
-                onClick={() => setAudience("institutions")}
-              >
-                Institutes / Schools
-              </button>
-            </div>
-
-            {/* Billing toggle */}
-            <div className="inline-flex items-center gap-2 rounded-lg border p-1">
-              <button
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                  cycle === "monthly" ? "bg-muted" : "opacity-70 hover:opacity-100"
-                }`}
-                onClick={() => setCycle("monthly")}
-              >
-                Monthly
-              </button>
-              <button
-                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                  cycle === "yearly" ? "bg-muted" : "opacity-70 hover:opacity-100"
-                }`}
-                onClick={() => setCycle("yearly")}
-              >
-                Yearly <span className="ml-1 hidden sm:inline">(save ~20%)</span>
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Plan cards */}
-      <section className="mx-auto max-w-6xl px-4 pb-6">
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {plans.map((p, idx) => (
-            <motion.div
-              key={p.id}
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-20% 0px" }}
-              transition={{ duration: 0.45, delay: 0.05 * idx, ease: "easeOut" }}
+        {/* Audience Toggle */}
+        <div className="inline-flex bg-muted p-1 rounded-lg mb-8">
+          {[
+            { id: "individual", label: "Teachers", icon: <Users size={18} /> },
+            { id: "institute", label: "Institutes", icon: <Building size={18} /> },
+            { id: "school", label: "Schools", icon: <School size={18} /> },
+          ].map((item) => (
+            <button
+              key={item.id}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                audience === item.id
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setAudience(item.id)}
             >
-              <Card
-                className={`relative h-full overflow-hidden transition-all hover:shadow-xl ${
-                  p.highlight ? "border-primary/60 shadow-lg" : p.popular ? "border-primary/30" : ""
-                }`}
-              >
-                {/* Accent gradient */}
-                <div className="pointer-events-none absolute -inset-px rounded-lg opacity-0 [mask-image:radial-gradient(60%_40%_at_30%_0%,black,transparent)] transition-opacity group-hover:opacity-100">
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent" />
-                </div>
-
-                <CardHeader className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-xl font-semibold tracking-tight">{p.name}</h3>
-                        {p.popular && <Chip intent="warning">Most popular</Chip>}
-                        {p.highlight && <Chip intent="success">Best value</Chip>}
-                      </div>
-                      {p.tagline && (
-                        <p className="mt-1 text-sm text-muted-foreground">{p.tagline}</p>
-                      )}
-                    </div>
-                    {audience === "individual" ? (
-                      <Sparkles className="h-5 w-5 text-primary" />
-                    ) : (
-                      <ShieldCheck className="h-5 w-5 text-primary" />
-                    )}
-                  </div>
-
-                  {/* Price */}
-                  <div className="mt-4">
-                    {p.priceMonthly === null ? (
-                      <div className="text-3xl font-semibold">Custom</div>
-                    ) : p.priceMonthly === 0 ? (
-                      <div className="text-3xl font-semibold">Free</div>
-                    ) : cycle === "monthly" ? (
-                      <PriceTag n={p.priceMonthly} cycle={cycle} />
-                    ) : (
-                      <PriceTag n={p.priceYearly ?? p.priceMonthly} cycle={cycle} billedNote={billedNote(p)} />
-                    )}
-                  </div>
-                </CardHeader>
-
-                <CardContent>
-                  <ul className="mt-2 space-y-2">
-                    {p.features.map((f) => (
-                      <FeatureItem key={f} text={f} />
-                    ))}
-                  </ul>
-                </CardContent>
-
-                <CardFooter className="mt-2">
-                  {p.priceMonthly === null ? (
-                    <Button className="w-full" size="sm">
-                      Contact sales <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  ) : p.priceMonthly === 0 ? (
-                    <Button variant="outline" className="w-full" size="sm">
-                      Get started <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button className="w-full" size="sm">
-                      Start {audience === "individual" ? "trial" : "demo"} <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  )}
-                </CardFooter>
-              </Card>
-            </motion.div>
+              {item.icon}
+              {item.label}
+            </button>
           ))}
         </div>
 
-        {/* Tiny note for taxes */}
-        <p className="mt-4 text-xs text-muted-foreground">
-          Prices are in INR and exclude applicable taxes. You can switch plans or cancel anytime.
-        </p>
-      </section>
-
-      {/* Comparison Table */}
-      <section className="mx-auto max-w-6xl px-4 py-10">
-        <div className="mb-4 flex items-center gap-2">
-          <Zap className="h-5 w-5" />
-          <h2 className="text-xl font-semibold tracking-tight">Compare features</h2>
-        </div>
-
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium">Feature</th>
-                {plans.map((p) => (
-                  <th key={p.id} className="px-4 py-3 text-left font-medium">
-                    {p.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.key} className="border-t">
-                  <td className="px-4 py-3 text-foreground/90">{row.label}</td>
-                  {row.entries.map((val, i) => (
-                    <td key={i} className="px-4 py-3">
-                      {typeof val === "boolean" ? (
-                        val ? (
-                          <div className="inline-flex items-center gap-2 text-green-600 dark:text-green-400">
-                            <Check className="h-4 w-4" />
-                            <span className="hidden sm:inline">Included</span>
-                          </div>
-                        ) : (
-                          <div className="inline-flex items-center gap-2 text-muted-foreground">
-                            <Minus className="h-4 w-4" />
-                            <span className="hidden sm:inline">Not included</span>
-                          </div>
-                        )
-                      ) : val ? (
-                        <span>{val}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="mx-auto max-w-6xl px-4 pb-20">
-        <div className="mb-6 flex items-center gap-2">
-          <Sparkles className="h-5 w-5" />
-          <h2 className="text-xl font-semibold tracking-tight">Frequently asked</h2>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <FaqItem q="What’s the difference between Monthly and Yearly?" a="Yearly shows a lower per‑month price and is billed once annually. You can switch anytime—changes take effect from your next billing cycle." />
-          <FaqItem q="Do you offer student discounts?" a="Yes—Pro plan pricing is already optimized for students. For special circumstances, write to us and we’ll try to help." />
-          <FaqItem q="How do institute seats work?" a="Seats are the number of unique students that can be active in a month. You can purchase additional seats as you grow or talk to us for custom tiers." />
-          <FaqItem q="Is my data safe?" a="We use industry‑standard security, encryption at rest and in transit, and granular role‑based access controls. Enterprise options include private cloud and SSO." />
-        </div>
-
-        <div className="mt-10 rounded-xl border bg-muted/40 p-6">
-          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-            <div>
-              <h3 className="text-lg font-semibold tracking-tight">Need a custom quote or a live demo?</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Tell us about your requirements—curriculum, seat counts, branding, SSO—and we’ll tailor a plan for you.</p>
-            </div>
-            <Button size="sm" className="gap-2">
-              Contact sales
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+        {/* Billing Toggle */}
+        <div className="flex items-center justify-center gap-4 mb-12">
+          <span className={`text-sm ${billingPeriod === "monthly" ? "font-semibold" : "text-muted-foreground"}`}>
+            Monthly
+          </span>
+          <div 
+            className="w-12 h-6 flex items-center bg-gradient-to-r from-blue-500 to-purple-500 rounded-full p-1 cursor-pointer"
+            onClick={() => setBillingPeriod(billingPeriod === "monthly" ? "yearly" : "monthly")}
+          >
+            <div
+              className={`bg-white dark:bg-slate-900 h-4 w-4 rounded-full shadow-md transform transition-transform ${
+                billingPeriod === "yearly" ? "translate-x-6" : ""
+              }`}
+            />
+          </div>
+          <div className="flex items-center">
+            <span className={`text-sm ${billingPeriod === "yearly" ? "font-semibold" : "text-muted-foreground"}`}>
+              Yearly
+            </span>
+            <span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+              Save 17%
+            </span>
           </div>
         </div>
-      </section>
-    </div>
-  );
-}
+      </div>
 
-function FaqItem({ q, a }: { q: string; a: string }) {
-  return (
-    <div className="rounded-lg border bg-background/50 p-4">
-      <div className="font-medium">{q}</div>
-      <p className="mt-1 text-sm text-muted-foreground">{a}</p>
+      {/* Pricing Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl w-full">
+        {plans[audience].map((plan, idx) => (
+          <div
+            key={idx}
+            className={`relative rounded-2xl p-8 flex flex-col h-full transition-all duration-300 ${
+              plan.popular
+                ? "border-2 border-blue-500 shadow-2xl shadow-blue-500/20 bg-background scale-105"
+                : "border border-border bg-background shadow-lg hover:shadow-xl"
+            }`}
+          >
+            {plan.popular && (
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <span className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-semibold px-4 py-1 rounded-full flex items-center">
+                  <Star size={12} className="mr-1 fill-white" />
+                  MOST POPULAR
+                </span>
+              </div>
+            )}
+
+            <div className="mb-6">
+              <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
+              <p className="text-muted-foreground mb-4">{plan.description}</p>
+              <div className="flex items-baseline mb-2">
+                <span className="text-4xl font-bold">
+                  {plan.price[billingPeriod]}
+                </span>
+                <span className="text-muted-foreground ml-2">
+                  {billingPeriod === "monthly" ? "/month" : "/year"}
+                </span>
+              </div>
+              {billingPeriod === "yearly" && (
+                <p className="text-green-600 text-sm font-medium">
+                  Save ₹{parseInt(plan.price.monthly.replace(/\D/g, "")) * 12 - parseInt(plan.price.yearly.replace(/\D/g, ""))} annually
+                </p>
+              )}
+            </div>
+
+            <ul className="space-y-3 mb-8 flex-grow">
+              {plan.features.map((feature, fidx) => (
+                <li key={fidx} className="flex items-start">
+                  <Check className="h-5 w-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-muted-foreground">{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <button
+              className={`w-full py-3 px-4 rounded-lg font-medium transition-all ${
+                plan.popular
+                  ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                  : "bg-gradient-to-r from-slate-100 to-slate-200 text-slate-800 hover:from-slate-200 hover:to-slate-300 dark:from-slate-800 dark:to-slate-700 dark:text-white dark:hover:from-slate-700 dark:hover:to-slate-600"
+              }`}
+              onClick={() => navigate("/payment")}
+            >
+              {plan.popular ? "Get Started" : "Choose Plan"}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* FAQ Section */}
+      <div className="mt-16 max-w-4xl w-full">
+        <h2 className="text-2xl font-bold text-center mb-8">Frequently Asked Questions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[
+            {
+              question: "Can I change plans anytime?",
+              answer: "Yes, you can upgrade or downgrade your plan at any time."
+            },
+            {
+              question: "Is there a free trial?",
+              answer: "Yes, all plans include a 14-day free trial with full access to features."
+            },
+            {
+              question: "What payment methods do you accept?",
+              answer: "We accept all major credit cards, UPI, Net Banking, and bank transfers."
+            },
+            {
+              question: "Do you offer educational discounts?",
+              answer: "Yes, we offer special pricing for non-profits and educational institutions."
+            }
+          ].map((faq, idx) => (
+            <div key={idx} className="bg-white dark:bg-slate-800 p-4 rounded-lg shadow">
+              <h3 className="font-semibold mb-2">{faq.question}</h3>
+              <p className="text-muted-foreground text-sm">{faq.answer}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
