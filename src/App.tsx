@@ -64,14 +64,11 @@ const PrivacyPolicyPage  = lazy(() => import("./pages/company/PrivacyPolicyPage"
 const TermsPage          = lazy(() => import("./pages/legal/TermsPage"));
 const CookiePolicyPage   = lazy(() => import("./pages/legal/CookiePolicyPage"));
 
-<<<<<<< HEAD
 /* ---------- Auth callback (correct file path) ---------- */
 const CallbackPage       = lazy(() => import("./pages/auth/callback"));
 
-=======
-const PaymentPage    = lazy(() => import("./pages/payment/PaymentPage"));
+const PaymentPage    = lazy(() => import("./pages/payment/paymentPage"));
 /* ---------- Utilities ---------- */
->>>>>>> e7b471b (added payment gateaway)
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {

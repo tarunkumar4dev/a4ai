@@ -1,7 +1,18 @@
-import { createRoot } from 'react-dom/client'
-import App from './App.tsx'
-import './index.css'
-import "@/i18n";  // added this on 21st august, 2025
+// src/main.tsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./index.css";
 
+/* ---------- Vercel Analytics inject() ---------- */
+import { inject } from "@vercel/analytics";
 
-createRoot(document.getElementById("root")!).render(<App />);
+if (import.meta.env.PROD) {
+  inject(); // ✅ enable only in production
+}
+
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
