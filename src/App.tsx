@@ -67,14 +67,9 @@ const CookiePolicyPage   = lazy(() => import("./pages/legal/CookiePolicyPage"));
 /* ---------- Auth callback ---------- */
 const CallbackPage       = lazy(() => import("./pages/auth/callback"));
 
-<<<<<<< HEAD
-const PaymentPage    = lazy(() => import("./pages/payment/paymentPage"));
-/* ---------- Utilities ---------- */
-=======
-/* ---------- Diagnostic (PUBLIC) ---------- */
-const AuthDiag           = lazy(() => import("./pages/AuthDiag"));
+/* ---------- Payment ---------- */
+const PaymentPage        = lazy(() => import("./pages/payment/paymentPage"));
 
->>>>>>> faa0b38 (fixed auth partially)
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -176,12 +171,9 @@ const App = () => {
               <ScrollToTop />
               <Suspense fallback={<LoadingScreen />}>
                 <Routes>
-                  {/* Auth callback (support odd fragments like /auth/callback#access_token=...) */}
+                  {/* Auth callback */}
                   <Route path="/auth/callback" element={<CallbackPage />} />
                   <Route path="/auth/callback/*" element={<CallbackPage />} />
-
-                  {/* Diagnostic (PUBLIC) */}
-                  <Route path="/auth/diag" element={<AuthDiag />} />
 
                   {/* Public marketing */}
                   <Route path="/"            element={<LandingPage />} />
@@ -191,8 +183,6 @@ const App = () => {
                   <Route path="/about"       element={<AboutPage />} />
                   <Route path="/contact"     element={<ContactPage />} />
                   <Route path="/payment"     element={<PaymentPage />} />
-
-
 
                   {/* Company */}
                   <Route path="/careers"     element={<CareersPage />} />
