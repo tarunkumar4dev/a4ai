@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect, Suspense, lazy } from "react";
+import { useEffect, useRef, Suspense, lazy } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -64,11 +64,17 @@ const PrivacyPolicyPage  = lazy(() => import("./pages/company/PrivacyPolicyPage"
 const TermsPage          = lazy(() => import("./pages/legal/TermsPage"));
 const CookiePolicyPage   = lazy(() => import("./pages/legal/CookiePolicyPage"));
 
-/* ---------- Auth callback (correct file path) ---------- */
+/* ---------- Auth callback ---------- */
 const CallbackPage       = lazy(() => import("./pages/auth/callback"));
 
+<<<<<<< HEAD
 const PaymentPage    = lazy(() => import("./pages/payment/paymentPage"));
 /* ---------- Utilities ---------- */
+=======
+/* ---------- Diagnostic (PUBLIC) ---------- */
+const AuthDiag           = lazy(() => import("./pages/AuthDiag"));
+
+>>>>>>> faa0b38 (fixed auth partially)
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -101,12 +107,17 @@ const NotFound = () => (
 );
 
 const App = () => {
-  // Ensure profile exists for all sign-ins (email/password or OAuth).
-  // Idempotent upsert; do NOT override role here to avoid conflicts.
+  // Prevent double-upsert in React 18 StrictMode (dev)
+  const didUpsertRef = useRef(false);
+
+  // Ensure profile exists for all sign-ins (email/password or OAuth)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
+          if (didUpsertRef.current) return; // guard
+          didUpsertRef.current = true;
+
           const u = session.user;
           const full_name =
             (u.user_metadata?.full_name as string | undefined) ??
@@ -124,7 +135,6 @@ const App = () => {
                 email: u.email,
                 full_name,
                 avatar_url,
-                // role: "teacher", // ❌ intentionally omitted (use DB default/trigger)
                 updated_at: new Date().toISOString(),
               },
               { onConflict: "id" }
@@ -166,8 +176,12 @@ const App = () => {
               <ScrollToTop />
               <Suspense fallback={<LoadingScreen />}>
                 <Routes>
-                  {/* Auth */}
+                  {/* Auth callback (support odd fragments like /auth/callback#access_token=...) */}
                   <Route path="/auth/callback" element={<CallbackPage />} />
+                  <Route path="/auth/callback/*" element={<CallbackPage />} />
+
+                  {/* Diagnostic (PUBLIC) */}
+                  <Route path="/auth/diag" element={<AuthDiag />} />
 
                   {/* Public marketing */}
                   <Route path="/"            element={<LandingPage />} />
