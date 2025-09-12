@@ -1,166 +1,104 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { TestFormValues } from "@/utils/testGeneratorOptions";
-import { Loader2 } from "lucide-react";
+import React, { useState } from "react";
 
-import TestFormSection from "./TestFormSection";
-import ErrorMessage from "./ErrorMessage";
-import GeneratedTest from "./GeneratedTest";
+export type TestGeneratorFormValues = {
+  subject?: string;
+  difficulty?: string;    // "Easy" | "Medium" | "Hard"
+  questionType?: string;  // "Multiple Choice" | "Short Answer" | "Mixed"
+  qCount?: number;
+  itemCount?: number;     // legacy alias
+};
 
-interface TestGeneratorFormProps {
-  onGenerate: (formData: {
-    subject: string;
-    topic?: string;
-    difficulty: string;
-    questionType: string;
-    questionCount: number;
-    outputFormat: string;
-    additionalRequirements?: string;
-  }) => Promise<{
-    test: string;
-    provider: string;
-  }>;
-}
+type Props = {
+  /** Must return a downloadable URL or null */
+  onGenerate: (data: TestGeneratorFormValues) => Promise<string | null>;
+  loading?: boolean;
+};
 
-const TestGeneratorForm = ({ onGenerate }: TestGeneratorFormProps) => {
-  const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [generatedTest, setGeneratedTest] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState<string | null>(null);
-
-  const [formValues, setFormValues] = useState<TestFormValues>({
+const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading }) => {
+  const [values, setValues] = useState<TestGeneratorFormValues>({
     subject: "",
-    topic: "",
-    difficulty: "",
-    questionType: "",
-    questionCount: "",
-    outputFormat: "plain text",
-    additionalRequirements: "",
+    difficulty: "Easy",
+    questionType: "Multiple Choice",
+    qCount: 5,
   });
 
-  const handleChange = (field: string, value: string) => {
-    setFormValues({ ...formValues, [field]: value });
-    if (error) setError(null);
-  };
-
-  const isFormValid =
-    formValues.subject &&
-    formValues.difficulty &&
-    formValues.questionType &&
-    formValues.questionCount &&
-    formValues.outputFormat;
+  const onChange =
+    (key: keyof TestGeneratorFormValues) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const v = e.target.value;
+      setValues((s) => ({
+        ...s,
+        [key]:
+          key === "qCount" || key === "itemCount"
+            ? Number(v)
+            : v,
+      }));
+    };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
-
-    setIsLoading(true);
-    setGeneratedTest("");
-    setError(null);
-    setProvider(null);
-
-    try {
-      toast({
-        title: "Test Generation Started",
-        description: "Your test paper is being generated. Please wait...",
-      });
-
-      const formData = {
-        subject: formValues.subject,
-        topic: formValues.topic || undefined,
-        difficulty: formValues.difficulty,
-        questionType: formValues.questionType,
-        questionCount: parseInt(formValues.questionCount),
-        outputFormat: formValues.outputFormat,
-        additionalRequirements: formValues.additionalRequirements || undefined,
-      };
-
-      console.log("Form Data Sent:", formData);
-
-      const result = await onGenerate(formData);
-
-      if (result?.test) {
-        setGeneratedTest(result.test);
-        setProvider(result.provider || null);
-
-        toast({
-          title: "✅ Test Generated",
-          description: "Your test has been generated successfully!",
-        });
-      } else {
-        throw new Error("No test content received.");
-      }
-    } catch (err: any) {
-      console.error("Test generation error:", err);
-      const errorMessage =
-        err?.message || "Something went wrong while generating the test.";
-      setError(errorMessage);
-      toast({
-        title: "❌ Test generation failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRetry = () => {
-    setError(null);
-    setIsLoading(false);
-    setGeneratedTest("");
-    setProvider(null);
+    await onGenerate(values);
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <TestFormSection formValues={formValues} handleChange={handleChange} />
-
-        <div className="flex flex-col sm:flex-row items-center gap-4 pt-4">
-          <Button
-            type="submit"
-            className={`w-full sm:w-auto min-w-[200px] transition-all ${
-              !isFormValid || isLoading
-                ? "bg-gray-400 text-gray-600 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 text-white shadow-md"
-            }`}
-            disabled={!isFormValid || isLoading}
-          >
-            {isLoading ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating...
-              </div>
-            ) : (
-              "Generate Test Paper"
-            )}
-          </Button>
-
-          <p className="text-sm text-gray-500 text-center sm:text-left">
-            This will use 1 of your 10 free generations this month
-          </p>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm mb-1">Subject</label>
+          <input
+            className="w-full border rounded-md px-3 py-2"
+            placeholder="Maths / Science / ..."
+            value={values.subject ?? ""}
+            onChange={onChange("subject")}
+          />
         </div>
-      </form>
 
-      {error && (
-        <ErrorMessage
-          error={error}
-          onRetry={handleRetry}
-          isLoading={isLoading}
-        />
-      )}
+        <div>
+          <label className="block text-sm mb-1">Difficulty</label>
+          <select
+            className="w-full border rounded-md px-3 py-2"
+            value={values.difficulty ?? "Easy"}
+            onChange={onChange("difficulty")}
+          >
+            <option>Easy</option>
+            <option>Medium</option>
+            <option>Hard</option>
+          </select>
+        </div>
 
-      {generatedTest && !error && (
-        <GeneratedTest
-          generatedTest={generatedTest}
-          provider={provider}
-          subject={formValues.subject}
-        />
-      )}
-    </div>
+        <div>
+          <label className="block text-sm mb-1">Question Type</label>
+          <select
+            className="w-full border rounded-md px-3 py-2"
+            value={values.questionType ?? "Multiple Choice"}
+            onChange={onChange("questionType")}
+          >
+            <option>Multiple Choice</option>
+            <option>Short Answer</option>
+            <option>Mixed</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm mb-1"># Questions</label>
+          <input
+            type="number"
+            min={1}
+            className="w-full border rounded-md px-3 py-2"
+            value={Number(values.qCount ?? 5)}
+            onChange={onChange("qCount")}
+          />
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="px-4 py-2 rounded-md bg-black text-white disabled:opacity-60"
+      >
+        {loading ? "Generating..." : "Generate"}
+      </button>
+    </form>
   );
 };
 
