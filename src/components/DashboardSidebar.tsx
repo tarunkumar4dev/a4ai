@@ -1,5 +1,4 @@
-// src/components/DashboardSidebar.tsx
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -18,9 +17,11 @@ import {
   Users2,
   Sparkles,
   Plus,
+  Menu,
+  X,
 } from "lucide-react";
 
-/* ---------------- Motion presets (shared, consistent) ---------------- */
+/* ---------------- Motion presets ---------------- */
 const enterFromLeft = {
   hidden: { x: -12, opacity: 0 },
   show: (i: number) => ({
@@ -29,7 +30,6 @@ const enterFromLeft = {
     transition: { delay: 0.02 * i, type: "spring", stiffness: 280, damping: 22 },
   }),
 };
-
 const hoverLift = { scale: 1.02, x: 6, transition: { type: "spring", stiffness: 320, damping: 16 } };
 
 /* ---------------- Types ---------------- */
@@ -67,7 +67,7 @@ const SidebarItem = React.memo(function SidebarItem({
         <motion.span
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"
+          className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-background"
           aria-hidden
         />
       )}
@@ -87,10 +87,10 @@ const SidebarItem = React.memo(function SidebarItem({
         to={to}
         className={({ isActive }) =>
           cn(
-            "group flex items-center gap-3 rounded-lg px-4 py-3 transition-all duration-300",
+            "group flex min-h-11 items-center gap-3 rounded-lg px-4 py-3 transition-all duration-300",
             isActive
               ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg"
-              : "text-gray-700 hover:bg-gray-50 hover:text-purple-600",
+              : "text-muted-foreground hover:bg-muted hover:text-purple-600",
             premium && "border-l-4 border-amber-400"
           )
         }
@@ -101,7 +101,7 @@ const SidebarItem = React.memo(function SidebarItem({
             <Icon
               className={cn(
                 "h-5 w-5 transition-transform duration-300",
-                isActive ? "text-white" : "text-gray-400 group-hover:text-purple-500",
+                isActive ? "text-white" : "text-muted-foreground group-hover:text-purple-500",
                 premium && !isActive && "text-amber-500 group-hover:text-amber-600"
               )}
             />
@@ -146,7 +146,7 @@ const useSidebarData = () =>
     []
   );
 
-/* ---------------- Featured Contest + Notes (split, memo) ---------------- */
+/* ---------------- Featured Contest ---------------- */
 const FeaturedContest = React.memo(function FeaturedContest({
   contest,
 }: {
@@ -176,7 +176,7 @@ const FeaturedContest = React.memo(function FeaturedContest({
       <div className="mb-2 flex items-start justify-between">
         <div className="flex items-center gap-2">
           <Trophy className={cn("h-5 w-5", contest.premium ? "text-amber-600" : "text-amber-500")} />
-          <h3 className="font-semibold text-gray-800">Featured Contest</h3>
+          <h3 className="font-semibold text-foreground">Featured Contest</h3>
         </div>
         {contest.premium && (
           <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
@@ -185,14 +185,14 @@ const FeaturedContest = React.memo(function FeaturedContest({
         )}
       </div>
 
-      <p className="mb-1 text-sm font-medium text-gray-800">{contest.title}</p>
+      <p className="mb-1 text-sm font-medium text-foreground">{contest.title}</p>
 
-      <div className="mt-3 space-y-2 text-sm">
-        <div className="flex items-center gap-2 text-gray-600">
+      <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-amber-500" />
           <span>Date {dateStr}</span>
         </div>
-        <div className="flex items-center gap-2 text-gray-600">
+        <div className="flex items-center gap-2">
           <Users2 className="h-4 w-4 text-amber-500" />
           <span>{contest.participants.toLocaleString()} participants</span>
         </div>
@@ -232,6 +232,7 @@ const FeaturedContest = React.memo(function FeaturedContest({
   );
 });
 
+/* ---------------- Notes Quick ---------------- */
 const NotesQuick = React.memo(function NotesQuick({
   unread,
   recentSubject,
@@ -253,7 +254,7 @@ const NotesQuick = React.memo(function NotesQuick({
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Notebook className="h-5 w-5 text-purple-600" />
-          <h3 className="font-semibold text-gray-800">My Notes</h3>
+          <h3 className="font-semibold text-foreground">My Notes</h3>
         </div>
         <div className="flex gap-1">
           {unread > 0 && (
@@ -268,7 +269,7 @@ const NotesQuick = React.memo(function NotesQuick({
         </div>
       </div>
 
-      <div className="mb-3 space-y-2 text-sm text-gray-600">
+      <div className="mb-3 space-y-2 text-sm text-muted-foreground">
         <p>
           Last updated: <span className="font-medium text-purple-700">{lastUpdated}</span>
         </p>
@@ -280,9 +281,9 @@ const NotesQuick = React.memo(function NotesQuick({
       <div className="mt-4 flex gap-2">
         <Link to="/dashboard/notes" className="flex-1">
           <motion.button
-            whileHover={{ scale: 1.02, backgroundColor: "rgba(249,250,251,1)" }}
+            whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white py-2 text-sm text-purple-600 transition-all"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-background py-2 text-sm text-purple-600 transition-all"
           >
             <Bookmark className="h-4 w-4" />
             View All
@@ -303,19 +304,13 @@ const NotesQuick = React.memo(function NotesQuick({
   );
 });
 
-/* ---------------- Sidebar ---------------- */
-export default function DashboardSidebar() {
+/* ---------------- Inner content (reused) ---------------- */
+function SidebarContent() {
   const { items, contestInfo, notesSummary } = useSidebarData();
-  const location = useLocation(); // (kept to trigger re-render on route change)
   const prefersReducedMotion = useReducedMotion();
 
   return (
-    <motion.aside
-      initial={{ x: -90, opacity: 0 }}
-      animate={{ x: 0, opacity: 1, transition: { type: "spring", stiffness: 110, damping: 20 } }}
-      exit={{ x: -90, opacity: 0 }}
-      className="sticky top-0 flex h-screen w-64 flex-col overflow-y-auto border-r border-gray-100 bg-white scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300"
-    >
+    <>
       {/* Logo */}
       <motion.div
         className="p-6"
@@ -351,10 +346,83 @@ export default function DashboardSidebar() {
         ))}
       </nav>
 
+      <FeaturedContest contest={contestInfo} />
+      <NotesQuick {...notesSummary} />
+    </>
+  );
+}
+
+/* ---------------- Responsive Sidebar (desktop + mobile drawer) ---------------- */
+export default function DashboardSidebar() {
+  const location = useLocation(); // re-render on route change
+  const [open, setOpen] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
+
+  return (
+    <>
+      {/* Mobile top-left hamburger */}
+      <button
+        className="md:hidden fixed left-3 top-3 z-50 inline-flex h-10 w-10 items-center justify-center rounded-md border bg-background shadow-sm"
+        aria-label="Open sidebar"
+        onClick={() => setOpen(true)}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Desktop sidebar */}
+      <motion.aside
+        key="desktop"
+        initial={{ x: -90, opacity: 0 }}
+        animate={{ x: 0, opacity: 1, transition: { type: "spring", stiffness: 110, damping: 20 } }}
+        exit={{ x: -90, opacity: 0 }}
+        className="sticky top-0 hidden h-[100dvh] w-64 md:flex md:flex-col overflow-y-auto border-r border-border bg-background"
+      >
+        <SidebarContent />
+      </motion.aside>
+
+      {/* Mobile drawer */}
       <AnimatePresence>
-        <FeaturedContest contest={contestInfo} />
-        <NotesQuick {...notesSummary} />
+        {open && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="backdrop"
+              className="md:hidden fixed inset-0 z-50 bg-black/40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setOpen(false)}
+            />
+
+            {/* Drawer panel */}
+            <motion.aside
+              key="mobile"
+              role="dialog"
+              aria-modal="true"
+              className="md:hidden fixed inset-y-0 left-0 z-[60] w-80 max-w-[85vw] bg-background border-r border-border shadow-xl flex flex-col"
+              initial={{ x: -320, opacity: 1 }}
+              animate={{ x: 0 }}
+              exit={{ x: -320 }}
+              transition={{ type: "spring", stiffness: 260, damping: 26 }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <div className="font-semibold">Menu</div>
+                <button
+                  aria-label="Close sidebar"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border"
+                  onClick={() => setOpen(false)}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                <SidebarContent />
+              </div>
+            </motion.aside>
+          </>
+        )}
       </AnimatePresence>
-    </motion.aside>
+    </>
   );
 }

@@ -1,8 +1,10 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ----------------------------------------------------------------------------------
+   Base design tokens (unchanged, just grouped)
+---------------------------------------------------------------------------------- */
 @layer base {
   :root {
     --background: 260 33% 98%;
@@ -76,17 +78,38 @@
   }
 }
 
+/* ----------------------------------------------------------------------------------
+   Base element resets + Apple-like smoothing + font
+---------------------------------------------------------------------------------- */
 @layer base {
-  * {
-    @apply border-border;
+  * { @apply border-border; }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    /* subtle stylistic alternates for a clean UI feel */
+    font-feature-settings: "ss01" on, "cv09" on;
   }
 }
 
+/* ----------------------------------------------------------------------------------
+   Utilities/helpers
+---------------------------------------------------------------------------------- */
+
+/* Align numbers perfectly for KPIs */
+.num { font-variant-numeric: tabular-nums lining-nums; }
+
+/* Soften cards with a very light vertical gradient */
+.card-soft {
+  background: linear-gradient(180deg, rgba(16,18,27,0.02), rgba(16,18,27,0.00));
+}
+
+/* Brand wordmark helper (kept from your code) */
 .logo {
   font-weight: 700;
-  color: theme('colors.zolvio.purple');
+  color: theme("colors.zolvio.purple");
 }

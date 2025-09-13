@@ -1,20 +1,30 @@
 // ==========================================
 // FILE: src/pages/AnalyticsPage.tsx
+// Modern analytics with Excel/CSV upload + Auto-Charts (any Excel)
 // ==========================================
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Download, BarChart3, Users2, Clock, Target, Trophy } from "lucide-react";
+import { Download, BarChart3, Users2, Clock, Target, Trophy, Upload, FileSpreadsheet } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
+import { motion } from "framer-motion";
+import * as XLSX from "xlsx";
 
 // ------------------------------
-// Mock data (replace with API)
+// Types
 // ------------------------------
-const mockDailyUsage = [
+export type DailyUsage = { date: string; logins: number; tests: number };
+export type TopicBreakdown = { name: string; correct: number; total: number };
+export type LeaderboardRow = { id?: string; name: string; tests: number; avgScore: number; streak?: number };
+
+// ------------------------------
+// Mock data (fallbacks until file upload)
+// ------------------------------
+const MOCK_DAILY: DailyUsage[] = [
   { date: "Aug 01", logins: 42, tests: 6 },
   { date: "Aug 02", logins: 55, tests: 9 },
   { date: "Aug 03", logins: 61, tests: 14 },
@@ -24,14 +34,14 @@ const mockDailyUsage = [
   { date: "Aug 07", logins: 84, tests: 21 },
 ];
 
-const mockTopicBreakdown = [
+const MOCK_TOPICS: TopicBreakdown[] = [
   { name: "Electricity", correct: 312, total: 520 },
   { name: "Optics", correct: 271, total: 480 },
   { name: "Metals", correct: 198, total: 350 },
   { name: "Acids & Bases", correct: 325, total: 510 },
 ];
 
-const mockStudentLeaderboard = [
+const MOCK_LEADERBOARD: LeaderboardRow[] = [
   { id: "S01", name: "Ananya Gupta", tests: 7, avgScore: 92, streak: 6 },
   { id: "S02", name: "Ravi Sharma", tests: 6, avgScore: 88, streak: 4 },
   { id: "S03", name: "Meera Iyer", tests: 5, avgScore: 86, streak: 8 },
@@ -39,23 +49,224 @@ const mockStudentLeaderboard = [
 ];
 
 // Utility for %
-const pct = (a:number, b:number) => (b === 0 ? 0 : Math.round((a/b)*100));
+const pct = (a: number, b: number) => (b === 0 ? 0 : Math.round((a / b) * 100));
 
-// Simple metric card
-const MetricCard = ({ icon:Icon, label, value, hint }:{ icon: any; label:string; value: string | number; hint?:string }) => (
-  <Card className="shadow-sm hover:shadow-md transition-all">
-    <CardHeader className="flex flex-row items-center justify-between pb-2">
-      <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</CardTitle>
-      <div className="rounded-xl p-2 bg-gray-100 dark:bg-gray-800"><Icon className="h-4 w-4" /></div>
-    </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-semibold">{value}</div>
-      {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
-    </CardContent>
-  </Card>
+const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"]; // Pies only
+
+// ---------------------------------
+// File helpers (XLSX/CSV parsing)
+// ---------------------------------
+const normalizeKey = (k: string) => k.trim().toLowerCase().replace(/\s+/g, "_");
+
+function sheetToJSON(ws: XLSX.WorkSheet) {
+  return XLSX.utils.sheet_to_json(ws, { defval: "" }) as Record<string, any>[];
+}
+
+function coerceNumber(v: any): number {
+  if (typeof v === "number") return v;
+  const n = Number(String(v).replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function detectDailyUsage(rows: Record<string, any>[]): DailyUsage[] | null {
+  if (!rows.length) return null;
+  const keys = Object.keys(rows[0] || {}).map(normalizeKey);
+  const idxDate = keys.findIndex((k) => ["date", "day"].includes(k));
+  const idxLogins = keys.findIndex((k) => ["logins", "login", "login_count"].includes(k));
+  const idxTests = keys.findIndex((k) => ["tests", "attempts", "test", "tests_count"].includes(k));
+  if (idxDate === -1 || idxLogins === -1 || idxTests === -1) return null;
+
+  return rows.map((r) => {
+    const arr = Object.values(r);
+    return {
+      date: String(arr[idxDate] ?? ""),
+      logins: coerceNumber(arr[idxLogins]),
+      tests: coerceNumber(arr[idxTests]),
+    };
+  });
+}
+
+function detectTopics(rows: Record<string, any>[]): TopicBreakdown[] | null {
+  if (!rows.length) return null;
+  const keys = Object.keys(rows[0] || {}).map(normalizeKey);
+  const idxName = keys.findIndex((k) => ["name", "topic"].includes(k));
+  const idxCorrect = keys.findIndex((k) => ["correct", "right"].includes(k));
+  const idxTotal = keys.findIndex((k) => ["total", "attempted", "questions"].includes(k));
+  if (idxName === -1 || idxCorrect === -1 || idxTotal === -1) return null;
+
+  return rows.map((r) => {
+    const arr = Object.values(r);
+    return {
+      name: String(arr[idxName] ?? ""),
+      correct: coerceNumber(arr[idxCorrect]),
+      total: coerceNumber(arr[idxTotal]),
+    };
+  });
+}
+
+function detectLeaderboard(rows: Record<string, any>[]): LeaderboardRow[] | null {
+  if (!rows.length) return null;
+  const keys = Object.keys(rows[0] || {}).map(normalizeKey);
+  const idxName = keys.findIndex((k) => ["name", "student", "student_name"].includes(k));
+  const idxTests = keys.findIndex((k) => ["tests", "attempts"].includes(k));
+  const idxAvg = keys.findIndex((k) => ["avgscore", "avg_score", "average", "avg"].includes(k));
+  const idxStreak = keys.findIndex((k) => ["streak", "days"].includes(k));
+  const idxId = keys.findIndex((k) => ["id", "roll", "roll_no"].includes(k));
+  if (idxName === -1 || idxTests === -1 || idxAvg === -1) return null;
+
+  return rows.map((r) => {
+    const arr = Object.values(r);
+    return {
+      id: idxId !== -1 ? String(arr[idxId] ?? "") : undefined,
+      name: String(arr[idxName] ?? ""),
+      tests: coerceNumber(arr[idxTests]),
+      avgScore: coerceNumber(arr[idxAvg]),
+      streak: idxStreak !== -1 ? coerceNumber(arr[idxStreak]) : undefined,
+    };
+  });
+}
+
+function parseWorkbook(wb: XLSX.WorkBook) {
+  const daily: DailyUsage[] = [];
+  const topics: TopicBreakdown[] = [];
+  const leaders: LeaderboardRow[] = [];
+
+  const targetSheets = wb.SheetNames.slice(0, 5);
+  const firstSheetRows: Record<string, any>[] = [];
+
+  for (const name of targetSheets) {
+    const ws = wb.Sheets[name];
+    if (!ws) continue;
+    const rows = sheetToJSON(ws);
+
+    const d = detectDailyUsage(rows);
+    if (d) daily.push(...d);
+
+    const t = detectTopics(rows);
+    if (t) topics.push(...t);
+
+    const l = detectLeaderboard(rows);
+    if (l) leaders.push(...l);
+
+    if (!firstSheetRows.length) firstSheetRows.push(...rows);
+  }
+
+  return { daily: daily.length ? daily : null, topics: topics.length ? topics : null, leaders: leaders.length ? leaders : null, firstSheetRows };
+}
+
+// CSV export
+function downloadAllAsCSV(daily: DailyUsage[], topics: TopicBreakdown[], leaders: LeaderboardRow[]) {
+  const secs: string[] = [];
+  if (daily.length) {
+    secs.push("# DailyUsage\ndate,logins,tests");
+    daily.forEach((d) => secs.push(`${d.date},${d.logins},${d.tests}`));
+    secs.push("");
+  }
+  if (topics.length) {
+    secs.push("# TopicBreakdown\nname,correct,total,accuracy_%");
+    topics.forEach((t) => secs.push(`${t.name},${t.correct},${t.total},${pct(t.correct, t.total)}`));
+    secs.push("");
+  }
+  if (leaders.length) {
+    secs.push("# Leaderboard\nid,name,tests,avgScore,streak");
+    leaders.forEach((l) => secs.push(`${l.id ?? ""},${l.name},${l.tests},${l.avgScore},${l.streak ?? ""}`));
+  }
+
+  const blob = new Blob([secs.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `analytics_export_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Template download (3 tabs)
+function downloadTemplateXLSX() {
+  const wsDaily = XLSX.utils.aoa_to_sheet([["date", "logins", "tests"], ["2025-08-01", 42, 6], ["2025-08-02", 55, 9]]);
+  const wsTopic = XLSX.utils.aoa_to_sheet([["name", "correct", "total"], ["Electricity", 312, 520], ["Optics", 271, 480]]);
+  const wsLead = XLSX.utils.aoa_to_sheet([["id", "name", "tests", "avgScore", "streak"], ["S01", "Ananya Gupta", 7, 92, 6], ["S02", "Ravi Sharma", 6, 88, 4]]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsDaily, "DailyUsage");
+  XLSX.utils.book_append_sheet(wb, wsTopic, "TopicBreakdown");
+  XLSX.utils.book_append_sheet(wb, wsLead, "Leaderboard");
+  XLSX.writeFile(wb, "a4ai_analytics_template.xlsx");
+}
+
+// ------------------------------
+// Auto-Chart (generic Excel) helpers
+// ------------------------------
+function isDateLike(v: any) {
+  if (v instanceof Date) return true;
+  const s = String(v).trim();
+  if (!s) return false;
+  const d = new Date(s);
+  return !isNaN(d.getTime());
+}
+
+function inferGenericMeta(rows: Record<string, any>[]) {
+  if (!rows.length) return { dateCol: undefined as string | undefined, categoryCol: undefined as string | undefined, numericCols: [] as string[] };
+  const headers = Object.keys(rows[0]);
+
+  // find date column
+  const dateCol = headers.find((h) => rows.slice(0, 30).filter((r) => isDateLike(r[h])).length >= Math.max(5, Math.ceil(rows.length * 0.2)));
+
+  // find numeric columns
+  const numericCols = headers.filter((h) => {
+    let nums = 0, seen = 0;
+    for (const r of rows.slice(0, 50)) {
+      const v = r[h];
+      if (v === "" || v === null || v === undefined) continue;
+      seen++;
+      if (!Number.isNaN(Number(String(v).replace(/[^0-9.\-]/g, "")))) nums++;
+    }
+    return seen > 0 && nums / seen > 0.7; // mostly numeric
+  }).slice(0, 3);
+
+  // category = non-numeric with small cardinality
+  const nonNum = headers.filter((h) => !numericCols.includes(h));
+  let categoryCol: string | undefined = undefined;
+  for (const h of nonNum) {
+    const vals = new Set(rows.map((r) => String(r[h]).trim()).filter(Boolean));
+    if (vals.size >= 2 && vals.size <= 20) { categoryCol = h; break; }
+  }
+
+  return { dateCol, categoryCol, numericCols };
+}
+
+function groupBy<T extends Record<string, any>>(rows: T[], key: string) {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = String(r[key] ?? "");
+    if (!m.has(k)) m.set(k, []);
+    m.get(k)!.push(r);
+  }
+  return m;
+}
+
+function sumColumn(rows: Record<string, any>[], col: string) {
+  return rows.reduce((s, r) => s + coerceNumber(r[col]), 0);
+}
+
+// ------------------------------
+// UI: Metric Card
+// ------------------------------
+const MetricCard = ({ icon: Icon, label, value, hint }: { icon: any; label: string; value: string | number; hint?: string }) => (
+  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+    <Card className="shadow-sm hover:shadow-md transition-all">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</CardTitle>
+        <div className="rounded-xl p-2 bg-gray-100 dark:bg-gray-800"><Icon className="h-4 w-4" /></div>
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-semibold">{value}</div>
+        {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
+      </CardContent>
+    </Card>
+  </motion.div>
 );
-
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6"]; // Will be overridden by theme, but OK for pies
 
 export default function AnalyticsPage() {
   const [roleTab, setRoleTab] = useState<"teacher" | "student">("teacher");
@@ -64,38 +275,128 @@ export default function AnalyticsPage() {
   const [from, setFrom] = useState("2025-08-01");
   const [to, setTo] = useState("2025-08-07");
 
+  const [dailyUsage, setDailyUsage] = useState<DailyUsage[]>(MOCK_DAILY);
+  const [topicBreakdown, setTopicBreakdown] = useState<TopicBreakdown[]>(MOCK_TOPICS);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>(MOCK_LEADERBOARD);
+
+  // Generic auto-charts state
+  const [genericRows, setGenericRows] = useState<Record<string, any>[]>([]);
+  const [genericMeta, setGenericMeta] = useState<{ dateCol?: string; categoryCol?: string; numericCols: string[] }>({ numericCols: [] });
+
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [uploadInfo, setUploadInfo] = useState<string>("Upload .xlsx/.csv with sheets: DailyUsage, TopicBreakdown, Leaderboard (or headers auto-detected). If not found, we'll auto-chart your file generically.");
+  const [parsing, setParsing] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
   const totals = useMemo(() => {
-    const totalLogins = mockDailyUsage.reduce((s, d) => s + d.logins, 0);
-    const totalTests = mockDailyUsage.reduce((s, d) => s + d.tests, 0);
-    const correct = mockTopicBreakdown.reduce((s, t) => s + t.correct, 0);
-    const total = mockTopicBreakdown.reduce((s, t) => s + t.total, 0);
+    const totalLogins = dailyUsage.reduce((s, d) => s + d.logins, 0);
+    const totalTests = dailyUsage.reduce((s, d) => s + d.tests, 0);
+    const correct = topicBreakdown.reduce((s, t) => s + t.correct, 0);
+    const total = topicBreakdown.reduce((s, t) => s + t.total, 0);
     return { totalLogins, totalTests, accuracy: pct(correct, total) };
-  }, []);
+  }, [dailyUsage, topicBreakdown]);
 
   // Pie-friendly data for topic mastery
-  const topicPie = mockTopicBreakdown.map(t => ({ name: t.name, value: pct(t.correct, t.total) }));
+  const topicPie = topicBreakdown.map((t) => ({ name: t.name, value: pct(t.correct, t.total) }));
+
+  // Derived generic datasets
+  const genericTimeSeries = useMemo(() => {
+    if (!genericRows.length || !genericMeta.dateCol || !genericMeta.numericCols.length) return [] as any[];
+    const dateCol = genericMeta.dateCol;
+    const num = genericMeta.numericCols[0];
+    const byDate = groupBy(genericRows, dateCol);
+    const points: any[] = [];
+    for (const [k, rows] of byDate.entries()) {
+      const d = new Date(k);
+      if (isNaN(d.getTime())) continue;
+      points.push({ date: k, [num]: sumColumn(rows, num) });
+    }
+    // sort by date
+    points.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return points;
+  }, [genericRows, genericMeta]);
+
+  const genericCategoryAgg = useMemo(() => {
+    if (!genericRows.length || !genericMeta.categoryCol || !genericMeta.numericCols.length) return [] as any[];
+    const c = genericMeta.categoryCol!;
+    const num = genericMeta.numericCols[0];
+    const byCat = groupBy(genericRows, c);
+    const arr: any[] = [];
+    for (const [k, rows] of byCat.entries()) {
+      arr.push({ name: k || "(blank)", value: sumColumn(rows, num) });
+    }
+    return arr;
+  }, [genericRows, genericMeta]);
+
+  async function handleFile(file: File) {
+    try {
+      setParsing(true);
+      setFileName(file.name);
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const { daily, topics, leaders, firstSheetRows } = parseWorkbook(wb);
+
+      let changed = 0;
+      if (daily && daily.length) { setDailyUsage(daily); changed++; }
+      if (topics && topics.length) { setTopicBreakdown(topics); changed++; }
+      if (leaders && leaders.length) { setLeaderboard(leaders); changed++; }
+
+      if (!changed) {
+        // Generic auto-chart path
+        setGenericRows(firstSheetRows);
+        const meta = inferGenericMeta(firstSheetRows);
+        setGenericMeta(meta);
+        const foundAny = (meta.dateCol || meta.categoryCol) && meta.numericCols.length;
+        setUploadInfo(foundAny
+          ? `Auto-charts enabled from ${file.name}. Using ${meta.dateCol ? `date: ${meta.dateCol}` : "no date"}, ${meta.categoryCol ? `category: ${meta.categoryCol}` : "no category"}, numeric: ${meta.numericCols.join(", ")}`
+          : `No recognized analytics sheets and couldn't infer columns. Try the Template or include at least one numeric column + (date or category).`
+        );
+      } else {
+        // Clear generic if structured datasets found
+        setGenericRows([]);
+        setGenericMeta({ numericCols: [] });
+        setUploadInfo(`Loaded ${changed} dataset(s) from ${file.name}.`);
+      }
+    } catch (e: any) {
+      console.error(e);
+      setUploadInfo(`Failed to parse file: ${e?.message ?? e}`);
+    } finally {
+      setParsing(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-7xl p-4 md:p-6 lg:p-8 space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-3">
-            <BarChart3 className="h-7 w-7" /> Analytics
-            <Badge variant="secondary" className="ml-1">Beta</Badge>
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Actionable insights for teachers & students. Filter by class, subject and time range.</p>
+      {/* Gradient header */}
+      <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-tr from-indigo-600/10 via-fuchsia-500/10 to-emerald-500/10 p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-3">
+                <BarChart3 className="h-7 w-7" /> Analytics
+                <Badge variant="secondary" className="ml-1">Beta</Badge>
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">Upload Excel/CSV and get instant charts. Filter by class, subject and time range.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => downloadAllAsCSV(dailyUsage, topicBreakdown, leaderboard)}>
+                <Download className="h-4 w-4 mr-1" />Export CSV
+              </Button>
+              <Button variant="secondary" size="sm" onClick={downloadTemplateXLSX}>
+                <FileSpreadsheet className="h-4 w-4 mr-1" />Template
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Download className="h-4 w-4 mr-1"/>Export CSV</Button>
-        </div>
-      </div>
+      </motion.div>
 
-      {/* Filters */}
+      {/* Filters + Upload */}
       <Card className="border-dashed">
         <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-5 gap-3">
+          {/* Role Tabs */}
           <div className="md:col-span-1">
             <label className="text-xs text-muted-foreground">Role View</label>
-            <Tabs value={roleTab} onValueChange={(v)=>setRoleTab(v as any)} className="mt-2">
+            <Tabs value={roleTab} onValueChange={(v) => setRoleTab(v as any)} className="mt-2">
               <TabsList className="grid grid-cols-2">
                 <TabsTrigger value="teacher">Teacher</TabsTrigger>
                 <TabsTrigger value="student">Student</TabsTrigger>
@@ -103,6 +404,7 @@ export default function AnalyticsPage() {
             </Tabs>
           </div>
 
+          {/* Class */}
           <div>
             <label className="text-xs text-muted-foreground">Class</label>
             <Select value={klass} onValueChange={setKlass}>
@@ -116,6 +418,7 @@ export default function AnalyticsPage() {
             </Select>
           </div>
 
+          {/* Subject */}
           <div>
             <label className="text-xs text-muted-foreground">Subject</label>
             <Select value={subject} onValueChange={setSubject}>
@@ -128,34 +431,63 @@ export default function AnalyticsPage() {
             </Select>
           </div>
 
+          {/* Dates */}
           <div>
             <label className="text-xs text-muted-foreground">From</label>
-            <Input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} className="mt-2"/>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-2" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground">To</label>
-            <Input type="date" value={to} onChange={(e)=>setTo(e.target.value)} className="mt-2"/>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="mt-2" />
           </div>
         </CardContent>
+
+        {/* File input row */}
+        <div className="px-6 pb-6">
+          <div className="rounded-xl border border-dashed p-4 flex flex-col md:flex-row items-center gap-3 justify-between bg-muted/20">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 grid place-items-center rounded-lg bg-background border"><Upload className="h-5 w-5" /></div>
+              <div className="text-sm">
+                <div className="font-medium">{fileName ?? "Upload .xlsx or .csv"}</div>
+                <div className="text-muted-foreground">{uploadInfo}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFile(f);
+                }}
+              />
+              <Button size="sm" onClick={() => fileRef.current?.click()} disabled={parsing}>
+                {parsing ? "Parsing..." : "Choose File"}
+              </Button>
+            </div>
+          </div>
+        </div>
       </Card>
 
-      {/* KPI row */}
+      {/* KPI row (structured mode) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <MetricCard icon={Users2} label="Total Logins" value={totals.totalLogins} hint="Past 7 days" />
+        <MetricCard icon={Users2} label="Total Logins" value={totals.totalLogins} hint="Selected range" />
         <MetricCard icon={Trophy} label="Tests Attempted" value={totals.totalTests} hint="Across selected class" />
         <MetricCard icon={Target} label="Average Accuracy" value={`${totals.accuracy}%`} hint="Correct / total" />
         <MetricCard icon={Clock} label="Avg Time/Test" value={`14m`} hint="Median duration" />
       </div>
 
-      {/* Charts */}
+      {/* Charts (structured) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Daily Activity: Logins vs Tests</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockDailyUsage} margin={{ left: 8, right: 8, top: 10, bottom: 0 }}>
+              <LineChart data={dailyUsage} margin={{ left: 8, right: 8, top: 10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="date" tickMargin={8} />
                 <YAxis />
@@ -171,40 +503,102 @@ export default function AnalyticsPage() {
           <CardHeader>
             <CardTitle className="text-base">Topic Mastery (Correct %)</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
+          <CardContent className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={topicPie} dataKey="value" nameKey="name" outerRadius={90}>
+                <Pie data={topicPie} dataKey="value" nameKey="name" outerRadius={100}>
                   {topicPie.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v:any)=>`${v}%`} />
+                <Tooltip formatter={(v: any) => `${v}%`} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
+      {/* Auto-Charts (generic) */}
+      {genericRows.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className="lg:col-span-3">
+            <CardHeader>
+              <CardTitle className="text-base">Auto Charts from {fileName}</CardTitle>
+              <p className="text-xs text-muted-foreground">Detected {genericRows.length} rows. {genericMeta.dateCol ? `Date: ${genericMeta.dateCol}. ` : ""}{genericMeta.categoryCol ? `Category: ${genericMeta.categoryCol}. ` : ""}Numeric: {genericMeta.numericCols.join(", ") || "-"}.</p>
+            </CardHeader>
+          </Card>
+
+          {/* Line (time series) */}
+          {genericMeta.dateCol && genericMeta.numericCols.length > 0 && (
+            <Card className="lg:col-span-2">
+              <CardHeader><CardTitle className="text-base">Time Series ({genericMeta.numericCols[0]} by {genericMeta.dateCol})</CardTitle></CardHeader>
+              <CardContent className="h-[320px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={genericTimeSeries}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis dataKey="date" tickMargin={8} />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey={genericMeta.numericCols[0]} strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Bar + Pie (category aggregates) */}
+          {genericMeta.categoryCol && genericMeta.numericCols.length > 0 && (
+            <>
+              <Card>
+                <CardHeader><CardTitle className="text-base">By {genericMeta.categoryCol}</CardTitle></CardHeader>
+                <CardContent className="h-[320px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={genericCategoryAgg}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="name" hide={genericCategoryAgg.length > 12} />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="value" radius={[6,6,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-base">Share by {genericMeta.categoryCol}</CardTitle></CardHeader>
+                <CardContent className="h-[320px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={genericCategoryAgg} dataKey="value" nameKey="name" outerRadius={100}>
+                        {genericCategoryAgg.map((_, i) => (
+                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Teacher vs Student Views */}
-      <Tabs value={roleTab} onValueChange={(v)=>setRoleTab(v as any)}>
+      <Tabs value={roleTab} onValueChange={(v) => setRoleTab(v as any)}>
         <TabsContent value="teacher" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Class-wise Performance</CardTitle>
             </CardHeader>
-            <CardContent className="h-[300px]">
+            <CardContent className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={[
-                  { name: "X-A", avg: 78, tests: 120 },
-                  { name: "X-B", avg: 81, tests: 140 },
-                  { name: "X-C", avg: 74, tests: 96 },
-                ]}>
+                <BarChart data={[{ name: "X-A", avg: 78, tests: 120 }, { name: "X-B", avg: 81, tests: 140 }, { name: "X-C", avg: 74, tests: 96 }] }>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                   <XAxis dataKey="name" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="avg" radius={[6,6,0,0]} />
+                  <Bar dataKey="avg" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -226,12 +620,15 @@ export default function AnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockStudentLeaderboard.map((s, i) => (
-                    <tr key={s.id} className="border-t">
-                      <td className="py-2 flex items-center gap-2"><span className="text-xs w-5 h-5 grid place-items-center rounded-full bg-primary/10 text-primary">{i+1}</span>{s.name}</td>
+                  {MOCK_LEADERBOARD.map((s, i) => (
+                    <tr key={s.id ?? s.name} className="border-t">
+                      <td className="py-2 flex items-center gap-2">
+                        <span className="text-xs w-5 h-5 grid place-items-center rounded-full bg-primary/10 text-primary">{i + 1}</span>
+                        {s.name}
+                      </td>
                       <td className="py-2">{s.tests}</td>
                       <td className="py-2 font-semibold">{s.avgScore}%</td>
-                      <td className="py-2">🔥 {s.streak} days</td>
+                      <td className="py-2">🔥 {s.streak ?? 0} days</td>
                     </tr>
                   ))}
                 </tbody>
@@ -243,7 +640,7 @@ export default function AnalyticsPage() {
         <TabsContent value="student" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <MetricCard icon={Trophy} label="Your Best Score" value={`96%`} />
-            <MetricCard icon={Target} label="Weakest Topic" value={`Optics`} hint="Suggested practice ready"/>
+            <MetricCard icon={Target} label="Weakest Topic" value={`Optics`} hint="Suggested practice ready" />
             <MetricCard icon={Clock} label="Avg Time/Test" value={`11m`} />
           </div>
 
@@ -285,5 +682,3 @@ export default function AnalyticsPage() {
     </div>
   );
 }
-
-

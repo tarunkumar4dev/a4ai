@@ -1,11 +1,10 @@
-import { useRef, useState } from "react";
-import {
-  motion,
-  useInView,
-  useMotionTemplate,
-  useMotionValue,
-  useTransform,
-} from "framer-motion";
+// ==========================================
+// FILE: src/pages/FeaturesPage.tsx
+// Animated, modern, crystal‑clear features page (TypeScript‑safe)
+// Tailwind + shadcn/ui + framer-motion (no extra deps)
+// ==========================================
+import React, { useRef, useState, useEffect } from "react";
+import { motion, useInView, useMotionTemplate, useMotionValue, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,21 +29,43 @@ import {
 } from "lucide-react";
 
 /*
-  FeaturesPage — a4ai
-  - Animated, authentic, realistic
-  - Sticky sub‑nav with Core / Proctoring / Analytics
-  - Tilt + glow feature cards, stats, comparison, demo video, security band, FAQ, CTA
-  - Uses Tailwind + shadcn/ui + Framer Motion
+  Design goals
+  - Clean hero with animated gradient text
+  - Sticky sub‑nav with sliding underline (Core / Proctoring / Analytics)
+  - Tilt + shine feature cards (parallax)
+  - Stats with animated counters
+  - Crisp comparison strip
+  - Video demo card with hover glow
+  - Security band + FAQ + CTA
 */
 
-const fadeInUp = {
-  initial: { opacity: 0, y: 24 },
-  whileInView: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
-};
+// ---------- Animation helpers ----------
+const fadeUp = {
+  initial: { opacity: 0, y: 20 },
+  whileInView: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+} as const;
 
-const stagger = { whileInView: { transition: { staggerChildren: 0.12 } } } as const;
+const stagger = { whileInView: { transition: { staggerChildren: 0.08 } } } as const;
 
-type Feature = {
+// Light count‑up without framer-motion controls (TS‑safe)
+function useCountUp(target: number, duration = 1200) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / duration);
+      setVal(Math.round(target * p));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return val;
+}
+
+// ---------- Types & data ----------
+export type Feature = {
   title: string;
   description: string;
   icon: React.ElementType;
@@ -55,7 +76,7 @@ type Feature = {
 const CORE: Feature[] = [
   {
     title: "AI‑Powered Test Generation",
-    description: "Create complete papers from a prompt—sections, marks, formatting included.",
+    description: "Create full papers from a prompt—sections, marks, formatting.",
     icon: Brain,
     bullets: ["Topic + outcome aware", "Deterministic blueprints", "One‑click export (PDF/DOCX)"],
     tag: "Pro",
@@ -64,7 +85,7 @@ const CORE: Feature[] = [
     title: "Curriculum‑Aligned Content",
     description: "Questions mapped to standards with coverage scoring.",
     icon: BookOpen,
-    bullets: ["Syllabus import (PDF/CSV)", "Outcome coverage heatmap", "Gap warnings before export"],
+    bullets: ["Syllabus import (PDF/CSV)", "Outcome heatmap", "Gap warnings before export"],
   },
   {
     title: "Multiple Question Types",
@@ -75,19 +96,19 @@ const CORE: Feature[] = [
   },
   {
     title: "Difficulty Customization",
-    description: "Dial difficulty per section/outcome with readability & cognitive checks.",
+    description: "Set difficulty per section/outcome with cognitive checks.",
     icon: SlidersHorizontal,
     bullets: ["Bloom mapping", "Grade bands", "Readability guardrails"],
   },
   {
     title: "Instant Answer Keys",
-    description: "Auto‑generated keys with stepwise rationales & marking hints.",
+    description: "Stepwise rationales & marking hints auto‑generated.",
     icon: KeyRound,
     bullets: ["Rubric templates", "Point‑wise hints", "Misconception flags"],
   },
   {
     title: "Collaborative Workflows",
-    description: "Invite colleagues, co‑edit, reuse banks with version control.",
+    description: "Invite colleagues, co‑edit, reuse banks with versioning.",
     icon: Users2,
     bullets: ["Shareable links", "Approval flow", "Reusable item banks"],
     tag: "Beta",
@@ -112,7 +133,7 @@ const PROCTORING: Feature[] = [
 const ANALYTICS: Feature[] = [
   {
     title: "Student Analytics",
-    description: "Progress by chapter/outcome with trend lines.",
+    description: "Progress by chapter/outcome with trends.",
     icon: BarChart3,
     bullets: ["Percentile bands", "Section‑wise accuracy", "Time on task"],
   },
@@ -130,8 +151,9 @@ const TABS = [
   { key: "analytics", label: "Analytics", items: ANALYTICS },
 ] as const;
 
+// ==========================================
 export default function FeaturesPage() {
-  // background glow
+  // animated hero glow
   const mx = useMotionValue(320);
   const my = useMotionValue(160);
   const onMove = (e: React.MouseEvent<HTMLElement>) => {
@@ -140,41 +162,34 @@ export default function FeaturesPage() {
     my.set(e.clientY - r.top);
   };
   const bgGlow = useMotionTemplate`
-    radial-gradient(900px 450px at ${mx}px ${my}px, hsl(var(--primary)/0.12), transparent 70%),
-    radial-gradient(900px 450px at calc(${mx}px + 220px) calc(${my}px + 140px), hsl(var(--primary)/0.10), transparent 70%),
-    radial-gradient(900px 450px at calc(${mx}px - 180px) calc(${my}px + 220px), hsl(var(--primary)/0.08), transparent 70%)
+    radial-gradient(900px 450px at ${mx}px ${my}px, hsl(var(--primary)/0.10), transparent 70%),
+    radial-gradient(900px 450px at calc(${mx}px + 220px) calc(${my}px + 120px), hsl(var(--primary)/0.12), transparent 70%),
+    radial-gradient(900px 450px at calc(${mx}px - 220px) calc(${my}px + 220px), hsl(var(--primary)/0.08), transparent 70%)
   `;
 
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("core");
   const current = TABS.find((t) => t.key === tab)!;
 
-  const demoRef = useRef<HTMLVideoElement>(null);
-
-  // sticky sub‑nav visibility
   const stickyRef = useRef<HTMLDivElement>(null);
   const stickyInView = useInView(stickyRef, { margin: "-80px 0px 0px 0px" });
+
+  const Papers = useCountUp(3500);
 
   return (
     <div onMouseMove={onMove} className="min-h-screen bg-gradient-to-b from-background to-muted/40">
       {/* ambient mesh */}
-      <motion.div aria-hidden className="pointer-events-none fixed inset-0 z-0 opacity-80" style={{ backgroundImage: bgGlow }} />
-      <div className="fixed inset-0 -z-10 bg-[url('/images/grid.svg')] opacity-[0.06] dark:opacity-[0.03]" />
+      <motion.div aria-hidden className="pointer-events-none fixed inset-0 z-0 opacity-10" style={{ backgroundImage: bgGlow }} />
+      <div className="fixed inset-0 -z-10 bg-[url('/images/grid.svg')] opacity-[0.02] dark:opacity-[0.03]" />
 
       {/* sticky sub‑nav */}
-      <div ref={stickyRef} className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+      <div ref={stickyRef} className="sticky top-0 z-40 border-b backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="text-sm font-medium opacity-80">a4ai Features</div>
-          <div className="inline-flex rounded-lg border p-1">
-            {TABS.map((t) => (
-              <button key={t.key} onClick={() => setTab(t.key)} className={`rounded-md px-3 py-1.5 text-sm font-medium ${tab === t.key ? "bg-muted" : "opacity-70 hover:opacity-100"}`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <TabNav value={tab} onChange={setTab} />
         </div>
       </div>
 
-      {/* header */}
+      {/* hero */}
       <section className="relative z-10 py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <motion.div className="text-center mb-10" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
@@ -189,18 +204,20 @@ export default function FeaturesPage() {
             <p className="mt-4 text-lg text-muted-foreground">Everything you need to create curriculum‑perfect assessments in half the time.</p>
           </motion.div>
 
-          {/* category grid */}
-          <motion.div variants={stagger} initial="initial" whileInView="whileInView" viewport={{ once: true, amount: 0.2 }} className="grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
+          {/* grid */}
+          <motion.div variants={stagger} initial="initial" whileInView="whileInView" viewport={{ once: true, amount: 0.18 }} className="grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
             {current.items.map((f, i) => (
-              <motion.div key={f.title} variants={fadeInUp}><FeatureCard feature={f} index={i} /></motion.div>
+              <motion.div key={f.title} variants={fadeUp}>
+                <FeatureCard feature={f} index={i} />
+              </motion.div>
             ))}
           </motion.div>
 
           {/* stats band */}
-          <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="mt-14 rounded-2xl border bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-[1px] shadow-lg">
-            <div className="rounded-2xl bg-background/70 px-6 py-6 backdrop-blur">
+          <motion.div {...fadeUp} viewport={{ once: true }} className="mt-14 rounded-2xl border bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-[1px] shadow-lg">
+            <div className="rounded-2xl bg-background px-6 py-6">
               <div className="grid grid-cols-1 gap-6 text-center sm:grid-cols-4">
-                <Stat k="3.5K+" v="Papers generated" />
+                <Stat k={`${Papers.toLocaleString()}+`} v="Papers generated" />
                 <Stat k="99%" v="Syllabus alignment" />
                 <Stat k="< 2 min" v="Prompt ➜ Paper" />
                 <Stat k="99.9%" v="Uptime" />
@@ -209,7 +226,7 @@ export default function FeaturesPage() {
           </motion.div>
 
           {/* comparison strip */}
-          <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="mt-10 rounded-2xl border bg-muted/40 p-6 shadow-sm">
+          <motion.div {...fadeUp} viewport={{ once: true }} className="mt-10 rounded-2xl border bg-card p-6 shadow-sm">
             <div className="grid gap-4 md:grid-cols-3 text-sm">
               <Compare good="Outcome‑aware generation" bad="Generic question dumps" />
               <Compare good="Deterministic blueprints" bad="Unstable lengths & marks" />
@@ -218,48 +235,10 @@ export default function FeaturesPage() {
           </motion.div>
 
           {/* Demo video */}
-          <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="mt-14 grid items-center gap-6 md:grid-cols-[1.2fr_1fr]">
-            <Card className="overflow-hidden">
-              <div className="border-b bg-muted/40 px-6 py-3 text-sm font-medium flex items-center gap-2"><Video className="h-4 w-4"/> See it in action</div>
-              <CardContent className="p-0">
-                <motion.div initial={{ opacity: 0.95 }} whileHover={{ scale: 1.01 }} transition={{ duration: 0.3 }} className="relative group p-[1px] rounded-xl bg-gradient-to-br from-indigo-600/40 via-purple-600/40 to-pink-600/40">
-                  <div className="rounded-xl bg-background/80 backdrop-blur overflow-hidden">
-                    <video
-                      id="demoVideo"
-                      ref={demoRef}
-                      className="aspect-video w-full object-cover"
-                      src="/demo.mp4"           
-                      playsInline
-                      controls
-                      preload="metadata"
-                      // poster="/images/demo_poster.jpg"
-                    />
-                  </div>
-                  <span aria-hidden className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
-                  <motion.div initial={false} animate={{ opacity: demoRef?.current && !demoRef.current.paused && !demoRef.current.ended ? 0 : 1 }} className="pointer-events-none absolute inset-0 grid place-items-center">
-                    <div className="rounded-full px-3 py-1 text-xs font-medium bg-black/60 text-white">Click ▶ to play</div>
-                  </motion.div>
-                </motion.div>
-              </CardContent>
-              <CardFooter className="justify-between">
-                <Button size="sm" className="gap-2" onClick={() => { const v = demoRef.current; if (v) { v.scrollIntoView({ behavior: 'smooth', block: 'center' }); v.play(); }}}><Zap className="h-4 w-4"/> Watch demo</Button>
-                <Button size="sm" variant="outline" className="gap-2"><Download className="h-4 w-4"/> Download sample paper</Button>
-              </CardFooter>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2"><div className="text-sm text-muted-foreground">Why it feels different</div></CardHeader>
-              <CardContent className="grid gap-3 text-sm">
-                <Bullet>Blueprint‑first generation means papers match your marking scheme exactly.</Bullet>
-                <Bullet>Outcome coverage heatmaps catch blind‑spots before export.</Bullet>
-                <Bullet>Item analytics prune weak questions for a healthier bank over time.</Bullet>
-                <Bullet>Privacy‑first proctoring: humane alerts, no invasive captures.</Bullet>
-              </CardContent>
-            </Card>
-          </motion.div>
+          <VideoRow />
 
           {/* Security & Reliability */}
-          <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="mt-14 rounded-2xl border bg-background/80 p-6">
+          <motion.div {...fadeUp} viewport={{ once: true }} className="mt-14 rounded-2xl border bg-background p-6">
             <div className="mb-4 flex items-center gap-2"><ShieldCheck className="h-5 w-5"/><h3 className="text-lg font-semibold tracking-tight">Security & reliability</h3></div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm">
               <Pill icon={ShieldCheck} title="RBAC" desc="Granular roles for admins, teachers, students" />
@@ -291,12 +270,37 @@ export default function FeaturesPage() {
   );
 }
 
-/* ---------- Feature Card ---------- */
+// ---------- Sub components ----------
+function TabNav({ value, onChange }: { value: (typeof TABS)[number]["key"]; onChange: (v: any) => void }) {
+  return (
+    <div className="relative">
+      <div className="inline-flex rounded-lg border p-1 relative">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            className={`relative rounded-md px-3 py-1.5 text-sm font-medium transition ${value === t.key ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {value === t.key && (
+              <motion.span
+                layoutId="tab-underline"
+                className="absolute inset-0 rounded-md bg-muted"
+                transition={{ type: "spring", stiffness: 350, damping: 30 }}
+              />
+            )}
+            <span className="relative z-10">{t.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
-  const mx = useMotionValue(160);
-  const my = useMotionValue(100);
-  const rotateX = useTransform(my, [0, 220], [8, -8]);
-  const rotateY = useTransform(mx, [0, 300], [-10, 10]);
+  const mx = useMotionValue(120);
+  const my = useMotionValue(90);
+  const rotateX = useTransform(my, [0, 180], [8, -8]);
+  const rotateY = useTransform(mx, [0, 260], [-10, 10]);
 
   const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -307,13 +311,12 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
   const Icon = feature.icon;
 
   return (
-    <div onMouseMove={handleMove} onMouseLeave={() => { mx.set(160); my.set(100); }} style={{ perspective: 1000 }} className="group">
-      <motion.div style={{ rotateX, rotateY }} className="relative h-full rounded-2xl border bg-gradient-to-b from-background to-muted/40 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_10px_30px_rgba(0,0,0,0.04)] transition-all duration-300 hover:shadow-[0_4px_12px_rgba(0,0,0,0.08),0_18px_50px_rgba(0,0,0,0.06)]">
+    <div onMouseMove={handleMove} onMouseLeave={() => { mx.set(120); my.set(90); }} style={{ perspective: 1000 }} className="group">
+      <motion.div style={{ rotateX, rotateY }} className="relative h-full rounded-2xl border bg-card p-6 shadow-md transition-all duration-300 hover:shadow-xl">
         {/* gradient ring */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-transparent [background:linear-gradient(theme(colors.background),theme(colors.background))_padding-box,linear-gradient(90deg,rgba(79,70,229,.35),rgba(168,85,247,.35),rgba(236,72,153,.35))_border-box] [border:1px_solid_transparent] opacity-90" />
-
+        <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-border" />
         {/* faint cursor glow */}
-        <motion.span aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: useMotionTemplate`radial-gradient(160px_110px_at_${mx}px_${my}px,hsl(var(--primary)/0.12),transparent_70%)` }} />
+        <motion.span aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: useMotionTemplate`radial-gradient(160px_110px_at_${mx}px_${my}px,hsl(var(--primary)/0.10),transparent_70%)` }} />
 
         {/* content */}
         <Card className="h-full border-0 bg-transparent shadow-none">
@@ -324,16 +327,16 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
                 <span className="absolute -right-2 -top-2 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 px-2 py-0.5 text-[10px] font-semibold text-white shadow">{feature.tag}</span>
               )}
             </div>
-            <h3 className="text-lg font-bold">{feature.title}</h3>
+            <h3 className="text-lg font-semibold text-foreground">{feature.title}</h3>
           </CardHeader>
 
           <CardContent className="p-0 pt-3">
-            <p className="text-sm text-foreground/90">{feature.description}</p>
+            <p className="text-sm text-muted-foreground">{feature.description}</p>
             <ul className="mt-4 space-y-2">
               {feature.bullets.map((b, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm">
                   <span className="mt-[2px] rounded-md bg-gradient-to-r from-indigo-600/15 to-purple-600/15 p-[6px]"><Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" /></span>
-                  <span>{b}</span>
+                  <span className="text-foreground">{b}</span>
                 </li>
               ))}
             </ul>
@@ -347,7 +350,6 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
   );
 }
 
-/* ---------- Small bits ---------- */
 function Stat({ k, v }: { k: string; v: string }) {
   return (
     <div>
@@ -366,12 +368,6 @@ function Compare({ good, bad }: { good: string; bad: string }) {
   );
 }
 
-function Bullet({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-2 text-sm"><span className="mt-[2px] h-2 w-2 rounded-full bg-gradient-to-r from-indigo-600 to-pink-600"/> <span>{children}</span></div>
-  );
-}
-
 function Pill({ icon: Icon, title, desc }: { icon: React.ElementType; title: string; desc: string }) {
   return (
     <div className="rounded-xl border bg-muted/40 p-4"><div className="mb-1 flex items-center gap-2"><Icon className="h-4 w-4"/> <div className="font-medium">{title}</div></div><div className="text-sm text-muted-foreground">{desc}</div></div>
@@ -384,6 +380,56 @@ function Faq({ q, a }: { q: string; a: string }) {
   );
 }
 
-/* Tailwind keyframes (add in globals if not present)
+function VideoRow() {
+  const demoRef = useRef<HTMLVideoElement>(null);
+  return (
+    <motion.div {...fadeUp} viewport={{ once: true }} className="mt-14 grid items-center gap-6 md:grid-cols-[1.2fr_1fr]">
+      <Card className="overflow-hidden">
+        <div className="border-b bg-muted/40 px-6 py-3 text-sm font-medium flex items-center gap-2"><Video className="h-4 w-4"/> See it in action</div>
+        <CardContent className="p-0">
+          <motion.div initial={{ opacity: 0.95 }} whileHover={{ scale: 1.01 }} transition={{ duration: 0.3 }} className="relative group p-[1px] rounded-xl bg-gradient-to-br from-indigo-600/40 via-purple-600/40 to-pink-600/40">
+            <div className="rounded-xl bg-background overflow-hidden">
+              <video
+                id="demoVideo"
+                ref={demoRef}
+                className="aspect-video w-full object-cover"
+                src="/demo.mp4"
+                playsInline
+                controls
+                preload="metadata"
+              />
+            </div>
+            <span aria-hidden className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
+            <motion.div initial={false} animate={{ opacity: demoRef?.current && !demoRef.current.paused && !demoRef.current.ended ? 0 : 1 }} className="pointer-events-none absolute inset-0 grid place-items-center">
+              <div className="rounded-full px-3 py-1 text-xs font-medium bg-black/60 text-white">Click ▶ to play</div>
+            </motion.div>
+          </motion.div>
+        </CardContent>
+        <CardFooter className="justify-between">
+          <Button size="sm" className="gap-2" onClick={() => { const v = demoRef.current; if (v) { v.scrollIntoView({ behavior: 'smooth', block: 'center' }); v.play(); }}}><Zap className="h-4 w-4"/> Watch demo</Button>
+          <Button size="sm" variant="outline" className="gap-2"><Download className="h-4 w-4"/> Download sample paper</Button>
+        </CardFooter>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><div className="text-sm text-muted-foreground">Why it feels different</div></CardHeader>
+        <CardContent className="grid gap-3 text-sm">
+          <Bullet>Blueprint‑first generation matches your marking scheme exactly.</Bullet>
+          <Bullet>Outcome coverage heatmaps catch blind‑spots before export.</Bullet>
+          <Bullet>Item analytics prune weak questions over time.</Bullet>
+          <Bullet>Privacy‑first proctoring: humane alerts, no invasive captures.</Bullet>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
+function Bullet({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 text-sm"><span className="mt-[2px] h-2 w-2 rounded-full bg-gradient-to-r from-indigo-600 to-pink-600"/> <span>{children}</span></div>
+  );
+}
+
+/* Tailwind keyframes (add once in globals.css if not present)
 @keyframes bg-pan { 0% { background-position: 0% 50% } 100% { background-position: 200% 50% } }
 */
