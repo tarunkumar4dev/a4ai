@@ -30,26 +30,26 @@ import {
 const team = [
   {
     name: "Tarun",
-    role: "Founder & CEO",
-    description: "Founder-led product thinker; drives vision, GTM, and educator experience.",
+    role: "Co-Founder",
+    description: "Full Stack + ML",
     image: "/images/tarun_a4ai.jpeg",
   },
   {
     name: "Yash",
-    role: "CTO",
-    description: "Full‑stack + ML; multi‑LLM orchestration, infra & security.",
+    role: "Co-Founder",
+    description: "Full Stack + ML",
     image: "/images/yash_a4ai.jpeg",
   },
   {
     name: "Aakash",
-    role: "Growth & Community",
-    description: "Runs outreach with schools, pilots, and partner programs.",
+    role: "Co-Founder",
+    description: "Infra & security",
     image: "/images/aakash_a4ai.jpg",
   },
   {
     name: "Krishna",
-    role: "Ops & Support",
-    description: "Delight‑first ops; ensures contest reliability at scale.",
+    role: "Co-Founder",
+    description: "Ops & CFO",
     image: "/images/krishna_a4ai.jpg",
   },
 ];
@@ -84,7 +84,7 @@ const testimonials = [
 ];
 
 const partners = [
-  { name: "MSIT", logo: "/images/partner-msit.svg" },
+  { name: "Chanakya", logo: "/images/partner-msit.svg" },
   { name: "CBSE schools", logo: "/images/partner-cbse.svg" },
   { name: "SkillED", logo: "/images/partner-skilled.svg" },
   { name: "EduLabs", logo: "/images/partner-edulabs.svg" },
