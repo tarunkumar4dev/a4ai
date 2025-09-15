@@ -221,7 +221,7 @@ const TestGeneratorPage = () => {
                 <h1 className="text-2xl font-bold leading-tight bg-gradient-to-r from-sky-600 via-indigo-600 to-fuchsia-500 bg-clip-text text-transparent">
                   Test Generator
                 </h1>
-                <p className="text-sm text-zinc-500">Light blue aura, soft magenta tint — clean & modern.</p>
+                <p className="text-sm text-zinc-500">As Fast as Light</p>
               </div>
             </div>
 
