@@ -1,30 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import {
-  Moon,
-  Sun,
-  Search,
-  Upload,
-  Eye,
-  Download,
-  X,
-  FileText,
-  Image as ImageIcon,
-  FileType,
-  Trash2,
-  ChevronDown,
-  Grid as GridIcon,
-  Rows,
-  Star,
-  StarOff,
-  Tag,
-  SlidersHorizontal,
-  Keyboard,
-  Pencil,
-  Link as LinkIcon,
-  Plus,
-  Palette,
+  Moon, Sun, Search, Upload, Eye, Download, X, FileText, Image as ImageIcon, FileType, Trash2,
+  ChevronDown, Grid as GridIcon, Rows, Star, StarOff, Tag, SlidersHorizontal, Keyboard,
+  Pencil, Link as LinkIcon, Plus, Palette,
 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 /* -------------------------------------------------------------------------- */
 /*                               Notes (polished)                             */
@@ -33,17 +14,17 @@ import {
 type Note = {
   id: number;
   name: string;
-  size: string;
+  size: string; // human readable
   date: string; // ISO
   type: string; // mime
-  content: string; // object URL
+  content: string; // public URL
   subjectKey: string; // e.g. "11-Physics"
   pinned?: boolean;
   tags?: string[];
+  _path?: string; // storage object path (for delete/rename later)
 };
 
 type ViewMode = "grid" | "list";
-
 type SortKey = "date" | "name" | "size";
 
 const SUBJECTS: Record<string, string[]> = {
@@ -64,54 +45,32 @@ const prettyType = (mime: string) => {
   if (mime.includes("text")) return "TXT";
   return mime.split("/")[1]?.toUpperCase() || "FILE";
 };
-
 const iconFor = (mime: string) => {
   if (mime.startsWith("image/")) return <ImageIcon className="h-5 w-5" />;
   if (mime.includes("pdf")) return <FileText className="h-5 w-5" />;
   return <FileType className="h-5 w-5" />;
 };
-
+const bytesToSize = (bytes?: number) => {
+  if (!bytes && bytes !== 0) return "—";
+  const k = 1024, dm = 1, sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
 const useLocalStorage = <T,>(key: string, initial: T) => {
   const [state, setState] = useState<T>(() => {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : initial;
-    } catch {
-      return initial;
-    }
+    try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : initial; } catch { return initial; }
   });
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(state));
-    } catch {}
-  }, [key, state]);
+  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)); } catch {} }, [key, state]);
   return [state, setState] as const;
 };
 
 /* ---------------------------- Accent / Theme map --------------------------- */
 const ACCENTS = {
-  indigo: {
-    grad: "from-indigo-600 via-fuchsia-600 to-sky-500",
-    solid: "bg-indigo-600",
-    soft: "from-indigo-500 to-fuchsia-500",
-  },
-  emerald: {
-    grad: "from-emerald-600 via-teal-500 to-cyan-500",
-    solid: "bg-emerald-600",
-    soft: "from-emerald-500 to-teal-500",
-  },
-  amber: {
-    grad: "from-amber-600 via-orange-500 to-rose-500",
-    solid: "bg-amber-600",
-    soft: "from-amber-500 to-orange-500",
-  },
-  rose: {
-    grad: "from-rose-600 via-pink-500 to-violet-500",
-    solid: "bg-rose-600",
-    soft: "from-rose-500 to-pink-500",
-  },
+  indigo: { grad: "from-indigo-600 via-fuchsia-600 to-sky-500", solid: "bg-indigo-600", soft: "from-indigo-500 to-fuchsia-500" },
+  emerald:{ grad: "from-emerald-600 via-teal-500 to-cyan-500", solid: "bg-emerald-600", soft: "from-emerald-500 to-teal-500" },
+  amber:  { grad: "from-amber-600 via-orange-500 to-rose-500",  solid: "bg-amber-600",  soft: "from-amber-500 to-orange-500" },
+  rose:   { grad: "from-rose-600 via-pink-500 to-violet-500",   solid: "bg-rose-600",   soft: "from-rose-500 to-pink-500" },
 } as const;
-
 type AccentKey = keyof typeof ACCENTS;
 
 /* ------------------------------- Tiny Components --------------------------- */
@@ -122,14 +81,11 @@ function Kbd({ children }: { children: string }) {
     </span>
   );
 }
-
 function TagChip({ label, onRemove }: { label: string; onRemove?: () => void }) {
   return (
     <motion.span layout className="inline-flex items-center gap-1 rounded-full bg-neutral-200/70 dark:bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-700 dark:text-neutral-200">
       #{label}
-      {onRemove && (
-        <button onClick={onRemove} className="ml-0.5 rounded hover:bg-neutral-300/60 dark:hover:bg-neutral-700/60 px-1">×</button>
-      )}
+      {onRemove && (<button onClick={onRemove} className="ml-0.5 rounded hover:bg-neutral-300/60 dark:hover:bg-neutral-700/60 px-1">×</button>)}
     </motion.span>
   );
 }
@@ -159,82 +115,100 @@ export default function NotesSection() {
   const dropRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  /* ------------------------------- Theme toggle ------------------------------ */
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-  }, [darkMode]);
+  useEffect(() => { document.documentElement.classList.toggle("dark", darkMode); }, [darkMode]);
 
   /* -------------------------------- Drag&Drop -------------------------------- */
   useEffect(() => {
-    const el = dropRef.current;
-    if (!el) return;
-    const onOver = (e: DragEvent) => {
-      e.preventDefault();
-      el.classList.add("ring-2", "ring-purple-500");
-    };
+    const el = dropRef.current; if (!el) return;
+    const onOver = (e: DragEvent) => { e.preventDefault(); el.classList.add("ring-2", "ring-purple-500"); };
     const onLeave = () => el.classList.remove("ring-2", "ring-purple-500");
-    const onDrop = (e: DragEvent) => {
-      e.preventDefault();
-      onLeave();
-      if (e.dataTransfer?.files?.[0]) setFile(e.dataTransfer.files[0]);
-    };
-    el.addEventListener("dragover", onOver);
-    el.addEventListener("dragleave", onLeave);
-    el.addEventListener("drop", onDrop);
-    return () => {
-      el.removeEventListener("dragover", onOver);
-      el.removeEventListener("dragleave", onLeave);
-      el.removeEventListener("drop", onDrop);
-    };
+    const onDrop = (e: DragEvent) => { e.preventDefault(); onLeave(); if (e.dataTransfer?.files?.[0]) setFile(e.dataTransfer.files[0]); };
+    el.addEventListener("dragover", onOver); el.addEventListener("dragleave", onLeave); el.addEventListener("drop", onDrop);
+    return () => { el.removeEventListener("dragover", onOver); el.removeEventListener("dragleave", onLeave); el.removeEventListener("drop", onDrop); };
   }, []);
 
   /* ------------------------------- Keyboard UX ------------------------------ */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/") {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-      if (e.key === "Escape") {
-        setShowPreview(false);
-        setRenameId(null);
-      }
+      if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); }
+      if (e.key === "Escape") { setShowPreview(false); setRenameId(null); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  /* -------------------------------- Uploading -------------------------------- */
-  const handleUpload = () => {
-    if (!selectedClass || !selectedSubject || !file) return alert("⚠️ Select class, subject and a file.");
-    let progress = 0;
-    const key = `${selectedClass}-${selectedSubject}`;
-    const timer = setInterval(() => {
-      progress = Math.min(100, progress + 8 + Math.random() * 12);
-      setUploadProgress(progress);
-      if (progress >= 100) {
-        clearInterval(timer);
-        const newNote: Note = {
-          id: Date.now(),
-          name: file.name,
-          size: `${(file.size / 1024).toFixed(1)} KB`,
-          date: new Date().toISOString(),
-          type: file.type,
-          content: URL.createObjectURL(file),
-          subjectKey: key,
-          tags: [],
-        };
-        setNotes((prev) => [newNote, ...prev]);
-        setFile(null);
-        setUploadProgress(0);
-      }
-    }, 120);
+  /* --------------------------- Supabase: helpers ---------------------------- */
+  const bucket = "notes";
+  const currentPrefix = selectedClass && selectedSubject ? `user-notes/${selectedClass}-${selectedSubject}` : "";
+
+  const getPublicUrl = (path: string) => {
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+    return data.publicUrl;
   };
 
-  const handleView = (note: Note) => {
-    setPreview(note);
-    setShowPreview(true);
+  const fetchNotes = async () => {
+    if (!currentPrefix) { setNotes([]); return; }
+    const { data, error } = await supabase.storage.from(bucket).list(currentPrefix, {
+      limit: 200,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error) { console.error("Fetch error:", error.message); setNotes([]); return; }
+    const mapped: Note[] = (data || []).map((obj) => {
+      const path = `${currentPrefix}/${obj.name}`;
+      const url = getPublicUrl(path);
+      const updated = (obj.updated_at ?? new Date().toISOString());
+      const size = bytesToSize(obj.metadata?.size as number | undefined);
+      const mimeGuess = obj.metadata?.mimetype || (obj.name.toLowerCase().endsWith(".pdf") ? "application/pdf" :
+                       obj.name.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? `image/${obj.name.split(".").pop()}` : "application/octet-stream");
+      return {
+        id: (updated ? new Date(updated).getTime() : Date.now()) + Math.floor(Math.random() * 1000),
+        name: obj.name,
+        size,
+        date: updated,
+        type: String(mimeGuess),
+        content: url,
+        subjectKey: `${selectedClass}-${selectedSubject}`,
+        tags: [],
+        _path: path,
+      };
+    });
+    // keep pinned tags etc. if same name exists
+    setNotes((prev) => {
+      const byName = new Map(prev.map((n) => [n.name, n]));
+      return mapped.map((m) => (byName.has(m.name) ? { ...m, pinned: byName.get(m.name)?.pinned, tags: byName.get(m.name)?.tags || [] } : m));
+    });
   };
+
+  useEffect(() => { fetchNotes(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedClass, selectedSubject]);
+
+  /* -------------------------------- Uploading -------------------------------- */
+  const handleUpload = async () => {
+    if (!selectedClass || !selectedSubject || !file) return alert("⚠️ Select class, subject and a file.");
+    setUploadProgress(5);
+    const safeName = file.name.replace(/\s+/g, "_");
+    const path = `${currentPrefix}/${Date.now()}-${safeName}`;
+    const { data, error } = await supabase.storage.from(bucket).upload(path, file, { cacheControl: "3600", upsert: false });
+    if (error) { console.error("Upload error:", error.message); setUploadProgress(0); return; }
+    setUploadProgress(90);
+    const publicUrl = getPublicUrl(data.path);
+    const newNote: Note = {
+      id: Date.now(),
+      name: safeName,
+      size: bytesToSize(file.size),
+      date: new Date().toISOString(),
+      type: file.type || "application/octet-stream",
+      content: publicUrl,
+      subjectKey: `${selectedClass}-${selectedSubject}`,
+      tags: [],
+      _path: data.path,
+    };
+    setNotes((prev) => [newNote, ...prev]);
+    setUploadProgress(100);
+    setTimeout(() => setUploadProgress(0), 600);
+    setFile(null);
+  };
+
+  const handleView = (note: Note) => { setPreview(note); setShowPreview(true); };
 
   const handleDownload = (note: Note) => {
     const a = document.createElement("a");
@@ -245,34 +219,27 @@ export default function NotesSection() {
     document.body.removeChild(a);
   };
 
-  const handleDelete = (note: Note) => {
+  const handleDelete = async (note: Note) => {
+    if (!note._path) { setNotes((prev) => prev.filter((n) => n.id !== note.id)); return; }
+    const { error } = await supabase.storage.from(bucket).remove([note._path]);
+    if (error) { console.error("Delete error:", error.message); return; }
     setNotes((prev) => prev.filter((n) => n.id !== note.id));
     if (preview?.id === note.id) setShowPreview(false);
   };
 
   const togglePin = (note: Note) => setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, pinned: !n.pinned } : n)));
-
   const addTagToNote = (note: Note, tag: string) =>
     setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, tags: Array.from(new Set([...(n.tags || []), tag])) } : n)));
-
   const removeTagFromNote = (note: Note, tag: string) =>
     setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, tags: (n.tags || []).filter((t) => t !== tag) } : n)));
-
-  const clearFilters = () => {
-    setSelectedClass("");
-    setSelectedSubject("");
-    setSearchQuery("");
-    setActiveTags([]);
-  };
+  const clearFilters = () => { setSelectedClass(""); setSelectedSubject(""); setSearchQuery(""); setActiveTags([]); };
 
   /* --------------------------------- Derived -------------------------------- */
   const filtered = useMemo(() => {
     const key = selectedClass && selectedSubject ? `${selectedClass}-${selectedSubject}` : null;
     const list = key ? notes.filter((n) => n.subjectKey === key) : [];
     const q = searchQuery.trim().toLowerCase();
-    const byQuery = q
-      ? list.filter((n) => n.name.toLowerCase().includes(q) || (n.tags || []).some((t) => t.toLowerCase().includes(q)))
-      : list;
+    const byQuery = q ? list.filter((n) => n.name.toLowerCase().includes(q) || (n.tags || []).some((t) => t.toLowerCase().includes(q))) : list;
     const byTags = activeTags.length ? byQuery.filter((n) => activeTags.every((t) => (n.tags || []).includes(t))) : byQuery;
     const sorted = [...byTags].sort((a, b) => {
       if (sortKey === "name") return a.name.localeCompare(b.name);
@@ -288,19 +255,9 @@ export default function NotesSection() {
   /* ---------------------------------- JSX ----------------------------------- */
   return (
     <div className={`relative min-h-screen p-6 transition-colors duration-300 ${darkMode ? "dark bg-neutral-950" : "bg-gradient-to-br from-slate-50 to-indigo-50"}`}>
-      {/* Ambient animated blobs */}
-      <motion.div
-        className={`pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br ${ACCENTS[accent].solid}`}
-        animate={{ y: [0, 15, 0], opacity: [0.25, 0.35, 0.25] }}
-        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        className={`pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br ${ACCENTS[accent].solid}`}
-        animate={{ y: [0, -12, 0], opacity: [0.25, 0.35, 0.25] }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-      />
+      <motion.div className={`pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br ${ACCENTS[accent].solid}`} animate={{ y: [0, 15, 0], opacity: [0.25, 0.35, 0.25] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }} />
+      <motion.div className={`pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br ${ACCENTS[accent].solid}`} animate={{ y: [0, -12, 0], opacity: [0.25, 0.35, 0.25] }} transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }} />
 
-      {/* Preview Modal */}
       <AnimatePresence>
         {showPreview && preview && (
           <motion.div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -310,12 +267,8 @@ export default function NotesSection() {
                   {iconFor(preview.type)} <span className="truncate">{preview.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleDownload(preview)} className="px-3 py-1.5 text-sm rounded-lg bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:opacity-90">
-                    Download
-                  </button>
-                  <button onClick={() => setShowPreview(false)} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                    <X className="h-5 w-5" />
-                  </button>
+                  <button onClick={() => handleDownload(preview)} className="px-3 py-1.5 text-sm rounded-lg bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:opacity-90">Download</button>
+                  <button onClick={() => setShowPreview(false)} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"><X className="h-5 w-5" /></button>
                 </div>
               </div>
               <div className="p-4 overflow-auto max-h-[78vh]">
@@ -324,9 +277,7 @@ export default function NotesSection() {
                 ) : preview.type.includes("pdf") ? (
                   <iframe title="preview" src={preview.content} className="w-full h-[72vh] rounded-lg" />
                 ) : (
-                  <div className="p-6 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-center text-neutral-500 dark:text-neutral-400">
-                    Preview not available for this file type. Download to view.
-                  </div>
+                  <div className="p-6 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-center text-neutral-500 dark:text-neutral-400">Preview not available for this file type. Download to view.</div>
                 )}
               </div>
             </motion.div>
@@ -335,22 +286,14 @@ export default function NotesSection() {
       </AnimatePresence>
 
       <div className="max-w-7xl mx-auto relative">
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
-            <h1 className={`text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r ${ACCENTS[accent].grad}`}>
-              Notes
-            </h1>
+            <h1 className={`text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r ${ACCENTS[accent].grad}`}>Notes</h1>
             <div className="mt-2 text-sm text-neutral-600 dark:text-neutral-300 flex items-center gap-2">
-              <span>Classes</span>
-              <span>›</span>
-              <span>{selectedClass || "—"}</span>
-              <span>›</span>
-              <span>{selectedSubject || "—"}</span>
+              <span>Classes</span><span>›</span><span>{selectedClass || "—"}</span><span>›</span><span>{selectedSubject || "—"}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Accent palette toggle */}
             <div className="hidden md:flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-neutral-800 p-1">
               {(Object.keys(ACCENTS) as AccentKey[]).map((k) => (
                 <button key={k} onClick={() => setAccent(k)} className={`h-7 w-7 rounded-lg ${ACCENTS[k].solid} ${accent === k ? "ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 ring-white/80" : "opacity-80"}`} title={`Accent: ${k}`} />
@@ -365,7 +308,6 @@ export default function NotesSection() {
           </div>
         </div>
 
-        {/* Upload + Filters */}
         <div className="rounded-2xl border-0 shadow-lg bg-white dark:bg-neutral-900">
           <div className="p-6 space-y-5">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -380,9 +322,7 @@ export default function NotesSection() {
                 <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Class</label>
                 <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="mt-1 w-full py-2 px-3 rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100">
                   <option value="">Select Class</option>
-                  {[9, 10, 11, 12].map((c) => (
-                    <option key={c} value={String(c)}>Class {c}</option>
-                  ))}
+                  {[9, 10, 11, 12].map((c) => (<option key={c} value={String(c)}>Class {c}</option>))}
                 </select>
               </div>
 
@@ -390,9 +330,7 @@ export default function NotesSection() {
                 <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Subject</label>
                 <select value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)} disabled={!selectedClass} className="mt-1 w-full py-2 px-3 rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100 disabled:opacity-60">
                   <option value="">Select Subject</option>
-                  {selectedClass && SUBJECTS[selectedClass]?.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
+                  {selectedClass && SUBJECTS[selectedClass]?.map((s) => (<option key={s} value={s}>{s}</option>))}
                 </select>
               </div>
 
@@ -415,7 +353,6 @@ export default function NotesSection() {
               </div>
             </div>
 
-            {/* Search + sort + tag filters */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
               <div className="relative md:col-span-5">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
@@ -434,31 +371,15 @@ export default function NotesSection() {
                 </div>
               </div>
 
-              {/* Better Tag Filter */}
               <div className="md:col-span-4">
                 <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 px-3 py-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-neutral-500">
-                      <Tag className="h-4 w-4" /> Tags
-                    </div>
+                    <div className="flex items-center gap-2 text-xs text-neutral-500"><Tag className="h-4 w-4" /> Tags</div>
                     <div className="flex items-center gap-2">
-                      <input
-                        value={tagInput}
-                        onChange={(e) => setTagInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && tagInput.trim()) {
-                            const v = tagInput.trim();
-                            setActiveTags((prev) => Array.from(new Set([...prev, v])));
-                            setTagInput("");
-                          }
-                        }}
-                        placeholder="Add filter tag"
-                        className="w-32 rounded-md bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-xs"
-                      />
-                      <button
-                        onClick={() => tagInput.trim() && (setActiveTags((p) => Array.from(new Set([...p, tagInput.trim()]))), setTagInput(""))}
-                        className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-white bg-gradient-to-r ${ACCENTS[accent].soft}`}
-                      >
+                      <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => {
+                        if (e.key === "Enter" && tagInput.trim()) { const v = tagInput.trim(); setActiveTags((prev) => Array.from(new Set([...prev, v]))); setTagInput(""); }
+                      }} placeholder="Add filter tag" className="w-32 rounded-md bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-xs" />
+                      <button onClick={() => tagInput.trim() && (setActiveTags((p) => Array.from(new Set([...p, tagInput.trim()]))), setTagInput(""))} className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-white bg-gradient-to-r ${ACCENTS[accent].soft}`}>
                         <Plus className="h-3.5 w-3.5" /> Add
                       </button>
                     </div>
@@ -471,14 +392,9 @@ export default function NotesSection() {
                         </motion.div>
                       ))}
                     </AnimatePresence>
-                    {/* quick-pick from existing tags */}
-                    {!activeTags.length && allTags.length > 0 && (
-                      <div className="text-xs text-neutral-500">Quick picks:</div>
-                    )}
+                    {!activeTags.length && allTags.length > 0 && (<div className="text-xs text-neutral-500">Quick picks:</div>)}
                     {activeTags.length === 0 && allTags.slice(0, 6).map((t) => (
-                      <button key={t} onClick={() => setActiveTags((arr) => Array.from(new Set([...arr, t])))} className="rounded-full bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-700">
-                        #{t}
-                      </button>
+                      <button key={t} onClick={() => setActiveTags((arr) => Array.from(new Set([...arr, t])))} className="rounded-full bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-700">#{t}</button>
                     ))}
                   </div>
                 </div>
@@ -487,7 +403,6 @@ export default function NotesSection() {
           </div>
         </div>
 
-        {/* Notes */}
         {selectedClass && selectedSubject ? (
           <div className="mt-8">
             <div className="mb-4 flex items-center justify-between">
@@ -520,9 +435,7 @@ export default function NotesSection() {
                             <p className="text-xs text-neutral-500">{prettyType(note.type)} · {note.size} · {new Date(note.date).toLocaleDateString()}</p>
                             {note.tags && note.tags.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-1">
-                                {note.tags.map((t) => (
-                                  <TagChip key={t} label={t} onRemove={() => removeTagFromNote(note, t)} />
-                                ))}
+                                {note.tags.map((t) => (<TagChip key={t} label={t} onRemove={() => removeTagFromNote(note, t)} />))}
                               </div>
                             )}
                             <div className="mt-2 flex items-center gap-2">
@@ -531,10 +444,7 @@ export default function NotesSection() {
                                 className="w-28 rounded-md bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-xs"
                                 onKeyDown={(e) => {
                                   const v = (e.target as HTMLInputElement).value.trim();
-                                  if (e.key === "Enter" && v) {
-                                    addTagToNote(note, v);
-                                    (e.target as HTMLInputElement).value = "";
-                                  }
+                                  if (e.key === "Enter" && v) { addTagToNote(note, v); (e.target as HTMLInputElement).value = ""; }
                                 }}
                               />
                               <button onClick={() => setRenameId(note.id)} className="text-xs rounded-md px-2 py-1 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700"><Pencil className="h-3.5 w-3.5 inline" /> Rename</button>
