@@ -1,4 +1,4 @@
-// Hero — refined headline + exact CTA pills + PRO neumorphic corner arrows
+// Hero — refined headline + exact CTA pills + PRO neumorphic corner arrows (RESPONSIVE VERIFIED)
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import {
@@ -56,36 +56,51 @@ export default function LandingHero() {
     <section onMouseMove={handleMouseMove} className="relative isolate overflow-hidden">
       {/* BG base */}
       <div className="absolute inset-0 -z-20">
-        <div className="absolute inset-0" style={{ background: "linear-gradient(140deg, #EEF3FC 0%, #E6ECF7 48%, #D9E1EC 100%)" }} />
-        <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(60rem 36rem at 50% 35%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.78) 40%, rgba(255,255,255,0) 70%)" }} />
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(140deg, #EEF3FC 0%, #E6ECF7 48%, #D9E1EC 100%)" }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(60rem 36rem at 50% 35%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.78) 40%, rgba(255,255,255,0) 70%)",
+          }}
+        />
       </div>
 
-      {/* light grid */}
+      {/* grid */}
       <div className="absolute inset-0 -z-10 opacity-[0.05] [background-image:linear-gradient(to_right,_#000_1px,_transparent_1px),linear-gradient(to_bottom,_#000_1px,_transparent_1px)] [background-size:48px_48px]" />
 
-      {/* darker vignette sides */}
+      {/* vignette (lighter on mobile) */}
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute inset-y-0 left-0 w-56" style={{ background: "linear-gradient(90deg, rgba(15,23,42,0.10), rgba(15,23,42,0.00))" }} />
-        <div className="absolute inset-y-0 right-0 w-56" style={{ background: "linear-gradient(270deg, rgba(15,23,42,0.10), rgba(15,23,42,0.00))" }} />
-        <div className="absolute inset-x-0 bottom-0 h-40" style={{ background: "linear-gradient(0deg, rgba(2,6,23,0.06), rgba(2,6,23,0))" }} />
+        <div className="hidden md:block absolute inset-y-0 left-0 w-56" style={{ background: "linear-gradient(90deg, rgba(15,23,42,0.10), rgba(15,23,42,0.00))" }} />
+        <div className="hidden md:block absolute inset-y-0 right-0 w-56" style={{ background: "linear-gradient(270deg, rgba(15,23,42,0.10), rgba(15,23,42,0.00))" }} />
+        <div className="absolute inset-x-0 bottom-0 h-32 md:h-40" style={{ background: "linear-gradient(0deg, rgba(2,6,23,0.06), rgba(2,6,23,0))" }} />
       </div>
 
-      {/* subtle blobs */}
-      <motion.div style={{ x: blobX, y: blobY }} className="absolute -top-24 -left-24 h-[42rem] w-[42rem] rounded-full blur-3xl opacity-60 -z-10">
+      {/* blobs */}
+      <motion.div style={{ x: blobX, y: blobY }} className="absolute -top-24 -left-24 h-[36rem] md:h-[42rem] w-[36rem] md:w-[42rem] rounded-full blur-3xl opacity-60 -z-10">
         <div className="h-full w-full" style={{ background: "radial-gradient(closest-side, rgba(110,124,142,0.22), transparent 70%)" }} />
       </motion.div>
-      <motion.div style={{ x: useTransform(blobX, (v) => -v), y: useTransform(blobY, (v) => v / 2) }} className="absolute -bottom-32 -right-24 h-[40rem] w-[40rem] rounded-full blur-3xl opacity-60 -z-10">
+      <motion.div style={{ x: useTransform(blobX, (v) => -v), y: useTransform(blobY, (v) => v / 2) }} className="absolute -bottom-32 -right-24 h-[34rem] md:h-[40rem] w-[34rem] md:w-[40rem] rounded-full blur-3xl opacity-60 -z-10">
         <div className="h-full w-full" style={{ background: "radial-gradient(closest-side, rgba(173,184,199,0.20), transparent 70%)" }} />
       </motion.div>
 
-      {/* premium corner arrows targeting headline */}
+      {/* the two active corner arrows */}
       <CornerArrows />
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 pb-24 md:pt-28 md:pb-36">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-16 md:pt-20 pb-20 md:pb-32">
         {/* badge */}
         <motion.div
-          style={{ x: badgeX, y: badgeY, border: "1px solid var(--stroke, #E4E9F0)", background: "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))" }}
-          className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full px-4 py-2 backdrop-blur"
+          style={{
+            x: badgeX,
+            y: badgeY,
+            border: "1px solid var(--stroke, #E4E9F0)",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))",
+          }}
+          className="mx-auto mb-6 md:mb-8 inline-flex items-center gap-2 rounded-full px-4 py-2 backdrop-blur"
         >
           <Sparkles className="h-4 w-4" style={{ color: "var(--brand-600, #5D6B7B)" }} />
           <span className="text-sm font-medium tracking-wide" style={{ color: "var(--muted-700, #4E5A66)" }}>
@@ -95,48 +110,54 @@ export default function LandingHero() {
 
         {/* headline */}
         <div className="text-center">
-          <h1 className="font-halenoir font-semibold tracking-[-0.02em] leading-[0.84]">
+          <h1 className="font-halenoir font-semibold tracking-[-0.01em] md:tracking-[-0.02em] leading-tight md:leading-[0.84]">
             <span
-              className="block bg-clip-text text-transparent text-[clamp(2.9rem,9vw,8.6rem)]"
+              className="hero-headline block bg-clip-text text-transparent text-[clamp(2rem,10vw,3.2rem)] sm:text-[clamp(2.4rem,8.5vw,4rem)] md:text-[clamp(2.9rem,9vw,8.6rem)]"
               style={{
                 backgroundImage: "linear-gradient(90deg,#2F3A44 0%,#4F6274 40%,#2F3A44 100%)",
                 backgroundSize: "220% 100%",
                 animation: "bg-pan 10s linear infinite",
-                wordSpacing: "-0.12em",
               }}
             >
               Smartest.Tests.Ever.
             </span>
 
             <span
-              className="mt-4 block font-halenoir text-[clamp(1.35rem,2.8vw,2.6rem)] font-semibold tracking-[-0.012em] leading-[1.04]"
+              className="mt-3 md:mt-4 block font-halenoir text-[clamp(1.1rem,4.6vw,1.6rem)] sm:text-[clamp(1.2rem,3.8vw,1.8rem)] md:text-[clamp(1.35rem,2.8vw,2.6rem)] font-semibold tracking-[-0.01em] md:tracking-[-0.012em] leading-snug md:leading-[1.04]"
               style={{ color: "var(--ink-800, #2F3A44)" }}
             >
               The Teacher’s Assessment Co-Pilot
             </span>
           </h1>
 
-          <p className="mx-auto mt-7 max-w-3xl text-[clamp(0.98rem,1.4vw,1.125rem)]" style={{ color: "var(--muted-600, #5D6B7B)" }}>
+          <p
+            className="mx-auto mt-4 md:mt-7 max-w-xl md:max-w-3xl text-[clamp(0.95rem,3.8vw,1.05rem)] md:text-[clamp(0.98rem,1.4vw,1.125rem)]"
+            style={{ color: "var(--muted-600, #5D6B7B)" }}
+          >
             Generate & host curriculum-perfect tests in under 2 minutes — then track what actually matters.
           </p>
 
           {/* CTAs */}
-          <div className="relative mt-16 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <div className="relative mt-8 md:mt-16 flex flex-col items-center justify-center gap-3 sm:gap-4 md:flex-row">
+            {/* glow strip */}
             <div
               aria-hidden
-              className="pointer-events-none absolute -inset-x-10 top-3 h-16 rounded-2xl blur-2xl"
+              className="pointer-events-none absolute -inset-x-10 top-2 h-12 md:h-16 rounded-2xl blur-2xl"
               style={{
                 background:
-                  "radial-gradient(14rem 5rem at 35% 50%, rgba(59,130,246,0.30), transparent 60%), radial-gradient(12rem 5rem at 70% 50%, rgba(17,24,39,0.35), transparent 60%)",
+                  "radial-gradient(12rem 4rem at 35% 50%, rgba(59,130,246,0.28), transparent 60%), radial-gradient(10rem 4rem at 70% 50%, rgba(17,24,39,0.30), transparent 60%)",
               }}
             />
 
-            {/* PRIMARY (magnetic) */}
-            <motion.div style={{ x: magneticX, y: magneticY }} className="isolate">
-              <Link to="/signup">
+            {/* PRIMARY (magnetic on md+) */}
+            <motion.div
+              style={{ x: magneticX, y: magneticY }}
+              className="isolate w-full max-w-[320px] md:max-w-none md:w-auto"
+            >
+              <Link to="/signup" className="w-full">
                 <Button
                   size="lg"
-                  className="relative h-12 rounded-[14px] px-7 text-base font-semibold text-white flex items-center gap-2 transform-gpu transition-[transform,box-shadow] hover:-translate-y-[1px] active:translate-y-0"
+                  className="w-full md:w-auto relative h-12 rounded-[14px] px-6 md:px-7 text-base font-semibold text-white flex items-center justify-center gap-2 transform-gpu transition-[transform,box-shadow] md:hover:-translate-y-[1px] active:translate-y-0"
                   style={{
                     background: "linear-gradient(180deg, #76B6FF 0%, #2F6DF4 88%)",
                     border: "1px solid rgba(59,130,246,0.55)",
@@ -155,11 +176,11 @@ export default function LandingHero() {
             </motion.div>
 
             {/* SECONDARY */}
-            <div className="isolate">
-              <Link to="/demo">
+            <div className="isolate w-full max-w-[320px] md:max-w-none md:w-auto">
+              <Link to="/demo" className="w-full">
                 <Button
                   size="lg"
-                  className="relative h-12 rounded-[14px] px-7 text-base font-semibold text-white flex items-center gap-2 transform-gpu transition-[transform,box-shadow] hover:-translate-y-[1px] active:translate-y-0"
+                  className="w-full md:w-auto relative h-12 rounded-[14px] px-6 md:px-7 text-base font-semibold text-white flex items-center justify-center gap-2 transform-gpu transition-[transform,box-shadow] md:hover:-translate-y-[1px] active:translate-y-0"
                   style={{
                     background: "linear-gradient(180deg, #1F2937 0%, #0B1220 92%)",
                     border: "1px solid rgba(0,0,0,0.35)",
@@ -179,17 +200,17 @@ export default function LandingHero() {
           </div>
 
           {/* marquee */}
-          <div className="relative mt-12 overflow-hidden">
+          <div className="relative mt-8 md:mt-12 overflow-hidden">
             <motion.div
               initial={{ x: 0 }}
               animate={{ x: ["0%", "-50%"] }}
               transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-              className="flex gap-3 whitespace-nowrap"
+              className="flex gap-2 md:gap-3 whitespace-nowrap"
             >
               {[...Array(2)].flatMap(() => features).map((f, i) => (
                 <div
                   key={i}
-                  className="mx-1 inline-flex items-center gap-2 rounded-full px-4 py-2 backdrop-blur text-sm"
+                  className="mx-1 inline-flex items-center gap-2 rounded-full px-3 md:px-4 py-2 backdrop-blur text-sm"
                   style={{
                     border: "1px solid var(--stroke, #E4E9F0)",
                     background: "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))",
@@ -201,8 +222,8 @@ export default function LandingHero() {
                 </div>
               ))}
             </motion.div>
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-white to-transparent" />
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-10 md:w-16 bg-gradient-to-r from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-10 md:w-16 bg-gradient-to-l from-white to-transparent" />
           </div>
         </div>
       </div>
@@ -212,50 +233,21 @@ export default function LandingHero() {
 
 /* =========================
    Corner arrows targeting the headline block
+   (Only two active, like you asked)
    ========================= */
 function CornerArrows() {
   return (
     <div className="hidden md:block">
-      {/* TOP-LEFT → arrow to center (↘) */}
-      {/* <KeycapArrow
-        pos="left-10 top-[18%]"
-        size={78}
-        variant="raised"
-        tilt={-8}
-        dir="SE"
-      /> */}
-      {/* TOP-RIGHT → arrow to center (↙) */}
-      <KeycapArrow
-        pos="right-12 top-[18%]"
-        size={74}
-        variant="neon"
-        tilt={8}
-        dir="SW"
-      />
-      {/* BOTTOM-LEFT → arrow to center (↗) */}
-      <KeycapArrow
-        pos="left-10 bottom-[48%]"
-        size={75}
-        variant="neon"
-        tilt={6}
-        dir="NE"
-      />
-      {/* BOTTOM-RIGHT → arrow to center (↖) */}
-      {/* <KeycapArrow
-        pos="right-14 bottom-[18%]"
-        size={76}
-        variant="raised"
-        tilt={-6}
-        dir="NW"
-      /> */}
+      {/* TOP-RIGHT ↙ */}
+      <KeycapArrow pos="right-12 top-[18%]" size={74} variant="neon" tilt={8} dir="SW" />
+      {/* LEFT middle ↗ (raised a bit from bottom) */}
+      <KeycapArrow pos="left-10 bottom-[48%]" size={75} variant="neon" tilt={6} dir="NE" />
     </div>
   );
 }
 
 /* =========================
    KeycapArrow primitive
-   - variant: "raised" (debossed glyph), "neon" (glow rim)
-   - dir: NE, NW, SE, SW (arrow direction)
    ========================= */
 function KeycapArrow({
   pos,
@@ -279,8 +271,6 @@ function KeycapArrow({
   const ring = "inset 0 0 0 1px rgba(255,255,255,0.55)";
   const neonRim =
     "0 0 0 2px rgba(255,255,255,0.9), 0 0 40px rgba(147,197,253,0.65), 0 16px 36px rgba(30,58,138,0.20)";
-
-  // long soft shadow (oval) for realism
   const ovalShadow =
     "radial-gradient(120px 60px at 60% 60%, rgba(36,62,155,0.12), rgba(36,62,155,0) 70%)";
 
@@ -292,8 +282,7 @@ function KeycapArrow({
         height: size,
         transform: `rotate(${tilt}deg)`,
         background: baseGrad,
-        boxShadow:
-          `${dropShadow}, ${ring}, ${innerShadow}`,
+        boxShadow: `${dropShadow}, ${ring}, ${innerShadow}`,
       }}
       animate={{ y: [0, -10, 0] }}
       transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
@@ -307,22 +296,10 @@ function KeycapArrow({
             "radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0) 55%), radial-gradient(100% 80% at 50% 120%, rgba(2,6,23,0.08) 0%, rgba(2,6,23,0) 60%)",
         }}
       />
-      {/* neon rim if variant neon */}
       {variant === "neon" && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-[20px]"
-          style={{ boxShadow: neonRim }}
-        />
+        <span aria-hidden className="pointer-events-none absolute inset-0 rounded-[20px]" style={{ boxShadow: neonRim }} />
       )}
-      {/* long soft shadow under tile */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -inset-x-16 -bottom-10 h-24 rounded-[40px] blur-2xl opacity-90"
-        style={{ background: ovalShadow }}
-      />
-
-      {/* arrow glyph */}
+      <span aria-hidden className="pointer-events-none absolute -inset-x-16 -bottom-10 h-24 rounded-[40px] blur-2xl opacity-90" style={{ background: ovalShadow }} />
       <div className="relative z-[1] flex h-full w-full items-center justify-center">
         <ArrowGlyph dir={dir} variant={variant} />
       </div>
@@ -340,7 +317,6 @@ function ArrowGlyph({
   dir: "NE" | "NW" | "SE" | "SW";
   variant: "raised" | "neon";
 }) {
-  // rotation for the base arrow (points to NE by default)
   const rotation =
     dir === "NE" ? 0 : dir === "SE" ? 90 : dir === "SW" ? 180 : 270;
 
@@ -355,41 +331,12 @@ function ArrowGlyph({
   const strokeWidth = variant === "neon" ? 2.6 : 1.9;
 
   return (
-    <svg
-      width="30"
-      height="30"
-      viewBox="0 0 24 24"
-      fill="none"
-      style={{ transform: `rotate(${rotation}deg)` }}
-    >
-      {/* main arrow */}
-      <path
-        d="M6 14l8-8m0 0H9m5 0v5"
-        stroke={strokeMain}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* micro highlight */}
-      <path
-        d="M13.6 6.4h2v2"
-        stroke={strokeHighlight}
-        strokeWidth={0.7}
-        strokeLinecap="round"
-      />
-      {/* deboss shadow for raised variant */}
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style={{ transform: `rotate(${rotation}deg)` }}>
+      <path d="M6 14l8-8m0 0H9m5 0v5" stroke={strokeMain} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13.6 6.4h2v2" stroke={strokeHighlight} strokeWidth={0.7} strokeLinecap="round" />
       {variant === "raised" && (
-        <path
-          d="M6 14l8-8"
-          stroke="rgba(2,6,23,0.18)"
-          strokeWidth={1.4}
-          strokeLinecap="round"
-        />
+        <path d="M6 14l8-8" stroke="rgba(2,6,23,0.18)" strokeWidth={1.4} strokeLinecap="round" />
       )}
     </svg>
   );
 }
-
-/* globals.css
-@keyframes bg-pan { 0% { background-position: 0% 50% } 100% { background-position: 200% 50% } }
-*/
