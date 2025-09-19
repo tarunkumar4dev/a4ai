@@ -17,8 +17,9 @@ export default {
       screens: { "2xl": "1400px" },
     },
     extend: {
-      /* Apple-like system stack (falls back cleanly cross-platform) */
+      /* add Halenoir + keep your Apple/system stack */
       fontFamily: {
+        halenoir: ['"Halenoir Expanded"', "ui-sans-serif", "system-ui", "sans-serif"],
         sans: [
           "-apple-system",
           "SF Pro Text",

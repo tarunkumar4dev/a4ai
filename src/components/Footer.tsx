@@ -39,17 +39,17 @@ const Footer = () => {
 
   // Social links
   const socialLinks = [
-    { icon: Linkedin,  href: "https://www.linkedin.com/company/a4ai-in",                 label: "LinkedIn" },
-    { icon: Twitter,   href: "https://x.com/a4aiOfficial",                                label: "X (Twitter)" },
-    { icon: Instagram, href: "https://www.instagram.com/a4ai.in?igsh=ODdpajJjNjkzeXp1",  label: "Instagram" },
-    { icon: Github,    href: "https://github.com",                                        label: "GitHub" },
-    { icon: Mail,      href: "mailto:a4ai.team@gmail.com",                                label: "Email" },
+    { icon: Linkedin,  href: "https://www.linkedin.com/company/a4ai-in",                label: "LinkedIn" },
+    { icon: Twitter,   href: "https://x.com/a4aiOfficial",                               label: "X (Twitter)" },
+    { icon: Instagram, href: "https://www.instagram.com/a4ai.in?igsh=ODdpajJjNjkzeXp1", label: "Instagram" },
+    { icon: Github,    href: "https://github.com",                                       label: "GitHub" },
+    { icon: Mail,      href: "mailto:a4ai.team@gmail.com",                               label: "Email" },
   ];
 
   const isExternal = (href: string) =>
     href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:");
 
-  // cursor-reactive glow
+  // cursor-reactive glow (grey-blue)
   const mx = useMotionValue(300);
   const my = useMotionValue(120);
   const onMouseMove = (e: React.MouseEvent<HTMLElement>) => {
@@ -59,8 +59,8 @@ const Footer = () => {
   };
 
   const glow = useMotionTemplate`
-    radial-gradient(700px 350px at ${mx}px ${my}px, rgba(99,102,241,0.18), transparent 70%),
-    radial-gradient(700px 350px at calc(${mx}px + 220px) calc(${my}px + 160px), rgba(168,85,247,0.16), transparent 70%)
+    radial-gradient(700px 350px at ${mx}px ${my}px, rgba(93,107,123,0.18), transparent 70%),
+    radial-gradient(700px 350px at calc(${mx}px + 220px) calc(${my}px + 160px), rgba(175,186,199,0.16), transparent 70%)
   `;
 
   return (
@@ -71,7 +71,7 @@ const Footer = () => {
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
       viewport={{ once: true }}
-      className="relative border-t border-gray-200/80 dark:border-gray-800/70 bg-gradient-to-b from-white to-[#f9f9fb] dark:from-gray-950 dark:to-gray-950/95 pt-24 pb-12 overflow-hidden"
+      className="relative border-t border-gray-200/80 dark:border-gray-800/70 bg-gradient-to-b from-white to-[#f3f6fa] dark:from-gray-950 dark:to-gray-950/95 pt-24 pb-12 overflow-hidden"
     >
       {/* cursor glow + soft grain */}
       <motion.div
@@ -88,19 +88,19 @@ const Footer = () => {
         }}
       />
 
-      {/* animated top hairline */}
-      <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
+      {/* animated top hairline — grey-blue */}
+      <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-[#5D6B7B]/60 to-transparent" />
 
-      {/* floating orbs — make them click-through */}
+      {/* floating orbs (blue-grey, no purple) */}
       <motion.span
         aria-hidden
-        className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl"
+        className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full bg-[#5D6B7B]/10 blur-3xl"
         animate={{ y: [0, 8, 0] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.span
         aria-hidden
-        className="pointer-events-none absolute -bottom-14 -right-10 h-44 w-44 rounded-full bg-purple-500/10 blur-3xl"
+        className="pointer-events-none absolute -bottom-14 -right-10 h-44 w-44 rounded-full bg-[#AFBAC7]/10 blur-3xl"
         animate={{ y: [0, -10, 0] }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
       />
@@ -111,9 +111,14 @@ const Footer = () => {
           <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 300 }}>
             <div className="flex items-center gap-2">
               <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 3 }}>
-                <Zap className="h-6 w-6 text-indigo-600" />
+                <Zap className="h-6 w-6 text-[#5D6B7B]" />
               </motion.div>
-              <h2 className="text-2xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <h2
+                className="text-2xl font-extrabold bg-clip-text text-transparent"
+                style={{
+                  backgroundImage: "linear-gradient(90deg, #353D47 0%, #6E7C8E 50%, #353D47 100%)",
+                }}
+              >
                 a4ai
               </h2>
             </div>
@@ -127,7 +132,13 @@ const Footer = () => {
               <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                 Stay Updated
               </h4>
-              <div className="relative rounded-xl p-[1px] bg-gradient-to-r from-indigo-500/60 to-purple-500/60">
+              <div
+                className="relative rounded-xl p-[1px]"
+                style={{
+                  background:
+                    "linear-gradient(90deg, rgba(93,107,123,0.5), rgba(175,186,199,0.5))",
+                }}
+              >
                 <div className="flex items-center rounded-[11px] bg-white dark:bg-gray-950">
                   <input
                     type="email"
@@ -138,7 +149,8 @@ const Footer = () => {
                     type="button"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.96 }}
-                    className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                    className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full text-white"
+                    style={{ background: "#5D6B7B" }}
                     aria-label="Subscribe"
                   >
                     <ArrowRight className="h-4 w-4" />
@@ -161,7 +173,7 @@ const Footer = () => {
                   viewport={{ once: true }}
                   transition={{ delay: 0.08 * i }}
                   whileHover={{ y: -3, rotate: 2 }}
-                  className="text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  className="text-gray-500 hover:text-[#5D6B7B] transition-colors"
                   title={s.label}
                 >
                   <s.icon size={20} />
@@ -182,12 +194,15 @@ const Footer = () => {
               <h3 className="relative inline-block text-sm font-semibold text-gray-900 dark:text-white mb-4">
                 {col.title}
                 <motion.span
-                  className="absolute -bottom-1 left-0 h-0.5 w-full bg-gradient-to-r from-indigo-600 to-purple-600"
+                  className="absolute -bottom-1 left-0 h-0.5 w-full"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
+                  }}
                   initial={{ scaleX: 0 }}
                   whileInView={{ scaleX: 1 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, delay: 0.15 }}
-                  style={{ transformOrigin: "left" }}
                 />
               </h3>
 
@@ -212,14 +227,14 @@ const Footer = () => {
                           href={link.href}
                           target={link.href.startsWith("http") ? "_blank" : undefined}
                           rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
-                          className="group flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 transition-colors"
+                          className="group flex items-center gap-2 text-sm text-gray-600 hover:text-[#5D6B7B] dark:text-gray-300 dark:hover:text-[#AFBAC7] transition-colors"
                         >
                           {content}
                         </a>
                       ) : (
                         <Link
                           to={link.href}
-                          className="group flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 transition-colors"
+                          className="group flex items-center gap-2 text-sm text-gray-600 hover:text-[#5D6B7B] dark:text-gray-300 dark:hover:text-[#AFBAC7] transition-colors"
                         >
                           {content}
                         </Link>
@@ -243,13 +258,13 @@ const Footer = () => {
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <p>© {new Date().getFullYear()} a4ai — All rights reserved.</p>
             <div className="flex gap-4">
-              <Link to="/terms" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+              <Link to="/terms" className="hover:text-[#5D6B7B] transition-colors">
                 Terms of Service
               </Link>
-              <Link to="/privacy" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+              <Link to="/privacy" className="hover:text-[#5D6B7B] transition-colors">
                 Privacy Policy
               </Link>
-              <Link to="/cookies" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+              <Link to="/cookies" className="hover:text-[#5D6B7B] transition-colors">
                 Cookie Policy
               </Link>
             </div>

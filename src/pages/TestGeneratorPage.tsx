@@ -1,4 +1,4 @@
-// src/pages/TestGeneratorPage.tsx
+// /src/pages/TestGeneratorPage.tsx
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
@@ -6,34 +6,17 @@ import DashboardSidebar from "@/components/DashboardSidebar";
 import TestGeneratorForm, { TestGeneratorFormValues } from "@/components/TestGeneratorForm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateTest } from "@/lib/generateTest";
+import { fetchRecentPapers, type PaperRow } from "@/lib/history";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, RefreshCw, FileText, Sparkles, Loader2, ArrowRight, Clock } from "lucide-react";
+import { Download, RefreshCw, Sparkles, Loader2, ArrowRight } from "lucide-react";
 
 /* ----------------------------- Types ----------------------------- */
 type LastMeta = { subject?: string; difficulty?: string; qCount?: number } | null;
 
-type TestHistoryRow = {
-  id: string;
-  created_at: string | null;
-  subject: string | null;
-  topic: string | null;
-  difficulty: string | null;
-  question_type: string | null;
-  q_count: number | null;
-  output_format: string | null;
-  storage_path: string | null;
-  file_url: string | null; // aliased from signed_url if old schema
-  status: string | null;
-  // (fallback-only fields)
-  _size?: number | null;
-};
-
-const BUCKET = "tests";
-
 /* --------------------------- Helpers ---------------------------- */
 const mapDifficulty = (d?: string) => {
   if (!d) return "Easy";
-  const v = d.toLowerCase();
+  const v = d.trim().toLowerCase();
   if (v === "easy") return "Easy";
   if (v === "medium") return "Medium";
   if (v === "hard") return "Hard";
@@ -42,15 +25,13 @@ const mapDifficulty = (d?: string) => {
 
 const mapQuestionType = (t?: string) => {
   if (!t) return "Multiple Choice";
-  const v = t.toLowerCase();
+  const v = t.trim().toLowerCase();
   if (["mcq", "multiplechoice", "multiple choice"].includes(v)) return "Multiple Choice";
   if (["short", "short answer", "shortanswer"].includes(v)) return "Short Answer";
   return "Mixed";
 };
 
 const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleString() : "-");
-const fmtBytes = (b?: number | null) =>
-  typeof b === "number" ? (b < 1024 ? `${b} B` : b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`) : "-";
 
 /* ------------------------------ Page ---------------------------- */
 const TestGeneratorPage = () => {
@@ -59,142 +40,102 @@ const TestGeneratorPage = () => {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [lastMeta, setLastMeta] = useState<LastMeta>(null);
 
-  // History
-  const [rows, setRows] = useState<TestHistoryRow[]>([]);
+  // History state
+  const [rows, setRows] = useState<PaperRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  /* --------- Fallback: list from Storage if DB empty/error --------- */
-  const listFromStorage = useCallback(async (userId: string): Promise<TestHistoryRow[]> => {
-    const { data: list, error } = await supabase.storage.from(BUCKET).list(`${userId}`, {
-      limit: 100,
-      sortBy: { column: "created_at", order: "desc" },
-    });
-    if (error || !list) return [];
-
-    return list
-      .filter((f) => f.name?.toLowerCase().endsWith(".pdf"))
-      .map((f) => ({
-        id: `stor:${f.id ?? `${userId}/${f.name}`}`,
-        created_at: (f as any).created_at ?? null,
-        subject: "—",
-        topic: null,
-        difficulty: null,
-        question_type: null,
-        q_count: null,
-        output_format: "PDF",
-        storage_path: `${userId}/${f.name}`,
-        file_url: null,
-        status: "stored",
-        _size: (f as any)?.metadata?.size ?? null,
-      }));
-  }, []);
-
-  /* --------- Primary: fetch from DB; else fallback to Storage --------- */
+  /* --------- Refresh history from DB --------- */
   const refreshHistory = useCallback(async () => {
     try {
       setHistoryLoading(true);
-      const { data: { user }, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !user) { setRows([]); return; }
-
-      // try DB first
-      const { data, error } = await supabase
-        .from("tests")
-        .select(`
-          id, created_at, subject, topic, difficulty, question_type, q_count,
-          output_format, storage_path,
-          file_url:signed_url,
-          status
-        `)
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      if (!error && data && data.length > 0) {
-        setRows(data as TestHistoryRow[]);
-        return;
-      }
-
-      // fallback to Storage listing
-      const stor = await listFromStorage(user.id);
-      setRows(stor);
+      const r = await fetchRecentPapers(20);
+      setRows(r);
     } catch (e: any) {
       console.error("History error:", e);
-      // even on DB failure, attempt storage fallback
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const stor = await listFromStorage(user.id);
-          setRows(stor);
-        }
-      } catch {}
-      toast({ title: "History issue", description: String(e?.message || e) });
+      toast({
+        title: "History issue",
+        description: String(e?.message || e),
+      });
     } finally {
       setHistoryLoading(false);
     }
-  }, [listFromStorage, toast]);
-
-  useEffect(() => { refreshHistory(); }, [refreshHistory]);
-
-  /* --------- Download helper --------- */
-  const openHistoryDownload = useCallback(async (row: TestHistoryRow) => {
-    try {
-      if (row.file_url) { window.open(row.file_url, "_blank", "noopener,noreferrer"); return; }
-      if (!row.storage_path) throw new Error("Missing storage path");
-      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(row.storage_path, 60 * 10);
-      if (error || !data?.signedUrl) throw new Error(error?.message || "Failed to sign URL");
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-    } catch (e: any) {
-      toast({ title: "Download failed", description: String(e?.message || e) });
-    }
   }, [toast]);
 
+  useEffect(() => {
+    refreshHistory();
+  }, [refreshHistory]);
+
+  // revoke previous blob URLs when component unmounts or downloadUrl changes
+  useEffect(() => {
+    return () => {
+      if (downloadUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(downloadUrl);
+      }
+    };
+  }, [downloadUrl]);
+
   /* --------- Generate handler --------- */
-  const handleGenerateTest = async (formData: TestGeneratorFormValues): Promise<string | null> => {
+  const handleGenerateTest = async (
+    formData: TestGeneratorFormValues
+  ): Promise<string | null> => {
+    let objectUrlToRevoke: string | null = null;
+
     try {
       setLoading(true);
       setDownloadUrl(null);
 
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !user) { toast({ title: "Login required", description: "Please sign in." }); throw new Error("Not logged in"); }
+      if (userErr || !user) {
+        toast({ title: "Login required", description: "Please sign in." });
+        throw new Error("Not logged in");
+      }
+
+      const qCount = Math.max(5, Number(formData?.qCount ?? (formData as any)?.itemCount ?? 5));
 
       const payload = {
         userId: user.id,
-        subject: formData?.subject || "Maths",
+        subject: (formData?.subject || "Maths").trim(),
         difficulty: mapDifficulty(formData?.difficulty),
         questionType: mapQuestionType(formData?.questionType),
-        qCount: Number(formData?.qCount ?? (formData as any)?.itemCount ?? 5),
+        qCount,
         outputFormat: "PDF" as const,
       };
 
+      // unified API: { ok, url, meta, json, used }
       const res = await generateTest(payload, { timeoutMs: 90_000 });
 
-      if (res.kind === "json") {
-        const url = res.json.publicUrl || res.json.downloadUrl || null;
-        if (url) {
-          setDownloadUrl(url);
-        } else if (res.json.filePath || res.json.storagePath) {
-          const filePath = (res.json.filePath || res.json.storagePath)!;
-          const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, 60 * 30);
-          if (error || !data?.signedUrl) throw new Error(error?.message || "Failed to generate download link");
-          setDownloadUrl(data.signedUrl);
-        } else {
-          throw new Error("File URL/path missing in response");
-        }
-      } else {
-        const link = URL.createObjectURL(res.blob);
-        setDownloadUrl(link);
+      let finalUrl = res.url;
+
+      // In rare cases, client lib may return a blob URL (streamed PDF path).
+      if (finalUrl.startsWith("blob:")) {
+        objectUrlToRevoke = finalUrl;
       }
 
-      setLastMeta({ subject: payload.subject, difficulty: payload.difficulty, qCount: payload.qCount });
+      if (!finalUrl) throw new Error("File URL missing in response");
+
+      setDownloadUrl(finalUrl);
+      setLastMeta({
+        subject: payload.subject,
+        difficulty: payload.difficulty,
+        qCount: payload.qCount,
+      });
+
       await refreshHistory();
       toast({ title: "Generated 🎉", description: "Your PDF is ready to download." });
-      return downloadUrl;
+      return finalUrl;
     } catch (err: any) {
       console.error("Generation Error:", err);
-      toast({ title: "Failed", description: String(err?.message || err) || "Could not generate test.", variant: "destructive" });
+      toast({
+        title: "Failed",
+        description: String(err?.message || err) || "Could not generate test.",
+        variant: "destructive",
+      });
       return null;
     } finally {
       setLoading(false);
+      if (objectUrlToRevoke) {
+        setTimeout(() => URL.revokeObjectURL(objectUrlToRevoke!), 0);
+      }
     }
   };
 
@@ -224,11 +165,6 @@ const TestGeneratorPage = () => {
                 <p className="text-sm text-zinc-500">As Fast as Light</p>
               </div>
             </div>
-
-            <div className="hidden md:flex items-center gap-2 text-xs text-zinc-500">
-              <Clock className="h-4 w-4" />
-              <span>Avg ~30s per paper</span>
-            </div>
           </div>
         </header>
 
@@ -237,22 +173,9 @@ const TestGeneratorPage = () => {
           <div className="max-w-6xl mx-auto px-6 py-8">
             {/* Tabs */}
             <Tabs defaultValue="test-generator" className="w-full">
-              <TabsList className="relative grid grid-cols-3 bg-zinc-100/70 rounded-xl overflow-hidden p-1">
-                <TabsTrigger value="test-generator" className="relative rounded-lg data-[state=active]:text-zinc-900">
-                  <div className="relative z-10 flex items-center gap-2 px-2 py-1">
-                    <Sparkles className="h-4 w-4" /> Generate
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="history" className="relative rounded-lg data-[state=active]:text-zinc-900">
-                  <div className="relative z-10 flex items-center gap-2 px-2 py-1">
-                    <FileText className="h-4 w-4" /> History
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="analytics" className="relative rounded-lg data-[state=active]:text-zinc-900">
-                  <div className="relative z-10 flex items-center gap-2 px-2 py-1">
-                    <Clock className="h-4 w-4" /> Analytics
-                  </div>
-                </TabsTrigger>
+              <TabsList className="relative grid grid-cols-2 bg-zinc-100/70 rounded-xl overflow-hidden p-1">
+                <TabsTrigger value="test-generator">Generate</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
 
               {/* Generate */}
@@ -324,115 +247,46 @@ const TestGeneratorPage = () => {
                       className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm hover:bg-zinc-50"
                       disabled={historyLoading}
                     >
-                      {historyLoading ? (<><Loader2 className="h-4 w-4 animate-spin" />Refreshing…</>) : (<><RefreshCw className="h-4 w-4" />Refresh</>)}
+                      {historyLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Refreshing…
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4" />
+                          Refresh
+                        </>
+                      )}
                     </button>
                   </div>
 
-                  {/* Loading skeleton */}
-                  {historyLoading && rows.length === 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[...Array(4)].map((_, i) => (
-                        <div key={i} className="rounded-xl border overflow-hidden bg-white shadow-sm">
-                          <div className="animate-pulse h-28 bg-zinc-100" />
-                          <div className="p-4 space-y-2">
-                            <div className="h-4 bg-zinc-100 rounded w-3/5" />
-                            <div className="h-3 bg-zinc-100 rounded w-2/5" />
-                            <div className="h-3 bg-zinc-100 rounded w-1/3" />
+                  {!rows.length ? (
+                    <div className="text-sm opacity-70">
+                      {historyLoading ? "Loading…" : "No papers yet."}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {rows.map((r) => (
+                        <div
+                          key={r.id}
+                          className="border rounded p-2 flex items-center justify-between text-sm"
+                        >
+                          <div>
+                            <div className="font-medium">
+                              {r.subject || "Paper"} — {r.grade ?? ""} {r.board ? `• ${r.board}` : ""}
+                            </div>
+                            <div className="opacity-70">
+                              Q:{r.q_count ?? "-"} • {r.question_type ?? "-"} • {r.difficulty ?? "-"} • {fmtDate(r.created_at)}
+                            </div>
                           </div>
+                          <a href={r.pdf_url} target="_blank" className="underline">
+                            Open
+                          </a>
                         </div>
                       ))}
                     </div>
-                  ) : rows.length === 0 ? (
-                    <div className="rounded-2xl border bg-gradient-to-r from-zinc-50 to-white p-10 text-center">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-white">
-                        <FileText className="h-6 w-6" />
-                      </div>
-                      <h3 className="text-lg font-semibold">No tests yet</h3>
-                      <p className="mt-1 text-sm text-zinc-500">
-                        Generate your first paper from the <span className="font-medium">Generate</span> tab.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <AnimatePresence>
-                        {rows.map((r) => (
-                          <motion.div
-                            key={r.id}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 8 }}
-                            transition={{ duration: 0.25 }}
-                            className="group rounded-xl border bg-white/90 shadow-sm ring-1 ring-black/5 hover:shadow-md transition"
-                          >
-                            <div className="p-4 flex items-start gap-3">
-                              <div className="h-10 w-10 inline-flex items-center justify-center rounded-lg bg-zinc-900 text-white">
-                                <FileText className="h-5 w-5" />
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <div className="font-medium truncate">
-                                    {r.subject || "Untitled"}
-                                    {r.topic ? <span className="text-zinc-500"> — {r.topic}</span> : null}
-                                  </div>
-                                  <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
-                                    {r.difficulty || "-"}
-                                  </span>
-                                </div>
-
-                                <div className="mt-1 text-sm text-zinc-500 flex flex-wrap items-center gap-3">
-                                  <span>{typeof r.q_count === "number" ? `${r.q_count} Qs` : "-"}</span>
-                                  <span className="inline-flex items-center gap-1">
-                                    <Clock className="h-3.5 w-3.5" />
-                                    {fmtDate(r.created_at)}
-                                  </span>
-                                  {r._size != null && <span>{fmtBytes(r._size)}</span>}
-                                  {r.status && (
-                                    <span className="rounded-full bg-emerald-50 text-emerald-600 px-2 py-0.5 text-xs">
-                                      {r.status}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="mt-3 flex items-center gap-2">
-                                  <button
-                                    onClick={() => openHistoryDownload(r)}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-                                  >
-                                    <Download className="h-4 w-4" />
-                                    Download
-                                  </button>
-                                  {r.file_url && (
-                                    <a
-                                      href={r.file_url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm hover:bg-zinc-50"
-                                    >
-                                      Open link <ArrowRight className="h-4 w-4" />
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </AnimatePresence>
-                    </div>
                   )}
-                </motion.section>
-              </TabsContent>
-
-              {/* Analytics placeholder */}
-              <TabsContent value="analytics">
-                <motion.section
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35 }}
-                  className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm ring-1 ring-black/5"
-                >
-                  <h2 className="text-xl font-semibold mb-4">Test Analytics</h2>
-                  <p className="text-zinc-500">Charts coming soon: subjects, difficulty mix, time saved, etc.</p>
                 </motion.section>
               </TabsContent>
             </Tabs>

@@ -1,29 +1,38 @@
+// Hero — Halenoir Expanded, tighter lines, CTAs pushed lower
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { motion, useMotionValue, useTransform, useMotionTemplate } from "framer-motion";
-import { ArrowRight, Sparkles, Zap, BookOpen, BarChart2, Check } from "lucide-react";
+import {
+  motion,
+  useMotionValue,
+  useTransform,
+  useSpring,
+} from "framer-motion";
+import { ArrowRight, Play, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 
 const features = [
-  { icon: <Zap className="h-4 w-4" />, text: "AI-Powered" },
-  { icon: <BookOpen className="h-4 w-4" />, text: "Curriculum-Aligned" },
-  { icon: <BarChart2 className="h-4 w-4" />, text: "Real Analytics" },
-  { icon: <Check className="h-4 w-4" />, text: "Instant Generation" },
+  { icon: <span className="inline-block h-1.5 w-1.5 rounded-full bg-sky-500" />, text: "AI-Powered" },
+  { icon: <span className="inline-block h-1.5 w-1.5 rounded-full bg-sky-600" />, text: "Curriculum-Aligned" },
+  { icon: <span className="inline-block h-1.5 w-1.5 rounded-full bg-slate-500" />, text: "Real Analytics" },
+  { icon: <span className="inline-block h-1.5 w-1.5 rounded-full bg-slate-600" />, text: "Instant Generation" },
 ];
 
+const CENTER_X = 300;
+const CENTER_Y = 140;
+
 export default function LandingHero() {
-  // cursor values for parallax + magnetic CTA
-  const mx = useMotionValue(0);
-  const my = useMotionValue(0);
+  const mx = useMotionValue(CENTER_X);
+  const my = useMotionValue(CENTER_Y);
+  const spring = { stiffness: 120, damping: 18, mass: 0.5 };
 
-  const blobX = useTransform(mx, v => v / 12);
-  const blobY = useTransform(my, v => v / 12);
+  const blobX = useSpring(useTransform(mx, (v) => v / 12), spring);
+  const blobY = useSpring(useTransform(my, (v) => v / 12), spring);
 
-  const badgeX = useTransform(mx, v => v / 25);
-  const badgeY = useTransform(my, v => v / 25);
+  const badgeX = useSpring(useTransform(mx, (v) => v / 25), spring);
+  const badgeY = useSpring(useTransform(my, (v) => v / 25), spring);
 
-  const magneticX = useTransform(mx, v => (v - 200) / 50);
-  const magneticY = useTransform(my, v => (v - 60) / 50);
+  const magneticX = useSpring(useTransform(mx, (v) => (v - 200) / 50), spring);
+  const magneticY = useSpring(useTransform(my, (v) => (v - 60) / 50), spring);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
@@ -32,134 +41,168 @@ export default function LandingHero() {
   };
 
   useEffect(() => {
-    // mobile safety: center values so the hero looks good without mouse
-    mx.set(300);
-    my.set(140);
+    mx.set(CENTER_X);
+    my.set(CENTER_Y);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <section
-      onMouseMove={handleMouseMove}
-      className="relative isolate overflow-hidden"
-    >
-      {/* BACKGROUND — gradient mesh blobs */}
-      <div className="absolute inset-0 -z-10">
-        <motion.div
+    <section onMouseMove={handleMouseMove} className="relative isolate overflow-hidden">
+      {/* BG */}
+      <div className="absolute inset-0 -z-20">
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(140deg, #F6F9FF 0%, #E9EEF7 48%, #DCE3ED 100%)" }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none"
           style={{
-            translateX: blobX,
-            translateY: blobY,
+            background:
+              "radial-gradient(60rem 36rem at 50% 35%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.78) 40%, rgba(255,255,255,0) 70%)",
           }}
-          className="absolute -top-24 -left-24 h-[42rem] w-[42rem] rounded-full blur-3xl"
-        >
-          <div className="h-full w-full bg-[radial-gradient(closest-side,_rgba(99,102,241,0.25),_transparent_70%)] dark:bg-[radial-gradient(closest-side,_rgba(99,102,241,0.2),_transparent_70%)]" />
-        </motion.div>
-
-        <motion.div
-          style={{
-            translateX: useTransform(blobX, v => -v),
-            translateY: useTransform(blobY, v => v / 2),
-          }}
-          className="absolute -bottom-32 -right-24 h-[40rem] w-[40rem] rounded-full blur-3xl"
-        >
-          <div className="h-full w-full bg-[radial-gradient(closest-side,_rgba(168,85,247,0.25),_transparent_70%)] dark:bg-[radial-gradient(closest-side,_rgba(168,85,247,0.2),_transparent_70%)]" />
-        </motion.div>
-
-        {/* subtle grain */}
-        <div className="absolute inset-0 opacity-[0.06] mix-blend-overlay pointer-events-none"
-             style={{
-               backgroundImage:
-                 "url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.8%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%2240%22 height=%2240%22 filter=%22url(%23n)%22 opacity=%220.25%22/></svg>')"
-             }}
+        />
+        <div
+          aria-hidden
+          className="absolute -left-40 bottom-10 h-[28rem] w-[28rem] rounded-[9999px] blur-3xl opacity-40"
+          style={{ background: "radial-gradient(closest-side, rgba(56,189,248,0.35), transparent 70%)" }}
+        />
+        <div
+          aria-hidden
+          className="absolute -right-56 top-24 h-[30rem] w-[30rem] rounded-[9999px] blur-3xl opacity-35"
+          style={{ background: "radial-gradient(closest-side, rgba(251,146,255,0.28), transparent 70%)" }}
         />
       </div>
 
-      {/* LIGHT GRID */}
+      {/* light grid */}
       <div className="absolute inset-0 -z-10 opacity-[0.05] [background-image:linear-gradient(to_right,_#000_1px,_transparent_1px),linear-gradient(to_bottom,_#000_1px,_transparent_1px)] [background-size:48px_48px]" />
 
+      {/* subtle blobs */}
+      <motion.div
+        style={{ x: blobX, y: blobY }}
+        className="absolute -top-24 -left-24 h-[42rem] w-[42rem] rounded-full blur-3xl opacity-60 -z-10"
+      >
+        <div
+          className="h-full w-full"
+          style={{ background: "radial-gradient(closest-side, rgba(110,124,142,0.22), transparent 70%)" }}
+        />
+      </motion.div>
+      <motion.div
+        style={{ x: useTransform(blobX, (v) => -v), y: useTransform(blobY, (v) => v / 2) }}
+        className="absolute -bottom-32 -right-24 h-[40rem] w-[40rem] rounded-full blur-3xl opacity-60 -z-10"
+      >
+        <div
+          className="h-full w-full"
+          style={{ background: "radial-gradient(closest-side, rgba(173,184,199,0.20), transparent 70%)" }}
+        />
+      </motion.div>
+
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 pb-24 md:pt-28 md:pb-36">
-        {/* Floating badge */}
+        {/* badge */}
         <motion.div
           style={{
-            translateX: badgeX,
-            translateY: badgeY,
+            x: badgeX,
+            y: badgeY,
+            border: "1px solid var(--stroke, #E4E9F0)",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))",
           }}
-          className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-2 backdrop-blur"
+          className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full px-4 py-2 backdrop-blur"
         >
-          <Sparkles className="h-4 w-4 text-indigo-600" />
-          <span className="text-sm font-medium tracking-wide text-gray-700 dark:text-gray-200">
+          <Sparkles className="h-4 w-4" style={{ color: "var(--brand-600, #5D6B7B)" }} />
+          <span className="text-sm font-medium tracking-wide" style={{ color: "var(--muted-700, #4E5A66)" }}>
             Think Beyond
           </span>
         </motion.div>
 
-        {/* HEADLINE */}
+        {/* HEADLINE — Halenoir, tighter tracking & line height */}
         <div className="text-center">
-          <motion.h1
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="font-extrabold leading-[0.95] tracking-tight
-                       text-5xl sm:text-6xl md:text-7xl lg:text-8xl
-                       text-gray-900 dark:text-white"
-            style={{ fontStretch: "condensed" as any }}
-          >
-            <span className="bg-clip-text text-transparent bg-[linear-gradient(90deg,#4f46e5_0%,#a855f7_50%,#ec4899_100%)] bg-[length:200%_100%] animate-[bg-pan_8s_linear_infinite]">
+          <h1 className="font-halenoir font-semibold tracking-[-0.02em] leading-[0.86]">
+            <span
+              className="block bg-clip-text text-transparent text-[clamp(2.6rem,8vw,8rem)]"
+              style={{
+                backgroundImage: "linear-gradient(90deg,#2F3A44 0%,#4F6274 40%,#2F3A44 100%)",
+                backgroundSize: "220% 100%",
+                animation: "bg-pan 10s linear infinite",
+              }}
+            >
               Smartest. Tests. Ever.
             </span>
-            <br />
-            <span className="mt-3 inline-block">
+
+            <span
+              className="mt-1 block font-halenoir text-[clamp(1.25rem,2.6vw,2.2rem)] font-semibold tracking-[-0.012em] leading-[1.02]"
+              style={{ color: "var(--ink-800, #2F3A44)" }}
+            >
               The Teacher’s Assessment Co-Pilot
             </span>
-          </motion.h1>
+          </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.5 }}
-            className="mx-auto mt-6 max-w-3xl text-lg sm:text-xl text-gray-600 dark:text-gray-300"
+          <p
+            className="mx-auto mt-6 max-w-3xl text-[clamp(0.98rem,1.4vw,1.125rem)]"
+            style={{ color: "var(--muted-600, #5D6B7B)" }}
           >
-            Generate & host curriculum-perfect tests in under 2 minutes—then track what actually matters.
-          </motion.p>
+            Generate & host curriculum-perfect tests in under 2 minutes — then track what actually matters.
+          </p>
 
-          {/* CTA Row (magnetic primary) */}
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+          {/* CTAs pushed further down */}
+          <div className="relative mt-16 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-x-10 top-3 h-20 rounded-xl blur-2xl"
+              style={{
+                background:
+                  "radial-gradient(14rem 5rem at 35% 50%, rgba(59,130,246,0.4), transparent 60%), radial-gradient(12rem 5rem at 70% 50%, rgba(17,24,39,0.5), transparent 60%)",
+              }}
+            />
+
+            {/* primary */}
             <motion.div style={{ x: magneticX, y: magneticY }}>
               <Link to="/signup">
                 <Button
                   size="lg"
-                  className="relative px-8 py-6 text-lg font-semibold
-                             bg-gradient-to-r from-indigo-600 to-purple-600
-                             hover:from-indigo-700 hover:to-purple-700
-                             shadow-lg hover:shadow-xl transition-all rounded-2xl"
+                  className="relative h-12 rounded-lg px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(59,130,246,0.25)] transition-transform"
+                  style={{
+                    background: "linear-gradient(180deg, #93C5FD 0%, #3B82F6 75%)",
+                    border: "1px solid rgba(59,130,246,0.45)",
+                  }}
                 >
-                  Get Started Free
+                  Get Started
                   <ArrowRight className="ml-2 h-5 w-5" />
-                  <motion.span
+                  <span
                     aria-hidden
-                    className="pointer-events-none absolute inset-0 rounded-2xl"
+                    className="pointer-events-none absolute inset-0 rounded-lg"
                     style={{
-                      background: useMotionTemplate`
-                        radial-gradient(120px at ${mx}px ${my}px, rgba(255,255,255,0.18), transparent 70%)
-                      `,
+                      background: "linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 40%)",
                     }}
                   />
                 </Button>
               </Link>
             </motion.div>
 
+            {/* secondary */}
             <Link to="/demo">
               <Button
-                variant="outline"
                 size="lg"
-                className="px-8 py-6 text-lg font-semibold rounded-2xl border-gray-300/70 dark:border-white/20 hover:bg-white/60 dark:hover:bg-white/10 transition"
+                className="relative h-12 rounded-lg px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(17,24,39,0.3)]"
+                style={{
+                  background: "linear-gradient(180deg, #374151 0%, #111827 85%)",
+                  border: "1px solid rgba(17,24,39,0.5)",
+                }}
               >
+                <Play className="mr-2 h-5 w-5" />
                 Watch Demo
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 rounded-lg"
+                  style={{
+                    background: "linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 45%)",
+                  }}
+                />
               </Button>
             </Link>
           </div>
 
-          {/* Marquee of feature pills */}
-          <div className="relative mt-14 overflow-hidden">
+          {/* marquee */}
+          <div className="relative mt-12 overflow-hidden">
             <motion.div
               initial={{ x: 0 }}
               animate={{ x: ["0%", "-50%"] }}
@@ -169,33 +212,27 @@ export default function LandingHero() {
               {[...Array(2)].flatMap(() => features).map((f, i) => (
                 <div
                   key={i}
-                  className="mx-1 inline-flex items-center gap-2 rounded-full border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/5 px-4 py-2 backdrop-blur text-sm text-gray-700 dark:text-gray-200"
+                  className="mx-1 inline-flex items-center gap-2 rounded-full px-4 py-2 backdrop-blur text-sm"
+                  style={{
+                    border: "1px solid var(--stroke, #E4E9F0)",
+                    background: "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))",
+                    color: "var(--muted-700, #4E5A66)",
+                  }}
                 >
                   {f.icon}
                   <span>{f.text}</span>
                 </div>
               ))}
             </motion.div>
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-white dark:from-gray-950 to-transparent" />
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-white dark:from-gray-950 to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-white to-transparent" />
           </div>
         </div>
       </div>
-
-      {/* bottom divider */}
-      <motion.div
-        initial={{ scaleX: 0, opacity: 0 }}
-        animate={{ scaleX: 1, opacity: 1 }}
-        transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent"
-      />
     </section>
   );
 }
 
-/* Tailwind keyframes (add once in globals.css if you don't already have it)
-@keyframes bg-pan { 
-  0% { background-position: 0% 50% } 
-  100% { background-position: 200% 50% } 
-}
+/* globals.css (keep)
+@keyframes bg-pan { 0% { background-position: 0% 50% } 100% { background-position: 200% 50% } } 
 */

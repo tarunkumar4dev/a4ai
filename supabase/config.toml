@@ -4,4 +4,4 @@ project_id = "dcmnzvjftmdbywrjkust"
 major_version = 15
 
 [functions.generate-test]
-verify_jwt = true
+verify_jwt = false

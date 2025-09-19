@@ -1,5 +1,7 @@
 // src/App.tsx
 import { useEffect, useRef, Suspense, lazy } from "react";
+// src/main.tsx (or src/App.tsx – anywhere that runs once at app start)
+import "./styles/globals.css";
 import {
   BrowserRouter,
   Routes,

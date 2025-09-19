@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/context/ThemeContext";
-import LanguagePicker from "@/components/LanguagePicker"; // ⬅️ new
+import LanguagePicker from "@/components/LanguagePicker";
 
 import {
   motion,
@@ -26,13 +26,12 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  // determine active item by URL
   const { pathname } = useLocation();
   const activeName =
     navItems.find((n) => (n.path === "/" ? pathname === "/" : pathname.startsWith(n.path)))?.name ??
     "Home";
 
-  // cursor-reactive glow
+  // subtle cursor glow
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -40,37 +39,56 @@ export default function Navbar() {
     mx.set(e.clientX - r.left);
     my.set(e.clientY - r.top);
   };
-
   const glow = useMotionTemplate`
-    radial-gradient(140px 80px at ${mx}px ${my}px, rgba(99,102,241,0.15), transparent 70%),
-    radial-gradient(160px 90px at ${mx}px ${my}px, rgba(168,85,247,0.12), transparent 75%)
+    radial-gradient(140px 80px at ${mx}px ${my}px, rgba(93,107,123,0.10), transparent 70%),
+    radial-gradient(160px 90px at ${mx}px ${my}px, rgba(175,186,199,0.08), transparent 75%)
   `;
+
+  // hero-matching background
+  const heroBase = "linear-gradient(140deg, #F6F9FF 0%, #E9EEF7 48%, #DCE3ED 100%)";
+  const heroBloom =
+    "radial-gradient(40rem 22rem at 50% 0%, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 70%)";
 
   return (
     <nav className="sticky top-0 z-50">
       <div
         onMouseMove={onMouseMove}
-        className="relative border-b border-gray-200/80 dark:border-gray-800/80 bg-white/75 dark:bg-gray-950/60 backdrop-blur-xl"
+        className="relative backdrop-blur-xl" // ⬅️ removed border-b
+        style={{
+          backgroundImage: `${heroBloom}, ${heroBase}`,
+        }}
       >
         {/* soft animated glow */}
         <motion.div
           aria-hidden
-          className="absolute inset-0 -z-10 opacity-70 pointer-events-none"
+          className="absolute inset-0 -z-10 opacity-80 pointer-events-none"
           style={{ backgroundImage: glow }}
         />
 
-        {/* subtle gradient hairline */}
-        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
+        {/* ⬇️ removed the gradient hairline entirely */}
 
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           {/* Logo */}
           <Link to="/" className="flex items-center">
             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="flex items-center gap-2">
               <img src="/ICON.ico" alt="a4ai" className="h-8 w-8" />
-              <span className="text-xl font-extrabold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              <span
+                className="text-xl font-extrabold bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(90deg, #2F3A44 0%, #5F7388 50%, #2F3A44 100%)",
+                }}
+              >
                 a4ai
               </span>
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+              <span
+                className="ml-2 rounded-full px-2 py-0.5 text-xs font-medium"
+                style={{
+                  background: "rgba(255,255,255,0.75)",
+                  color: "#4E5A66",
+                  boxShadow: "0 0 0 1px rgba(228,233,240,0.9) inset",
+                }}
+              >
                 βeta
               </span>
             </motion.div>
@@ -83,21 +101,18 @@ export default function Navbar() {
               return (
                 <Link key={item.name} to={item.path} className="relative px-3 py-2">
                   <motion.span
-                    className={`text-sm font-medium transition-colors ${
-                      active
-                        ? "text-gray-900 dark:text-white"
-                        : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-                    }`}
+                    className="text-sm font-medium transition-colors"
+                    style={{ color: active ? "#2F3A44" : "#5D6B7B" }}
                   >
                     {item.name}
                   </motion.span>
 
-                  {/* animated active underline */}
                   <AnimatePresence>
                     {active && (
                       <motion.span
                         layoutId="activeNavLine"
-                        className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600"
+                        className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full"
+                        style={{ background: "linear-gradient(90deg, #5D6B7B, #AFBAC7)" }}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -117,7 +132,8 @@ export default function Navbar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 text-gray-600 hover:bg-gray-100/60 dark:text-gray-300 dark:hover:bg-gray-800/60"
+                className="h-9 w-9"
+                style={{ color: "#5D6B7B" }}
                 onClick={() => setSearchOpen((s) => !s)}
                 aria-label="Search"
                 aria-expanded={searchOpen}
@@ -130,7 +146,8 @@ export default function Navbar() {
                     initial={{ opacity: 0, width: 0 }}
                     animate={{ opacity: 1, width: 220 }}
                     exit={{ opacity: 0, width: 0 }}
-                    className="absolute right-0 top-0 ml-2 h-9 overflow-hidden rounded-full border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
+                    className="absolute right-0 top-0 ml-2 h-9 overflow-hidden rounded-full border bg-white shadow-sm dark:bg-gray-900"
+                    style={{ borderColor: "rgba(228,233,240,0.9)" }}
                   >
                     <input
                       autoFocus
@@ -143,7 +160,7 @@ export default function Navbar() {
               </AnimatePresence>
             </motion.div>
 
-            {/* Language (popover) */}
+            {/* Language */}
             <div className="hidden sm:block">
               <LanguagePicker />
             </div>
@@ -152,7 +169,8 @@ export default function Navbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 text-gray-600 hover:bg-gray-100/60 dark:text-gray-300 dark:hover:bg-gray-800/60"
+              className="h-9 w-9"
+              style={{ color: "#5D6B7B" }}
               onClick={toggleTheme}
               aria-label="Toggle theme"
               aria-pressed={theme === "dark"}
@@ -163,15 +181,12 @@ export default function Navbar() {
             {/* Auth (desktop) */}
             <div className="ml-1 hidden items-center gap-2 md:flex">
               <Link to="/login">
-                <Button
-                  variant="ghost"
-                  className="h-9 px-3 text-gray-700 hover:text-gray-900 hover:bg-gray-100/60 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-800/60"
-                >
+                <Button variant="ghost" className="h-9 px-3" style={{ color: "#5D6B7B" }}>
                   Sign in
                 </Button>
               </Link>
               <Link to="/signup">
-                <Button className="h-9 bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm transition hover:from-indigo-700 hover:to-purple-700 hover:shadow-md">
+                <Button className="h-9 text-white shadow-sm transition" style={{ background: "#5D6B7B" }}>
                   Get Started
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -182,7 +197,8 @@ export default function Navbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="ml-1 md:hidden text-gray-600 dark:text-gray-300"
+              className="ml-1 md:hidden"
+              style={{ color: "#5D6B7B" }}
               onClick={() => setMobileMenuOpen((m) => !m)}
               aria-label="Open menu"
               aria-expanded={mobileMenuOpen}
@@ -192,14 +208,14 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu (no top border now) */}
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden overflow-hidden border-t border-gray-200 dark:border-gray-800"
+              className="md:hidden overflow-hidden"
             >
               <div className="space-y-1 px-2 pt-2 pb-4">
                 {navItems.map((item) => {
@@ -209,11 +225,11 @@ export default function Navbar() {
                       key={item.name}
                       to={item.path}
                       onClick={() => setMobileMenuOpen(false)}
-                      className={`block rounded-md px-3 py-2 text-base font-medium transition-colors ${
-                        active
-                          ? "bg-indigo-50/70 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
-                          : "text-gray-700 hover:bg-gray-100/70 dark:text-gray-300 dark:hover:bg-gray-800/70"
-                      }`}
+                      className="block rounded-md px-3 py-2 text-base font-medium transition-colors"
+                      style={{
+                        color: active ? "#2F3A44" : "#5D6B7B",
+                        background: active ? "rgba(223,228,239,0.8)" : "transparent",
+                      }}
                     >
                       {item.name}
                     </Link>
@@ -221,19 +237,18 @@ export default function Navbar() {
                 })}
 
                 {/* Mobile controls */}
-                <div className="mt-3 border-t border-gray-200 pt-3 dark:border-gray-800">
-                  {/* Language picker (mobile) */}
+                <div className="mt-3">
                   <div className="mb-2">
                     <LanguagePicker />
                   </div>
 
                   <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" className="mb-2 w-full">
+                    <Button variant="outline" className="mb-2 w-full" style={{ borderColor: "rgba(228,233,240,0.9)" }}>
                       Sign in
                     </Button>
                   </Link>
                   <Link to="/signup" onClick={() => setMobileMenuOpen(false)}>
-                    <Button className="w-full bg-gradient-to-r from-indigo-600 to-purple-600">
+                    <Button className="w-full text-white" style={{ background: "#5D6B7B" }}>
                       Get Started
                     </Button>
                   </Link>

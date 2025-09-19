@@ -42,7 +42,7 @@ export default function LandingPage() {
 
         {/* How It Works */}
         <motion.section
-          className="bg-gradient-to-b from-gray-50 to-white py-20 dark:from-gray-900 dark:to-gray-950"
+          className="bg-gradient-to-b from-[#F2F5FA] to-white py-20 dark:from-gray-900 dark:to-gray-950"
           variants={container}
           initial="hidden"
           whileInView="show"
@@ -50,7 +50,13 @@ export default function LandingPage() {
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <motion.div className="mb-16 text-center" variants={fadeUp}>
-              <h2 className="mb-4 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-4xl font-extrabold text-transparent">
+              <h2
+                className="mb-4 text-4xl font-extrabold bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(90deg, #353D47 0%, #6E7C8E 50%, #353D47 100%)",
+                }}
+              >
                 How It Works
               </h2>
               <p className="mx-auto max-w-3xl text-xl text-gray-600 dark:text-gray-300">
@@ -67,8 +73,19 @@ export default function LandingPage() {
                   title: "Choose Your Specifications",
                   desc: "Select subject, difficulty, question type, and other parameters for your test.",
                   icon: (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      className="h-6 w-6"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                      />
                     </svg>
                   ),
                 },
@@ -76,8 +93,19 @@ export default function LandingPage() {
                   title: "AI Models Generate Content",
                   desc: "Multiple AI models create questions and answers based on your specifications.",
                   icon: (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      className="h-6 w-6"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                      />
                     </svg>
                   ),
                 },
@@ -85,21 +113,40 @@ export default function LandingPage() {
                   title: "Download Your Test Paper",
                   desc: "Get your professionally formatted test paper ready for distribution.",
                   icon: (
-                    <svg xmlns="http://www.w3.org/200/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      className="h-6 w-6"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      />
                     </svg>
                   ),
                 },
               ].map((item, i) => (
                 <motion.div
                   key={i}
-                  className="rounded-2xl border border-gray-100 bg-white p-8 shadow-xl transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl dark:border-gray-700 dark:bg-gray-800"
+                  className="rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
                   variants={fadeUp}
                 >
-                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+                  <div
+                    className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl text-white"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
+                    }}
+                  >
                     {item.icon}
                   </div>
-                  <h3 className="mb-3 text-xl font-bold dark:text-white">{item.title}</h3>
+                  <h3 className="mb-3 text-xl font-bold text-gray-900 dark:text-white">
+                    {item.title}
+                  </h3>
                   <p className="text-gray-600 dark:text-gray-300">{item.desc}</p>
                 </motion.div>
               ))}
@@ -118,7 +165,7 @@ export default function LandingPage() {
 
         {/* Testimonials */}
         <motion.section
-          className="bg-gradient-to-b from-gray-50 to-white py-20 dark:from-gray-900 dark:to-gray-950"
+          className="bg-gradient-to-b from-[#F2F5FA] to-white py-20 dark:from-gray-900 dark:to-gray-950"
           variants={container}
           initial="hidden"
           whileInView="show"
@@ -126,7 +173,9 @@ export default function LandingPage() {
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <motion.div className="mb-16 text-center" variants={fadeUp}>
-              <h2 className="mb-4 text-4xl font-extrabold text-gray-900 dark:text-white">What Educators Say</h2>
+              <h2 className="mb-4 text-4xl font-extrabold text-gray-900 dark:text-white">
+                What Educators Say
+              </h2>
               <p className="mx-auto max-w-3xl text-xl text-gray-600 dark:text-gray-300">
                 Thousands of teachers trust a4ai to save time and improve student outcomes.
               </p>
@@ -155,17 +204,36 @@ export default function LandingPage() {
               ].map((t, i) => (
                 <motion.div
                   key={i}
-                  className="rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800"
+                  className="rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
                   variants={fadeUp}
                 >
-                  <div className="mb-6 flex items-center">
-                    <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  <div
+                    className="mb-6 flex items-center"
+                  >
+                    <div
+                      className="mr-4 flex h-12 w-12 items-center justify-center rounded-full font-bold text-white"
+                      style={{
+                        background:
+                          "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
+                      }}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                        />
                       </svg>
                     </div>
                     <div>
-                      <p className="font-bold dark:text-white">{t.name}</p>
+                      <p className="font-bold text-gray-900 dark:text-white">{t.name}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{t.title}</p>
                     </div>
                   </div>
@@ -178,23 +246,31 @@ export default function LandingPage() {
 
         {/* Final CTA */}
         <motion.section
-          className="bg-gradient-to-r from-indigo-600 to-purple-600 py-20"
+          className="py-20"
+          style={{
+            background:
+              "linear-gradient(135deg, #DFE4EF 0%, #F6F9FF 100%)",
+          }}
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           transition={{ duration: 1 }}
           viewport={{ once: true }}
         >
           <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            <h2 className="mb-6 text-4xl font-extrabold tracking-tight text-white md:text-5xl">
+            <h2 className="mb-6 text-4xl font-extrabold tracking-tight text-[#353D47] md:text-5xl">
               Ready to Transform Your Assessment Process?
             </h2>
-            <p className="mx-auto mb-10 max-w-3xl text-xl text-white/90">
+            <p className="mx-auto mb-10 max-w-3xl text-xl text-[#4E5A66]">
               Join thousands of educators who are saving time and improving student outcomes with a4ai.
             </p>
             <Link to="/signup">
               <Button
                 size="lg"
-                className="rounded-xl bg-white px-10 py-6 text-lg font-semibold text-indigo-600 shadow-lg transition hover:bg-gray-100 hover:scale-105"
+                className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
+                style={{
+                  background: "#5D6B7B",
+                  color: "#fff",
+                }}
               >
                 Get Started For Free
               </Button>
@@ -214,19 +290,35 @@ export default function LandingPage() {
 function UpgradedCTA() {
   return (
     <motion.div variants={fadeUp} className="mx-auto mt-16 max-w-5xl">
-      <div className="relative overflow-hidden rounded-2xl border border-black/10 bg-white p-8 shadow-xl backdrop-blur
-                      dark:border-white/10 dark:bg-white/5">
-        {/* decorative frame (always BELOW content) */}
+      <div
+        className="relative overflow-hidden rounded-2xl border bg-white p-8 shadow-xl backdrop-blur
+                      dark:bg-white/5"
+        style={{ borderColor: "var(--stroke, #E4E9F0)" }}
+      >
+        {/* decorative frame (neutral grey-blue) */}
         <div
-          className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-1 ring-inset ring-transparent
-                     [background:linear-gradient(white,white)_padding-box,linear-gradient(90deg,rgba(99,102,241,.35),rgba(168,85,247,.35))_border-box]
-                     [border:1px_solid_transparent]" />
+          className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-1 ring-inset"
+          style={{
+            ringColor: "transparent",
+            background:
+              "linear-gradient(white,white) padding-box, linear-gradient(90deg, rgba(93,107,123,.35), rgba(175,186,199,.35)) border-box",
+            border: "1px solid transparent",
+            borderRadius: "1rem",
+          }}
+        />
 
-        {/* content (always ABOVE frame) */}
+        {/* content */}
         <div className="relative z-10 text-center text-gray-900 dark:text-gray-100">
-          <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs
-                          tracking-wide text-gray-700 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:text-gray-200">
-            <Sparkles className="h-4 w-4 text-indigo-600" />
+          <div
+            className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur"
+            style={{
+              borderColor: "var(--stroke, #E4E9F0)",
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))",
+              color: "var(--muted-700, #4E5A66)",
+            }}
+          >
+            <Sparkles className="h-4 w-4" style={{ color: "#5D6B7B" }} />
             No credit card required
           </div>
 
@@ -238,7 +330,7 @@ function UpgradedCTA() {
           <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
             {["Curriculum-aligned", "Multiple question types", "Instant answer key"].map((b) => (
               <div key={b} className="flex items-center justify-center gap-2 text-sm">
-                <Check className="h-4 w-4 text-indigo-600" />
+                <Check className="h-4 w-4" style={{ color: "#5D6B7B" }} />
                 {b}
               </div>
             ))}
@@ -246,8 +338,10 @@ function UpgradedCTA() {
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link to="/dashboard/test-generator">
-              <Button className="group rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-7 py-6 text-base font-semibold text-white
-                                  hover:from-indigo-700 hover:to-purple-700">
+              <Button
+                className="group rounded-xl px-7 py-6 text-base font-semibold text-white"
+                style={{ background: "#5D6B7B" }}
+              >
                 Create Your First Test
                 <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Button>
@@ -255,7 +349,12 @@ function UpgradedCTA() {
             <Link to="/demo">
               <Button
                 variant="outline"
-                className="rounded-xl border-gray-300/70 px-7 py-6 text-base font-semibold dark:border-white/20"
+                className="rounded-xl px-7 py-6 text-base font-semibold"
+                style={{
+                  borderColor: "var(--stroke, #E4E9F0)",
+                  color: "var(--ink-800, #353D47)",
+                  background: "var(--brand-50, #EFF3F9)",
+                }}
               >
                 Watch Demo
               </Button>
@@ -286,7 +385,13 @@ function TrustSecurity() {
         </motion.div>
 
         <motion.div variants={fadeUp} className="text-center mb-14">
-          <h2 className="mb-4 bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-4xl font-extrabold text-transparent">
+          <h2
+            className="mb-4 text-4xl font-extrabold bg-clip-text text-transparent"
+            style={{
+              backgroundImage:
+                "linear-gradient(90deg, #353D47 0%, #6E7C8E 50%, #353D47 100%)",
+            }}
+          >
             Private by Design. Built for Schools.
           </h2>
           <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
@@ -311,10 +416,11 @@ function TrustSecurity() {
               transition={{ delay: 0.05 * i }}
               className="rounded-2xl border border-gray-100 bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
             >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-indigo-100 text-2xl dark:from-sky-900/40 dark:to-indigo-900/40">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-2xl"
+                   style={{ background: "linear-gradient(135deg, #EFF3F9, #DFE4EF)" }}>
                 {c.icon}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 d  ark:text-white">{c.title}</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{c.title}</h3>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{c.desc}</p>
             </motion.div>
           ))}
@@ -339,8 +445,12 @@ function LogosMarquee() {
         className="flex items-center gap-10 whitespace-nowrap px-6"
       >
         {Array.from({ length: 2 }).flatMap(() => [
-          "CHANAKYA INSTITUTE OF EDUCATION", "EDUCATION BEAST", "DEEP COACHING CENTRE",
-          "DEEP JYOTI COACHING CENTRE", "ANUPMA INSTITUTE", "DELTA INSTITUTES",
+          "CHANAKYA INSTITUTE OF EDUCATION",
+          "EDUCATION BEAST",
+          "DEEP COACHING CENTRE",
+          "DEEP JYOTI COACHING CENTRE",
+          "ANUPMA INSTITUTE",
+          "DELTA INSTITUTES",
         ]).map((name, idx) => (
           <div
             key={idx}
@@ -366,7 +476,7 @@ function Outcomes() {
 
   return (
     <motion.section
-      className="bg-gradient-to-b from-gray-50 to-white py-20 dark:from-gray-900 dark:to-gray-950"
+      className="bg-gradient-to-b from-[#F2F5FA] to-white py-20 dark:from-gray-900 dark:to-gray-950"
       variants={container}
       initial="hidden"
       whileInView="show"
@@ -393,10 +503,18 @@ function Outcomes() {
               transition={{ delay: 0.05 * i }}
               className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-lg dark:border-gray-800 dark:bg-gray-900"
             >
-              <div className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-[linear-gradient(90deg,#0ea5e9_0%,#6366f1_50%,#a78bfa_100%)]">
+              <div
+                className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(90deg, #353D47 0%, #6E7C8E 50%, #AFBAC7 100%)",
+                }}
+              >
                 {s.k}
               </div>
-              <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{s.v}</div>
+              <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
+                {s.v}
+              </div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>
             </motion.div>
           ))}
@@ -405,10 +523,19 @@ function Outcomes() {
         {/* subtle CTA */}
         <motion.div
           variants={fadeUp}
-          className="mx-auto mt-12 max-w-3xl rounded-2xl border border-gray-200 bg-white/70 p-6 text-center shadow-lg backdrop-blur dark:border-gray-800 dark:bg-white/[0.06]"
+          className="mx-auto mt-12 max-w-3xl rounded-2xl border bg-white/70 p-6 text-center shadow-lg backdrop-blur dark:bg-white/[0.06]"
+          style={{ borderColor: "var(--stroke, #E4E9F0)" }}
         >
-          <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs tracking-wide text-gray-700 backdrop-blur dark:border-white/10 dark:bg-white/10 dark:text-gray-200">
-            <Sparkles className="h-4 w-4 text-sky-600" />
+          <div
+            className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur"
+            style={{
+              borderColor: "var(--stroke, #E4E9F0)",
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))",
+              color: "var(--muted-700, #4E5A66)",
+            }}
+          >
+            <Sparkles className="h-4 w-4" style={{ color: "#5D6B7B" }} />
             Start free — no credit card
           </div>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -419,7 +546,10 @@ function Outcomes() {
           </p>
           <div className="mt-5">
             <Link to="/signup">
-              <Button className="rounded-xl bg-gradient-to-r from-slate-900 via-sky-900 to-indigo-900 px-7 py-6 text-base font-semibold text-white hover:from-slate-800 hover:via-sky-800 hover:to-indigo-800">
+              <Button
+                className="rounded-xl px-7 py-6 text-base font-semibold text-white"
+                style={{ background: "#5D6B7B" }}
+              >
                 Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>

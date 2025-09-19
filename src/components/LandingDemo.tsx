@@ -1,40 +1,60 @@
+// src/components/LandingDemo.tsx — smooth, subtle, grey-blue, white-gradient bg
 import { useRef, useState, useEffect } from "react";
-import { motion, useInView, useMotionValue, useTransform, useMotionTemplate } from "framer-motion";
+import {
+  motion,
+  useInView,
+  useMotionValue,
+  useTransform,
+  useMotionTemplate,
+  useSpring,
+} from "framer-motion";
 import { Play } from "lucide-react";
 
-type LandingDemoProps = {
+export type LandingDemoProps = {
   youtubeId?: string;
 };
 
 export default function LandingDemo({ youtubeId }: LandingDemoProps) {
-  const sectionRef = useRef(null);
+  const sectionRef = useRef<HTMLDivElement | null>(null);
   const inView = useInView(sectionRef, { once: true, margin: "-20% 0px" });
 
-  // cursor + tilt
-  const mx = useMotionValue(300);
-  const my = useMotionValue(150);
-  const rotateX = useTransform(my, [0, 300], [5, -5]);   // reduced tilt range for subtlety
-  const rotateY = useTransform(mx, [0, 600], [-7, 7]);   // reduced tilt range for subtlety
-  const glowX = useTransform(mx, v => v);
-  const glowY = useTransform(my, v => v);
+  // --------------------------------
+  // Cursor + tilt with springs
+  // --------------------------------
+  const rawX = useMotionValue(300);
+  const rawY = useMotionValue(150);
+
+  // smooth cursor values (less jitter)
+  const mx = useSpring(rawX, { stiffness: 140, damping: 18, mass: 0.5 });
+  const my = useSpring(rawY, { stiffness: 140, damping: 18, mass: 0.5 });
+
+  // very subtle tilt (reduce seasick)
+  const rotateX = useSpring(useTransform(my, [0, 300], [3, -3]), {
+    stiffness: 120,
+    damping: 16,
+    mass: 0.5,
+  });
+  const rotateY = useSpring(useTransform(mx, [0, 600], [-4, 4]), {
+    stiffness: 120,
+    damping: 16,
+    mass: 0.5,
+  });
+
+  const glowX = useTransform(mx, (v) => v);
+  const glowY = useTransform(my, (v) => v);
 
   const [hintVisible, setHintVisible] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isLoaded) return;
-    
     const rect = e.currentTarget.getBoundingClientRect();
-    mx.set(e.clientX - rect.left);
-    my.set(e.clientY - rect.top);
+    rawX.set(e.clientX - rect.left);
+    rawY.set(e.clientY - rect.top);
   };
 
-  // Reset position when component mounts
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoaded(true);
-    }, 300);
-    
+    const timer = setTimeout(() => setIsLoaded(true), 300);
     return () => clearTimeout(timer);
   }, []);
 
@@ -44,34 +64,53 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
       className="relative overflow-hidden py-24"
       onMouseMove={onMouseMove}
     >
-      {/* animated background blobs - optimized with will-change */}
+      {/* Section background: very light white gradient + faint vignette */}
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-20"
+        style={{
+          background:
+            "radial-gradient(80% 60% at 50% 10%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.75) 40%, rgba(247,249,252,0.8) 60%, rgba(238,243,248,0.9) 100%)",
+        }}
+      />
+      {/* faint vertical sheen */}
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-20 opacity-70"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.6) 45%, rgba(255,255,255,0.0) 100%)",
+        }}
+      />
+
+      {/* soft grey-blue blobs for depth */}
       <motion.div
         aria-hidden
         className="pointer-events-none absolute -top-32 -left-40 h-[42rem] w-[42rem] rounded-full blur-3xl will-change-transform"
-        style={{ opacity: inView ? 0.35 : 0 }}
+        style={{ opacity: inView ? 0.28 : 0 }}
       >
         <motion.div
           className="h-full w-full"
-          animate={{ scale: [1, 1.05, 1], rotate: [0, 8, 0] }}
+          animate={{ scale: [1, 1.05, 1], rotate: [0, 6, 0] }}
           transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
           style={{
             background:
-              "radial-gradient(closest-side, rgba(99,102,241,0.35), transparent 70%)",
+              "radial-gradient(closest-side, rgba(110,124,142,0.22), transparent 70%)",
           }}
         />
       </motion.div>
       <motion.div
         aria-hidden
         className="pointer-events-none absolute -bottom-32 -right-40 h-[38rem] w-[38rem] rounded-full blur-3xl will-change-transform"
-        style={{ opacity: inView ? 0.3 : 0 }}
+        style={{ opacity: inView ? 0.22 : 0 }}
       >
         <motion.div
           className="h-full w-full"
-          animate={{ scale: [1.03, 0.97, 1.03] }}
-          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+          animate={{ scale: [1.02, 0.98, 1.02] }}
+          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
           style={{
             background:
-              "radial-gradient(closest-side, rgba(168,85,247,0.32), transparent 70%)",
+              "radial-gradient(closest-side, rgba(173,184,199,0.20), transparent 70%)",
           }}
         />
       </motion.div>
@@ -81,7 +120,15 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
           initial={{ opacity: 0, y: 10 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="text-center text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-600"
+          className="text-center text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight"
+          style={{
+            background:
+              "linear-gradient(90deg,#5D6B7B 0%,#6E7C8E 50%,#8B98A9 100%)",
+            WebkitBackgroundClip: "text",
+            color: "transparent",
+            backgroundSize: "200% 100%",
+            animation: "bg-pan 10s linear infinite",
+          }}
         >
           See a4ai in Action
         </motion.h2>
@@ -89,48 +136,71 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
         <motion.p
           initial={{ opacity: 0, y: 8 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="mx-auto mt-4 max-w-2xl text-center text-gray-600 dark:text-gray-300 text-lg"
+          transition={{ delay: 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+          className="mx-auto mt-4 max-w-2xl text-center text-lg"
+          style={{ color: "var(--muted-600, #5D6B7B)" }}
         >
-          Generate, host, and analyze assessments—end-to-end in minutes.
+          Generate, host, and analyze assessments — end-to-end in minutes.
         </motion.p>
 
-        {/* video card */}
+        {/* VIDEO CARD */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.98, y: 20 }}
+          initial={{ opacity: 0, scale: 0.985, y: 18 }}
           animate={inView ? { opacity: 1, scale: 1, y: 0 } : {}}
-          transition={{ delay: 0.2, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ delay: 0.15, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="relative mx-auto mt-12 w-full max-w-5xl"
           style={{ perspective: 1200 }}
         >
           <motion.div
-            className="relative aspect-video overflow-hidden rounded-2xl border border-black/10 dark:border-white/10 bg-black shadow-2xl will-change-transform"
-            style={{ rotateX, rotateY }}
+            className="relative aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl will-change-transform"
+            style={{
+              rotateX,
+              rotateY,
+              transformStyle: "preserve-3d",
+              border: "1px solid var(--stroke, #E4E9F0)",
+            }}
             onMouseLeave={() => {
-              mx.set(300);
-              my.set(150);
+              rawX.set(300);
+              rawY.set(150);
             }}
           >
-            {/* subtle gradient overlay */}
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-transparent via-transparent to-black/20 z-10 pointer-events-none" />
-            
-            {/* shimmer glow that follows cursor */}
-            <motion.div
+            {/* soft white inner gradient (barely visible) */}
+            <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300"
+              className="absolute inset-0 rounded-2xl"
               style={{
-                background: useMotionTemplate`
-                  radial-gradient(300px 300px at ${glowX}px ${glowY}px,
-                    rgba(255,255,255,0.15), transparent 70%)
-                `,
-                opacity: isLoaded ? 1 : 0
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.18) 100%)",
+                pointerEvents: "none",
+                zIndex: 1,
               }}
             />
 
-            {/* subtle gradient ring */}
+            {/* cursor-follow glow (smoother, slightly smaller) */}
+            <motion.div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 rounded-2xl"
+              style={{
+                background: useMotionTemplate`
+                  radial-gradient(230px 230px at ${glowX}px ${glowY}px, rgba(255,255,255,0.12), transparent 70%)
+                `,
+                opacity: isLoaded ? 1 : 0,
+                transition: "opacity 220ms ease",
+                zIndex: 1,
+              }}
+            />
+
+            {/* neutral gradient ring (no purple) */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-transparent [background:linear-gradient(black,black)_padding-box,linear-gradient(90deg,rgba(99,102,241,.45),rgba(168,85,247,.45))_border-box] [border:1px_solid_transparent]"
+              className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset"
+              style={{
+                background:
+                  "linear-gradient(#000,#000) padding-box, linear-gradient(90deg, rgba(93,107,123,.45), rgba(175,186,199,.45)) border-box",
+                border: "1px solid transparent",
+                borderRadius: "1rem",
+                zIndex: 1,
+              }}
             />
 
             {/* media */}
@@ -162,29 +232,24 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
               </video>
             )}
 
-            {/* pulsing play hint (auto hides after play) */}
+            {/* PLAY HINT */}
             {hintVisible && (
               <motion.div
-                className="pointer-events-none absolute inset-0 flex items-center justify-center z-20"
+                className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.5 }}
+                transition={{ duration: 0.45 }}
               >
                 <motion.div
-                  className="relative rounded-full bg-white/10 text-white backdrop-blur-lg px-5 py-2.5 text-sm font-medium border border-white/20"
+                  className="relative rounded-full backdrop-blur-md px-5 py-2.5 text-sm font-medium"
+                  style={{
+                    color: "#fff",
+                    background: "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.22)",
+                  }}
                   animate={{ scale: [1, 1.03, 1] }}
                   transition={{ duration: 1.8, repeat: Infinity }}
                 >
-                  <div className="absolute inset-0 -z-10 rounded-full overflow-hidden">
-                    <motion.span
-                      className="absolute inset-0 rounded-full"
-                      style={{
-                        background: "radial-gradient(circle, rgba(255,255,255,0.25) 0%, transparent 70%)",
-                      }}
-                      animate={{ scale: [1, 1.4, 1], opacity: [0.7, 0, 0.7] }}
-                      transition={{ duration: 2.5, repeat: Infinity }}
-                    />
-                  </div>
                   <div className="flex items-center gap-2 relative z-10">
                     <Play className="h-4 w-4" fill="white" />
                     Play demo
@@ -192,14 +257,14 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
                 </motion.div>
               </motion.div>
             )}
-            
-            {/* loading state */}
+
+            {/* LOADING STATE */}
             {!isLoaded && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50">
-                <motion.div 
-                  className="h-12 w-12 rounded-full border-2 border-transparent border-t-white"
+                <motion.div
+                  className="h-10 w-10 rounded-full border-2 border-transparent border-t-white"
                   animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
                 />
               </div>
             )}
@@ -209,3 +274,9 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
     </section>
   );
 }
+
+/* Tailwind keyframes (add once in globals.css if you don't already have it)
+@keyframes bg-pan {
+  0% { background-position: 0% 50% }
+  100% { background-position: 200% 50% }
+}*/
