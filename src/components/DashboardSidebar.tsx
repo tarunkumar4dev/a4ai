@@ -1,32 +1,40 @@
+// DashboardSidebar.tsx — Cluely palette (#DFE4EF), black primary button
 import React, { useMemo, useState } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
-  FileText,
-  BarChart2,
-  Users,
-  Bookmark,
-  Settings,
-  LayoutDashboard,
-  ChevronRight,
-  Zap,
-  Trophy,
-  Notebook,
-  CalendarDays,
-  Users2,
-  Sparkles,
-  Plus,
-  Menu,
-  X,
+  FileText, BarChart2, Users, Bookmark, Settings, LayoutDashboard,
+  ChevronRight, Zap, Trophy, Notebook, CalendarDays, Users2,
+  Sparkles, Plus, Menu, X,
 } from "lucide-react";
+
+/* ---------------- Cluely theme tokens ---------------- */
+const theme = {
+  // Core Cluely colors
+  mist: "#DFE4EF",
+  slate600: "#5D6B7B",
+  ink800: "#2F3A44",
+
+  // Tailwind helpers
+  gradFrom: "from-[#5D6B7B]",   // slate600
+  gradTo: "to-[#2F3A44]",       // ink800
+
+  textAccent: "text-[#4E5A66]",
+  textAccentHover: "group-hover:text-[#2F3A44]",
+
+  hoverTint: "hover:bg-[#DFE4EF]/70 dark:hover:bg-slate-800/60",
+  borderAccent: "border-[#DFE4EF] dark:border-slate-700",
+
+  // Shadows tuned for slate UI
+  pillShadowAccent: "shadow-[0_10px_24px_rgba(47,58,68,0.18)]",
+};
 
 /* ---------------- Motion presets ---------------- */
 const enterFromLeft = {
   hidden: { x: -12, opacity: 0 },
   show: (i: number) => ({
-    x: 0,
-    opacity: 1,
+    x: 0, opacity: 1,
     transition: { delay: 0.02 * i, type: "spring", stiffness: 280, damping: 22 },
   }),
 };
@@ -42,14 +50,9 @@ interface SidebarItemProps {
   index: number;
 }
 
-/* ---------------- Memo Sidebar Item ---------------- */
+/* ---------------- Item ---------------- */
 const SidebarItem = React.memo(function SidebarItem({
-  icon: Icon,
-  label,
-  to,
-  alert,
-  premium,
-  index,
+  icon: Icon, label, to, alert, premium, index,
 }: SidebarItemProps) {
   const prefersReducedMotion = useReducedMotion();
 
@@ -87,21 +90,32 @@ const SidebarItem = React.memo(function SidebarItem({
         to={to}
         className={({ isActive }) =>
           cn(
-            "group flex min-h-11 items-center gap-3 rounded-lg px-4 py-3 transition-all duration-300",
-            isActive
-              ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg"
-              : "text-muted-foreground hover:bg-muted hover:text-purple-600",
-            premium && "border-l-4 border-amber-400"
+            "group relative flex min-h-11 items-center gap-3 rounded-lg px-4 py-3 transition-all duration-300",
+            !isActive && theme.hoverTint,
+            isActive ? "text-white" : "text-muted-foreground",
+            premium && !isActive && "border-l-4 border-amber-400/80",
+            isActive &&
+              cn(
+                "bg-gradient-to-r", theme.gradFrom, theme.gradTo,
+                theme.pillShadowAccent, "ring-1 ring-white/30 dark:ring-white/10"
+              )
           )
         }
         aria-label={label}
       >
         {({ isActive }) => (
           <>
+            <span
+              aria-hidden
+              className={cn(
+                "absolute left-0 top-1/2 -translate-y-1/2 h-6 w-[3px] rounded-full transition-opacity md:block",
+                isActive ? "bg-white/90 opacity-100" : "opacity-0"
+              )}
+            />
             <Icon
               className={cn(
                 "h-5 w-5 transition-transform duration-300",
-                isActive ? "text-white" : "text-muted-foreground group-hover:text-purple-500",
+                isActive ? "text-white" : cn("text-muted-foreground", theme.textAccentHover),
                 premium && !isActive && "text-amber-500 group-hover:text-amber-600"
               )}
             />
@@ -109,7 +123,7 @@ const SidebarItem = React.memo(function SidebarItem({
             <ChevronRight
               className={cn(
                 "h-4 w-4 opacity-0 transition-all duration-300",
-                isActive ? "text-white opacity-100" : "group-hover:opacity-100 group-hover:text-purple-500"
+                isActive ? "text-white opacity-100" : "group-hover:opacity-100 " + theme.textAccentHover
               )}
               aria-hidden
             />
@@ -120,7 +134,7 @@ const SidebarItem = React.memo(function SidebarItem({
   );
 });
 
-/* ---------------- Data (memoized) ---------------- */
+/* ---------------- Data ---------------- */
 const useSidebarData = () =>
   useMemo(
     () => ({
@@ -150,14 +164,7 @@ const useSidebarData = () =>
 const FeaturedContest = React.memo(function FeaturedContest({
   contest,
 }: {
-  contest: {
-    title: string;
-    deadline: string;
-    participants: number;
-    prize1: string;
-    prize2: string;
-    premium?: boolean;
-  };
+  contest: { title: string; deadline: string; participants: number; prize1: string; prize2: string; premium?: boolean };
 }) {
   const dateStr = new Date(contest.deadline).toLocaleDateString();
 
@@ -168,18 +175,17 @@ const FeaturedContest = React.memo(function FeaturedContest({
       transition={{ type: "spring", delay: 0.05 }}
       className={cn(
         "mx-3 mb-4 rounded-xl border p-4",
-        contest.premium
-          ? "bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 shadow-[0_4px_12px_rgba(245,158,11,0.10)]"
-          : "bg-gradient-to-br from-yellow-50 to-amber-50 border-amber-200"
+        "bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200 shadow-[0_6px_16px_rgba(245,158,11,0.12)]",
+        "dark:from-amber-900/10 dark:to-amber-800/10"
       )}
     >
       <div className="mb-2 flex items-start justify-between">
         <div className="flex items-center gap-2">
-          <Trophy className={cn("h-5 w-5", contest.premium ? "text-amber-600" : "text-amber-500")} />
+          <Trophy className="h-5 w-5 text-amber-600" />
           <h3 className="font-semibold text-foreground">Featured Contest</h3>
         </div>
         {contest.premium && (
-          <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+          <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
             <Sparkles className="h-3 w-3" /> Premium
           </span>
         )}
@@ -196,15 +202,15 @@ const FeaturedContest = React.memo(function FeaturedContest({
           <Users2 className="h-4 w-4 text-amber-500" />
           <span>{contest.participants.toLocaleString()} participants</span>
         </div>
-        <div className="flex items-center gap-2 font-medium text-amber-700">
+        <div className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
           <Zap className="h-4 w-4" />
           <span>1st Prize: {contest.prize1}</span>
         </div>
-        <div className="flex items-center gap-2 font-medium text-amber-700">
+        <div className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
           <Zap className="h-4 w-4" />
           <span>2nd Prize: {contest.prize2}</span>
         </div>
-        <div className="flex items-center gap-2 font-medium text-amber-700">
+        <div className="flex items-center gap-2 font-medium text-amber-700 dark:text-amber-300">
           <Zap className="h-4 w-4" />
           <span>Goodies to Top 15</span>
         </div>
@@ -212,17 +218,9 @@ const FeaturedContest = React.memo(function FeaturedContest({
 
       <Link to="/dashboard/contests" className="block">
         <motion.button
-          whileHover={{
-            scale: 1.02,
-            boxShadow: contest.premium
-              ? "0 4px 12px rgba(245, 158, 11, 0.30)"
-              : "0 4px 12px rgba(245, 158, 11, 0.20)",
-          }}
+          whileHover={{ scale: 1.02, boxShadow: "0 6px 16px rgba(245,158,11,0.28)" }}
           whileTap={{ scale: 0.98 }}
-          className={cn(
-            "mt-3 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-white transition-all",
-            contest.premium ? "bg-gradient-to-r from-amber-500 to-amber-600 shadow-md" : "bg-gradient-to-r from-amber-400 to-amber-500"
-          )}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-white transition-all bg-gradient-to-r from-amber-500 to-amber-600"
         >
           <Trophy className="h-4 w-4" />
           Register Now
@@ -234,34 +232,33 @@ const FeaturedContest = React.memo(function FeaturedContest({
 
 /* ---------------- Notes Quick ---------------- */
 const NotesQuick = React.memo(function NotesQuick({
-  unread,
-  recentSubject,
-  lastUpdated,
-  starred,
-}: {
-  unread: number;
-  recentSubject: string;
-  lastUpdated: string;
-  starred: number;
-}) {
+  unread, recentSubject, lastUpdated, starred,
+}: { unread: number; recentSubject: string; lastUpdated: string; starred: number }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", delay: 0.1 }}
-      className="mx-3 mb-6 rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-4 shadow-[0_4px_12px_rgba(124,58,237,0.1)]"
+      className={cn(
+        "mx-3 mb-6 rounded-xl border p-4",
+        theme.borderAccent,
+        "bg-gradient-to-br from-white to-[#DFE4EF]/60 dark:from-slate-800/40 dark:to-slate-800/20",
+        "shadow-[0_6px_16px_rgba(15,23,42,0.06)]"
+      )}
     >
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Notebook className="h-5 w-5 text-purple-600" />
+          <Notebook className={cn("h-5 w-5", theme.textAccent)} />
           <h3 className="font-semibold text-foreground">My Notes</h3>
         </div>
         <div className="flex gap-1">
           {unread > 0 && (
-            <span className="rounded-full bg-purple-100 px-2 py-1 text-xs font-medium text-purple-800">{unread} new</span>
+            <span className="rounded-full bg-[#DFE4EF] px-2 py-1 text-xs font-medium text-[#2F3A44] dark:bg-slate-700 dark:text-slate-100">
+              {unread} new
+            </span>
           )}
           {starred > 0 && (
-            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
               <Sparkles className="h-3 w-3" />
               {starred}
             </span>
@@ -271,10 +268,10 @@ const NotesQuick = React.memo(function NotesQuick({
 
       <div className="mb-3 space-y-2 text-sm text-muted-foreground">
         <p>
-          Last updated: <span className="font-medium text-purple-700">{lastUpdated}</span>
+          Last updated: <span className="font-medium text-[#2F3A44] dark:text-slate-200">{lastUpdated}</span>
         </p>
         <p>
-          Recent subject: <span className="font-medium text-purple-700">{recentSubject}</span>
+          Recent subject: <span className="font-medium text-[#2F3A44] dark:text-slate-200">{recentSubject}</span>
         </p>
       </div>
 
@@ -283,17 +280,21 @@ const NotesQuick = React.memo(function NotesQuick({
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-background py-2 text-sm text-purple-600 transition-all"
+            className={cn(
+              "flex w-full items-center justify-center gap-2 rounded-lg border bg-background py-2 text-sm",
+              theme.borderAccent, theme.textAccent
+            )}
           >
             <Bookmark className="h-4 w-4" />
             View All
           </motion.button>
         </Link>
         <Link to="/dashboard/notes/new" className="flex-1">
+          {/* BLACK primary per request */}
           <motion.button
-            whileHover={{ scale: 1.02, boxShadow: "0 4px 12px rgba(124, 58, 237, 0.2)" }}
+            whileHover={{ scale: 1.02, boxShadow: "0 6px 16px rgba(0,0,0,0.35)" }}
             whileTap={{ scale: 0.98 }}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 py-2 text-sm text-white transition-all"
+            className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm text-white transition-all bg-gradient-to-b from-[#1F2937] to-[#0B1220]"
           >
             <Plus className="h-4 w-4" />
             New Note
@@ -304,7 +305,7 @@ const NotesQuick = React.memo(function NotesQuick({
   );
 });
 
-/* ---------------- Inner content (reused) ---------------- */
+/* ---------------- Sidebar content ---------------- */
 function SidebarContent() {
   const { items, contestInfo, notesSummary } = useSidebarData();
   const prefersReducedMotion = useReducedMotion();
@@ -312,20 +313,13 @@ function SidebarContent() {
   return (
     <>
       {/* Logo */}
-      <motion.div
-        className="p-6"
-        whileHover={!prefersReducedMotion ? { scale: 1.02 } : undefined}
-        transition={{ type: "spring", stiffness: 400 }}
-      >
+      <motion.div className="p-6" whileHover={!prefersReducedMotion ? { scale: 1.02 } : undefined} transition={{ type: "spring", stiffness: 400 }}>
         <Link
           to="/"
-          className="flex items-center gap-2 text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent"
+          className={cn("flex items-center gap-2 text-2xl font-bold bg-gradient-to-r", theme.gradFrom, theme.gradTo, "bg-clip-text text-transparent")}
         >
-          <motion.div
-            animate={!prefersReducedMotion ? { rotate: [0, 10, -10, 0] } : {}}
-            transition={{ repeat: Infinity, duration: 3 }}
-          >
-            <Zap className="h-6 w-6 text-purple-600" />
+          <motion.div animate={!prefersReducedMotion ? { rotate: [0, 10, -10, 0] } : {}} transition={{ repeat: Infinity, duration: 3 }}>
+            <Zap className="h-6 w-6 text-[#5D6B7B]" />
           </motion.div>
           a4ai
         </Link>
@@ -334,15 +328,7 @@ function SidebarContent() {
       {/* Nav */}
       <nav className="flex-1 space-y-1 px-3 py-2">
         {items.map((item, i) => (
-          <SidebarItem
-            key={item.to}
-            icon={item.icon}
-            label={item.label}
-            to={item.to}
-            alert={item.alert}
-            premium={item.premium}
-            index={i}
-          />
+          <SidebarItem key={item.to} icon={item.icon} label={item.label} to={item.to} alert={item.alert} premium={item.premium} index={i} />
         ))}
       </nav>
 
@@ -352,15 +338,14 @@ function SidebarContent() {
   );
 }
 
-/* ---------------- Responsive Sidebar (desktop + mobile drawer) ---------------- */
+/* ---------------- Responsive Sidebar ---------------- */
 export default function DashboardSidebar() {
-  const location = useLocation(); // re-render on route change
+  useLocation(); // trigger on route change
   const [open, setOpen] = useState(false);
-  const prefersReducedMotion = useReducedMotion();
 
   return (
     <>
-      {/* Mobile top-left hamburger */}
+      {/* Mobile hamburger */}
       <button
         className="md:hidden fixed left-3 top-3 z-50 inline-flex h-10 w-10 items-center justify-center rounded-md border bg-background shadow-sm"
         aria-label="Open sidebar"
@@ -384,7 +369,6 @@ export default function DashboardSidebar() {
       <AnimatePresence>
         {open && (
           <>
-            {/* Backdrop */}
             <motion.div
               key="backdrop"
               className="md:hidden fixed inset-0 z-50 bg-black/40"
@@ -393,8 +377,6 @@ export default function DashboardSidebar() {
               exit={{ opacity: 0 }}
               onClick={() => setOpen(false)}
             />
-
-            {/* Drawer panel */}
             <motion.aside
               key="mobile"
               role="dialog"
@@ -415,7 +397,6 @@ export default function DashboardSidebar() {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-
               <div className="flex-1 overflow-y-auto">
                 <SidebarContent />
               </div>

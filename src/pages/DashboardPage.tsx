@@ -1,5 +1,5 @@
 // src/pages/DashboardPage.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   motion,
@@ -61,6 +61,10 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
 } as const;
 
+/* ------------ brand ink/slate for headings/body ------------ */
+const INK = "#2F3A44";
+const SLATE = "#5D6B7B";
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { profile, loading } = useUserProfile();
@@ -98,53 +102,24 @@ export default function DashboardPage() {
     };
   }, [navigate]);
 
-  // demo data
-  const recentTests = [
-    {
-      id: 1,
-      name: "Physics Midterm",
-      date: "May 14, 2025",
-      questions: 15,
-      subject: "Physics",
-      status: "Ready",
-    },
-    {
-      id: 2,
-      name: "Calculus Quiz",
-      date: "May 10, 2025",
-      questions: 10,
-      subject: "Mathematics",
-      status: "Draft",
-    },
-    {
-      id: 3,
-      name: "Chemistry Practice",
-      date: "May 02, 2025",
-      questions: 12,
-      subject: "Chemistry",
-      status: "Ready",
-    },
-  ];
-  const announcements = [
-    {
-      id: "a1",
-      title: "New: Blueprint Editor",
-      desc: "Lock marks, difficulty and outcome mix before generation.",
-      icon: Rocket,
-      date: "2d ago",
-    },
-    {
-      id: "a2",
-      title: "Contest Host Beta",
-      desc: "Schedule live, proctored contests with rankings.",
-      icon: Rocket,
-      date: "1w ago",
-    },
-  ];
+  // demo data (memoized)
+  const { recentTests, announcements } = useMemo(
+    () => ({
+      recentTests: [
+        { id: 1, name: "Physics Midterm", date: "May 14, 2025", questions: 15, subject: "Physics", status: "Ready" },
+        { id: 2, name: "Calculus Quiz", date: "May 10, 2025", questions: 10, subject: "Mathematics", status: "Draft" },
+        { id: 3, name: "Chemistry Practice", date: "May 02, 2025", questions: 12, subject: "Chemistry", status: "Ready" },
+      ],
+      announcements: [
+        { id: "a1", title: "New: Blueprint Editor", desc: "Lock marks, difficulty and outcome mix before generation.", icon: Rocket, date: "2d ago" },
+        { id: "a2", title: "Contest Host Beta", desc: "Schedule live, proctored contests with rankings.", icon: Rocket, date: "1w ago" },
+      ],
+    }),
+    []
+  );
 
-  // calm, cursor-reactive background (disabled on mobile/low motion)
-  const mx = useMotionValue(320),
-    my = useMotionValue(160);
+  // cursor-reactive background (disabled on mobile/low motion)
+  const mx = useMotionValue(320), my = useMotionValue(160);
   const onMove = (e: React.MouseEvent<HTMLElement>) => {
     if (!interactiveCards) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -152,7 +127,7 @@ export default function DashboardPage() {
     my.set(e.clientY - r.top);
   };
   const bgGlow = useMotionTemplate`
-    radial-gradient(900px 450px at ${mx}px ${my}px, hsl(var(--primary)/.08), transparent 70%)
+    radial-gradient(900px 450px at ${mx}px ${my}px, rgba(47,58,68,.08), transparent 70%)
   `;
 
   const roleLabel = profile?.role ? profile.role[0].toUpperCase() + profile.role.slice(1) : "User";
@@ -167,21 +142,26 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="flex min-h-dvh bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-gray-900 text-gray-900 dark:text-gray-100"
+      className="flex min-h-dvh text-gray-900 dark:text-gray-100"
+      style={{
+        background:
+          `radial-gradient(60rem 36rem at 50% 20%, rgba(255,255,255,0.95), rgba(255,255,255,0.65) 40%, transparent 72%),
+           #DFE4EF`,
+      }}
       onMouseMove={onMove}
     >
       {interactiveCards && (
         <motion.div aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundImage: bgGlow }} />
       )}
-      <div className="fixed inset-0 -z-20 bg-[url('/images/grid.svg')] opacity-[0.03] dark:opacity-[0.02]" />
+      <div className="fixed inset-0 -z-20 opacity-[0.035] dark:opacity-[0.03] [background-image:linear-gradient(to_right,#000_1px,transparent_1px),linear-gradient(to_bottom,#000_1px,transparent_1px)] [background-size:48px_48px]" />
 
       <DashboardSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* header — crisp Apple-ish typography */}
-        <header className="bg-background/90 backdrop-blur border-b sticky top-0 z-10">
+        {/* header */}
+        <header className="bg-background/80 backdrop-blur border-b sticky top-0 z-10">
           <div className="mx-auto w-full max-w-7xl px-3 sm:px-4 py-3 flex items-center justify-between">
-            <h1 className="text-[21px] sm:text-[24px] font-[650] tracking-[-0.012em] leading-tight">
+            <h1 className="text-[21px] sm:text-[24px] font-[700] tracking-[-0.012em] leading-tight" style={{ color: INK }}>
               Dashboard <span className="text-muted-foreground">— {roleLabel}</span>
             </h1>
             <div className="flex items-center gap-2 sm:gap-4 text-sm">
@@ -189,10 +169,7 @@ export default function DashboardPage() {
                 {profile?.full_name} {profile?.email ? `(${profile.email})` : ""}
               </div>
               <Button
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  navigate("/login");
-                }}
+                onClick={async () => { await supabase.auth.signOut(); navigate("/login"); }}
                 variant="destructive"
                 size="sm"
               >
@@ -203,21 +180,16 @@ export default function DashboardPage() {
         </header>
 
         <main className="flex-1 overflow-y-auto py-5 sm:py-6">
-          <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="mx-auto max-w-7xl px-3 sm:px-4 space-y-5 sm:space-y-6"
-          >
+          <motion.div variants={container} initial="hidden" animate="show" className="mx-auto max-w-7xl px-3 sm:px-4 space-y-5 sm:space-y-6">
             {/* welcome */}
             <motion.div variants={item}>
               <Card className="border card-soft">
                 <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div>
-                    <CardTitle className="text-[17px] sm:text-[18px] font-[600] tracking-[-0.01em]">
+                    <CardTitle className="text-[18px] font-[650] tracking-[-0.01em]" style={{ color: INK }}>
                       Welcome back, {profile?.full_name || "there"}!
                     </CardTitle>
-                    <CardDescription className="tracking-[-0.005em]">
+                    <CardDescription className="tracking-[-0.005em]" style={{ color: SLATE }}>
                       Generate curriculum-perfect tests with AI. Pick a quick action to get started.
                     </CardDescription>
                   </div>
@@ -243,94 +215,46 @@ export default function DashboardPage() {
 
             {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <KpiCard
-                title="Tests Generated"
-                value={recentTests.length}
-                icon={FileText}
-                tone="indigo"
-                interactive={interactiveCards}
-              />
-              <KpiCard
-                title="Avg. Time to Paper"
-                value="01:42"
-                icon={TimerReset}
-                tone="emerald"
-                interactive={interactiveCards}
-              />
-              <KpiCard
-                title="Syllabus Match"
-                value="99%"
-                icon={TrendingUp}
-                tone="fuchsia"
-                interactive={interactiveCards}
-              />
-              <KpiCard
-                title="Streak"
-                value={profile?.streak ?? 3}
-                icon={Flame}
-                tone="amber"
-                interactive={interactiveCards}
-              />
+              <KpiCard title="Tests Generated" value={recentTests.length} icon={FileText} tone="blue"  interactive={interactiveCards} />
+              <KpiCard title="Avg. Time to Paper" value="01:42" icon={TimerReset} tone="teal"  interactive={interactiveCards} />
+              <KpiCard title="Syllabus Match" value="99%" icon={TrendingUp} tone="blue"  interactive={interactiveCards} />
+              <KpiCard title="Streak" value={profile?.streak ?? 3} icon={Flame} tone="amber" interactive={interactiveCards} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* recent tests */}
               <motion.div variants={item} className="lg:col-span-2 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-[16px] font-[600] tracking-[-0.01em]">Recent Tests</h2>
+                  <h2 className="text-[16px] font-[600] tracking-[-0.01em]" style={{ color: INK }}>Recent Tests</h2>
                   <Link to="/dashboard/history">
-                    <Button variant="ghost" size="sm" className="text-gray-900 dark:text-gray-50">
-                      View All
-                    </Button>
+                    <Button variant="ghost" size="sm" className="text-gray-900 dark:text-gray-50">View All</Button>
                   </Link>
                 </div>
                 <AnimatePresence initial={false}>
                   {recentTests.map((t) => (
-                    <motion.div
-                      key={t.id}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="group"
-                    >
+                    <motion.div key={t.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="group">
                       <Card className="border">
                         <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span
-                                className={`w-2 h-2 rounded-full ${
-                                  t.subject === "Physics"
-                                    ? "bg-red-400"
-                                    : t.subject === "Mathematics"
-                                    ? "bg-blue-400"
-                                    : "bg-emerald-400"
-                                }`}
-                              />
-                              <h3 className="font-[600] tracking-[-0.01em] truncate">{t.name}</h3>
-                              <Badge variant="secondary" className="ml-1 shrink-0">
-                                {t.subject}
-                              </Badge>
+                              <span className={`w-2 h-2 rounded-full ${
+                                t.subject === "Physics" ? "bg-red-400"
+                                : t.subject === "Mathematics" ? "bg-sky-400"
+                                : "bg-emerald-400"
+                              }`} />
+                              <h3 className="font-[600] tracking-[-0.01em] truncate" style={{ color: INK }}>{t.name}</h3>
+                              <Badge variant="secondary" className="ml-1 shrink-0">{t.subject}</Badge>
                               {t.status === "Ready" ? (
-                                <Badge className="ml-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
-                                  Ready
-                                </Badge>
+                                <Badge className="ml-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0">Ready</Badge>
                               ) : (
-                                <Badge className="ml-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
-                                  Draft
-                                </Badge>
+                                <Badge className="ml-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0">Draft</Badge>
                               )}
                             </div>
-                            <p className="text-sm text-muted-foreground truncate">
-                              {t.date} • {t.questions} questions
-                            </p>
+                            <p className="text-sm text-muted-foreground truncate">{t.date} • {t.questions} questions</p>
                           </div>
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="sm:w-auto w-full">
-                              View
-                            </Button>
-                            <Button variant="outline" size="sm" className="hidden sm:inline-flex">
-                              Edit
-                            </Button>
+                            <Button variant="outline" size="sm" className="sm:w-auto w-full">View</Button>
+                            <Button variant="outline" size="sm" className="hidden sm:inline-flex">Edit</Button>
                           </div>
                         </div>
                       </Card>
@@ -345,24 +269,22 @@ export default function DashboardPage() {
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2">
                       <BellDot className="h-4 w-4" />
-                      <CardTitle className="text-base font-[600] tracking-[-0.01em]">Announcements</CardTitle>
+                      <CardTitle className="text-base font-[600] tracking-[-0.01em]" style={{ color: INK }}>
+                        Announcements
+                      </CardTitle>
                     </div>
                     <CardDescription>What’s new in a4ai</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {announcements.map((a) => (
                       <div key={a.id} className="rounded-lg border bg-muted/40 p-3">
-                        <div className="flex items-center gap-2 font-medium">
-                          <a.icon className="h-4 w-4" /> {a.title}
-                        </div>
+                        <div className="flex items-center gap-2 font-medium"><a.icon className="h-4 w-4" /> {a.title}</div>
                         <div className="text-sm text-muted-foreground">{a.desc}</div>
                         <div className="mt-1 text-[11px] text-muted-foreground">{a.date}</div>
                       </div>
                     ))}
                     <Link to="/changelog">
-                      <Button variant="ghost" className="w-full">
-                        See changelog
-                      </Button>
+                      <Button variant="ghost" className="w-full">See changelog</Button>
                     </Link>
                   </CardContent>
                 </Card>
@@ -373,7 +295,7 @@ export default function DashboardPage() {
             <motion.div variants={item} className="rounded-2xl border p-[1px] shadow-sm">
               <div className="rounded-2xl bg-card card-soft px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
-                  <div className="text-[18px] font-[600] tracking-[-0.01em]">Host a live contest</div>
+                  <div className="text-[18px] font-[600] tracking-[-0.01em]" style={{ color: INK }}>Host a live contest</div>
                   <div className="text-sm text-muted-foreground">Proctor with camera checks, rankings and exports.</div>
                 </div>
                 <Link to="/dashboard/contest/create">
@@ -390,22 +312,21 @@ export default function DashboardPage() {
   );
 }
 
-/* ------- KPI Card (soft, modern, typography-tuned) ------- */
+/* ------- KPI Card (glossy blue, no purple) ------- */
 function KpiCard({
   title,
   value,
   icon: Icon,
-  tone = "indigo",
+  tone = "blue",
   interactive,
 }: {
   title: string;
   value: string | number;
   icon: any;
-  tone?: "indigo" | "emerald" | "fuchsia" | "amber";
+  tone?: "blue" | "teal" | "amber";
   interactive: boolean;
 }) {
-  const mx = useMotionValue(60),
-    my = useMotionValue(40);
+  const mx = useMotionValue(60), my = useMotionValue(40);
   const rotateX = useTransform(my, [0, 120], [6, -6]);
   const rotateY = useTransform(mx, [0, 180], [-8, 8]);
 
@@ -416,11 +337,11 @@ function KpiCard({
     my.set(e.clientY - r.top);
   };
 
+  // glossy blue gradients (matches hero: #76B6FF → #2F6DF4)
   const TONES = {
-    indigo: { border: "from-indigo-400/40 to-purple-400/40", chip: "bg-indigo-500/10 text-indigo-700" },
-    emerald: { border: "from-emerald-400/40 to-teal-400/40", chip: "bg-emerald-500/10 text-emerald-700" },
-    fuchsia: { border: "from-fuchsia-400/40 to-pink-400/40", chip: "bg-fuchsia-500/10 text-fuchsia-700" },
-    amber: { border: "from-amber-400/40 to-orange-400/40", chip: "bg-amber-500/10 text-amber-700" },
+    blue:  { border: "from-[#76B6FF66] to-[#2F6DF466]", chip: "bg-[#E8F1FF] text-[#1E3A8A]" },
+    teal:  { border: "from-teal-400/45 to-cyan-400/45",   chip: "bg-teal-500/10 text-teal-700" },
+    amber: { border: "from-amber-400/45 to-orange-400/45", chip: "bg-amber-500/10 text-amber-700" },
   } as const;
   const t = TONES[tone];
 
@@ -440,7 +361,7 @@ function KpiCard({
                 <Icon className="h-5 w-5" />
               </div>
             </div>
-            <div className="mt-2 text-[28px] sm:text-[30px] leading-none font-[700] tracking-[-0.015em] num">
+            <div className="mt-2 text-[28px] sm:text-[30px] leading-none font-[700] tracking-[-0.015em] num" style={{ color: INK }}>
               {value}
             </div>
           </div>
