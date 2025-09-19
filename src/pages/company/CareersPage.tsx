@@ -12,7 +12,7 @@ type Job = {
   responsibilities: string[];
   requirements: string[];
   niceToHave?: string[];
-  compensation?: string; // text for now
+  compensation?: string;
   applyEmail?: string;
 };
 
@@ -120,8 +120,9 @@ function Pill({
   return (
     <span
       className={
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 " +
-        "border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-950/60 " +
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs " +
+        "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 " +
+        "bg-white/80 dark:bg-slate-950/60 shadow-sm " +
         className
       }
     >
@@ -176,92 +177,116 @@ export default function CareersPage() {
       title="Careers"
       subtitle="We’re a small team building fast. If you like ownership, craft, and impact—join us."
     >
-      {/* Hero strip */}
-      <div className="rounded-2xl border border-indigo-200/50 dark:border-indigo-900/40 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/20 p-6 mb-8">
+      {/* Hero strip — glossy BLUE only */}
+      <div className="rounded-2xl border border-sky-200/60 dark:border-sky-900/40 bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/20 p-6 mb-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
         <div className="flex flex-wrap items-center gap-3">
-          <Pill><Plus className="h-3.5 w-3.5 mr-1" /> Early team</Pill>
+          <Pill><Plus className="h-3.5 w-3.5 mr-1 text-sky-600" /> Early team</Pill>
           <Pill>Fast ship cadence</Pill>
           <Pill>Founder-led product</Pill>
           <Pill>Remote-friendly</Pill>
         </div>
-        <p className="mt-4 text-sm text-gray-700 dark:text-gray-300">
-          Don’t see a perfect role? Write to us at <a href="mailto:a4ai.team@gmail.com" className="text-indigo-600">a4ai.team@gmail.com</a>.
+        <p className="mt-4 text-sm text-slate-700 dark:text-slate-300">
+          Don’t see a perfect role? Write to us at{" "}
+          <a href="mailto:a4ai.team@gmail.com" className="text-sky-600 hover:text-sky-700">a4ai.team@gmail.com</a>.
         </p>
       </div>
 
       {/* Filters */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-        <div className="flex items-center gap-2 rounded-xl border bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 px-3 py-2">
-          <Search className="h-4 w-4 text-gray-400" />
+        <div className="flex items-center gap-2 rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3 py-2 shadow-sm">
+          <Search className="h-4 w-4 text-slate-400" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search roles…"
-            className="w-full bg-transparent outline-none text-sm"
+            className="w-full bg-transparent outline-none text-sm placeholder:text-slate-400"
           />
         </div>
 
-        <select value={dept} onChange={(e) => setDept(e.target.value as any)} className="rounded-xl border bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 px-3 py-2 text-sm">
+        <select
+          value={dept}
+          onChange={(e) => setDept(e.target.value as any)}
+          className="rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+        >
           {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
         </select>
-        <select value={type} onChange={(e) => setType(e.target.value as any)} className="rounded-xl border bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 px-3 py-2 text-sm">
+
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value as any)}
+          className="rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+        >
           {TYPES.map((t) => <option key={t}>{t}</option>)}
         </select>
-        <select value={loc} onChange={(e) => setLoc(e.target.value as any)} className="rounded-xl border bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 px-3 py-2 text-sm">
+
+        <select
+          value={loc}
+          onChange={(e) => setLoc(e.target.value as any)}
+          className="rounded-xl border bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+        >
           {LOCATIONS.map((l) => <option key={l}>{l}</option>)}
         </select>
       </div>
 
       {/* Jobs */}
       {filtered.length === 0 ? (
-        <p className="text-sm text-gray-600 dark:text-gray-400">No matching roles right now. Try different filters.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          No matching roles right now. Try different filters.
+        </p>
       ) : (
         <ul className="space-y-5">
           {filtered.map((j) => (
             <li
               key={j.id}
-              className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-950/60 p-5"
+              className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/60 p-5 transition
+                         hover:border-sky-300/70 hover:shadow-[0_8px_30px_rgba(2,132,199,0.12)]"
             >
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-semibold">{j.title}</h3>
-                  <div className="mt-1 flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-300">
-                    <span className="inline-flex items-center gap-1"><Briefcase className="h-4 w-4" /> {j.department}</span>
-                    <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> {j.type}</span>
-                    <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" /> {j.location}</span>
+                  <div className="mt-1 flex flex-wrap gap-2 text-sm text-slate-600 dark:text-slate-300">
+                    <span className="inline-flex items-center gap-1"><Briefcase className="h-4 w-4 text-sky-600" /> {j.department}</span>
+                    <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4 text-sky-600" /> {j.type}</span>
+                    <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4 text-sky-600" /> {j.location}</span>
                   </div>
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => openMail(j)}
-                    className="rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm px-3.5 py-2"
+                    className="rounded-lg bg-[linear-gradient(180deg,#60a5fa,#2563eb_85%)] text-white text-sm px-3.5 py-2
+                               border border-blue-600/60 shadow-[0_10px_20px_rgba(37,99,235,0.25)]
+                               hover:brightness-110 active:brightness-[1.05] transition"
                   >
                     Apply
                   </button>
-                  <a href={`#${j.id}`} className="rounded-lg border border-gray-300 dark:border-gray-700 text-sm px-3.5 py-2">
+                  <a
+                    href={`#${j.id}`}
+                    className="rounded-lg border border-slate-300 dark:border-slate-700 text-sm px-3.5 py-2
+                               bg-white/70 dark:bg-slate-950/60 hover:bg-slate-50 dark:hover:bg-slate-900 transition"
+                  >
                     Details
                   </a>
                 </div>
               </div>
 
-              <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">{j.intro}</p>
+              <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">{j.intro}</p>
 
               {/* Details */}
               <div id={j.id} className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <section className="border rounded-xl p-4 bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800">
+                <section className="border rounded-xl p-4 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
                   <h4 className="font-medium mb-2">Responsibilities</h4>
                   <ul className="list-disc list-inside text-sm space-y-1">
                     {j.responsibilities.map((x) => <li key={x}>{x}</li>)}
                   </ul>
                 </section>
-                <section className="border rounded-xl p-4 bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800">
+                <section className="border rounded-xl p-4 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
                   <h4 className="font-medium mb-2">Requirements</h4>
                   <ul className="list-disc list-inside text-sm space-y-1">
                     {j.requirements.map((x) => <li key={x}>{x}</li>)}
                   </ul>
                 </section>
-                <section className="border rounded-xl p-4 bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800">
+                <section className="border rounded-xl p-4 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800">
                   <h4 className="font-medium mb-2">Perks & More</h4>
                   <ul className="list-disc list-inside text-sm space-y-1">
                     {j.niceToHave?.map((x) => <li key={x}>{x}</li>)}
@@ -275,12 +300,12 @@ export default function CareersPage() {
       )}
 
       {/* Bottom CTA */}
-      <div className="mt-8 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 bg-white/70 dark:bg-gray-950/60">
+      <div className="mt-8 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 bg-white/80 dark:bg-slate-950/60">
         <h3 className="font-semibold">General Application</h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
           Passionate about building for education but unsure where you fit?
           Email us your resume and a short note at{" "}
-          <a href="mailto:a4ai.team@gmail.com" className="text-indigo-600">a4ai.team@gmail.com</a>.
+          <a href="mailto:a4ai.team@gmail.com" className="text-sky-600 hover:text-sky-700">a4ai.team@gmail.com</a>.
         </p>
       </div>
     </CompanyLayout>
