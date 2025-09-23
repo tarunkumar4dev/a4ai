@@ -148,11 +148,11 @@ const useSidebarData = () =>
         { icon: Settings, label: "Settings", to: "/dashboard/settings" },
       ],
       contestInfo: {
-        title: "Class 10 Science Test 2025",
-        deadline: "2025-07-25",
-        participants: 300,
-        prize1: "₹5,000",
-        prize2: "₹2,000",
+        title: "Class 11 Physics Test 2025",
+        deadline: "2025-05-10",
+        participants: 250,
+        prize1: "₹500",
+        prize2: "₹300",
         premium: true,
       },
       notesSummary: { unread: 3, recentSubject: "Algebra II", lastUpdated: "2 hours ago", starred: 5 },
@@ -297,7 +297,7 @@ const NotesQuick = React.memo(function NotesQuick({
             className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-sm text-white transition-all bg-gradient-to-b from-[#1F2937] to-[#0B1220]"
           >
             <Plus className="h-4 w-4" />
-            New Note
+            Note It !
           </motion.button>
         </Link>
       </div>

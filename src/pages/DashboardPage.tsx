@@ -195,11 +195,13 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Link to="/dashboard/test-generator">
-                      <Button className="group bg-gray-900 text-white hover:bg-black">
-                        <Plus className="mr-2 h-4 w-4" /> Create New Test
-                        <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                      <Button
+                        className="gap-2 w-full sm:w-auto rounded-xl bg-gray-900 text-white hover:bg-black active:scale-[.98] shadow-lg"
+                      >
+                        <Rocket className="h-4 w-4" /> Create a Test Paper
                       </Button>
                     </Link>
+
                     <Link to="/dashboard/history">
                       <Button variant="outline">View History</Button>
                     </Link>
@@ -215,9 +217,9 @@ export default function DashboardPage() {
 
             {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <KpiCard title="Tests Generated" value={recentTests.length} icon={FileText} tone="blue"  interactive={interactiveCards} />
-              <KpiCard title="Avg. Time to Paper" value="01:42" icon={TimerReset} tone="teal"  interactive={interactiveCards} />
-              <KpiCard title="Syllabus Match" value="99%" icon={TrendingUp} tone="blue"  interactive={interactiveCards} />
+              <KpiCard title="Tests Generated" value={recentTests.length} icon={FileText} tone="blue" interactive={interactiveCards} />
+              <KpiCard title="Avg. Time to Paper" value="01:42" icon={TimerReset} tone="teal" interactive={interactiveCards} />
+              <KpiCard title="Syllabus Match" value="99%" icon={TrendingUp} tone="blue" interactive={interactiveCards} />
               <KpiCard title="Streak" value={profile?.streak ?? 3} icon={Flame} tone="amber" interactive={interactiveCards} />
             </div>
 
@@ -237,11 +239,10 @@ export default function DashboardPage() {
                         <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className={`w-2 h-2 rounded-full ${
-                                t.subject === "Physics" ? "bg-red-400"
+                              <span className={`w-2 h-2 rounded-full ${t.subject === "Physics" ? "bg-red-400"
                                 : t.subject === "Mathematics" ? "bg-sky-400"
-                                : "bg-emerald-400"
-                              }`} />
+                                  : "bg-emerald-400"
+                                }`} />
                               <h3 className="font-[600] tracking-[-0.01em] truncate" style={{ color: INK }}>{t.name}</h3>
                               <Badge variant="secondary" className="ml-1 shrink-0">{t.subject}</Badge>
                               {t.status === "Ready" ? (
@@ -292,17 +293,20 @@ export default function DashboardPage() {
             </div>
 
             {/* CTA */}
-            <motion.div variants={item} className="rounded-2xl border p-[1px] shadow-sm">
-              <div className="rounded-2xl bg-card card-soft px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <motion.div variants={item} className="rounded-2xl border p-[1px] shadow-[0_8px_24px_rgba(0,0,0,0.08),0_12px_40px_rgba(0,0,0,0.06)]">
+              <div className="rounded-2xl bg-card card-soft px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
                   <div className="text-[18px] font-[600] tracking-[-0.01em]" style={{ color: INK }}>Host a live contest</div>
                   <div className="text-sm text-muted-foreground">Proctor with camera checks, rankings and exports.</div>
                 </div>
                 <Link to="/dashboard/contest/create">
-                  <Button className="gap-2 w-full sm:w-auto">
+                  <Button
+                    className="gap-2 w-full sm:w-auto rounded-xl bg-gray-900 text-white hover:bg-black active:scale-[.98] shadow-lg"
+                  >
                     <Rocket className="h-4 w-4" /> Create contest
                   </Button>
                 </Link>
+
               </div>
             </motion.div>
           </motion.div>
@@ -339,8 +343,8 @@ function KpiCard({
 
   // glossy blue gradients (matches hero: #76B6FF → #2F6DF4)
   const TONES = {
-    blue:  { border: "from-[#76B6FF66] to-[#2F6DF466]", chip: "bg-[#E8F1FF] text-[#1E3A8A]" },
-    teal:  { border: "from-teal-400/45 to-cyan-400/45",   chip: "bg-teal-500/10 text-teal-700" },
+    blue: { border: "from-[#76B6FF66] to-[#2F6DF466]", chip: "bg-[#E8F1FF] text-[#1E3A8A]" },
+    teal: { border: "from-teal-400/45 to-cyan-400/45", chip: "bg-teal-500/10 text-teal-700" },
     amber: { border: "from-amber-400/45 to-orange-400/45", chip: "bg-amber-500/10 text-amber-700" },
   } as const;
   const t = TONES[tone];

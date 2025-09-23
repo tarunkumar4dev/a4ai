@@ -106,7 +106,6 @@ const TestGeneratorPage = () => {
 
       let finalUrl = res.url;
 
-      // In rare cases, client lib may return a blob URL (streamed PDF path).
       if (finalUrl.startsWith("blob:")) {
         objectUrlToRevoke = finalUrl;
       }
@@ -143,11 +142,12 @@ const TestGeneratorPage = () => {
   return (
     <div
       className="
-        flex h-screen
-        bg-[radial-gradient(900px_600px_at_0%_-10%,rgba(161,196,253,0.28),transparent),
-            radial-gradient(1000px_700px_at_100%_0%,rgba(251,174,210,0.20),transparent)]
+        flex h-screen text-slate-900
+        bg-[#DFE4EF]
       "
     >
+      {/* subtle grid on background */}
+      <div className="fixed inset-0 -z-10 opacity-[0.05] [background-image:linear-gradient(to_right,#000_1px,transparent_1px),linear-gradient(to_bottom,#000_1px,transparent_1px)] [background-size:48px_48px]" />
       <DashboardSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -159,10 +159,11 @@ const TestGeneratorPage = () => {
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold leading-tight bg-gradient-to-r from-sky-600 via-indigo-600 to-fuchsia-500 bg-clip-text text-transparent">
+                {/* remove pink/fuchsia from gradient */}
+                <h1 className="text-2xl font-bold leading-tight bg-gradient-to-r from-sky-600 via-indigo-600 to-indigo-700 bg-clip-text text-transparent">
                   Test Generator
                 </h1>
-                <p className="text-sm text-zinc-500">As Fast as Light</p>
+                <p className="text-sm text-slate-500">As Fast as Light</p>
               </div>
             </div>
           </div>
@@ -173,7 +174,7 @@ const TestGeneratorPage = () => {
           <div className="max-w-6xl mx-auto px-6 py-8">
             {/* Tabs */}
             <Tabs defaultValue="test-generator" className="w-full">
-              <TabsList className="relative grid grid-cols-2 bg-zinc-100/70 rounded-xl overflow-hidden p-1">
+              <TabsList className="relative grid grid-cols-2 bg-slate-100/70 rounded-xl overflow-hidden p-1">
                 <TabsTrigger value="test-generator">Generate</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
@@ -181,15 +182,15 @@ const TestGeneratorPage = () => {
               {/* Generate */}
               <TabsContent value="test-generator">
                 <motion.section
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35 }}
-                  className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm ring-1 ring-black/5"
+                  transition={{ duration: 0.28 }}
+                  className="bg-white/85 backdrop-blur rounded-2xl p-6 shadow-[0_8px_24px_rgba(2,8,23,.06)] ring-1 ring-black/5"
                 >
                   <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-xl font-semibold">Create New Test</h2>
                     {loading ? (
-                      <span className="inline-flex items-center gap-2 text-sm text-zinc-500">
+                      <span className="inline-flex items-center gap-2 text-sm text-slate-500">
                         <Loader2 className="h-4 w-4 animate-spin" /> Generating…
                       </span>
                     ) : null}
@@ -200,10 +201,10 @@ const TestGeneratorPage = () => {
                   <AnimatePresence>
                     {downloadUrl && (
                       <motion.div
-                        initial={{ opacity: 0, y: 8 }}
+                        initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 8 }}
-                        className="mt-5 flex items-center justify-between rounded-xl border bg-gradient-to-r from-zinc-50 to-white p-4"
+                        exit={{ opacity: 0, y: 6 }}
+                        className="mt-5 flex items-center justify-between rounded-xl border bg-gradient-to-r from-slate-50 to-white p-4"
                       >
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 inline-flex items-center justify-center rounded-lg bg-black text-white">
@@ -212,7 +213,7 @@ const TestGeneratorPage = () => {
                           <div>
                             <div className="font-medium">Your PDF is ready</div>
                             {lastMeta && (
-                              <div className="text-sm text-zinc-500">
+                              <div className="text-sm text-slate-500">
                                 {lastMeta.subject} • {lastMeta.difficulty} • {lastMeta.qCount} Qs
                               </div>
                             )}
@@ -235,16 +236,16 @@ const TestGeneratorPage = () => {
               {/* History */}
               <TabsContent value="history">
                 <motion.section
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.35 }}
-                  className="bg-white/80 backdrop-blur rounded-2xl p-6 shadow-sm ring-1 ring-black/5"
+                  transition={{ duration: 0.28 }}
+                  className="bg-white/85 backdrop-blur rounded-2xl p-6 shadow-[0_8px_24px_rgba(2,8,23,.06)] ring-1 ring-black/5"
                 >
                   <div className="mb-5 flex items-center justify-between">
                     <h2 className="text-xl font-semibold">Recent Papers</h2>
                     <button
                       onClick={refreshHistory}
-                      className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm hover:bg-zinc-50"
+                      className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm hover:bg-slate-50"
                       disabled={historyLoading}
                     >
                       {historyLoading ? (
@@ -270,7 +271,7 @@ const TestGeneratorPage = () => {
                       {rows.map((r) => (
                         <div
                           key={r.id}
-                          className="border rounded p-2 flex items-center justify-between text-sm"
+                          className="border rounded-xl p-3 flex items-center justify-between text-sm bg-white/90"
                         >
                           <div>
                             <div className="font-medium">
