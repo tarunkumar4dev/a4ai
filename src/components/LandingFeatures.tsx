@@ -24,7 +24,7 @@ const features = [
   },
   {
     icon: Loader,
-    title: "Under 1 Minute",
+    title: "Under 2 Minutes",
     description:
       "Create a complete, formatted paper and move straight to review.",
   },
