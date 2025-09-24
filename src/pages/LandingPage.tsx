@@ -207,9 +207,7 @@ export default function LandingPage() {
                   className="rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
                   variants={fadeUp}
                 >
-                  <div
-                    className="mb-6 flex items-center"
-                  >
+                  <div className="mb-6 flex items-center">
                     <div
                       className="mr-4 flex h-12 w-12 items-center justify-center rounded-full font-bold text-white"
                       style={{
@@ -248,8 +246,7 @@ export default function LandingPage() {
         <motion.section
           className="py-20"
           style={{
-            background:
-              "linear-gradient(135deg, #DFE4EF 0%, #F6F9FF 100%)",
+            background: "linear-gradient(135deg, #DFE4EF 0%, #F6F9FF 100%)",
           }}
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -267,10 +264,7 @@ export default function LandingPage() {
               <Button
                 size="lg"
                 className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
-                style={{
-                  background: "#5D6B7B",
-                  color: "#fff",
-                }}
+                style={{ background: "#5D6B7B", color: "#fff" }}
               >
                 Get Started For Free
               </Button>
@@ -291,8 +285,7 @@ function UpgradedCTA() {
   return (
     <motion.div variants={fadeUp} className="mx-auto mt-16 max-w-5xl">
       <div
-        className="relative overflow-hidden rounded-2xl border bg-white p-8 shadow-xl backdrop-blur
-                      dark:bg-white/5"
+        className="relative overflow-hidden rounded-2xl border bg-white p-8 shadow-xl backdrop-blur dark:bg-white/5"
         style={{ borderColor: "var(--stroke, #E4E9F0)" }}
       >
         {/* decorative frame (neutral grey-blue) */}
@@ -384,7 +377,7 @@ function TrustSecurity() {
           <LogosMarquee />
         </motion.div>
 
-        <motion.div variants={fadeUp} className="text-center mb-14">
+        <motion.div variants={fadeUp} className="mb-14 text-center">
           <h2
             className="mb-4 text-4xl font-extrabold bg-clip-text text-transparent"
             style={{
@@ -411,13 +404,15 @@ function TrustSecurity() {
             { title: "Controls", desc: "Role-based access, per-class sharing, and one-click export.", icon: "⚙️" },
           ].map((c, i) => (
             <motion.div
-              key={c.title}
+              key={`${c.title}-${i}`}
               variants={fadeUp}
               transition={{ delay: 0.05 * i }}
               className="rounded-2xl border border-gray-100 bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
             >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-2xl"
-                   style={{ background: "linear-gradient(135deg, #EFF3F9, #DFE4EF)" }}>
+              <div
+                className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-2xl"
+                style={{ background: "linear-gradient(135deg, #EFF3F9, #DFE4EF)" }}
+              >
                 {c.icon}
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{c.title}</h3>
@@ -453,7 +448,7 @@ function LogosMarquee() {
           "DELTA INSTITUTES",
         ]).map((name, idx) => (
           <div
-            key={idx}
+            key={`${name}-${idx}`}
             className="inline-flex h-10 items-center rounded-md border border-gray-200 px-4 text-xs font-semibold tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-300"
           >
             {name}
@@ -469,9 +464,10 @@ function LogosMarquee() {
    ========================= */
 function Outcomes() {
   const stats = [
-    { k: "2000+", v: "Questions Generated", sub: "across subjects & boards" },
-    { k: "5h", v: "Saved / Teacher / Month", sub: "on paper creation & grading" },
-    { k: "95%", v: "Teacher Satisfaction", sub: "internal NPS survey" },
+    // First card: tagline only (removes 2000+/Questions Generated/subtitle)
+    { k: "Shaping Tomorrow's Classrooms" },
+    { k: "12+", v: "Question formats", sub: "MCQ, SA, LA, Cloze, Match…" },
+    { k: "PDF & Word", v: "Export anywhere", sub: "print or share in your LMS" },
   ];
 
   return (
@@ -498,7 +494,7 @@ function Outcomes() {
         >
           {stats.map((s, i) => (
             <motion.div
-              key={s.v}
+              key={`${s.k}-${i}`}
               variants={fadeUp}
               transition={{ delay: 0.05 * i }}
               className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-lg dark:border-gray-800 dark:bg-gray-900"
@@ -512,10 +508,14 @@ function Outcomes() {
               >
                 {s.k}
               </div>
-              <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
-                {s.v}
-              </div>
-              <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>
+              {s.v && (
+                <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
+                  {s.v}
+                </div>
+              )}
+              {s.sub && (
+                <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>
+              )}
             </motion.div>
           ))}
         </motion.div>
