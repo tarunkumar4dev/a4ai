@@ -6,9 +6,9 @@ import { useState } from "react";
 const features = [
   {
     icon: FileText,
-    title: "10,000+ Generated Tests",
+    title: "Hosted Tests + Analytics",
     description:
-      "Teachers have already created thousands of customized tests with our platform.",
+      "Share a link, collect responses, and see concept-level insights.",
   },
   {
     icon: Brain,
