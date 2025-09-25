@@ -17,10 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowRight,
   BellDot,
   Flame,
-  Plus,
   Rocket,
   TimerReset,
   TrendingUp,
@@ -205,7 +203,9 @@ export default function DashboardPage() {
                     <Link to="/dashboard/history">
                       <Button variant="outline">View History</Button>
                     </Link>
-                    <Link to="/dashboard/subscription">
+
+                    {/* ✅ Upgrade goes to public pricing */}
+                    <Link to="/pricing">
                       <Button variant="ghost" className="gap-1">
                         <Zap className="h-4 w-4" /> Upgrade
                       </Button>
@@ -306,7 +306,6 @@ export default function DashboardPage() {
                     <Rocket className="h-4 w-4" /> Create contest
                   </Button>
                 </Link>
-
               </div>
             </motion.div>
           </motion.div>
@@ -341,7 +340,6 @@ function KpiCard({
     my.set(e.clientY - r.top);
   };
 
-  // glossy blue gradients (matches hero: #76B6FF → #2F6DF4)
   const TONES = {
     blue: { border: "from-[#76B6FF66] to-[#2F6DF466]", chip: "bg-[#E8F1FF] text-[#1E3A8A]" },
     teal: { border: "from-teal-400/45 to-cyan-400/45", chip: "bg-teal-500/10 text-teal-700" },
