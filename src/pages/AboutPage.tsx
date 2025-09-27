@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef } from "react";
 import {
   motion,
   useInView,
@@ -16,71 +16,54 @@ import {
   Target,
   ShieldCheck,
   Rocket,
-  Globe2,
   Bolt,
   BookOpenCheck,
-  Building2,
-  HeartHandshake,
   Quote,
   ArrowRight,
-  Star,
+  Gauge,
+  Shield,
+  BookOpen,
 } from "lucide-react";
 
-// ---------------- Data ----------------
+/* ----------------------------- Theme Tokens ----------------------------- */
+const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
+const cardShell =
+  "rounded-2xl border border-black/5 dark:border-white/10 bg-white/70 dark:bg-gray-900/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_10px_30px_rgba(2,6,23,0.05)] backdrop-blur";
+const statCard =
+  "rounded-2xl border border-black/5 dark:border-white/10 bg-white/80 dark:bg-gray-900/60 text-center p-4 shadow-sm backdrop-blur";
+
+const primaryGrad =
+  "bg-gradient-to-tr from-indigo-500 via-indigo-500/90 to-sky-500 text-white hover:from-indigo-600 hover:via-indigo-600/90 hover:to-sky-600";
+
+const ghostLight =
+  "border border-black/10 text-gray-900 hover:bg-gray-100 " +
+  "dark:border-white/20 dark:text-white dark:hover:bg-white/10";
+
+/* --------------------------------- Data --------------------------------- */
 const team = [
-  {
-    name: "Tarun",
-    role: "Co-Founder",
-    description: "Full Stack + ML",
-    image: "/images/tarun_a4ai.jpeg",
-  },
-  {
-    name: "Yash",
-    role: "Co-Founder",
-    description: "Full Stack + ML",
-    image: "/images/yash_a4ai.jpeg",
-  },
-  {
-    name: "Aakash",
-    role: "Co-Founder",
-    description: "Infra & security",
-    image: "/images/aakash_a4ai.jpg",
-  },
-  {
-    name: "Krishna",
-    role: "Co-Founder",
-    description: "Ops & CFO",
-    image: "/images/krishna_a4ai.jpg",
-  },
+  { name: "Tarun", role: "Co-Founder", description: "Technology · Marketing", image: "/images/tarun_a4ai.jpeg" },
+  { name: "Yash", role: "Co-Founder", description: "Tech Lead", image: "/images/yash_a4ai.jpeg" },
+  { name: "Aakash", role: "Co-Founder", description: "Tech Support · Cloud", image: "/images/aakash_a4ai.jpg" },
+  { name: "Krishna", role: "Co-Founder", description: "COO", image: "/images/krishna_a4ai.jpg" },
 ];
 
 const values = [
-  { icon: Target, k: "Outcomes > Outputs", v: "We obsess over student learning gains and teacher time saved." },
-  { icon: ShieldCheck, k: "Trust by design", v: "Privacy‑first data handling with clear controls and audit trails." },
-  { icon: BookOpenCheck, k: "Pedagogy‑aware AI", v: "Questions that align to curriculum, not just prompt magic." },
-  { icon: Bolt, k: "Speed with dignity", v: "From prompt to paper in under 2 min—without cutting corners." },
+  { icon: Target, k: "Outcomes > Outputs", v: "We obsess over learning gains and teacher time saved." },
+  { icon: ShieldCheck, k: "Trust by design", v: "Privacy-first controls with auditability." },
+  { icon: BookOpenCheck, k: "Pedagogy-aware AI", v: "Curriculum-aligned, rubric-checked questions." },
+  { icon: Bolt, k: "Speed with dignity", v: "Under 2 minutes, without cutting corners." },
 ];
 
 const milestones = [
-  { date: "Apr 2025", title: "a4ai is founded", detail: "Validated the pain: teachers spend 6–10 hrs/week creating papers." },
-  { date: "Jun 2025", title: "Private alpha", detail: "First 50 teachers, 1K+ papers generated; tight build‑with loop." },
-  { date: "Aug 2025", title: "Contest engine MVP", detail: "Proctored live contests with camera checks & screen‑lock." },
-  { date: "Q4 2025", title: "Institutes beta", detail: "Custom branding, SSO, and advanced analytics for campuses." },
+  { date: "Apr 2025", title: "a4ai is founded", detail: "Validated teachers spend 6–10 hrs/week creating papers." },
+  { date: "Jun 2025", title: "Private alpha", detail: "First 50 teachers; 1K+ papers generated; tight build-with loop." },
+  { date: "Aug 2025", title: "Contest engine MVP", detail: "Proctored live contests with camera checks & screen-lock." },
+  { date: "Q4 2025", title: "Institutes beta", detail: "Branding, SSO, advanced analytics for campuses." },
 ];
 
 const testimonials = [
-  {
-    quote:
-      "We cut paper‑setting time by 80% and finally standardised difficulty across sections.",
-    name: "Ritika Sharma",
-    title: "HOD Science, Delhi",
-  },
-  {
-    quote:
-      "Proctoring is surprisingly humane—alerts were actionable and didn’t overwhelm invigilators.",
-    name: "Arvind Rao",
-    title: "Principal, Pune",
-  },
+  { quote: "We cut paper-setting time by ~80% and standardised difficulty across sections.", name: "Ritika Sharma", title: "HOD Science, Delhi" },
+  { quote: "Proctoring felt humane—alerts were actionable and not overwhelming.", name: "Arvind Rao", title: "Principal, Pune" },
 ];
 
 const partners = [
@@ -90,21 +73,17 @@ const partners = [
   { name: "EduLabs", logo: "/images/partner-edulabs.svg" },
 ];
 
-// --------------- Small helpers ---------------
+/* ------------------------------ Anim Presets ----------------------------- */
 const fadeUp = {
   initial: { opacity: 0, y: 24 },
-  whileInView: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, ease: "easeOut" },
-  },
+  whileInView: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+  viewport: { once: true },
 };
 
-// --------------- Page ---------------
+/* --------------------------------- Page --------------------------------- */
 export default function AboutPage() {
-  // cursor‑reactive glow
-  const mx = useMotionValue(300);
-  const my = useMotionValue(140);
+  const mx = useMotionValue(320);
+  const my = useMotionValue(160);
   const onMouseMove = (e: React.MouseEvent<HTMLElement>) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     mx.set(e.clientX - r.left);
@@ -112,54 +91,51 @@ export default function AboutPage() {
   };
 
   const heroGlow = useMotionTemplate`
-    radial-gradient(900px 450px at ${mx}px ${my}px, hsl(var(--primary)/0.10), transparent 70%),
-    radial-gradient(800px 400px at calc(${mx}px + 220px) calc(${my}px + 140px), hsl(var(--primary)/0.08), transparent 70%)
+    radial-gradient(900px 500px at ${mx}px ${my}px, rgba(99,102,241,0.14), transparent 70%),
+    radial-gradient(700px 380px at calc(${mx}px + 220px) calc(${my}px + 140px), rgba(56,189,248,0.12), transparent 70%)
   `;
 
   const sectionRef = useRef(null);
-  const inView = useInView(sectionRef, { once: true, margin: "-15% 0px" });
+  const inView = useInView(sectionRef, { once: true, margin: "-12% 0px" });
 
   const orgJsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: 'a4ai',
-    url: 'https://a4ai.in',
-    logo: 'https://a4ai.in/images/logo.png',
-    sameAs: ['https://x.com/a4ai', 'https://www.linkedin.com/company/a4ai'],
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "a4ai",
+    url: "https://a4ai.in",
+    logo: "https://a4ai.in/images/logo.png",
+    sameAs: ["https://x.com/a4ai", "https://www.linkedin.com/company/a4ai"],
   };
 
   return (
     <>
       <Helmet>
-        <title>About a4ai — Building assessment tools that serve learning</title>
+        <title>About a4ai — Smart, simple, secure assessments</title>
         <meta
           name="description"
-          content="We’re a small team building AI‑powered test generation, proctoring, and analytics that respect pedagogy and privacy."
+          content="We’re a builder-educator team crafting AI-powered test generation, proctoring, and analytics that respect pedagogy and privacy."
         />
         <script type="application/ld+json">{JSON.stringify(orgJsonLd)}</script>
         <meta property="og:title" content="About a4ai" />
-        <meta property="og:description" content="AI‑powered assessments for real classrooms." />
+        <meta property="og:description" content="AI-powered assessments for real classrooms." />
         <meta property="og:type" content="website" />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-white dark:from-gray-950 dark:via-gray-950 dark:to-gray-900">
+      <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,rgba(99,102,241,0.06),transparent_70%)] dark:bg-[radial-gradient(1200px_600px_at_50%_-10%,rgba(99,102,241,0.08),transparent_70%)]">
         {/* HERO */}
-        <section
-          onMouseMove={onMouseMove}
-          className="relative overflow-hidden py-24 md:py-28 text-gray-900 dark:text-white"
-        >
+        <section onMouseMove={onMouseMove} className="relative overflow-hidden py-24 md:py-28 text-gray-900 dark:text-white">
           <motion.div aria-hidden className="absolute inset-0 -z-10" style={{ backgroundImage: heroGlow }} />
           <div className="absolute inset-0 -z-20 bg-[url('/images/grid.svg')] bg-center opacity-5 dark:opacity-[0.03]" />
 
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
+          <div className={sectionX}>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Badge variant="secondary" className="gap-1"><Sparkles className="h-3.5 w-3.5"/> Founded 2025</Badge>
-              <Badge variant="secondary" className="gap-1"><Rocket className="h-3.5 w-3.5"/> Contest engine live</Badge>
-              <Badge variant="secondary" className="gap-1"><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</Badge>
+              <Badge variant="secondary" className="gap-1"><Sparkles className="h-3.5 w-3.5" /> Founded 2025</Badge>
+              <Badge variant="secondary" className="gap-1"><Rocket className="h-3.5 w-3.5" /> Contest engine live</Badge>
+              <Badge variant="secondary" className="gap-1"><ShieldCheck className="h-3.5 w-3.5" /> Privacy-first</Badge>
             </div>
 
             <motion.h1
-              initial={{ opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, ease: "easeOut" }}
               className="text-center text-5xl md:text-6xl font-extrabold tracking-tight mt-6"
@@ -173,8 +149,7 @@ export default function AboutPage() {
               transition={{ delay: 0.15, duration: 0.6 }}
               className="mx-auto mt-5 max-w-3xl text-center text-lg md:text-xl text-gray-600 dark:text-gray-300"
             >
-              We’re building the assessment stack for Indian classrooms—
-              fast, fair, and aligned to how teachers actually teach.
+              Building the assessment stack for Indian classrooms—fast, fair, and aligned to how teachers actually teach.
             </motion.p>
 
             {/* Stats */}
@@ -191,7 +166,7 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.05 * i, duration: 0.4 }}
-                  className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center shadow-sm backdrop-blur dark:border-white/10 dark:bg-gray-900/50"
+                  className={statCard}
                 >
                   <div className="text-2xl font-bold">{s.v}</div>
                   <div className="text-xs text-muted-foreground">{s.k}</div>
@@ -203,27 +178,62 @@ export default function AboutPage() {
 
         {/* MISSION */}
         <section ref={sectionRef} className="relative py-16">
-          <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-            <motion.div initial={{ opacity: 0, x: -40 }} animate={inView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
-              <h2 className="text-3xl md:text-4xl font-extrabold">Our mission</h2>
+          <div className={`${sectionX} grid grid-cols-1 items-center gap-12 lg:grid-cols-2`}>
+            <motion.div
+              initial={{ opacity: 0, x: -36 }}
+              animate={inView ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.6 }}
+            >
+              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Our mission</h2>
               <p className="mt-5 text-lg md:text-xl text-muted-foreground leading-relaxed">
-                Give teachers superpowers with AI that respects context and curriculum.
-                Save hours every week and return that time to students.
+                Give teachers superpowers with AI that respects context and curriculum. Save hours weekly and return that time to students.
               </p>
               <p className="mt-4 text-lg md:text-xl text-muted-foreground leading-relaxed">
-                We combine multi‑LLM generation with rubric checks, plagiarism guards,
-                and contest‑grade proctoring to ensure quality from day one.
+                Multi-LLM generation meets rubric checks, plagiarism guards, and humane proctoring—quality from day one.
               </p>
-              <div className="mt-8 flex gap-3">
-                <Button size="lg" className="rounded-xl">See how it works</Button>
-                <Button size="lg" variant="outline" className="rounded-xl">Talk to us</Button>
+
+              {/* Visible buttons (fixed contrast) */}
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button size="lg" className={`rounded-xl px-6 ${primaryGrad}`}>
+                  See how it works
+                </Button>
+                <Button size="lg" variant="outline" className={`rounded-xl px-6 ${ghostLight}`}>
+                  Talk to us
+                </Button>
+              </div>
+
+              {/* Detail-centric mini reasons */}
+              <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  { icon: Gauge, title: "Faster prep", copy: "Create aligned tests in minutes, not evenings." },
+                  { icon: Shield, title: "Safer data", copy: "Privacy-first storage, clear consent, audit trails." },
+                  { icon: BookOpen, title: "Better pedagogy", copy: "Curriculum mapping + rubric checks by default." },
+                ].map((i) => (
+                  <div key={i.title} className={`${cardShell} p-3`}>
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <i.icon className="h-4 w-4 text-indigo-500" />
+                      {i.title}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{i.copy}</p>
+                  </div>
+                ))}
               </div>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 40 }} animate={inView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
-              <Card className="overflow-hidden">
+            <motion.div
+              initial={{ opacity: 0, x: 36 }}
+              animate={inView ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.6 }}
+            >
+              <Card className={`${cardShell} overflow-hidden`}>
                 <CardContent className="p-0">
-                  <img src="/images/bg.jpg" alt="Educators using a4ai" className="aspect-video w-full object-cover" loading="lazy" />
+                  <img
+                    src="/images/bg.jpg"
+                    alt="Educators using a4ai"
+                    className="aspect-video w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </CardContent>
               </Card>
             </motion.div>
@@ -232,9 +242,9 @@ export default function AboutPage() {
 
         {/* VALUES */}
         <section className="py-8">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className={sectionX}>
             <div className="mb-6 text-center">
-              <h3 className="text-2xl font-bold">What we value</h3>
+              <h3 className="text-2xl font-bold tracking-tight">What we value</h3>
               <p className="mt-1 text-sm text-muted-foreground">Principles that steer product and policy.</p>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -245,9 +255,11 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.05 * i, duration: 0.4 }}
-                  className="rounded-2xl border bg-gradient-to-b from-background to-muted/40 p-4"
+                  className={`${cardShell} p-4`}
                 >
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><x.icon className="h-4 w-4"/> {x.k}</div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <x.icon className="h-4 w-4 text-indigo-500" /> {x.k}
+                  </div>
                   <p className="mt-2 text-sm">{x.v}</p>
                 </motion.div>
               ))}
@@ -258,7 +270,7 @@ export default function AboutPage() {
         {/* TIMELINE */}
         <section className="py-12">
           <div className="mx-auto max-w-5xl px-4">
-            <h3 className="text-2xl font-bold text-center">Milestones</h3>
+            <h3 className="text-2xl font-bold text-center tracking-tight">Milestones</h3>
             <div className="mt-6 space-y-6">
               {milestones.map((m, i) => (
                 <motion.div
@@ -267,7 +279,7 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.45 }}
-                  className="grid grid-cols-1 gap-3 rounded-2xl border bg-background/60 p-4 md:grid-cols-[140px_1fr]"
+                  className={`${cardShell} grid grid-cols-1 gap-3 p-4 md:grid-cols-[140px_1fr]`}
                 >
                   <div className="text-sm font-medium text-muted-foreground">{m.date}</div>
                   <div>
@@ -281,13 +293,21 @@ export default function AboutPage() {
         </section>
 
         {/* TEAM */}
-        <section className="relative bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-950 py-16">
-          <div className="absolute inset-0 bg-[url('/images/grid-dark.svg')] bg-center opacity-[0.03]" />
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section className="relative py-16">
+          <div className="absolute inset-0 bg-[url('/images/grid-dark.svg')] bg-center opacity-[0.03] pointer-events-none" />
+          <div className={`${sectionX} relative`}>
             <div className="text-center">
-              <motion.h2 {...fadeUp} className="mb-4 text-3xl md:text-4xl font-extrabold tracking-tight">Meet the team</motion.h2>
-              <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.15, duration: 0.5 }} className="mx-auto max-w-3xl text-lg text-muted-foreground">
-                Builder‑educators who care about the craft of assessment.
+              <motion.h2 {...fadeUp} className="mb-3 text-3xl md:text-4xl font-extrabold tracking-tight">
+                Meet the team
+              </motion.h2>
+              <motion.p
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.15, duration: 0.5 }}
+                className="mx-auto max-w-3xl text-lg text-muted-foreground"
+              >
+                Builder-educators who care about the craft of assessment.
               </motion.p>
             </div>
 
@@ -296,6 +316,11 @@ export default function AboutPage() {
                 <TeamCard key={m.name} index={i} member={m} />
               ))}
             </div>
+
+            {/* behind-the-scenes note */}
+            <p className="mt-8 text-center text-sm text-muted-foreground">
+              …and many more builders behind the screen—mentors, teachers, and student testers who shape a4ai every week.
+            </p>
           </div>
         </section>
 
@@ -303,13 +328,13 @@ export default function AboutPage() {
         <section className="py-12">
           <div className="mx-auto max-w-6xl px-4">
             <div className="text-center">
-              <h3 className="text-2xl font-bold">Schools & partners</h3>
+              <h3 className="text-2xl font-bold tracking-tight">Schools & partners</h3>
               <p className="mt-1 text-sm text-muted-foreground">Pilots and early adopters we’re grateful for.</p>
             </div>
             <div className="mt-6 grid grid-cols-2 items-center gap-6 sm:grid-cols-4">
               {partners.map((p) => (
-                <div key={p.name} className="flex items-center justify-center rounded-xl border bg-muted/30 p-4">
-                  <img src={p.logo} alt={p.name} className="h-8 opacity-80" />
+                <div key={p.name} className={`${cardShell} flex items-center justify-center p-4`}>
+                  <img src={p.logo} alt={p.name} className="h-8 opacity-80" loading="lazy" decoding="async" />
                 </div>
               ))}
             </div>
@@ -327,9 +352,9 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.45, delay: 0.05 * i }}
-                  className="relative rounded-2xl border bg-background/60 p-6"
+                  className={`${cardShell} relative p-6`}
                 >
-                  <Quote className="absolute -top-3 -left-3 h-6 w-6 text-primary" />
+                  <Quote className="absolute -top-3 -left-3 h-6 w-6 text-indigo-500" />
                   <p className="text-base">{t.quote}</p>
                   <footer className="mt-4 text-sm text-muted-foreground">— {t.name}, {t.title}</footer>
                 </motion.blockquote>
@@ -339,21 +364,43 @@ export default function AboutPage() {
         </section>
 
         {/* CTA */}
-        <section className="bg-gradient-to-b from-gray-900 to-black py-20 text-white">
-          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            <motion.h2 initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-3xl md:text-4xl font-extrabold">
+        <section className="bg-gradient-to-b from-gray-950 via-[#0b1220] to-black py-20 text-white">
+          <div className={`${sectionX} text-center`}>
+            <motion.h2
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="text-3xl md:text-4xl font-extrabold tracking-tight"
+            >
               Ready to transform your assessments?
             </motion.h2>
-            <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.15, duration: 0.5 }} className="mx-auto mt-3 max-w-3xl text-lg text-white/80">
+            <motion.p
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.15, duration: 0.5 }}
+              className="mx-auto mt-3 max-w-3xl text-lg text-white/80"
+            >
               Join educators using a4ai to save time and improve outcomes.
             </motion.p>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.25, duration: 0.5 }} className="mt-8 flex justify-center gap-3">
-              <Button className="rounded-xl bg-white px-8 py-6 text-lg font-semibold text-gray-900 shadow-lg hover:bg-gray-100">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.25, duration: 0.5 }}
+              className="mt-8 flex justify-center gap-3"
+            >
+              <Button className={`rounded-xl px-8 py-6 text-lg font-semibold shadow-lg ${primaryGrad}`}>
                 Get started for free
               </Button>
-              <Button variant="outline" className="rounded-xl bg-transparent px-8 py-6 text-lg text-white">
+              <Button
+                className="rounded-xl px-8 py-6 text-lg font-semibold bg-white text-black shadow-lg hover:bg-gray-100 dark:bg-gray-100 dark:text-black dark:hover:bg-gray-200 transition-colors"
+              >
                 Book a demo <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
+
+
             </motion.div>
           </div>
         </section>
@@ -362,7 +409,7 @@ export default function AboutPage() {
   );
 }
 
-// ------- Team Card (tilt + glow) -------
+/* ----------------------------- Team Card ----------------------------- */
 function TeamCard({
   member,
   index,
@@ -400,18 +447,17 @@ function TeamCard({
       >
         <motion.div
           style={{ rotateX, rotateY }}
-          className="relative rounded-3xl border border-black/10 dark:border-white/10 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08),0_18px_50px_rgba(0,0,0,0.06)] transition-all duration-300 will-change-transform"
+          className={`${cardShell} relative p-6 will-change-transform`}
         >
           <motion.span
             aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-3xl"
+            className="pointer-events-none absolute inset-0 rounded-2xl"
             style={{
               background: useMotionTemplate`
-                radial-gradient(160px 110px at ${mx}px ${my}px, hsl(var(--primary)/0.10), transparent 70%)
+                radial-gradient(160px 110px at ${mx}px ${my}px, rgba(99,102,241,0.12), transparent 70%)
               `,
             }}
           />
-
           <div className="relative z-10 text-center">
             <Avatar className="mx-auto mb-4 h-28 w-28 ring-1 ring-black/10 dark:ring-white/10">
               <AvatarImage src={member.image} alt={member.name} className="object-cover" />
@@ -420,7 +466,7 @@ function TeamCard({
               </AvatarFallback>
             </Avatar>
 
-            <h3 className="text-xl font-bold">{member.name}</h3>
+            <h3 className="text-xl font-bold tracking-tight">{member.name}</h3>
             <p className="mt-0.5 text-sm font-medium text-muted-foreground">{member.role}</p>
             <p className="mt-3 text-sm text-foreground/90">{member.description}</p>
           </div>
