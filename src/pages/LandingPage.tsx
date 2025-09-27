@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider"; // ⬅️ ADDED
 
 /* -------------------- Animation presets (consistent) -------------------- */
 const fadeUp = {
@@ -23,6 +24,9 @@ const container = {
 };
 
 export default function LandingPage() {
+  const { session } = useAuth();                     // ⬅️ ADDED
+  const loggedIn = !!session;                         // ⬅️ ADDED
+
   return (
     <div className="flex min-h-screen flex-col bg-white dark:bg-gray-950">
       <Navbar />
@@ -260,15 +264,29 @@ export default function LandingPage() {
             <p className="mx-auto mb-10 max-w-3xl text-xl text-[#4E5A66]">
               Join thousands of educators who are saving time and improving student outcomes with a4ai.
             </p>
-            <Link to="/signup">
-              <Button
-                size="lg"
-                className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
-                style={{ background: "#5D6B7B", color: "#fff" }}
-              >
-                Get Started For Free
-              </Button>
-            </Link>
+
+            {/* ⬇️ Auth-aware: logged-in → Dashboard, guest → Signup */}
+            {!loggedIn ? (
+              <Link to="/signup">
+                <Button
+                  size="lg"
+                  className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
+                  style={{ background: "#5D6B7B", color: "#fff" }}
+                >
+                  Get Started For Free
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/dashboard">
+                <Button
+                  size="lg"
+                  className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
+                  style={{ background: "#5D6B7B", color: "#fff" }}
+                >
+                  Go to Dashboard
+                </Button>
+              </Link>
+            )}
           </div>
         </motion.section>
       </main>
@@ -282,6 +300,13 @@ export default function LandingPage() {
    Upgraded CTA
    ========================= */
 function UpgradedCTA() {
+  const { session } = useAuth();         // ⬅️ ADDED
+  const loggedIn = !!session;            // ⬅️ ADDED
+
+  // Destinations based on auth
+  const primaryHref = loggedIn ? "/dashboard/test-generator" : "/signup";
+  const secondaryHref = "/demo";
+
   return (
     <motion.div variants={fadeUp} className="mx-auto mt-16 max-w-5xl">
       <div
@@ -330,16 +355,16 @@ function UpgradedCTA() {
           </div>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/dashboard/test-generator">
+            <Link to={primaryHref}>
               <Button
                 className="group rounded-xl px-7 py-6 text-base font-semibold text-white"
                 style={{ background: "#5D6B7B" }}
               >
-                Create Your First Test
+                {loggedIn ? "Open Test Generator" : "Create Your First Test"}
                 <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Button>
             </Link>
-            <Link to="/demo">
+            <Link to={secondaryHref}>
               <Button
                 variant="outline"
                 className="rounded-xl px-7 py-6 text-base font-semibold"
@@ -463,12 +488,18 @@ function LogosMarquee() {
    Outcomes & Stats
    ========================= */
 function Outcomes() {
+  const { session } = useAuth();     // ⬅️ ADDED
+  const loggedIn = !!session;        // ⬅️ ADDED
+
   const stats = [
     // First card: tagline only (removes 2000+/Questions Generated/subtitle)
     { k: "Shaping Tomorrow's Classrooms" },
     { k: "12+", v: "Question formats", sub: "MCQ, SA, LA, Cloze, Match…" },
     { k: "PDF & Word", v: "Export anywhere", sub: "print or share in your LMS" },
   ];
+
+  // Destination for subtle CTA
+  const subtleHref = loggedIn ? "/dashboard" : "/signup"; // ⬅️ ADDED
 
   return (
     <motion.section
@@ -545,12 +576,12 @@ function Outcomes() {
             Generate your first paper and share it with your class in minutes.
           </p>
           <div className="mt-5">
-            <Link to="/signup">
+            <Link to={subtleHref}>
               <Button
                 className="rounded-xl px-7 py-6 text-base font-semibold text-white"
                 style={{ background: "#5D6B7B" }}
               >
-                Get Started Free
+                {loggedIn ? "Go to Dashboard" : "Get Started Free"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

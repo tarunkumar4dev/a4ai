@@ -1,6 +1,5 @@
 // src/App.tsx
-import { useEffect, useRef, Suspense, lazy } from "react";
-// src/main.tsx (or src/App.tsx – anywhere that runs once at app start)
+import { useEffect, Suspense, lazy } from "react";
 import "./styles/globals.css";
 import {
   BrowserRouter,
@@ -13,11 +12,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabaseClient";
 import PrivateRoute from "@/components/PrivateRoute";
 import { ThemeProvider } from "@/context/ThemeContext";
 import LandingDemo from "@/components/LandingDemo";
 import FAQ from "@/components/FAQ";
+import { AuthProvider, useAuth } from "@/providers/AuthProvider";
+import { useIdleLogout } from "@/hooks/useIdleLogout"; // ⬅️ IDLE LOGOUT
+import { toast } from "sonner";                        // ⬅️ TOASTS
 
 /* ---------- Vercel Analytics & Speed Insights ---------- */
 import { Analytics } from "@vercel/analytics/react";
@@ -103,48 +104,35 @@ const NotFound = () => (
   </div>
 );
 
+/** If user is already logged in, prevent showing /login or /signup.
+ *  If loading, show a spinner so we don't flash wrong page.
+ */
+function AuthGateForAuthPages({ children }: { children: React.ReactNode }) {
+  const { loading, session } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (session) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+/** Mounts the idle-logout hook only when a session exists (avoids warnings for guests). */
+function IdleLogoutManager() {
+  const { session } = useAuth();
+  // Render the hook in a separate component to respect Rules of Hooks
+  return session ? <IdleLogoutEnabled /> : null;
+}
+function IdleLogoutEnabled() {
+  useIdleLogout({
+    timeoutMs: 15 * 60 * 1000, // 15 minutes (tweak to 10–15 as you like)
+    warnBeforeMs: 60 * 1000,
+    onWarn: () => toast("You've been inactive. Auto sign-out in 1 minute."),
+    onLogout: () => toast("Signed out due to inactivity."),
+  });
+  return null;
+}
+
 const App = () => {
-  // Prevent double-upsert in React 18 StrictMode (dev)
-  const didUpsertRef = useRef(false);
-
-  // Ensure profile exists for all sign-ins (email/password or OAuth)
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          if (didUpsertRef.current) return; // guard
-          didUpsertRef.current = true;
-
-          const u = session.user;
-          const full_name =
-            (u.user_metadata?.full_name as string | undefined) ??
-            (u.user_metadata?.name as string | undefined) ?? null;
-
-          const avatar_url =
-            (u.user_metadata?.avatar_url as string | undefined) ??
-            (u.user_metadata?.picture as string | undefined) ?? null;
-
-          const { error } = await supabase
-            .from("profiles")
-            .upsert(
-              {
-                id: u.id,
-                email: u.email,
-                full_name,
-                avatar_url,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "id" }
-            );
-
-          if (error) {
-            console.error("profiles upsert (onAuthStateChange) failed:", error);
-          }
-        }
-      }
-    );
-    return () => subscription.unsubscribe();
-  }, []);
+  // NOTE: Removed any onAuthStateChange + profiles upsert from here.
+  // We'll handle profile row via DB trigger (Step 5).
 
   // Idle-prefetch commonly visited chunks
   useEffect(() => {
@@ -164,179 +152,198 @@ const App = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors">
-            <BrowserRouter>
-              <ScrollToTop />
-              <Suspense fallback={<LoadingScreen />}>
-                <Routes>
-                  {/* Auth callback */}
-                  <Route path="/auth/callback" element={<CallbackPage />} />
-                  <Route path="/auth/callback/*" element={<CallbackPage />} />
+      <AuthProvider>
+        {/* Only active while logged in */}
+        <IdleLogoutManager />
 
-                  {/* Public marketing */}
-                  <Route path="/"            element={<LandingPage />} />
-                  <Route path="/features"    element={<FeaturesPage />} />
-                  <Route path="/pricing"     element={<PricingPage />} />
-                  <Route path="/api"         element={<ApiPage />} />
-                  <Route path="/about"       element={<AboutPage />} />
-                  <Route path="/contact"     element={<ContactPage />} />
-                  <Route path="/payment"     element={<PaymentPage />} />
+        <ThemeProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors">
+              <BrowserRouter>
+                <ScrollToTop />
+                <Suspense fallback={<LoadingScreen />}>
+                  <Routes>
+                    {/* Auth callback */}
+                    <Route path="/auth/callback" element={<CallbackPage />} />
+                    <Route path="/auth/callback/*" element={<CallbackPage />} />
 
-                  {/* Company */}
-                  <Route path="/careers"     element={<CareersPage />} />
-                  <Route path="/privacy"     element={<PrivacyPolicyPage />} />
+                    {/* Public marketing */}
+                    <Route path="/"            element={<LandingPage />} />
+                    <Route path="/features"    element={<FeaturesPage />} />
+                    <Route path="/pricing"     element={<PricingPage />} />
+                    <Route path="/api"         element={<ApiPage />} />
+                    <Route path="/about"       element={<AboutPage />} />
+                    <Route path="/contact"     element={<ContactPage />} />
+                    <Route path="/payment"     element={<PaymentPage />} />
 
-                  {/* Legal */}
-                  <Route path="/terms"       element={<TermsPage />} />
-                  <Route path="/cookies"     element={<CookiePolicyPage />} />
+                    {/* Company */}
+                    <Route path="/careers"     element={<CareersPage />} />
+                    <Route path="/privacy"     element={<PrivacyPolicyPage />} />
 
-                  {/* Resources */}
-                  <Route path="/resources"    element={<ResourcesHome />} />
-                  <Route path="/docs"         element={<DocsPage />} />
-                  <Route path="/help"         element={<HelpCenterPage />} />
-                  <Route path="/blog"         element={<BlogPage />} />
-                  <Route path="/case-studies" element={<CaseStudiesPage />} />
+                    {/* Legal */}
+                    <Route path="/terms"       element={<TermsPage />} />
+                    <Route path="/cookies"     element={<CookiePolicyPage />} />
 
-                  {/* Standalone sections */}
-                  <Route path="/demo"         element={<LandingDemo />} />
-                  <Route path="/faq"          element={<FAQ />} />
+                    {/* Resources */}
+                    <Route path="/resources"    element={<ResourcesHome />} />
+                    <Route path="/docs"         element={<DocsPage />} />
+                    <Route path="/help"         element={<HelpCenterPage />} />
+                    <Route path="/blog"         element={<BlogPage />} />
+                    <Route path="/case-studies" element={<CaseStudiesPage />} />
 
-                  {/* Auth pages */}
-                  <Route path="/login"        element={<LoginPage />} />
-                  <Route path="/signup"       element={<SignupPage />} />
+                    {/* Standalone sections */}
+                    <Route path="/demo"         element={<LandingDemo />} />
+                    <Route path="/faq"          element={<FAQ />} />
 
-                  {/* Protected */}
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <PrivateRoute>
-                        <DashboardPage />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/test-generator"
-                    element={
-                      <PrivateRoute>
-                        <TestGeneratorPage />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/analytics"
-                    element={
-                      <PrivateRoute>
-                        <AnalyticsPage />
-                      </PrivateRoute>
-                    }
-                  />
+                    {/* Auth pages (redirect if already logged in) */}
+                    <Route
+                      path="/login"
+                      element={
+                        <AuthGateForAuthPages>
+                          <LoginPage />
+                        </AuthGateForAuthPages>
+                      }
+                    />
+                    <Route
+                      path="/signup"
+                      element={
+                        <AuthGateForAuthPages>
+                          <SignupPage />
+                        </AuthGateForAuthPages>
+                      }
+                    />
 
-                  {/* Students / Notes / Settings */}
-                  <Route
-                    path="/dashboard/students"
-                    element={
-                      <PrivateRoute>
-                        <StudentsPage />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/notes"
-                    element={
-                      <PrivateRoute>
-                        <NotesPage />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/settings"
-                    element={
-                      <PrivateRoute>
-                        <SettingsPage />
-                      </PrivateRoute>
-                    }
-                  />
+                    {/* Protected */}
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <PrivateRoute>
+                          <DashboardPage />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard/test-generator"
+                      element={
+                        <PrivateRoute>
+                          <TestGeneratorPage />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard/analytics"
+                      element={
+                        <PrivateRoute>
+                          <AnalyticsPage />
+                        </PrivateRoute>
+                      }
+                    />
 
-                  {/* Contests */}
-                  <Route
-                    path="/contests"
-                    element={
-                      <PrivateRoute>
-                        <ContestLandingPage />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/contests/create"
-                    element={
-                      <PrivateRoute>
-                        <CreateContestPage />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/contests/join"
-                    element={
-                      <PrivateRoute>
-                        <JoinContestPage />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/contests/live/:contestId"
-                    element={
-                      <PrivateRoute>
-                        <ContestLivePage />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/contests/leaderboard"
-                    element={
-                      <PrivateRoute>
-                        <LeaderboardPage />
-                      </PrivateRoute>
-                    }
-                  />
+                    {/* Students / Notes / Settings */}
+                    <Route
+                      path="/dashboard/students"
+                      element={
+                        <PrivateRoute>
+                          <StudentsPage />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard/notes"
+                      element={
+                        <PrivateRoute>
+                          <NotesPage />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard/settings"
+                      element={
+                        <PrivateRoute>
+                          <SettingsPage />
+                        </PrivateRoute>
+                      }
+                    />
 
-                  {/* Redirect shims */}
-                  <Route
-                    path="/dashboard/contests"
-                    element={<Navigate to="/contests" replace />}
-                  />
-                  <Route
-                    path="/dashboard/contests/create"
-                    element={<Navigate to="/contests/create" replace />}
-                  />
-                  <Route
-                    path="/dashboard/contests/join"
-                    element={<Navigate to="/contests/join" replace />}
-                  />
-                  <Route
-                    path="/dashboard/contests/live/:contestId"
-                    element={<Navigate to="/contests/live/:contestId" replace />}
-                  />
-                  <Route
-                    path="/dashboard/contests/leaderboard"
-                    element={<Navigate to="/contests/leaderboard" replace />}
-                  />
+                    {/* Contests */}
+                    <Route
+                      path="/contests"
+                      element={
+                        <PrivateRoute>
+                          <ContestLandingPage />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/contests/create"
+                      element={
+                        <PrivateRoute>
+                          <CreateContestPage />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/contests/join"
+                      element={
+                        <PrivateRoute>
+                          <JoinContestPage />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/contests/live/:contestId"
+                      element={
+                        <PrivateRoute>
+                          <ContestLivePage />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/contests/leaderboard"
+                      element={
+                        <PrivateRoute>
+                          <LeaderboardPage />
+                        </PrivateRoute>
+                      }
+                    />
 
-                  {/* Fallbacks */}
-                  <Route path="/home" element={<Navigate to="/" replace />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                    {/* Redirect shims */}
+                    <Route
+                      path="/dashboard/contests"
+                      element={<Navigate to="/contests" replace />}
+                    />
+                    <Route
+                      path="/dashboard/contests/create"
+                      element={<Navigate to="/contests/create" replace />}
+                    />
+                    <Route
+                      path="/dashboard/contests/join"
+                      element={<Navigate to="/contests/join" replace />}
+                    />
+                    <Route
+                      path="/dashboard/contests/live/:contestId"
+                      element={<Navigate to="/contests/live/:contestId" replace />}
+                    />
+                    <Route
+                      path="/dashboard/contests/leaderboard"
+                      element={<Navigate to="/contests/leaderboard" replace />}
+                    />
 
-                {/* Vercel Web Analytics - tracks SPA route changes */}
-                <Analytics />
-              </Suspense>
-            </BrowserRouter>
-          </div>
-        </TooltipProvider>
-      </ThemeProvider>
+                    {/* Fallbacks */}
+                    <Route path="/home" element={<Navigate to="/" replace />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+
+                  {/* Vercel Web Analytics - tracks SPA route changes */}
+                  <Analytics />
+                </Suspense>
+              </BrowserRouter>
+            </div>
+          </TooltipProvider>
+        </ThemeProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 };

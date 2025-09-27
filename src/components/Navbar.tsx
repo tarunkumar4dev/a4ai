@@ -1,9 +1,11 @@
 // src/components/Navbar.tsx
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useState, useMemo } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/context/ThemeContext";
 import LanguagePicker from "@/components/LanguagePicker";
+import { useAuth } from "@/providers/AuthProvider";
+import { supabase } from "@/lib/supabaseClient";
 
 import {
   motion,
@@ -11,7 +13,7 @@ import {
   useMotionValue,
   useMotionTemplate,
 } from "framer-motion";
-import { Search, Moon, Sun, Menu, X, ArrowRight } from "lucide-react";
+import { Search, Moon, Sun, Menu, X, ArrowRight, User } from "lucide-react";
 
 const navItems = [
   { name: "Home", path: "/" },
@@ -22,14 +24,20 @@ const navItems = [
 ];
 
 export default function Navbar() {
+  const navigate = useNavigate();
+  const { session } = useAuth();
+  const loggedIn = !!session;
+
   const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const { pathname } = useLocation();
   const activeName =
-    navItems.find((n) => (n.path === "/" ? pathname === "/" : pathname.startsWith(n.path)))?.name ??
-    "Home";
+    navItems.find((n) =>
+      n.path === "/" ? pathname === "/" : pathname.startsWith(n.path)
+    )?.name ?? "Home";
 
   // subtle cursor glow
   const mx = useMotionValue(0);
@@ -49,14 +57,41 @@ export default function Navbar() {
   const heroBloom =
     "radial-gradient(40rem 22rem at 50% 0%, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 70%)";
 
+  // auth helpers
+  const gotoSignIn = () => navigate("/login");
+  const gotoSignUp = () => navigate("/signup");
+  const gotoDashboard = () => navigate("/dashboard");
+
+  async function handleSignOut() {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setProfileOpen(false);
+      setMobileMenuOpen(false);
+      // if currently on protected area, send home
+      if (pathname.startsWith("/dashboard") || pathname.startsWith("/contests")) {
+        navigate("/", { replace: true });
+      }
+    }
+  }
+
+  // derive user initials for circle avatar (optional)
+  const initials = useMemo(() => {
+    const name =
+      (session?.user?.user_metadata?.full_name as string | undefined) ||
+      (session?.user?.user_metadata?.name as string | undefined) ||
+      (session?.user?.email as string | undefined) ||
+      "";
+    const parts = name.trim().split(/\s+/).slice(0, 2);
+    return parts.map((p) => p[0]?.toUpperCase() ?? "").join("") || "U";
+  }, [session]);
+
   return (
     <nav className="sticky top-0 z-50">
       <div
         onMouseMove={onMouseMove}
-        className="relative backdrop-blur-xl" // ⬅️ removed border-b
-        style={{
-          backgroundImage: `${heroBloom}, ${heroBase}`,
-        }}
+        className="relative backdrop-blur-xl"
+        style={{ backgroundImage: `${heroBloom}, ${heroBase}` }}
       >
         {/* soft animated glow */}
         <motion.div
@@ -64,8 +99,6 @@ export default function Navbar() {
           className="absolute inset-0 -z-10 opacity-80 pointer-events-none"
           style={{ backgroundImage: glow }}
         />
-
-        {/* ⬇️ removed the gradient hairline entirely */}
 
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           {/* Logo */}
@@ -180,17 +213,62 @@ export default function Navbar() {
 
             {/* Auth (desktop) */}
             <div className="ml-1 hidden items-center gap-2 md:flex">
-              <Link to="/login">
-                <Button variant="ghost" className="h-9 px-3" style={{ color: "#5D6B7B" }}>
-                  Sign in
-                </Button>
-              </Link>
-              <Link to="/signup">
-                <Button className="h-9 text-white shadow-sm transition" style={{ background: "#5D6B7B" }}>
-                  Get Started
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+              {!loggedIn ? (
+                <>
+                  <Button variant="ghost" className="h-9 px-3" style={{ color: "#5D6B7B" }} onClick={gotoSignIn}>
+                    Sign in
+                  </Button>
+                  <Button className="h-9 text-white shadow-sm transition" style={{ background: "#5D6B7B" }} onClick={gotoSignUp}>
+                    Get Started
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="secondary" className="h-9" onClick={gotoDashboard}>
+                    Dashboard
+                  </Button>
+
+                  {/* Profile dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setProfileOpen((v) => !v)}
+                      className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-900"
+                      aria-haspopup="menu"
+                      aria-expanded={profileOpen}
+                    >
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-[11px] font-semibold text-gray-700">
+                        {initials}
+                      </div>
+                      <span className="hidden lg:inline">Profile</span>
+                    </button>
+                    <AnimatePresence>
+                      {profileOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          className="absolute right-0 mt-2 w-44 rounded-xl border bg-white p-1 shadow-lg dark:border-gray-800 dark:bg-gray-900"
+                          onMouseLeave={() => setProfileOpen(false)}
+                        >
+                          <DropdownItem to="/dashboard/settings" onClick={() => setProfileOpen(false)}>
+                            Settings
+                          </DropdownItem>
+                          <DropdownItem to="/dashboard" onClick={() => setProfileOpen(false)}>
+                            My Dashboard
+                          </DropdownItem>
+                          <button
+                            onClick={handleSignOut}
+                            className="w-full text-left rounded-lg px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                          >
+                            Sign out
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -199,7 +277,10 @@ export default function Navbar() {
               size="icon"
               className="ml-1 md:hidden"
               style={{ color: "#5D6B7B" }}
-              onClick={() => setMobileMenuOpen((m) => !m)}
+              onClick={() => {
+                setProfileOpen(false);
+                setMobileMenuOpen((m) => !m);
+              }}
               aria-label="Open menu"
               aria-expanded={mobileMenuOpen}
             >
@@ -208,7 +289,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Mobile menu (no top border now) */}
+        {/* Mobile menu */}
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
@@ -242,16 +323,52 @@ export default function Navbar() {
                     <LanguagePicker />
                   </div>
 
-                  <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" className="mb-2 w-full" style={{ borderColor: "rgba(228,233,240,0.9)" }}>
-                      Sign in
-                    </Button>
-                  </Link>
-                  <Link to="/signup" onClick={() => setMobileMenuOpen(false)}>
-                    <Button className="w-full text-white" style={{ background: "#5D6B7B" }}>
-                      Get Started
-                    </Button>
-                  </Link>
+                  {!loggedIn ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="mb-2 w-full"
+                        style={{ borderColor: "rgba(228,233,240,0.9)" }}
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          gotoSignIn();
+                        }}
+                      >
+                        Sign in
+                      </Button>
+                      <Button
+                        className="w-full text-white"
+                        style={{ background: "#5D6B7B" }}
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          gotoSignUp();
+                        }}
+                      >
+                        Get Started
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="secondary"
+                        className="mb-2 w-full"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          gotoDashboard();
+                        }}
+                      >
+                        Dashboard
+                      </Button>
+                      <Button
+                        className="w-full"
+                        onClick={() => {
+                          handleSignOut();
+                        }}
+                      >
+                        Sign out
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -259,5 +376,25 @@ export default function Navbar() {
         </AnimatePresence>
       </div>
     </nav>
+  );
+}
+
+function DropdownItem({
+  to,
+  children,
+  onClick,
+}: {
+  to: string;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      className="block rounded-lg px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+    >
+      {children}
+    </Link>
   );
 }
