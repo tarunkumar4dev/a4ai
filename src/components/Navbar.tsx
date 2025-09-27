@@ -13,7 +13,7 @@ import {
   useMotionValue,
   useMotionTemplate,
 } from "framer-motion";
-import { Search, Moon, Sun, Menu, X, ArrowRight, User } from "lucide-react";
+import { Search, Moon, Sun, Menu, X, ArrowRight } from "lucide-react";
 
 const navItems = [
   { name: "Home", path: "/" },
@@ -57,25 +57,23 @@ export default function Navbar() {
   const heroBloom =
     "radial-gradient(40rem 22rem at 50% 0%, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 70%)";
 
-  // auth helpers
+  // helpers
   const gotoSignIn = () => navigate("/login");
   const gotoSignUp = () => navigate("/signup");
   const gotoDashboard = () => navigate("/dashboard");
-
   async function handleSignOut() {
     try {
       await supabase.auth.signOut();
     } finally {
       setProfileOpen(false);
       setMobileMenuOpen(false);
-      // if currently on protected area, send home
       if (pathname.startsWith("/dashboard") || pathname.startsWith("/contests")) {
         navigate("/", { replace: true });
       }
     }
   }
 
-  // derive user initials for circle avatar (optional)
+  // initials (optional)
   const initials = useMemo(() => {
     const name =
       (session?.user?.user_metadata?.full_name as string | undefined) ||
@@ -229,7 +227,7 @@ export default function Navbar() {
                     Dashboard
                   </Button>
 
-                  {/* Profile dropdown */}
+                  {/* Simple profile popover */}
                   <div className="relative">
                     <button
                       onClick={() => setProfileOpen((v) => !v)}
@@ -270,6 +268,32 @@ export default function Navbar() {
                 </>
               )}
             </div>
+
+            {/* ===== MOBILE QUICK CTA (always visible) ===== */}
+            {loggedIn ? (
+              <Button
+                variant="secondary"
+                className="md:hidden h-9 px-3 mr-1"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  gotoDashboard();
+                }}
+              >
+                Dashboard
+              </Button>
+            ) : (
+              <Button
+                className="md:hidden h-9 px-3 mr-1 text-white"
+                style={{ background: "#5D6B7B" }}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  gotoSignUp();
+                }}
+              >
+                Get Started
+              </Button>
+            )}
+            {/* =========================================== */}
 
             {/* Mobile menu button */}
             <Button
