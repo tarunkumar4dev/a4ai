@@ -1,6 +1,9 @@
 // src/App.tsx
 import { useEffect, Suspense, lazy } from "react";
 import "./styles/globals.css";
+import PracticePage from "@/pages/PracticePage";
+import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
+import Rules from "@/pages/Rules";
 import {
   BrowserRouter,
   Routes,
@@ -26,52 +29,52 @@ import { injectSpeedInsights } from "@vercel/speed-insights";
 injectSpeedInsights();
 
 /* ---------- Lazy pages (marketing) ---------- */
-const LandingPage        = lazy(() => import("./pages/LandingPage"));
-const FeaturesPage       = lazy(() => import("./pages/FeaturesPage"));
-const PricingPage        = lazy(() => import("./pages/product/PricingPage"));
-const ApiPage            = lazy(() => import("./pages/product/ApiPage"));
-const AboutPage          = lazy(() => import("./pages/AboutPage"));
-const ContactPage        = lazy(() => import("./pages/ContactPage"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const PricingPage = lazy(() => import("./pages/product/PricingPage"));
+const ApiPage = lazy(() => import("./pages/product/ApiPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
 
 /* ---------- Lazy pages (auth & app) ---------- */
-const LoginPage          = lazy(() => import("./pages/LoginPage"));
-const SignupPage         = lazy(() => import("./pages/SignupPage"));
-const DashboardPage      = lazy(() => import("./pages/DashboardPage"));
-const TestGeneratorPage  = lazy(() => import("./pages/TestGeneratorPage"));
-const AnalyticsPage      = lazy(() => import("./pages/AnalyticsPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SignupPage = lazy(() => import("./pages/SignupPage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
+const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
 /* ---------- NEW: Students / Notes / Settings ---------- */
-const StudentsPage       = lazy(() => import("./pages/StudentsPage"));
-const NotesPage          = lazy(() => import("./pages/Notes"));
-const SettingsPage       = lazy(() => import("./pages/SettingsPage"));
+const StudentsPage = lazy(() => import("./pages/StudentsPage"));
+const NotesPage = lazy(() => import("./pages/Notes"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 /* ---------- Contests ---------- */
 const ContestLandingPage = lazy(() => import("./pages/ContestLandingPage"));
-const CreateContestPage  = lazy(() => import("./pages/CreateContestPage"));
-const JoinContestPage    = lazy(() => import("./pages/JoinContestPage"));
-const ContestLivePage    = lazy(() => import("./pages/ContestLivePage"));
-const LeaderboardPage    = lazy(() => import("./pages/LeaderboardPage"));
+const CreateContestPage = lazy(() => import("./pages/CreateContestPage"));
+const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
+const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
+const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 
 /* ---------- Resources ---------- */
-const ResourcesHome      = lazy(() => import("./pages/Resources/ResourcesHome"));
-const DocsPage           = lazy(() => import("./pages/Resources/Documentation"));
-const HelpCenterPage     = lazy(() => import("./pages/Resources/HelpCenter"));
-const BlogPage           = lazy(() => import("./pages/Resources/BlogPage"));
-const CaseStudiesPage    = lazy(() => import("./pages/Resources/CaseStudiesPage"));
+const ResourcesHome = lazy(() => import("./pages/Resources/ResourcesHome"));
+const DocsPage = lazy(() => import("./pages/Resources/Documentation"));
+const HelpCenterPage = lazy(() => import("./pages/Resources/HelpCenter"));
+const BlogPage = lazy(() => import("./pages/Resources/BlogPage"));
+const CaseStudiesPage = lazy(() => import("./pages/Resources/CaseStudiesPage"));
 
 /* ---------- Company ---------- */
-const CareersPage        = lazy(() => import("./pages/company/CareersPage"));
-const PrivacyPolicyPage  = lazy(() => import("./pages/company/PrivacyPolicyPage"));
+const CareersPage = lazy(() => import("./pages/company/CareersPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/company/PrivacyPolicyPage"));
 
 /* ---------- Legal ---------- */
-const TermsPage          = lazy(() => import("./pages/legal/TermsPage"));
-const CookiePolicyPage   = lazy(() => import("./pages/legal/CookiePolicyPage"));
+const TermsPage = lazy(() => import("./pages/legal/TermsPage"));
+const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
 
 /* ---------- Auth callback ---------- */
-const CallbackPage       = lazy(() => import("./pages/auth/callback"));
+const CallbackPage = lazy(() => import("./pages/auth/callback"));
 
 /* ---------- Payment ---------- */
-const PaymentPage        = lazy(() => import("./pages/payment/paymentPage"));
+const PaymentPage = lazy(() => import("./pages/payment/paymentPage"));
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -170,32 +173,32 @@ const App = () => {
                     <Route path="/auth/callback/*" element={<CallbackPage />} />
 
                     {/* Public marketing */}
-                    <Route path="/"            element={<LandingPage />} />
-                    <Route path="/features"    element={<FeaturesPage />} />
-                    <Route path="/pricing"     element={<PricingPage />} />
-                    <Route path="/api"         element={<ApiPage />} />
-                    <Route path="/about"       element={<AboutPage />} />
-                    <Route path="/contact"     element={<ContactPage />} />
-                    <Route path="/payment"     element={<PaymentPage />} />
+                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/features" element={<FeaturesPage />} />
+                    <Route path="/pricing" element={<PricingPage />} />
+                    <Route path="/api" element={<ApiPage />} />
+                    <Route path="/about" element={<AboutPage />} />
+                    <Route path="/contact" element={<ContactPage />} />
+                    <Route path="/payment" element={<PaymentPage />} />
 
                     {/* Company */}
-                    <Route path="/careers"     element={<CareersPage />} />
-                    <Route path="/privacy"     element={<PrivacyPolicyPage />} />
+                    <Route path="/careers" element={<CareersPage />} />
+                    <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
                     {/* Legal */}
-                    <Route path="/terms"       element={<TermsPage />} />
-                    <Route path="/cookies"     element={<CookiePolicyPage />} />
+                    <Route path="/terms" element={<TermsPage />} />
+                    <Route path="/cookies" element={<CookiePolicyPage />} />
 
                     {/* Resources */}
-                    <Route path="/resources"    element={<ResourcesHome />} />
-                    <Route path="/docs"         element={<DocsPage />} />
-                    <Route path="/help"         element={<HelpCenterPage />} />
-                    <Route path="/blog"         element={<BlogPage />} />
+                    <Route path="/resources" element={<ResourcesHome />} />
+                    <Route path="/docs" element={<DocsPage />} />
+                    <Route path="/help" element={<HelpCenterPage />} />
+                    <Route path="/blog" element={<BlogPage />} />
                     <Route path="/case-studies" element={<CaseStudiesPage />} />
 
                     {/* Standalone sections */}
-                    <Route path="/demo"         element={<LandingDemo />} />
-                    <Route path="/faq"          element={<FAQ />} />
+                    <Route path="/demo" element={<LandingDemo />} />
+                    <Route path="/faq" element={<FAQ />} />
 
                     {/* Auth pages (redirect if already logged in) */}
                     <Route
@@ -241,6 +244,14 @@ const App = () => {
                       }
                     />
 
+                    <Route path="/practice" element={<PracticePage />} />
+
+                    <Route path="/contests/math-weekly" element={<JoinContestPageAurora />} />
+                    <Route path="/contests/sci-lab" element={<JoinContestPageAurora />} />
+                    <Route path="/contests/gk-rapid" element={<JoinContestPageAurora />} />
+                    <Route path="rules" element={<Rules />} />
+                    
+                      
                     {/* Students / Notes / Settings */}
                     <Route
                       path="/dashboard/students"

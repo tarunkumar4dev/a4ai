@@ -1,11 +1,13 @@
 // /src/types/testgen.ts
 
 /* -------------------- Core enums/aliases -------------------- */
-export type Language = "en" | "hi" | "bilingual";
+/** New client-side preference; backend still expects "English" | "Hindi". */
+export type Language = "en" | "hi" | "bilingual" | "English" | "Hindi";
 
-// Keep existing Difficulty literals so old payloads still work
+/** Keep existing Difficulty literals so old payloads still work */
 export type Difficulty = "Easy" | "Medium" | "Hard" | "Mixed";
 
+/** Broader set to keep UI flexible; backend maps to MCQ/VSA/SA/LA internally */
 export type QuestionType =
   | "MCQ"
   | "Short"
@@ -43,15 +45,20 @@ export type PaperBranding = {
   footerNote?: string;     // e.g., "All the best!"
 };
 
-/* -------------------- Client → Edge payload -------------------- */
-export type GenerateTestRequest = {
+/* -------------------- Client → Edge payloads -------------------- */
+/** Preferred modern request (sectioned mode capable) */
+export type NewGenerateTestRequest = {
+  // Identity (optional but useful for storage paths / DB rows)
+  userId?: string;
+  requestId?: string;
+
   subject: string;
   grade: string;                 // e.g., "Class 11"
   board?: string;                // "CBSE" | "ICSE" | "State" | ...
   topics?: string[];
   chapters?: string[];
 
-  // Existing single-type mode (still supported)
+  // Single-type mode (still supported)
   questionType?: QuestionType;   // optional now if sections are used
   difficulty?: Difficulty;       // "Mixed" or single level
   numQuestions?: number;         // used only when not providing sections
@@ -75,7 +82,43 @@ export type GenerateTestRequest = {
 
   // NEW branding (all optional)
   branding?: PaperBranding;
+
+  /* ---- Compatibility fields mapped by the FE adapter (optional) ---- */
+  // When passing references via Supabase Storage instead of inline text:
+  ref_files?: Array<{ name: string; path: string }>;
+  // If UI already serializes sections to JSON for the backend:
+  sectionsJSON?: string;
+  // For older UIs that compute total marks on the client:
+  computedTotalMarks?: string;
+
+  // Preferred output (server may still return multiple)
+  outputFormat?: "PDF" | "DOCX" | "CSV" | "JSON";
 };
+
+/** Legacy minimal request that existing UI used earlier */
+export type LegacyGenerateTestRequest = {
+  // Identity (optional)
+  userId?: string;
+  requestId?: string;
+
+  // core
+  subject: string;
+  difficulty?: Difficulty | string;
+  questionType?: string;   // e.g., "Multiple Choice" | "Short Answer" | "Mixed"
+  qCount?: number;         // total questions
+  outputFormat?: "PDF" | "DOCX" | "CSV" | "JSON";
+
+  // optional extras that backend tolerates
+  board?: string;
+  grade?: string;          // sometimes stored as "Class 10" or "10"
+  language?: Language;
+  topics?: string[];
+  chapters?: string[];
+  notes?: string;
+  ref_files?: Array<{ name: string; path: string }>;
+};
+
+export type GenerateTestRequest = NewGenerateTestRequest | LegacyGenerateTestRequest;
 
 /* -------------------- Generated JSON (strict) -------------------- */
 export interface Meta {
@@ -84,7 +127,7 @@ export interface Meta {
   board?: string;
 
   // Keep original fields for backward compatibility
-  questionType?: QuestionType;
+  questionType?: QuestionType | string;
   difficulty?: Difficulty | string;
   language?: Language | string;
   numQuestions?: number;
@@ -102,6 +145,10 @@ export interface Meta {
   ncertOnly?: boolean;
   instructions?: string[];
   difficultyMix?: DifficultyMix;
+
+  // passthrough ids
+  requestId?: string;
+  userId?: string;
 }
 
 export interface BaseQuestion {
@@ -146,10 +193,21 @@ export interface GeneratedTest {
 export type GenerateTestServerResponse =
   | {
       ok: true;
-      url: string;                        // public PDF URL (preferred)
+      // Preferred explicit URLs (new backend)
+      pdfUrl?: string | null;
+      docxUrl?: string | null;
+      csvUrl?: string | null;
+
+      // Back-compat single URL (PDF)
+      url: string;
+
       meta: Meta;
-      json: GeneratedTest;                // validated JSON (flat or sectioned)
+      json: GeneratedTest; // validated JSON (flat or sectioned)
       used: { modelGPT: string; modelDeepseek: string };
+
+      // Optional ids
+      requestId?: string;
+      rid?: string;
     }
   | {
       ok: false;

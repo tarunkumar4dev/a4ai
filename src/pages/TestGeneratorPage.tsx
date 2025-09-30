@@ -1,5 +1,5 @@
 // /src/pages/TestGeneratorPage.tsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
 import DashboardSidebar from "@/components/DashboardSidebar";
@@ -8,10 +8,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateTest } from "@/lib/generateTest";
 import { fetchRecentPapers, type PaperRow } from "@/lib/history";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, RefreshCw, Sparkles, Loader2, ArrowRight } from "lucide-react";
+import { Download, RefreshCw, Sparkles, Loader2, ArrowRight, FileText, FileSpreadsheet } from "lucide-react";
+import { uploadReferenceFiles } from "@/lib/uploadRefs";
+import { buildEdgePayload } from "@/lib/mapFormToEdge";
 
 /* ----------------------------- Types ----------------------------- */
 type LastMeta = { subject?: string; difficulty?: string; qCount?: number } | null;
+
+type Links = {
+  pdf?: string | null;
+  docx?: string | null;
+  csv?: string | null;
+  legacy?: string | null;
+};
 
 /* --------------------------- Helpers ---------------------------- */
 const mapDifficulty = (d?: string) => {
@@ -36,9 +45,17 @@ const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleString() :
 /* ------------------------------ Page ---------------------------- */
 const TestGeneratorPage = () => {
   const { toast } = useToast();
+
+  // generation state
   const [loading, setLoading] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [links, setLinks] = useState<Links>({});
   const [lastMeta, setLastMeta] = useState<LastMeta>(null);
+
+  // timer/progress
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const timerRef = useRef<number | null>(null);
+  const progressRef = useRef<number | null>(null);
 
   // History state
   const [rows, setRows] = useState<PaperRow[]>([]);
@@ -65,24 +82,55 @@ const TestGeneratorPage = () => {
     refreshHistory();
   }, [refreshHistory]);
 
-  // revoke previous blob URLs when component unmounts or downloadUrl changes
+  // cleanup object URLs when links change/unmount
   useEffect(() => {
     return () => {
-      if (downloadUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(downloadUrl);
-      }
+      const all = [links.legacy, links.pdf, links.docx, links.csv].filter((u): u is string => !!u);
+      all.forEach((u) => {
+        if (u.startsWith("blob:")) URL.revokeObjectURL(u);
+      });
     };
-  }, [downloadUrl]);
+  }, [links]);
+
+  /* --------- Timer/Progress orchestration --------- */
+  useEffect(() => {
+    if (loading) {
+      setElapsedSec(0);
+      setProgress(0);
+
+      timerRef.current = window.setInterval(() => setElapsedSec((s) => s + 1), 1000) as unknown as number;
+
+      const start = performance.now();
+      const expectedMs = 75_000;
+      const hardLimitMs = 95_000;
+
+      progressRef.current = window.setInterval(() => {
+        const t = performance.now() - start;
+        const x = Math.min(t / expectedMs, 1);
+        const eased = 1 - Math.pow(1 - x, 2);
+        let pct = Math.min(95, Math.round(eased * 90 + 5));
+        if (t > expectedMs) {
+          const extra = Math.min((t - expectedMs) / (hardLimitMs - expectedMs), 1);
+          pct = Math.min(95, Math.round(90 + extra * 5));
+        }
+        setProgress(pct);
+      }, 300) as unknown as number;
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (progressRef.current) { clearInterval(progressRef.current); progressRef.current = null; }
+      setProgress((p) => (p > 0 ? 100 : 0));
+      const id = window.setTimeout(() => setProgress(0), 1200);
+      return () => clearTimeout(id);
+    }
+  }, [loading]);
 
   /* --------- Generate handler --------- */
   const handleGenerateTest = async (
     formData: TestGeneratorFormValues
   ): Promise<string | null> => {
-    let objectUrlToRevoke: string | null = null;
-
     try {
       setLoading(true);
-      setDownloadUrl(null);
+      setLinks({});
 
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr || !user) {
@@ -90,38 +138,44 @@ const TestGeneratorPage = () => {
         throw new Error("Not logged in");
       }
 
-      const qCount = Math.max(5, Number(formData?.qCount ?? (formData as any)?.itemCount ?? 5));
+      // Create a requestId to link refs & DB rows
+      const requestId =
+        (globalThis.crypto && "randomUUID" in globalThis.crypto)
+          ? (globalThis.crypto as Crypto).randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-      const payload = {
-        userId: user.id,
-        subject: (formData?.subject || "Maths").trim(),
-        difficulty: mapDifficulty(formData?.difficulty),
-        questionType: mapQuestionType(formData?.questionType),
-        qCount,
-        outputFormat: "PDF" as const,
-      };
+      // Upload reference files (txt/csv/md handled server-side; pdf/docx optional)
+      const ref_files = await uploadReferenceFiles(formData.referenceFiles || [], user.id, requestId);
 
-      // unified API: { ok, url, meta, json, used }
-      const res = await generateTest(payload, { timeoutMs: 90_000 });
+      // Build an Edge payload that matches the new function’s Input
+      const payload = buildEdgePayload(formData, user.id, requestId, ref_files);
 
-      let finalUrl = res.url;
+      // (Back-compat helpers for the history card summary)
+      const qCount =
+        payload["qCount"] ??
+        (Array.isArray(payload["sections"]) ? (payload["sections"] as any[]).reduce((s, x) => s + (x?.count || 0), 0) : undefined) ??
+        (Array.isArray(formData.markingMatrix) ? formData.markingMatrix.reduce((s, x) => s + (x.count || 0), 0) : formData.qCount) ??
+        5;
 
-      if (finalUrl.startsWith("blob:")) {
-        objectUrlToRevoke = finalUrl;
-      }
+      const difficulty = mapDifficulty(formData?.difficulty);
+      const subject = (formData?.subject || "Paper").trim();
 
-      if (!finalUrl) throw new Error("File URL missing in response");
+      // Hit the generator (it will create sectioned or legacy depending on sectionsJSON)
+      const res = await generateTest(payload as any, { timeoutMs: 120_000, retries: 2 });
 
-      setDownloadUrl(finalUrl);
-      setLastMeta({
-        subject: payload.subject,
-        difficulty: payload.difficulty,
-        qCount: payload.qCount,
-      });
+      const pdfUrl = (res as any)?.pdfUrl || (res as any)?.publicUrl || (res as any)?.url || null;
+      const docxUrl = (res as any)?.docxUrl || null;
+      const csvUrl = (res as any)?.csvUrl || null;
+      const legacy = !pdfUrl && (res as any)?.url ? (res as any).url : null;
+
+      if (!pdfUrl && !legacy) throw new Error("File URL missing in response");
+
+      setLinks({ pdf: pdfUrl, docx: docxUrl, csv: csvUrl, legacy });
+      setLastMeta({ subject, difficulty, qCount });
 
       await refreshHistory();
-      toast({ title: "Generated 🎉", description: "Your PDF is ready to download." });
-      return finalUrl;
+      toast({ title: "Generated 🎉", description: "Your paper is ready to download." });
+      return pdfUrl || legacy;
     } catch (err: any) {
       console.error("Generation Error:", err);
       toast({
@@ -132,20 +186,12 @@ const TestGeneratorPage = () => {
       return null;
     } finally {
       setLoading(false);
-      if (objectUrlToRevoke) {
-        setTimeout(() => URL.revokeObjectURL(objectUrlToRevoke!), 0);
-      }
     }
   };
 
   /* ------------------------------ UI ------------------------------- */
   return (
-    <div
-      className="
-        flex h-screen text-slate-900
-        bg-[#DFE4EF]
-      "
-    >
+    <div className="flex h-screen text-slate-900 bg-[#DFE4EF]">
       {/* subtle grid on background */}
       <div className="fixed inset-0 -z-10 opacity-[0.05] [background-image:linear-gradient(to_right,#000_1px,transparent_1px),linear-gradient(to_bottom,#000_1px,transparent_1px)] [background-size:48px_48px]" />
       <DashboardSidebar />
@@ -159,7 +205,6 @@ const TestGeneratorPage = () => {
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>
-                {/* remove pink/fuchsia from gradient */}
                 <h1 className="text-2xl font-bold leading-tight bg-gradient-to-r from-sky-600 via-indigo-600 to-indigo-700 bg-clip-text text-transparent">
                   Test Generator
                 </h1>
@@ -196,37 +241,103 @@ const TestGeneratorPage = () => {
                     ) : null}
                   </div>
 
-                  <TestGeneratorForm onGenerate={handleGenerateTest} loading={loading} />
-
+                  {/* Progress & Timer */}
                   <AnimatePresence>
-                    {downloadUrl && (
+                    {loading && (
                       <motion.div
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 6 }}
-                        className="mt-5 flex items-center justify-between rounded-xl border bg-gradient-to-r from-slate-50 to-white p-4"
+                        className="mb-4 rounded-xl border bg-white/70 p-3"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 inline-flex items-center justify-center rounded-lg bg-black text-white">
-                            <Download className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <div className="font-medium">Your PDF is ready</div>
-                            {lastMeta && (
-                              <div className="text-sm text-slate-500">
-                                {lastMeta.subject} • {lastMeta.difficulty} • {lastMeta.qCount} Qs
-                              </div>
-                            )}
+                        <div className="flex items-center justify-between text-sm mb-2">
+                          <div className="font-medium text-slate-700">Preparing your paper…</div>
+                          <div className="tabular-nums text-slate-500">
+                            {Math.floor(elapsedSec / 60)}:{String(elapsedSec % 60).padStart(2, "0")}
                           </div>
                         </div>
-                        <a
-                          className="inline-flex items-center gap-1 rounded-lg bg-black px-3 py-2 text-sm font-medium text-white hover:opacity-90"
-                          href={downloadUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Download <ArrowRight className="h-4 w-4" />
-                        </a>
+                        <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+                          <div className="h-full bg-black transition-all" style={{ width: `${progress}%` }} />
+                        </div>
+                        <div className="mt-2 text-xs text-slate-500">
+                          Tip: you can switch tabs while this runs. It’ll auto-update here.
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <TestGeneratorForm onGenerate={handleGenerateTest} loading={loading} />
+
+                  {/* Download cards */}
+                  <AnimatePresence>
+                    {(links.pdf || links.docx || links.csv || links.legacy) && !loading && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 6 }}
+                        className="mt-5 grid gap-3 sm:grid-cols-2"
+                      >
+                        {(links.pdf || links.legacy) && (
+                          <div className="flex items-center justify-between rounded-xl border bg-gradient-to-r from-slate-50 to-white p-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 inline-flex items-center justify-center rounded-lg bg-black text-white">
+                                <Download className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <div className="font-medium">PDF ready</div>
+                                {lastMeta && (
+                                  <div className="text-sm text-slate-500">
+                                    {lastMeta.subject} • {lastMeta.difficulty} • {lastMeta.qCount} Qs
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <a
+                              className="inline-flex items-center gap-1 rounded-lg bg-black px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                              href={links.pdf || links.legacy || "#"}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Download <ArrowRight className="h-4 w-4" />
+                            </a>
+                          </div>
+                        )}
+
+                        <div className="flex flex-col gap-2">
+                          {links.docx && (
+                            <a
+                              href={links.docx}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group inline-flex items-center justify-between rounded-xl border bg-white/90 px-4 py-3 hover:bg-slate-50"
+                            >
+                              <span className="inline-flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-slate-600" />
+                                <span className="text-sm font-medium">Open in DOCX (Word)</span>
+                              </span>
+                              <span className="text-xs text-slate-500 group-hover:text-slate-700">Edit/Print</span>
+                            </a>
+                          )}
+                          {links.csv && (
+                            <a
+                              href={links.csv}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group inline-flex items-center justify-between rounded-xl border bg-white/90 px-4 py-3 hover:bg-slate-50"
+                            >
+                              <span className="inline-flex items-center gap-2">
+                                <FileSpreadsheet className="h-4 w-4 text-slate-600" />
+                                <span className="text-sm font-medium">Download CSV (Spreadsheet)</span>
+                              </span>
+                              <span className="text-xs text-slate-500 group-hover:text-slate-700">Import/Customize</span>
+                            </a>
+                          )}
+                          {!links.docx && !links.csv && (
+                            <div className="text-xs text-slate-500 px-1">
+                              Need DOCX/CSV? They’ll appear here when enabled on backend.
+                            </div>
+                          )}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -263,9 +374,7 @@ const TestGeneratorPage = () => {
                   </div>
 
                   {!rows.length ? (
-                    <div className="text-sm opacity-70">
-                      {historyLoading ? "Loading…" : "No papers yet."}
-                    </div>
+                    <div className="text-sm opacity-70">{historyLoading ? "Loading…" : "No papers yet."}</div>
                   ) : (
                     <div className="space-y-2">
                       {rows.map((r) => (
@@ -281,9 +390,15 @@ const TestGeneratorPage = () => {
                               Q:{r.q_count ?? "-"} • {r.question_type ?? "-"} • {r.difficulty ?? "-"} • {fmtDate(r.created_at)}
                             </div>
                           </div>
-                          <a href={r.pdf_url} target="_blank" className="underline">
-                            Open
-                          </a>
+                          <div className="flex items-center gap-3">
+                            {r.pdf_url ? (
+                              <a href={r.pdf_url} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-1">
+                                Open <ArrowRight className="h-4 w-4" />
+                              </a>
+                            ) : (
+                              <span className="text-slate-400">No file</span>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>

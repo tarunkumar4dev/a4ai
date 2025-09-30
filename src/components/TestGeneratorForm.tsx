@@ -147,6 +147,7 @@ function ChipInput({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
+          aria-label={`${label} input`}
         />
       </div>
     </div>
@@ -248,7 +249,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" aria-label="Test Generator Form">
       {/* ======= Header actions ======= */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-lg font-semibold">Create New Test</h3>
@@ -266,6 +267,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
               type="button"
               onClick={handleSubmit((d) => onSaveTemplate?.(d))}
               className="px-3 py-2 rounded-md border hover:bg-slate-100"
+              title="Save the current configuration as a reusable template"
             >
               Save as Template
             </button>
@@ -441,11 +443,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
             <label className="block text-sm mb-1">Pattern Mode</label>
             <div className="flex flex-wrap gap-3">
               <label className="inline-flex items-center gap-2">
-                <input
-                  type="radio"
-                  value="simple"
-                  {...register("patternMode")}
-                />
+                <input type="radio" value="simple" {...register("patternMode")} />
                 <span>Simple</span>
               </label>
               <label className="inline-flex items-center gap-2">
@@ -490,11 +488,17 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
                 <div key={f.id} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                   <div>
                     <label className="block text-xs mb-1">Title</label>
-                    <input className="w-full border rounded-md px-2 py-2" {...register(`sections.${idx}.title` as const)} />
+                    <input
+                      className="w-full border rounded-md px-2 py-2"
+                      {...register(`sections.${idx}.title` as const)}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs mb-1">Type</label>
-                    <select className="w-full border rounded-md px-2 py-2 bg-white" {...register(`sections.${idx}.questionType` as const)}>
+                    <select
+                      className="w-full border rounded-md px-2 py-2 bg-white"
+                      {...register(`sections.${idx}.questionType` as const)}
+                    >
                       <option>Multiple Choice</option>
                       <option>Very Short Answer</option>
                       <option>Short Answer</option>
@@ -525,6 +529,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
                       type="button"
                       onClick={() => remove(idx)}
                       className="h-10 px-3 rounded-md border hover:bg-slate-50"
+                      aria-label={`Remove ${watch(`sections.${idx}.title`) || `Section ${idx + 1}`}`}
                     >
                       Remove
                     </button>
@@ -590,6 +595,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
                       type="button"
                       onClick={() => matrix.remove(idx)}
                       className="h-10 px-3 rounded-md border hover:bg-slate-50"
+                      aria-label={`Remove matrix row ${idx + 1}`}
                     >
                       Remove
                     </button>
@@ -655,7 +661,10 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
                 />
               )}
             />
-            <p className="text-xs text-slate-500 mt-1">txt/csv/md are parsed directly; pdf/docx extraction can be added next.</p>
+            <p className="text-xs text-slate-500 mt-1">
+              <span className="font-medium">Note:</span> txt/csv/md are parsed directly on the server today; pdf/doc/docx extraction can
+              be added client-side to pass plain text.
+            </p>
           </div>
 
           {/* Watermark */}
@@ -685,7 +694,9 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
           <span className="font-medium">Summary:</span>
           <span>{totalQuestions} questions</span>
           <span>·</span>
-          <span>Total marks: <b>{totalMarks}</b></span>
+          <span>
+            Total marks: <b>{totalMarks}</b>
+          </span>
           {patternMode === "matrix" && totalMarks !== 80 && (
             <span className="text-amber-600 ml-2">(Tip: For CBSE preset, total is 80)</span>
           )}
@@ -695,6 +706,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
             type="submit"
             disabled={loading || isSubmitting}
             className="px-4 py-2 rounded-md bg-black text-white disabled:opacity-60"
+            aria-busy={loading || isSubmitting}
           >
             {loading || isSubmitting ? "Generating..." : "Generate"}
           </button>
@@ -702,9 +714,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
       </div>
 
       {/* ======== Errors (fallback) ======== */}
-      {Object.keys(errors).length > 0 && (
-        <div className="text-xs text-red-600">Please fix the highlighted fields.</div>
-      )}
+      {Object.keys(errors).length > 0 && <div className="text-xs text-red-600">Please fix the highlighted fields.</div>}
     </form>
   );
 };
