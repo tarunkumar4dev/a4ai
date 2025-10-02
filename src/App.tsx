@@ -1,5 +1,6 @@
 // src/App.tsx
 import { useEffect, Suspense, lazy } from "react";
+import type { ReactNode } from "react";
 import "./styles/globals.css";
 import PracticePage from "@/pages/PracticePage";
 import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
@@ -42,6 +43,10 @@ const SignupPage = lazy(() => import("./pages/SignupPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
+
+/* -------- Practice Session ---------------- */
+const PracticeSessionPage = lazy(() => import("./pages/PracticeSessionPage"));
+
 
 /* ---------- NEW: Students / Notes / Settings ---------- */
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
@@ -110,7 +115,7 @@ const NotFound = () => (
 /** If user is already logged in, prevent showing /login or /signup.
  *  If loading, show a spinner so we don't flash wrong page.
  */
-function AuthGateForAuthPages({ children }: { children: React.ReactNode }) {
+function AuthGateForAuthPages({ children }: { children: ReactNode }) {
   const { loading, session } = useAuth();
   if (loading) return <LoadingScreen />;
   if (session) return <Navigate to="/dashboard" replace />;
@@ -244,14 +249,23 @@ const App = () => {
                       }
                     />
 
+                    <Route
+                      path="/practice/session"
+                      element={
+                        <PrivateRoute>
+                          <PracticeSessionPage />
+                        </PrivateRoute>
+                      }
+                    />
+
                     <Route path="/practice" element={<PracticePage />} />
 
                     <Route path="/contests/math-weekly" element={<JoinContestPageAurora />} />
                     <Route path="/contests/sci-lab" element={<JoinContestPageAurora />} />
                     <Route path="/contests/gk-rapid" element={<JoinContestPageAurora />} />
                     <Route path="rules" element={<Rules />} />
-                    
-                      
+
+
                     {/* Students / Notes / Settings */}
                     <Route
                       path="/dashboard/students"
