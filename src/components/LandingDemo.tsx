@@ -1,4 +1,3 @@
-// src/components/LandingDemo.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   motion,
@@ -8,7 +7,7 @@ import {
   useSpring,
   useTransform,
 } from "framer-motion";
-import { Wand2, MessageSquareText, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 type Props = {
   /** Fallback image when no video is provided */
@@ -28,7 +27,8 @@ export default function LandingDemo({
   bgImage = "/showcase-bg.png",
   videoSrcMp4,
   videoSrcWebm,
-  poster = "/demo-poster.jpg",
+  // FIX: default matches your actual file
+  poster = "/demo-poster.png",
   showControls = false,
   showHud = true,
 }: Props) {
@@ -37,7 +37,7 @@ export default function LandingDemo({
 
   // disable tilt on touch
   const isCoarsePointer = useMemo(
-    () => window.matchMedia?.("(pointer: coarse)")?.matches ?? false,
+    () => (typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches) ?? false,
     []
   );
 
@@ -47,10 +47,14 @@ export default function LandingDemo({
   const mx = useSpring(rawX, { stiffness: 140, damping: 18, mass: 0.5 });
   const my = useSpring(rawY, { stiffness: 140, damping: 18, mass: 0.5 });
   const rotateX = useSpring(useTransform(my, [0, 320], [3, -3]), {
-    stiffness: 120, damping: 16, mass: 0.5,
+    stiffness: 120,
+    damping: 16,
+    mass: 0.5,
   });
   const rotateY = useSpring(useTransform(mx, [0, 640], [-4, 4]), {
-    stiffness: 120, damping: 16, mass: 0.5,
+    stiffness: 120,
+    damping: 16,
+    mass: 0.5,
   });
 
   const glowX = useTransform(mx, (v) => v);
@@ -69,15 +73,16 @@ export default function LandingDemo({
   const resolve = (p?: string) => {
     if (!p) return p;
     if (/^https?:\/\//i.test(p)) return p;
+    // Vite base support
     const base = (import.meta as any).env?.BASE_URL ?? "/";
     const trimmed = p.startsWith("/") ? p.slice(1) : p;
-    return `${base.replace(/\/$/, "")}/${trimmed}`;
+    return `${String(base).replace(/\/$/, "")}/${trimmed}`;
   };
 
   const resolvedImg = resolve(bgImage);
   const resolvedPoster = resolve(poster);
-  const mp4 = resolve(videoSrcMp4);
-  const webm = resolve(videoSrcWebm);
+  const mp4 = videoSrcMp4 ? `${resolve(videoSrcMp4)}?v=2` : undefined; // cache-bust
+  const webm = videoSrcWebm ? `${resolve(videoSrcWebm)}?v=2` : undefined;
 
   // Pause video when offscreen or tab hidden
   useEffect(() => {
@@ -114,27 +119,47 @@ export default function LandingDemo({
       onMouseMove={onMouseMove}
     >
       {/* BACKDROP */}
-      <div aria-hidden className="absolute inset-0 -z-20" style={{
-        background:
-          "radial-gradient(80% 60% at 50% 8%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.76) 40%, rgba(247,249,252,0.82) 60%, rgba(238,243,248,0.92) 100%)",
-      }} />
-      <div aria-hidden className="absolute inset-0 -z-20 opacity-70" style={{
-        background:
-          "linear-gradient(180deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.6) 45%, rgba(255,255,255,0.0) 100%)",
-      }} />
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-20"
+        style={{
+          background:
+            "radial-gradient(80% 60% at 50% 8%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.76) 40%, rgba(247,249,252,0.82) 60%, rgba(238,243,248,0.92) 100%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-20 opacity-70"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.6) 45%, rgba(255,255,255,0.0) 100%)",
+        }}
+      />
 
       {/* BLOBS */}
-      <motion.div aria-hidden className="pointer-events-none absolute -top-28 -left-40 h-[42rem] w-[42rem] rounded-full blur-3xl" style={{ opacity: inView ? 0.25 : 0 }}>
-        <motion.div className="h-full w-full"
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute -top-28 -left-40 h-[42rem] w-[42rem] rounded-full blur-3xl"
+        style={{ opacity: inView ? 0.25 : 0 }}
+      >
+        <motion.div
+          className="h-full w-full"
           animate={{ scale: [1, 1.05, 1], rotate: [0, 6, 0] }}
           transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-          style={{ background: "radial-gradient(closest-side, rgba(110,124,142,0.22), transparent 70%)" }} />
+          style={{ background: "radial-gradient(closest-side, rgba(110,124,142,0.22), transparent 70%)" }}
+        />
       </motion.div>
-      <motion.div aria-hidden className="pointer-events-none absolute -bottom-32 -right-40 h-[38rem] w-[38rem] rounded-full blur-3xl" style={{ opacity: inView ? 0.2 : 0 }}>
-        <motion.div className="h-full w-full"
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-32 -right-40 h-[38rem] w-[38rem] rounded-full blur-3xl"
+        style={{ opacity: inView ? 0.2 : 0 }}
+      >
+        <motion.div
+          className="h-full w-full"
           animate={{ scale: [1.02, 0.98, 1.02] }}
           transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-          style={{ background: "radial-gradient(closest-side, rgba(173,184,199,0.20), transparent 70%)" }} />
+          style={{ background: "radial-gradient(closest-side, rgba(173,184,199,0.20), transparent 70%)" }}
+        />
       </motion.div>
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -145,8 +170,7 @@ export default function LandingDemo({
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="text-center text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight"
           style={{
-            background:
-              "linear-gradient(90deg,#5D6B7B 0%,#6E7C8E 50%,#8B98A9 100%)",
+            background: "linear-gradient(90deg,#5D6B7B 0%,#6E7C8E 50%,#8B98A9 100%)",
             WebkitBackgroundClip: "text",
             color: "transparent",
             backgroundSize: "200% 100%",
@@ -200,8 +224,13 @@ export default function LandingDemo({
                 preload="metadata"
                 poster={resolvedPoster}
                 controls={showControls}
+                crossOrigin="anonymous"
+                onLoadedData={() => setReady(true)}
                 onCanPlay={() => setReady(true)}
-                onError={() => setMediaError(`Could not load video ${mp4 || webm}`)}
+                onError={(e) => {
+                  console.error("Video load error", e);
+                  setMediaError(`Could not load video ${mp4 || webm}`);
+                }}
                 onClick={() => {
                   const v = videoRef.current;
                   if (!v) return;
@@ -210,8 +239,9 @@ export default function LandingDemo({
                 }}
                 style={{ zIndex: 0 }}
               >
-                {webm && <source src={webm} type="video/webm" />}
+                {/* Prefer MP4 first for wider support */}
                 {mp4 && <source src={mp4} type="video/mp4" />}
+                {webm && <source src={webm} type="video/webm" />}
               </video>
             ) : (
               <img
@@ -226,12 +256,16 @@ export default function LandingDemo({
             )}
 
             {/* sheen */}
-            <div aria-hidden className="absolute inset-0 rounded-2xl" style={{
-              background:
-                "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.18) 100%)",
-              pointerEvents: "none",
-              zIndex: 1,
-            }} />
+            <div
+              aria-hidden
+              className="absolute inset-0 rounded-2xl"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.18) 100%)",
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            />
 
             {/* cursor glow */}
             <motion.div
@@ -270,7 +304,12 @@ export default function LandingDemo({
           </motion.div>
 
           {mediaError && (
-            <p className="mt-2 text-center text-sm text-red-500">{mediaError}</p>
+            <p className="mt-2 text-center text-sm text-red-500">
+              {mediaError} — try opening the file directly to check:{" "}
+              <a className="underline" href={mp4 || webm} target="_blank" rel="noreferrer">
+                {mp4 || webm}
+              </a>
+            </p>
           )}
         </motion.div>
       </div>
@@ -315,26 +354,6 @@ function BottomHud() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.9, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {/* <HudPill icon={<Wand2 className="h-4 w-4" />} label="Live insights" />
-      <HudPill icon={<MessageSquareText className="h-4 w-4" />} label="Show transcript" /> */}
-    </motion.div>
-  );
-}
-
-function HudPill({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div
-      className="relative inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm backdrop-blur-md"
-      style={{
-        color: "#0f172a",
-        background: "rgba(255,255,255,0.86)",
-        border: "1px solid rgba(210,220,232,0.95)",
-      }}
-    >
-      {icon}
-      {label}
-      <div aria-hidden className="absolute -z-10 inset-0 rounded-xl" style={{ boxShadow: "0 10px 40px rgba(30,41,59,0.12)" }} />
-    </div>
+    />
   );
 }

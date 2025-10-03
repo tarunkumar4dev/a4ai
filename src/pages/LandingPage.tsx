@@ -1,4 +1,3 @@
-// src/pages/LandingPage.tsx
 import Navbar from "@/components/Navbar";
 import LandingHero from "@/components/LandingHero";
 import LandingDemo from "@/components/LandingDemo";
@@ -33,10 +32,10 @@ export default function LandingPage() {
 
         {/* DEMO — video in the 3D/glass card (files live in /public) */}
         <LandingDemo
-          videoSrcMp4="/demo.mp4"
-          poster="/demo-poster.png"
+          videoSrcMp4="/demo.mp4"      // public/demo.mp4
+          poster="/demo-poster.png"     // public/demo-poster.png
           showHud
-        // showControls                // uncomment to show native controls
+          // showControls
         />
 
         {/* FEATURES */}
@@ -477,7 +476,7 @@ function Outcomes() {
         {/* subtle CTA */}
         <motion.div
           variants={fadeUp}
-          className="mx-auto mt-12 max-w-3xl rounded-2xl border bg-white/70 p-6 text-center shadow-lg backdrop-blur dark:bg-white/[0.06]"
+          className="mx-auto mt-12 max-w-3xl rounded-2xl border bg-white/70 p-6 text-center shadow-lg backdrop-blur dark:bg.white/[0.06]"
           style={{ borderColor: "var(--stroke, #E4E9F0)" }}
         >
           <div
