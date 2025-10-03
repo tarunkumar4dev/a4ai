@@ -11,6 +11,18 @@
   font-display: swap;
 }
 
+@keyframes bg-pan {
+  0% { background-position: 0% 50% }
+  100% { background-position: 200% 50% }
+}
+
+@keyframes pill-shimmer {
+  0% { transform: translateX(-120%) skewX(-20deg); opacity: 0 }
+  20% { opacity: .9 }
+  100% { transform: translateX(220%) skewX(-20deg); opacity: 0 }
+}
+
+
 /* Utility class — use this if you don't want to edit Tailwind config */
 .font-halenoir {
   font-family: "Halenoir Expanded", ui-sans-serif, system-ui, -apple-system,
@@ -20,10 +32,9 @@
 
 /* Used by the animated headline fill */
 @keyframes bg-pan {
-  0%   { background-position: 0% 50% }
+  0% { background-position: 0% 50% }
   100% { background-position: 200% 50% }
 }
-
 
 /* ---------------------------
    Theme Tokens
@@ -51,6 +62,14 @@
 
   /* Muted text */
   --muted-foreground: 215 16% 47%;
+}
+
+/* Add in globals.css for 3D effect */
+.logo-3d {
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));
+  background: linear-gradient(145deg, #1f2544, #3b82f6);
+  padding: 6px;
+  border-radius: 20%;
 }
 
 .dark {

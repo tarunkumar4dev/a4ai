@@ -10,22 +10,18 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { ArrowRight, Check, Sparkles } from "lucide-react";
-import { useAuth } from "@/providers/AuthProvider"; // ⬅️ ADDED
+import { useAuth } from "@/providers/AuthProvider";
 
-/* -------------------- Animation presets (consistent) -------------------- */
+/* -------------------- Animation presets -------------------- */
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
   show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
-
-const container = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.12 } },
-};
+const container = { hidden: {}, show: { transition: { staggerChildren: 0.12 } } };
 
 export default function LandingPage() {
-  const { session } = useAuth();                     // ⬅️ ADDED
-  const loggedIn = !!session;                         // ⬅️ ADDED
+  const { session } = useAuth();
+  const loggedIn = !!session;
 
   return (
     <div className="flex min-h-screen flex-col bg-white dark:bg-gray-950">
@@ -35,8 +31,13 @@ export default function LandingPage() {
         {/* HERO */}
         <LandingHero />
 
-        {/* DEMO */}
-        <LandingDemo />
+        {/* DEMO — video in the 3D/glass card (files live in /public) */}
+        <LandingDemo
+          videoSrcMp4="/demo.mp4"
+          poster="/demo-poster.png"
+          showHud
+        // showControls                // uncomment to show native controls
+        />
 
         {/* FEATURES */}
         <LandingFeatures />
@@ -77,19 +78,9 @@ export default function LandingPage() {
                   title: "Choose Your Specifications",
                   desc: "Select subject, difficulty, question type, and other parameters for your test.",
                   icon: (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      className="h-6 w-6"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                      />
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
                   ),
                 },
@@ -97,19 +88,9 @@ export default function LandingPage() {
                   title: "AI Models Generate Content",
                   desc: "Multiple AI models create questions and answers based on your specifications.",
                   icon: (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      className="h-6 w-6"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                      />
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
                   ),
                 },
@@ -117,19 +98,9 @@ export default function LandingPage() {
                   title: "Download Your Test Paper",
                   desc: "Get your professionally formatted test paper ready for distribution.",
                   icon: (
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      className="h-6 w-6"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                      />
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                   ),
                 },
@@ -141,10 +112,7 @@ export default function LandingPage() {
                 >
                   <div
                     className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl text-white"
-                    style={{
-                      background:
-                        "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
-                    }}
+                    style={{ background: "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)" }}
                   >
                     {item.icon}
                   </div>
@@ -214,24 +182,11 @@ export default function LandingPage() {
                   <div className="mb-6 flex items-center">
                     <div
                       className="mr-4 flex h-12 w-12 items-center justify-center rounded-full font-bold text-white"
-                      style={{
-                        background:
-                          "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
-                      }}
+                      style={{ background: "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)" }}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-6 w-6"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                        />
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                       </svg>
                     </div>
                     <div>
@@ -249,9 +204,7 @@ export default function LandingPage() {
         {/* Final CTA */}
         <motion.section
           className="py-20"
-          style={{
-            background: "linear-gradient(135deg, #DFE4EF 0%, #F6F9FF 100%)",
-          }}
+          style={{ background: "linear-gradient(135deg, #DFE4EF 0%, #F6F9FF 100%)" }}
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           transition={{ duration: 1 }}
@@ -265,24 +218,15 @@ export default function LandingPage() {
               Join thousands of educators who are saving time and improving student outcomes with a4ai.
             </p>
 
-            {/* ⬇️ Auth-aware: logged-in → Dashboard, guest → Signup */}
             {!loggedIn ? (
               <Link to="/signup">
-                <Button
-                  size="lg"
-                  className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
-                  style={{ background: "#5D6B7B", color: "#fff" }}
-                >
+                <Button size="lg" className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition" style={{ background: "#5D6B7B", color: "#fff" }}>
                   Get Started For Free
                 </Button>
               </Link>
             ) : (
               <Link to="/dashboard">
-                <Button
-                  size="lg"
-                  className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
-                  style={{ background: "#5D6B7B", color: "#fff" }}
-                >
+                <Button size="lg" className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition" style={{ background: "#5D6B7B", color: "#fff" }}>
                   Go to Dashboard
                 </Button>
               </Link>
@@ -300,10 +244,9 @@ export default function LandingPage() {
    Upgraded CTA
    ========================= */
 function UpgradedCTA() {
-  const { session } = useAuth();         // ⬅️ ADDED
-  const loggedIn = !!session;            // ⬅️ ADDED
+  const { session } = useAuth();
+  const loggedIn = !!session;
 
-  // Destinations based on auth
   const primaryHref = loggedIn ? "/dashboard/test-generator" : "/signup";
   const secondaryHref = "/demo";
 
@@ -313,7 +256,7 @@ function UpgradedCTA() {
         className="relative overflow-hidden rounded-2xl border bg-white p-8 shadow-xl backdrop-blur dark:bg-white/5"
         style={{ borderColor: "var(--stroke, #E4E9F0)" }}
       >
-        {/* decorative frame (neutral grey-blue) */}
+        {/* decorative frame */}
         <div
           className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-1 ring-inset"
           style={{
@@ -325,7 +268,6 @@ function UpgradedCTA() {
           }}
         />
 
-        {/* content */}
         <div className="relative z-10 text-center text-gray-900 dark:text-gray-100">
           <div
             className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur"
@@ -356,10 +298,7 @@ function UpgradedCTA() {
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link to={primaryHref}>
-              <Button
-                className="group rounded-xl px-7 py-6 text-base font-semibold text-white"
-                style={{ background: "#5D6B7B" }}
-              >
+              <Button className="group rounded-xl px-7 py-6 text-base font-semibold text-white" style={{ background: "#5D6B7B" }}>
                 {loggedIn ? "Open Test Generator" : "Create Your First Test"}
                 <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Button>
@@ -397,7 +336,6 @@ function TrustSecurity() {
       viewport={{ once: true, amount: 0.2 }}
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Logos / Social proof */}
         <motion.div variants={fadeUp} className="mb-12">
           <LogosMarquee />
         </motion.div>
@@ -417,11 +355,7 @@ function TrustSecurity() {
           </p>
         </motion.div>
 
-        {/* Trust cards */}
-        <motion.div
-          className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4"
-          variants={container}
-        >
+        <motion.div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4" variants={container}>
           {[
             { title: "Encryption", desc: "Data encrypted in transit and at rest with modern standards.", icon: "🔒" },
             { title: "Privacy-First", desc: "No ads, no selling data. You control retention and export.", icon: "🛡️" },
@@ -451,7 +385,7 @@ function TrustSecurity() {
 }
 
 /* =========================
-   Logos Marquee (replace with real logos later)
+   Logos Marquee
    ========================= */
 function LogosMarquee() {
   return (
@@ -488,18 +422,16 @@ function LogosMarquee() {
    Outcomes & Stats
    ========================= */
 function Outcomes() {
-  const { session } = useAuth();     // ⬅️ ADDED
-  const loggedIn = !!session;        // ⬅️ ADDED
+  const { session } = useAuth();
+  const loggedIn = !!session;
 
   const stats = [
-    // First card: tagline only (removes 2000+/Questions Generated/subtitle)
     { k: "Shaping Tomorrow's Classrooms" },
     { k: "12+", v: "Question formats", sub: "MCQ, SA, LA, Cloze, Match…" },
     { k: "PDF & Word", v: "Export anywhere", sub: "print or share in your LMS" },
   ];
 
-  // Destination for subtle CTA
-  const subtleHref = loggedIn ? "/dashboard" : "/signup"; // ⬅️ ADDED
+  const subtleHref = loggedIn ? "/dashboard" : "/signup";
 
   return (
     <motion.section
@@ -519,10 +451,7 @@ function Outcomes() {
           </p>
         </motion.div>
 
-        <motion.div
-          className="grid grid-cols-1 gap-6 sm:grid-cols-3"
-          variants={container}
-        >
+        <motion.div className="grid grid-cols-1 gap-6 sm:grid-cols-3" variants={container}>
           {stats.map((s, i) => (
             <motion.div
               key={`${s.k}-${i}`}
@@ -539,14 +468,8 @@ function Outcomes() {
               >
                 {s.k}
               </div>
-              {s.v && (
-                <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
-                  {s.v}
-                </div>
-              )}
-              {s.sub && (
-                <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>
-              )}
+              {s.v && <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{s.v}</div>}
+              {s.sub && <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>}
             </motion.div>
           ))}
         </motion.div>
@@ -577,10 +500,7 @@ function Outcomes() {
           </p>
           <div className="mt-5">
             <Link to={subtleHref}>
-              <Button
-                className="rounded-xl px-7 py-6 text-base font-semibold text-white"
-                style={{ background: "#5D6B7B" }}
-              >
+              <Button className="rounded-xl px-7 py-6 text-base font-semibold text-white" style={{ background: "#5D6B7B" }}>
                 {loggedIn ? "Go to Dashboard" : "Get Started Free"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>

@@ -13,6 +13,40 @@ const hx = {
   fontWeight: 600,
 } as const;
 
+/* -------------------- Cluely-style glossy badge -------------------- */
+function LogoBadge() {
+  return (
+    <span
+      className="
+        relative inline-flex items-center justify-center
+        h-14 w-14 md:h-16 md:w-16
+        -rotate-6 hover:rotate-0 transition-transform duration-500
+        rounded-2xl
+        /* ← BLUE → GREY */
+        bg-[linear-gradient(180deg,#f3f5f8_0%,#e6e9ee_55%,#cfd6df_100%)]
+        ring-1 ring-white/70
+        shadow-[0_18px_44px_-10px_rgba(2,6,23,0.18),0_8px_18px_-6px_rgba(17,24,39,0.18)]
+      "
+      aria-hidden="true"
+    >
+      {/* soft inner bevel */}
+      <div className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_2px_6px_rgba(255,255,255,0.7),inset_0_-10px_18px_rgba(0,0,0,0.10)]" />
+      {/* specular highlight */}
+      <div className="pointer-events-none absolute -top-1 -left-1 h-10 w-10 rounded-2xl bg-white/60 blur-md opacity-80" />
+      {/* bottom glow — neutral grey */}
+      <div className="pointer-events-none absolute -bottom-2 inset-x-2 h-4 rounded-b-2xl bg-slate-400/25 blur-md" />
+
+      <img
+  src="/images/LOGO.png"
+  alt="a4ai logo"
+  className="relative h-12 w-12 md:h-14 md:w-14 object-contain drop-shadow-[0_2px_3px_rgba(0,0,0,0.35)]"
+/>
+
+    </span>
+  );
+}
+
+
 export default function PricingPage() {
   const [audience, setAudience] = useState<AudienceKey>("individual");
   const [billingPeriod, setBillingPeriod] = useState<PeriodKey>("monthly");
@@ -177,40 +211,43 @@ export default function PricingPage() {
 
       <div className="relative mx-auto max-w-6xl px-4 pt-12 pb-16">
         {/* Header */}
-        <div className="mx-auto max-w-2xl text-center">
+        <div className="mx-auto max-w-3xl text-center">
           <h1
-            className="text-3xl md:text-4xl tracking-tight"
+            className="text-3xl md:text-5xl tracking-tight flex items-center justify-center gap-4"
             style={hx}
           >
-            <span className="bg-clip-text text-transparent bg-[linear-gradient(90deg,#0f172a_0%,#334155_50%,#0f172a_100%)] bg-[length:200%_100%] animate-[bg-pan_12s_linear_infinite]">
-              Flexible Plans for Every Educator
-            </span>
+            <span className="text-slate-900">Start</span>
+            <LogoBadge />
+            <span className="text-slate-900">for free.</span>
           </h1>
-          <p className="mt-2 text-[15px] text-slate-600">
-            Choose the perfect plan for your teaching needs. All plans include a 14-day free trial.
+
+          <p className="mt-3 text-[15px] md:text-[17px] text-slate-600">
+            Whether you're using a4ai for test generation, contests, or analytics, it's free to try.
           </p>
 
-          {/* Audience toggle */}
-          <div className="mt-6 inline-flex rounded-2xl border border-slate-200 bg-white/80 backdrop-blur px-1 py-1 shadow-sm">
-            {[
-              { id: "individual", label: "Teachers", icon: <Users size={16} /> },
-              { id: "institute", label: "Institutes", icon: <Building size={16} /> },
-              { id: "school", label: "Schools", icon: <School size={16} /> },
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setAudience(t.id as AudienceKey)}
-                className={`mx-0.5 flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm transition
-                ${audience === t.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`}
-                style={hx}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
+          {/* Audience toggle — centered */}
+          <div className="mt-6 flex justify-center">
+            <div className="inline-flex rounded-2xl border border-slate-200 bg-white/80 backdrop-blur px-1 py-1 shadow-sm">
+              {[
+                { id: "individual", label: "Teachers", icon: <Users size={16} /> },
+                { id: "institute", label: "Institutes", icon: <Building size={16} /> },
+                { id: "school", label: "Schools", icon: <School size={16} /> },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setAudience(t.id as AudienceKey)}
+                  className={`mx-0.5 flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition
+                    ${audience === t.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`}
+                  style={hx}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Billing toggle */}
+          {/* Billing toggle — already centered by flex wrapper below */}
           <div className="mt-4 flex items-center justify-center gap-3">
             <span
               className={`text-sm ${billingPeriod === "monthly" ? "text-slate-900" : "text-slate-500"}`}
@@ -227,14 +264,15 @@ export default function PricingPage() {
               onClick={() => setBillingPeriod(billingPeriod === "monthly" ? "yearly" : "monthly")}
               className="
                 relative h-6 w-12 rounded-full
-                bg-[linear-gradient(90deg,#93c5fd,#3b82f6)]
+                bg-[linear-gradient(90deg,#e5e7eb,#cbd5e1)]
+
                 p-0 appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0
                 shadow-inner
               "
             >
               <span
                 className={`absolute top-[4px] left-[4px] h-4 w-4 rounded-full bg-white shadow
-                transition-transform duration-300 ${billingPeriod === "yearly" ? "translate-x-[24px]" : ""}`}
+                  transition-transform duration-300 ${billingPeriod === "yearly" ? "translate-x-[24px]" : ""}`}
               />
             </button>
 
@@ -332,7 +370,7 @@ export default function PricingPage() {
           <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
             {[
               { q: "Can I change plans anytime?", a: "Yes, you can upgrade or downgrade your plan at any time." },
-              { q: "Is there a free trial?", a: "Yes, all plans include a 14-day free trial with full access to features." },
+              { q: "Is there a free trial?", a: "Yes, all plans include a 7-day free trial with full access to features." },
               { q: "What payment methods do you accept?", a: "All major cards, UPI, Net Banking, and bank transfers." },
               { q: "Do you offer educational discounts?", a: "Yes, for non-profits and educational institutions." },
             ].map((f, i) => (
@@ -349,5 +387,3 @@ export default function PricingPage() {
     </div>
   );
 }
-
-/* Uses your existing @keyframes bg-pan in globals.css */

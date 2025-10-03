@@ -71,6 +71,9 @@ export default function DashboardPage() {
   const isCoarse = useCoarse();
   const interactiveCards = !(isMobile || isCoarse || prefersReducedMotion);
 
+  // ✅ single helper to go to Test Generator → History tab
+  const goToHistory = () => navigate("/dashboard/test-generator?tab=history");
+
   /* ensure profile */
   useEffect(() => {
     let mounted = true;
@@ -200,9 +203,10 @@ export default function DashboardPage() {
                       </Button>
                     </Link>
 
-                    <Link to="/dashboard/history">
-                      <Button variant="outline">View History</Button>
-                    </Link>
+                    {/* ✅ History → Test Generator History tab */}
+                    <Button variant="outline" onClick={goToHistory}>
+                      View History
+                    </Button>
 
                     {/* ✅ Upgrade goes to public pricing */}
                     <Link to="/pricing">
@@ -228,9 +232,10 @@ export default function DashboardPage() {
               <motion.div variants={item} className="lg:col-span-2 space-y-3">
                 <div className="flex items-center justify-between">
                   <h2 className="text-[16px] font-[600] tracking-[-0.01em]" style={{ color: INK }}>Recent Tests</h2>
-                  <Link to="/dashboard/history">
-                    <Button variant="ghost" size="sm" className="text-gray-900 dark:text-gray-50">View All</Button>
-                  </Link>
+                  {/* ✅ View All → History tab */}
+                  <Button variant="ghost" size="sm" className="text-gray-900 dark:text-gray-50" onClick={goToHistory}>
+                    View All
+                  </Button>
                 </div>
                 <AnimatePresence initial={false}>
                   {recentTests.map((t) => (

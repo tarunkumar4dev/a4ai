@@ -1,62 +1,111 @@
-// src/components/LandingDemo.tsx — smooth, subtle, grey-blue, white-gradient bg
-import { useRef, useState, useEffect } from "react";
+// src/components/LandingDemo.tsx
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   motion,
   useInView,
-  useMotionValue,
-  useTransform,
   useMotionTemplate,
+  useMotionValue,
   useSpring,
+  useTransform,
 } from "framer-motion";
-import { Play } from "lucide-react";
+import { Wand2, MessageSquareText, Sparkles } from "lucide-react";
 
-export type LandingDemoProps = {
-  youtubeId?: string;
+type Props = {
+  /** Fallback image when no video is provided */
+  bgImage?: string;
+
+  /** Provide to render video instead of image (public paths OK) */
+  videoSrcMp4?: string;
+  videoSrcWebm?: string;
+  poster?: string;
+  showControls?: boolean;
+
+  /** Show HUD pills */
+  showHud?: boolean;
 };
 
-export default function LandingDemo({ youtubeId }: LandingDemoProps) {
+export default function LandingDemo({
+  bgImage = "/showcase-bg.png",
+  videoSrcMp4,
+  videoSrcWebm,
+  poster = "/demo-poster.jpg",
+  showControls = false,
+  showHud = true,
+}: Props) {
   const sectionRef = useRef<HTMLDivElement | null>(null);
-  const inView = useInView(sectionRef, { once: true, margin: "-20% 0px" });
+  const inView = useInView(sectionRef, { once: false, margin: "-20% 0px" });
 
-  // --------------------------------
-  // Cursor + tilt with springs
-  // --------------------------------
+  // disable tilt on touch
+  const isCoarsePointer = useMemo(
+    () => window.matchMedia?.("(pointer: coarse)")?.matches ?? false,
+    []
+  );
+
+  // tilt
   const rawX = useMotionValue(300);
-  const rawY = useMotionValue(150);
-
-  // smooth cursor values (less jitter)
+  const rawY = useMotionValue(160);
   const mx = useSpring(rawX, { stiffness: 140, damping: 18, mass: 0.5 });
   const my = useSpring(rawY, { stiffness: 140, damping: 18, mass: 0.5 });
-
-  // very subtle tilt (reduce seasick)
-  const rotateX = useSpring(useTransform(my, [0, 300], [3, -3]), {
-    stiffness: 120,
-    damping: 16,
-    mass: 0.5,
+  const rotateX = useSpring(useTransform(my, [0, 320], [3, -3]), {
+    stiffness: 120, damping: 16, mass: 0.5,
   });
-  const rotateY = useSpring(useTransform(mx, [0, 600], [-4, 4]), {
-    stiffness: 120,
-    damping: 16,
-    mass: 0.5,
+  const rotateY = useSpring(useTransform(mx, [0, 640], [-4, 4]), {
+    stiffness: 120, damping: 16, mass: 0.5,
   });
 
   const glowX = useTransform(mx, (v) => v);
   const glowY = useTransform(my, (v) => v);
 
-  const [hintVisible, setHintVisible] = useState(true);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isReady, setReady] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 250);
+    return () => clearTimeout(t);
+  }, []);
+
+  // base-url-safe resolver for public assets
+  const resolve = (p?: string) => {
+    if (!p) return p;
+    if (/^https?:\/\//i.test(p)) return p;
+    const base = (import.meta as any).env?.BASE_URL ?? "/";
+    const trimmed = p.startsWith("/") ? p.slice(1) : p;
+    return `${base.replace(/\/$/, "")}/${trimmed}`;
+  };
+
+  const resolvedImg = resolve(bgImage);
+  const resolvedPoster = resolve(poster);
+  const mp4 = resolve(videoSrcMp4);
+  const webm = resolve(videoSrcWebm);
+
+  // Pause video when offscreen or tab hidden
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+
+    const handleVisibility = () => {
+      if (document.hidden) el.pause();
+      else if (inView) el.play().catch(() => {});
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [inView]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (inView) el.play().catch(() => {});
+    else el.pause();
+  }, [inView]);
 
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isLoaded) return;
+    if (!isReady || isCoarsePointer) return;
     const rect = e.currentTarget.getBoundingClientRect();
     rawX.set(e.clientX - rect.left);
     rawY.set(e.clientY - rect.top);
   };
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoaded(true), 300);
-    return () => clearTimeout(timer);
-  }, []);
 
   return (
     <section
@@ -64,58 +113,32 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
       className="relative overflow-hidden py-24"
       onMouseMove={onMouseMove}
     >
-      {/* Section background: very light white gradient + faint vignette */}
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-20"
-        style={{
-          background:
-            "radial-gradient(80% 60% at 50% 10%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.75) 40%, rgba(247,249,252,0.8) 60%, rgba(238,243,248,0.9) 100%)",
-        }}
-      />
-      {/* faint vertical sheen */}
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-20 opacity-70"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.6) 45%, rgba(255,255,255,0.0) 100%)",
-        }}
-      />
+      {/* BACKDROP */}
+      <div aria-hidden className="absolute inset-0 -z-20" style={{
+        background:
+          "radial-gradient(80% 60% at 50% 8%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.76) 40%, rgba(247,249,252,0.82) 60%, rgba(238,243,248,0.92) 100%)",
+      }} />
+      <div aria-hidden className="absolute inset-0 -z-20 opacity-70" style={{
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.6) 45%, rgba(255,255,255,0.0) 100%)",
+      }} />
 
-      {/* soft grey-blue blobs for depth */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -top-32 -left-40 h-[42rem] w-[42rem] rounded-full blur-3xl will-change-transform"
-        style={{ opacity: inView ? 0.28 : 0 }}
-      >
-        <motion.div
-          className="h-full w-full"
+      {/* BLOBS */}
+      <motion.div aria-hidden className="pointer-events-none absolute -top-28 -left-40 h-[42rem] w-[42rem] rounded-full blur-3xl" style={{ opacity: inView ? 0.25 : 0 }}>
+        <motion.div className="h-full w-full"
           animate={{ scale: [1, 1.05, 1], rotate: [0, 6, 0] }}
           transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-          style={{
-            background:
-              "radial-gradient(closest-side, rgba(110,124,142,0.22), transparent 70%)",
-          }}
-        />
+          style={{ background: "radial-gradient(closest-side, rgba(110,124,142,0.22), transparent 70%)" }} />
       </motion.div>
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -bottom-32 -right-40 h-[38rem] w-[38rem] rounded-full blur-3xl will-change-transform"
-        style={{ opacity: inView ? 0.22 : 0 }}
-      >
-        <motion.div
-          className="h-full w-full"
+      <motion.div aria-hidden className="pointer-events-none absolute -bottom-32 -right-40 h-[38rem] w-[38rem] rounded-full blur-3xl" style={{ opacity: inView ? 0.2 : 0 }}>
+        <motion.div className="h-full w-full"
           animate={{ scale: [1.02, 0.98, 1.02] }}
           transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-          style={{
-            background:
-              "radial-gradient(closest-side, rgba(173,184,199,0.20), transparent 70%)",
-          }}
-        />
+          style={{ background: "radial-gradient(closest-side, rgba(173,184,199,0.20), transparent 70%)" }} />
       </motion.div>
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        {/* Title */}
         <motion.h2
           initial={{ opacity: 0, y: 10 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -143,7 +166,7 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
           Generate, host, and analyze assessments — end-to-end in minutes.
         </motion.p>
 
-        {/* VIDEO CARD */}
+        {/* SHOWCASE CARD */}
         <motion.div
           initial={{ opacity: 0, scale: 0.985, y: 18 }}
           animate={inView ? { opacity: 1, scale: 1, y: 0 } : {}}
@@ -152,31 +175,65 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
           style={{ perspective: 1200 }}
         >
           <motion.div
-            className="relative aspect-video overflow-hidden rounded-2xl bg-black shadow-2xl will-change-transform"
+            className="relative aspect-video overflow-hidden rounded-2xl shadow-2xl bg-neutral-900"
             style={{
-              rotateX,
-              rotateY,
+              rotateX: isCoarsePointer ? 0 : (rotateX as any),
+              rotateY: isCoarsePointer ? 0 : (rotateY as any),
               transformStyle: "preserve-3d",
               border: "1px solid var(--stroke, #E4E9F0)",
             }}
             onMouseLeave={() => {
+              if (isCoarsePointer) return;
               rawX.set(300);
-              rawY.set(150);
+              rawY.set(160);
             }}
           >
-            {/* soft white inner gradient (barely visible) */}
-            <div
-              aria-hidden
-              className="absolute inset-0 rounded-2xl"
-              style={{
-                background:
-                  "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.18) 100%)",
-                pointerEvents: "none",
-                zIndex: 1,
-              }}
-            />
+            {/* MEDIA */}
+            {mp4 || webm ? (
+              <video
+                ref={videoRef}
+                className="absolute inset-0 h-full w-full object-cover"
+                muted
+                loop
+                playsInline
+                autoPlay
+                preload="metadata"
+                poster={resolvedPoster}
+                controls={showControls}
+                onCanPlay={() => setReady(true)}
+                onError={() => setMediaError(`Could not load video ${mp4 || webm}`)}
+                onClick={() => {
+                  const v = videoRef.current;
+                  if (!v) return;
+                  if (v.paused) v.play().catch(() => {});
+                  else v.pause();
+                }}
+                style={{ zIndex: 0 }}
+              >
+                {webm && <source src={webm} type="video/webm" />}
+                {mp4 && <source src={mp4} type="video/mp4" />}
+              </video>
+            ) : (
+              <img
+                src={resolvedImg}
+                alt="a4ai product preview"
+                className="absolute inset-0 h-full w-full object-cover"
+                draggable={false}
+                style={{ zIndex: 0 }}
+                onLoad={() => setMediaError(null)}
+                onError={() => setMediaError(`Could not load ${resolvedImg}`)}
+              />
+            )}
 
-            {/* cursor-follow glow (smoother, slightly smaller) */}
+            {/* sheen */}
+            <div aria-hidden className="absolute inset-0 rounded-2xl" style={{
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.18) 100%)",
+              pointerEvents: "none",
+              zIndex: 1,
+            }} />
+
+            {/* cursor glow */}
             <motion.div
               aria-hidden
               className="pointer-events-none absolute inset-0 rounded-2xl"
@@ -184,99 +241,100 @@ export default function LandingDemo({ youtubeId }: LandingDemoProps) {
                 background: useMotionTemplate`
                   radial-gradient(230px 230px at ${glowX}px ${glowY}px, rgba(255,255,255,0.12), transparent 70%)
                 `,
-                opacity: isLoaded ? 1 : 0,
+                opacity: isReady && !isCoarsePointer ? 1 : 0,
                 transition: "opacity 220ms ease",
-                zIndex: 1,
+                zIndex: 2,
               }}
             />
 
-            {/* neutral gradient ring (no purple) */}
+            {/* gradient border mask */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset"
+              className="pointer-events-none absolute inset-0 rounded-2xl"
               style={{
-                background:
-                  "linear-gradient(#000,#000) padding-box, linear-gradient(90deg, rgba(93,107,123,.45), rgba(175,186,199,.45)) border-box",
                 border: "1px solid transparent",
                 borderRadius: "1rem",
-                zIndex: 1,
+                background:
+                  "linear-gradient(90deg, rgba(93,107,123,.45), rgba(175,186,199,.45)) border-box",
+                WebkitMask:
+                  "linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0)",
+                WebkitMaskComposite: "xor",
+                maskComposite: "exclude",
+                zIndex: 3,
               }}
             />
 
-            {/* media */}
-            {youtubeId ? (
-              <iframe
-                className="absolute inset-0 h-full w-full"
-                src={`https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1`}
-                title="a4ai Demo Video"
-                loading="lazy"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                onLoad={() => {
-                  setHintVisible(false);
-                  setIsLoaded(true);
-                }}
-              />
-            ) : (
-              <video
-                className="absolute inset-0 h-full w-full object-cover"
-                controls
-                playsInline
-                preload="metadata"
-                poster="/demo-poster.jpg"
-                onPlay={() => setHintVisible(false)}
-                onLoadedData={() => setIsLoaded(true)}
-              >
-                <source src="/demo.mp4" type="video/mp4" />
-                <source src="/demo.webm" type="video/webm" />
-              </video>
-            )}
-
-            {/* PLAY HINT */}
-            {hintVisible && (
-              <motion.div
-                className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.45 }}
-              >
-                <motion.div
-                  className="relative rounded-full backdrop-blur-md px-5 py-2.5 text-sm font-medium"
-                  style={{
-                    color: "#fff",
-                    background: "rgba(255,255,255,0.08)",
-                    border: "1px solid rgba(255,255,255,0.22)",
-                  }}
-                  animate={{ scale: [1, 1.03, 1] }}
-                  transition={{ duration: 1.8, repeat: Infinity }}
-                >
-                  <div className="flex items-center gap-2 relative z-10">
-                    <Play className="h-4 w-4" fill="white" />
-                    Play demo
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-
-            {/* LOADING STATE */}
-            {!isLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50">
-                <motion.div
-                  className="h-10 w-10 rounded-full border-2 border-transparent border-t-white"
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
-                />
-              </div>
-            )}
+            {/* HUD */}
+            <FloatingHint />
+            {showHud && <BottomHud />}
           </motion.div>
+
+          {mediaError && (
+            <p className="mt-2 text-center text-sm text-red-500">{mediaError}</p>
+          )}
         </motion.div>
       </div>
     </section>
   );
 }
 
-/* Tailwind keyframes (add once in globals.css if you don't already have it)
-@keyframes bg-pan {
-  0% { background-position: 0% 50% }
-  100% { background-position: 200% 50% }
-}*/
+/* ---------- Floating hint pill ---------- */
+function FloatingHint() {
+  return (
+    <motion.div
+      className="absolute left-1/2 top-[7%] z-40 -translate-x-1/2"
+      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: 0.6, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <motion.div
+        className="relative rounded-full backdrop-blur-md px-4 py-2 text-sm font-medium shadow"
+        style={{
+          color: "#263244",
+          background: "rgba(255,255,255,0.9)",
+          border: "1px solid rgba(210,220,232,0.9)",
+        }}
+        animate={{ y: [0, 4, 0] }}
+        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <div className="flex items-center gap-2 relative z-10">
+          <Sparkles className="h-4 w-4" />
+          Keep scrolling
+        </div>
+        <div aria-hidden className="absolute inset-0 rounded-full" style={{ boxShadow: "0 0 80px 20px rgba(120,140,160,0.15)" }} />
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ---------- Bottom HUD pills ---------- */
+function BottomHud() {
+  return (
+    <motion.div
+      className="absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2 gap-2 px-2"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.9, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {/* <HudPill icon={<Wand2 className="h-4 w-4" />} label="Live insights" />
+      <HudPill icon={<MessageSquareText className="h-4 w-4" />} label="Show transcript" /> */}
+    </motion.div>
+  );
+}
+
+function HudPill({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div
+      className="relative inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm backdrop-blur-md"
+      style={{
+        color: "#0f172a",
+        background: "rgba(255,255,255,0.86)",
+        border: "1px solid rgba(210,220,232,0.95)",
+      }}
+    >
+      {icon}
+      {label}
+      <div aria-hidden className="absolute -z-10 inset-0 rounded-xl" style={{ boxShadow: "0 10px 40px rgba(30,41,59,0.12)" }} />
+    </div>
+  );
+}
