@@ -1,4 +1,5 @@
-import { useState } from "react";
+// src/pages/PaymentPage.tsx
+import { useEffect, useState } from "react";
 import { CreditCard, Smartphone, QrCode, Wallet, Shield, CheckCircle } from "lucide-react";
 
 declare global {
@@ -7,9 +8,14 @@ declare global {
   }
 }
 
-// ⬇️ envs (same key as backend .env.local)
+/* ----------------------- ENV (Vite) ----------------------- */
+// These are injected at build time. Make sure keys start with VITE_
 const RZP_KEY = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || "";
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) || "http://localhost:5000";
+const RAW_BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) || "http://localhost:5000";
+
+// normalize BACKEND_URL and safely join paths
+const joinUrl = (base: string, path: string) =>
+  `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 
 type MethodId = "upi" | "card" | "wallet" | "netbanking";
 
@@ -17,6 +23,18 @@ export default function PaymentPage() {
   const [selectedMethod, setSelectedMethod] = useState<MethodId>("upi");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+  // ---- lazily ensure Razorpay script exists ----
+  const ensureRazorpay = () =>
+    new Promise<void>((resolve, reject) => {
+      if (window.Razorpay) return resolve();
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Failed to load Razorpay Checkout"));
+      document.head.appendChild(script);
+    });
 
   const paymentMethods = [
     { id: "upi" as const, name: "UPI / Google Pay", icon: <Smartphone className="h-6 w-6" />, description: "Instant payment using UPI apps" },
@@ -27,20 +45,22 @@ export default function PaymentPage() {
 
   const openRazorpay = async (amountPaise: number) => {
     if (!RZP_KEY) {
-      alert("Razorpay key missing. Add VITE_RAZORPAY_KEY_ID in your .env and restart dev server.");
+      alert("Razorpay key missing. Add VITE_RAZORPAY_KEY_ID in your .env and restart the dev server.");
       return;
     }
 
     setIsProcessing(true);
     try {
-      // 1) Create order on backend (amount is in paise)
-      const res = await fetch(`${BACKEND_URL}/create-order`, {
+      await ensureRazorpay();
+
+      // 1) Create order on backend (amount in paise)
+      const res = await fetch(joinUrl(RAW_BACKEND_URL, "/create-order"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: amountPaise,
           payment_method: selectedMethod,
-          // helpful for test-mode UPI collect; harmless for other methods
+          // For Razorpay TEST mode UPI, this helps quick success; prod should NOT force this.
           vpa: selectedMethod === "upi" ? "success@razorpay" : undefined,
         }),
       });
@@ -49,31 +69,31 @@ export default function PaymentPage() {
         const e = await res.json().catch(() => ({}));
         throw new Error(e?.details || e?.error || `Order create failed (${res.status})`);
       }
-      const order = await res.json(); // { id, amount, currency }
+      const order = await res.json(); // expect: { id, amount, currency }
 
       // 2) Open Razorpay Checkout
       const options = {
         key: RZP_KEY,
         order_id: order.id,
-        amount: order.amount,               // paise
+        amount: order.amount, // paise
         currency: order.currency || "INR",
         name: "a4ai.in",
         description: "Subscription Payment (Test)",
         prefill: { name: "Test User", email: "test@example.com", contact: "9999999999" },
         theme: { color: "#6366f1" },
         handler: async function (response: any) {
-          // 3) Verify payment on backend
+          // 3) Verify on backend
           try {
-            const verifyRes = await fetch(`${BACKEND_URL}/verify-payment`, {
+            const verifyRes = await fetch(joinUrl(RAW_BACKEND_URL, "/verify-payment"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(response),
+              body: JSON.stringify(response), // { razorpay_order_id, razorpay_payment_id, razorpay_signature }
             });
             const result = await verifyRes.json();
-            if (result.success) {
+            if (verifyRes.ok && result?.success) {
               setPaymentSuccess(true);
             } else {
-              alert(result.error || "Payment Verification Failed ❌");
+              alert(result?.error || "Payment Verification Failed ❌");
             }
           } catch (e: any) {
             alert(e?.message || "Verification failed");
@@ -81,9 +101,7 @@ export default function PaymentPage() {
             setIsProcessing(false);
           }
         },
-        modal: {
-          ondismiss: () => setIsProcessing(false),
-        },
+        modal: { ondismiss: () => setIsProcessing(false) },
       };
 
       const rzp = new window.Razorpay(options);
@@ -167,7 +185,7 @@ export default function PaymentPage() {
                 ))}
               </div>
 
-              <div className="mt-6 flex items-center text-sm text-gray-500 dark:text-gray-400">
+              <div className="mt-6 flex items-center text-sm text-gray-5 00 dark:text-gray-400">
                 <Shield className="h-4 w-4 mr-2 text-green-500" />
                 <span>Secure and encrypted payment processing</span>
               </div>
@@ -238,7 +256,7 @@ export default function PaymentPage() {
             </div>
           </div>
         </div>
-      </div>
+      </div>  
     </div>
   );
 }
