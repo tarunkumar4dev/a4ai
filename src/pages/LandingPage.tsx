@@ -3,7 +3,7 @@ import LandingHero from "@/components/LandingHero";
 import LandingDemo from "@/components/LandingDemo";
 import LandingFeatures from "@/components/LandingFeatures";
 import FAQ from "@/components/FAQ";
-import Footer from "@/components/Footer";
+import Footer from "@/components/Footer"; 
 
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";

@@ -1,179 +1,109 @@
+// ── load env first ─────────────────────────────────────────────
+require("dotenv").config({ path: ".env.local" });
+
 const express = require("express");
 const Razorpay = require("razorpay");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const crypto = require("crypto");
 
 const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+
+/** CORS (dev allowlist) */
+app.use(
+  cors({
+    origin: function (origin, cb) {
+      const allow = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+        "http://localhost:8080",
+        process.env.CLIENT_ORIGIN,
+      ].filter(Boolean);
+      if (!origin || allow.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked: ${origin}`));
+    },
+  })
+);
+
+// JSON body parser
+app.use(express.json());
+
+// sanity log
+console.log("Razorpay key:", process.env.RAZORPAY_KEY_ID || "(fallback)");
+if (!process.env.RAZORPAY_KEY_SECRET) {
+  console.warn("⚠️ RAZORPAY_KEY_SECRET is missing. Did you create Backend/.env.local ?");
+}
 
 const razorpay = new Razorpay({
-  key_id: "rzp_test_RFzfYR5zJO0IBV",
-  key_secret: "3v2f1PhIOzPHiS5d7tJPa8y7",
+  key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_RFzfYR5zJO0IBV",
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// 👉 Create Order API with UPI support
+// Root check
+app.get("/", (_req, res) => res.send("Razorpay test backend OK"));
+
+/** Create Order (expects amount in **paise**) */
 app.post("/create-order", async (req, res) => {
-  const { amount, payment_method } = req.body;
-
-  const options = {
-    amount: amount * 100, // convert to paise
-    currency: "INR",
-    receipt: "receipt_" + Date.now(),
-    notes: {
-      payment_method: payment_method || "general"
-    }
-  };
-
-  // Add UPI-specific options if payment method is UPI
-  if (payment_method === "upi") {
-    options.method = "upi";
-    options.upi = {
-      flow: "collect", // This enables UPI intent flow
-      vpa: "" // Can be pre-filled if available
-    };
-  }
-
   try {
+    const { amount, payment_method, vpa } = req.body;
+    if (!amount || amount < 1) {
+      return res.status(400).json({ error: "Invalid amount (paise)" });
+    }
+
+    const options = {
+      amount,                 // paise from FE
+      currency: "INR",
+      receipt: "receipt_" + Date.now(),
+      notes: { payment_method: payment_method || "general" },
+    };
+
+    // ✅ your requested UPI "collect" hint
+    if (payment_method === "upi") {
+      options.method = "upi";
+      options.upi = { flow: "collect" };
+      // optionally prefill VPA for test mode:
+      // if FE sends vpa, use it; otherwise Checkout will ask user to enter one
+      if (vpa) options.upi.vpa = vpa; // e.g. "success@razorpay" in test mode
+    }
+
     const order = await razorpay.orders.create(options);
-    res.json({
-      ...order,
-      recommended_apps: payment_method === "upi" ? [
-        { name: "Google Pay", package: "com.google.android.apps.nbu.paisa.user" },
-        { name: "PhonePe", package: "com.phonepe.app" },
-        { name: "Paytm", package: "net.one97.paytm" },
-        { name: "BHIM", package: "in.org.npci.upiapp" }
-      ] : null
-    });
+    console.log("Order created:", order.id, order.amount, order.currency, "method:", payment_method);
+    res.json({ id: order.id, amount: order.amount, currency: order.currency });
   } catch (err) {
     console.error("Order creation error:", err);
-    res.status(500).json({ error: "Error creating order", details: err.error ? err.error.description : err.message });
-  }
-});
-
-// 👉 Create Payment Link API (Alternative for UPI)
-app.post("/create-payment-link", async (req, res) => {
-  const { amount, customer } = req.body;
-
-  try {
-    const paymentLink = await razorpay.paymentLink.create({
-      amount: amount * 100,
-      currency: "INR",
-      accept_partial: false,
-      description: "Subscription Payment for a4ai.in",
-      customer: {
-        name: customer.name || "Customer",
-        email: customer.email || "customer@example.com",
-        contact: customer.contact || "+919999999999"
-      },
-      notify: {
-        sms: true,
-        email: true
-      },
-      reminder_enable: true,
-      notes: {
-        purpose: "Subscription Payment"
-      },
-      upi_link: true // This enables UPI payment option in the payment link
+    res.status(500).json({
+      error: "Error creating order",
+      details: err?.error?.description || err?.message || "unknown",
     });
-
-    res.json(paymentLink);
-  } catch (err) {
-    console.error("Payment link creation error:", err);
-    res.status(500).json({ error: "Error creating payment link", details: err.error ? err.error.description : err.message });
   }
 });
 
-// 👉 Verify Payment API
+/** Verify Payment */
 app.post("/verify-payment", (req, res) => {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-
-  // Validate required fields
-  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-    return res.status(400).json({ 
-      success: false, 
-      error: "Missing required payment verification parameters" 
-    });
-  }
-
   try {
-    const hmac = crypto.createHmac("sha256", "3v2f1PhIOzPHiS5d7tJPa8y7");
-    hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
-    const generatedSignature = hmac.digest("hex");
-
-    if (generatedSignature === razorpay_signature) {
-      // Payment successful - here you would typically:
-      // 1. Update your database
-      // 2. Send confirmation email
-      // 3. Activate the user's subscription
-      
-      console.log("Payment verified successfully for order:", razorpay_order_id);
-      res.json({ 
-        success: true, 
-        message: "Payment verified successfully",
-        order_id: razorpay_order_id,
-        payment_id: razorpay_payment_id
-      });
-    } else {
-      console.warn("Signature verification failed for order:", razorpay_order_id);
-      res.status(400).json({ 
-        success: false, 
-        error: "Payment verification failed: invalid signature" 
-      });
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, error: "Missing verification params" });
     }
+
+    const shasum = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET);
+    shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const digest = shasum.digest("hex");
+
+    if (digest === razorpay_signature) {
+      return res.json({ success: true, order_id: razorpay_order_id, payment_id: razorpay_payment_id });
+    }
+    return res.status(400).json({ success: false, error: "Invalid signature" });
   } catch (err) {
     console.error("Verification error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: "Internal server error during verification" 
-    });
+    res.status(500).json({ success: false, error: "Internal verification error" });
   }
 });
 
-// 👉 Get Payment Details API
-app.get("/payment-details/:paymentId", async (req, res) => {
-  try {
-    const payment = await razorpay.payments.fetch(req.params.paymentId);
-    res.json(payment);
-  } catch (err) {
-    console.error("Fetch payment error:", err);
-    res.status(500).json({ error: "Error fetching payment details" });
-  }
-});
+// Health
+app.get("/health", (_req, res) => res.json({ status: "OK", at: new Date().toISOString() }));
 
-// 👉 Get Order Details API
-app.get("/order-details/:orderId", async (req, res) => {
-  try {
-    const order = await razorpay.orders.fetch(req.params.orderId);
-    res.json(order);
-  } catch (err) {
-    console.error("Fetch order error:", err);
-    res.status(500).json({ error: "Error fetching order details" });
-  }
-});
-
-// 👉 Health Check API
-app.get("/health", (req, res) => {
-  res.json({ 
-    status: "OK", 
-    timestamp: new Date().toISOString(),
-    service: "Razorpay Payment Gateway"
-  });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
-});
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: "Endpoint not found" });
-});
-
-// Run server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`✅ Backend running at http://localhost:${PORT}`);
