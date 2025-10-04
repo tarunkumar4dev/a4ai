@@ -65,13 +65,14 @@ export default function PricingPage() {
     individual: [
       {
         name: "Starter",
-        price: { monthly: "₹499", yearly: "₹4,999" },
+        price: { monthly: "₹299", yearly: "₹2,999" },
         description: "All essential features.",
         features: [
-          "Unlimited Test Generation",
+          "Test Generation",
           "Basic Student Analytics",
           "Notes Recommendations",
-          "Up to 50 students",
+          "Up to 10 test per month",
+          "PDF Export",
           "Email support",
         ],
       },
@@ -83,7 +84,7 @@ export default function PricingPage() {
           "All Starter features",
           "Advanced Analytics",
           "Custom Test Branding",
-          "Up to 200 students",
+          "Up to 40 tests per month",
           "Priority support",
           "PDF Export",
           "Question Bank Access",
@@ -106,7 +107,7 @@ export default function PricingPage() {
     institute: [
       {
         name: "Institute Basic",
-        price: { monthly: "₹4,999", yearly: "₹49,999" },
+        price: { monthly: "₹2,999", yearly: "₹29,999" },
         description: "All essential features.",
         features: [
           "Up to 5 teachers",
