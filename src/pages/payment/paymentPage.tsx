@@ -1,19 +1,15 @@
 // src/pages/PaymentPage.tsx
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CreditCard, Smartphone, QrCode, Wallet, Shield, CheckCircle } from "lucide-react";
 
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+declare global { interface Window { Razorpay: any } }
 
 /* ----------------------- ENV (Vite) ----------------------- */
-// These are injected at build time. Make sure keys start with VITE_
+// Must be set in your .env(.local/.production)
 const RZP_KEY = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || "";
-const RAW_BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) || "http://localhost:5000";
+const RAW_BACKEND_URL = (import.meta.env.VITE_BACKEND_URL as string) || "https://api.a4ai.in/api";
 
-// normalize BACKEND_URL and safely join paths
+// join helper: avoids double slashes
 const joinUrl = (base: string, path: string) =>
   `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 
@@ -24,7 +20,7 @@ export default function PaymentPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
-  // ---- lazily ensure Razorpay script exists ----
+  // ensure Razorpay script
   const ensureRazorpay = () =>
     new Promise<void>((resolve, reject) => {
       if (window.Razorpay) return resolve();
@@ -43,7 +39,7 @@ export default function PaymentPage() {
     { id: "netbanking" as const, name: "Net Banking", icon: <QrCode className="h-6 w-6" />, description: "Direct bank transfer" },
   ];
 
-  const openRazorpay = async (amountPaise: number) => {
+  async function openRazorpay(amountPaise: number) {
     if (!RZP_KEY) {
       alert("Razorpay key missing. Add VITE_RAZORPAY_KEY_ID in your .env and restart the dev server.");
       return;
@@ -54,22 +50,26 @@ export default function PaymentPage() {
       await ensureRazorpay();
 
       // 1) Create order on backend (amount in paise)
-      const res = await fetch(joinUrl(RAW_BACKEND_URL, "/create-order"), {
+      const body: Record<string, any> = {
+        amount: amountPaise,
+        payment_method: selectedMethod,
+      };
+      // TEST UPI shortcut only in non-production
+      if (selectedMethod === "upi" && import.meta.env.MODE !== "production") {
+        body.vpa = "success@razorpay";
+      }
+
+      const res = await fetch(joinUrl(RAW_BACKEND_URL, "create-order"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: amountPaise,
-          payment_method: selectedMethod,
-          // For Razorpay TEST mode UPI, this helps quick success; prod should NOT force this.
-          vpa: selectedMethod === "upi" ? "success@razorpay" : undefined,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
         throw new Error(e?.details || e?.error || `Order create failed (${res.status})`);
       }
-      const order = await res.json(); // expect: { id, amount, currency }
+      const order = await res.json(); // { id, amount, currency, ... }
 
       // 2) Open Razorpay Checkout
       const options = {
@@ -78,25 +78,25 @@ export default function PaymentPage() {
         amount: order.amount, // paise
         currency: order.currency || "INR",
         name: "a4ai.in",
-        description: "Subscription Payment (Test)",
+        description: "Subscription Payment",
         prefill: { name: "Test User", email: "test@example.com", contact: "9999999999" },
         theme: { color: "#6366f1" },
-        handler: async function (response: any) {
+        handler: async (response: any) => {
           // 3) Verify on backend
           try {
-            const verifyRes = await fetch(joinUrl(RAW_BACKEND_URL, "/verify-payment"), {
+            const verifyRes = await fetch(joinUrl(RAW_BACKEND_URL, "verify-payment"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(response), // { razorpay_order_id, razorpay_payment_id, razorpay_signature }
             });
-            const result = await verifyRes.json();
+            const result = await verifyRes.json().catch(() => ({}));
             if (verifyRes.ok && result?.success) {
               setPaymentSuccess(true);
             } else {
-              alert(result?.error || "Payment Verification Failed ❌");
+              throw new Error(result?.error || "Payment Verification Failed");
             }
-          } catch (e: any) {
-            alert(e?.message || "Verification failed");
+          } catch (err: any) {
+            alert(err?.message || "Verification failed");
           } finally {
             setIsProcessing(false);
           }
@@ -116,7 +116,7 @@ export default function PaymentPage() {
       alert(error?.message || "Payment failed. Please try again.");
       setIsProcessing(false);
     }
-  };
+  }
 
   if (paymentSuccess) {
     return (
@@ -185,7 +185,7 @@ export default function PaymentPage() {
                 ))}
               </div>
 
-              <div className="mt-6 flex items-center text-sm text-gray-5 00 dark:text-gray-400">
+              <div className="mt-6 flex items-center text-sm text-gray-500 dark:text-gray-400">
                 <Shield className="h-4 w-4 mr-2 text-green-500" />
                 <span>Secure and encrypted payment processing</span>
               </div>
@@ -230,7 +230,7 @@ export default function PaymentPage() {
               </div>
 
               <button
-                onClick={() => openRazorpay(99900)} // paise
+                onClick={() => openRazorpay(99900)} // 999 rupees -> paise
                 disabled={isProcessing}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium py-4 px-6 rounded-xl shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -256,7 +256,7 @@ export default function PaymentPage() {
             </div>
           </div>
         </div>
-      </div>  
+      </div>
     </div>
   );
 }
