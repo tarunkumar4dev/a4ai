@@ -1,16 +1,28 @@
-// ContestLandingPage.tsx — Level-aware Contest Zone v2
-// Fonts: everything uses Halenoir Expanded Demi Bold EXCEPT the main "Contest Zone" title.
-// Themes: primary(cartoon), middle(science), high(maths+space), college(fun), pro(fire)
-
+// src/pages/ContestLandingPage.tsx — Level-aware Contest Zone v2 (route-based Preview)
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import styled, { css, keyframes, createGlobalStyle } from "styled-components";
 import { motion, AnimatePresence } from "framer-motion";
+import { useCoins } from "@/context/CoinContext"; // named export
 
 type LevelKey = "primary" | "middle" | "high" | "college" | "pro";
 
+interface Contest {
+  id: string;
+  title: string;
+  type: string;
+  startTime: string;
+  duration: string;
+  participants: number;
+  format: string;
+  difficulty: string;
+  description: string;
+  rules: string[];
+  prizes: { rank: string; prize: string }[];
+  topics: string[];
+}
+
 /* ==================== Global Fonts ==================== */
-/* TODO: Replace /fonts/... with your actual asset paths (self-hosted recommended) */
 const GlobalFonts = createGlobalStyle`
   @font-face {
     font-family: 'HalenoirExpDemiBold';
@@ -21,20 +33,17 @@ const GlobalFonts = createGlobalStyle`
     font-display: swap;
   }
 
-  /* Apply Halenoir everywhere... */
   html, body, #root {
     font-family: 'HalenoirExpDemiBold', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji','Segoe UI Emoji';
     letter-spacing: .1px;
   }
 
-  /* ...except the main title (we keep it neutral/system for contrast) */
-  h1[data-keep-default-font] {
+  .keep-default-font {
     font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans';
     letter-spacing: -0.02em;
     font-weight: 900;
   }
 
-  /* Small defaults */
   * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 `;
 
@@ -47,9 +56,8 @@ const LEVELS: Record<
     accent1: string; accent2: string; accent3: string;
     btnGrad: [string, string];
     chipBg: string;
-    // backdrop tokens
-    backdropTint: string;      // very light wash
-    strokeSoft: string;        // decorative linework
+    backdropTint: string;
+    strokeSoft: string;
   }
 > = {
   primary: {
@@ -146,7 +154,7 @@ const CardWrap = styled(motion.section)`
 
 const TitleRow = styled.div`display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;`;
 
-const H1 = styled.h1.attrs({ "data-keep-default-font": true })`
+const H1 = styled.h1`
   margin: 0;
   font-size: clamp(1.9rem, 3.2vw, 2.7rem);
   line-height: 1.1;
@@ -184,7 +192,7 @@ const Btn = styled(motion.button)<{ $lvl: LevelKey; $tone?: "solid" | "ghost" }>
 const Switcher = styled.div`display:inline-flex; gap:6px; padding:6px; background:#fff; border:1px solid ${RING}; border-radius:14px;`;
 const Pill = styled.button<{ active?: boolean }>`
   padding:6px 10px; border-radius:10px; font-weight:800; font-size:.82rem; cursor:pointer;
-  color:${({active})=>active?NAVY:SUB}; background:${({active})=>active?"#F2F6FF":"transparent"}; border:1px solid ${RING};
+  color:${({active})=>active?"#0B1220":"#6B7280"}; background:${({active})=>active?"#F2F6FF":"transparent"}; border:1px solid ${RING};
 `;
 
 /* ==================== Mascot ==================== */
@@ -199,7 +207,6 @@ function Mascot({ lvl }: { lvl: LevelKey }) {
   const L = LEVELS[lvl];
   const band = L.accent2, deco = L.accent3;
 
-  // Accessory per level
   const accessory = (() => {
     switch (lvl) {
       case "primary": return <circle cx="68" cy="26" r="10" fill={L.accent1} stroke={NAVY} strokeWidth="2"/>;
@@ -207,6 +214,7 @@ function Mascot({ lvl }: { lvl: LevelKey }) {
       case "high":    return <g transform="translate(68,24)"><path d="M0 -10 L6 0 L0 10 L-6 0 Z" fill={deco} stroke={NAVY} strokeWidth="2"/></g>;
       case "college": return <g transform="translate(68,22)"><path d="M-8 -4 H8 V4 H-8 Z" fill={deco} stroke={NAVY} strokeWidth="2"/><path d="M-6 4 V10 H6 V4" stroke={NAVY} strokeWidth="2"/></g>;
       case "pro":     return <g transform="translate(66,22)"><path d="M0 -10 C4 -6, 6 -2, 0 0 C-6 2,-2 8,0 10" fill="none" stroke={deco} strokeWidth="3" strokeLinecap="round"/></g>;
+      default: return null;
     }
   })();
 
@@ -257,9 +265,7 @@ const Meta = styled.div`color:${SUB}; display:flex; flex-wrap:wrap; gap:.6rem; f
 const Backdrop = styled.div<{ $lvl: LevelKey }>`
   position:absolute; inset:0; pointer-events:none;
   &:before, &:after { content:''; position:absolute; inset:0; }
-  /* soft wash */
   &:before { background:${({$lvl})=>LEVELS[$lvl].backdropTint}; }
-  /* line doodles, level specific */
   ${({$lvl}) => $lvl === "primary" && css`
     &:after{
       background:
@@ -321,27 +327,126 @@ const ContestLandingPage: React.FC = () => {
   const [lvl, setLvl] = useState<LevelKey>("college");
   const [tab, setTab] = useState<"upcoming"|"ongoing"|"past">("upcoming");
 
+  const { coins, addCoins } = useCoins();
+
   const user = { name: "Tarun", handle: "a4ai_student" };
   const stats = { solved: 162, total: 1200, rating: 1420, streak: 9, badges: 7 };
   const tracks = ["Math", "Science", "Coding", "GK", "Business"];
 
-  const buckets = useMemo(() => ({
-    upcoming: [
-      { id:"math-weekly", title:"Math Weekly #24", startsIn:"2d", participants: 220, len:"60m", type:"MCQ" },
-      { id:"sci-lab", title:"Science Lab Sprint", startsIn:"3d", participants: 310, len:"45m", type:"Mixed" },
-      { id:"gk-rapid", title:"GK Rapid Fire", startsIn:"5d", participants: 540, len:"25m", type:"Rapid" },
-    ],
-    ongoing: [
-      { id:"phy-masters", title:"Physics Masters (Live)", endsIn:"32m", participants: 96, len:"90m", type:"Mixed" },
-    ],
-    past: [
-      { id:"apt-open", title:"Aptitude Open 2025 #3", date:"May 12", participants: 980, rank: 143 },
-      { id:"cs-derby", title:"CS Fundamentals Derby", date:"Apr 28", participants: 740, rank: 210 },
-    ],
-  }), []);
+  const contestData: Record<string, Contest> = {
+    "math-weekly": {
+      id: "math-weekly",
+      title: "Math Weekly #24",
+      type: "Weekly Challenge",
+      startTime: "2 days",
+      duration: "60 minutes",
+      participants: 220,
+      format: "MCQ",
+      difficulty: "Intermediate",
+      description:
+        "Test your mathematical skills in this weekly challenge covering algebra, geometry, and calculus. Perfect for students preparing for competitive exams.",
+      rules: [
+        "No external calculators allowed",
+        "Must complete within time limit",
+        "One attempt per participant",
+        "Answers cannot be changed after submission",
+        "Score based on accuracy and speed",
+      ],
+      prizes: [
+        { rank: "1st", prize: "$500 + 500 coins" },
+        { rank: "2nd", prize: "$300 + 300 coins" },
+        { rank: "3rd", prize: "$200 + 200 coins" },
+        { rank: "4th-10th", prize: "$50 + 100 coins" },
+      ],
+      topics: ["Algebra", "Geometry", "Calculus", "Trigonometry", "Statistics"],
+    },
+    "sci-lab": {
+      id: "sci-lab",
+      title: "Science Lab Sprint",
+      type: "Lab Challenge",
+      startTime: "3 days",
+      duration: "45 minutes",
+      participants: 310,
+      format: "Mixed",
+      difficulty: "Advanced",
+      description:
+        "A fast-paced science challenge testing your knowledge in physics, chemistry, and biology with interactive lab scenarios.",
+      rules: [
+        "Scientific calculators allowed",
+        "Time-bound sections",
+        "Partial credit for steps shown",
+        "No external resources",
+        "Auto-submit when time ends",
+      ],
+      prizes: [
+        { rank: "1st", prize: "$750 + 500 coins" },
+        { rank: "2nd", prize: "$400 + 300 coins" },
+        { rank: "3rd", prize: "$250 + 200 coins" },
+        { rank: "4th-10th", prize: "$75 + 100 coins" },
+      ],
+      topics: ["Physics", "Chemistry", "Biology", "Scientific Methods"],
+    },
+    "gk-rapid": {
+      id: "gk-rapid",
+      title: "GK Rapid Fire",
+      type: "Rapid Fire",
+      startTime: "5 days",
+      duration: "25 minutes",
+      participants: 540,
+      format: "Rapid",
+      difficulty: "Beginner",
+      description:
+        "Quick-fire general knowledge questions covering current affairs, history, geography, and more. Test your quick thinking!",
+      rules: [
+        "5 seconds per question",
+        "No skipping questions",
+        "Points decrease with time",
+        "Instant feedback",
+        "Leaderboard updates in real-time",
+      ],
+      prizes: [
+        { rank: "1st", prize: "$300 + 500 coins" },
+        { rank: "2nd", prize: "$150 + 300 coins" },
+        { rank: "3rd", prize: "$100 + 200 coins" },
+        { rank: "4th-20th", prize: "$25 + 50 coins" },
+      ],
+      topics: ["Current Affairs", "History", "Geography", "Sports", "Entertainment"],
+    },
+  };
+
+  const buckets = useMemo(
+    () => ({
+      upcoming: [
+        { id: "math-weekly", title: "Math Weekly #24", startsIn: "2d", participants: 220, len: "60m", type: "MCQ" },
+        { id: "sci-lab", title: "Science Lab Sprint", startsIn: "3d", participants: 310, len: "45m", type: "Mixed" },
+        { id: "gk-rapid", title: "GK Rapid Fire", startsIn: "5d", participants: 540, len: "25m", type: "Rapid" },
+      ],
+      ongoing: [
+        { id: "phy-masters", title: "Physics Masters (Live)", endsIn: "32m", participants: 96, len: "90m", type: "Mixed" },
+      ],
+      past: [
+        { id: "apt-open", title: "Aptitude Open 2025 #3", date: "May 12", participants: 980, rank: 143 },
+        { id: "cs-derby", title: "CS Fundamentals Derby", date: "Apr 28", participants: 740, rank: 210 },
+      ],
+    }),
+    []
+  );
+
+  const handlePreviewClick = (contestId: string) => {
+    if (!contestId) {
+      console.warn("No contest.id for Preview");
+      return;
+    }
+    nav(`/contests/preview/${contestId}`, { state: { from: "/contests" } });
+  };
+
+  const handleJoinContest = (contestId: string) => {
+    addCoins(50, `Joined contest: ${contestData[contestId]?.title || "Unknown Contest"}`, contestId);
+    nav(`/contests/live/${contestId}`);
+  };
 
   const L = LEVELS[lvl];
-  const list = buckets[tab];
+  const list = (buckets as any)[tab] as any[];
 
   return (
     <>
@@ -350,71 +455,104 @@ const ContestLandingPage: React.FC = () => {
         <Backdrop $lvl={lvl} />
         <Shell>
           {/* LEFT */}
-          <CardWrap initial={{ opacity:0, y:14 }} animate={{ opacity:1, y:0 }} transition={{ duration:.35 }}>
+          <CardWrap initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
             <TitleRow>
-              <H1>Contest Zone</H1>
+              <H1 className="keep-default-font">Contest Zone</H1>
               <Switcher role="tablist" aria-label="Select level">
-                { (["primary","middle","high","college","pro"] as LevelKey[]).map(k=>(
-                  <Pill key={k} active={lvl===k} onClick={()=>setLvl(k)} aria-pressed={lvl===k}>
+                {(["primary", "middle", "high", "college", "pro"] as LevelKey[]).map((k) => (
+                  <Pill key={k} active={lvl === k} onClick={() => setLvl(k)} aria-pressed={lvl === k}>
                     {LEVELS[k].name}
                   </Pill>
-                )) }
+                ))}
               </Switcher>
             </TitleRow>
 
-            <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", gap:16, alignItems:"center", marginTop:12 }}>
-              <MascotBox $lvl={lvl}><Mascot lvl={lvl} /></MascotBox>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto 1fr",
+                gap: 16,
+                alignItems: "center",
+                marginTop: 12,
+              }}
+            >
+              <MascotBox $lvl={lvl}>
+                <Mascot lvl={lvl} />
+              </MascotBox>
               <div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <Tag $lvl={lvl}>Safe & Fair</Tag>
                   <Tag $lvl={lvl}>No Cheating</Tag>
-                  <Tag $lvl={lvl}>Ranked</Tag>
+                  <Tag $lvl={lvl}>Earn Coins</Tag>
                 </div>
-                <Sub>Play live contests, rank up, and win badges. Join a round or create your own in a few clicks.</Sub>
+                <Sub>
+                  Play live contests, earn coins, rank up, and win badges. Join a round or create your own in a few
+                  clicks.
+                </Sub>
                 <BtnRow>
-                  <Btn $lvl={lvl} whileHover={{scale:1.03}} whileTap={{scale:0.98}} onClick={()=>nav("/contests/join")}>Join a Contest</Btn>
-                  <Btn $lvl={lvl} whileHover={{scale:1.03}} whileTap={{scale:0.98}} onClick={()=>nav("/contests/create")}>Create Contest</Btn>
-                  <Btn $lvl={lvl} $tone="ghost" whileHover={{scale:1.02}} whileTap={{scale:0.98}} onClick={()=>nav("/rules")}>Rules</Btn>
+                  <Btn $lvl={lvl} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} onClick={() => nav("/contests/join")} type="button">
+                    Join a Contest
+                  </Btn>
+                  <Btn $lvl={lvl} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} onClick={() => nav("/contests/create")} type="button">
+                    Create Contest
+                  </Btn>
+                  <Btn $lvl={lvl} $tone="ghost" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => nav("/rules")} type="button">
+                    Rules
+                  </Btn>
                 </BtnRow>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
-                  {tracks.map(t=> <Tag $lvl={lvl} key={t}>{t}</Tag>)}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                  {tracks.map((t) => (
+                    <Tag $lvl={lvl} key={t}>
+                      {t}
+                    </Tag>
+                  ))}
                 </div>
               </div>
             </div>
 
             {/* Stats */}
-            <div style={{ marginTop:16 }}>
+            <div style={{ marginTop: 16 }}>
               <Grid>
                 <Stat>
                   <StatH>Problems Solved</StatH>
-                  <StatV>{stats.solved.toLocaleString()} / {stats.total.toLocaleString()}</StatV>
-                  <Meter><Fill w={(stats.solved/stats.total)*100} c1={L.accent1} c2={L.accent2}/></Meter>
+                  <StatV>
+                    {stats.solved.toLocaleString()} / {stats.total.toLocaleString()}
+                  </StatV>
+                  <Meter>
+                    <Fill w={(stats.solved / stats.total) * 100} c1={L.accent1} c2={L.accent2} />
+                  </Meter>
                 </Stat>
                 <Stat>
                   <StatH>Contest Rating</StatH>
                   <StatV>{stats.rating}</StatV>
-                  <Meter><Fill w={Math.min(100,(stats.rating/2000)*100)} c1={L.accent2} c2={L.accent3}/></Meter>
+                  <Meter>
+                    <Fill w={Math.min(100, (stats.rating / 2000) * 100)} c1={L.accent2} c2={L.accent3} />
+                  </Meter>
                 </Stat>
                 <Stat>
                   <StatH>Daily Streak</StatH>
                   <StatV>{stats.streak} days</StatV>
-                  <Meter><Fill w={Math.min(100,(stats.streak/30)*100)} c1={L.accent3} c2={L.accent1}/></Meter>
+                  <Meter>
+                    <Fill w={Math.min(100, (stats.streak / 30) * 100)} c1={L.accent3} c2={L.accent1} />
+                  </Meter>
                 </Stat>
                 <Stat>
-                  <StatH>Badges</StatH>
-                  <StatV>{stats.badges} earned</StatV>
-                  <Meter><Fill w={70} c1={L.accent1} c2={L.accent3}/></Meter>
+                  <StatH>Coins Earned</StatH>
+                  <StatV>{coins.toLocaleString()}</StatV>
+                  <Meter>
+                    <Fill w={Math.min(100, (coins / 5000) * 100)} c1="#FFD700" c2="#FFA500" />
+                  </Meter>
                 </Stat>
               </Grid>
             </div>
 
             {/* Tabs */}
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:18 }}>
-              <h2 style={{ margin:0, fontSize:"1.06rem", color:NAVY }}>Contests</h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18 }}>
+              <h2 style={{ margin: 0, fontSize: "1.06rem", color: NAVY }}>Contests</h2>
               <Tabs>
-                {["upcoming","ongoing","past"].map(t=>(
-                  <Tab key={t} $active={tab===t as any} onClick={()=>setTab(t as any)} whileHover={{y:-1}}>
-                    {t[0].toUpperCase()+t.slice(1)}
+                {["upcoming", "ongoing", "past"].map((t) => (
+                  <Tab key={t} $active={tab === (t as any)} onClick={() => setTab(t as any)} whileHover={{ y: -1 }}>
+                    {t[0].toUpperCase() + t.slice(1)}
                   </Tab>
                 ))}
               </Tabs>
@@ -423,20 +561,90 @@ const ContestLandingPage: React.FC = () => {
             {/* List */}
             <List>
               <AnimatePresence mode="wait">
-                {list.map((c:any, i:number)=>(
-                  <Row key={c.id} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:.22, delay:i*.04}}>
+                {list.map((c: any, i: number) => (
+                  <Row
+                    key={c.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.22, delay: i * 0.04 }}
+                  >
                     <div>
-                      <Name>{c.title} {tab==="ongoing" && <Tag $lvl={lvl}>Live 🔴</Tag>}</Name>
+                      <Name>
+                        {c.title} {tab === "ongoing" && <Tag $lvl={lvl}>Live 🔴</Tag>}
+                      </Name>
                       <Meta>
-                        {tab==="upcoming" && (<><span>Starts in {c.startsIn}</span><span>•</span><span>{c.participants} players</span><span>•</span><span>{c.len}</span><span>•</span><span>{c.type}</span></>)}
-                        {tab==="ongoing"  && (<><span>Ends in {c.endsIn}</span><span>•</span><span>{c.participants} players</span><span>•</span><span>{c.len}</span></>)}
-                        {tab==="past"     && (<><span>{c.date}</span><span>•</span><span>{c.participants} players</span><span>•</span><span>Your rank: {c.rank}</span></>)}
+                        {tab === "upcoming" && (
+                          <>
+                            <span>Starts in {c.startsIn}</span>
+                            <span>•</span>
+                            <span>{c.participants} players</span>
+                            <span>•</span>
+                            <span>{c.len}</span>
+                            <span>•</span>
+                            <span>{c.type}</span>
+                            <span>•</span>
+                            <span>🎯 +50 coins</span>
+                          </>
+                        )}
+                        {tab === "ongoing" && (
+                          <>
+                            <span>Ends in {c.endsIn}</span>
+                            <span>•</span>
+                            <span>{c.participants} players</span>
+                            <span>•</span>
+                            <span>{c.len}</span>
+                            <span>•</span>
+                            <span>🎯 +50 coins</span>
+                          </>
+                        )}
+                        {tab === "past" && (
+                          <>
+                            <span>{c.date}</span>
+                            <span>•</span>
+                            <span>{c.participants} players</span>
+                            <span>•</span>
+                            <span>Your rank: {c.rank}</span>
+                          </>
+                        )}
                       </Meta>
                     </div>
-                    <div style={{ display:"grid" }}>
-                      {tab==="upcoming" && <Btn $lvl={lvl} whileHover={{scale:1.03}} whileTap={{scale:0.98}} onClick={()=>nav(`/contests/${c.id}`)}>Preview</Btn>}
-                      {tab==="ongoing"  && <Btn $lvl={lvl} whileHover={{scale:1.03}} whileTap={{scale:0.98}} onClick={()=>nav(`/contests/${c.id}`)}>Enter</Btn>}
-                      {tab==="past"     && <Btn $lvl={lvl} $tone="ghost" whileHover={{scale:1.02}} whileTap={{scale:0.98}} onClick={()=>nav(`/contests/${c.id}`)}>Details</Btn>}
+                    <div style={{ display: "grid" }}>
+                      {tab === "upcoming" && (
+                        <Btn
+                          $lvl={lvl}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handlePreviewClick(c.id)}
+                          type="button"
+                          aria-label={`Preview ${c.title}`}
+                        >
+                          Preview
+                        </Btn>
+                      )}
+                      {tab === "ongoing" && (
+                        <Btn
+                          $lvl={lvl}
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleJoinContest(c.id)}
+                          type="button"
+                        >
+                          Enter (+50 coins)
+                        </Btn>
+                      )}
+                      {tab === "past" && (
+                        <Btn
+                          $lvl={lvl}
+                          $tone="ghost"
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => nav(`/contests/${c.id}`)}
+                          type="button"
+                        >
+                          Details
+                        </Btn>
+                      )}
                     </div>
                   </Row>
                 ))}
@@ -444,51 +652,144 @@ const ContestLandingPage: React.FC = () => {
             </List>
 
             {/* Safety */}
-            <CardWrap style={{ marginTop:8 }}>
-              <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                <span role="img" aria-label="shield">🛡️</span>
-                <strong style={{ color:NAVY }}>Fair Play & Privacy</strong>
+            <CardWrap style={{ marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <span role="img" aria-label="shield">
+                  🛡️
+                </span>
+                <strong style={{ color: NAVY }}>Fair Play & Privacy</strong>
               </div>
-              <p style={{ color:SUB, margin:"6px 2px 0" }}>
-                Smart proctoring, tab-switch detection, and camera checks only during live rounds (never stored without consent).
+              <p style={{ color: SUB, margin: "6px 2px 0" }}>
+                Smart proctoring, tab-switch detection, and camera checks only during live rounds (never stored without
+                consent).
               </p>
             </CardWrap>
           </CardWrap>
 
           {/* RIGHT */}
-          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Coin Balance Card */}
             <CardWrap>
-              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <div style={{ width:56, height:56, borderRadius:"50%", background:`linear-gradient(180deg, ${L.accent2}, ${L.accent1})`, display:"grid", placeItems:"center", color:"#fff", fontWeight:900, border:`1px solid ${RING}` }}>
-                  {user.name[0]}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <div
+                  style={{
+                    background: "linear-gradient(135deg, #FFD700, #FFA500)",
+                    width: 48,
+                    height: 48,
+                    borderRadius: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: `2px solid ${RING}`,
+                    boxShadow: "0 4px 12px rgba(255, 215, 0, 0.3)",
+                  }}
+                >
+                  <span style={{ fontSize: "24px", fontWeight: "bold" }}>🪙</span>
                 </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:900, color:NAVY }}>{user.name}</div>
-                  <div style={{ fontSize:".9rem", color:SUB }}>@{user.handle}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 900, color: NAVY, fontSize: "1.5rem" }}>{coins.toLocaleString()}</div>
+                  <div style={{ fontSize: "0.9rem", color: SUB }}>Available Coins</div>
+                  <div style={{ fontSize: "0.8rem", color: "#16A34A", fontWeight: 600 }}>
+                    Redeem for Amazon, Flipkart & more! 🎁
+                  </div>
                 </div>
-                <Tag $lvl={lvl}>Ranked</Tag>
               </div>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginTop:8 }}>
-                <Tag $lvl={lvl}>Starter</Tag><Tag $lvl={lvl}>Friendly</Tag><Tag $lvl={lvl}>Learner</Tag>
+
+              <div
+                style={{
+                  background: "linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 165, 0, 0.1))",
+                  padding: "12px",
+                  borderRadius: "12px",
+                  border: `1px solid ${RING}`,
+                  marginBottom: "12px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "8px" }}>
+                  <span style={{ color: NAVY, fontWeight: 600 }}>Contest Join:</span>
+                  <span style={{ color: "#16A34A", fontWeight: 700 }}>+50 coins</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "8px" }}>
+                  <span style={{ color: NAVY, fontWeight: 600 }}>Top 3 Finish:</span>
+                  <span style={{ color: "#16A34A", fontWeight: 700 }}>+200-500 coins</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
+                  <span style={{ color: NAVY, fontWeight: 600 }}>Daily Streak:</span>
+                  <span style={{ color: "#16A34A", fontWeight: 700 }}>+25 coins</span>
+                </div>
+              </div>
+
+              <Btn
+                $lvl={lvl}
+                $tone="solid"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => nav("/coinshop")}
+                type="button"
+                style={{
+                  width: "100%",
+                  background: "linear-gradient(135deg, #FFD700, #FFA500)",
+                  color: "#7C2D12",
+                  border: "none",
+                  marginBottom: "8px",
+                }}
+              >
+                🛍️ Visit Reward Store
+              </Btn>
+              <div style={{ textAlign: "center", fontSize: "0.8rem", color: SUB }}>
+                Amazon • Flipkart • AJIO • Swiggy • Netflix • PUBG
               </div>
             </CardWrap>
 
             <CardWrap>
-              <h3 style={{ margin:0, color:NAVY, fontSize:"1rem" }}>Daily Missions</h3>
-              <ul style={{ margin:"10px 0 0 18px", color:SUB }}>
-                <li>Solve 3 Easy questions</li>
-                <li>Join 1 live contest</li>
-                <li>Review 1 past attempt</li>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    background: `linear-gradient(180deg, ${L.accent2}, ${L.accent1})`,
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#fff",
+                    fontWeight: 900,
+                    border: `1px solid ${RING}`,
+                  }}
+                >
+                  {user.name[0]}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 900, color: NAVY }}>{user.name}</div>
+                  <div style={{ fontSize: ".9rem", color: SUB }}>@{user.handle}</div>
+                </div>
+                <Tag $lvl={lvl}>Ranked</Tag>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                <Tag $lvl={lvl}>Starter</Tag>
+                <Tag $lvl={lvl}>Friendly</Tag>
+                <Tag $lvl={lvl}>Learner</Tag>
+              </div>
+            </CardWrap>
+
+            <CardWrap>
+              <h3 style={{ margin: 0, color: NAVY, fontSize: "1rem" }}>Daily Missions</h3>
+              <ul style={{ margin: "10px 0 0 18px", color: SUB }}>
+                <li>Solve 3 Easy questions (+30 coins)</li>
+                <li>Join 1 live contest (+50 coins)</li>
+                <li>Review 1 past attempt (+15 coins)</li>
               </ul>
-              <BtnRow style={{ marginTop:10 }}>
-                <Btn $lvl={lvl} whileHover={{scale:1.03}} whileTap={{scale:0.98}} onClick={()=>nav("/practice")}>Practice</Btn>
-                <Btn $lvl={lvl} $tone="ghost" whileHover={{scale:1.02}} whileTap={{scale:0.98}} onClick={()=>nav("/history")}>History</Btn>
+              <BtnRow style={{ marginTop: 10 }}>
+                <Btn $lvl={lvl} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} onClick={() => nav("/practice")} type="button">
+                  Practice
+                </Btn>
+                <Btn $lvl={lvl} $tone="ghost" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => nav("/contests/history")} type="button">
+                  History
+                </Btn>
               </BtnRow>
             </CardWrap>
 
             <CardWrap>
-              <h3 style={{ margin:0, color:NAVY, fontSize:"1rem" }}>Badges</h3>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
+              <h3 style={{ margin: 0, color: NAVY, fontSize: "1rem" }}>Badges</h3>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                 <Tag $lvl={lvl}>🔥 Streak 7</Tag>
                 <Tag $lvl={lvl}>💡 Fast Thinker</Tag>
                 <Tag $lvl={lvl}>🏆 Top 20%</Tag>
