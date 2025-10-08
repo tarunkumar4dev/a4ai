@@ -3,7 +3,7 @@ import { useEffect, Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import "./styles/globals.css";
 
-/* -------- Non-lazy pages you already had like this -------- */
+/* -------- Core Imports -------- */
 import PracticePage from "@/pages/PracticePage";
 import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
 import Rules from "@/pages/Rules";
@@ -21,73 +21,70 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PrivateRoute from "@/components/PrivateRoute";
 import { ThemeProvider } from "@/context/ThemeContext";
-import { CoinProvider } from "@/context/CoinContext"; // ⬅️ coins
+import { CoinProvider } from "@/context/CoinContext";
 import LandingDemo from "@/components/LandingDemo";
 import FAQ from "@/components/FAQ";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
 
-/* ---------- Vercel Analytics & Speed Insights ---------- */
+/* ---------- Vercel Analytics ---------- */
 import { Analytics } from "@vercel/analytics/react";
 import { injectSpeedInsights } from "@vercel/speed-insights";
 injectSpeedInsights();
 
-/* ---------- Lazy pages (marketing) ---------- */
-const LandingPage   = lazy(() => import("./pages/LandingPage"));
-const FeaturesPage  = lazy(() => import("./pages/FeaturesPage"));
-const PricingPage   = lazy(() => import("./pages/product/PricingPage"));
-const ApiPage       = lazy(() => import("./pages/product/ApiPage"));
-const AboutPage     = lazy(() => import("./pages/AboutPage"));
-const ContactPage   = lazy(() => import("./pages/ContactPage"));
+/* ---------- Lazy Marketing Pages ---------- */
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const PricingPage = lazy(() => import("./pages/product/PricingPage"));
+const ApiPage = lazy(() => import("./pages/product/ApiPage"));
+const AboutPage = lazy(() => import("./pages/AboutPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
 
-/* ---------- Lazy pages (auth & app) ---------- */
-const LoginPage         = lazy(() => import("./pages/LoginPage"));
-const SignupPage        = lazy(() => import("./pages/SignupPage"));
-const DashboardPage     = lazy(() => import("./pages/DashboardPage"));
+/* ---------- Lazy Auth & App Pages ---------- */
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const SignupPage = lazy(() => import("./pages/SignupPage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
-const AnalyticsPage     = lazy(() => import("./pages/AnalyticsPage"));
-
-/* -------- Practice Session ---------------- */
+const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 const PracticeSessionPage = lazy(() => import("./pages/PracticeSessionPage"));
 
 /* ---------- Students / Notes / Settings ---------- */
-const StudentsPage  = lazy(() => import("./pages/StudentsPage"));
-const NotesPage     = lazy(() => import("./pages/Notes"));
-const SettingsPage  = lazy(() => import("./pages/SettingsPage"));
+const StudentsPage = lazy(() => import("./pages/StudentsPage"));
+const NotesPage = lazy(() => import("./pages/Notes"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 /* ---------- Contests ---------- */
 const ContestLandingPage = lazy(() => import("./pages/ContestLandingPage"));
-const CreateContestPage  = lazy(() => import("./pages/CreateContestPage"));
-const JoinContestPage    = lazy(() => import("./pages/JoinContestPage"));
-const ContestLivePage    = lazy(() => import("./pages/ContestLivePage"));
-const LeaderboardPage    = lazy(() => import("./pages/LeaderboardPage"));
-const ContestPreviewPage = lazy(() => import("./pages/ContestPreview")); // ⬅️ NEW
+const CreateContestPage = lazy(() => import("./pages/CreateContestPage"));
+const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
+const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
+const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
 
-/* ---------- NEW: Coin System ---------- */
-const CoinShop           = lazy(() => import("./pages/CoinShop")); // ⬅️ NEW
+/* ---------- Coins ---------- */
+const CoinShop = lazy(() => import("./pages/CoinShop"));
 
 /* ---------- Resources ---------- */
-const ResourcesHome   = lazy(() => import("./pages/Resources/ResourcesHome"));
-const DocsPage        = lazy(() => import("./pages/Resources/Documentation"));
-const HelpCenterPage  = lazy(() => import("./pages/Resources/HelpCenter"));
-const BlogPage        = lazy(() => import("./pages/Resources/BlogPage"));
+const ResourcesHome = lazy(() => import("./pages/Resources/ResourcesHome"));
+const DocsPage = lazy(() => import("./pages/Resources/Documentation"));
+const HelpCenterPage = lazy(() => import("./pages/Resources/HelpCenter"));
+const BlogPage = lazy(() => import("./pages/Resources/BlogPage"));
 const CaseStudiesPage = lazy(() => import("./pages/Resources/CaseStudiesPage"));
 
 /* ---------- Company ---------- */
-const CareersPage       = lazy(() => import("./pages/company/CareersPage"));
+const CareersPage = lazy(() => import("./pages/company/CareersPage"));
 const PrivacyPolicyPage = lazy(() => import("./pages/company/PrivacyPolicyPage"));
 
 /* ---------- Legal ---------- */
-const TermsPage        = lazy(() => import("./pages/legal/TermsPage"));
+const TermsPage = lazy(() => import("./pages/legal/TermsPage"));
 const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
 
-/* ---------- Auth callback ---------- */
+/* ---------- Auth Callback & Payment ---------- */
 const CallbackPage = lazy(() => import("./pages/auth/callback"));
-
-/* ---------- Payment ---------- */
 const PaymentPage = lazy(() => import("./pages/payment/paymentPage"));
 
+/* ---------- Scroll Helper ---------- */
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -98,6 +95,7 @@ function ScrollToTop() {
 
 const queryClient = new QueryClient();
 
+/* ---------- Loaders ---------- */
 const LoadingScreen = () => (
   <div className="p-8 text-center text-sm text-gray-500">Loading…</div>
 );
@@ -119,7 +117,7 @@ const NotFound = () => (
   </div>
 );
 
-/** If user is already logged in, prevent showing /login or /signup. */
+/* ---------- Auth Gates ---------- */
 function AuthGateForAuthPages({ children }: { children: ReactNode }) {
   const { loading, session } = useAuth();
   if (loading) return <LoadingScreen />;
@@ -127,7 +125,7 @@ function AuthGateForAuthPages({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** Mount idle-logout only when a session exists */
+/* ---------- Idle Logout ---------- */
 function IdleLogoutManager() {
   const { session } = useAuth();
   return session ? <IdleLogoutEnabled /> : null;
@@ -142,8 +140,10 @@ function IdleLogoutEnabled() {
   return null;
 }
 
+/* ========================================================= */
+
 const App = () => {
-  // Idle-prefetch commonly visited chunks (added ContestPreview & CoinShop)
+  // Prefetch heavy chunks on idle
   useEffect(() => {
     const prefetch = () => {
       import("./pages/FeaturesPage");
@@ -153,8 +153,8 @@ const App = () => {
       import("./pages/StudentsPage");
       import("./pages/Notes");
       import("./pages/SettingsPage");
-      import("./pages/CoinShop");        // ⬅️ NEW prefetch
-      import("./pages/ContestPreview");  // ⬅️ NEW prefetch
+      import("./pages/CoinShop");
+      import("./pages/ContestPreview");
     };
     (window as any).requestIdleCallback
       ? (window as any).requestIdleCallback(prefetch)
@@ -164,10 +164,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* Only active while logged in */}
         <IdleLogoutManager />
-
-        {/* Keep ThemeProvider and add CoinProvider inside so coins can use theme + auth */}
         <ThemeProvider>
           <CoinProvider>
             <TooltipProvider>
@@ -178,11 +175,10 @@ const App = () => {
                   <ScrollToTop />
                   <Suspense fallback={<LoadingScreen />}>
                     <Routes>
-                      {/* Auth callback */}
-                      <Route path="/auth/callback" element={<CallbackPage />} />
+                      {/* -------- Auth callback -------- */}
                       <Route path="/auth/callback/*" element={<CallbackPage />} />
 
-                      {/* Public marketing */}
+                      {/* -------- Public marketing -------- */}
                       <Route path="/" element={<LandingPage />} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/pricing" element={<PricingPage />} />
@@ -191,26 +187,26 @@ const App = () => {
                       <Route path="/contact" element={<ContactPage />} />
                       <Route path="/payment" element={<PaymentPage />} />
 
-                      {/* Company */}
+                      {/* -------- Company -------- */}
                       <Route path="/careers" element={<CareersPage />} />
                       <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
-                      {/* Legal */}
+                      {/* -------- Legal -------- */}
                       <Route path="/terms" element={<TermsPage />} />
                       <Route path="/cookies" element={<CookiePolicyPage />} />
 
-                      {/* Resources */}
+                      {/* -------- Resources -------- */}
                       <Route path="/resources" element={<ResourcesHome />} />
                       <Route path="/docs" element={<DocsPage />} />
                       <Route path="/help" element={<HelpCenterPage />} />
                       <Route path="/blog" element={<BlogPage />} />
                       <Route path="/case-studies" element={<CaseStudiesPage />} />
 
-                      {/* Standalone sections */}
+                      {/* -------- Standalone -------- */}
                       <Route path="/demo" element={<LandingDemo />} />
                       <Route path="/faq" element={<FAQ />} />
 
-                      {/* Auth pages (redirect if already logged in) */}
+                      {/* -------- Auth Pages -------- */}
                       <Route
                         path="/login"
                         element={
@@ -228,7 +224,7 @@ const App = () => {
                         }
                       />
 
-                      {/* Protected */}
+                      {/* -------- Protected Routes -------- */}
                       <Route
                         path="/dashboard"
                         element={
@@ -254,7 +250,33 @@ const App = () => {
                         }
                       />
 
-                      {/* Practice */}
+                      {/* 🔥 Added missing pages */}
+                      <Route
+                        path="/students"
+                        element={
+                          <PrivateRoute>
+                            <StudentsPage />
+                          </PrivateRoute>
+                        }
+                      />
+                      <Route
+                        path="/notes"
+                        element={
+                          <PrivateRoute>
+                            <NotesPage />
+                          </PrivateRoute>
+                        }
+                      />
+                      <Route
+                        path="/settings"
+                        element={
+                          <PrivateRoute>
+                            <SettingsPage />
+                          </PrivateRoute>
+                        }
+                      />
+
+                      {/* -------- Practice -------- */}
                       <Route
                         path="/practice/session"
                         element={
@@ -265,13 +287,12 @@ const App = () => {
                       />
                       <Route path="/practice" element={<PracticePage />} />
 
-                      {/* Quick contest entries you already had */}
+                      {/* -------- Contests -------- */}
                       <Route path="/contests/math-weekly" element={<JoinContestPageAurora />} />
                       <Route path="/contests/sci-lab" element={<JoinContestPageAurora />} />
                       <Route path="/contests/gk-rapid" element={<JoinContestPageAurora />} />
                       <Route path="rules" element={<Rules />} />
 
-                      {/* Full contest area */}
                       <Route
                         path="/contests"
                         element={
@@ -321,7 +342,7 @@ const App = () => {
                         }
                       />
 
-                      {/* NEW: Coin System */}
+                      {/* -------- Coin Shop -------- */}
                       <Route
                         path="/coinshop"
                         element={
@@ -331,48 +352,17 @@ const App = () => {
                         }
                       />
 
-                      {/* Redirect shims (existing) */}
-                      <Route
-                        path="/dashboard/contests"
-                        element={<Navigate to="/contests" replace />}
-                      />
-                      <Route
-                        path="/dashboard/contests/create"
-                        element={<Navigate to="/contests/create" replace />}
-                      />
-                      <Route
-                        path="/dashboard/contests/join"
-                        element={<Navigate to="/contests/join" replace />}
-                      />
-                      <Route
-                        path="/dashboard/contests/live/:contestId"
-                        element={<Navigate to="/contests/live/:contestId" replace />}
-                      />
-                      <Route
-                        path="/dashboard/contests/leaderboard"
-                        element={<Navigate to="/contests/leaderboard" replace />}
-                      />
-                      <Route
-                        path="/dashboard/contests/preview/:contestId"
-                        element={<Navigate to="/contests/preview/:contestId" replace />}
-                      />
+                      {/* -------- Redirect shims -------- */}
+                      <Route path="/dashboard/students" element={<Navigate to="/students" replace />} />
+                      <Route path="/dashboard/notes" element={<Navigate to="/notes" replace />} />
+                      <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
+                      <Route path="/dashboard/contests" element={<Navigate to="/contests" replace />} />
+                      <Route path="/dashboard/coinshop" element={<Navigate to="/coinshop" replace />} />
 
-                      {/* NEW: Redirect shims for coin shop */}
-                      <Route
-                        path="/dashboard/coinshop"
-                        element={<Navigate to="/coinshop" replace />}
-                      />
-                      <Route
-                        path="/dashboard/coins"
-                        element={<Navigate to="/coinshop" replace />}
-                      />
-
-                      {/* Fallbacks */}
+                      {/* -------- Fallback -------- */}
                       <Route path="/home" element={<Navigate to="/" replace />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
-
-                    {/* Vercel Web Analytics - tracks SPA route changes */}
                     <Analytics />
                   </Suspense>
                 </BrowserRouter>
