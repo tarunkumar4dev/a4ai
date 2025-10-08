@@ -1,64 +1,61 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabaseClient';
-import { useToast } from '@/hooks/use-toast';
+// src/pages/AuthCallback.tsx
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    const handleAuth = async () => {
+    const run = async () => {
       try {
-        // Get the session from URL fragments
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) throw error;
-        
-        if (session) {
-          // Ensure we have a valid user
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          if (!user) throw new Error("User not found after authentication");
+        // 1) Always exchange the auth code for a session on redirect flow
+        const url = new URL(window.location.href);
+        const hasCode = !!url.searchParams.get("code");
 
-          // Create/update profile if needed
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert({
-              id: user.id,
-              email: user.email,
-              full_name: user.user_metadata?.full_name || 'New User',
-              role: 'teacher'
-            });
-
-          if (profileError) throw profileError;
-
-          // Add small delay to ensure session persistence
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          // Redirect back to login with state
-          navigate('/login', { 
-            replace: true,
-            state: { from: 'oauth-callback' } 
-          });
-        } else {
-          navigate('/login', { 
-            replace: true,
-            state: { error: 'Authentication failed' } 
-          });
+        if (hasCode) {
+          const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+          if (error) throw error;
         }
-      } catch (error) {
-        console.error('OAuth callback error:', error);
-        navigate('/login', { 
+
+        // 2) Now a session should exist; fetch the user
+        const {
+          data: { user },
+          error: userErr,
+        } = await supabase.auth.getUser();
+        if (userErr) throw userErr;
+        if (!user) throw new Error("No user after OAuth exchange");
+
+        // 3) Upsert profile (adjust fields as your schema requires)
+        const { error: profileError } = await supabase.from("profiles").upsert({
+          id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || user.user_metadata?.name || "New User",
+          role: "teacher",
+          updated_at: new Date().toISOString(),
+        });
+        if (profileError) throw profileError;
+
+        // 4) Clean the URL (remove code) and go to dashboard
+        window.history.replaceState({}, "", `${window.location.origin}/auth/callback`);
+        navigate("/dashboard", { replace: true, state: { from: "oauth-callback" } });
+      } catch (e: any) {
+        console.error("OAuth callback error:", e);
+        toast({
+          title: "Sign-in failed",
+          description: e?.message || "Authentication error",
+          variant: "destructive",
+        });
+        navigate("/login", {
           replace: true,
-          state: { 
-            error: error instanceof Error ? error.message : 'Authentication error' 
-          } 
+          state: { error: e?.message || "Authentication error" },
         });
       }
     };
 
-    handleAuth();
+    run();
   }, [navigate, toast]);
 
   return (

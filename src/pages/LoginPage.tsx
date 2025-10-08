@@ -1,4 +1,3 @@
-// src/pages/loginpage.tsx
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,6 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
   const [formValues, setFormValues] = useState({ email: "", password: "" });
-
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
 
   // pointer for eyes (mouse + touch)
@@ -30,10 +28,14 @@ export default function LoginPage() {
     return () => window.removeEventListener("pointermove", onMove);
   }, []);
 
+  // if you came back from callback with state (legacy), push to dashboard
   useEffect(() => {
-    if (location.state?.from === "oauth-callback") navigate("/dashboard", { replace: true });
+    if (location.state?.from === "oauth-callback") {
+      navigate("/dashboard", { replace: true });
+    }
   }, [location, navigate]);
 
+  // already signed in? go straight to dashboard
   useEffect(() => {
     const check = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -47,10 +49,11 @@ export default function LoginPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email: formValues.email,
+        email: formValues.email.trim(),
         password: formValues.password,
       });
       if (error) throw error;
@@ -67,8 +70,10 @@ export default function LoginPage() {
   };
 
   const google = async () => {
+    if (isLoading) return;
     setIsLoading(true);
     try {
+      // Redirect flow → page will navigate away; don't reset loading in success path.
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -90,10 +95,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen w-full bg-[#E0E6F7]">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 md:py-8 lg:px-8">
-        {/* Responsive grid:
-           - mobile: 1 column (form then shapes)
-           - md: 1 column but wider form
-           - lg: fixed 480px form + flexible shapes */}
         <div className="grid grid-cols-1 gap-6 lg:[grid-template-columns:480px_1fr]">
           {/* LEFT — compact card */}
           <div className="rounded-2xl sm:rounded-3xl bg-white shadow-xl ring-1 ring-[#D6DEE7] p-5 sm:p-6 md:p-8">
@@ -250,7 +251,6 @@ function ShapesWithEyes({ pointer }: { pointer: { x: number; y: number } }) {
     <path d={d} stroke={stroke} strokeWidth={w} fill="none" strokeLinecap="round" />
   );
 
-  /* The SVG scales to container (height controlled by parent) */
   return (
     <svg ref={ref} viewBox="0 0 460 330" className="h-full w-full max-w-[760px]">
       <ellipse cx="240" cy="300" rx="180" ry="16" fill="#D6DEE7" />
@@ -263,7 +263,6 @@ function ShapesWithEyes({ pointer }: { pointer: { x: number; y: number } }) {
       <EyePair x1={217} x2={241} y={152} eyeR={6.5} pupilR={3} eyeFill="#0F0F12" pupilFill="#7B48FF" />
       <Smile d="M217 168 Q229 174 241 168" w={2.5} />
 
-      {/* black block with white eyes, black pupils */}
       <rect x="265" y="200" width="78" height="100" rx="12" fill="#0F0F12" />
       <EyePair x1={288} x2={310} y={238} eyeR={7} pupilR={2.6} eyeFill="#FFFFFF" pupilFill="#0F0F12" />
       <Smile d="M287 254 L311 254" stroke="#FFFFFF" w={3} />
