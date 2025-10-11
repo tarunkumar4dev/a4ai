@@ -1,4 +1,4 @@
-// DashboardSidebar.tsx — Cluely palette (#DFE4EF), black primary button
+// src/components/DashboardSidebar.tsx
 import React, { useMemo, useState } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -11,22 +11,15 @@ import {
 
 /* ---------------- Cluely theme tokens ---------------- */
 const theme = {
-  // Core Cluely colors
   mist: "#DFE4EF",
   slate600: "#5D6B7B",
   ink800: "#2F3A44",
-
-  // Tailwind helpers
-  gradFrom: "from-[#5D6B7B]",   // slate600
-  gradTo: "to-[#2F3A44]",       // ink800
-
+  gradFrom: "from-[#5D6B7B]",
+  gradTo: "to-[#2F3A44]",
   textAccent: "text-[#4E5A66]",
   textAccentHover: "group-hover:text-[#2F3A44]",
-
   hoverTint: "hover:bg-[#DFE4EF]/70 dark:hover:bg-slate-800/60",
   borderAccent: "border-[#DFE4EF] dark:border-slate-700",
-
-  // Shadows tuned for slate UI
   pillShadowAccent: "shadow-[0_10px_24px_rgba(47,58,68,0.18)]",
 };
 
@@ -144,7 +137,7 @@ const useSidebarData = () =>
         { icon: Trophy, label: "Contests", to: "/dashboard/contests", premium: true },
         { icon: BarChart2, label: "Analytics", to: "/dashboard/analytics" },
         { icon: Users, label: "Students", to: "/dashboard/students", alert: true },
-        { icon: Notebook, label: "Notes", to: "/dashboard/notes" },
+        { icon: Notebook, label: "Notes", to: "/dashboard/notes" }, // <-- list page
         { icon: Settings, label: "Settings", to: "/dashboard/settings" },
       ],
       contestInfo: {
@@ -290,7 +283,7 @@ const NotesQuick = React.memo(function NotesQuick({
           </motion.button>
         </Link>
         <Link to="/dashboard/notes/new" className="flex-1">
-          {/* BLACK primary per request */}
+          {/* BLACK primary */}
           <motion.button
             whileHover={{ scale: 1.02, boxShadow: "0 6px 16px rgba(0,0,0,0.35)" }}
             whileTap={{ scale: 0.98 }}
@@ -340,7 +333,7 @@ function SidebarContent() {
 
 /* ---------------- Responsive Sidebar ---------------- */
 export default function DashboardSidebar() {
-  useLocation(); // trigger on route change
+  useLocation(); // rerender on route change
   const [open, setOpen] = useState(false);
 
   return (

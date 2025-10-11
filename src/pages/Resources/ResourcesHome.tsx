@@ -1,26 +1,160 @@
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import ResourcesLayout from "./ResourcesLayout";
-import { BookOpen, LifeBuoy, Newspaper, Briefcase } from "lucide-react";
+import { BookOpen, LifeBuoy, Newspaper, Briefcase, Search } from "lucide-react";
+
+const hx = {
+  fontFamily:
+    "'Halenoir Expanded DemiBold','Halenoir Expanded','Halenoir','Inter',system-ui,sans-serif",
+  fontWeight: 600,
+} as const;
 
 const cards = [
-  { to: "/docs", title: "Documentation", desc: "Install, configure, and integrate the a4ai test generator.", Icon: BookOpen },
-  { to: "/help", title: "Help Center", desc: "FAQs, troubleshooting, and how-tos for common issues.", Icon: LifeBuoy },
-  { to: "/blog", title: "Blog", desc: "Product updates, tips, and behind-the-scenes notes.", Icon: Newspaper },
-  { to: "/case-studies", title: "Case Studies", desc: "How schools and teachers use a4ai in the real world.", Icon: Briefcase },
+  {
+    to: "/docs",
+    title: "Documentation",
+    desc: "Install, configure, and integrate the a4ai test generator.",
+    Icon: BookOpen,
+    tags: ["setup", "api", "sdk", "integration"],
+  },
+  {
+    to: "/help",
+    title: "Help Center",
+    desc: "FAQs, troubleshooting, and how-tos for common issues.",
+    Icon: LifeBuoy,
+    tags: ["faq", "errors", "troubleshoot", "account"],
+  },
+  {
+    to: "/blog",
+    title: "Blog",
+    desc: "Product updates, tips, and behind-the-scenes notes.",
+    Icon: Newspaper,
+    tags: ["updates", "release", "tips", "news"],
+  },
+  {
+    to: "/case-studies",
+    title: "Case Studies",
+    desc: "How schools and teachers use a4ai in the real world.",
+    Icon: Briefcase,
+    tags: ["schools", "teachers", "impact", "stories"],
+  },
 ];
 
 export default function ResourcesHome() {
+  const [q, setQ] = useState("");
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return cards;
+    return cards.filter(
+      (c) =>
+        c.title.toLowerCase().includes(needle) ||
+        c.desc.toLowerCase().includes(needle) ||
+        c.tags?.some((t) => t.toLowerCase().includes(needle))
+    );
+  }, [q]);
+
   return (
-    <ResourcesLayout title="Resources" subtitle="Everything you need to build, learn, and succeed with a4ai.">
+    <ResourcesLayout
+      title="Resources"
+      subtitle="Everything you need to build, learn, and succeed with a4ai."
+    >
+      {/* Search bar */}
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-md">
+          <label htmlFor="resource-search" className="sr-only">
+            Search resources
+          </label>
+          <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+            <Search className="h-4 w-4 text-slate-500" aria-hidden />
+          </div>
+          <input
+            id="resource-search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search docs, help, blog, case studies…"
+            className="
+              w-full rounded-xl border border-slate-200 bg-white/85 backdrop-blur
+              pl-9 pr-3 py-2 text-sm outline-none ring-0
+              focus:border-slate-300 focus:ring-2 focus:ring-indigo-200/60 transition
+            "
+          />
+        </div>
+        <div className="text-xs text-slate-600">Tip: Try “setup”, “errors”, or “release”.</div>
+      </div>
+
+      {/* Cards (Cluely-style frosted, same shadow language as Pricing) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {cards.map(({ to, title, desc, Icon }) => (
-          <Link to={to} key={to} className="group border rounded-xl p-5 hover:border-indigo-500/60 transition-colors bg-white/70 dark:bg-gray-950/60">
-            <Icon className="h-6 w-6 mb-3 text-indigo-600" />
-            <h3 className="font-semibold mb-1">{title}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-300">{desc}</p>
-            <span className="inline-block mt-3 text-sm text-indigo-600 group-hover:translate-x-0.5 transition-transform">Open →</span>
+        {filtered.map(({ to, title, desc, Icon }) => (
+          <Link
+            to={to}
+            key={to}
+            className="
+              group relative rounded-2xl bg-white/90 backdrop-blur p-5
+              ring-1 ring-slate-200 shadow-[0_14px_36px_-12px_rgba(2,6,23,0.12)]
+              transition hover:shadow-[0_18px_44px_-10px_rgba(2,6,23,0.16)] hover:translate-y-[-2px]
+              focus:outline-none focus:ring-2 focus:ring-indigo-300/60
+            "
+            aria-label={`${title} – ${desc}`}
+          >
+            {/* subtle hover gradient wash like Pricing cards */}
+            <div
+              aria-hidden
+              className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity bg-[linear-gradient(180deg,rgba(147,197,253,0.06),rgba(59,130,246,0.06))]"
+            />
+            <Icon className="relative h-6 w-6 mb-3 text-indigo-600" />
+            <h3 className="relative font-semibold text-slate-900" style={hx}>
+              {title}
+            </h3>
+            <p className="relative text-sm text-slate-600 mt-1 leading-relaxed">{desc}</p>
+            <span
+              className="relative inline-flex items-center gap-1 mt-3 text-sm text-indigo-600"
+              style={hx}
+            >
+              Open <span aria-hidden className="translate-x-0 group-hover:translate-x-0.5 transition-transform">→</span>
+            </span>
+
+            {/* soft base glow to match Pricing card rim */}
+            <div className="pointer-events-none absolute inset-x-0 -bottom-4 h-5 rounded-b-2xl bg-black/5 blur-xl" />
           </Link>
         ))}
+      </div>
+
+      {/* Empty state */}
+      {filtered.length === 0 && (
+        <div className="mt-10 rounded-xl border border-dashed border-slate-300 p-8 text-center bg-white/70 backdrop-blur">
+          <p className="text-sm text-slate-700">
+            No matches for <span className="font-semibold">“{q}”</span>. Try a different keyword.
+          </p>
+        </div>
+      )}
+
+      {/* Quick links (CTA chips) */}
+      <div className="mt-12">
+        <h4 className="text-sm font-semibold text-slate-900 mb-3" style={hx}>
+          Quick links
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { to: "/docs/get-started", label: "Get started" },
+            { to: "/help/authentication", label: "Fix sign-in issues" },
+            { to: "/blog", label: "Latest updates" },
+            { to: "/case-studies", label: "Success stories" },
+          ].map((l) => (
+            <Link
+              key={l.to}
+              to={l.to}
+              className="
+                text-xs rounded-lg px-3 py-1.5 border border-slate-200
+                bg-white/80 hover:border-indigo-300/60 hover:bg-white
+                transition-colors
+              "
+              style={hx}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </div>
       </div>
     </ResourcesLayout>
   );

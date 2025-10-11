@@ -192,7 +192,7 @@ export default function LoginPage() {
                 </Button>
 
                 <p className="text-center text-sm text-slate-600">
-                  Don’t have an account?{" "}
+                  Don't have an account?{" "}
                   <Link to="/signup" className="font-semibold text-[#0f172a] underline-offset-4 hover:underline">
                     Sign up
                   </Link>
@@ -206,7 +206,7 @@ export default function LoginPage() {
             <div className="relative flex-1 rounded-2xl sm:rounded-3xl bg-white shadow-xl ring-1 ring-[#D6DEE7] 
                             p-3 sm:p-4 md:p-6 lg:p-8 flex items-center justify-center
                             h-64 md:h-80 lg:h-[520px]">
-              <ShapesWithEyes pointer={pointer} />
+              <RubberHoseShapes pointer={pointer} />
             </div>
           </div>
         </div>
@@ -215,34 +215,57 @@ export default function LoginPage() {
   );
 }
 
-/* ---------------- Shapes (responsive + pointer tracking) ---------------- */
-function ShapesWithEyes({ pointer }: { pointer: { x: number; y: number } }) {
+/* ---------------- Rubber Hose Animation Style ---------------- */
+function RubberHoseShapes({ pointer }: { pointer: { x: number; y: number } }) {
   const ref = useRef<SVGSVGElement>(null);
 
   const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
-  const offset = (cx: number, cy: number, max = 3) => {
-    if (!ref.current) return { dx: 0, dy: 0 };
+  
+  const getHeadMovement = (baseX: number, baseY: number, headX: number, headY: number, maxTilt = 8) => {
+    if (!ref.current) return { tiltX: 0, tiltY: 0 };
+    
     const r = ref.current.getBoundingClientRect();
     const mx = clamp(pointer.x - r.left, 0, r.width);
     const my = clamp(pointer.y - r.top, 0, r.height);
-    const dx = mx - cx;
-    const dy = my - cy;
+    
+    // Calculate direction from base to mouse
+    const dx = mx - baseX;
+    const dy = my - baseY;
+    
+    // Normalize and apply tilt
     const len = Math.hypot(dx, dy) || 1;
-    const k = Math.min(max, len) / len;
-    return { dx: dx * k, dy: dy * k };
+    const tiltX = (dx / len) * maxTilt;
+    const tiltY = (dy / len) * maxTilt;
+    
+    return { tiltX, tiltY };
   };
 
   const EyePair = ({
     x1, x2, y, eyeR = 8, pupilR = 3, eyeFill = "#0F0F12", pupilFill = "#FF7A2B",
   }: { x1: number; x2: number; y: number; eyeR?: number; pupilR?: number; eyeFill?: string; pupilFill?: string }) => {
-    const l = offset(x1, y, 3);
-    const r = offset(x2, y, 3);
+    if (!ref.current) return null;
+    
+    const r = ref.current.getBoundingClientRect();
+    const mx = clamp(pointer.x - r.left, 0, r.width);
+    const my = clamp(pointer.y - r.top, 0, r.height);
+    
+    const lDx = mx - x1;
+    const lDy = my - y;
+    const rDx = mx - x2;
+    const rDy = my - y;
+    
+    const lLen = Math.hypot(lDx, lDy) || 1;
+    const rLen = Math.hypot(rDx, rDy) || 1;
+    
+    const lK = Math.min(3, lLen) / lLen;
+    const rK = Math.min(3, rLen) / rLen;
+    
     return (
       <>
         <circle cx={x1} cy={y} r={eyeR} fill={eyeFill} />
-        <circle cx={x1 + l.dx} cy={y + l.dy} r={pupilR} fill={pupilFill} />
+        <circle cx={x1 + lDx * lK} cy={y + lDy * lK} r={pupilR} fill={pupilFill} />
         <circle cx={x2} cy={y} r={eyeR} fill={eyeFill} />
-        <circle cx={x2 + r.dx} cy={y + r.dy} r={pupilR} fill={pupilFill} />
+        <circle cx={x2 + rDx * rK} cy={y + rDy * rK} r={pupilR} fill={pupilFill} />
       </>
     );
   };
@@ -253,31 +276,118 @@ function ShapesWithEyes({ pointer }: { pointer: { x: number; y: number } }) {
 
   return (
     <svg ref={ref} viewBox="0 0 460 330" className="h-full w-full max-w-[760px]">
-      <ellipse cx="240" cy="300" rx="180" ry="16" fill="#D6DEE7" />
+      {/* Background shadow */}
+      <ellipse cx="240" cy="300" rx="180" ry="16" fill="#D6DEE7" opacity="0.8" />
 
-      <path d="M70 300 A115 115 0 0 1 300 300 L70 300 Z" fill="#FF7A2B" />
-      <EyePair x1={158} x2={186} y={272} eyeFill="#0F0F12" pupilFill="#FF7A2B" />
-      <Smile d="M150 285 Q172 297 194 285" />
+      {/* Orange Triangle Character - Rubber Hose Style */}
+      <g>
+        {/* Base (fixed) */}
+        <path d="M70 300 A115 115 0 0 1 300 300 L70 300 Z" fill="#FF7A2B" />
+        
+        {/* Head with flexible movement */}
+        <g transform={
+          (() => {
+            const movement = getHeadMovement(185, 300, 172, 272, 6);
+            return `translate(${movement.tiltX}, ${movement.tiltY})`;
+          })()
+        }>
+          <EyePair x1={158} x2={186} y={272} eyeFill="#0F0F12" pupilFill="#FFFFFF" />
+          <Smile d="M150 285 Q172 297 194 285" />
+        </g>
+      </g>
 
-      <rect x="190" y="120" width="100" height="138" rx="14" fill="#7B48FF" />
-      <EyePair x1={217} x2={241} y={152} eyeR={6.5} pupilR={3} eyeFill="#0F0F12" pupilFill="#7B48FF" />
-      <Smile d="M217 168 Q229 174 241 168" w={2.5} />
+      {/* Purple Rectangle Character */}
+      <g>
+        {/* Base (fixed) */}
+        <rect x="190" y="120" width="100" height="138" rx="14" fill="#7B48FF" />
+        
+        {/* Head with flexible movement */}
+        <g transform={
+          (() => {
+            const movement = getHeadMovement(240, 258, 229, 152, 4);
+            return `translate(${movement.tiltX}, ${movement.tiltY})`;
+          })()
+        }>
+          <EyePair x1={217} x2={241} y={152} eyeR={6.5} pupilR={3} eyeFill="#0F0F12" pupilFill="#FFFFFF" />
+          <Smile d="M217 168 Q229 174 241 168" w={2.5} />
+        </g>
+      </g>
 
-      <rect x="265" y="200" width="78" height="100" rx="12" fill="#0F0F12" />
-      <EyePair x1={288} x2={310} y={238} eyeR={7} pupilR={2.6} eyeFill="#FFFFFF" pupilFill="#0F0F12" />
-      <Smile d="M287 254 L311 254" stroke="#FFFFFF" w={3} />
+      {/* Black Rectangle Character */}
+      <g>
+        {/* Base (fixed) */}
+        <rect x="265" y="200" width="78" height="100" rx="12" fill="#0F0F12" />
+        
+        {/* Head with flexible movement */}
+        <g transform={
+          (() => {
+            const movement = getHeadMovement(299, 300, 299, 238, 3);
+            return `translate(${movement.tiltX}, ${movement.tiltY})`;
+          })()
+        }>
+          <EyePair x1={288} x2={310} y={238} eyeR={7} pupilR={2.6} eyeFill="#FFFFFF" pupilFill="#0F0F12" />
+          <Smile d="M287 254 L311 254" stroke="#FFFFFF" w={3} />
+        </g>
+      </g>
 
-      <rect x="340" y="185" width="105" height="116" rx="28" fill="#F2C500" />
-      <EyePair x1={370} x2={394} y={222} eyeR={6} pupilR={2.6} eyeFill="#0F0F12" pupilFill="#F2C500" />
-      <Smile d="M374 238 q12 8 24 0" w={4} />
+      {/* Yellow Rectangle Character */}
+      <g>
+        {/* Base (fixed) */}
+        <rect x="340" y="185" width="105" height="116" rx="28" fill="#F2C500" />
+        
+        {/* Head with flexible movement */}
+        <g transform={
+          (() => {
+            const movement = getHeadMovement(392.5, 301, 382, 222, 5);
+            return `translate(${movement.tiltX}, ${movement.tiltY})`;
+          })()
+        }>
+          <EyePair x1={370} x2={394} y={222} eyeR={6} pupilR={2.6} eyeFill="#0F0F12" pupilFill="#FFFFFF" />
+          <Smile d="M374 238 q12 8 24 0" w={4} />
+        </g>
+      </g>
 
-      <circle cx="120" cy="118" r="25" fill="#FF6B6B" />
-      <EyePair x1={112} x2={128} y={112} eyeR={4.5} pupilR={2} eyeFill="#0F0F12" pupilFill="#FF6B6B" />
-      <path d="M116 124 a8 7 0 1 0 10 0" fill="#0F0F12" />
+      {/* Red Circle Character */}
+      <g>
+        {/* Base (fixed) */}
+        <circle cx="120" cy="118" r="25" fill="#FF6B6B" />
+        
+        {/* Head with flexible movement */}
+        <g transform={
+          (() => {
+            const movement = getHeadMovement(120, 118, 120, 112, 4);
+            return `translate(${movement.tiltX}, ${movement.tiltY})`;
+          })()
+        }>
+          <EyePair x1={112} x2={128} y={112} eyeR={4.5} pupilR={2} eyeFill="#0F0F12" pupilFill="#FFFFFF" />
+          <path d="M116 124 a8 7 0 1 0 10 0" fill="#0F0F12" />
+        </g>
+      </g>
 
-      <path d="M320 95 L380 145 L260 145 Z" fill="#4ECDC4" />
-      <EyePair x1={316} x2={334} y={120} eyeR={4} pupilR={1.6} eyeFill="#0F0F12" pupilFill="#4ECDC4" />
-      <polyline points="314,132 319,136 324,132 329,136 334,132" fill="none" stroke="#0F0F12" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Teal Triangle Character */}
+      <g>
+        {/* Base (fixed) */}
+        <path d="M320 95 L380 145 L260 145 Z" fill="#4ECDC4" />
+        
+        {/* Head with flexible movement */}
+        <g transform={
+          (() => {
+            const movement = getHeadMovement(320, 145, 325, 120, 4);
+            return `translate(${movement.tiltX}, ${movement.tiltY})`;
+          })()
+        }>
+          <EyePair x1={316} x2={334} y={120} eyeR={4} pupilR={1.6} eyeFill="#0F0F12" pupilFill="#FFFFFF" />
+          <polyline points="314,132 319,136 324,132 329,136 334,132" fill="none" stroke="#0F0F12" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+      </g>
+
+      {/* Floating elements for more cuteness */}
+      <circle cx="400" cy="80" r="8" fill="#FF7A2B" opacity="0.6">
+        <animate attributeName="cy" values="80;75;80" dur="2s" repeatCount="indefinite" />
+      </circle>
+      <circle cx="60" cy="90" r="6" fill="#7B48FF" opacity="0.6">
+        <animate attributeName="cy" values="90;85;90" dur="1.5s" repeatCount="indefinite" />
+      </circle>
     </svg>
   );
 }
