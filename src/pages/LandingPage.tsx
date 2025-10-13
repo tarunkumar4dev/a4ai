@@ -11,10 +11,10 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check, Sparkles } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 
-/* -------------------- Animation presets -------------------- */
+/* -------------------- Animation presets (consistent) -------------------- */
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
 };
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.12 } } };
 
@@ -54,24 +54,22 @@ export default function LandingPage() {
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <motion.div className="mb-16 text-center" variants={fadeUp}>
-              <h2
-                className="mb-4 text-4xl font-extrabold bg-clip-text text-transparent"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(90deg, #353D47 0%, #6E7C8E 50%, #353D47 100%)",
-                }}
-              >
-                How It Works
+              {/* Always-visible headline (separate light/dark gradients) */}
+              <h2 className="mb-4 text-4xl font-extrabold tracking-tight">
+                <span className="inline dark:hidden bg-clip-text text-transparent bg-[linear-gradient(90deg,#353D47_0%,#6E7C8E_50%,#353D47_100%)]">
+                  How It Works
+                </span>
+                <span className="hidden dark:inline bg-clip-text text-transparent bg-[linear-gradient(90deg,#ffffff_0%,#e5e7eb_50%,#ffffff_100%)]">
+                  How It Works
+                </span>
               </h2>
+
               <p className="mx-auto max-w-3xl text-xl text-gray-600 dark:text-gray-300">
                 Our AI-powered system creates high-quality test papers in just a few simple steps.
               </p>
             </motion.div>
 
-            <motion.div
-              className="grid grid-cols-1 gap-10 md:grid-cols-3"
-              variants={container}
-            >
+            <motion.div className="grid grid-cols-1 gap-10 md:grid-cols-3" variants={container}>
               {[
                 {
                   title: "Choose Your Specifications",
@@ -106,24 +104,31 @@ export default function LandingPage() {
               ].map((item, i) => (
                 <motion.div
                   key={i}
-                  className="rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
+                  className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-xl dark:border-white/10 dark:bg-white/[0.05]"
                   variants={fadeUp}
                 >
+                  {/* decorative surface */}
+                  <div
+                    className="pointer-events-none absolute inset-0 rounded-2xl"
+                    style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.0), rgba(2,6,23,0.04))" }}
+                  />
                   <div
                     className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl text-white"
-                    style={{ background: "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)" }}
+                    style={{
+                      background:
+                        "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
+                    }}
                   >
                     {item.icon}
                   </div>
-                  <h3 className="mb-3 text-xl font-bold text-gray-900 dark:text-white">
+                  <h3 className="relative z-[1] mb-3 text-xl font-bold text-gray-900 dark:text-white">
                     {item.title}
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-300">{item.desc}</p>
+                  <p className="relative z-[1] text-gray-600 dark:text-gray-300">{item.desc}</p>
                 </motion.div>
               ))}
             </motion.div>
 
-            {/* Upgraded CTA */}
             <UpgradedCTA />
           </div>
         </motion.section>
@@ -144,9 +149,7 @@ export default function LandingPage() {
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <motion.div className="mb-16 text-center" variants={fadeUp}>
-              <h2 className="mb-4 text-4xl font-extrabold text-gray-900 dark:text-white">
-                What Educators Say
-              </h2>
+              <h2 className="mb-4 text-4xl font-extrabold text-gray-900 dark:text-white">What Educators Say</h2>
               <p className="mx-auto max-w-3xl text-xl text-gray-600 dark:text-gray-300">
                 Thousands of teachers trust a4ai to save time and improve student outcomes.
               </p>
@@ -175,17 +178,30 @@ export default function LandingPage() {
               ].map((t, i) => (
                 <motion.div
                   key={i}
-                  className="rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
+                  className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:shadow-xl dark:border-white/10 dark:bg-white/[0.05]"
                   variants={fadeUp}
                 >
                   <div className="mb-6 flex items-center">
                     <div
                       className="mr-4 flex h-12 w-12 items-center justify-center rounded-full font-bold text-white"
-                      style={{ background: "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)" }}
+                      style={{
+                        background:
+                          "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
+                      }}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+                        />
                       </svg>
                     </div>
                     <div>
@@ -193,20 +209,22 @@ export default function LandingPage() {
                       <p className="text-sm text-gray-500 dark:text-gray-400">{t.title}</p>
                     </div>
                   </div>
-                  <p className="italic text-gray-600 dark:text-gray-300">"{t.quote}"</p>
+                  <p className="relative z-[1] italic text-gray-600 dark:text-gray-300">"{t.quote}"</p>
                 </motion.div>
               ))}
             </motion.div>
           </div>
         </motion.section>
 
-        {/* Final CTA */}
+        {/* FINAL CTA — BOXED */}
         <motion.section
           className="py-20"
-          style={{ background: "linear-gradient(135deg, #DFE4EF 0%, #F6F9FF 100%)" }}
+          style={{
+            background: "linear-gradient(135deg, #DFE4EF 0%, #F6F9FF 100%)",
+          }}
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
-          transition={{ duration: 1 }}
+          transition={{ duration: 0.8, ease: EASE }}
           viewport={{ once: true }}
         >
           <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
@@ -216,20 +234,15 @@ export default function LandingPage() {
             <p className="mx-auto mb-10 max-w-3xl text-xl text-[#4E5A66]">
               Join thousands of educators who are saving time and improving student outcomes with a4ai.
             </p>
-
-            {!loggedIn ? (
-              <Link to="/signup">
-                <Button size="lg" className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition" style={{ background: "#5D6B7B", color: "#fff" }}>
-                  Get Started For Free
-                </Button>
-              </Link>
-            ) : (
-              <Link to="/dashboard">
-                <Button size="lg" className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition" style={{ background: "#5D6B7B", color: "#fff" }}>
-                  Go to Dashboard
-                </Button>
-              </Link>
-            )}
+            <Link to="/signup">
+              <Button
+                size="lg"
+                className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
+                style={{ background: "#5D6B7B", color: "#fff" }}
+              >
+                Get Started For Free
+              </Button>
+            </Link>
           </div>
         </motion.section>
       </main>
@@ -240,7 +253,7 @@ export default function LandingPage() {
 }
 
 /* =========================
-   Upgraded CTA
+   Upgraded CTA  (the one in your screenshot)
    ========================= */
 function UpgradedCTA() {
   const { session } = useAuth();
@@ -255,29 +268,28 @@ function UpgradedCTA() {
         className="relative overflow-hidden rounded-2xl border bg-white p-8 shadow-xl backdrop-blur dark:bg-white/5"
         style={{ borderColor: "var(--stroke, #E4E9F0)" }}
       >
-        {/* decorative frame */}
+        {/* decorative frame (neutral grey-blue) */}
         <div
-          className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-1 ring-inset"
+          className="pointer-events-none absolute inset-0 z-0 rounded-2xl"
           style={{
-            ringColor: "transparent",
             background:
-              "linear-gradient(white,white) padding-box, linear-gradient(90deg, rgba(93,107,123,.35), rgba(175,186,199,.35)) border-box",
+              "linear-gradient(white,white) padding-box, linear-gradient(90deg, var(--chip-accent-1), var(--chip-accent-2)) border-box",
             border: "1px solid transparent",
             borderRadius: "1rem",
           }}
         />
 
+        {/* content */}
         <div className="relative z-10 text-center text-gray-900 dark:text-gray-100">
           <div
             className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur"
             style={{
-              borderColor: "var(--stroke, #E4E9F0)",
-              background:
-                "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))",
-              color: "var(--muted-700, #4E5A66)",
+              borderColor: "var(--ring-muted)",
+              background: "var(--chip-bg)",
+              color: "var(--chip-text)",
             }}
           >
-            <Sparkles className="h-4 w-4" style={{ color: "#5D6B7B" }} />
+            <Sparkles className="h-4 w-4" style={{ color: "var(--chip-accent-1)" }} />
             No credit card required
           </div>
 
@@ -289,27 +301,31 @@ function UpgradedCTA() {
           <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
             {["Curriculum-aligned", "Multiple question types", "Instant answer key"].map((b) => (
               <div key={b} className="flex items-center justify-center gap-2 text-sm">
-                <Check className="h-4 w-4" style={{ color: "#5D6B7B" }} />
+                <Check className="h-4 w-4" style={{ color: "var(--chip-accent-1)" }} />
                 {b}
               </div>
             ))}
           </div>
 
+          {/* Buttons row */}
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to={primaryHref}>
-              <Button className="group rounded-xl px-7 py-6 text-base font-semibold text-white" style={{ background: "#5D6B7B" }}>
-                {loggedIn ? "Open Test Generator" : "Create Your First Test"}
+            <Link to="/dashboard/test-generator">
+              <Button
+                className="group rounded-xl px-7 py-6 text-base font-semibold text-white"
+                style={{ background: "#5D6B7B" }}
+              >
+                Create Your First Test
                 <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Button>
             </Link>
-            <Link to={secondaryHref}>
+            <Link to="/demo">
               <Button
                 variant="outline"
                 className="rounded-xl px-7 py-6 text-base font-semibold"
                 style={{
-                  borderColor: "var(--stroke, #E4E9F0)",
-                  color: "var(--ink-800, #353D47)",
-                  background: "var(--brand-50, #EFF3F9)",
+                  borderColor: "var(--ring-muted)",
+                  color: "var(--ink-800)",
+                  background: "var(--chip-bg)",
                 }}
               >
                 Watch Demo
@@ -340,15 +356,16 @@ function TrustSecurity() {
         </motion.div>
 
         <motion.div variants={fadeUp} className="mb-14 text-center">
-          <h2
-            className="mb-4 text-4xl font-extrabold bg-clip-text text-transparent"
-            style={{
-              backgroundImage:
-                "linear-gradient(90deg, #353D47 0%, #6E7C8E 50%, #353D47 100%)",
-            }}
-          >
-            Private by Design. Built for Schools.
+          {/* Always-visible headline */}
+          <h2 className="mb-4 text-4xl font-extrabold tracking-tight">
+            <span className="inline dark:hidden bg-clip-text text-transparent bg-[linear-gradient(90deg,#353D47_0%,#6E7C8E_50%,#353D47_100%)]">
+              Private by Design. Built for Schools.
+            </span>
+            <span className="hidden dark:inline bg-clip-text text-transparent bg-[linear-gradient(90deg,#ffffff_0%,#e5e7eb_50%,#ffffff_100%)]">
+              Private by Design. Built for Schools.
+            </span>
           </h2>
+
           <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
             We keep teacher and student data safe with sensible defaults and clear controls.
           </p>
@@ -364,17 +381,17 @@ function TrustSecurity() {
             <motion.div
               key={`${c.title}-${i}`}
               variants={fadeUp}
-              transition={{ delay: 0.05 * i }}
-              className="rounded-2xl border border-gray-100 bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl dark:border-gray-800 dark:bg-gray-900"
+              transition={{ delay: 0.05 * i, ease: EASE }}
+              className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-white/[0.05]"
             >
-              <div
-                className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-2xl"
-                style={{ background: "linear-gradient(135deg, #EFF3F9, #DFE4EF)" }}
-              >
+              <div className="pointer-events-none absolute inset-0 rounded-2xl"
+                   style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.0), rgba(2,6,23,0.04))" }} />
+              <div className="relative z-[1] mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-2xl"
+                   style={{ background: "linear-gradient(135deg, var(--chip-bg-2), var(--chip-bg-3))" }}>
                 {c.icon}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{c.title}</h3>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{c.desc}</p>
+              <h3 className="relative z-[1] text-lg font-semibold text-gray-900 dark:text-white">{c.title}</h3>
+              <p className="relative z-[1] mt-2 text-sm text-gray-600 dark:text-gray-300">{c.desc}</p>
             </motion.div>
           ))}
         </motion.div>
@@ -388,7 +405,7 @@ function TrustSecurity() {
    ========================= */
 function LogosMarquee() {
   return (
-    <div className="relative overflow-hidden rounded-xl border border-gray-100 bg-white py-6 dark:border-gray-800 dark:bg-gray-900">
+    <div className="relative overflow-hidden rounded-xl border border-gray-100 bg-white py-6 dark:border-white/10 dark:bg-white/[0.05]">
       <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-white dark:from-gray-900 to-transparent" />
       <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-white dark:from-gray-900 to-transparent" />
       <motion.div
@@ -407,7 +424,7 @@ function LogosMarquee() {
         ]).map((name, idx) => (
           <div
             key={`${name}-${idx}`}
-            className="inline-flex h-10 items-center rounded-md border border-gray-200 px-4 text-xs font-semibold tracking-wider text-gray-600 dark:border-gray-800 dark:text-gray-300"
+            className="inline-flex h-10 items-center rounded-md border border-gray-200 px-4 text-xs font-semibold tracking-wider text-gray-600 dark:border-white/10 dark:text-gray-300"
           >
             {name}
           </div>
@@ -455,20 +472,31 @@ function Outcomes() {
             <motion.div
               key={`${s.k}-${i}`}
               variants={fadeUp}
-              transition={{ delay: 0.05 * i }}
-              className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-lg dark:border-gray-800 dark:bg-gray-900"
+              transition={{ delay: 0.05 * i, ease: EASE }}
+              className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-lg dark:border-white/10 dark:bg-white/[0.05]"
             >
               <div
-                className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(90deg, #353D47 0%, #6E7C8E 50%, #AFBAC7 100%)",
-                }}
-              >
-                {s.k}
+                className="pointer-events-none absolute inset-0 rounded-2xl"
+                style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.0), rgba(2,6,23,0.04))" }}
+              />
+              {/* HEADLINE — bright enough in dark mode */}
+              <div className="relative z-[1] text-4xl font-extrabold tracking-tight">
+                <span className="
+                  bg-clip-text text-transparent
+                  bg-[linear-gradient(90deg,#353D47_0%,#6E7C8E_50%,#AFBAC7_100%)]
+                  dark:bg-[linear-gradient(90deg,#ffffff_0%,#e5e7eb_50%,#ffffff_100%)]
+                ">
+                  {s.k}
+                </span>
               </div>
-              {s.v && <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{s.v}</div>}
-              {s.sub && <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>}
+              {s.v && (
+                <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
+                  {s.v}
+                </div>
+              )}
+              {s.sub && (
+                <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>
+              )}
             </motion.div>
           ))}
         </motion.div>
@@ -476,19 +504,18 @@ function Outcomes() {
         {/* subtle CTA */}
         <motion.div
           variants={fadeUp}
-          className="mx-auto mt-12 max-w-3xl rounded-2xl border bg-white/70 p-6 text-center shadow-lg backdrop-blur dark:bg.white/[0.06]"
+          className="mx-auto mt-12 max-w-3xl rounded-2xl border bg-white/70 p-6 text-center shadow-lg backdrop-blur dark:bg-white/[0.06]"
           style={{ borderColor: "var(--stroke, #E4E9F0)" }}
         >
           <div
             className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur"
             style={{
-              borderColor: "var(--stroke, #E4E9F0)",
-              background:
-                "linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.70))",
-              color: "var(--muted-700, #4E5A66)",
+              borderColor: "var(--ring-muted)",
+              background: "var(--chip-bg)",
+              color: "var(--chip-text)",
             }}
           >
-            <Sparkles className="h-4 w-4" style={{ color: "#5D6B7B" }} />
+            <Sparkles className="h-4 w-4" style={{ color: "var(--chip-accent-1)" }} />
             Start free — no credit card
           </div>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -498,9 +525,12 @@ function Outcomes() {
             Generate your first paper and share it with your class in minutes.
           </p>
           <div className="mt-5">
-            <Link to={subtleHref}>
-              <Button className="rounded-xl px-7 py-6 text-base font-semibold text-white" style={{ background: "#5D6B7B" }}>
-                {loggedIn ? "Go to Dashboard" : "Get Started Free"}
+            <Link to="/signup">
+              <Button
+                className="rounded-xl px-7 py-6 text-base font-semibold text-white"
+                style={{ background: "#5D6B7B" }}
+              >
+                Get Started Free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>

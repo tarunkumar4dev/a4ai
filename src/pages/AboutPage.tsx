@@ -25,21 +25,7 @@ import {
   BookOpen,
 } from "lucide-react";
 
-/* ----------------------------- Theme Tokens ----------------------------- */
-const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
-const cardShell =
-  "rounded-2xl border border-black/5 dark:border-white/10 bg-white/70 dark:bg-gray-900/60 shadow-[0_1px_2px_rgba(0,0,0,0.05),0_10px_30px_rgba(2,6,23,0.05)] backdrop-blur";
-const statCard =
-  "rounded-2xl border border-black/5 dark:border-white/10 bg-white/80 dark:bg-gray-900/60 text-center p-4 shadow-sm backdrop-blur";
-
-const primaryGrad =
-  "bg-gradient-to-tr from-indigo-500 via-indigo-500/90 to-sky-500 text-white hover:from-indigo-600 hover:via-indigo-600/90 hover:to-sky-600";
-
-const ghostLight =
-  "border border-black/10 text-gray-900 hover:bg-gray-100 " +
-  "dark:border-white/20 dark:text-white dark:hover:bg-white/10";
-
-/* --------------------------------- Data --------------------------------- */
+// ---------------- Data ----------------
 const team = [
   { name: "Tarun", role: "Co-Founder", description: "Technology · Marketing", image: "/images/tarun_a4ai.jpeg" },
   { name: "Yash", role: "Co-Founder", description: "Tech Lead", image: "/images/yash_a4ai.jpeg" },
@@ -48,22 +34,32 @@ const team = [
 ];
 
 const values = [
-  { icon: Target, k: "Outcomes > Outputs", v: "We obsess over learning gains and teacher time saved." },
-  { icon: ShieldCheck, k: "Trust by design", v: "Privacy-first controls with auditability." },
-  { icon: BookOpenCheck, k: "Pedagogy-aware AI", v: "Curriculum-aligned, rubric-checked questions." },
-  { icon: Bolt, k: "Speed with dignity", v: "Under 2 minutes, without cutting corners." },
+  { icon: Target, k: "Outcomes > Outputs", v: "We obsess over student learning gains and teacher time saved." },
+  { icon: ShieldCheck, k: "Trust by design", v: "Privacy‑first data handling with clear controls and audit trails." },
+  { icon: BookOpenCheck, k: "Pedagogy‑aware AI", v: "Questions that align to curriculum, not just prompt magic." },
+  { icon: Bolt, k: "Speed with dignity", v: "From prompt to paper in under 2 min—without cutting corners." },
 ];
 
 const milestones = [
-  { date: "Apr 2025", title: "a4ai is founded", detail: "Validated teachers spend 6–10 hrs/week creating papers." },
-  { date: "Jun 2025", title: "Private alpha", detail: "First 50 teachers; 1K+ papers generated; tight build-with loop." },
-  { date: "Aug 2025", title: "Contest engine MVP", detail: "Proctored live contests with camera checks & screen-lock." },
-  { date: "Q4 2025", title: "Institutes beta", detail: "Branding, SSO, advanced analytics for campuses." },
+  { date: "Apr 2025", title: "a4ai is founded", detail: "Validated the pain: teachers spend 6–10 hrs/week creating papers." },
+  { date: "Jun 2025", title: "Private alpha", detail: "First 50 teachers, 1K+ papers generated; tight build‑with loop." },
+  { date: "Aug 2025", title: "Contest engine MVP", detail: "Proctored live contests with camera checks & screen‑lock." },
+  { date: "Q4 2025", title: "Institutes beta", detail: "Custom branding, SSO, and advanced analytics for campuses." },
 ];
 
 const testimonials = [
-  { quote: "We cut paper-setting time by ~80% and standardised difficulty across sections.", name: "Ritika Sharma", title: "HOD Science, Delhi" },
-  { quote: "Proctoring felt humane—alerts were actionable and not overwhelming.", name: "Arvind Rao", title: "Principal, Pune" },
+  {
+    quote:
+      "We cut paper‑setting time by 80% and finally standardised difficulty across sections.",
+    name: "Ritika Sharma",
+    title: "HOD Science, Delhi",
+  },
+  {
+    quote:
+      "Proctoring is surprisingly humane—alerts were actionable and didn’t overwhelm invigilators.",
+    name: "Arvind Rao",
+    title: "Principal, Pune",
+  },
 ];
 
 const partners = [
@@ -73,17 +69,21 @@ const partners = [
   { name: "EduLabs", logo: "/images/partner-edulabs.svg" },
 ];
 
-/* ------------------------------ Anim Presets ----------------------------- */
+// --------------- Small helpers ---------------
 const fadeUp = {
   initial: { opacity: 0, y: 24 },
-  whileInView: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
-  viewport: { once: true },
+  whileInView: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: "easeOut" },
+  },
 };
 
-/* --------------------------------- Page --------------------------------- */
+// --------------- Page ---------------
 export default function AboutPage() {
-  const mx = useMotionValue(320);
-  const my = useMotionValue(160);
+  // cursor‑reactive glow
+  const mx = useMotionValue(300);
+  const my = useMotionValue(140);
   const onMouseMove = (e: React.MouseEvent<HTMLElement>) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     mx.set(e.clientX - r.left);
@@ -113,7 +113,7 @@ export default function AboutPage() {
         <title>About a4ai — Smart, simple, secure assessments</title>
         <meta
           name="description"
-          content="We’re a builder-educator team crafting AI-powered test generation, proctoring, and analytics that respect pedagogy and privacy."
+          content="We’re a small team building AI‑powered test generation, proctoring, and analytics that respect pedagogy and privacy."
         />
         <script type="application/ld+json">{JSON.stringify(orgJsonLd)}</script>
         <meta property="og:title" content="About a4ai" />
@@ -123,22 +123,25 @@ export default function AboutPage() {
 
       <div className="min-h-screen bg-[radial-gradient(1200px_600px_at_50%_-10%,rgba(99,102,241,0.06),transparent_70%)] dark:bg-[radial-gradient(1200px_600px_at_50%_-10%,rgba(99,102,241,0.08),transparent_70%)]">
         {/* HERO */}
-        <section onMouseMove={onMouseMove} className="relative overflow-hidden py-24 md:py-28 text-gray-900 dark:text-white">
+        <section
+          onMouseMove={onMouseMove}
+          className="relative overflow-hidden py-24 md:py-28 text-gray-900 dark:text-white"
+        >
           <motion.div aria-hidden className="absolute inset-0 -z-10" style={{ backgroundImage: heroGlow }} />
           <div className="absolute inset-0 -z-20 bg-[url('/images/grid.svg')] bg-center opacity-5 dark:opacity-[0.03]" />
 
           <div className={sectionX}>
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Badge variant="secondary" className="gap-1"><Sparkles className="h-3.5 w-3.5" /> Founded 2025</Badge>
-              <Badge variant="secondary" className="gap-1"><Rocket className="h-3.5 w-3.5" /> Contest engine live</Badge>
-              <Badge variant="secondary" className="gap-1"><ShieldCheck className="h-3.5 w-3.5" /> Privacy-first</Badge>
+              <Badge variant="secondary" className="gap-1"><Sparkles className="h-3.5 w-3.5"/> Founded 2025</Badge>
+              <Badge variant="secondary" className="gap-1"><Rocket className="h-3.5 w-3.5"/> Contest engine live</Badge>
+              <Badge variant="secondary" className="gap-1"><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</Badge>
             </div>
 
             <motion.h1
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: "easeOut" }}
-              className="text-center text-5xl md:text-6xl font-extrabold tracking-tight mt-6"
+              transition={{ duration: 0.7, ease: EASE }}
+              className="text-center text-5xl md:text-6xl font-extrabold tracking-tight mt-2"
             >
               About a4ai
             </motion.h1>
@@ -146,14 +149,14 @@ export default function AboutPage() {
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.6 }}
-              className="mx-auto mt-5 max-w-3xl text-center text-lg md:text-xl text-gray-600 dark:text-gray-300"
+              transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
+              className="mx-auto mt-2 max-w-3xl text-center text-lg md:text-xl text-gray-600 dark:text-gray-300"
             >
               Building the assessment stack for Indian classrooms—fast, fair, and aligned to how teachers actually teach.
             </motion.p>
 
             {/* Stats */}
-            <div className="mx-auto mt-10 grid max-w-4xl grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mx-auto mt-4 grid max-w-4xl grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 { k: "Papers", v: "3.5K+" },
                 { k: "Schools", v: "25+" },
@@ -166,7 +169,7 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.05 * i, duration: 0.4 }}
-                  className={statCard}
+                  className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center shadow-sm backdrop-blur dark:border-white/10 dark:bg-gray-900/50"
                 >
                   <div className="text-2xl font-bold">{s.v}</div>
                   <div className="text-xs text-muted-foreground">{s.k}</div>
@@ -178,18 +181,15 @@ export default function AboutPage() {
 
         {/* MISSION */}
         <section ref={sectionRef} className="relative py-16">
-          <div className={`${sectionX} grid grid-cols-1 items-center gap-12 lg:grid-cols-2`}>
-            <motion.div
-              initial={{ opacity: 0, x: -36 }}
-              animate={inView ? { opacity: 1, x: 0 } : {}}
-              transition={{ duration: 0.6 }}
-            >
-              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">Our mission</h2>
+          <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+            <motion.div initial={{ opacity: 0, x: -40 }} animate={inView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
+              <h2 className="text-3xl md:text-4xl font-extrabold">Our mission</h2>
               <p className="mt-5 text-lg md:text-xl text-muted-foreground leading-relaxed">
                 Give teachers superpowers with AI that respects context and curriculum. Save hours weekly and return that time to students.
               </p>
               <p className="mt-4 text-lg md:text-xl text-muted-foreground leading-relaxed">
-                Multi-LLM generation meets rubric checks, plagiarism guards, and humane proctoring—quality from day one.
+                We combine multi‑LLM generation with rubric checks, plagiarism guards,
+                and contest‑grade proctoring to ensure quality from day one.
               </p>
 
               {/* Visible buttons (fixed contrast) */}
@@ -220,12 +220,8 @@ export default function AboutPage() {
               </div>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, x: 36 }}
-              animate={inView ? { opacity: 1, x: 0 } : {}}
-              transition={{ duration: 0.6 }}
-            >
-              <Card className={`${cardShell} overflow-hidden`}>
+            <motion.div initial={{ opacity: 0, x: 40 }} animate={inView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
+              <Card className="overflow-hidden">
                 <CardContent className="p-0">
                   <img
                     src="/images/bg.jpg"
@@ -255,7 +251,7 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.05 * i, duration: 0.4 }}
-                  className={`${cardShell} p-4`}
+                  className="rounded-2xl border bg-gradient-to-b from-background to-muted/40 p-4"
                 >
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <x.icon className="h-4 w-4 text-indigo-500" /> {x.k}
@@ -279,7 +275,7 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.45 }}
-                  className={`${cardShell} grid grid-cols-1 gap-3 p-4 md:grid-cols-[140px_1fr]`}
+                  className="grid grid-cols-1 gap-3 rounded-2xl border bg-background/60 p-4 md:grid-cols-[140px_1fr]"
                 >
                   <div className="text-sm font-medium text-muted-foreground">{m.date}</div>
                   <div>
@@ -297,17 +293,9 @@ export default function AboutPage() {
           <div className="absolute inset-0 bg-[url('/images/grid-dark.svg')] bg-center opacity-[0.03] pointer-events-none" />
           <div className={`${sectionX} relative`}>
             <div className="text-center">
-              <motion.h2 {...fadeUp} className="mb-3 text-3xl md:text-4xl font-extrabold tracking-tight">
-                Meet the team
-              </motion.h2>
-              <motion.p
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.15, duration: 0.5 }}
-                className="mx-auto max-w-3xl text-lg text-muted-foreground"
-              >
-                Builder-educators who care about the craft of assessment.
+              <motion.h2 {...fadeUp} className="mb-4 text-3xl md:text-4xl font-extrabold tracking-tight">Meet the team</motion.h2>
+              <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.15, duration: 0.5 }} className="mx-auto max-w-3xl text-lg text-muted-foreground">
+                Builder‑educators who care about the craft of assessment.
               </motion.p>
             </div>
 
@@ -352,7 +340,7 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.45, delay: 0.05 * i }}
-                  className={`${cardShell} relative p-6`}
+                  className="relative rounded-2xl border bg-background/60 p-6"
                 >
                   <Quote className="absolute -top-3 -left-3 h-6 w-6 text-indigo-500" />
                   <p className="text-base">{t.quote}</p>
@@ -364,34 +352,16 @@ export default function AboutPage() {
         </section>
 
         {/* CTA */}
-        <section className="bg-gradient-to-b from-gray-950 via-[#0b1220] to-black py-20 text-white">
-          <div className={`${sectionX} text-center`}>
-            <motion.h2
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className="text-3xl md:text-4xl font-extrabold tracking-tight"
-            >
+        <section className="bg-gradient-to-b from-gray-900 to-black py-20 text-white">
+          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+            <motion.h2 initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-3xl md:text-4xl font-extrabold">
               Ready to transform your assessments?
             </motion.h2>
-            <motion.p
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.15, duration: 0.5 }}
-              className="mx-auto mt-3 max-w-3xl text-lg text-white/80"
-            >
+            <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.15, duration: 0.5 }} className="mx-auto mt-3 max-w-3xl text-lg text-white/80">
               Join educators using a4ai to save time and improve outcomes.
             </motion.p>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.25, duration: 0.5 }}
-              className="mt-8 flex justify-center gap-3"
-            >
-              <Button className={`rounded-xl px-8 py-6 text-lg font-semibold shadow-lg ${primaryGrad}`}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.25, duration: 0.5 }} className="mt-8 flex justify-center gap-3">
+              <Button className="rounded-xl bg-white px-8 py-6 text-lg font-semibold text-gray-900 shadow-lg hover:bg-gray-100">
                 Get started for free
               </Button>
               <Button
@@ -409,7 +379,7 @@ export default function AboutPage() {
   );
 }
 
-/* ----------------------------- Team Card ----------------------------- */
+// ------- Team Card (tilt + glow) -------
 function TeamCard({
   member,
   index,
@@ -433,7 +403,7 @@ function TeamCard({
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.45, delay: 0.08 * index }}
+      transition={{ duration: 0.45, delay: 0.08 * index, ease: EASE }}
       className="relative"
     >
       <div
