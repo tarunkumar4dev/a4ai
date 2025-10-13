@@ -10,7 +10,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY") || "";
 // Optional perf toggle: set FAST_MODE=true to skip DeepSeek
-const FAST_MODE = Deno.env.get("FAST_MODE") === "true";
+const FAST_MODE = Deno.env.get("FAST_MODE") ===  "true";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");

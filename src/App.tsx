@@ -3,6 +3,8 @@ import { useEffect, Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import "./styles/globals.css";
 
+
+import ChankyaInstitutePublic from "@/pages/institute/chanakya";
 /* -------- Core Imports -------- */
 import PracticePage from "@/pages/PracticePage";
 import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
@@ -201,6 +203,11 @@ const App = () => {
                       <Route path="/help" element={<HelpCenterPage />} />
                       <Route path="/blog" element={<BlogPage />} />
                       <Route path="/case-studies" element={<CaseStudiesPage />} />
+
+
+                      {/* --------Institute----------- */}
+                      <Route path="/*" element={<ChankyaInstitutePublic />} />
+
 
                       {/* -------- Standalone -------- */}
                       <Route path="/demo" element={<LandingDemo />} />
