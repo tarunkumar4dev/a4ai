@@ -4,104 +4,7 @@ import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { z } from "https://esm.sh/zod@3.23.8";
 import JSZip from "https://esm.sh/jszip@3.10.1";
 
-/* -------------------- Env -------------------- */
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY") || "";
-// Optional perf toggle: set FAST_MODE=true to skip DeepSeek
-const FAST_MODE = Deno.env.get("FAST_MODE") ===  "true";
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-}
-if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
-  console.warn("WARNING: Both OPENAI_API_KEY and DEEPSEEK_API_KEY are missing. Generation may fail.");
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-// buckets
-const TESTS_BUCKET = "tests"; // Public bucket
-const IS_PUBLIC_BUCKET = true;
-const REFS_BUCKET = Deno.env.get("REFS_BUCKET") || "papers";
-
-/* -------------------- CORS & utils -------------------- */
-const ALLOWED_ORIGINS = new Set([
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://localhost:8080",
-  "https://a4ai.in",
-  "https://www.a4ai.in",
-]);
-function corsHeadersFor(req: Request) {
-  const origin = req.headers.get("Origin") ?? "";
-  const allow = ALLOWED_ORIGINS.has(origin) ? origin : "*";
-  return {
-    "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-    "Content-Type": "application/json",
-  };
-}
-function json(body: unknown, status = 200, extra: Record<string, string> = {}) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...extra,
-    },
-  });
-}
-const now = () => performance.now();
-const dur = (ms: number) => Math.round(ms);
-
-/* -------------------- Shared text utils -------------------- */
-function cleanOption(opt: unknown) {
-  return String(opt || "")
-    .trim()
-    .replace(/^[A-D]\s*[\)\.\:\-]\s*/i, "")
-    .trim();
-}
-function looksLikePlaceholderOptions(opts: unknown) {
-  if (!Array.isArray(opts) || opts.length < 3) return true;
-  const plain = opts.map((o) => cleanOption(String(o)).toLowerCase());
-  if (plain.every((t) => t.length <= 2)) return true;
-  if (new Set(plain).size < Math.ceil(opts.length / 2)) return true;
-  return false;
-}
-function sanitizeText(s?: string) {
-  if (!s) return s;
-  return s
-    // --- arrows to ASCII so pdf-lib WinAnsi can render ---
-    .replace(/[→⟶➝➔⇒⟹]/g, "->")
-    .replace(/[←⟵⇐⟸]/g, "<-")
-    .replace(/[↔⇄⇆⇌⇋]/g, "<->")
-    // --- existing symbols cleanup ---
-    .replace(/√/g, "sqrt")
-    .replace(/[×✕✖]/g, "x")
-    .replace(/÷/g, "/")
-    .replace(/π/g, "pi")
-    .replace(/≤/g, "<=")
-    .replace(/≥/g, ">=")
-    .replace(/≠/g, "!=")
-    .replace(/≈/g, "~")
-    .replace(/“|”/g, '"')
-    .replace(/‘|’/g, "'")
-    .replace(/[–—]/g, "-")
-    .replace(/\u00A0/g, " ")
-    .replace(/\t/g, " ")
-    .replace(/[^\S\r\n]+/g, " ")
-    .trim();
-}
-
-/* ======================================================================
-   INPUT SCHEMA (BACK-COMPAT + NEW SECTIONED MODE)
-====================================================================== */
-
-// Old sections (blueprint)
+// ==================== SCHEMAS ====================
 const SectionLegacy = z.object({
   title: z.string(),
   questionType: z.enum(["Multiple Choice", "Very Short Answer", "Short Answer", "Long Answer", "Case-based"]),
@@ -115,80 +18,153 @@ const MatrixRow = z.object({
   count: z.number().int().min(0),
 });
 
-// NEW section spec (from sectionsJSON UI)
+const CognitiveLevel = z.enum(["recall", "understand", "apply", "analyze"]);
+const QuestionType = z.enum(["mcq", "short", "long", "numerical", "case_based"]);
+
+const QuestionBucket = z.object({
+  type: QuestionType,
+  difficulty: z.enum(["easy", "medium", "hard"]),
+  cognitive: CognitiveLevel,
+  count: z.number().int().min(1).max(50),
+  marks: z.number().min(0),
+  negativeMarking: z.number().min(0).default(0),
+});
+
 const SectionNew = z.object({
   id: z.string(),
   marksPerQuestion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   count: z.number().int().min(1).max(100),
-  difficultyMix: z
-    .object({
-      easy: z.number().min(0),
-      medium: z.number().min(0),
-      hard: z.number().min(0),
-    })
-    .default({ easy: 40, medium: 40, hard: 20 }),
+  difficultyMix: z.object({
+    easy: z.number().min(0),
+    medium: z.number().min(0),
+    hard: z.number().min(0),
+  }).default({ easy: 40, medium: 40, hard: 20 }),
 });
 
-const Input = z
-  .object({
-    // optional request row id
-    requestId: z.string().uuid().optional(),
-    userId: z.string().uuid(),
+const Input = z.object({
+  requestId: z.string().uuid().optional(),
+  userId: z.string().uuid(),
+  board: z.enum(["CBSE", "ICSE", "State"]).default("CBSE"),
+  classNum: z.number().int().min(1).max(12).default(10),
+  subject: z.string().min(2),
+  topics: z.array(z.string()).default([]),
+  subtopics: z.array(z.string()).default([]),
+  questionType: z.enum(["Multiple Choice", "Short Answer", "Long Answer", "Mixed"]).default("Multiple Choice"),
+  mode: z.enum(["single", "mix"]).default("single"),
+  difficulty: z.enum(["Easy", "Medium", "Hard"]).default("Easy"),
+  mix: z.object({ 
+    easy: z.number().min(0).max(100), 
+    medium: z.number().min(0).max(100), 
+    hard: z.number().min(0).max(100) 
+  }).default({ easy: 50, medium: 30, hard: 20 }),
+  patternMode: z.enum(["simple", "blueprint", "matrix"]).default("simple"),
+  qCount: z.number().int().min(1).default(5),
+  marksPerQuestion: z.number().min(0).default(1),
+  sections: z.array(SectionLegacy).default([]),
+  markingMatrix: z.array(MatrixRow).default([]),
+  language: z.enum(["English", "Hindi"]).default("English"),
+  solutionStyle: z.enum(["Steps", "Concise"]).default("Steps"),
+  includeAnswerKey: z.boolean().default(true),
+  negativeMarking: z.number().default(0),
+  shuffleQuestions: z.boolean().default(true),
+  shuffleOptions: z.boolean().default(true),
+  notes: z.string().max(2000).optional(),
+  outputFormat: z.enum(["PDF", "DOCX", "CSV", "JSON"]).default("PDF"),
+  watermark: z.boolean().default(false),
+  watermarkText: z.string().optional(),
+  useLogo: z.boolean().default(true),
+  sectionsJSON: z.string().optional(),
+  computedTotalMarks: z.string().optional(),
+  ref_files: z.array(z.object({ name: z.string(), path: z.string().min(1) })).default([]),
+  institute: z.string().optional(),
+  teacherName: z.string().optional(),
+  examTitle: z.string().optional(),
+  examDate: z.string().optional(),
+  chapters: z.array(z.string()).default([]),
+  buckets: z.array(QuestionBucket).default([]),
+  cognitiveLevels: z.array(CognitiveLevel).default(["understand", "apply"]),
+  avoidDuplicates: z.boolean().default(true),
+  ncertWeight: z.number().min(0).max(1).default(0.6),
+  requireUnits: z.boolean().default(true),
+  timeLimit: z.number().min(5).optional(),
+  shareable: z.boolean().default(false),
+}).refine((d) => (d.mode === "mix" ? d.mix.easy + d.mix.medium + d.mix.hard === 100 : true), {
+  path: ["mix"],
+  message: "Mix must sum to 100%",
+});
 
-    // basics
-    board: z.enum(["CBSE", "ICSE", "State"]).default("CBSE"),
-    classNum: z.number().int().min(1).max(12).default(10),
-    subject: z.string().min(2),
-    topics: z.array(z.string()).default([]),
-    subtopics: z.array(z.string()).default([]),
+/* -------------------- Env & Setup -------------------- */
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
+const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY") || "";
+const FAST_MODE = Deno.env.get("FAST_MODE") === "true";
 
-    // legacy mode controls
-    questionType: z.enum(["Multiple Choice", "Short Answer", "Long Answer", "Mixed"]).default("Multiple Choice"),
-    mode: z.enum(["single", "mix"]).default("single"),
-    difficulty: z.enum(["Easy", "Medium", "Hard"]).default("Easy"),
-    mix: z
-      .object({ easy: z.number().min(0).max(100), medium: z.number().min(0).max(100), hard: z.number().min(0).max(100) })
-      .default({ easy: 50, medium: 30, hard: 20 }),
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
+  console.warn("WARNING: Both OPENAI_API_KEY and DEEPSEEK_API_KEY are missing. Generation may fail.");
+}
 
-    // legacy patterns
-    patternMode: z.enum(["simple", "blueprint", "matrix"]).default("simple"),
-    qCount: z.number().int().min(1).default(5),
-    marksPerQuestion: z.number().min(0).default(1),
-    sections: z.array(SectionLegacy).default([]),
-    markingMatrix: z.array(MatrixRow).default([]),
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const TESTS_BUCKET = "tests";
+const IS_PUBLIC_BUCKET = true;
+const REFS_BUCKET = Deno.env.get("REFS_BUCKET") || "papers";
 
-    // presentation
-    language: z.enum(["English", "Hindi"]).default("English"),
-    solutionStyle: z.enum(["Steps", "Concise"]).default("Steps"),
-    includeAnswerKey: z.boolean().default(true),
-    negativeMarking: z.number().default(0),
-    shuffleQuestions: z.boolean().default(true),
-    shuffleOptions: z.boolean().default(true),
-    notes: z.string().max(2000).optional(),
-    outputFormat: z.enum(["PDF", "DOCX", "CSV", "JSON"]).default("PDF"),
-    watermark: z.boolean().default(false),
-    watermarkText: z.string().optional(),
-    useLogo: z.boolean().default(true),
+/* -------------------- CORS & Utils -------------------- */
+const ALLOWED_ORIGINS = new Set([
+  "http://localhost:3000", "http://localhost:5173", "http://localhost:8080",
+  "https://a4ai.in", "https://www.a4ai.in",
+]);
 
-    // NEW from UI for sectioned mode
-    sectionsJSON: z.string().optional(), // JSON.stringify of SectionNew[]
-    computedTotalMarks: z.string().optional(),
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get("Origin") ?? "";
+  const allow = ALLOWED_ORIGINS.has(origin) ? origin : "*";
+  return {
+    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+    "Content-Type": "application/json",
+  };
+}
 
-    // storage refs
-    ref_files: z.array(z.object({ name: z.string(), path: z.string().min(1) })).default([]),
-
-    // header meta (optional)
-    institute: z.string().optional(),
-    teacherName: z.string().optional(),
-    examTitle: z.string().optional(),
-    examDate: z.string().optional(),
-  })
-  .refine((d) => (d.mode === "mix" ? d.mix.easy + d.mix.medium + d.mix.hard === 100 : true), {
-    path: ["mix"],
-    message: "Mix must sum to 100%",
+function json(body: unknown, status = 200, extra: Record<string, string> = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...extra },
   });
+}
 
-/* -------------------- References loader (txt/csv/md) -------------------- */
+const now = () => performance.now();
+const dur = (ms: number) => Math.round(ms);
+
+/* -------------------- Text Utils -------------------- */
+function cleanOption(opt: unknown) {
+  return String(opt || "").trim().replace(/^[A-D]\s*[\)\.\:\-]\s*/i, "").trim();
+}
+
+function looksLikePlaceholderOptions(opts: unknown) {
+  if (!Array.isArray(opts) || opts.length < 3) return true;
+  const plain = opts.map((o) => cleanOption(String(o)).toLowerCase());
+  if (plain.every((t) => t.length <= 2)) return true;
+  if (new Set(plain).size < Math.ceil(opts.length / 2)) return true;
+  return false;
+}
+
+function sanitizeText(s?: string) {
+  if (!s) return s;
+  return s
+    .replace(/[→⟶➝➔⇒⟹]/g, "->").replace(/[←⟵⇐⟸]/g, "<-").replace(/[↔⇄⇆⇌⇋]/g, "<->")
+    .replace(/√/g, "sqrt").replace(/[×✕✖]/g, "x").replace(/÷/g, "/").replace(/π/g, "pi")
+    .replace(/≤/g, "<=").replace(/≥/g, ">=").replace(/≠/g, "!=").replace(/≈/g, "~")
+    .replace(/“|”/g, '"').replace(/‘|'|'/g, "'").replace(/[–—]/g, "-")
+    .replace(/\u00A0/g, " ").replace(/\t/g, " ").replace(/[^\S\r\n]+/g, " ").trim();
+}
+
+/* -------------------- References Loader -------------------- */
 async function loadRefs(refs?: Array<{ name: string; path: string }>) {
   if (!refs?.length) return "";
   const texts: string[] = [];
@@ -202,13 +178,86 @@ async function loadRefs(refs?: Array<{ name: string; path: string }>) {
   return texts.join("\n---\n").slice(0, 12000);
 }
 
+/* ==================== MISSING FUNCTIONS ==================== */
+
+/* -------------------- Bucket Creation -------------------- */
+function createBuckets(input: z.infer<typeof Input>): any[] {
+  if (input.buckets && input.buckets.length > 0) {
+    return input.buckets;
+  }
+
+  const buckets: any[] = [];
+  const defaultCognitive = input.cognitiveLevels.length > 0 ? input.cognitiveLevels[0] : "understand";
+
+  if (input.patternMode === "simple") {
+    buckets.push({
+      type: "mcq",
+      difficulty: input.difficulty.toLowerCase(),
+      cognitive: defaultCognitive,
+      count: input.qCount,
+      marks: input.marksPerQuestion,
+      negativeMarking: input.negativeMarking || 0
+    });
+  } else if (input.patternMode === "blueprint") {
+    for (const section of input.sections) {
+      const typeMap: Record<string, string> = {
+        "Multiple Choice": "mcq", "Very Short Answer": "short", 
+        "Short Answer": "short", "Long Answer": "long", "Case-based": "case_based"
+      };
+      buckets.push({
+        type: typeMap[section.questionType] || "mcq",
+        difficulty: input.difficulty.toLowerCase(),
+        cognitive: defaultCognitive,
+        count: section.count,
+        marks: section.marksPerQuestion,
+        negativeMarking: input.negativeMarking || 0
+      });
+    }
+  }
+
+  return buckets;
+}
+
+/* -------------------- Enhanced Prompts -------------------- */
+function buildEnhancedPrompt(bucket: any, input: any, refsText: string = "") {
+  const lang = input.language;
+  const chapters = (input.chapters?.length ? input.chapters : input.topics)?.join(", ") || "relevant topics";
+  const refNote = refsText ? `\nReference extracts:\n${refsText.slice(0, 2000)}\n` : "";
+
+  return `
+Generate ${bucket.count} ${lang} questions for ${input.board} Class ${input.classNum} ${input.subject}.
+Question Type: ${bucket.type.toUpperCase()}
+Marks: ${bucket.marks}
+Difficulty: ${bucket.difficulty}
+Cognitive Level: ${bucket.cognitive}
+Topics: ${chapters}
+NCERT Alignment: ${Math.round(input.ncertWeight * 100)}%
+
+Return JSON array with ${bucket.count} questions:
+[
+ {
+   "type": "${bucket.type}",
+   "difficulty": "${bucket.difficulty}",
+   "cognitive": "${bucket.cognitive}",
+   "marks": ${bucket.marks},
+   "text": "question text in ${lang}",
+   "options": ["A","B","C","D"],
+   "answer": "correct answer",
+   "solution": "stepwise explanation"
+ }
+]
+No extra keys. No commentary.${refNote}
+`.trim();
+}
+
 /* ======================================================================
-   LLM LAYER (returns GenQuestion[])
+   LLM LAYER
 ====================================================================== */
 type GenQuestion = {
   type: string;
   difficulty: "easy" | "medium" | "hard";
-  marks: 1 | 2 | 3 | 4 | number;
+  cognitive?: string;
+  marks: number;
   text: string;
   options?: string[];
   answer?: string;
@@ -289,50 +338,44 @@ async function callDeepSeek(prompt: string, rid: string): Promise<GenQuestion[]>
   }
 }
 
-/* -------------------- Prompts -------------------- */
-// NEW: multi-question batch prompt (replaces old single-question prompt)
-function buildMultiQuestionPrompt(
-  i: z.infer<typeof Input>,
-  sec: z.infer<typeof SectionNew>,
-  diffs: ("easy" | "medium" | "hard")[],
-  refsChunk = ""
-) {
+/* -------------------- Multi-Question Prompts -------------------- */
+function buildMultiQuestionPrompt(i: z.infer<typeof Input>, sec: z.infer<typeof SectionNew>, diffs: ("easy" | "medium" | "hard")[], refsChunk = "") {
   const lang = i.language === "Hindi" ? "Hindi" : "English";
-  const chapters = (i.topics?.length ? i.topics : i.subtopics)?.join(", ") || "relevant NCERT concepts";
-  const typeHint =
-    sec.marksPerQuestion === 1 ? "MCQ or VSA" : sec.marksPerQuestion === 2 ? "VSA or SA" : sec.marksPerQuestion === 3 ? "SA" : "LA";
+  const chapters = (i.chapters?.length ? i.chapters : i.topics)?.join(", ") || "relevant NCERT concepts";
+  const typeHint = sec.marksPerQuestion === 1 ? "MCQ or VSA" : sec.marksPerQuestion === 2 ? "VSA or SA" : sec.marksPerQuestion === 3 ? "SA" : "LA";
 
   const counts = diffs.reduce((m, d) => ((m[d] = (m[d] || 0) + 1), m), {} as Record<string, number>);
-  const refNote = refsChunk ? `\nReference extracts (if relevant, align concepts):\n${refsChunk}\n` : "";
+  const refNote = refsChunk ? `\nReference extracts:\n${refsChunk}\n` : "";
+  const cognitiveNote = i.cognitiveLevels?.length ? `\nCognitive levels: ${i.cognitiveLevels.join(", ")}` : "";
 
   return `
 Generate EXACTLY ${diffs.length} ${lang} questions for ${i.board} Class ${i.classNum} ${i.subject}.
-Marks: ${sec.marksPerQuestion}. Prefer types: ${typeHint}. Topics: ${chapters}.
-Difficulty distribution in this batch:
-${Object.entries(counts)
-  .map(([k, v]) => `- ${k}: ${v}`)
-  .join("\n")}
-Be exam-ready, concise, NCERT-aligned. Avoid repeats and ambiguity.
+Marks: ${sec.marksPerQuestion}. Types: ${typeHint}. Topics: ${chapters}.
+Difficulty distribution:
+${Object.entries(counts).map(([k, v]) => `- ${k}: ${v}`).join("\n")}
+${cognitiveNote}
+NCERT Alignment: ${Math.round(i.ncertWeight * 100)}%
 
-Return a JSON array of length ${diffs.length} with objects:
+Return JSON array of length ${diffs.length}:
 [
- { "type": "MCQ|VSA|SA|LA|CASE|ASSERTION",
+ {
+   "type": "MCQ|VSA|SA|LA|CASE",
    "difficulty": "easy|medium|hard",
+   "cognitive": "${i.cognitiveLevels?.[0] || "understand"}",
    "marks": ${sec.marksPerQuestion},
    "text": "question text in ${lang}",
    "options": ["A","B","C","D"],
-   "answer": "final answer or option key",
-   "solution": "stepwise solution (optional)"
+   "answer": "final answer",
+   "solution": "stepwise solution"
  }
 ]
 No extra keys. No commentary.${refNote}
 `.trim();
 }
 
-/* -------------------- Ranking / merging -------------------- */
+/* -------------------- Scoring & Filtering -------------------- */
 function scoreAndFilter(i: z.infer<typeof Input>, sec: z.infer<typeof SectionNew>, arr: GenQuestion[]) {
-  const keyWords = (i.topics.length ? i.topics : i.subtopics).join(" ").toLowerCase().split(/\W+/).filter(Boolean);
-
+  const keyWords = (i.chapters?.length ? i.chapters : i.topics).join(" ").toLowerCase().split(/\W+/).filter(Boolean);
   const uniq = new Set<string>();
   const out: { q: GenQuestion; s: number }[] = [];
 
@@ -350,6 +393,7 @@ function scoreAndFilter(i: z.infer<typeof Input>, sec: z.infer<typeof SectionNew
     if (keyWords.some((k) => key.includes(k))) s++;
     if (q.type === "MCQ" && Array.isArray(q.options) && q.options.length >= 4 && q.answer) s++;
     if (q.solution && q.solution.length > 10) s++;
+    if (q.cognitive && i.cognitiveLevels?.includes(q.cognitive)) s++;
 
     out.push({ q, s });
   }
@@ -357,9 +401,7 @@ function scoreAndFilter(i: z.infer<typeof Input>, sec: z.infer<typeof SectionNew
   return out.map((x) => x.q);
 }
 
-/* ======================================================================
-   SECTION ORCHESTRATOR (NEW MODE)
-====================================================================== */
+/* ==================== SECTION ORCHESTRATOR ==================== */
 function splitDifficultyTargets(count: number, mix: { easy: number; medium: number; hard: number }) {
   const total = Math.max(1, mix.easy + mix.medium + mix.hard);
   const e = Math.round((mix.easy / total) * count);
@@ -370,13 +412,13 @@ function splitDifficultyTargets(count: number, mix: { easy: number; medium: numb
 }
 
 function pickBatch(want: { easy: number; medium: number; hard: number }, got: GenQuestion[], take: number) {
-  const c = { easy: 0, medium: 0, hard: 0 } as Record<"easy" | "medium" | "hard", number>;
+  const c = { easy: 0, medium: 0, hard: 0 };
   for (const q of got) c[q.difficulty]++;
   const need = {
     easy: Math.max(0, want.easy - c.easy),
     medium: Math.max(0, want.medium - c.medium),
     hard: Math.max(0, want.hard - c.hard),
-  } as Record<"easy" | "medium" | "hard", number>;
+  };
 
   const arr: ("easy" | "medium" | "hard")[] = [];
   while (arr.length < take) {
@@ -384,9 +426,8 @@ function pickBatch(want: { easy: number; medium: number; hard: number }, got: Ge
     if (need.easy) pool.push("easy");
     if (need.medium) pool.push("medium");
     if (need.hard) pool.push("hard");
-    const pick = pool.length
-      ? pool[Math.floor(Math.random() * pool.length)]
-      : (["easy", "medium", "hard"] as const)[Math.floor(Math.random() * 3)];
+    const pick = pool.length ? pool[Math.floor(Math.random() * pool.length)] : 
+                 (["easy", "medium", "hard"] as const)[Math.floor(Math.random() * 3)];
     arr.push(pick);
     need[pick] = Math.max(0, need[pick] - 1);
   }
@@ -396,28 +437,23 @@ function pickBatch(want: { easy: number; medium: number; hard: number }, got: Ge
 async function genSection(i: z.infer<typeof Input>, sec: z.infer<typeof SectionNew>, rid: string, refsShort: string) {
   const out: GenQuestion[] = [];
   const targets = splitDifficultyTargets(sec.count, sec.difficultyMix);
-  const batchSize = 6; // safe for tokens
+  const batchSize = 6;
 
   while (out.length < sec.count) {
     const remaining = sec.count - out.length;
     const take = Math.min(batchSize, remaining);
     const wants = pickBatch(targets, out, take);
-
-    // Single prompt per provider for the whole batch
     const prompt = buildMultiQuestionPrompt(i, sec, wants, refsShort);
 
-    const [a, b] = await Promise.all([callOpenAI(prompt, rid), FAST_MODE ? Promise.resolve([]) : callDeepSeek(prompt, rid)]);
-
-    // Merge + score
+    const [a, b] = await Promise.all([callOpenAI(prompt, rid), FAST_MODE ? [] : callDeepSeek(prompt, rid)]);
     const merged = scoreAndFilter(i, sec, [...a, ...b]).slice(0, take);
 
-    // de-dup into out
     const existingKeys = new Set(out.map((q) => q.text.toLowerCase().replace(/\s+/g, " ").slice(0, 200)));
     for (const q of merged) {
       const key = q.text.toLowerCase().replace(/\s+/g, " ").slice(0, 200);
       if (!existingKeys.has(key)) {
         existingKeys.add(key);
-        out.push(q as GenQuestion);
+        out.push(q);
         if (out.length >= sec.count) break;
       }
     }
@@ -425,19 +461,147 @@ async function genSection(i: z.infer<typeof Input>, sec: z.infer<typeof SectionN
   return out;
 }
 
-/* ======================================================================
-   PDF (Sections A–D + instructions + header)
-====================================================================== */
+/* ==================== ENHANCED BUCKET GENERATION ==================== */
+async function generateWithBuckets(input: z.infer<typeof Input>, rid: string, refsText: string) {
+  const buckets = createBuckets(input);
+  const allQuestions: GenQuestion[] = [];
+  
+  for (const bucket of buckets) {
+    const prompt = buildEnhancedPrompt(bucket, input, refsText);
+    const [openAIResults, deepSeekResults] = await Promise.all([
+      callOpenAI(prompt, rid),
+      FAST_MODE ? [] : callDeepSeek(prompt, rid)
+    ]);
+    
+    const merged = [...openAIResults, ...deepSeekResults];
+    const keyWords = (input.chapters?.length ? input.chapters : input.topics).join(" ").toLowerCase().split(/\W+/).filter(Boolean);
+    const uniq = new Set<string>();
+    const scored: { q: GenQuestion; s: number }[] = [];
+    
+    for (const q of merged) {
+      if (!q?.text) continue;
+      if (q.marks !== bucket.marks) continue;
+      if (q.type.toLowerCase() !== bucket.type.toLowerCase()) continue;
+      if (q.difficulty !== bucket.difficulty) continue;
+      if (q.type === "MCQ" && looksLikePlaceholderOptions(q.options)) continue;
+
+      const key = q.text.toLowerCase().replace(/\s+/g, " ").slice(0, 200);
+      if (uniq.has(key)) continue;
+      uniq.add(key);
+
+      let score = 0;
+      if (q.text.length > 20) score++;
+      if (keyWords.some((k) => key.includes(k))) score++;
+      if (q.type === "MCQ" && Array.isArray(q.options) && q.options.length >= 4 && q.answer) score++;
+      if (q.solution && q.solution.length > 10) score++;
+      if (q.cognitive === bucket.cognitive) score += 2;
+
+      scored.push({ q, s: score });
+    }
+    
+    scored.sort((a, b) => b.s - a.s);
+    const bestQuestions = scored.slice(0, bucket.count).map(x => x.q);
+    allQuestions.push(...bestQuestions);
+  }
+  
+  const sections: Record<string, GenQuestion[]> = {};
+  let currentSection = 'A';
+  
+  for (const bucket of buckets) {
+    const bucketQuestions = allQuestions.filter(q => 
+      q.marks === bucket.marks && 
+      q.difficulty === bucket.difficulty &&
+      q.type.toLowerCase() === bucket.type.toLowerCase()
+    ).slice(0, bucket.count);
+    
+    if (bucketQuestions.length > 0) {
+      sections[currentSection] = bucketQuestions;
+      currentSection = String.fromCharCode(currentSection.charCodeAt(0) + 1);
+    }
+  }
+  
+  return sections;
+}
+
+/* ==================== LEGACY SYSTEM ==================== */
+function buildLegacyPrompt(i: z.infer<typeof Input>) {
+  const topics = i.topics.length ? i.topics.join(", ") : "teacher-specified topics";
+  const subs = i.subtopics.length ? i.subtopics.join(", ") : "relevant subtopics";
+  const diff = i.mode === "single" ? `Overall difficulty: ${i.difficulty}.` : 
+               `Distribute difficulty: ${i.mix.easy}% Easy, ${i.mix.medium}% Medium, ${i.mix.hard}% Hard.`;
+  const pattern = i.patternMode === "simple" ? `Create exactly ${i.qCount} questions.\nEach question carries ${i.marksPerQuestion} marks.` :
+                 i.patternMode === "blueprint" ? `Follow section blueprint:\n${i.sections.map((s) => `- ${s.title}: ${s.questionType} × ${s.count} (${s.marksPerQuestion} marks each)`).join("\n")}` :
+                 `Follow marking matrix:\n${i.markingMatrix.map((r) => `- ${r.questionType}: ${r.count} questions, ${r.marksPerQuestion} marks each`).join("\n")}`;
+
+  return `
+You are an experienced ${i.board} Class ${i.classNum} ${i.subject} paper setter.
+Language: ${i.language}. Style: ${i.solutionStyle}. Shuffle options: ${i.shuffleOptions}.
+Topics: ${topics}. Subtopics: ${subs}.
+${pattern}
+${diff}
+${i.notes ? `Teacher notes: ${i.notes}` : ""}
+
+Return STRICT JSON ONLY:
+{
+  "questions": [
+    { "text": "string", "type": "MCQ|VSA|SA|LA|CASE", "marks": number,
+      "options": ["...", "...", "...", "..."]?,
+      "answer": "string"
+    }
+  ]
+}
+Ensure counts and marks match pattern. No commentary.
+`.trim();
+}
+
+function normalizeLegacy(i: z.infer<typeof Input>, draft: any) {
+  const wantsMCQ = i.questionType === "Multiple Choice" || i.questionType === "Mixed";
+  return (draft.questions || []).map((q: any, idx: number) => ({
+    idx: idx + 1,
+    text: String(q.text ?? "").trim(),
+    type: String(q.type ?? ""),
+    marks: typeof q.marks === "number" ? q.marks : i.marksPerQuestion,
+    options: wantsMCQ ? (Array.isArray(q.options) ? q.options.slice(0, 4).map((o) => cleanOption(String(o))) : undefined) : undefined,
+    answer: String(q.answer ?? "").trim(),
+  }));
+}
+
+function scoreLegacy(i: z.infer<typeof Input>, qs: any[]) {
+  const kw = [i.subject, ...i.topics, ...i.subtopics].join(" ").toLowerCase().split(/\W+/).filter(Boolean);
+  const uniq = new Set<string>();
+  const dedup: any[] = [];
+  for (const q of qs) {
+    if ((i.questionType === "Multiple Choice" || i.questionType === "Mixed") && looksLikePlaceholderOptions(q.options)) continue;
+    const key = q.text.toLowerCase().replace(/\s+/g, " ").slice(0, 200);
+    if (uniq.has(key)) continue;
+    uniq.add(key);
+    dedup.push(q);
+  }
+  const scored = dedup.map((q) => {
+    let s = 0;
+    if (q.text.length > 20) s++;
+    if (kw.some((k) => q.text.toLowerCase().includes(k))) s++;
+    if (i.questionType !== "Multiple Choice") s++;
+    else if (q.options && q.options.length >= 3) s++;
+    if (q.answer) s++;
+    return { ...q, _score: s };
+  });
+  scored.sort((a, b) => b._score - a._score);
+  return scored;
+}
+
+/* ==================== PDF RENDERER ==================== */
 async function renderPdf(i: z.infer<typeof Input>, sections: Record<string, GenQuestion[]>) {
   const pdf = await PDFDocument.create();
-  let page = pdf.addPage([595.28, 841.89]); // A4
+  let page = pdf.addPage([595.28, 841.89]);
   const { width, height } = page.getSize();
   const font = await pdf.embedFont(StandardFonts.TimesRoman);
   const bold = await pdf.embedFont(StandardFonts.TimesRomanBold);
 
-  // frame
-  const drawFrame = () =>
-    page.drawRectangle({ x: 24, y: 24, width: width - 48, height: height - 48, borderWidth: 1, borderColor: rgb(0.82, 0.82, 0.82) });
+  const drawFrame = () => page.drawRectangle({ 
+    x: 24, y: 24, width: width - 48, height: height - 48, 
+    borderWidth: 1, borderColor: rgb(0.82, 0.82, 0.82) 
+  });
   drawFrame();
 
   const marginX = 48;
@@ -452,44 +616,32 @@ async function renderPdf(i: z.infer<typeof Input>, sections: Record<string, GenQ
   const write = (txt: string, size = 12, useBold = false) => {
     if (y < 80) newPage();
     page.drawText(sanitizeText(txt) || "", {
-      x: marginX,
-      y,
-      size,
+      x: marginX, y, size,
       font: useBold ? bold : font,
       color: rgb(0, 0, 0),
     });
     y -= lineH + (size >= 13 ? 2 : 0);
   };
 
-  // header
+  // Header
   write(i.institute || "a4ai — Test Paper", 16, true);
   write(i.examTitle || `${i.subject} • Class ${i.classNum} • ${i.board}`, 12);
-  const maxMarks =
-    i.computedTotalMarks ||
-    Object.values(sections)
-      .flat()
-      .reduce((s, q) => s + (Number(q.marks) || 0), 0)
-      .toString();
+  const maxMarks = i.computedTotalMarks || Object.values(sections).flat().reduce((s, q) => s + (Number(q.marks) || 0), 0).toString();
   write(`Time: ${i.language} • Max Marks: ${maxMarks}`, 11);
   if (i.teacherName || i.examDate) write(`Teacher: ${i.teacherName || "-"} | Date: ${i.examDate || "-"}`, 10);
 
-  // instructions
+  // Instructions
   if (i.notes) {
     write("General Instructions:", 12, true);
-    i.notes
-      .split(/\n+/)
-      .filter(Boolean)
-      .slice(0, 12)
-      .forEach((ln, idx) => write(`(${idx + 1}) ${ln}`, 10));
+    i.notes.split(/\n+/).filter(Boolean).slice(0, 12).forEach((ln, idx) => write(`(${idx + 1}) ${ln}`, 10));
   }
 
-  // sections
-  const order = Object.keys(sections).sort(); // A,B,C,D...
+  // Sections
+  const order = Object.keys(sections).sort();
   for (const sid of order) {
     const list = sections[sid] || [];
     if (!list.length) continue;
     write(`SECTION – ${sid}`, 12, true);
-
     list.forEach((q, idx) => {
       write(`${idx + 1}. (${q.marks}) ${q.text}`, 10);
       if (q.type === "MCQ" && q.options?.length) {
@@ -512,22 +664,11 @@ async function renderPdf(i: z.infer<typeof Input>, sections: Record<string, GenQ
   return await pdf.save();
 }
 
-/* ======================================================================
-   CSV & DOCX EXPORTS
-====================================================================== */
+/* ==================== CSV & DOCX EXPORTS ==================== */
 function buildFlatRows(sections: Record<string, GenQuestion[]>) {
   const rows: Array<{
-    section: string;
-    index: number;
-    marks: number;
-    type: string;
-    difficulty: string;
-    text: string;
-    optionA?: string;
-    optionB?: string;
-    optionC?: string;
-    optionD?: string;
-    answer?: string;
+    section: string; index: number; marks: number; type: string; difficulty: string; cognitive?: string;
+    text: string; optionA?: string; optionB?: string; optionC?: string; optionD?: string; answer?: string;
   }> = [];
 
   const order = Object.keys(sections).sort();
@@ -536,16 +677,10 @@ function buildFlatRows(sections: Record<string, GenQuestion[]>) {
     list.forEach((q, idx) => {
       const opts = (q.options || []).slice(0, 4).map((o) => cleanOption(o));
       rows.push({
-        section: sid,
-        index: idx + 1,
-        marks: Number(q.marks) || 0,
-        type: q.type || "",
-        difficulty: q.difficulty || "",
+        section: sid, index: idx + 1, marks: Number(q.marks) || 0,
+        type: q.type || "", difficulty: q.difficulty || "", cognitive: q.cognitive,
         text: sanitizeText(q.text || ""),
-        optionA: opts[0],
-        optionB: opts[1],
-        optionC: opts[2],
-        optionD: opts[3],
+        optionA: opts[0], optionB: opts[1], optionC: opts[2], optionD: opts[3],
         answer: q.answer || "",
       });
     });
@@ -555,21 +690,13 @@ function buildFlatRows(sections: Record<string, GenQuestion[]>) {
 
 function createCsv(sections: Record<string, GenQuestion[]>) {
   const rows = buildFlatRows(sections);
-  const header = ["Section", "Index", "Marks", "Type", "Difficulty", "Text", "OptionA", "OptionB", "OptionC", "OptionD", "Answer"];
+  const header = ["Section", "Index", "Marks", "Type", "Difficulty", "Cognitive", "Text", "OptionA", "OptionB", "OptionC", "OptionD", "Answer"];
   const lines = [header.join(",")];
   for (const r of rows) {
     const vals = [
-      r.section,
-      String(r.index),
-      String(r.marks),
-      r.type,
-      r.difficulty,
-      r.text.replace(/"/g, '""'),
-      (r.optionA || "").replace(/"/g, '""'),
-      (r.optionB || "").replace(/"/g, '""'),
-      (r.optionC || "").replace(/"/g, '""'),
-      (r.optionD || "").replace(/"/g, '""'),
-      (r.answer || "").replace(/"/g, '""'),
+      r.section, String(r.index), String(r.marks), r.type, r.difficulty, r.cognitive || "",
+      r.text.replace(/"/g, '""'), (r.optionA || "").replace(/"/g, '""'), (r.optionB || "").replace(/"/g, '""'),
+      (r.optionC || "").replace(/"/g, '""'), (r.optionD || "").replace(/"/g, '""'), (r.answer || "").replace(/"/g, '""'),
     ];
     lines.push(vals.map((v) => `"${v}"`).join(","));
   }
@@ -577,19 +704,14 @@ function createCsv(sections: Record<string, GenQuestion[]>) {
 }
 
 async function createDocx(i: z.infer<typeof Input>, sections: Record<string, GenQuestion[]>) {
-  // Minimal WordprocessingML using JSZip
   const zip = new JSZip();
 
-  // [Content_Types].xml
-  zip.file(
-    "[Content_Types].xml",
-    `<?xml version="1.0" encoding="UTF-8"?>
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-</Types>`
-  );
+</Types>`);
 
   // _rels/.rels
   zip.folder("_rels")?.file(
@@ -686,81 +808,7 @@ async function createDocx(i: z.infer<typeof Input>, sections: Record<string, Gen
 }
 
 /* ======================================================================
-   LEGACY (fallback)
-====================================================================== */
-
-// legacy system prompt (unchanged) for batch generation
-function buildLegacyPrompt(i: z.infer<typeof Input>) {
-  const topics = i.topics.length ? i.topics.join(", ") : "teacher-specified topics";
-  const subs = i.subtopics.length ? i.subtopics.join(", ") : "relevant subtopics";
-  const diff = i.mode === "single" ? `Overall difficulty: ${i.difficulty}.` : `Distribute difficulty approximately: ${i.mix.easy}% Easy, ${i.mix.medium}% Medium, ${i.mix.hard}% Hard.`;
-  const pattern =
-    i.patternMode === "simple"
-      ? `Create exactly ${i.qCount} questions.\nEach question carries ${i.marksPerQuestion} marks.`
-      : i.patternMode === "blueprint"
-      ? `Follow this section blueprint strictly:\n${i.sections.map((s) => `- ${s.title}: ${s.questionType} × ${s.count} (${s.marksPerQuestion} marks each)`).join("\n")}`
-      : `Follow this type-wise marking matrix strictly:\n${i.markingMatrix.map((r) => `- ${r.questionType}: ${r.count} questions, ${r.marksPerQuestion} marks each`).join("\n")}`;
-
-  return `
-You are an experienced ${i.board} Class ${i.classNum} ${i.subject} paper setter.
-Language: ${i.language}. Style: ${i.solutionStyle}. Shuffle options: ${i.shuffleOptions}.
-Topics: ${topics}. Subtopics: ${subs}.
-${pattern}
-${diff}
-${i.notes ? `Teacher notes: ${i.notes}` : ""}
-
-Return STRICT JSON ONLY (no markdown) with:
-{
-  "questions": [
-    { "text": "string", "type": "MCQ|VSA|SA|LA|CASE", "marks": number,
-      "options": ["...", "...", "...", "..."]?,  // only for MCQ
-      "answer": "string"
-    }
-  ]
-}
-Ensure the counts and marks exactly match the pattern. No commentary.
-`.trim();
-}
-
-function normalizeLegacy(i: z.infer<typeof Input>, draft: any) {
-  const wantsMCQ = i.questionType === "Multiple Choice" || i.questionType === "Mixed";
-  return (draft.questions || []).map((q: any, idx: number) => ({
-    idx: idx + 1,
-    text: String(q.text ?? "").trim(),
-    type: String(q.type ?? ""),
-    marks: typeof q.marks === "number" ? q.marks : i.marksPerQuestion,
-    options: wantsMCQ ? (Array.isArray(q.options) ? q.options.slice(0, 4).map((o) => cleanOption(String(o))) : undefined) : undefined,
-    answer: String(q.answer ?? "").trim(),
-  }));
-}
-function scoreLegacy(i: z.infer<typeof Input>, qs: any[]) {
-  const kw = [i.subject, ...i.topics, ...i.subtopics].join(" ").toLowerCase().split(/\W+/).filter(Boolean);
-  const uniq = new Set<string>();
-  const dedup: any[] = [];
-  for (const q of qs) {
-    if ((i.questionType === "Multiple Choice" || i.questionType === "Mixed") && looksLikePlaceholderOptions(q.options)) {
-      continue;
-    }
-    const key = q.text.toLowerCase().replace(/\s+/g, " ").slice(0, 200);
-    if (uniq.has(key)) continue;
-    uniq.add(key);
-    dedup.push(q);
-  }
-  const scored = dedup.map((q) => {
-    let s = 0;
-    if (q.text.length > 20) s++;
-    if (kw.some((k) => q.text.toLowerCase().includes(k))) s++;
-    if (i.questionType !== "Multiple Choice") s++;
-    else if (q.options && q.options.length >= 3) s++;
-    if (q.answer) s++;
-    return { ...q, _score: s };
-  });
-  scored.sort((a, b) => b._score - a._score);
-  return scored;
-}
-
-/* ======================================================================
-   HANDLER
+   MAIN HANDLER
 ====================================================================== */
 Deno.serve(async (req) => {
   const CORS = corsHeadersFor(req);
@@ -803,11 +851,17 @@ Deno.serve(async (req) => {
     const refsText = await loadRefs(input.ref_files);
     const refsShort = refsText ? refsText.slice(0, 1200) : "";
 
-    // ---------- NEW SECTIONED MODE ----------
+    // ---------- ENHANCED BUCKET MODE ----------
     let sectionsOut: Record<string, GenQuestion[]> | null = null;
     let totalQuestions = 0;
 
-    if (input.sectionsJSON) {
+    if (input.buckets && input.buckets.length > 0) {
+      sectionsOut = await generateWithBuckets(input, rid, refsShort);
+      totalQuestions = Object.values(sectionsOut).flat().length;
+    }
+    
+    // ---------- NEW SECTIONED MODE ----------
+    if (!sectionsOut && input.sectionsJSON) {
       let parsed: unknown = [];
       try {
         parsed = JSON.parse(input.sectionsJSON);
@@ -927,7 +981,16 @@ Deno.serve(async (req) => {
           paper_url: pdfUrl,
           answer_key_url: null,
           ref_files: input.ref_files,
-          meta: { rid, total_questions: totalQuestions, mode: "sectioned", pdfPath, docxPath, csvPath },
+          meta: { 
+            rid, 
+            total_questions: totalQuestions, 
+            mode: input.buckets ? "enhanced_bucket" : "sectioned", 
+            pdfPath, 
+            docxPath, 
+            csvPath,
+            cognitiveLevels: input.cognitiveLevels,
+            ncertWeight: input.ncertWeight
+          },
         })
         .eq("id", input.requestId);
     } else {
@@ -949,7 +1012,13 @@ Deno.serve(async (req) => {
           question_type: input.questionType,
           q_count: totalQuestions,
           pdf_url: pdfUrl,
-          meta: { rid, mode: "sectioned", docxUrl, csvUrl },
+          meta: { 
+            rid, 
+            mode: input.buckets ? "enhanced_bucket" : "sectioned", 
+            docxUrl, 
+            csvUrl,
+            cognitiveLevels: input.cognitiveLevels 
+          },
         }),
       }).catch((e) => console.error("audit insert failed", e));
     }
@@ -962,7 +1031,12 @@ Deno.serve(async (req) => {
         pdfUrl,
         docxUrl,
         csvUrl,
-        meta: { mode: "sectioned", totalQuestions },
+        meta: { 
+          mode: input.buckets ? "enhanced_bucket" : "sectioned", 
+          totalQuestions,
+          cognitiveLevels: input.cognitiveLevels,
+          ncertWeight: input.ncertWeight
+        },
       },
       200,
       CORS,
