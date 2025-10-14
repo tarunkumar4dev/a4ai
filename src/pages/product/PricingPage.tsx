@@ -13,40 +13,6 @@ const hx = {
   fontWeight: 600,
 } as const;
 
-/* -------------------- Cluely-style glossy badge -------------------- */
-function LogoBadge() {
-  return (
-    <span
-      className="
-        relative inline-flex items-center justify-center
-        h-14 w-14 md:h-16 md:w-16
-        -rotate-6 hover:rotate-0 transition-transform duration-500
-        rounded-2xl
-        /* ← BLUE → GREY */
-        bg-[linear-gradient(180deg,#f3f5f8_0%,#e6e9ee_55%,#cfd6df_100%)]
-        ring-1 ring-white/70
-        shadow-[0_18px_44px_-10px_rgba(2,6,23,0.18),0_8px_18px_-6px_rgba(17,24,39,0.18)]
-      "
-      aria-hidden="true"
-    >
-      {/* soft inner bevel */}
-      <div className="pointer-events-none absolute inset-0 rounded-2xl shadow-[inset_0_2px_6px_rgba(255,255,255,0.7),inset_0_-10px_18px_rgba(0,0,0,0.10)]" />
-      {/* specular highlight */}
-      <div className="pointer-events-none absolute -top-1 -left-1 h-10 w-10 rounded-2xl bg-white/60 blur-md opacity-80" />
-      {/* bottom glow — neutral grey */}
-      <div className="pointer-events-none absolute -bottom-2 inset-x-2 h-4 rounded-b-2xl bg-slate-400/25 blur-md" />
-
-      <img
-  src="/images/LOGO.png"
-  alt="a4ai logo"
-  className="relative h-12 w-12 md:h-14 md:w-14 object-contain drop-shadow-[0_2px_3px_rgba(0,0,0,0.35)]"
-/>
-
-    </span>
-  );
-}
-
-
 export default function PricingPage() {
   const [audience, setAudience] = useState<AudienceKey>("individual");
   const [billingPeriod, setBillingPeriod] = useState<PeriodKey>("monthly");
@@ -194,11 +160,10 @@ export default function PricingPage() {
 
   const cards = plans[audience];
 
-  // ----- Buttons -----
-  // Make both CTAs share the same blue gradient (matches your “Talk to sales” button)
+  // Use the same soothing blue gradient for CTAs (also reads well in dark mode)
   const blueBtn =
     "bg-[linear-gradient(180deg,#93c5fd,#3b82f6_85%)] text-white border border-blue-300 shadow-[0_8px_20px_rgba(59,130,246,0.25)] hover:brightness-[1.06] active:brightness-[1.03] transition";
-  const darkBtn = blueBtn; // <- changed: non-enterprise now also uses the blue gradient
+  const darkBtn = blueBtn; // non-enterprise buttons also use the blue style
 
   return (
     <div
@@ -215,41 +180,62 @@ export default function PricingPage() {
       <div className="relative mx-auto max-w-6xl px-4 pt-12 pb-16">
         {/* Header */}
         <div className="mx-auto max-w-2xl text-center">
-          <h1
-            className="text-3xl md:text-4xl tracking-tight"
-            style={hx}
-          >
-            <span className="bg-clip-text text-transparent bg-[linear-gradient(90deg,#0f172a_0%,#334155_50%,#0f172a_100%)] bg-[length:200%_100%] animate-[bg-pan_12s_linear_infinite]">
+          <h1 className="text-3xl md:text-4xl tracking-tight" style={hx}>
+            <span className="bg-clip-text text-transparent bg-[linear-gradient(90deg,#0f172a_0%,#334155_50%,#0f172a_100%)] bg-[length:200%_100%] animate-[bg-pan_12s_linear_infinite] dark:bg-[linear-gradient(90deg,#ffffff_0%,#e5e7eb_50%,#ffffff_100%)]">
               Flexible Plans for Every Educator
             </span>
           </h1>
-          <p className="mt-2 text-[15px] text-slate-600">
+          <p className="mt-2 text-[15px] text-slate-600 dark:text-slate-300">
             Choose the perfect plan for your teaching needs. All plans include a 14-day free trial.
           </p>
 
-          {/* Audience toggle */}
-          <div className="mt-6 inline-flex rounded-2xl border border-slate-200 bg-white/80 backdrop-blur px-1 py-1 shadow-sm">
+          {/* Audience toggle — clearer selection in dark mode */}
+          <div
+            className="
+              mt-6 inline-flex items-center gap-1 rounded-2xl border px-1 py-1 shadow-sm backdrop-blur
+              bg-white/80 border-slate-200
+              dark:bg-slate-300/35 dark:border-white/15
+            "
+            role="tablist"
+            aria-label="Audience"
+          >
             {[
               { id: "individual", label: "Teachers", icon: <Users size={16} /> },
               { id: "institute", label: "Institutes", icon: <Building size={16} /> },
               { id: "school", label: "Schools", icon: <School size={16} /> },
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setAudience(t.id as AudienceKey)}
-                className={`mx-0.5 flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm transition
-                ${audience === t.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-700 hover:bg-slate-50"}`}
-                style={hx}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
+            ].map((t) => {
+              const active = audience === (t.id as AudienceKey);
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setAudience(t.id as AudienceKey)}
+                  role="tab"
+                  aria-selected={active}
+                  className={
+                    "mx-0.5 flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm transition " +
+                    (active
+                      ? "bg-slate-900 text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
+                      : "text-slate-700 hover:bg-white/70 ring-1 ring-transparent dark:text-slate-800 dark:hover:bg-slate-300/70")
+                  }
+                  style={hx}
+                >
+                  {t.icon}
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Billing toggle — already centered by flex wrapper below */}
+          {/* Billing toggle */}
           <div className="mt-4 flex items-center justify-center gap-3">
-            <span className={`text-sm ${billingPeriod === "monthly" ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"}`} style={hx}>
+            <span
+              className={`text-sm ${
+                billingPeriod === "monthly"
+                  ? "text-slate-900 dark:text-white"
+                  : "text-slate-500 dark:text-slate-400"
+              }`}
+              style={hx}
+            >
               Monthly
             </span>
 
@@ -258,7 +244,9 @@ export default function PricingPage() {
               role="switch"
               aria-checked={billingPeriod === "yearly"}
               aria-label="Toggle billing period"
-              onClick={() => setBillingPeriod(billingPeriod === "monthly" ? "yearly" : "monthly")}
+              onClick={() =>
+                setBillingPeriod(billingPeriod === "monthly" ? "yearly" : "monthly")
+              }
               className="
                 relative h-6 w-12 rounded-full
                 bg-[linear-gradient(90deg,#93c5fd,#3b82f6)]
@@ -267,12 +255,20 @@ export default function PricingPage() {
               "
             >
               <span
-                className={`absolute top-[4px] left-[4px] h-4 w-4 rounded-full bg-white shadow
-                transition-transform duration-300 ${billingPeriod === "yearly" ? "translate-x-[24px]" : ""}`}
+                className={`absolute top-[4px] left-[4px] h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${
+                  billingPeriod === "yearly" ? "translate-x-[24px]" : ""
+                }`}
               />
             </button>
 
-            <span className={`text-sm ${billingPeriod === "yearly" ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"}`} style={hx}>
+            <span
+              className={`text-sm ${
+                billingPeriod === "yearly"
+                  ? "text-slate-900 dark:text-white"
+                  : "text-slate-500 dark:text-slate-400"
+              }`}
+              style={hx}
+            >
               Yearly
             </span>
             <span className="ml-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-emerald-400/15 dark:text-emerald-300">
@@ -297,7 +293,10 @@ export default function PricingPage() {
                 dark:bg-white/[0.06] dark:ring-white/10`}
               >
                 {plan.popular && (
-                  <div className="absolute -top-3 right-4 rounded-full bg-blue-600/90 px-3 py-1 text-xs text-white shadow" style={hx}>
+                  <div
+                    className="absolute -top-3 right-4 rounded-full bg-blue-600/90 px-3 py-1 text-xs text-white shadow"
+                    style={hx}
+                  >
                     Popular
                   </div>
                 )}
@@ -344,7 +343,9 @@ export default function PricingPage() {
                 {/* soft card glow */}
                 <div className="pointer-events-none absolute inset-x-0 -bottom-5 h-5 rounded-b-[22px] bg-black/5 blur-xl dark:bg-white/5" />
                 {/* frosted rim for enterprise */}
-                {isEnterprise && <div className="pointer-events-none absolute inset-0 rounded-[22px] ring-1 ring-white/70 dark:ring-white/20" />}
+                {isEnterprise && (
+                  <div className="pointer-events-none absolute inset-0 rounded-[22px] ring-1 ring-white/70 dark:ring-white/20" />
+                )}
               </div>
             );
           })}
@@ -362,7 +363,10 @@ export default function PricingPage() {
               { q: "What payment methods do you accept?", a: "All major cards, UPI, Net Banking, and bank transfers." },
               { q: "Do you offer educational discounts?", a: "Yes, for non-profits and educational institutions." },
             ].map((f, i) => (
-              <div key={i} className="rounded-xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200 dark:bg-white/[0.06] dark:ring-white/10">
+              <div
+                key={i}
+                className="rounded-xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200 dark:bg-white/[0.06] dark:ring-white/10"
+              >
                 <div className="text-slate-900 dark:text-white" style={hx}>
                   {f.q}
                 </div>
