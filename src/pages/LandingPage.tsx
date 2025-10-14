@@ -4,19 +4,22 @@ import LandingDemo from "@/components/LandingDemo";
 import LandingFeatures from "@/components/LandingFeatures";
 import FAQ from "@/components/FAQ";
 import Footer from "@/components/Footer"; 
-
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Sparkles, MessageSquare, Download, Settings } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 
-/* -------------------- Animation presets (consistent) -------------------- */
+/* -------------------- Animation presets -------------------- */
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 };
-const container = { hidden: {}, show: { transition: { staggerChildren: 0.12 } } };
+
+const container = { 
+  hidden: {}, 
+  show: { transition: { staggerChildren: 0.12 } } 
+};
 
 export default function LandingPage() {
   const { session } = useAuth();
@@ -30,221 +33,30 @@ export default function LandingPage() {
         {/* HERO */}
         <LandingHero />
 
-        {/* DEMO — video in the 3D/glass card (files live in /public) */}
+        {/* DEMO */}
         <LandingDemo
-          videoSrcMp4="/demo.mp4"      // public/demo.mp4
-          poster="/demo-poster.png"     // public/demo-poster.png
+          videoSrcMp4="/demo.mp4"
+          poster="/demo-poster.png"
           showHud
-          // showControls
         />
 
         {/* FEATURES */}
         <LandingFeatures />
 
-        {/* FAQ */}
-        <FAQ />
+        {/* HOW IT WORKS - Simplified */}
+        <HowItWorks />
 
-        {/* How It Works */}
-        <motion.section
-          className="bg-gradient-to-b from-[#F2F5FA] to-white py-20 dark:from-gray-900 dark:to-gray-950"
-          variants={container}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.2 }}
-        >
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <motion.div className="mb-16 text-center" variants={fadeUp}>
-              {/* Always-visible headline (separate light/dark gradients) */}
-              <h2 className="mb-4 text-4xl font-extrabold tracking-tight">
-                <span className="inline dark:hidden bg-clip-text text-transparent bg-[linear-gradient(90deg,#353D47_0%,#6E7C8E_50%,#353D47_100%)]">
-                  How It Works
-                </span>
-                <span className="hidden dark:inline bg-clip-text text-transparent bg-[linear-gradient(90deg,#ffffff_0%,#e5e7eb_50%,#ffffff_100%)]">
-                  How It Works
-                </span>
-              </h2>
-
-              <p className="mx-auto max-w-3xl text-xl text-gray-600 dark:text-gray-300">
-                Our AI-powered system creates high-quality test papers in just a few simple steps.
-              </p>
-            </motion.div>
-
-            <motion.div className="grid grid-cols-1 gap-10 md:grid-cols-3" variants={container}>
-              {[
-                {
-                  title: "Choose Your Specifications",
-                  desc: "Select subject, difficulty, question type, and other parameters for your test.",
-                  icon: (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  ),
-                },
-                {
-                  title: "AI Models Generate Content",
-                  desc: "Multiple AI models create questions and answers based on your specifications.",
-                  icon: (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                  ),
-                },
-                {
-                  title: "Download Your Test Paper",
-                  desc: "Get your professionally formatted test paper ready for distribution.",
-                  icon: (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-6 w-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                  ),
-                },
-              ].map((item, i) => (
-                <motion.div
-                  key={i}
-                  className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-xl dark:border-white/10 dark:bg-white/[0.05]"
-                  variants={fadeUp}
-                >
-                  {/* decorative surface */}
-                  <div
-                    className="pointer-events-none absolute inset-0 rounded-2xl"
-                    style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.0), rgba(2,6,23,0.04))" }}
-                  />
-                  <div
-                    className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl text-white"
-                    style={{
-                      background:
-                        "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
-                    }}
-                  >
-                    {item.icon}
-                  </div>
-                  <h3 className="relative z-[1] mb-3 text-xl font-bold text-gray-900 dark:text-white">
-                    {item.title}
-                  </h3>
-                  <p className="relative z-[1] text-gray-600 dark:text-gray-300">{item.desc}</p>
-                </motion.div>
-              ))}
-            </motion.div>
-
-            <UpgradedCTA />
-          </div>
-        </motion.section>
-
-        {/* Trust / Security / Logos */}
+        {/* TRUST & SECURITY */}
         <TrustSecurity />
 
-        {/* Outcomes & Stats */}
+        {/* OUTCOMES & STATS */}
         <Outcomes />
 
-        {/* Testimonials */}
-        <motion.section
-          className="bg-gradient-to-b from-[#F2F5FA] to-white py-20 dark:from-gray-900 dark:to-gray-950"
-          variants={container}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.2 }}
-        >
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <motion.div className="mb-16 text-center" variants={fadeUp}>
-              <h2 className="mb-4 text-4xl font-extrabold text-gray-900 dark:text-white">What Educators Say</h2>
-              <p className="mx-auto max-w-3xl text-xl text-gray-600 dark:text-gray-300">
-                Thousands of teachers trust a4ai to save time and improve student outcomes.
-              </p>
-            </motion.div>
+        {/* TESTIMONIALS */}
+        <Testimonials />
 
-            <motion.div className="grid grid-cols-1 gap-10 md:grid-cols-3" variants={container}>
-              {[
-                {
-                  quote:
-                    "a4ai has saved me hours every week. The quality of the generated tests is impressive, and my students find them engaging.",
-                  name: "Rahul Verma",
-                  title: "Director, Education Beast",
-                },
-                {
-                  quote:
-                    "The variety of question types and difficulty levels makes this perfect for creating differentiated assessments for my diverse classroom.",
-                  name: "Abhay Gupta",
-                  title: "Director, Chanakya Institute",
-                },
-                {
-                  quote:
-                    "I was skeptical about AI-generated content, but a4ai surprised me with its accuracy and curriculum-aligned questions.",
-                  name: "Aman Singh",
-                  title: "Chemistry Teacher (10+ Years Exp)",
-                },
-              ].map((t, i) => (
-                <motion.div
-                  key={i}
-                  className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-8 shadow-lg transition-all duration-300 hover:shadow-xl dark:border-white/10 dark:bg-white/[0.05]"
-                  variants={fadeUp}
-                >
-                  <div className="mb-6 flex items-center">
-                    <div
-                      className="mr-4 flex h-12 w-12 items-center justify-center rounded-full font-bold text-white"
-                      style={{
-                        background:
-                          "linear-gradient(90deg, #5D6B7B 0%, #AFBAC7 100%)",
-                      }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-6 w-6"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                        />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-900 dark:text-white">{t.name}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{t.title}</p>
-                    </div>
-                  </div>
-                  <p className="relative z-[1] italic text-gray-600 dark:text-gray-300">"{t.quote}"</p>
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-        </motion.section>
-
-        {/* FINAL CTA — BOXED */}
-        <motion.section
-          className="py-20"
-          style={{
-            background: "linear-gradient(135deg, #DFE4EF 0%, #F6F9FF 100%)",
-          }}
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          transition={{ duration: 0.8, ease: EASE }}
-          viewport={{ once: true }}
-        >
-          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            <h2 className="mb-6 text-4xl font-extrabold tracking-tight text-[#353D47] md:text-5xl">
-              Ready to Transform Your Assessment Process?
-            </h2>
-            <p className="mx-auto mb-10 max-w-3xl text-xl text-[#4E5A66]">
-              Join thousands of educators who are saving time and improving student outcomes with a4ai.
-            </p>
-            <Link to="/signup">
-              <Button
-                size="lg"
-                className="rounded-xl px-10 py-6 text-lg font-semibold shadow-sm transition"
-                style={{ background: "#5D6B7B", color: "#fff" }}
-              >
-                Get Started For Free
-              </Button>
-            </Link>
-          </div>
-        </motion.section>
+        {/* FINAL CTA */}
+        <FinalCTA />
       </main>
 
       <Footer />
@@ -253,80 +65,126 @@ export default function LandingPage() {
 }
 
 /* =========================
-   Upgraded CTA  (the one in your screenshot)
+   How It Works - Optimized
+   ========================= */
+function HowItWorks() {
+  const steps = [
+    {
+      title: "Choose Specifications",
+      desc: "Select subject, difficulty, question type, and other parameters.",
+      icon: <Settings className="h-6 w-6" />,
+    },
+    {
+      title: "AI Generates Content",
+      desc: "Multiple AI models create questions and answers instantly.",
+      icon: <MessageSquare className="h-6 w-6" />,
+    },
+    {
+      title: "Download Test Paper",
+      desc: "Get professionally formatted PDF/DOCX ready for distribution.",
+      icon: <Download className="h-6 w-6" />,
+    },
+  ];
+
+  return (
+    <motion.section
+      className="bg-gradient-to-b from-[#F2F5FA] to-white py-16 dark:from-gray-900 dark:to-gray-950"
+      variants={container}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, amount: 0.2 }}
+    >
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <motion.div className="mb-12 text-center" variants={fadeUp}>
+          <h2 className="mb-4 text-3xl font-bold text-gray-900 dark:text-white md:text-4xl">
+            How It Works
+          </h2>
+          <p className="mx-auto max-w-2xl text-lg text-gray-600 dark:text-gray-300">
+            Create high-quality test papers in three simple steps
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+          {steps.map((step, index) => (
+            <motion.div
+              key={step.title}
+              variants={fadeUp}
+              className="relative text-center"
+            >
+              {/* Step Number */}
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300">
+                <span className="text-lg font-bold">{index + 1}</span>
+              </div>
+              
+              {/* Content */}
+              <div className="rounded-lg bg-white p-6 shadow-lg dark:bg-gray-800">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                  {step.icon}
+                </div>
+                <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+                  {step.title}
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300">
+                  {step.desc}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        <UpgradedCTA />
+      </div>
+    </motion.section>
+  );
+}
+
+/* =========================
+   Upgraded CTA - Optimized
    ========================= */
 function UpgradedCTA() {
   const { session } = useAuth();
   const loggedIn = !!session;
 
-  const primaryHref = loggedIn ? "/dashboard/test-generator" : "/signup";
-  const secondaryHref = "/demo";
-
   return (
-    <motion.div variants={fadeUp} className="mx-auto mt-16 max-w-5xl">
-      <div
-        className="relative overflow-hidden rounded-2xl border bg-white p-8 shadow-xl backdrop-blur dark:bg-white/5"
-        style={{ borderColor: "var(--stroke, #E4E9F0)" }}
-      >
-        {/* decorative frame (neutral grey-blue) */}
-        <div
-          className="pointer-events-none absolute inset-0 z-0 rounded-2xl"
-          style={{
-            background:
-              "linear-gradient(white,white) padding-box, linear-gradient(90deg, var(--chip-accent-1), var(--chip-accent-2)) border-box",
-            border: "1px solid transparent",
-            borderRadius: "1rem",
-          }}
-        />
-
-        {/* content */}
-        <div className="relative z-10 text-center text-gray-900 dark:text-gray-100">
-          <div
-            className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur"
-            style={{
-              borderColor: "var(--ring-muted)",
-              background: "var(--chip-bg)",
-              color: "var(--chip-text)",
-            }}
-          >
-            <Sparkles className="h-4 w-4" style={{ color: "var(--chip-accent-1)" }} />
+    <motion.div variants={fadeUp} className="mx-auto mt-16 max-w-4xl">
+      <div className="rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 p-8 text-white shadow-xl">
+        <div className="text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm">
+            <Sparkles className="h-4 w-4" />
             No credit card required
           </div>
 
-          <h3 className="text-2xl font-bold">Create Your First Test in Minutes</h3>
-          <p className="mx-auto mt-2 max-w-2xl text-gray-600 dark:text-gray-300">
-            Start with a topic or paste your syllabus. We’ll generate a fully formatted paper with answer key and rubric checks.
+          <h3 className="mb-4 text-2xl font-bold">
+            Create Your First Test in Minutes
+          </h3>
+          <p className="mb-6 text-blue-100">
+            Start with a topic or paste your syllabus. We'll generate a fully formatted paper with answer key.
           </p>
 
-          <div className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
-            {["Curriculum-aligned", "Multiple question types", "Instant answer key"].map((b) => (
-              <div key={b} className="flex items-center justify-center gap-2 text-sm">
-                <Check className="h-4 w-4" style={{ color: "var(--chip-accent-1)" }} />
-                {b}
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {["Curriculum-aligned", "Multiple question types", "Instant answer key"].map((feature) => (
+              <div key={feature} className="flex items-center justify-center gap-2 text-sm">
+                <Check className="h-4 w-4" />
+                {feature}
               </div>
             ))}
           </div>
 
-          {/* Buttons row */}
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to="/dashboard/test-generator">
+          <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
+            <Link to={loggedIn ? "/dashboard/test-generator" : "/signup"}>
               <Button
-                className="group rounded-xl px-7 py-6 text-base font-semibold text-white"
-                style={{ background: "#5D6B7B" }}
+                className="bg-white text-blue-600 hover:bg-gray-100"
+                size="lg"
               >
                 Create Your First Test
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
             <Link to="/demo">
               <Button
                 variant="outline"
-                className="rounded-xl px-7 py-6 text-base font-semibold"
-                style={{
-                  borderColor: "var(--ring-muted)",
-                  color: "var(--ink-800)",
-                  background: "var(--chip-bg)",
-                }}
+                className="border-white text-white hover:bg-blue-500"
+                size="lg"
               >
                 Watch Demo
               </Button>
@@ -339,204 +197,212 @@ function UpgradedCTA() {
 }
 
 /* =========================
-   Trust, Security & Logos
+   Trust & Security - Optimized
    ========================= */
 function TrustSecurity() {
-  return (
-    <motion.section
-      className="relative overflow-hidden bg-white py-20 dark:bg-gray-950"
-      variants={container}
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.2 }}
-    >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div variants={fadeUp} className="mb-12">
-          <LogosMarquee />
-        </motion.div>
-
-        <motion.div variants={fadeUp} className="mb-14 text-center">
-          {/* Always-visible headline */}
-          <h2 className="mb-4 text-4xl font-extrabold tracking-tight">
-            <span className="inline dark:hidden bg-clip-text text-transparent bg-[linear-gradient(90deg,#353D47_0%,#6E7C8E_50%,#353D47_100%)]">
-              Private by Design. Built for Schools.
-            </span>
-            <span className="hidden dark:inline bg-clip-text text-transparent bg-[linear-gradient(90deg,#ffffff_0%,#e5e7eb_50%,#ffffff_100%)]">
-              Private by Design. Built for Schools.
-            </span>
-          </h2>
-
-          <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
-            We keep teacher and student data safe with sensible defaults and clear controls.
-          </p>
-        </motion.div>
-
-        <motion.div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4" variants={container}>
-          {[
-            { title: "Encryption", desc: "Data encrypted in transit and at rest with modern standards.", icon: "🔒" },
-            { title: "Privacy-First", desc: "No ads, no selling data. You control retention and export.", icon: "🛡️" },
-            { title: "Reliability", desc: "Monitored uptime and graceful fallbacks during peak load.", icon: "⚡" },
-            { title: "Controls", desc: "Role-based access, per-class sharing, and one-click export.", icon: "⚙️" },
-          ].map((c, i) => (
-            <motion.div
-              key={`${c.title}-${i}`}
-              variants={fadeUp}
-              transition={{ delay: 0.05 * i, ease: EASE }}
-              className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl dark:border-white/10 dark:bg-white/[0.05]"
-            >
-              <div className="pointer-events-none absolute inset-0 rounded-2xl"
-                   style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.0), rgba(2,6,23,0.04))" }} />
-              <div className="relative z-[1] mb-4 flex h-12 w-12 items-center justify-center rounded-xl text-2xl"
-                   style={{ background: "linear-gradient(135deg, var(--chip-bg-2), var(--chip-bg-3))" }}>
-                {c.icon}
-              </div>
-              <h3 className="relative z-[1] text-lg font-semibold text-gray-900 dark:text-white">{c.title}</h3>
-              <p className="relative z-[1] mt-2 text-sm text-gray-600 dark:text-gray-300">{c.desc}</p>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    </motion.section>
-  );
-}
-
-/* =========================
-   Logos Marquee
-   ========================= */
-function LogosMarquee() {
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-gray-100 bg-white py-6 dark:border-white/10 dark:bg-white/[0.05]">
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-white dark:from-gray-900 to-transparent" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-white dark:from-gray-900 to-transparent" />
-      <motion.div
-        initial={{ x: 0 }}
-        animate={{ x: ["0%", "-50%"] }}
-        transition={{ duration: 26, repeat: Infinity, ease: "linear" }}
-        className="flex items-center gap-10 whitespace-nowrap px-6"
-      >
-        {Array.from({ length: 2 }).flatMap(() => [
-          "CHANAKYA INSTITUTE OF EDUCATION",
-          "EDUCATION BEAST",
-          "DEEP COACHING CENTRE",
-          "DEEP JYOTI COACHING CENTRE",
-          "ANUPMA INSTITUTE",
-          "DELTA INSTITUTES",
-        ]).map((name, idx) => (
-          <div
-            key={`${name}-${idx}`}
-            className="inline-flex h-10 items-center rounded-md border border-gray-200 px-4 text-xs font-semibold tracking-wider text-gray-600 dark:border-white/10 dark:text-gray-300"
-          >
-            {name}
-          </div>
-        ))}
-      </motion.div>
-    </div>
-  );
-}
-
-/* =========================
-   Outcomes & Stats
-   ========================= */
-function Outcomes() {
-  const { session } = useAuth();
-  const loggedIn = !!session;
-
-  const stats = [
-    { k: "Shaping Tomorrow's Classrooms" },
-    { k: "12+", v: "Question formats", sub: "MCQ, SA, LA, Cloze, Match…" },
-    { k: "PDF & Word", v: "Export anywhere", sub: "print or share in your LMS" },
+  const features = [
+    { 
+      title: "Encryption", 
+      desc: "Data encrypted in transit and at rest with modern standards.", 
+      icon: "🔒" 
+    },
+    { 
+      title: "Privacy-First", 
+      desc: "No ads, no selling data. You control retention and export.", 
+      icon: "🛡️" 
+    },
+    { 
+      title: "Reliability", 
+      desc: "Monitored uptime and graceful fallbacks during peak load.", 
+      icon: "⚡" 
+    },
+    { 
+      title: "Controls", 
+      desc: "Role-based access, per-class sharing, and one-click export.", 
+      icon: "⚙️" 
+    },
   ];
 
-  const subtleHref = loggedIn ? "/dashboard" : "/signup";
-
   return (
-    <motion.section
-      className="bg-gradient-to-b from-[#F2F5FA] to-white py-20 dark:from-gray-900 dark:to-gray-950"
-      variants={container}
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.2 }}
-    >
+    <section className="bg-white py-16 dark:bg-gray-900">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div className="mb-12 text-center" variants={fadeUp}>
-          <h2 className="mb-3 text-4xl font-extrabold text-gray-900 dark:text-white">
-            Outcomes that matter
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white md:text-4xl">
+            Trusted by Educators
           </h2>
-          <p className="mx-auto max-w-3xl text-lg text-gray-600 dark:text-gray-300">
-            Less busywork. More teaching time. Better insights for every class.
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600 dark:text-gray-300">
+            Secure, reliable, and built specifically for educational institutions
           </p>
-        </motion.div>
+        </div>
 
-        <motion.div className="grid grid-cols-1 gap-6 sm:grid-cols-3" variants={container}>
-          {stats.map((s, i) => (
+        <div className="mt-12 grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+          {features.map((feature, index) => (
             <motion.div
-              key={`${s.k}-${i}`}
+              key={feature.title}
               variants={fadeUp}
-              transition={{ delay: 0.05 * i, ease: EASE }}
-              className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-lg dark:border-white/10 dark:bg-white/[0.05]"
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true }}
+              transition={{ delay: index * 0.1 }}
+              className="rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800"
             >
-              <div
-                className="pointer-events-none absolute inset-0 rounded-2xl"
-                style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.0), rgba(2,6,23,0.04))" }}
-              />
-              {/* HEADLINE — bright enough in dark mode */}
-              <div className="relative z-[1] text-4xl font-extrabold tracking-tight">
-                <span className="
-                  bg-clip-text text-transparent
-                  bg-[linear-gradient(90deg,#353D47_0%,#6E7C8E_50%,#AFBAC7_100%)]
-                  dark:bg-[linear-gradient(90deg,#ffffff_0%,#e5e7eb_50%,#ffffff_100%)]
-                ">
-                  {s.k}
-                </span>
-              </div>
-              {s.v && (
-                <div className="mt-1 text-base font-semibold text-gray-900 dark:text-white">
-                  {s.v}
-                </div>
-              )}
-              {s.sub && (
-                <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">{s.sub}</div>
-              )}
+              <div className="text-2xl">{feature.icon}</div>
+              <h3 className="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
+                {feature.title}
+              </h3>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                {feature.desc}
+              </p>
             </motion.div>
           ))}
-        </motion.div>
-
-        {/* subtle CTA */}
-        <motion.div
-          variants={fadeUp}
-          className="mx-auto mt-12 max-w-3xl rounded-2xl border bg-white/70 p-6 text-center shadow-lg backdrop-blur dark:bg-white/[0.06]"
-          style={{ borderColor: "var(--stroke, #E4E9F0)" }}
-        >
-          <div
-            className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur"
-            style={{
-              borderColor: "var(--ring-muted)",
-              background: "var(--chip-bg)",
-              color: "var(--chip-text)",
-            }}
-          >
-            <Sparkles className="h-4 w-4" style={{ color: "var(--chip-accent-1)" }} />
-            Start free — no credit card
-          </div>
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-            See how much time you’ll save this week.
-          </h3>
-          <p className="mt-1 text-gray-600 dark:text-gray-300">
-            Generate your first paper and share it with your class in minutes.
-          </p>
-          <div className="mt-5">
-            <Link to="/signup">
-              <Button
-                className="rounded-xl px-7 py-6 text-base font-semibold text-white"
-                style={{ background: "#5D6B7B" }}
-              >
-                Get Started Free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </motion.div>
+        </div>
       </div>
-    </motion.section>
+    </section>
+  );
+}
+
+/* =========================
+   Outcomes & Stats - Optimized
+   ========================= */
+function Outcomes() {
+  const stats = [
+    { value: "12+", label: "Question Formats", description: "MCQ, SA, LA, Cloze, Match…" },
+    { value: "PDF & Word", label: "Export Options", description: "Print or share in your LMS" },
+    { value: "Instant", label: "Generation", description: "Get tests in seconds" },
+  ];
+
+  return (
+    <section className="bg-gray-50 py-16 dark:bg-gray-800">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white md:text-4xl">
+            Outcomes That Matter
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600 dark:text-gray-300">
+            Less busywork. More teaching time. Better insights for every class.
+          </p>
+        </div>
+
+        <div className="mt-12 grid grid-cols-1 gap-8 sm:grid-cols-3">
+          {stats.map((stat, index) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              viewport={{ once: true }}
+              className="text-center"
+            >
+              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                {stat.value}
+              </div>
+              <h3 className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">
+                {stat.label}
+              </h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                {stat.description}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =========================
+   Testimonials - Optimized
+   ========================= */
+function Testimonials() {
+  const testimonials = [
+    {
+      quote: "a4ai has saved me hours every week. The quality of generated tests is impressive and engaging for students.",
+      name: "Rahul Verma",
+      role: "Director, Education Beast",
+    },
+    {
+      quote: "Perfect for creating differentiated assessments for my diverse classroom. The variety of question types is excellent.",
+      name: "Abhay Gupta",
+      role: "Director, Chanakya Institute",
+    },
+    {
+      quote: "Surprised by the accuracy and curriculum-aligned questions. The AI-generated content is remarkably good.",
+      name: "Aman Singh",
+      role: "Chemistry Teacher (10+ Years Exp)",
+    },
+  ];
+
+  return (
+    <section className="bg-white py-16 dark:bg-gray-900">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white md:text-4xl">
+            What Educators Say
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600 dark:text-gray-300">
+            Thousands of teachers trust a4ai to save time and improve student outcomes.
+          </p>
+        </div>
+
+        <div className="mt-12 grid grid-cols-1 gap-8 md:grid-cols-3">
+          {testimonials.map((testimonial, index) => (
+            <motion.div
+              key={testimonial.name}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              viewport={{ once: true }}
+              className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800"
+            >
+              <div className="mb-4 flex items-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300">
+                  <MessageSquare className="h-6 w-6" />
+                </div>
+                <div className="ml-4">
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    {testimonial.name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    {testimonial.role}
+                  </p>
+                </div>
+              </div>
+              <p className="text-gray-600 dark:text-gray-300">
+                "{testimonial.quote}"
+              </p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =========================
+   Final CTA - Optimized
+   ========================= */
+function FinalCTA() {
+  return (
+    <section className="bg-gradient-to-r from-blue-600 to-blue-700 py-16">
+      <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-bold text-white md:text-4xl">
+          Ready to Transform Your Assessment Process?
+        </h2>
+        <p className="mx-auto mt-4 max-w-2xl text-lg text-blue-100">
+          Join thousands of educators saving time and improving outcomes with a4ai.
+        </p>
+        <div className="mt-8">
+          <Link to="/signup">
+            <Button
+              size="lg"
+              className="bg-white text-blue-600 hover:bg-gray-100"
+            >
+              Get Started For Free
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </section>
   );
 }
