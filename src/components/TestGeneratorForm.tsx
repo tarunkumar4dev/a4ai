@@ -1,11 +1,23 @@
-// src/components/TestGeneratorForm.tsx - ENHANCED VERSION
+// src/components/TestGeneratorForm.tsx - COMPLETELY FIXED
 import React, { useMemo } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-/* ===================== Enhanced Types & Schema ===================== */
+/* ===================== NAN PROTECTION UTILITIES ===================== */
+const safeNumber = (value: any, defaultValue: number = 0): number => {
+  if (value === null || value === undefined || value === "" || isNaN(value)) {
+    return defaultValue;
+  }
+  const num = Number(value);
+  return isNaN(num) ? defaultValue : num;
+};
 
+const safeInt = (value: any, defaultValue: number = 0): number => {
+  return Math.floor(safeNumber(value, defaultValue));
+};
+
+/* ===================== ENHANCED SCHEMA WITH NAN PROTECTION ===================== */
 const CognitiveLevelSchema = z.enum(["recall", "understand", "apply", "analyze"]);
 const QuestionTypeSchema = z.enum(["mcq", "short", "long", "numerical", "case_based"]);
 const DifficultyLevelSchema = z.enum(["easy", "medium", "hard"]);
@@ -17,33 +29,36 @@ const QuestionBucketSchema = z.object({
   cognitive: CognitiveLevelSchema,
   count: z.number().int().min(1).max(50),
   marks: z.number().min(0),
-  chapters: z.array(z.string()).min(1),
+  chapters: z.array(z.string()).min(1, "Select at least one chapter for this bucket"),
   topics: z.array(z.string()).default([]),
   negativeMarking: z.number().min(0).default(0),
   requireUnits: z.boolean().default(false),
 });
 
 const SectionSchema = z.object({
-  title: z.string().min(1, "Required"),
+  title: z.string().min(1, "Section title is required"),
   questionType: z.enum(["Multiple Choice", "Very Short Answer", "Short Answer", "Long Answer", "Case-based"]),
-  count: z.number().int().min(1, ">= 1"),
-  marksPerQuestion: z.number().min(0, ">= 0"),
+  count: z.number().int().min(1, "Question count must be at least 1"),
+  marksPerQuestion: z.number().min(0, "Marks per question must be 0 or more"),
 });
 
 const MatrixRowSchema = z.object({
   questionType: z.enum(["Multiple Choice", "Very Short Answer", "Short Answer", "Long Answer", "Case-based"]),
-  marksPerQuestion: z.number().min(0),
-  count: z.number().int().min(0),
+  marksPerQuestion: z.number().min(0, "Marks per question must be 0 or more"),
+  count: z.number().int().min(0, "Question count cannot be negative"),
 });
 
 const FormSchema = z.object({
-  // Basic Information
-  board: z.enum(["CBSE", "ICSE", "State"], { required_error: "Select board" }),
-  classNum: z.number().int().min(1).max(12),
-  subject: z.string().min(1, "Enter subject"),
+  // Basic Information - FIXED WITH DEFAULTS
+  board: z.enum(["CBSE", "ICSE", "State"]).default("CBSE"),
+  classNum: z.coerce.number()
+    .min(1, "Class must be at least 1")
+    .max(12, "Class must be at most 12")
+    .default(10),
+  subject: z.string().min(1, "Enter subject").default("Science"),
 
   // Enhanced Content Specification
-  chapters: z.array(z.string()).min(1, "Select at least one chapter"),
+  chapters: z.array(z.string()).min(1, "Select at least one chapter").default(["Electricity"]),
   topics: z.array(z.string()).default([]),
   subtopics: z.array(z.string()).default([]),
 
@@ -51,7 +66,7 @@ const FormSchema = z.object({
   generationMode: z.enum(["simple", "blueprint", "matrix", "buckets"]).default("simple"),
   
   // Cognitive Levels
-  cognitiveLevels: z.array(CognitiveLevelSchema).min(1, "Select at least one cognitive level"),
+  cognitiveLevels: z.array(CognitiveLevelSchema).min(1, "Select at least one cognitive level").default(["understand"]),
   
   // NCERT Alignment
   ncertWeight: z.number().min(0).max(1).default(0.6),
@@ -70,9 +85,13 @@ const FormSchema = z.object({
     hard: z.number().min(0).max(100).default(20),
   }).default({ easy: 40, medium: 40, hard: 20 }),
 
-  // SIMPLE pattern
-  qCount: z.number().int().min(1, ">= 1").default(5),
-  marksPerQuestion: z.number().min(0).default(1),
+  // SIMPLE pattern - FIXED
+  qCount: z.coerce.number()
+    .min(1, "Question count must be at least 1")
+    .default(5),
+  marksPerQuestion: z.coerce.number()
+    .min(0, "Marks per question must be 0 or more")
+    .default(1),
 
   // BLUEPRINT pattern
   sections: z.array(SectionSchema).default([]),
@@ -105,7 +124,7 @@ const FormSchema = z.object({
   shareable: z.boolean().default(false),
 
   // File inputs
-  referenceFiles: z.instanceof(File).array().optional(),
+  referenceFiles: z.any().optional(),
 
   // Header Information
   institute: z.string().optional(),
@@ -115,30 +134,54 @@ const FormSchema = z.object({
 })
 .refine((data) => {
   if (data.mode === "mix") {
-    const sum = (data.mix.easy || 0) + (data.mix.medium || 0) + (data.mix.hard || 0);
-    return sum === 100;
+    const easy = safeNumber(data.mix?.easy, 0);
+    const medium = safeNumber(data.mix?.medium, 0);
+    const hard = safeNumber(data.mix?.hard, 0);
+    const sum = easy + medium + hard;
+    return Math.abs(sum - 100) < 0.01;
   }
   return true;
-}, { path: ["mix"], message: "Mix must sum to 100%" })
-.refine((d) => (d.generationMode === "blueprint" ? d.sections.length >= 1 : true), {
-  path: ["sections"],
-  message: "Add at least one section",
+}, { 
+  path: ["mix"], 
+  message: "Difficulty mix must sum to 100%" 
 })
-.refine((d) => (d.generationMode === "buckets" ? d.buckets.length >= 1 : true), {
+.refine((data) => {
+  if (data.generationMode === "blueprint") {
+    return data.sections.length >= 1;
+  }
+  return true;
+}, {
+  path: ["sections"],
+  message: "Add at least one section for blueprint mode"
+})
+.refine((data) => {
+  if (data.generationMode === "buckets") {
+    return data.buckets.length >= 1;
+  }
+  return true;
+}, {
   path: ["buckets"],
-  message: "Add at least one question bucket",
+  message: "Add at least one question bucket for buckets mode"
+})
+.refine((data) => {
+  if (data.generationMode === "buckets") {
+    return data.buckets.every(bucket => bucket.chapters.length > 0);
+  }
+  return true;
+}, {
+  path: ["buckets"],
+  message: "Each bucket must have at least one chapter"
 });
 
 export type TestGeneratorFormValues = z.infer<typeof FormSchema>;
 
 type Props = {
-  /** Must return a downloadable URL or null */
   onGenerate: (data: TestGeneratorFormValues) => Promise<string | null>;
   loading?: boolean;
   onSaveTemplate?: (data: TestGeneratorFormValues) => Promise<void>;
 };
 
-/* ===================== Enhanced Input Components ===================== */
+/* ===================== ENHANCED INPUT COMPONENTS ===================== */
 
 function ChipInput({
   label,
@@ -146,20 +189,26 @@ function ChipInput({
   onChange,
   placeholder,
   required = false,
+  error,
 }: {
   label: string;
   values: string[];
   onChange: (next: string[]) => void;
   placeholder?: string;
   required?: boolean;
+  error?: string;
 }) {
   const [text, setText] = React.useState("");
+  
   const add = () => {
     const v = text.trim();
     if (!v) return;
-    if (!values.includes(v)) onChange([...values, v]);
+    if (!values.includes(v)) {
+      onChange([...values, v]);
+    }
     setText("");
   };
+  
   const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
@@ -169,12 +218,16 @@ function ChipInput({
     }
   };
 
+  const removeItem = (itemToRemove: string) => {
+    onChange(values.filter(item => item !== itemToRemove));
+  };
+
   return (
     <div>
       <label className="block text-sm mb-1">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      <div className="w-full border rounded-md px-2 py-2 bg-white">
+      <div className={`w-full border rounded-md px-2 py-2 bg-white ${error ? 'border-red-500' : 'border-gray-300'}`}>
         <div className="flex flex-wrap gap-2 mb-2">
           {values.map((t, i) => (
             <span
@@ -184,7 +237,7 @@ function ChipInput({
               {t}
               <button
                 type="button"
-                onClick={() => onChange(values.filter((x) => x !== t))}
+                onClick={() => removeItem(t)}
                 className="text-slate-500 hover:text-black"
                 aria-label={`Remove ${t}`}
               >
@@ -199,14 +252,20 @@ function ChipInput({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
+          onBlur={add}
           aria-label={`${label} input`}
         />
       </div>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
 }
 
-function CognitiveLevelSelector({ value, onChange }: { value: string[]; onChange: (value: string[]) => void }) {
+function CognitiveLevelSelector({ value, onChange, error }: { 
+  value: string[]; 
+  onChange: (value: string[]) => void;
+  error?: string;
+}) {
   const levels = [
     { value: "recall", label: "🧠 Recall", description: "Remember facts and concepts" },
     { value: "understand", label: "💡 Understand", description: "Explain ideas and concepts" },
@@ -224,7 +283,9 @@ function CognitiveLevelSelector({ value, onChange }: { value: string[]; onChange
 
   return (
     <div>
-      <label className="block text-sm mb-2">Cognitive Levels <span className="text-red-500">*</span></label>
+      <label className="block text-sm mb-2">
+        Cognitive Levels <span className="text-red-500">*</span>
+      </label>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {levels.map((level) => (
           <button
@@ -242,11 +303,16 @@ function CognitiveLevelSelector({ value, onChange }: { value: string[]; onChange
           </button>
         ))}
       </div>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
 }
 
-function BucketEditor({ buckets, onChange }: { buckets: any[]; onChange: (buckets: any[]) => void }) {
+function BucketEditor({ buckets, onChange, error }: { 
+  buckets: any[]; 
+  onChange: (buckets: any[]) => void;
+  error?: string;
+}) {
   const addBucket = () => {
     onChange([
       ...buckets,
@@ -267,7 +333,20 @@ function BucketEditor({ buckets, onChange }: { buckets: any[]; onChange: (bucket
 
   const updateBucket = (index: number, updates: any) => {
     const newBuckets = [...buckets];
-    newBuckets[index] = { ...newBuckets[index], ...updates };
+    
+    // NAN PROTECTION FOR NUMERIC FIELDS
+    const safeUpdates = { ...updates };
+    if ('count' in updates) {
+      safeUpdates.count = safeInt(updates.count, 5);
+    }
+    if ('marks' in updates) {
+      safeUpdates.marks = safeNumber(updates.marks, 1);
+    }
+    if ('negativeMarking' in updates) {
+      safeUpdates.negativeMarking = safeNumber(updates.negativeMarking, 0);
+    }
+    
+    newBuckets[index] = { ...newBuckets[index], ...safeUpdates };
     onChange(newBuckets);
   };
 
@@ -332,8 +411,10 @@ function BucketEditor({ buckets, onChange }: { buckets: any[]; onChange: (bucket
                 type="number"
                 min="1"
                 max="50"
-                value={bucket.count}
-                onChange={(e) => updateBucket(index, { count: parseInt(e.target.value) })}
+                value={bucket.count || ""}
+                onChange={(e) => updateBucket(index, { 
+                  count: safeInt(e.target.value, 5)
+                })}
                 className="w-full border rounded-md px-2 py-2 text-sm"
               />
             </div>
@@ -345,8 +426,10 @@ function BucketEditor({ buckets, onChange }: { buckets: any[]; onChange: (bucket
                 type="number"
                 min="0"
                 step="0.5"
-                value={bucket.marks}
-                onChange={(e) => updateBucket(index, { marks: parseFloat(e.target.value) })}
+                value={bucket.marks || ""}
+                onChange={(e) => updateBucket(index, { 
+                  marks: safeNumber(e.target.value, 1)
+                })}
                 className="w-full border rounded-md px-2 py-2 text-sm"
               />
             </div>
@@ -358,8 +441,10 @@ function BucketEditor({ buckets, onChange }: { buckets: any[]; onChange: (bucket
                 type="number"
                 min="0"
                 step="0.25"
-                value={bucket.negativeMarking}
-                onChange={(e) => updateBucket(index, { negativeMarking: parseFloat(e.target.value) })}
+                value={bucket.negativeMarking || ""}
+                onChange={(e) => updateBucket(index, { 
+                  negativeMarking: safeNumber(e.target.value, 0)
+                })}
                 className="w-full border rounded-md px-2 py-2 text-sm"
               />
             </div>
@@ -379,22 +464,29 @@ function BucketEditor({ buckets, onChange }: { buckets: any[]; onChange: (bucket
           {/* Chapters and Topics */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             <div>
-              <label className="block text-xs mb-1">Chapters</label>
+              <label className="block text-xs mb-1">Chapters *</label>
               <input
                 type="text"
                 placeholder="Chapter names (comma separated)"
-                value={bucket.chapters.join(", ")}
-                onChange={(e) => updateBucket(index, { chapters: e.target.value.split(",").map(c => c.trim()).filter(Boolean) })}
+                value={bucket.chapters?.join(", ") || ""}
+                onChange={(e) => updateBucket(index, { 
+                  chapters: e.target.value.split(",").map(c => c.trim()).filter(Boolean) 
+                })}
                 className="w-full border rounded-md px-2 py-2 text-sm"
               />
+              {(!bucket.chapters || bucket.chapters.length === 0) && (
+                <p className="text-xs text-red-600 mt-1">Select at least one chapter</p>
+              )}
             </div>
             <div>
               <label className="block text-xs mb-1">Topics</label>
               <input
                 type="text"
                 placeholder="Specific topics (comma separated)"
-                value={bucket.topics.join(", ")}
-                onChange={(e) => updateBucket(index, { topics: e.target.value.split(",").map(t => t.trim()).filter(Boolean) })}
+                value={bucket.topics?.join(", ") || ""}
+                onChange={(e) => updateBucket(index, { 
+                  topics: e.target.value.split(",").map(t => t.trim()).filter(Boolean) 
+                })}
                 className="w-full border rounded-md px-2 py-2 text-sm"
               />
             </div>
@@ -405,7 +497,7 @@ function BucketEditor({ buckets, onChange }: { buckets: any[]; onChange: (bucket
             <label className="inline-flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={bucket.requireUnits}
+                checked={bucket.requireUnits || false}
                 onChange={(e) => updateBucket(index, { requireUnits: e.target.checked })}
                 className="rounded"
               />
@@ -422,11 +514,13 @@ function BucketEditor({ buckets, onChange }: { buckets: any[]; onChange: (bucket
       >
         + Add Question Bucket
       </button>
+      
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>
   );
 }
 
-/* ===================== Main Form Component ===================== */
+/* ===================== MAIN FORM COMPONENT - COMPLETELY FIXED ===================== */
 
 const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplate }) => {
   const {
@@ -441,10 +535,10 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
     defaultValues: {
       board: "CBSE",
       classNum: 10,
-      subject: "",
-      chapters: [],
-      topics: [],
-      subtopics: [],
+      subject: "Science",
+      chapters: ["Electricity"],
+      topics: ["Ohm's Law"],
+      subtopics: ["Series Circuits"],
       generationMode: "simple",
       cognitiveLevels: ["understand", "apply"],
       ncertWeight: 0.6,
@@ -471,13 +565,20 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
       useLogo: true,
       shareable: false,
       referenceFiles: [],
-      notes: "",
+      notes: "NCERT based, CBSE, hard level",
     },
   });
 
   // Field arrays
-  const { fields: sectionFields, append: appendSection, remove: removeSection } = useFieldArray({ control, name: "sections" });
-  const { fields: matrixFields, append: appendMatrix, remove: removeMatrix } = useFieldArray({ control, name: "markingMatrix" });
+  const { fields: sectionFields, append: appendSection, remove: removeSection } = useFieldArray({ 
+    control, 
+    name: "sections" 
+  });
+  
+  const { fields: matrixFields, append: appendMatrix, remove: removeMatrix } = useFieldArray({ 
+    control, 
+    name: "markingMatrix" 
+  });
   
   // Watched values
   const generationMode = watch("generationMode");
@@ -492,29 +593,46 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
   const marksPerQuestion = watch("marksPerQuestion");
   const ncertWeight = watch("ncertWeight");
 
-  // Calculations
+  // FIXED CALCULATIONS - NO MORE NAN ERRORS
   const totalMarks = useMemo(() => {
     if (generationMode === "blueprint") {
-      return sections.reduce((sum, s) => sum + s.count * s.marksPerQuestion, 0);
+      return sections.reduce((sum, s) => sum + safeNumber(s.count, 0) * safeNumber(s.marksPerQuestion, 0), 0);
     }
     if (generationMode === "matrix") {
-      return (matrixRows || []).reduce((sum, r) => sum + (r.count || 0) * (r.marksPerQuestion || 0), 0);
+      return (matrixRows || []).reduce((sum, r) => sum + safeNumber(r.count, 0) * safeNumber(r.marksPerQuestion, 0), 0);
     }
     if (generationMode === "buckets") {
-      return buckets.reduce((sum, b) => sum + (b.count || 0) * (b.marks || 0), 0);
+      return buckets.reduce((sum, b) => sum + safeNumber(b.count, 0) * safeNumber(b.marks, 0), 0);
     }
-    return (qCount || 0) * (marksPerQuestion || 0);
+    // SIMPLE MODE - FIXED
+    return safeNumber(qCount, 5) * safeNumber(marksPerQuestion, 1);
   }, [generationMode, qCount, marksPerQuestion, sections, matrixRows, buckets]);
 
   const totalQuestions = useMemo(() => {
-    if (generationMode === "blueprint") return sections.reduce((s, x) => s + (x.count || 0), 0);
-    if (generationMode === "matrix") return (matrixRows || []).reduce((s, x) => s + (x.count || 0), 0);
-    if (generationMode === "buckets") return buckets.reduce((s, b) => s + (b.count || 0), 0);
-    return qCount || 0;
+    if (generationMode === "blueprint") return sections.reduce((s, x) => s + safeNumber(x.count, 0), 0);
+    if (generationMode === "matrix") return (matrixRows || []).reduce((s, x) => s + safeNumber(x.count, 0), 0);
+    if (generationMode === "buckets") return buckets.reduce((s, b) => s + safeNumber(b.count, 0), 0);
+    return safeNumber(qCount, 5);
   }, [generationMode, qCount, sections, matrixRows, buckets]);
 
+  // Safe mix percentage calculation
+  const mixSum = useMemo(() => {
+    const easy = safeNumber(mix?.easy, 0);
+    const medium = safeNumber(mix?.medium, 0);
+    const hard = safeNumber(mix?.hard, 0);
+    return easy + medium + hard;
+  }, [mix]);
+
   const onSubmit = async (data: TestGeneratorFormValues) => {
-    await onGenerate(data);
+    try {
+      console.log("Form data:", data);
+      const result = await onGenerate(data);
+      if (!result) {
+        console.error("Generation failed - no result returned");
+      }
+    } catch (error) {
+      console.error("Form submission error:", error);
+    }
   };
 
   const errorText = (e?: any) => e && <p className="text-xs text-red-600 mt-1">{e.message?.toString()}</p>;
@@ -531,6 +649,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
   };
 
   const applyCognitiveBalancedPreset = () => {
+    const currentChapters = chapters.length > 0 ? chapters : ["Electricity"];
     setValue("generationMode", "buckets");
     setValue("buckets", [
       {
@@ -540,7 +659,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
         cognitive: "recall",
         count: 5,
         marks: 1,
-        chapters: chapters,
+        chapters: currentChapters,
         topics: [],
         negativeMarking: 0.25,
         requireUnits: false,
@@ -552,7 +671,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
         cognitive: "understand",
         count: 8,
         marks: 2,
-        chapters: chapters,
+        chapters: currentChapters,
         topics: [],
         negativeMarking: 0,
         requireUnits: true,
@@ -564,7 +683,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
         cognitive: "apply",
         count: 4,
         marks: 4,
-        chapters: chapters,
+        chapters: currentChapters,
         topics: [],
         negativeMarking: 0,
         requireUnits: true,
@@ -576,7 +695,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
         cognitive: "analyze",
         count: 3,
         marks: 5,
-        chapters: chapters,
+        chapters: currentChapters,
         topics: [],
         negativeMarking: 0,
         requireUnits: true,
@@ -634,23 +753,26 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
           </div>
 
           <div>
-            <label className="block text-sm mb-1">Class</label>
+            <label className="block text-sm mb-1">Class *</label>
             <input
               type="number"
               min={1}
               max={12}
               className="w-full border rounded-md px-3 py-2"
-              {...register("classNum", { valueAsNumber: true })}
+              {...register("classNum", { 
+                valueAsNumber: true,
+                required: "Class is required"
+              })}
             />
             {errorText(errors.classNum)}
           </div>
 
           <div>
-            <label className="block text-sm mb-1">Subject</label>
+            <label className="block text-sm mb-1">Subject *</label>
             <input
               className="w-full border rounded-md px-3 py-2"
               placeholder="Maths / Science / ..."
-              {...register("subject")}
+              {...register("subject", { required: "Subject is required" })}
             />
             {errorText(errors.subject)}
           </div>
@@ -667,13 +789,14 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
           <Controller
             control={control}
             name="chapters"
-            render={({ field }) => (
+            render={({ field, fieldState }) => (
               <ChipInput
-                label="Chapters"
+                label="Chapters *"
                 values={field.value}
                 onChange={(v) => field.onChange(v)}
                 placeholder="e.g., Electricity, Magnetism, Optics"
                 required
+                error={fieldState.error?.message}
               />
             )}
           />
@@ -724,16 +847,19 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
           <Controller
             control={control}
             name="cognitiveLevels"
-            render={({ field }) => (
-              <CognitiveLevelSelector value={field.value} onChange={field.onChange} />
+            render={({ field, fieldState }) => (
+              <CognitiveLevelSelector 
+                value={field.value} 
+                onChange={field.onChange}
+                error={fieldState.error?.message}
+              />
             )}
           />
-          {errorText(errors.cognitiveLevels)}
 
           {/* NCERT Weight */}
           <div>
             <label className="block text-sm mb-2">
-              NCERT Alignment: {Math.round(ncertWeight * 100)}%
+              NCERT Alignment: {Math.round(safeNumber(ncertWeight, 0.6) * 100)}%
             </label>
             <input
               type="range"
@@ -798,26 +924,35 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
             </div>
           </div>
 
-          {/* SIMPLE MODE */}
+          {/* SIMPLE MODE - FIXED */}
           {generationMode === "simple" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm mb-1"># Questions</label>
+                <label className="block text-sm mb-1"># Questions *</label>
                 <input
                   type="number"
                   min={1}
                   className="w-full border rounded-md px-3 py-2"
-                  {...register("qCount", { valueAsNumber: true })}
+                  {...register("qCount", { 
+                    valueAsNumber: true,
+                    required: "Question count is required"
+                  })}
                 />
+                {errorText(errors.qCount)}
               </div>
               <div>
-                <label className="block text-sm mb-1">Marks per Question</label>
+                <label className="block text-sm mb-1">Marks per Question *</label>
                 <input
                   type="number"
                   min={0}
+                  step="0.5"
                   className="w-full border rounded-md px-3 py-2"
-                  {...register("marksPerQuestion", { valueAsNumber: true })}
+                  {...register("marksPerQuestion", { 
+                    valueAsNumber: true,
+                    required: "Marks per question is required"
+                  })}
                 />
+                {errorText(errors.marksPerQuestion)}
               </div>
             </div>
           )}
@@ -828,11 +963,14 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
               {sectionFields.map((field, idx) => (
                 <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                   <div className="md:col-span-3">
-                    <label className="block text-xs mb-1">Title</label>
+                    <label className="block text-xs mb-1">Title *</label>
                     <input
                       className="w-full border rounded-md px-2 py-2"
                       {...register(`sections.${idx}.title` as const)}
                     />
+                    {errors.sections?.[idx]?.title && (
+                      <p className="text-xs text-red-600 mt-1">{errors.sections[idx]?.title?.message}</p>
+                    )}
                   </div>
                   <div className="md:col-span-3">
                     <label className="block text-xs mb-1">Type</label>
@@ -848,22 +986,28 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
                     </select>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs mb-1">Count</label>
+                    <label className="block text-xs mb-1">Count *</label>
                     <input
                       type="number"
                       min={1}
                       className="w-full border rounded-md px-2 py-2"
                       {...register(`sections.${idx}.count` as const, { valueAsNumber: true })}
                     />
+                    {errors.sections?.[idx]?.count && (
+                      <p className="text-xs text-red-600 mt-1">{errors.sections[idx]?.count?.message}</p>
+                    )}
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs mb-1">Marks/Q</label>
+                    <label className="block text-xs mb-1">Marks/Q *</label>
                     <input
                       type="number"
                       min={0}
                       className="w-full border rounded-md px-2 py-2"
                       {...register(`sections.${idx}.marksPerQuestion` as const, { valueAsNumber: true })}
                     />
+                    {errors.sections?.[idx]?.marksPerQuestion && (
+                      <p className="text-xs text-red-600 mt-1">{errors.sections[idx]?.marksPerQuestion?.message}</p>
+                    )}
                   </div>
                   <div className="md:col-span-2">
                     <button
@@ -957,11 +1101,14 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
               <Controller
                 control={control}
                 name="buckets"
-                render={({ field }) => (
-                  <BucketEditor buckets={field.value} onChange={field.onChange} />
+                render={({ field, fieldState }) => (
+                  <BucketEditor 
+                    buckets={field.value} 
+                    onChange={field.onChange}
+                    error={fieldState.error?.message}
+                  />
                 )}
               />
-              {errors.buckets && <p className="text-xs text-red-600 mt-2">{errors.buckets.message?.toString()}</p>}
             </div>
           )}
 
@@ -1020,7 +1167,7 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
                       />
                     </div>
                     <div className="col-span-3 text-xs text-slate-600">
-                      Sum: {(mix.easy ?? 0) + (mix.medium ?? 0) + (mix.hard ?? 0)}%
+                      Sum: {mixSum}%
                       {errors.mix && <span className="ml-2 text-red-600">{errors.mix.message?.toString()}</span>}
                     </div>
                   </div>
@@ -1181,8 +1328,8 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
             </span>
           </div>
           <div className="text-xs text-gray-600">
-            Cognitive levels: {cognitiveLevels.join(", ")} · NCERT focus: {Math.round(ncertWeight * 100)}%
-            {generationMode === "buckets" && ` · ${buckets.length} buckets`}
+            Cognitive levels: {cognitiveLevels?.join(", ") || "None"} · NCERT focus: {Math.round(safeNumber(ncertWeight, 0.6) * 100)}%
+            {generationMode === "buckets" && ` · ${buckets?.length || 0} buckets`}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1202,9 +1349,19 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
         <div className="rounded-lg border border-red-200 bg-red-50 p-4">
           <div className="text-sm text-red-800 font-medium mb-2">Please fix the following errors:</div>
           <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
-            {Object.entries(errors).map(([key, error]) => (
-              <li key={key}>{error.message?.toString() || `Invalid ${key}`}</li>
-            ))}
+            {errors.chapters && <li>Select at least one chapter</li>}
+            {errors.classNum && <li>Class: {errors.classNum.message}</li>}
+            {errors.qCount && <li>Question count: {errors.qCount.message}</li>}
+            {errors.marksPerQuestion && <li>Marks per question: {errors.marksPerQuestion.message}</li>}
+            {errors.cognitiveLevels && <li>Select at least one cognitive level</li>}
+            {errors.sections && <li>{errors.sections.message}</li>}
+            {errors.buckets && <li>{errors.buckets.message}</li>}
+            {errors.mix && <li>{errors.mix.message}</li>}
+            {Object.entries(errors).map(([key, error]) => 
+              !['chapters', 'classNum', 'qCount', 'marksPerQuestion', 'cognitiveLevels', 'sections', 'buckets', 'mix'].includes(key) && (
+                <li key={key}>{error.message?.toString() || `Invalid ${key}`}</li>
+              )
+            )}
           </ul>
         </div>
       )}

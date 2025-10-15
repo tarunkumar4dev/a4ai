@@ -120,7 +120,7 @@ export default function Navbar() {
                   boxShadow: "0 0 0 1px rgba(228,233,240,0.9) inset",
                 }}
               >
-                βeta
+                βeta 2
               </span>
             </motion.div>
           </Link>

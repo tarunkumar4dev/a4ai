@@ -126,7 +126,7 @@ export default function LandingHero() {
               className="mt-3 md:mt-4 block font-halenoir text-[clamp(1.1rem,4.6vw,1.6rem)] sm:text-[clamp(1.2rem,3.8vw,1.8rem)] md:text-[clamp(1.35rem,2.8vw,2.6rem)] font-semibold tracking-[-0.01em] md:tracking-[-0.012em] leading-snug md:leading-[1.04]"
               style={{ color: "var(--ink-800, #2F3A44)" }}
             >
-              The Teacher’s Assessment Co-Pilot
+              The Teacher's Assessment Co-Pilot
             </span>
           </h1>
 
@@ -149,12 +149,12 @@ export default function LandingHero() {
               }}
             />
 
-            {/* PRIMARY (magnetic on md+) */}
+            {/* PRIMARY (magnetic on md+) - CHANGED TO CONTACT PAGE */}
             <motion.div
               style={{ x: magneticX, y: magneticY }}
               className="isolate w-full max-w-[320px] md:max-w-none md:w-auto"
             >
-              <Link to="/signup" className="w-full">
+              <Link to="/contact" className="w-full"> {/* CHANGED FROM /signup TO /contact */}
                 <Button
                   size="lg"
                   className="w-full md:w-auto relative h-12 rounded-[14px] px-6 md:px-7 text-base font-semibold text-white flex items-center justify-center gap-2 transform-gpu transition-[transform,box-shadow] md:hover:-translate-y-[1px] active:translate-y-0"
@@ -165,7 +165,7 @@ export default function LandingHero() {
                   }}
                 >
                   <ArrowRight className="h-5 w-5" />
-                  Get Started
+                  Get Free Domain
                   <span
                     aria-hidden
                     className="pointer-events-none absolute inset-0 rounded-[14px]"
@@ -188,7 +188,7 @@ export default function LandingHero() {
                   }}
                 >
                   <Play className="h-5 w-5" />
-                  Watch Demo
+                  Login (FREE 100 Coins)
                   <span
                     aria-hidden
                     className="pointer-events-none absolute inset-0 rounded-[14px]"
