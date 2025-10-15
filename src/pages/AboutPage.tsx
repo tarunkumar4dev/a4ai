@@ -25,11 +25,11 @@ import {
   BookOpen,
 } from "lucide-react";
 
-/* ================== Cluely Theme Tokens ================== */
+/* ================== Cluely Theme Tokens (Monochrome) ================== */
 const EASE: [number, number, number, number] = [0.25, 0.1, 0.25, 1];
 const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
 
-// Palette inspired by Cluely (inky greys + indigo/blue gradient)
+// Monochrome palette (Cluely-style inky greys, no blues/purples)
 const TOKENS = {
   INK: {
     50: "#EEF2F6",
@@ -43,14 +43,20 @@ const TOKENS = {
     800: "#2F3A44",
     900: "#1F2830",
   },
+  SURFACE: {
+    light: "#F5F6F8",
+    mid: "#E9EDF3",
+    dark: "#0F141A",
+  },
   BRAND: {
-    from: "from-[#6C8FFB]",
-    via: "via-[#6F7DEB]",
-    to: "to-[#8D5CF6]",
+    // Deep neutral gradient instead of indigo/purple
+    from: "from-[#0B0C0E]",
+    via: "via-[#161A1F]",
+    to: "to-[#2A2F37]",
   },
 };
 
-const primaryGrad = `bg-gradient-to-r ${TOKENS.BRAND.from} ${TOKENS.BRAND.to} text-white hover:opacity-95`;
+const primaryGrad = `bg-gradient-to-r ${TOKENS.BRAND.from} ${TOKENS.BRAND.via} ${TOKENS.BRAND.to} text-white hover:opacity-95`;
 
 /* ================== Data ================== */
 const team = [
@@ -102,7 +108,7 @@ const fadeUp = {
 
 /* ================== Page ================== */
 export default function AboutPage() {
-  // Cursor reactive hero glow
+  // Cursor reactive hero glow (neutral tints)
   const mx = useMotionValue(320);
   const my = useMotionValue(160);
 
@@ -113,8 +119,8 @@ export default function AboutPage() {
   };
 
   const heroGlow = useMotionTemplate`
-    radial-gradient(1000px 520px at ${mx}px ${my}px, rgba(108,143,251,0.18), transparent 70%),
-    radial-gradient(780px 420px at calc(${mx}px + 240px) calc(${my}px + 160px), rgba(141,92,246,0.14), transparent 70%)
+    radial-gradient(1000px 520px at ${mx}px ${my}px, rgba(0,0,0,0.12), transparent 70%),
+    radial-gradient(780px 420px at calc(${mx}px + 240px) calc(${my}px + 160px), rgba(0,0,0,0.08), transparent 70%)
   `;
 
   const sectionRef = useRef<HTMLDivElement | null>(null);
@@ -140,16 +146,16 @@ export default function AboutPage() {
         <meta property="og:type" content="website" />
       </Helmet>
 
-      <div className="min-h-screen font-['Halenoir_Expanded',Inter,system-ui,sans-serif] bg-[radial-gradient(1000px_800px_at_10%_-10%,#E8ECF7_0%,transparent_60%),radial-gradient(1000px_800px_at_90%_-20%,#E9E7FF_0%,transparent_55%)] dark:bg-[radial-gradient(1000px_800px_at_10%_-10%,#12161C_0%,transparent_60%),radial-gradient(1000px_800px_at_90%_-20%,#12121A_0%,transparent_55%)]">
+      <div className="min-h-screen font-['Halenoir_Expanded',Inter,system-ui,sans-serif] bg-[radial-gradient(1000px_800px_at_10%_-10%,#EFF2F6_0%,transparent_60%),radial-gradient(1000px_800px_at_90%_-20%,#ECEEF2_0%,transparent_55%)] dark:bg-[radial-gradient(1000px_800px_at_10%_-10%,#0D1116_0%,transparent_60%),radial-gradient(1000px_800px_at_90%_-20%,#0B0E12_0%,transparent_55%)]">
         {/* Grid overlay */}
         <div className="pointer-events-none fixed inset-0 -z-20 bg-[url('/images/grid.svg')] bg-center opacity-[0.06] dark:opacity-[0.03]" />
 
         {/* HERO */}
         <section onMouseMove={onMouseMove} className="relative overflow-hidden py-24 md:py-28">
           <motion.div aria-hidden className="absolute inset-0 -z-10" style={{ backgroundImage: heroGlow }} />
-          {/* floating orbs */}
-          <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-gradient-to-br from-indigo-400/30 to-blue-300/30 blur-3xl" />
-          <div className="absolute -right-16 top-1/3 h-60 w-60 rounded-full bg-gradient-to-br from-purple-400/30 to-pink-300/30 blur-3xl" />
+          {/* floating orbs (neutral) */}
+          <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-gradient-to-br from-neutral-300/30 to-zinc-200/30 blur-3xl" />
+          <div className="absolute -right-16 top-1/3 h-60 w-60 rounded-full bg-gradient-to-br from-zinc-400/30 to-stone-300/30 blur-3xl" />
 
           <div className={sectionX}>
             <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
@@ -170,7 +176,6 @@ export default function AboutPage() {
               transition={{ duration: 0.7, ease: EASE }}
               className="text-center text-4xl md:text-6xl font-extrabold tracking-tight text-[--ink-900] dark:text-white"
               style={{
-                // custom property so we can reuse ink shades in inline styles if needed
                 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
                 // @ts-ignore
                 ['--ink-900']: TOKENS.INK[900],
@@ -252,7 +257,7 @@ export default function AboutPage() {
                     className="rounded-xl border border-white/40 bg-white/70 p-4 shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60"
                   >
                     <div className="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
-                      <item.icon className="h-4 w-4 text-indigo-500" />
+                      <item.icon className="h-4 w-4 text-gray-800 dark:text-gray-200" />
                       {item.title}
                     </div>
                     <p className="mt-2 text-sm text-gray-700/90 dark:text-gray-300">{item.copy}</p>
@@ -294,7 +299,7 @@ export default function AboutPage() {
                   className="rounded-2xl border border-white/40 bg-white/70 p-6 shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60"
                 >
                   <div className="flex items-center gap-2 text-gray-900 dark:text-white font-semibold">
-                    <x.icon className="h-5 w-5 text-indigo-500" />
+                    <x.icon className="h-5 w-5 text-gray-800 dark:text-gray-200" />
                     {x.k}
                   </div>
                   <p className="mt-3 text-gray-700/90 dark:text-gray-300">{x.v}</p>
@@ -318,7 +323,7 @@ export default function AboutPage() {
                   transition={{ duration: 0.45 }}
                   className="grid grid-cols-1 gap-4 rounded-2xl border border-white/40 bg-white/70 p-6 shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60 md:grid-cols-[140px_1fr]"
                 >
-                  <div className="text-sm font-semibold text-indigo-600 dark:text-indigo-400">{m.date}</div>
+                  <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">{m.date}</div>
                   <div>
                     <div className="font-bold text-gray-900 dark:text-white">{m.title}</div>
                     <div className="mt-2 text-gray-700/90 dark:text-gray-300">{m.detail}</div>
@@ -398,7 +403,7 @@ export default function AboutPage() {
                   transition={{ duration: 0.45, delay: 0.05 * i }}
                   className="relative rounded-2xl border border-white/40 bg-white/70 p-8 shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60"
                 >
-                  <Quote className="absolute -top-3 -left-3 h-6 w-6 text-indigo-500" />
+                  <Quote className="absolute -top-3 -left-3 h-6 w-6 text-gray-500" />
                   <p className="text-lg text-gray-800 dark:text-gray-300 italic">"{t.quote}"</p>
                   <footer className="mt-6 font-semibold text-gray-900 dark:text-white">
                     {t.name}, <span className="text-gray-600 dark:text-gray-400 font-normal">{t.title}</span>
@@ -409,8 +414,8 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* CTA */}
-        <section className="bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-700 py-20 text-white">
+        {/* CTA (Neutral gradient) */}
+        <section className="bg-gradient-to-br from-[#0B0C0E] via-[#161A1F] to-[#2A2F37] py-20 text-white">
           <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
             <motion.h2
               initial={{ opacity: 0, y: 16 }}
@@ -426,7 +431,7 @@ export default function AboutPage() {
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ delay: 0.15, duration: 0.5 }}
-              className="mx-auto mt-4 max-w-3xl text-lg text-indigo-100"
+              className="mx-auto mt-4 max-w-3xl text-lg text-zinc-200"
             >
               Join educators using a4ai to save time and improve outcomes.
             </motion.p>
@@ -437,10 +442,10 @@ export default function AboutPage() {
               transition={{ delay: 0.25, duration: 0.5 }}
               className="mt-8 flex flex-col sm:flex-row justify-center gap-4"
             >
-              <Button size="lg" className="rounded-xl bg-white px-8 py-6 text-lg font-semibold text-indigo-600 shadow-lg hover:bg-gray-100">
+              <Button size="lg" className="rounded-xl bg-white px-8 py-6 text-lg font-semibold text-gray-900 shadow-lg hover:bg-gray-100">
                 Get started for free
               </Button>
-              <Button size="lg" variant="outline" className="rounded-xl border-white bg-transparent px-8 py-6 text-lg font-semibold text-white hover:bg-white hover:text-indigo-600">
+              <Button size="lg" variant="outline" className="rounded-xl border-white bg-transparent px-8 py-6 text-lg font-semibold text-white hover:bg-white hover:text-gray-900">
                 Book a demo <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </motion.div>
@@ -493,20 +498,20 @@ function TeamCard({
             className="pointer-events-none absolute inset-0 rounded-2xl"
             style={{
               background: useMotionTemplate`
-                radial-gradient(160px 110px at ${mx}px ${my}px, rgba(108,143,251,0.15), transparent 70%)
+                radial-gradient(160px 110px at ${mx}px ${my}px, rgba(0,0,0,0.12), transparent 70%)
               `,
             }}
           />
           <div className="relative z-10 text-center">
             <Avatar className="mx-auto mb-4 h-28 w-28 ring-2 ring-white/60 dark:ring-white/10">
               <AvatarImage src={member.image} alt={member.name} className="object-cover" />
-              <AvatarFallback className="bg-[${TOKENS.INK[100]}] text-gray-700 dark:bg-[#1A222B] dark:text-gray-200 text-xl font-bold">
+              <AvatarFallback className="bg-gray-100 text-gray-700 dark:bg-[#1A222B] dark:text-gray-200 text-xl font-bold">
                 {member.name.substring(0, 2)}
               </AvatarFallback>
             </Avatar>
 
             <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">{member.name}</h3>
-            <p className="mt-1 text-sm font-medium text-indigo-600 dark:text-indigo-400">{member.role}</p>
+            <p className="mt-1 text-sm font-medium text-gray-700 dark:text-gray-300">{member.role}</p>
             <p className="mt-3 text-gray-700/90 dark:text-gray-300">{member.description}</p>
           </div>
         </motion.div>
