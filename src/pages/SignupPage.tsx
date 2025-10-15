@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,17 +6,63 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { motion, AnimatePresence } from "framer-motion";
+import { Confetti } from "@/components/ui/confetti";
 
 const SignupPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [showScratchCard, setShowScratchCard] = useState(false);
+  const [coinsScratched, setCoinsScratched] = useState(false);
+  const [scratchProgress, setScratchProgress] = useState(0);
   const [formValues, setFormValues] = useState({
     name: "",
     email: "",
     password: "",
     acceptTerms: false,
   });
+
+  // Scratch card effect
+  const handleScratch = (e: React.MouseEvent) => {
+    if (!coinsScratched) {
+      setScratchProgress(prev => Math.min(prev + 25, 100));
+    }
+  };
+
+  const handleScratchComplete = () => {
+    if (scratchProgress >= 70 && !coinsScratched) {
+      setCoinsScratched(true);
+      // Add coins to user profile here
+      addWelcomeCoins();
+    }
+  };
+
+  const addWelcomeCoins = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Update user's coin balance in profiles table
+        const { error } = await supabase
+          .from('profiles')
+          .update({ coins: 100 })
+          .eq('id', user.id);
+
+        if (!error) {
+          toast({
+            title: "🎉 Congratulations!",
+            description: "100 FREE coins added to your account!",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error adding coins:", error);
+    }
+  };
+
+  useEffect(() => {
+    handleScratchComplete();
+  }, [scratchProgress]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormValues((prev) => ({
@@ -29,7 +75,6 @@ const SignupPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation checks
     if (!formValues.acceptTerms) {
       toast({
         title: "Terms required",
@@ -54,7 +99,6 @@ const SignupPage = () => {
     try {
       console.log("🔄 Starting signup process...");
 
-      // Supabase signup call
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formValues.email.trim(),
         password: formValues.password,
@@ -76,7 +120,7 @@ const SignupPage = () => {
 
       const { user, session } = data;
 
-      // Case 1: Email confirmation required (user will be null)
+      // Case 1: Email confirmation required
       if (!user) {
         toast({
           title: "Check your email!",
@@ -86,11 +130,11 @@ const SignupPage = () => {
         return;
       }
 
-      // Case 2: Auto-confirmed (immediate session)
+      // Case 2: Auto-confirmed - Show scratch card!
       if (session && user) {
         console.log("🎉 Immediate session received");
         
-        // Try to create profile manually as backup
+        // Create profile
         try {
           const { error: profileError } = await supabase
             .from("profiles")
@@ -99,28 +143,26 @@ const SignupPage = () => {
               email: formValues.email.trim(),
               full_name: formValues.name,
               role: "teacher",
+              coins: 100, // Initial coins
               updated_at: new Date().toISOString(),
             });
 
           if (profileError) {
             console.warn("⚠️ Profile creation warning:", profileError);
-            // Don't throw - might be handled by trigger
-          } else {
-            console.log("✅ Profile created successfully");
           }
         } catch (profileError) {
           console.warn("⚠️ Profile creation optional error:", profileError);
         }
 
-        toast({ 
-          title: "Welcome!", 
-          description: "Account created successfully." 
-        });
-        navigate("/dashboard?newUser=true", { replace: true });
+        // Show scratch card after a brief delay
+        setTimeout(() => {
+          setShowScratchCard(true);
+        }, 1000);
+
         return;
       }
 
-      // Case 3: No session but user exists (email confirmation pending)
+      // Case 3: Email confirmation pending
       toast({
         title: "Almost there!",
         description: "Please check your email to verify your account.",
@@ -130,7 +172,6 @@ const SignupPage = () => {
     } catch (error: any) {
       console.error("💥 Signup failed:", error);
       
-      // User-friendly error messages
       let errorMessage = "Please try again.";
       
       if (error?.message?.includes("already registered")) {
@@ -176,7 +217,6 @@ const SignupPage = () => {
       }
       
       console.log("✅ Google OAuth initiated successfully");
-      // User will be redirected, no need to reset loading state
       
     } catch (error: any) {
       console.error("💥 Google signup failed:", error);
@@ -195,11 +235,98 @@ const SignupPage = () => {
     }
   };
 
+  const closeScratchCard = () => {
+    setShowScratchCard(false);
+    navigate("/dashboard?newUser=true", { replace: true });
+  };
+
   return (
-    <div className="flex min-h-screen bg-[#DFE4EF]">
+    <div className="flex min-h-screen bg-[#DFE4EF] relative">
+      {/* Confetti Effect */}
+      <AnimatePresence>
+        {coinsScratched && <Confetti />}
+      </AnimatePresence>
+
+      {/* Scratch Card Modal */}
+      <AnimatePresence>
+        {showScratchCard && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl p-8 max-w-md w-full mx-auto"
+            >
+              <div className="text-center text-white">
+                <h2 className="text-3xl font-bold mb-4">🎉 Welcome Bonus! 🎉</h2>
+                <p className="text-lg mb-6">Scratch to reveal your FREE coins!</p>
+                
+                {/* Scratch Card */}
+                <div 
+                  className="relative bg-gradient-to-br from-amber-200 to-yellow-300 rounded-2xl p-8 cursor-pointer mx-auto max-w-xs"
+                  onMouseMove={handleScratch}
+                  onClick={handleScratch}
+                >
+                  {/* Scratchable Layer */}
+                  <div 
+                    className="absolute inset-0 bg-gradient-to-br from-gray-400 to-gray-600 rounded-2xl transition-all duration-300"
+                    style={{ 
+                      clipPath: `inset(0 0 ${100 - scratchProgress}% 0)`,
+                      WebkitMask: `linear-gradient(black, black) content-box, linear-gradient(black, black)`,
+                      WebkitMaskComposite: 'xor'
+                    }}
+                  />
+                  
+                  {/* Revealed Content */}
+                  <div className="text-center">
+                    <div className="text-4xl font-bold text-gray-800 mb-2">100</div>
+                    <div className="text-2xl font-bold text-gray-800 mb-4">FREE COINS</div>
+                    <div className="text-sm text-gray-600">
+                      {coinsScratched ? "🎊 Congratulations!" : "Scratch to reveal!"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 text-sm text-white/90 bg-white/20 rounded-lg p-3">
+                  <p>✨ <strong>Use these coins in contests</strong> to win amazing prizes!</p>
+                  <p className="text-xs mt-1">Create test papers, join competitions & more!</p>
+                </div>
+
+                <Button
+                  onClick={closeScratchCard}
+                  className="mt-6 bg-white text-orange-600 hover:bg-gray-100 font-bold py-3 px-8 rounded-full"
+                >
+                  Start Creating! 🚀
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Left: form card */}
       <div className="flex flex-1 flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto w-full max-w-md">
+          {/* Welcome Bonus Banner */}
+          <motion.div
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-4 mb-6 text-white text-center shadow-lg"
+          >
+            <div className="flex items-center justify-center gap-3">
+              <div className="text-2xl">🎁</div>
+              <div>
+                <h3 className="font-bold text-lg">Get 100 FREE Coins!</h3>
+                <p className="text-sm opacity-90">Sign up now & scratch to win</p>
+              </div>
+            </div>
+          </motion.div>
+
           <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl ring-1 ring-black/5 p-8">
             <div className="text-center">
               <Link to="/" className="inline-block">
@@ -313,12 +440,13 @@ const SignupPage = () => {
                   type="submit"
                   disabled={isLoading || !formValues.acceptTerms}
                   className="w-full h-12 rounded-full text-white font-medium
-                             bg-black shadow-[0_8px_24px_rgba(0,0,0,0.18)]
-                             hover:bg-gradient-to-r hover:from-blue-500 hover:via-blue-600 hover:to-blue-700
-                             active:from-blue-600 active:via-blue-700 active:to-blue-800
+                             bg-gradient-to-r from-green-600 to-emerald-700 
+                             shadow-[0_8px_24px_rgba(34,197,94,0.3)]
+                             hover:from-green-700 hover:to-emerald-800
+                             active:from-green-800 active:to-emerald-900
                              transition-all duration-300"
                 >
-                  {isLoading ? "Creating account..." : "Create account"}
+                  {isLoading ? "Creating account..." : "🎁 Get FREE Coins!"}
                 </Button>
               </form>
             </div>
@@ -333,9 +461,32 @@ const SignupPage = () => {
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="max-w-md text-center p-10">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Join a4ai Today</h2>
-            <p className="text-lg text-gray-700">
+            <p className="text-lg text-gray-700 mb-6">
               Create customized, high-quality test papers in minutes using the power of AI.
             </p>
+            
+            {/* Bonus Features List */}
+            <div className="bg-white/80 rounded-2xl p-6 shadow-lg">
+              <h3 className="font-bold text-lg text-gray-900 mb-4">🎊 Signup Benefits:</h3>
+              <ul className="text-left space-y-3 text-gray-700">
+                <li className="flex items-center gap-3">
+                  <span className="text-green-600">✅</span>
+                  <span><strong>100 FREE coins</strong> to get started</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-green-600">✅</span>
+                  <span>Use coins in <strong>contests & competitions</strong></span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-green-600">✅</span>
+                  <span>Create unlimited <strong>AI test papers</strong></span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-green-600">✅</span>
+                  <span>Win amazing <strong>prizes & rewards</strong></span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

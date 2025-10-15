@@ -3,7 +3,6 @@ import { useEffect, Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import "./styles/globals.css";
 
-
 import ChankyaInstitutePublic from "@/pages/institute/chanakya";
 /* -------- Core Imports -------- */
 import PracticePage from "@/pages/PracticePage";
