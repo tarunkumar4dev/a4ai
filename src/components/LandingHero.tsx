@@ -177,7 +177,7 @@ export default function LandingHero() {
 
             {/* SECONDARY */}
             <div className="isolate w-full max-w-[320px] md:max-w-none md:w-auto">
-              <Link to="/demo" className="w-full">
+              <Link to="/login" className="w-full">
                 <Button
                   size="lg"
                   className="w-full md:w-auto relative h-12 rounded-[14px] px-6 md:px-7 text-base font-semibold text-white flex items-center justify-center gap-2 transform-gpu transition-[transform,box-shadow] md:hover:-translate-y-[1px] active:translate-y-0"

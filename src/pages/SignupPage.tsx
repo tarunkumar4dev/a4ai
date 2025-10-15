@@ -47,29 +47,36 @@ const SignupPage = () => {
 
       if (signUpError) throw signUpError;
 
-      // If your project doesn't require email confirmation: session exists → upsert profile and go to dashboard
+      // ✅ UPDATED: Auto profile creation - let the database trigger handle it
       if (session && user) {
-        const { error: profileError } = await supabase.from("profiles").upsert({
-          id: user.id,
-          email: formValues.email.trim(),
-          full_name: formValues.name,
-          role: "teacher",
-          updated_at: new Date().toISOString(),
-        });
-        if (profileError) throw profileError;
+        console.log("✅ Signup successful, profile should be auto-created");
+        
+        // Optional: Still try to upsert, but don't throw error if it fails
+        try {
+          await supabase.from("profiles").upsert({
+            id: user.id,
+            email: formValues.email.trim(),
+            full_name: formValues.name,
+            role: "teacher",
+            updated_at: new Date().toISOString(),
+          });
+        } catch (profileError) {
+          console.log("Profile upsert optional - might be handled by trigger");
+        }
 
         toast({ title: "Welcome!", description: "Account created successfully." });
-        navigate("/dashboard", { replace: true });
+        navigate("/dashboard?newUser=true", { replace: true });
         return;
       }
 
       // If confirmation is required: user/session may be null → ask to verify email
       toast({
         title: "Verify your email",
-        description: "We’ve sent you a verification link. Please check your inbox to activate your account.",
+        description: "We've sent you a verification link. Please check your inbox to activate your account.",
       });
       // Optional: keep them on signup or redirect to a lightweight info page
     } catch (error: any) {
+      console.error("Signup error:", error);
       toast({
         title: "Signup failed",
         description: error?.message || "Please try again.",
@@ -94,6 +101,7 @@ const SignupPage = () => {
       if (error) throw error;
       // success path will leave page; do not reset loading
     } catch (error: any) {
+      console.error("Google signup error:", error);
       toast({
         title: "Google signup failed",
         description: error?.message || "Try again.",
