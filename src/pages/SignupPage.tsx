@@ -28,58 +28,124 @@ const SignupPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation checks
+    if (!formValues.acceptTerms) {
+      toast({
+        title: "Terms required",
+        description: "Please accept the terms and conditions",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formValues.password.length < 6) {
+      toast({
+        title: "Weak password",
+        description: "Password must be at least 6 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (isLoading) return;
     setIsLoading(true);
 
     try {
-      const {
-        data: { user, session },
-        error: signUpError,
-      } = await supabase.auth.signUp({
+      console.log("🔄 Starting signup process...");
+
+      // Supabase signup call
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email: formValues.email.trim(),
         password: formValues.password,
         options: {
-          data: { full_name: formValues.name, role: "teacher" },
-          // If email confirmation is ON, Supabase will send a verify link here.
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: { 
+            full_name: formValues.name, 
+            role: "teacher" 
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        console.error("❌ Signup error:", signUpError);
+        throw signUpError;
+      }
 
-      // ✅ UPDATED: Auto profile creation - let the database trigger handle it
+      console.log("✅ Auth signup successful:", data);
+
+      const { user, session } = data;
+
+      // Case 1: Email confirmation required (user will be null)
+      if (!user) {
+        toast({
+          title: "Check your email!",
+          description: "We've sent a verification link to your email address.",
+        });
+        navigate("/login?message=check-email");
+        return;
+      }
+
+      // Case 2: Auto-confirmed (immediate session)
       if (session && user) {
-        console.log("✅ Signup successful, profile should be auto-created");
+        console.log("🎉 Immediate session received");
         
-        // Optional: Still try to upsert, but don't throw error if it fails
+        // Try to create profile manually as backup
         try {
-          await supabase.from("profiles").upsert({
-            id: user.id,
-            email: formValues.email.trim(),
-            full_name: formValues.name,
-            role: "teacher",
-            updated_at: new Date().toISOString(),
-          });
+          const { error: profileError } = await supabase
+            .from("profiles")
+            .upsert({
+              id: user.id,
+              email: formValues.email.trim(),
+              full_name: formValues.name,
+              role: "teacher",
+              updated_at: new Date().toISOString(),
+            });
+
+          if (profileError) {
+            console.warn("⚠️ Profile creation warning:", profileError);
+            // Don't throw - might be handled by trigger
+          } else {
+            console.log("✅ Profile created successfully");
+          }
         } catch (profileError) {
-          console.log("Profile upsert optional - might be handled by trigger");
+          console.warn("⚠️ Profile creation optional error:", profileError);
         }
 
-        toast({ title: "Welcome!", description: "Account created successfully." });
+        toast({ 
+          title: "Welcome!", 
+          description: "Account created successfully." 
+        });
         navigate("/dashboard?newUser=true", { replace: true });
         return;
       }
 
-      // If confirmation is required: user/session may be null → ask to verify email
+      // Case 3: No session but user exists (email confirmation pending)
       toast({
-        title: "Verify your email",
-        description: "We've sent you a verification link. Please check your inbox to activate your account.",
+        title: "Almost there!",
+        description: "Please check your email to verify your account.",
       });
-      // Optional: keep them on signup or redirect to a lightweight info page
+      navigate("/login?message=verify-email");
+
     } catch (error: any) {
-      console.error("Signup error:", error);
+      console.error("💥 Signup failed:", error);
+      
+      // User-friendly error messages
+      let errorMessage = "Please try again.";
+      
+      if (error?.message?.includes("already registered")) {
+        errorMessage = "This email is already registered. Try logging in instead.";
+      } else if (error?.message?.includes("password")) {
+        errorMessage = "Password should be at least 6 characters.";
+      } else if (error?.message?.includes("email")) {
+        errorMessage = "Please enter a valid email address.";
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+
       toast({
         title: "Signup failed",
-        description: error?.message || "Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -91,20 +157,38 @@ const SignupPage = () => {
     if (isLoading) return;
     setIsLoading(true);
     try {
+      console.log("🔄 Starting Google OAuth...");
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: { access_type: "offline", prompt: "consent" },
+          queryParams: { 
+            access_type: "offline", 
+            prompt: "consent" 
+          },
         },
       });
-      if (error) throw error;
-      // success path will leave page; do not reset loading
+      
+      if (error) {
+        console.error("❌ Google OAuth error:", error);
+        throw error;
+      }
+      
+      console.log("✅ Google OAuth initiated successfully");
+      // User will be redirected, no need to reset loading state
+      
     } catch (error: any) {
-      console.error("Google signup error:", error);
+      console.error("💥 Google signup failed:", error);
+      
+      let errorMessage = "Please try again.";
+      if (error?.message?.includes("popup")) {
+        errorMessage = "Popup blocked. Please allow popups for this site.";
+      }
+      
       toast({
         title: "Google signup failed",
-        description: error?.message || "Try again.",
+        description: errorMessage,
         variant: "destructive",
       });
       setIsLoading(false);
@@ -166,6 +250,7 @@ const SignupPage = () => {
                     required
                     value={formValues.name}
                     onChange={handleChange}
+                    disabled={isLoading}
                     className="mt-1 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
                   />
                 </div>
@@ -180,6 +265,7 @@ const SignupPage = () => {
                     required
                     value={formValues.email}
                     onChange={handleChange}
+                    disabled={isLoading}
                     className="mt-1 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
                   />
                 </div>
@@ -192,11 +278,13 @@ const SignupPage = () => {
                     type="password"
                     autoComplete="new-password"
                     required
+                    minLength={6}
                     value={formValues.password}
                     onChange={handleChange}
+                    disabled={isLoading}
                     className="mt-1 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Password must be at least 8 characters long</p>
+                  <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
                 </div>
 
                 <div className="flex items-center">
@@ -207,6 +295,7 @@ const SignupPage = () => {
                     onCheckedChange={(checked) =>
                       setFormValues((s) => ({ ...s, acceptTerms: checked as boolean }))
                     }
+                    disabled={isLoading}
                   />
                   <label htmlFor="acceptTerms" className="ml-2 text-sm text-gray-700">
                     I agree to the{" "}
