@@ -1,245 +1,199 @@
-// src/components/TestGeneratorForm.tsx - COMPLETELY FIXED
-import React, { useMemo } from "react";
+// src/components/TestGeneratorForm.tsx - OPTIMIZED & REFINED VERSION
+import React, { useMemo, useCallback } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-/* ===================== NAN PROTECTION UTILITIES ===================== */
-const safeNumber = (value: any, defaultValue: number = 0): number => {
-  if (value === null || value === undefined || value === "" || isNaN(value)) {
-    return defaultValue;
-  }
-  const num = Number(value);
-  return isNaN(num) ? defaultValue : num;
+/* ===================== OPTIMIZED UTILITIES ===================== */
+const safeNumber = (value: unknown, defaultValue = 0): number => {
+  if (value == null || value === "") return defaultValue;
+  
+  const num = typeof value === 'string' 
+    ? Number(value.trim().replace(/,/g, ''))
+    : Number(value);
+  
+  return Number.isNaN(num) ? defaultValue : num;
 };
 
-const safeInt = (value: any, defaultValue: number = 0): number => {
+const safeInt = (value: unknown, defaultValue = 0): number => {
   return Math.floor(safeNumber(value, defaultValue));
 };
 
-/* ===================== ENHANCED SCHEMA WITH NAN PROTECTION ===================== */
+/* ===================== STREAMLINED SCHEMAS ===================== */
 const CognitiveLevelSchema = z.enum(["recall", "understand", "apply", "analyze"]);
 const QuestionTypeSchema = z.enum(["mcq", "short", "long", "numerical", "case_based"]);
 const DifficultyLevelSchema = z.enum(["easy", "medium", "hard"]);
 
+const BaseNumberField = z.preprocess(
+  (val) => safeNumber(val),
+  z.number().min(0)
+);
+
+const BaseIntField = z.preprocess(
+  (val) => safeInt(val),
+  z.number().int().min(0)
+);
+
 const QuestionBucketSchema = z.object({
-  id: z.string().default(() => Math.random().toString(36).substr(2, 9)),
+  id: z.string().default(() => crypto.randomUUID()),
   type: QuestionTypeSchema,
   difficulty: DifficultyLevelSchema,
   cognitive: CognitiveLevelSchema,
-  count: z.number().int().min(1).max(50),
-  marks: z.number().min(0),
-  chapters: z.array(z.string()).min(1, "Select at least one chapter for this bucket"),
+  count: BaseIntField.pipe(z.number().min(1).max(50)),
+  marks: BaseNumberField,
+  chapters: z.array(z.string()).min(1, "Select at least one chapter"),
   topics: z.array(z.string()).default([]),
-  negativeMarking: z.number().min(0).default(0),
+  negativeMarking: BaseNumberField.default(0),
   requireUnits: z.boolean().default(false),
 });
 
 const SectionSchema = z.object({
   title: z.string().min(1, "Section title is required"),
   questionType: z.enum(["Multiple Choice", "Very Short Answer", "Short Answer", "Long Answer", "Case-based"]),
-  count: z.number().int().min(1, "Question count must be at least 1"),
-  marksPerQuestion: z.number().min(0, "Marks per question must be 0 or more"),
+  count: BaseIntField.pipe(z.number().min(1)),
+  marksPerQuestion: BaseNumberField,
 });
 
 const MatrixRowSchema = z.object({
   questionType: z.enum(["Multiple Choice", "Very Short Answer", "Short Answer", "Long Answer", "Case-based"]),
-  marksPerQuestion: z.number().min(0, "Marks per question must be 0 or more"),
-  count: z.number().int().min(0, "Question count cannot be negative"),
+  marksPerQuestion: BaseNumberField,
+  count: BaseIntField,
 });
 
 const FormSchema = z.object({
-  // Basic Information - FIXED WITH DEFAULTS
+  // Basic Information
   board: z.enum(["CBSE", "ICSE", "State"]).default("CBSE"),
-  classNum: z.coerce.number()
-    .min(1, "Class must be at least 1")
-    .max(12, "Class must be at most 12")
-    .default(10),
-  subject: z.string().min(1, "Enter subject").default("Science"),
+  classNum: BaseIntField.pipe(z.number().min(1).max(12)).default(10),
+  subject: z.string().min(1, "Subject is required").default("Science"),
 
-  // Enhanced Content Specification
-  chapters: z.array(z.string()).min(1, "Select at least one chapter").default(["Electricity"]),
+  // Content
+  chapters: z.array(z.string()).min(1, "Select at least one chapter").default([]),
   topics: z.array(z.string()).default([]),
-  subtopics: z.array(z.string()).default([]),
 
-  // Enhanced Generation Mode
+  // Generation Settings
   generationMode: z.enum(["simple", "blueprint", "matrix", "buckets"]).default("simple"),
-  
-  // Cognitive Levels
   cognitiveLevels: z.array(CognitiveLevelSchema).min(1, "Select at least one cognitive level").default(["understand"]),
+  ncertWeight: BaseNumberField.pipe(z.number().min(0).max(1)).default(0.6),
   
-  // NCERT Alignment
-  ncertWeight: z.number().min(0).max(1).default(0.6),
-  requireUnits: z.boolean().default(true),
-  
-  // Duplicate Prevention
-  avoidDuplicates: z.boolean().default(true),
+  // Simple Mode
+  qCount: BaseIntField.pipe(z.number().min(1)).default(5),
+  marksPerQuestion: BaseNumberField.default(1),
 
-  // Legacy fields for backward compatibility
-  questionType: z.enum(["Multiple Choice", "Short Answer", "Long Answer", "Mixed"]).default("Multiple Choice"),
-  mode: z.enum(["single", "mix"]).default("single"),
-  difficulty: z.enum(["Easy", "Medium", "Hard"]).default("Easy"),
-  mix: z.object({
-    easy: z.number().min(0).max(100).default(40),
-    medium: z.number().min(0).max(100).default(40),
-    hard: z.number().min(0).max(100).default(20),
-  }).default({ easy: 40, medium: 40, hard: 20 }),
-
-  // SIMPLE pattern - FIXED
-  qCount: z.coerce.number()
-    .min(1, "Question count must be at least 1")
-    .default(5),
-  marksPerQuestion: z.coerce.number()
-    .min(0, "Marks per question must be 0 or more")
-    .default(1),
-
-  // BLUEPRINT pattern
+  // Blueprint Mode
   sections: z.array(SectionSchema).default([]),
 
-  // MATRIX pattern
+  // Matrix Mode  
   markingMatrix: z.array(MatrixRowSchema).default([]),
 
-  // BUCKETS pattern (Enhanced)
+  // Buckets Mode
   buckets: z.array(QuestionBucketSchema).default([]),
 
   // Presentation
   language: z.enum(["English", "Hindi"]).default("English"),
-  solutionStyle: z.enum(["Steps", "Concise"]).default("Steps"),
   includeAnswerKey: z.boolean().default(true),
 
-  // Assessment Settings
-  negativeMarking: z.number().min(-10).max(0).default(0),
+  // Assessment
+  negativeMarking: BaseNumberField.pipe(z.number().min(-10).max(0)).default(0),
   shuffleQuestions: z.boolean().default(true),
   shuffleOptions: z.boolean().default(true),
-  timeLimit: z.number().min(5).optional(),
+  timeLimit: z.preprocess(
+    (val) => val === "" ? undefined : safeInt(val),
+    z.number().min(1).optional()
+  ).optional(),
 
-  // Additional Content
-  notes: z.string().max(2000).optional(),
-
-  // Output Settings
+  // Output
   outputFormat: z.enum(["PDF", "DOCX", "CSV", "JSON"]).default("PDF"),
   watermark: z.boolean().default(false),
   watermarkText: z.string().optional(),
-  useLogo: z.boolean().default(true),
-  shareable: z.boolean().default(false),
 
-  // File inputs
-  referenceFiles: z.any().optional(),
-
-  // Header Information
+  // Header
   institute: z.string().optional(),
   teacherName: z.string().optional(),
   examTitle: z.string().optional(),
   examDate: z.string().optional(),
 })
-.refine((data) => {
-  if (data.mode === "mix") {
-    const easy = safeNumber(data.mix?.easy, 0);
-    const medium = safeNumber(data.mix?.medium, 0);
-    const hard = safeNumber(data.mix?.hard, 0);
-    const sum = easy + medium + hard;
-    return Math.abs(sum - 100) < 0.01;
-  }
-  return true;
-}, { 
-  path: ["mix"], 
-  message: "Difficulty mix must sum to 100%" 
-})
-.refine((data) => {
-  if (data.generationMode === "blueprint") {
-    return data.sections.length >= 1;
-  }
-  return true;
-}, {
-  path: ["sections"],
-  message: "Add at least one section for blueprint mode"
-})
-.refine((data) => {
-  if (data.generationMode === "buckets") {
-    return data.buckets.length >= 1;
-  }
-  return true;
-}, {
-  path: ["buckets"],
-  message: "Add at least one question bucket for buckets mode"
-})
-.refine((data) => {
-  if (data.generationMode === "buckets") {
-    return data.buckets.every(bucket => bucket.chapters.length > 0);
-  }
-  return true;
-}, {
-  path: ["buckets"],
-  message: "Each bucket must have at least one chapter"
-});
+.refine(
+  (data) => data.generationMode !== "blueprint" || data.sections.length >= 1,
+  { path: ["sections"], message: "Add at least one section for blueprint mode" }
+)
+.refine(
+  (data) => data.generationMode !== "buckets" || data.buckets.length >= 1,
+  { path: ["buckets"], message: "Add at least one question bucket" }
+)
+.refine(
+  (data) => data.generationMode !== "buckets" || data.buckets.every(b => b.chapters.length > 0),
+  { path: ["buckets"], message: "Each bucket must have at least one chapter" }
+);
 
 export type TestGeneratorFormValues = z.infer<typeof FormSchema>;
 
-type Props = {
-  onGenerate: (data: TestGeneratorFormValues) => Promise<string | null>;
+interface Props {
+  onGenerate: (data: unknown) => Promise<string | null>;
   loading?: boolean;
   onSaveTemplate?: (data: TestGeneratorFormValues) => Promise<void>;
-};
+}
 
-/* ===================== ENHANCED INPUT COMPONENTS ===================== */
+/* ===================== OPTIMIZED SUB-COMPONENTS ===================== */
 
-function ChipInput({
-  label,
-  values,
-  onChange,
-  placeholder,
-  required = false,
-  error,
-}: {
+interface ChipInputProps {
   label: string;
   values: string[];
-  onChange: (next: string[]) => void;
+  onChange: (values: string[]) => void;
   placeholder?: string;
   required?: boolean;
   error?: string;
-}) {
-  const [text, setText] = React.useState("");
-  
-  const add = () => {
-    const v = text.trim();
-    if (!v) return;
-    if (!values.includes(v)) {
-      onChange([...values, v]);
-    }
-    setText("");
-  };
-  
-  const onKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      add();
-    } else if (e.key === "Backspace" && !text && values.length) {
-      onChange(values.slice(0, -1));
-    }
-  };
+}
 
-  const removeItem = (itemToRemove: string) => {
+const ChipInput: React.FC<ChipInputProps> = ({ 
+  label, 
+  values, 
+  onChange, 
+  placeholder, 
+  required, 
+  error 
+}) => {
+  const [inputValue, setInputValue] = React.useState("");
+
+  const handleAdd = useCallback((value: string) => {
+    const trimmed = value.trim();
+    if (trimmed && !values.includes(trimmed)) {
+      onChange([...values, trimmed]);
+    }
+  }, [values, onChange]);
+
+  const handleRemove = useCallback((itemToRemove: string) => {
     onChange(values.filter(item => item !== itemToRemove));
-  };
+  }, [values, onChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      handleAdd(inputValue);
+      setInputValue("");
+    }
+  }, [inputValue, handleAdd]);
+
+  const handleBlur = useCallback(() => {
+    if (inputValue) {
+      handleAdd(inputValue);
+      setInputValue("");
+    }
+  }, [inputValue, handleAdd]);
 
   return (
     <div>
       <label className="block text-sm mb-1">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
-      <div className={`w-full border rounded-md px-2 py-2 bg-white ${error ? 'border-red-500' : 'border-gray-300'}`}>
-        <div className="flex flex-wrap gap-2 mb-2">
-          {values.map((t, i) => (
-            <span
-              key={`${t}-${i}`}
-              className="inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs bg-slate-100 border"
-            >
-              {t}
-              <button
-                type="button"
-                onClick={() => removeItem(t)}
-                className="text-slate-500 hover:text-black"
-                aria-label={`Remove ${t}`}
+      <div className={`border rounded-md p-2 min-h-[42px] ${error ? 'border-red-500' : 'border-gray-300'}`}>
+        <div className="flex flex-wrap gap-1 mb-1">
+          {values.map((value) => (
+            <span key={value} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
+              {value}
+              <button 
+                type="button" 
+                onClick={() => handleRemove(value)} 
+                className="text-blue-600 hover:text-blue-800 text-lg leading-none"
               >
                 ×
               </button>
@@ -247,39 +201,41 @@ function ChipInput({
           ))}
         </div>
         <input
-          className="w-full outline-none px-1"
-          placeholder={placeholder || "Type and press Enter"}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={onKeyDown}
-          onBlur={add}
-          aria-label={`${label} input`}
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          placeholder={placeholder}
+          className="w-full border-0 outline-none bg-transparent"
         />
       </div>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
-}
+};
 
-function CognitiveLevelSelector({ value, onChange, error }: { 
-  value: string[]; 
+interface CognitiveLevelSelectorProps {
+  value: string[];
   onChange: (value: string[]) => void;
   error?: string;
-}) {
-  const levels = [
-    { value: "recall", label: "🧠 Recall", description: "Remember facts and concepts" },
-    { value: "understand", label: "💡 Understand", description: "Explain ideas and concepts" },
-    { value: "apply", label: "⚡ Apply", description: "Use knowledge in new situations" },
-    { value: "analyze", label: "🔍 Analyze", description: "Draw connections among ideas" },
-  ];
+}
 
-  const toggleLevel = (level: string) => {
-    if (value.includes(level)) {
-      onChange(value.filter(l => l !== level));
-    } else {
-      onChange([...value, level]);
-    }
-  };
+const CognitiveLevelSelector: React.FC<CognitiveLevelSelectorProps> = ({ value, onChange, error }) => {
+  const levels = [
+    { value: "recall", label: "🧠 Recall" },
+    { value: "understand", label: "💡 Understand" },
+    { value: "apply", label: "⚡ Apply" },
+    { value: "analyze", label: "🔍 Analyze" },
+  ] as const;
+
+  const toggleLevel = useCallback((level: string) => {
+    onChange(
+      value.includes(level) 
+        ? value.filter(l => l !== level)
+        : [...value, level]
+    );
+  }, [value, onChange]);
 
   return (
     <div>
@@ -292,177 +248,119 @@ function CognitiveLevelSelector({ value, onChange, error }: {
             key={level.value}
             type="button"
             onClick={() => toggleLevel(level.value)}
-            className={`p-3 rounded-lg border text-left transition-all ${
+            className={`p-2 rounded border text-sm transition-colors ${
               value.includes(level.value)
                 ? "bg-blue-50 border-blue-500 text-blue-700"
                 : "bg-white border-gray-300 hover:bg-gray-50"
             }`}
           >
-            <div className="font-medium text-sm">{level.label}</div>
-            <div className="text-xs text-gray-600 mt-1">{level.description}</div>
+            {level.label}
           </button>
         ))}
       </div>
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
     </div>
   );
+};
+
+interface BucketEditorProps {
+  buckets: TestGeneratorFormValues['buckets'];
+  onChange: (buckets: TestGeneratorFormValues['buckets']) => void;
+  error?: string;
+  chapters: string[];
 }
 
-function BucketEditor({ buckets, onChange, error }: { 
-  buckets: any[]; 
-  onChange: (buckets: any[]) => void;
-  error?: string;
-}) {
-  const addBucket = () => {
+const BucketEditor: React.FC<BucketEditorProps> = ({ buckets = [], onChange, error, chapters }) => {
+  const addBucket = useCallback(() => {
     onChange([
       ...buckets,
       {
-        id: Math.random().toString(36).substr(2, 9),
+        id: crypto.randomUUID(),
         type: "mcq",
         difficulty: "medium",
         cognitive: "understand",
         count: 5,
         marks: 1,
-        chapters: [],
+        chapters: chapters.length > 0 ? [chapters[0]] : [],
         topics: [],
         negativeMarking: 0,
         requireUnits: false,
       },
     ]);
-  };
+  }, [buckets, onChange, chapters]);
 
-  const updateBucket = (index: number, updates: any) => {
+  const updateBucket = useCallback((index: number, updates: Partial<TestGeneratorFormValues['buckets'][0]>) => {
     const newBuckets = [...buckets];
-    
-    // NAN PROTECTION FOR NUMERIC FIELDS
-    const safeUpdates = { ...updates };
-    if ('count' in updates) {
-      safeUpdates.count = safeInt(updates.count, 5);
-    }
-    if ('marks' in updates) {
-      safeUpdates.marks = safeNumber(updates.marks, 1);
-    }
-    if ('negativeMarking' in updates) {
-      safeUpdates.negativeMarking = safeNumber(updates.negativeMarking, 0);
-    }
-    
-    newBuckets[index] = { ...newBuckets[index], ...safeUpdates };
+    newBuckets[index] = { ...newBuckets[index], ...updates };
     onChange(newBuckets);
-  };
+  }, [buckets, onChange]);
 
-  const removeBucket = (index: number) => {
+  const removeBucket = useCallback((index: number) => {
     onChange(buckets.filter((_, i) => i !== index));
-  };
+  }, [buckets, onChange]);
 
   return (
     <div className="space-y-4">
       {buckets.map((bucket, index) => (
         <div key={bucket.id} className="border rounded-lg p-4 bg-white">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            {/* Question Type */}
-            <div className="md:col-span-2">
-              <label className="block text-xs mb-1">Type</label>
-              <select
-                value={bucket.type}
-                onChange={(e) => updateBucket(index, { type: e.target.value })}
-                className="w-full border rounded-md px-2 py-2 text-sm"
-              >
-                <option value="mcq">MCQ</option>
-                <option value="short">Short Answer</option>
-                <option value="long">Long Answer</option>
-                <option value="numerical">Numerical</option>
-                <option value="case_based">Case Based</option>
-              </select>
-            </div>
+            {[
+              { key: 'type' as const, label: 'Type', options: ['mcq', 'short', 'long', 'numerical', 'case_based'] },
+              { key: 'difficulty' as const, label: 'Difficulty', options: ['easy', 'medium', 'hard'] },
+              { key: 'cognitive' as const, label: 'Cognitive', options: ['recall', 'understand', 'apply', 'analyze'] },
+            ].map(({ key, label, options }) => (
+              <div key={key} className="md:col-span-2">
+                <label className="block text-xs mb-1">{label}</label>
+                <select
+                  value={bucket[key]}
+                  onChange={(e) => updateBucket(index, { [key]: e.target.value })}
+                  className="w-full border rounded px-2 py-1 text-sm"
+                >
+                  {options.map(opt => (
+                    <option key={opt} value={opt}>
+                      {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
 
-            {/* Difficulty */}
             <div className="md:col-span-2">
-              <label className="block text-xs mb-1">Difficulty</label>
-              <select
-                value={bucket.difficulty}
-                onChange={(e) => updateBucket(index, { difficulty: e.target.value })}
-                className="w-full border rounded-md px-2 py-2 text-sm"
-              >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-              </select>
-            </div>
-
-            {/* Cognitive Level */}
-            <div className="md:col-span-2">
-              <label className="block text-xs mb-1">Cognitive</label>
-              <select
-                value={bucket.cognitive}
-                onChange={(e) => updateBucket(index, { cognitive: e.target.value })}
-                className="w-full border rounded-md px-2 py-2 text-sm"
-              >
-                <option value="recall">Recall</option>
-                <option value="understand">Understand</option>
-                <option value="apply">Apply</option>
-                <option value="analyze">Analyze</option>
-              </select>
-            </div>
-
-            {/* Count */}
-            <div className="md:col-span-1">
               <label className="block text-xs mb-1">Count</label>
               <input
                 type="number"
                 min="1"
                 max="50"
-                value={bucket.count || ""}
-                onChange={(e) => updateBucket(index, { 
-                  count: safeInt(e.target.value, 5)
-                })}
-                className="w-full border rounded-md px-2 py-2 text-sm"
+                value={bucket.count}
+                onChange={(e) => updateBucket(index, { count: safeInt(e.target.value, 1) })}
+                className="w-full border rounded px-2 py-1 text-sm"
               />
             </div>
 
-            {/* Marks */}
-            <div className="md:col-span-1">
+            <div className="md:col-span-2">
               <label className="block text-xs mb-1">Marks</label>
               <input
                 type="number"
                 min="0"
                 step="0.5"
-                value={bucket.marks || ""}
-                onChange={(e) => updateBucket(index, { 
-                  marks: safeNumber(e.target.value, 1)
-                })}
-                className="w-full border rounded-md px-2 py-2 text-sm"
+                value={bucket.marks}
+                onChange={(e) => updateBucket(index, { marks: safeNumber(e.target.value, 1) })}
+                className="w-full border rounded px-2 py-1 text-sm"
               />
             </div>
 
-            {/* Negative Marking */}
-            <div className="md:col-span-2">
-              <label className="block text-xs mb-1">Negative Marking</label>
-              <input
-                type="number"
-                min="0"
-                step="0.25"
-                value={bucket.negativeMarking || ""}
-                onChange={(e) => updateBucket(index, { 
-                  negativeMarking: safeNumber(e.target.value, 0)
-                })}
-                className="w-full border rounded-md px-2 py-2 text-sm"
-              />
-            </div>
-
-            {/* Remove Button */}
             <div className="md:col-span-2">
               <button
                 type="button"
                 onClick={() => removeBucket(index)}
-                className="w-full px-3 py-2 text-sm border border-red-300 text-red-600 rounded-md hover:bg-red-50"
+                className="w-full px-2 py-1 text-sm border border-red-300 text-red-600 rounded hover:bg-red-50 transition-colors"
               >
                 Remove
               </button>
             </div>
           </div>
 
-          {/* Chapters and Topics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs mb-1">Chapters *</label>
               <input
@@ -472,11 +370,8 @@ function BucketEditor({ buckets, onChange, error }: {
                 onChange={(e) => updateBucket(index, { 
                   chapters: e.target.value.split(",").map(c => c.trim()).filter(Boolean) 
                 })}
-                className="w-full border rounded-md px-2 py-2 text-sm"
+                className="w-full border rounded px-2 py-1 text-sm"
               />
-              {(!bucket.chapters || bucket.chapters.length === 0) && (
-                <p className="text-xs text-red-600 mt-1">Select at least one chapter</p>
-              )}
             </div>
             <div>
               <label className="block text-xs mb-1">Topics</label>
@@ -487,22 +382,9 @@ function BucketEditor({ buckets, onChange, error }: {
                 onChange={(e) => updateBucket(index, { 
                   topics: e.target.value.split(",").map(t => t.trim()).filter(Boolean) 
                 })}
-                className="w-full border rounded-md px-2 py-2 text-sm"
+                className="w-full border rounded px-2 py-1 text-sm"
               />
             </div>
-          </div>
-
-          {/* Units Requirement */}
-          <div className="mt-2">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={bucket.requireUnits || false}
-                onChange={(e) => updateBucket(index, { requireUnits: e.target.checked })}
-                className="rounded"
-              />
-              Require units in answers
-            </label>
           </div>
         </div>
       ))}
@@ -510,7 +392,7 @@ function BucketEditor({ buckets, onChange, error }: {
       <button
         type="button"
         onClick={addBucket}
-        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-800 transition-colors"
+        className="w-full py-2 border-2 border-dashed border-gray-300 rounded text-gray-600 hover:border-gray-400 hover:text-gray-800 transition-colors"
       >
         + Add Question Bucket
       </button>
@@ -518,11 +400,35 @@ function BucketEditor({ buckets, onChange, error }: {
       {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>
   );
-}
+};
 
-/* ===================== MAIN FORM COMPONENT - COMPLETELY FIXED ===================== */
+/* ===================== MAIN FORM COMPONENT ===================== */
 
-const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplate }) => {
+const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading = false }) => {
+  const defaultValues: TestGeneratorFormValues = useMemo(() => ({
+    board: "CBSE",
+    classNum: 10,
+    subject: "Science",
+    chapters: [],
+    topics: [],
+    generationMode: "simple",
+    cognitiveLevels: ["understand"],
+    ncertWeight: 0.6,
+    qCount: 5,
+    marksPerQuestion: 1,
+    sections: [],
+    markingMatrix: [],
+    buckets: [],
+    language: "English",
+    includeAnswerKey: true,
+    negativeMarking: 0,
+    shuffleOptions: true,
+    shuffleQuestions: true,
+    outputFormat: "PDF",
+    watermark: false,
+    watermarkText: "",
+  }), []);
+
   const {
     register,
     handleSubmit,
@@ -532,113 +438,93 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
     formState: { errors, isSubmitting },
   } = useForm<TestGeneratorFormValues>({
     resolver: zodResolver(FormSchema),
-    defaultValues: {
-      board: "CBSE",
-      classNum: 10,
-      subject: "Science",
-      chapters: ["Electricity"],
-      topics: ["Ohm's Law"],
-      subtopics: ["Series Circuits"],
-      generationMode: "simple",
-      cognitiveLevels: ["understand", "apply"],
-      ncertWeight: 0.6,
-      requireUnits: true,
-      avoidDuplicates: true,
-      questionType: "Multiple Choice",
-      mode: "single",
-      difficulty: "Easy",
-      mix: { easy: 50, medium: 30, hard: 20 },
-      qCount: 5,
-      marksPerQuestion: 1,
-      sections: [],
-      markingMatrix: [],
-      buckets: [],
-      language: "English",
-      solutionStyle: "Steps",
-      includeAnswerKey: true,
-      negativeMarking: 0,
-      shuffleOptions: true,
-      shuffleQuestions: true,
-      outputFormat: "PDF",
-      watermark: false,
-      watermarkText: "",
-      useLogo: true,
-      shareable: false,
-      referenceFiles: [],
-      notes: "NCERT based, CBSE, hard level",
-    },
+    defaultValues,
   });
 
   // Field arrays
-  const { fields: sectionFields, append: appendSection, remove: removeSection } = useFieldArray({ 
-    control, 
-    name: "sections" 
-  });
-  
-  const { fields: matrixFields, append: appendMatrix, remove: removeMatrix } = useFieldArray({ 
-    control, 
-    name: "markingMatrix" 
-  });
+  const { fields: sectionFields, append: appendSection, remove: removeSection } = useFieldArray({ control, name: "sections" });
+  const { fields: matrixFields, append: appendMatrix, remove: removeMatrix } = useFieldArray({ control, name: "markingMatrix" });
   
   // Watched values
   const generationMode = watch("generationMode");
   const cognitiveLevels = watch("cognitiveLevels");
   const chapters = watch("chapters");
   const buckets = watch("buckets");
-  const mode = watch("mode");
-  const mix = watch("mix");
   const qCount = watch("qCount");
   const sections = watch("sections");
   const matrixRows = watch("markingMatrix");
   const marksPerQuestion = watch("marksPerQuestion");
   const ncertWeight = watch("ncertWeight");
 
-  // FIXED CALCULATIONS - NO MORE NAN ERRORS
-  const totalMarks = useMemo(() => {
-    if (generationMode === "blueprint") {
-      return sections.reduce((sum, s) => sum + safeNumber(s.count, 0) * safeNumber(s.marksPerQuestion, 0), 0);
+  // Optimized calculations
+  const { totalMarks, totalQuestions } = useMemo(() => {
+    let marks = 0;
+    let questions = 0;
+
+    switch (generationMode) {
+      case "blueprint":
+        marks = sections.reduce((sum, s) => sum + (s.count * s.marksPerQuestion), 0);
+        questions = sections.reduce((sum, s) => sum + s.count, 0);
+        break;
+      case "matrix":
+        marks = matrixRows.reduce((sum, r) => sum + (r.count * r.marksPerQuestion), 0);
+        questions = matrixRows.reduce((sum, r) => sum + r.count, 0);
+        break;
+      case "buckets":
+        marks = buckets.reduce((sum, b) => sum + (b.count * b.marks), 0);
+        questions = buckets.reduce((sum, b) => sum + b.count, 0);
+        break;
+      default:
+        marks = qCount * marksPerQuestion;
+        questions = qCount;
     }
-    if (generationMode === "matrix") {
-      return (matrixRows || []).reduce((sum, r) => sum + safeNumber(r.count, 0) * safeNumber(r.marksPerQuestion, 0), 0);
-    }
-    if (generationMode === "buckets") {
-      return buckets.reduce((sum, b) => sum + safeNumber(b.count, 0) * safeNumber(b.marks, 0), 0);
-    }
-    // SIMPLE MODE - FIXED
-    return safeNumber(qCount, 5) * safeNumber(marksPerQuestion, 1);
+
+    return { totalMarks: marks, totalQuestions: questions };
   }, [generationMode, qCount, marksPerQuestion, sections, matrixRows, buckets]);
 
-  const totalQuestions = useMemo(() => {
-    if (generationMode === "blueprint") return sections.reduce((s, x) => s + safeNumber(x.count, 0), 0);
-    if (generationMode === "matrix") return (matrixRows || []).reduce((s, x) => s + safeNumber(x.count, 0), 0);
-    if (generationMode === "buckets") return buckets.reduce((s, b) => s + safeNumber(b.count, 0), 0);
-    return safeNumber(qCount, 5);
-  }, [generationMode, qCount, sections, matrixRows, buckets]);
-
-  // Safe mix percentage calculation
-  const mixSum = useMemo(() => {
-    const easy = safeNumber(mix?.easy, 0);
-    const medium = safeNumber(mix?.medium, 0);
-    const hard = safeNumber(mix?.hard, 0);
-    return easy + medium + hard;
-  }, [mix]);
-
-  const onSubmit = async (data: TestGeneratorFormValues) => {
+  // Optimized submit handler
+  const onSubmit = useCallback(async (data: TestGeneratorFormValues) => {
     try {
-      console.log("Form data:", data);
-      const result = await onGenerate(data);
-      if (!result) {
-        console.error("Generation failed - no result returned");
-      }
+      // Convert numeric fields to strings for backend compatibility
+      const backendData = {
+        ...data,
+        classNum: data.classNum.toString(),
+        qCount: data.qCount.toString(),
+        marksPerQuestion: data.marksPerQuestion.toString(),
+        ncertWeight: data.ncertWeight.toString(),
+        negativeMarking: data.negativeMarking.toString(),
+        timeLimit: data.timeLimit?.toString() || undefined,
+        
+        sections: data.sections.map(section => ({
+          ...section,
+          count: section.count.toString(),
+          marksPerQuestion: section.marksPerQuestion.toString(),
+        })),
+        
+        markingMatrix: data.markingMatrix.map(row => ({
+          ...row,
+          count: row.count.toString(),
+          marksPerQuestion: row.marksPerQuestion.toString(),
+        })),
+        
+        buckets: data.buckets.map(bucket => ({
+          ...bucket,
+          count: bucket.count.toString(),
+          marks: bucket.marks.toString(),
+          negativeMarking: bucket.negativeMarking.toString(),
+        })),
+      };
+
+      console.log("Submitting data to backend:", backendData);
+      await onGenerate(backendData);
+      
     } catch (error) {
       console.error("Form submission error:", error);
     }
-  };
-
-  const errorText = (e?: any) => e && <p className="text-xs text-red-600 mt-1">{e.message?.toString()}</p>;
+  }, [onGenerate]);
 
   // Presets
-  const applyCBSE80Preset = () => {
+  const applyCBSE80Preset = useCallback(() => {
     setValue("generationMode", "matrix");
     setValue("markingMatrix", [
       { questionType: "Multiple Choice", marksPerQuestion: 1, count: 20 },
@@ -646,14 +532,14 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
       { questionType: "Short Answer", marksPerQuestion: 3, count: 7 },
       { questionType: "Long Answer", marksPerQuestion: 4, count: 3 },
     ]);
-  };
+  }, [setValue]);
 
-  const applyCognitiveBalancedPreset = () => {
-    const currentChapters = chapters.length > 0 ? chapters : ["Electricity"];
+  const applyCognitiveBalancedPreset = useCallback(() => {
+    const currentChapters = chapters.length > 0 ? chapters : ["General Topics"];
     setValue("generationMode", "buckets");
     setValue("buckets", [
       {
-        id: "1",
+        id: crypto.randomUUID(),
         type: "mcq",
         difficulty: "easy",
         cognitive: "recall",
@@ -665,9 +551,9 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
         requireUnits: false,
       },
       {
-        id: "2", 
+        id: crypto.randomUUID(),
         type: "short",
-        difficulty: "medium",
+        difficulty: "medium", 
         cognitive: "understand",
         count: 8,
         marks: 2,
@@ -675,94 +561,49 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
         topics: [],
         negativeMarking: 0,
         requireUnits: true,
-      },
-      {
-        id: "3",
-        type: "long", 
-        difficulty: "hard",
-        cognitive: "apply",
-        count: 4,
-        marks: 4,
-        chapters: currentChapters,
-        topics: [],
-        negativeMarking: 0,
-        requireUnits: true,
-      },
-      {
-        id: "4",
-        type: "numerical",
-        difficulty: "hard", 
-        cognitive: "analyze",
-        count: 3,
-        marks: 5,
-        chapters: currentChapters,
-        topics: [],
-        negativeMarking: 0,
-        requireUnits: true,
-      },
+      }
     ]);
-  };
+  }, [setValue, chapters]);
+
+  const errorText = (error?: { message?: string }) => 
+    error?.message && <p className="text-xs text-red-600 mt-1">{error.message}</p>;
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" aria-label="Enhanced Test Generator Form">
-      {/* ======= Header actions ======= */}
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-lg font-semibold">Create Enhanced Test</h3>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={applyCBSE80Preset}
-            className="px-3 py-2 rounded-md border hover:bg-slate-100 text-sm"
-            title="Apply CBSE 80-marks matrix"
-          >
+          <button type="button" onClick={applyCBSE80Preset} className="px-3 py-2 border rounded text-sm hover:bg-gray-50 transition-colors">
             CBSE 80 Preset
           </button>
-          <button
-            type="button"
-            onClick={applyCognitiveBalancedPreset}
-            className="px-3 py-2 rounded-md border hover:bg-slate-100 text-sm"
-            title="Apply cognitive-balanced bucket preset"
-          >
+          <button type="button" onClick={applyCognitiveBalancedPreset} className="px-3 py-2 border rounded text-sm hover:bg-gray-50 transition-colors">
             Cognitive Balanced
           </button>
-          {onSaveTemplate && (
-            <button
-              type="button"
-              onClick={handleSubmit((d) => onSaveTemplate?.(d))}
-              className="px-3 py-2 rounded-md border hover:bg-slate-100 text-sm"
-              title="Save the current configuration as a reusable template"
-            >
-              Save as Template
-            </button>
-          )}
         </div>
       </div>
 
-      {/* ======== Basic Information ======== */}
-      <div className="rounded-lg border bg-white">
+      {/* Basic Information */}
+      <div className="border rounded-lg bg-white">
         <div className="px-4 py-3 border-b font-medium">Basic Information</div>
-        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm mb-1">Board</label>
-            <select className="w-full border rounded-md px-3 py-2 bg-white" {...register("board")}>
-              <option>CBSE</option>
-              <option>ICSE</option>
-              <option>State</option>
+            <select {...register("board")} className="w-full border rounded px-3 py-2">
+              <option value="CBSE">CBSE</option>
+              <option value="ICSE">ICSE</option>
+              <option value="State">State</option>
             </select>
-            {errorText(errors.board)}
           </div>
 
           <div>
             <label className="block text-sm mb-1">Class *</label>
             <input
               type="number"
-              min={1}
-              max={12}
-              className="w-full border rounded-md px-3 py-2"
-              {...register("classNum", { 
-                valueAsNumber: true,
-                required: "Class is required"
-              })}
+              {...register("classNum", { valueAsNumber: true })}
+              min="1"
+              max="12"
+              className="w-full border rounded px-3 py-2"
             />
             {errorText(errors.classNum)}
           </div>
@@ -770,22 +611,21 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
           <div>
             <label className="block text-sm mb-1">Subject *</label>
             <input
-              className="w-full border rounded-md px-3 py-2"
-              placeholder="Maths / Science / ..."
-              {...register("subject", { required: "Subject is required" })}
+              {...register("subject")}
+              className="w-full border rounded px-3 py-2"
+              placeholder="e.g., Science, Mathematics"
             />
             {errorText(errors.subject)}
           </div>
 
           <div>
             <label className="block text-sm mb-1">Language</label>
-            <select className="w-full border rounded-md px-3 py-2 bg-white" {...register("language")}>
-              <option>English</option>
-              <option>Hindi</option>
+            <select {...register("language")} className="w-full border rounded px-3 py-2">
+              <option value="English">English</option>
+              <option value="Hindi">Hindi</option>
             </select>
           </div>
 
-          {/* Enhanced Chapters Input */}
           <Controller
             control={control}
             name="chapters"
@@ -793,15 +633,14 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
               <ChipInput
                 label="Chapters *"
                 values={field.value}
-                onChange={(v) => field.onChange(v)}
-                placeholder="e.g., Electricity, Magnetism, Optics"
+                onChange={field.onChange}
+                placeholder="e.g., Electricity, Magnetism"
                 required
                 error={fieldState.error?.message}
               />
             )}
           />
 
-          {/* Topics/Subtopics chips */}
           <Controller
             control={control}
             name="topics"
@@ -809,41 +648,18 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
               <ChipInput
                 label="Topics"
                 values={field.value}
-                onChange={(v) => field.onChange(v)}
-                placeholder="e.g., Ohm's Law, Reflection, Refraction"
+                onChange={field.onChange}
+                placeholder="e.g., Ohm's Law, Reflection"
               />
             )}
           />
-          <Controller
-            control={control}
-            name="subtopics"
-            render={({ field }) => (
-              <ChipInput
-                label="Subtopics"
-                values={field.value}
-                onChange={(v) => field.onChange(v)}
-                placeholder="e.g., Series Circuits, Lens Formula"
-              />
-            )}
-          />
-
-          <div className="md:col-span-2">
-            <label className="block text-sm mb-1">Description / Keywords</label>
-            <textarea
-              rows={3}
-              className="w-full border rounded-md px-3 py-2"
-              placeholder="Syllabus scope, NCERT chapter numbers, constraints, etc."
-              {...register("notes")}
-            />
-          </div>
         </div>
       </div>
 
-      {/* ======== Enhanced Cognitive Settings ======== */}
-      <div className="rounded-lg border bg-white">
-        <div className="px-4 py-3 border-b font-medium">Cognitive & Curriculum Settings</div>
-        <div className="p-4 space-y-6">
-          {/* Cognitive Levels */}
+      {/* Cognitive Settings */}
+      <div className="border rounded-lg bg-white">
+        <div className="px-4 py-3 border-b font-medium">Cognitive Settings</div>
+        <div className="p-4 space-y-4">
           <Controller
             control={control}
             name="cognitiveLevels"
@@ -856,87 +672,54 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
             )}
           />
 
-          {/* NCERT Weight */}
           <div>
             <label className="block text-sm mb-2">
-              NCERT Alignment: {Math.round(safeNumber(ncertWeight, 0.6) * 100)}%
+              NCERT Alignment: {Math.round(ncertWeight * 100)}%
             </label>
             <input
               type="range"
+              {...register("ncertWeight", { valueAsNumber: true })}
+              className="w-full"
               min="0"
               max="1"
               step="0.1"
-              className="w-full"
-              {...register("ncertWeight", { valueAsNumber: true })}
             />
-            <div className="flex justify-between text-xs text-gray-600 mt-1">
-              <span>Low NCERT Focus</span>
-              <span>High NCERT Focus</span>
-            </div>
-          </div>
-
-          {/* Additional Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" {...register("requireUnits")} />
-              <span>Require units in answers</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" {...register("avoidDuplicates")} />
-              <span>Avoid duplicate questions</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" {...register("shareable")} />
-              <span>Make shareable</span>
-            </label>
           </div>
         </div>
       </div>
 
-      {/* ======== Generation Pattern ======== */}
-      <div className="rounded-lg border bg-white">
-        <div className="px-4 py-3 border-b font-medium">Question Pattern & Distribution</div>
+      {/* Question Pattern */}
+      <div className="border rounded-lg bg-white">
+        <div className="px-4 py-3 border-b font-medium">Question Pattern</div>
         <div className="p-4 space-y-6">
-          {/* Generation Mode Selection */}
           <div>
             <label className="block text-sm mb-2">Generation Mode</label>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {[
-                { value: "simple", label: "📝 Simple", description: "Basic count and marks" },
-                { value: "blueprint", label: "📊 Blueprint", description: "Section-wise distribution" },
-                { value: "matrix", label: "🔢 Matrix", description: "Type-wise marking scheme" },
-                { value: "buckets", label: "🎯 Buckets", description: "Advanced cognitive buckets" },
-              ].map((modeOption) => (
+              {["simple", "blueprint", "matrix", "buckets"].map((mode) => (
                 <button
-                  key={modeOption.value}
+                  key={mode}
                   type="button"
-                  onClick={() => setValue("generationMode", modeOption.value as any)}
-                  className={`p-3 rounded-lg border text-left transition-all ${
-                    generationMode === modeOption.value
-                      ? "bg-blue-50 border-blue-500 text-blue-700"
-                      : "bg-white border-gray-300 hover:bg-gray-50"
+                  onClick={() => setValue("generationMode", mode as any)}
+                  className={`p-3 rounded border text-left transition-colors ${
+                    generationMode === mode ? "bg-blue-50 border-blue-500" : "border-gray-300 hover:bg-gray-50"
                   }`}
                 >
-                  <div className="font-medium text-sm">{modeOption.label}</div>
-                  <div className="text-xs text-gray-600 mt-1">{modeOption.description}</div>
+                  <div className="font-medium text-sm capitalize">{mode}</div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* SIMPLE MODE - FIXED */}
+          {/* Simple Mode */}
           {generationMode === "simple" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm mb-1"># Questions *</label>
                 <input
                   type="number"
-                  min={1}
-                  className="w-full border rounded-md px-3 py-2"
-                  {...register("qCount", { 
-                    valueAsNumber: true,
-                    required: "Question count is required"
-                  })}
+                  {...register("qCount", { valueAsNumber: true })}
+                  min="1"
+                  className="w-full border rounded px-3 py-2"
                 />
                 {errorText(errors.qCount)}
               </div>
@@ -944,160 +727,19 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
                 <label className="block text-sm mb-1">Marks per Question *</label>
                 <input
                   type="number"
-                  min={0}
+                  {...register("marksPerQuestion", { valueAsNumber: true })}
+                  min="0"
                   step="0.5"
-                  className="w-full border rounded-md px-3 py-2"
-                  {...register("marksPerQuestion", { 
-                    valueAsNumber: true,
-                    required: "Marks per question is required"
-                  })}
+                  className="w-full border rounded px-3 py-2"
                 />
                 {errorText(errors.marksPerQuestion)}
               </div>
             </div>
           )}
 
-          {/* BLUEPRINT MODE */}
-          {generationMode === "blueprint" && (
-            <div className="rounded-md border p-4 space-y-4">
-              {sectionFields.map((field, idx) => (
-                <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                  <div className="md:col-span-3">
-                    <label className="block text-xs mb-1">Title *</label>
-                    <input
-                      className="w-full border rounded-md px-2 py-2"
-                      {...register(`sections.${idx}.title` as const)}
-                    />
-                    {errors.sections?.[idx]?.title && (
-                      <p className="text-xs text-red-600 mt-1">{errors.sections[idx]?.title?.message}</p>
-                    )}
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-xs mb-1">Type</label>
-                    <select
-                      className="w-full border rounded-md px-2 py-2 bg-white"
-                      {...register(`sections.${idx}.questionType` as const)}
-                    >
-                      <option>Multiple Choice</option>
-                      <option>Very Short Answer</option>
-                      <option>Short Answer</option>
-                      <option>Long Answer</option>
-                      <option>Case-based</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs mb-1">Count *</label>
-                    <input
-                      type="number"
-                      min={1}
-                      className="w-full border rounded-md px-2 py-2"
-                      {...register(`sections.${idx}.count` as const, { valueAsNumber: true })}
-                    />
-                    {errors.sections?.[idx]?.count && (
-                      <p className="text-xs text-red-600 mt-1">{errors.sections[idx]?.count?.message}</p>
-                    )}
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs mb-1">Marks/Q *</label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full border rounded-md px-2 py-2"
-                      {...register(`sections.${idx}.marksPerQuestion` as const, { valueAsNumber: true })}
-                    />
-                    {errors.sections?.[idx]?.marksPerQuestion && (
-                      <p className="text-xs text-red-600 mt-1">{errors.sections[idx]?.marksPerQuestion?.message}</p>
-                    )}
-                  </div>
-                  <div className="md:col-span-2">
-                    <button
-                      type="button"
-                      onClick={() => removeSection(idx)}
-                      className="w-full px-3 py-2 border border-red-300 text-red-600 rounded-md hover:bg-red-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {errors.sections && <p className="text-xs text-red-600">{errors.sections.message?.toString()}</p>}
-              <button
-                type="button"
-                onClick={() =>
-                  appendSection({
-                    title: sectionFields.length ? `Section ${String.fromCharCode(65 + sectionFields.length)}` : "Section A",
-                    questionType: "Multiple Choice",
-                    count: 5,
-                    marksPerQuestion: 1,
-                  })
-                }
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                + Add Section
-              </button>
-            </div>
-          )}
-
-          {/* MATRIX MODE */}
-          {generationMode === "matrix" && (
-            <div className="rounded-md border p-4 space-y-4">
-              {matrixFields.map((field, idx) => (
-                <div key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                  <div className="md:col-span-4">
-                    <label className="block text-xs mb-1">Question Type</label>
-                    <select
-                      className="w-full border rounded-md px-2 py-2 bg-white"
-                      {...register(`markingMatrix.${idx}.questionType` as const)}
-                    >
-                      <option>Multiple Choice</option>
-                      <option>Very Short Answer</option>
-                      <option>Short Answer</option>
-                      <option>Long Answer</option>
-                      <option>Case-based</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-xs mb-1">Marks/Q</label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full border rounded-md px-2 py-2"
-                      {...register(`markingMatrix.${idx}.marksPerQuestion` as const, { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-xs mb-1">Count</label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full border rounded-md px-2 py-2"
-                      {...register(`markingMatrix.${idx}.count` as const, { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <button
-                      type="button"
-                      onClick={() => removeMatrix(idx)}
-                      className="w-full px-3 py-2 border border-red-300 text-red-600 rounded-md hover:bg-red-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => appendMatrix({ questionType: "Multiple Choice", marksPerQuestion: 1, count: 0 })}
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                + Add Row
-              </button>
-            </div>
-          )}
-
-          {/* BUCKETS MODE - Enhanced */}
+          {/* Buckets Mode */}
           {generationMode === "buckets" && (
-            <div className="rounded-md border p-4">
+            <div>
               <Controller
                 control={control}
                 name="buckets"
@@ -1106,262 +748,44 @@ const TestGeneratorForm: React.FC<Props> = ({ onGenerate, loading, onSaveTemplat
                     buckets={field.value} 
                     onChange={field.onChange}
                     error={fieldState.error?.message}
+                    chapters={chapters}
                   />
                 )}
               />
             </div>
           )}
-
-          {/* Difficulty Settings (for simple mode) */}
-          {generationMode === "simple" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm mb-1">Difficulty Mode</label>
-                <div className="flex gap-3">
-                  <label className="inline-flex items-center gap-2">
-                    <input type="radio" value="single" {...register("mode")} />
-                    <span>Single</span>
-                  </label>
-                  <label className="inline-flex items-center gap-2">
-                    <input type="radio" value="mix" {...register("mode")} />
-                    <span>Percent mix</span>
-                  </label>
-                </div>
-
-                {mode === "single" ? (
-                  <select className="mt-2 w-full border rounded-md px-3 py-2 bg-white" {...register("difficulty")}>
-                    <option>Easy</option>
-                    <option>Medium</option>
-                    <option>Hard</option>
-                  </select>
-                ) : (
-                  <div className="mt-2 grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs mb-1">Easy %</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className="w-full border rounded-md px-2 py-2"
-                        {...register("mix.easy", { valueAsNumber: true })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs mb-1">Medium %</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className="w-full border rounded-md px-2 py-2"
-                        {...register("mix.medium", { valueAsNumber: true })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs mb-1">Hard %</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className="w-full border rounded-md px-2 py-2"
-                        {...register("mix.hard", { valueAsNumber: true })}
-                      />
-                    </div>
-                    <div className="col-span-3 text-xs text-slate-600">
-                      Sum: {mixSum}%
-                      {errors.mix && <span className="ml-2 text-red-600">{errors.mix.message?.toString()}</span>}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* ======== Advanced Settings ======== */}
-      <details className="rounded-lg border bg-white open:shadow-sm">
-        <summary className="cursor-pointer list-none px-4 py-3 font-medium">
-          Advanced Settings & Output Options
-        </summary>
-
-        <div className="px-4 pb-4 pt-2 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm mb-1">Time Limit (minutes)</label>
-                <input
-                  type="number"
-                  min="5"
-                  className="w-full border rounded-md px-3 py-2"
-                  {...register("timeLimit", { valueAsNumber: true })}
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">Negative Marking (per wrong)</label>
-                <input
-                  type="number"
-                  step="0.25"
-                  min={-10}
-                  max={0}
-                  className="w-full border rounded-md px-3 py-2"
-                  {...register("negativeMarking", { valueAsNumber: true })}
-                />
-                <p className="text-xs text-slate-500 mt-1">Use 0 for none, e.g., -0.25</p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="flex items-center gap-3">
-                  <input id="shuffleQ" type="checkbox" {...register("shuffleQuestions")} />
-                  <label htmlFor="shuffleQ">Shuffle questions</label>
-                </label>
-                <label className="flex items-center gap-3">
-                  <input id="shuffleOpt" type="checkbox" {...register("shuffleOptions")} />
-                  <label htmlFor="shuffleOpt">Shuffle MCQ options</label>
-                </label>
-                <label className="flex items-center gap-3">
-                  <input id="answerKey" type="checkbox" {...register("includeAnswerKey")} />
-                  <label htmlFor="answerKey">Include answer key</label>
-                </label>
-              </div>
-            </div>
-
-            {/* Right Column */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm mb-1">Solution Style</label>
-                <select className="w-full border rounded-md px-3 py-2 bg-white" {...register("solutionStyle")}>
-                  <option>Steps</option>
-                  <option>Concise</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm mb-1">Output Format</label>
-                <select className="w-full border rounded-md px-3 py-2 bg-white" {...register("outputFormat")}>
-                  <option>PDF</option>
-                  <option>DOCX</option>
-                  <option>CSV</option>
-                  <option>JSON</option>
-                </select>
-              </div>
-
-              {/* Header Information */}
-              <div className="space-y-2">
-                <input
-                  className="w-full border rounded-md px-3 py-2"
-                  placeholder="Institute Name (optional)"
-                  {...register("institute")}
-                />
-                <input
-                  className="w-full border rounded-md px-3 py-2"
-                  placeholder="Teacher Name (optional)"
-                  {...register("teacherName")}
-                />
-                <input
-                  className="w-full border rounded-md px-3 py-2"
-                  placeholder="Exam Title (optional)"
-                  {...register("examTitle")}
-                />
-                <input
-                  className="w-full border rounded-md px-3 py-2"
-                  type="date"
-                  {...register("examDate")}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* References */}
+      {/* Summary & Submit */}
+      <div className="border rounded-lg bg-gray-50 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <label className="block text-sm mb-1">Reference files</label>
-            <Controller
-              control={control}
-              name="referenceFiles"
-              render={({ field }) => (
-                <input
-                  type="file"
-                  multiple
-                  accept=".txt,.csv,.md,.pdf,.doc,.docx"
-                  className="w-full border rounded-md px-3 py-2"
-                  onChange={(e) => field.onChange(Array.from(e.target.files || []))}
-                />
-              )}
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              <span className="font-medium">Note:</span> txt/csv/md are parsed directly; pdf/doc/docx extraction can be added.
-            </p>
-          </div>
-
-          {/* Watermark */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-3">
-              <input id="wm" type="checkbox" {...register("watermark")} />
-              <label htmlFor="wm">Watermark</label>
+            <div className="font-medium">
+              {totalQuestions} questions · Total marks: {totalMarks}
             </div>
-            <div className="md:col-span-2">
-              <input
-                className="w-full border rounded-md px-3 py-2"
-                placeholder="Watermark text (optional)"
-                {...register("watermarkText")}
-              />
-              <div className="flex items-center gap-3 mt-2">
-                <input id="logo" type="checkbox" {...register("useLogo")} />
-                <label htmlFor="logo">Include a4ai logo</label>
-              </div>
+            <div className="text-sm text-gray-600">
+              Cognitive levels: {cognitiveLevels.join(", ")} · NCERT: {Math.round(ncertWeight * 100)}%
             </div>
           </div>
-        </div>
-      </details>
-
-      {/* ======== Summary & Generate Button ======== */}
-      <div className="rounded-lg border bg-slate-50 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="space-x-2">
-            <span className="font-medium">Summary:</span>
-            <span>{totalQuestions} questions</span>
-            <span>·</span>
-            <span>
-              Total marks: <b>{totalMarks}</b>
-            </span>
-          </div>
-          <div className="text-xs text-gray-600">
-            Cognitive levels: {cognitiveLevels?.join(", ") || "None"} · NCERT focus: {Math.round(safeNumber(ncertWeight, 0.6) * 100)}%
-            {generationMode === "buckets" && ` · ${buckets?.length || 0} buckets`}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
           <button
             type="submit"
             disabled={loading || isSubmitting}
-            className="px-6 py-2 rounded-md bg-blue-600 text-white disabled:opacity-60 hover:bg-blue-700 transition-colors"
-            aria-busy={loading || isSubmitting}
+            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {loading || isSubmitting ? "Generating..." : "Generate Enhanced Test"}
+            {loading || isSubmitting ? "Generating..." : "Generate Test"}
           </button>
         </div>
       </div>
 
-      {/* ======== Errors (fallback) ======== */}
+      {/* Error Display */}
       {Object.keys(errors).length > 0 && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <div className="text-sm text-red-800 font-medium mb-2">Please fix the following errors:</div>
-          <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
-            {errors.chapters && <li>Select at least one chapter</li>}
-            {errors.classNum && <li>Class: {errors.classNum.message}</li>}
-            {errors.qCount && <li>Question count: {errors.qCount.message}</li>}
-            {errors.marksPerQuestion && <li>Marks per question: {errors.marksPerQuestion.message}</li>}
-            {errors.cognitiveLevels && <li>Select at least one cognitive level</li>}
-            {errors.sections && <li>{errors.sections.message}</li>}
-            {errors.buckets && <li>{errors.buckets.message}</li>}
-            {errors.mix && <li>{errors.mix.message}</li>}
-            {Object.entries(errors).map(([key, error]) => 
-              !['chapters', 'classNum', 'qCount', 'marksPerQuestion', 'cognitiveLevels', 'sections', 'buckets', 'mix'].includes(key) && (
-                <li key={key}>{error.message?.toString() || `Invalid ${key}`}</li>
-              )
-            )}
+        <div className="border border-red-200 bg-red-50 p-4 rounded">
+          <div className="text-red-800 font-medium mb-2">Please fix the following errors:</div>
+          <ul className="text-red-700 text-sm list-disc list-inside space-y-1">
+            {Object.entries(errors).map(([key, error]: any) => (
+              <li key={key}>{error.message || `Invalid ${key}`}</li>
+            ))}
           </ul>
         </div>
       )}
