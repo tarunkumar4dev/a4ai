@@ -27,7 +27,8 @@ import {
   Zap,
   Coins,
   Menu,
-  X
+  X,
+  ArrowLeft
 } from "lucide-react";
 
 /* ------------ tiny media hook ------------ */
@@ -114,6 +115,11 @@ export default function DashboardPage() {
 
   // single helper to go to Test Generator → History tab
   const goToHistory = () => navigate("/dashboard/test-generator?tab=history");
+
+  // Handle back navigation
+  const handleBack = () => {
+    navigate(-1); // Go back to previous page
+  };
 
   /* ensure profile */
   useEffect(() => {
@@ -238,16 +244,27 @@ export default function DashboardPage() {
         <header className="bg-background/80 backdrop-blur border-b sticky top-0 z-30">
           <div className="mx-auto w-full max-w-7xl px-3 sm:px-4 py-3">
             <div className="flex items-center justify-between">
-              {/* Left Section - Menu & Title */}
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+              {/* Left Section - Back Button, Menu & Title */}
+              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                {/* Back Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-2 h-9 w-9 flex-shrink-0 hover:bg-gray-100/80 active:scale-95 transition-all"
+                  onClick={handleBack}
+                  aria-label="Go back"
+                >
+                  <ArrowLeft size={18} className="text-gray-700" />
+                </Button>
+
                 {/* Mobile Menu Button */}
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="lg:hidden p-2"
+                  className="lg:hidden p-2 h-9 w-9 flex-shrink-0"
                   onClick={() => setMobileSidebarOpen(true)}
                 >
-                  <Menu size={20} />
+                  <Menu size={18} />
                 </Button>
 
                 <div className="flex items-center gap-3 min-w-0 flex-1">

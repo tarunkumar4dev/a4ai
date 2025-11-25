@@ -60,10 +60,10 @@ const primaryGrad = `bg-gradient-to-r ${TOKENS.BRAND.from} ${TOKENS.BRAND.via} $
 
 /* ================== Data ================== */
 const team = [
-  { name: "Tarun", role: "Co-Founder", description: "Technology · Marketing", image: "/images/tarun_a4ai.jpeg" },
-  { name: "Yash", role: "Co-Founder", description: "Tech Lead", image: "/images/yash_a4ai.jpeg" },
-  { name: "Aakash", role: "Co-Founder", description: "Tech Support · Cloud", image: "/images/aakash_a4ai.jpg" },
-  { name: "Krishna", role: "Co-Founder", description: "COO", image: "/images/krishna_a4ai.jpg" },
+  { name: "Tarun Pathak", role: "Co-Founder", description: "Product · Marketing", image: "/images/tarun_a4ai.jpeg" },
+  { name: "Yash Dubey", role: "Co-Founder", description: "Full Stack Developer", image: "/images/yash_a4ai.jpg" },
+  { name: "Aakash Singh", role: "Co-Founder", description: "Cloud · Infra · Frontend", image: "/images/aakash_a4ai.jpg" },
+  { name: "Krishna Gupta", role: "Co-Founder", description: "Operations", image: "/images/krishna_a4ai.jpg" },
 ];
 
 const values = [
@@ -340,7 +340,7 @@ export default function AboutPage() {
           <div className={sectionX}>
             <div className="text-center">
               <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-6">
-                Meet the team
+              Team Behind a4ai
               </motion.h2>
               <motion.p
                 initial={{ opacity: 0 }}
@@ -349,7 +349,7 @@ export default function AboutPage() {
                 transition={{ delay: 0.15, duration: 0.5 }}
                 className="mx-auto max-w-3xl text-lg text-gray-700/85 dark:text-gray-300"
               >
-                Builder‑educators who care about the craft of assessment.
+               A small team building a4ai — step by step, every day.
               </motion.p>
             </div>
 
@@ -360,7 +360,7 @@ export default function AboutPage() {
             </div>
 
             <p className="mt-12 text-center text-gray-600 dark:text-gray-400">
-              …and many more builders behind the screen—mentors, teachers, and student testers who shape a4ai every week.
+            …and many more people who quietly help shape a4ai every moment.
             </p>
           </div>
         </section>
