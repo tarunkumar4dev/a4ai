@@ -1,0 +1,4 @@
+2025-12-14 12:24:45,947 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: cpu
+2025-12-14 12:24:45,950 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-mpnet-base-v2
+2025-12-14 19:13:30,718 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: cpu
+2025-12-14 19:13:30,719 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-mpnet-base-v2

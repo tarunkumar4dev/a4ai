@@ -1,0 +1,338 @@
+{
+  "timestamp": "20251213_024419",
+  "database_checks": {
+    "table_exists": true,
+    "row_count": 961,
+    "columns": [
+      "id",
+      "class_grade",
+      "subject",
+      "chapter",
+      "content",
+      "embedding",
+      "created_at"
+    ],
+    "has_required_columns": true,
+    "chapter_distribution": {
+      "Chemical Reactions and Equations": 71,
+      "Acids, Bases and Salts": 86,
+      "How do Organisms Reproduce": 79,
+      "Light - Reflection and Refraction": 125,
+      "Metals and Non-metals": 93,
+      "Human Eye and Colourful World": 54,
+      "Magnetic Effects of Electric Current": 63,
+      "Carbon and its Compounds": 93,
+      "Our Environment": 35,
+      "Life Processes": 86,
+      "Control and Coordination": 67,
+      "Heredity and Evolution": 33,
+      "Electricity": 76
+    },
+    "unique_chapters": 13
+  },
+  "query_tests": [
+    {
+      "test_description": "Test covalent bonding in correct chapter",
+      "query": "Explain covalent bonding in carbon compounds",
+      "target_chapter": "Carbon and its Compounds",
+      "with_filter_results": [
+        {
+          "id": "eeedbf32-b900-4630-b837-eb6278dc17e7",
+          "content": "Science 624.2 VERS ATILE NA TURE OF CARBON We have seen the for mation of covalent bonds by the sharing of electr ons in various elements and compounds. W e have also seen the structure of a simple ca",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.7787
+        },
+        {
+          "id": "2db4a382-7cbb-477c-85fa-a3d34a89372a",
+          "content": "Carbon and its Compounds 59saw how the nature of bonding in ionic compounds explains these properties. Let us now study the properties of some carbon compounds. Most carbon compounds are poor conducto",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.7693
+        },
+        {
+          "id": "218da02c-e90f-40f2-978d-f91ca74d58ef",
+          "content": "Carbon and its Compounds 77What y ou hav e learnt /square6Carbon is a versatile element that forms the basis for all living organisms and many of the things we use. /square6This large variety of compo",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.7532
+        }
+      ],
+      "without_filter_results": [
+        {
+          "id": "eeedbf32-b900-4630-b837-eb6278dc17e7",
+          "content": "Science 624.2 VERS ATILE NA TURE OF CARBON We have seen the for mation of covalent bonds by the sharing of electr ons in various elements and compounds. W e have also seen the structure of a simple ca",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.7787
+        },
+        {
+          "id": "2db4a382-7cbb-477c-85fa-a3d34a89372a",
+          "content": "Carbon and its Compounds 59saw how the nature of bonding in ionic compounds explains these properties. Let us now study the properties of some carbon compounds. Most carbon compounds are poor conducto",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.7693
+        },
+        {
+          "id": "218da02c-e90f-40f2-978d-f91ca74d58ef",
+          "content": "Carbon and its Compounds 77What y ou hav e learnt /square6Carbon is a versatile element that forms the basis for all living organisms and many of the things we use. /square6This large variety of compo",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.7532
+        },
+        {
+          "id": "24239901-81ae-4735-b299-eba730667494",
+          "content": ". In addition, all living structures are carbon based. The amount of carbon present in the earth’s crust and in the atmosphere is quite meagre. The earth’s crust has only 0.02% carbon in the form of m",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.7513
+        },
+        {
+          "id": "2e7dcf3d-a5de-489e-bcb5-1e70378211f7",
+          "content": ". In order to achieve noble gas configuration, carbon shares these electrons with four atoms of hydrogen as shown in Fig. 4.5. Such bonds which are formed by the sharing of an electron pair between tw",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.7294
+        }
+      ],
+      "filtered_chapters": [
+        "Carbon and its Compounds"
+      ],
+      "unfiltered_chapters": [
+        "Carbon and its Compounds"
+      ]
+    },
+    {
+      "test_description": "Test pH scale query",
+      "query": "What is the pH scale and how does it work?",
+      "target_chapter": "Acids, Bases and Salts",
+      "with_filter_results": [
+        {
+          "id": "bbdcc959-2fc5-414a-8dee-79d4dc398299",
+          "content": ". The universal indicator shows different colours at different concentrations of hydrogen ions in a solution. A scale for measuring hydrogen ion concentration in a solution, called pH scale has been d",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.7491
+        },
+        {
+          "id": "be563b7f-9dc2-441d-8f74-22dc2be808f8",
+          "content": "Science 34/square6The strength of an acid or an alkali can be tested by using a scale called the pH scale (0-14) which gives the measure of hydrogen ion concentration in a solution. /square6A neutral ",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.7266
+        },
+        {
+          "id": "44f70e80-c879-4301-9191-481f2a069a70",
+          "content": ". Acids that give rise to more H+ ions are said to be strong acids, and acids that give less H+ ions are said to be weak acids. Can you now say what weak and strong bases are? 2.3.1 Impor2.3.1 Impor2.",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.7022
+        }
+      ],
+      "without_filter_results": [
+        {
+          "id": "bbdcc959-2fc5-414a-8dee-79d4dc398299",
+          "content": ". The universal indicator shows different colours at different concentrations of hydrogen ions in a solution. A scale for measuring hydrogen ion concentration in a solution, called pH scale has been d",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.7491
+        },
+        {
+          "id": "be563b7f-9dc2-441d-8f74-22dc2be808f8",
+          "content": "Science 34/square6The strength of an acid or an alkali can be tested by using a scale called the pH scale (0-14) which gives the measure of hydrogen ion concentration in a solution. /square6A neutral ",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.7266
+        },
+        {
+          "id": "44f70e80-c879-4301-9191-481f2a069a70",
+          "content": ". Acids that give rise to more H+ ions are said to be strong acids, and acids that give less H+ ions are said to be weak acids. Can you now say what weak and strong bases are? 2.3.1 Impor2.3.1 Impor2.",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.7022
+        },
+        {
+          "id": "3f5dd901-06e3-4ef0-93aa-50c8152334cd",
+          "content": ". The survival of aquatic life in such rivers becomes difficult.Table 2.2 S. Solution Colour of Approx- Nature of No. pH paper -imate substance pH value 1Saliva (before meal) 2Saliva (after meal) 3Lem",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.6976
+        },
+        {
+          "id": "9f29d3c9-e439-4ea0-8b92-117c4012d403",
+          "content": ". 2.6). Generally paper impregnated with the universal indicator is used for measuring pH.QUESTIONS ?1. Why do HCl, HNO3, etc., show acidic characters in aqueous solutions while solutions of compounds",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.6964
+        }
+      ],
+      "filtered_chapters": [
+        "Acids, Bases and Salts"
+      ],
+      "unfiltered_chapters": [
+        "Acids, Bases and Salts"
+      ]
+    },
+    {
+      "test_description": "Test metals reactivity",
+      "query": "How do metals react with acids?",
+      "target_chapter": "Metals and Non-metals",
+      "with_filter_results": [
+        {
+          "id": "1355a6e1-f656-4adb-a9d6-a9e7de506f38",
+          "content": "Science 44Metal + Dilute acid → Salt + Hydrogen But do all metals react in the same manner? Let us find out. Activity 3.11Activity 3.11Activity 3.11Activity 3.11Activity 3.11 /square6Collect all the m",
+          "chapter": "Metals and Non-metals",
+          "similarity": 0.7854
+        },
+        {
+          "id": "2b3e05e9-63f5-4d06-afd8-455356757116",
+          "content": ". 3.2.3 What happens when Metals react with Acids? You have alr eady lear nt that metals r eact with acids to give a salt and hydrogen gas.Figure 3.3Figure 3.3Figure 3.3Figure 3.3Figure 3.3 Action of ",
+          "chapter": "Metals and Non-metals",
+          "similarity": 0.771
+        },
+        {
+          "id": "4b65389f-c256-4ae3-b9b8-d8f374921c24",
+          "content": "Metals and Non-metals 45/square6In which test tube did you find that a reaction has occurred? /square6On what basis can you say that a reaction has actually taken place? /square6Can you correlate your",
+          "chapter": "Metals and Non-metals",
+          "similarity": 0.7353
+        }
+      ],
+      "without_filter_results": [
+        {
+          "id": "1355a6e1-f656-4adb-a9d6-a9e7de506f38",
+          "content": "Science 44Metal + Dilute acid → Salt + Hydrogen But do all metals react in the same manner? Let us find out. Activity 3.11Activity 3.11Activity 3.11Activity 3.11Activity 3.11 /square6Collect all the m",
+          "chapter": "Metals and Non-metals",
+          "similarity": 0.7854
+        },
+        {
+          "id": "2b3e05e9-63f5-4d06-afd8-455356757116",
+          "content": ". 3.2.3 What happens when Metals react with Acids? You have alr eady lear nt that metals r eact with acids to give a salt and hydrogen gas.Figure 3.3Figure 3.3Figure 3.3Figure 3.3Figure 3.3 Action of ",
+          "chapter": "Metals and Non-metals",
+          "similarity": 0.771
+        },
+        {
+          "id": "fc3aee6b-8c65-4d12-8cab-a49c6f006d97",
+          "content": "Science 22Now write and balance the equation for the above reaction. Since metallic oxides react with acids to give salts and water , similar to the reaction of a base with an acid, metallic oxides ar",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.7469
+        },
+        {
+          "id": "4b65389f-c256-4ae3-b9b8-d8f374921c24",
+          "content": "Metals and Non-metals 45/square6In which test tube did you find that a reaction has occurred? /square6On what basis can you say that a reaction has actually taken place? /square6Can you correlate your",
+          "chapter": "Metals and Non-metals",
+          "similarity": 0.7353
+        },
+        {
+          "id": "121803dc-a448-4d50-bd25-494607c72b20",
+          "content": "Science 20 Note that the metal in the above reactions displaces hydrogen atoms from the acids as hydrogen gas and forms a compound called a salt. Thus, the reaction of a metal with an acid can be summ",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.735
+        }
+      ],
+      "filtered_chapters": [
+        "Metals and Non-metals"
+      ],
+      "unfiltered_chapters": [
+        "Metals and Non-metals",
+        "Acids, Bases and Salts"
+      ]
+    },
+    {
+      "test_description": "Test photosynthesis query",
+      "query": "What is photosynthesis and where does it occur?",
+      "target_chapter": "Life Processes",
+      "with_filter_results": [
+        {
+          "id": "0b7da64b-6d30-41e4-be33-c75d8da54a5c",
+          "content": "Science 82Let us now see what actually happens during the process of photosynthesis. The following events occur during this process – Figure 5.2Figure 5.2Figure 5.2Figure 5.2Figure 5.2 Variegated leaf",
+          "chapter": "Life Processes",
+          "similarity": 0.7289
+        },
+        {
+          "id": "6848a1aa-b117-436b-9d4a-9e51ac44148b",
+          "content": ". 5.2). /square6What can you conclude about the presence of starch in various areas of the leaf?(i)Absorption of light energy by chlorophyll. (ii)Conversion of light energy to chemical energy and spli",
+          "chapter": "Life Processes",
+          "similarity": 0.6999
+        },
+        {
+          "id": "d8637824-14f1-4788-bfec-d00b8e3f257d",
+          "content": "Life Processes 875.3 RESPIR5.3 RESPIR5.3 RESPIR5.3 RESPIR5.3 RESPIR A AAAATIONTIONTION TIONTION Activity 5.4Activity 5.4Activity 5.4Activity 5.4Activity 5.4 /square6Take some freshly prepared lime wat",
+          "chapter": "Life Processes",
+          "similarity": 0.6965
+        }
+      ],
+      "without_filter_results": [
+        {
+          "id": "0b7da64b-6d30-41e4-be33-c75d8da54a5c",
+          "content": "Science 82Let us now see what actually happens during the process of photosynthesis. The following events occur during this process – Figure 5.2Figure 5.2Figure 5.2Figure 5.2Figure 5.2 Variegated leaf",
+          "chapter": "Life Processes",
+          "similarity": 0.7289
+        },
+        {
+          "id": "6848a1aa-b117-436b-9d4a-9e51ac44148b",
+          "content": ". 5.2). /square6What can you conclude about the presence of starch in various areas of the leaf?(i)Absorption of light energy by chlorophyll. (ii)Conversion of light energy to chemical energy and spli",
+          "chapter": "Life Processes",
+          "similarity": 0.6999
+        },
+        {
+          "id": "d8637824-14f1-4788-bfec-d00b8e3f257d",
+          "content": "Life Processes 875.3 RESPIR5.3 RESPIR5.3 RESPIR5.3 RESPIR5.3 RESPIR A AAAATIONTIONTION TIONTION Activity 5.4Activity 5.4Activity 5.4Activity 5.4Activity 5.4 /square6Take some freshly prepared lime wat",
+          "chapter": "Life Processes",
+          "similarity": 0.6965
+        },
+        {
+          "id": "76f85f2e-b39b-4f12-a074-8b3ce5198192",
+          "content": "Life Processes 89cells, or away fr om them and out into the air . The dir ection of dif fusion depends upon the environmental conditions and the requirements of the plant. At night, when there is no p",
+          "chapter": "Life Processes",
+          "similarity": 0.696
+        },
+        {
+          "id": "c90ffd42-17b5-49e1-a433-0a049eba25c6",
+          "content": ". These or ganisms, the autotr ophs, include gr een plants and some bacteria. Other organisms utilise complex substances. These complex substances have to be broken down into simpler ones before they ",
+          "chapter": "Life Processes",
+          "similarity": 0.6849
+        }
+      ],
+      "filtered_chapters": [
+        "Life Processes"
+      ],
+      "unfiltered_chapters": [
+        "Life Processes"
+      ]
+    },
+    {
+      "test_description": "Test query without chapter filter",
+      "query": "Explain reflection of light",
+      "target_chapter": null,
+      "with_filter_results": [],
+      "without_filter_results": [
+        {
+          "id": "7912792d-8001-4b5e-a15c-d81330beb1f5",
+          "content": "[Chapter: Light - Reflection and Refraction]",
+          "chapter": "Light - Reflection and Refraction",
+          "similarity": 0.7739
+        },
+        {
+          "id": "6b7df002-3511-4b8d-88c0-e0c0ac21c3d3",
+          "content": "[Chapter: Light - Reflection and Refraction]",
+          "chapter": "Light - Reflection and Refraction",
+          "similarity": 0.7739
+        },
+        {
+          "id": "977730ba-fa00-4ee7-8509-2d0eb2ce1839",
+          "content": "[Chapter: Light - Reflection and Refraction]",
+          "chapter": "Light - Reflection and Refraction",
+          "similarity": 0.7739
+        },
+        {
+          "id": "85719515-5a53-4d56-bf2a-3511ac1b0c08",
+          "content": "[Chapter: Light - Reflection and Refraction]",
+          "chapter": "Light - Reflection and Refraction",
+          "similarity": 0.7739
+        },
+        {
+          "id": "942c32bd-6fde-41fe-bd54-b723be033f2c",
+          "content": "[Chapter: Light - Reflection and Refraction]",
+          "chapter": "Light - Reflection and Refraction",
+          "similarity": 0.7739
+        }
+      ],
+      "filtered_chapters": [],
+      "unfiltered_chapters": [
+        "Light - Reflection and Refraction"
+      ]
+    }
+  ],
+  "summary": {
+    "total_tests": 5,
+    "filtered_tests": 4,
+    "total_filtered_chunks": 12,
+    "total_unfiltered_chunks": 25,
+    "avg_filtered_chunks": 3.0,
+    "avg_unfiltered_chunks": 5.0
+  }
+}

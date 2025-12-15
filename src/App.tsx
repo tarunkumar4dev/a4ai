@@ -5,7 +5,7 @@ import "./styles/globals.css";
 
 import ChankyaInstitutePublic from "@/pages/institute/chanakya";
 /* -------- Core Imports -------- */
-import PracticePage from "@/pages/PracticePage";
+import PracticePage from "@/practice/index";
 import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
 import Rules from "@/pages/Rules";
 
@@ -42,13 +42,15 @@ const ApiPage = lazy(() => import("./pages/product/ApiPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 
+const ChemistryPracticePage = lazy(() => import("./practice/chemistry"));       //12th dec (chemistry class 10)
+
 /* ---------- Lazy Auth & App Pages ---------- */
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignupPage = lazy(() => import("./pages/SignupPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
-const PracticeSessionPage = lazy(() => import("./pages/PracticeSessionPage"));
+const PracticeSessionPage = lazy(() => import("./practice/index"));
 
 /* ---------- Students / Notes / Settings ---------- */
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
@@ -85,6 +87,10 @@ const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
 const CallbackPage = lazy(() => import("./pages/auth/callback"));
 const PaymentPage = lazy(() => import("./pages/payment/paymentPage"));
 
+/* ---------- NEW Daily Practice Module ---------- */
+const PracticeSelectionPage = lazy(() => import("./practice/index"));
+const PracticeSession = lazy(() => import("./practice/session"));
+
 /* ---------- Scroll Helper ---------- */
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -106,7 +112,7 @@ const NotFound = () => (
     <div className="text-center">
       <h1 className="text-2xl font-semibold">Page not found</h1>
       <p className="mt-2 text-gray-600 dark:text-gray-400">
-        The page you’re looking for doesn’t exist.
+        The page you're looking for doesn't exist.
       </p>
       <a
         href="/"
@@ -156,6 +162,8 @@ const App = () => {
       import("./pages/SettingsPage");
       import("./pages/CoinShop");
       import("./pages/ContestPreview");
+      import("./practice/index");
+      import("./practice/session");
     };
     (window as any).requestIdleCallback
       ? (window as any).requestIdleCallback(prefetch)
@@ -195,6 +203,16 @@ const App = () => {
                       {/* -------- Legal -------- */}
                       <Route path="/terms" element={<TermsPage />} />
                       <Route path="/cookies" element={<CookiePolicyPage />} />
+
+
+                      <Route
+                        path="/practice/chemistry"
+                        element={
+                          <PrivateRoute>
+                            <ChemistryPracticePage />
+                          </PrivateRoute>
+                        }
+                      />
 
                       {/* -------- Resources -------- */}
                       <Route path="/resources" element={<ResourcesHome />} />
@@ -282,16 +300,35 @@ const App = () => {
                         }
                       />
 
-                      {/* -------- Practice -------- */}
+                      {/* -------- Practice Routes -------- */}
+                      {/* 🔥 FIXED: Changed PracticeSessionPage to PracticeSession */}
                       <Route
                         path="/practice/session"
                         element={
                           <PrivateRoute>
-                            <PracticeSessionPage />
+                            <PracticeSession />  {/* ✅ ये practice/session.tsx को render करेगा */}
                           </PrivateRoute>
                         }
                       />
                       <Route path="/practice" element={<PracticePage />} />
+
+                      {/* -------- NEW Daily Practice Module -------- */}
+                      <Route
+                        path="/daily-practice"
+                        element={
+                          <PrivateRoute>
+                            <PracticeSelectionPage />
+                          </PrivateRoute>
+                        }
+                      />
+                      <Route
+                        path="/daily-practice/session"
+                        element={
+                          <PrivateRoute>
+                            <PracticeSession />
+                          </PrivateRoute>
+                        }
+                      />
 
                       {/* -------- Contests -------- */}
                       <Route path="/contests/math-weekly" element={<JoinContestPageAurora />} />

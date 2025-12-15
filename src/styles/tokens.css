@@ -1,0 +1,45 @@
+:root {
+    /* Brand Core */
+    --primary: #111827;     /* Deep Navy/Black */
+    --secondary: #2563EB;   /* Bright Blue */
+    --accent: #6366F1;      /* Indigo */
+    --accent-light: #E0E7FF; /* Soft Indigo Background */
+  
+    /* Surfaces */
+    --bg: #F9FAFB;          /* Main Page Background */
+    --bg-soft: #F3F4F6;     /* Secondary Surfaces */
+    --surface-white: #FFFFFF;
+    
+    /* Borders & Shadows */
+    --border: #E5E7EB;
+    --card-shadow: 0 8px 30px rgba(0,0,0,0.04);
+    --soft-glow: rgba(255,255,255,0.6);
+    --btn-shadow: 0 4px 14px 0 rgba(0,118,255,0.39);
+  
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, #2563EB 0%, #6366F1 100%);
+    --gradient-dark: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+    --gradient-surface: linear-gradient(180deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0.4) 100%);
+  }
+  
+  /* Global Reset tweaks for this module */
+  .a4ai-antialiased {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Scrollbar Polish */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+  }
