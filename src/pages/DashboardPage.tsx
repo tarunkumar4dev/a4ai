@@ -1,5 +1,14 @@
 // src/pages/DashboardPage.tsx
-import { useEffect, useState, useMemo } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  lazy,
+  Suspense,
+  memo,
+} from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   motion,
@@ -13,9 +22,17 @@ import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
 
 import DashboardSidebar from "@/components/DashboardSidebar";
-import ScratchCard from "@/components/ScratchCard";
+// ScratchCard only shows conditionally → lazy-load to save initial bytes & paint time.
+const ScratchCard = lazy(() => import("@/components/ScratchCard"));
+
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   BellDot,
@@ -27,13 +44,14 @@ import {
   Zap,
   Coins,
   Menu,
-  X
 } from "lucide-react";
 
-/* ------------ tiny media hook ------------ */
+/* ------------ tiny media hook (stable) ------------ */
 function useMedia(q: string) {
   const [m, setM] = useState(false);
   useEffect(() => {
+    // guard SSR
+    if (typeof window === "undefined" || !("matchMedia" in window)) return;
     const mq = window.matchMedia(q);
     const h = () => setM(mq.matches);
     h();
@@ -53,7 +71,7 @@ function useMedia(q: string) {
 const useIsMobile = () => useMedia("(max-width: 768px)");
 const useCoarse = () => useMedia("(pointer: coarse)");
 
-/* ------------ animations ------------ */
+/* ------------ animations (constants) ------------ */
 const container = {
   hidden: { opacity: 0 },
   show: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.06 } },
@@ -67,57 +85,99 @@ const item = {
 const INK = "#2F3A44";
 const SLATE = "#5D6B7B";
 
+/** rAF-based throttler to keep mousemove ultra-cheap */
+function useRafThrottle<T extends (...args: any[]) => void>(fn: T) {
+  const frame = useRef<number | null>(null);
+  const lastArgs = useRef<any[]>([]);
+  const cb = useCallback((...args: any[]) => {
+    lastArgs.current = args;
+    if (frame.current == null) {
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null;
+        // @ts-ignore
+        fn(...lastArgs.current);
+      });
+    }
+  }, [fn]);
+  useEffect(() => () => frame.current != null && cancelAnimationFrame(frame.current), []);
+  return cb as T;
+}
+
+/** safe localStorage read/write (won’t throw under SSR/private mode) */
+const safeStorage = {
+  get(key: string) {
+    try {
+      return typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
+    } catch {
+      return null;
+    }
+  },
+  set(key: string, value: string) {
+    try {
+      if (typeof window !== "undefined") window.localStorage.setItem(key, value);
+    } catch {
+      /* no-op */
+    }
+  },
+};
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile, loading } = useUserProfile();
+
   const prefersReducedMotion = useReducedMotion();
   const isMobile = useIsMobile();
   const isCoarse = useCoarse();
   const interactiveCards = !(isMobile || isCoarse || prefersReducedMotion);
+
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const openMobileSidebar = useCallback(() => setMobileSidebarOpen(true), []);
+  const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), []);
 
   // Scratch Card State
   const [showScratchCard, setShowScratchCard] = useState(false);
-
-  // Check if new user and show coins popup
-  useEffect(() => {
-    const checkNewUserAndCoins = async () => {
-      const isNewUser = searchParams.get('newUser') === 'true';
-      const storedHasSeenPopup = localStorage.getItem('hasSeenCoinPopup');
-      
-      // Check if user has coins but hasn't seen popup
-      if (profile && profile.coins && profile.coins >= 100 && !storedHasSeenPopup) {
-        setTimeout(() => {
-          setShowScratchCard(true);
-        }, 1500);
-      }
-      
-      // Also show for new users coming from signup
-      if (isNewUser && !storedHasSeenPopup) {
-        setTimeout(() => {
-          setShowScratchCard(true);
-        }, 2000);
-      }
-    };
-
-    if (!loading && profile) {
-      checkNewUserAndCoins();
-    }
-  }, [profile, loading, searchParams]);
-
-  // Handle scratch card close
-  const handleScratchCardClose = () => {
+  const closeScratch = useCallback(() => {
     setShowScratchCard(false);
-    localStorage.setItem('hasSeenCoinPopup', 'true');
-  };
+    safeStorage.set("hasSeenCoinPopup", "true");
+  }, []);
+  // keep timeout ids for cleanup
+  const popupTimers = useRef<number[]>([]);
 
-  // single helper to go to Test Generator → History tab
-  const goToHistory = () => navigate("/dashboard/test-generator?tab=history");
-
-  /* ensure profile */
+  /** Check if new user and show coins popup (robust & abortable) */
   useEffect(() => {
-    let mounted = true;
+    if (loading || !profile) return;
+
+    const isNewUser = searchParams.get("newUser") === "true";
+    const storedHasSeenPopup = safeStorage.get("hasSeenCoinPopup");
+    const shouldShowForCoins = !!profile?.coins && profile.coins >= 100 && !storedHasSeenPopup;
+    const shouldShowForNewUser = isNewUser && !storedHasSeenPopup;
+
+    const ids: number[] = [];
+    if (shouldShowForCoins) {
+      ids.push(
+        window.setTimeout(() => setShowScratchCard(true), 1500)
+      );
+    }
+    if (shouldShowForNewUser) {
+      ids.push(
+        window.setTimeout(() => setShowScratchCard(true), 2000)
+      );
+    }
+
+    popupTimers.current = ids;
+    return () => {
+      // clear any pending timers to avoid state updates after unmount/route changes
+      popupTimers.current.forEach((id) => clearTimeout(id));
+      popupTimers.current = [];
+    };
+    // We only want to re-run when actual values change, not object identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, profile?.id, profile?.coins, searchParams.get("newUser")]);
+
+  // Avoid duplicating profile fetch logic already handled by useUserProfile; keep only auth gate + best-effort ensure row
+  useEffect(() => {
+    let aborted = false;
     (async () => {
       const { data } = await supabase.auth.getUser();
       const user = data?.user;
@@ -125,57 +185,77 @@ export default function DashboardPage() {
         navigate("/login");
         return;
       }
-      const { data: existing, error } = await supabase
+      // If hook already gave a profile row, skip insert.
+      if (profile?.id) return;
+
+      // Best-effort check to ensure profile row; no UI change if this fails (RLS etc.)
+      const { data: existing } = await supabase
         .from("profiles")
-        .select("*")
+        .select("id")
         .eq("id", user.id)
         .single();
-      if (mounted && !existing && !error) {
-        await supabase.from("profiles").insert({
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || "User",
-          role: "student",
-          coins: 100,
-        });
-      }
+
+      if (aborted || existing) return;
+
+      // Try insert only if missing; swallow errors to avoid blocking UX under traffic
+      await supabase.from("profiles").insert({
+        id: user.id,
+        email: user.email,
+        full_name: (user.user_metadata?.full_name as string) || "User",
+        role: "student",
+        coins: 100,
+      });
     })();
     return () => {
-      mounted = false;
+      aborted = true;
     };
-  }, [navigate]);
+  }, [navigate, profile?.id]);
 
-  // demo data (memoized)
-  const { recentTests, announcements } = useMemo(
-    () => ({
-      recentTests: [
-        { id: 1, name: "Physics Midterm", date: "May 14, 2025", questions: 15, subject: "Physics", status: "Ready" },
-        { id: 2, name: "Calculus Quiz", date: "May 10, 2025", questions: 10, subject: "Mathematics", status: "Draft" },
-        { id: 3, name: "Chemistry Practice", date: "May 02, 2025", questions: 12, subject: "Chemistry", status: "Ready" },
-      ],
-      announcements: [
-        { id: "a1", title: "New: Blueprint Editor", desc: "Lock marks, difficulty and outcome mix before generation.", icon: Rocket, date: "2d ago" },
-        { id: "a2", title: "Contest Host Beta", desc: "Schedule live, proctored contests with rankings.", icon: Rocket, date: "1w ago" },
-      ],
-    }),
+  // memoized demo content (static)
+  const recentTests = useMemo(
+    () => [
+      { id: 1, name: "Physics Midterm", date: "May 14, 2025", questions: 15, subject: "Physics", status: "Ready" },
+      { id: 2, name: "Calculus Quiz", date: "May 10, 2025", questions: 10, subject: "Mathematics", status: "Draft" },
+      { id: 3, name: "Chemistry Practice", date: "May 02, 2025", questions: 12, subject: "Chemistry", status: "Ready" },
+    ],
+    []
+  );
+  const announcements = useMemo(
+    () => [
+      { id: "a1", title: "New: Blueprint Editor", desc: "Lock marks, difficulty and outcome mix before generation.", icon: Rocket, date: "2d ago" },
+      { id: "a2", title: "Contest Host Beta", desc: "Schedule live, proctored contests with rankings.", icon: Rocket, date: "1w ago" },
+    ],
     []
   );
 
-  // cursor-reactive background (disabled on mobile/low motion)
-  const mx = useMotionValue(320), my = useMotionValue(160);
-  const onMove = (e: React.MouseEvent<HTMLElement>) => {
+  // cursor-reactive background (disabled on mobile/low motion) – rAF throttled
+  const mx = useMotionValue(320);
+  const my = useMotionValue(160);
+  const onMoveRaw = useCallback((e: React.MouseEvent<HTMLElement>) => {
     if (!interactiveCards) return;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     mx.set(e.clientX - r.left);
     my.set(e.clientY - r.top);
-  };
+  }, [interactiveCards, mx, my]);
+  const onMove = useRafThrottle(onMoveRaw);
   const bgGlow = useMotionTemplate`
     radial-gradient(900px 450px at ${mx}px ${my}px, rgba(47,58,68,.08), transparent 70%)
   `;
 
-  const roleLabel = profile?.role ? profile.role[0].toUpperCase() + profile.role.slice(1) : "User";
+  // stable callbacks
+  const goToHistory = useCallback(
+    () => navigate("/dashboard/test-generator?tab=history"),
+    [navigate]
+  );
+
+  const coins = profile?.coins ?? 100;
+  const roleLabel = useMemo(() => {
+    const r = profile?.role || "user";
+    return r[0].toUpperCase() + r.slice(1);
+  }, [profile?.role]);
 
   if (loading) {
+    // keep exact UI
     return (
       <div className="grid h-screen place-items-center bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-gray-900">
         <div className="animate-pulse text-sm text-muted-foreground">Loading…</div>
@@ -193,12 +273,10 @@ export default function DashboardPage() {
       }}
       onMouseMove={onMove}
     >
-      {/* Scratch Card Popup */}
-      <ScratchCard 
-        isOpen={showScratchCard}
-        onClose={handleScratchCardClose}
-        coins={100}
-      />
+      {/* Scratch Card Popup (lazy) */}
+      <Suspense fallback={null}>
+        <ScratchCard isOpen={showScratchCard} onClose={closeScratch} coins={100} />
+      </Suspense>
 
       {interactiveCards && (
         <motion.div aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundImage: bgGlow }} />
@@ -214,15 +292,15 @@ export default function DashboardPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-              onClick={() => setMobileSidebarOpen(false)}
+              onClick={closeMobileSidebar}
             />
             <motion.div
               initial={{ x: -300 }}
               animate={{ x: 0 }}
               exit={{ x: -300 }}
-              className="fixed inset-y-0 left-0 z-50 lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 lg:hidden will-change-transform"
             >
-              <DashboardSidebar onClose={() => setMobileSidebarOpen(false)} />
+              <DashboardSidebar onClose={closeMobileSidebar} />
             </motion.div>
           </>
         )}
@@ -245,21 +323,24 @@ export default function DashboardPage() {
                   variant="ghost"
                   size="sm"
                   className="lg:hidden p-2"
-                  onClick={() => setMobileSidebarOpen(true)}
+                  onClick={openMobileSidebar}
                 >
                   <Menu size={20} />
                 </Button>
 
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <h1 className="text-[18px] sm:text-[24px] font-[700] tracking-[-0.012em] leading-tight truncate" style={{ color: INK }}>
+                  <h1
+                    className="text-[18px] sm:text-[24px] font-[700] tracking-[-0.012em] leading-tight truncate"
+                    style={{ color: INK }}
+                  >
                     Dashboard <span className="text-muted-foreground">— {roleLabel}</span>
                   </h1>
-                  
+
                   {/* Coin Balance - Mobile Responsive */}
                   <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium shrink-0">
                     <Coins size={14} className="sm:size-4" />
-                    <span className="hidden xs:inline">{profile?.coins || 100} Coins</span>
-                    <span className="xs:hidden">{profile?.coins || 100}</span>
+                    <span className="hidden xs:inline">{coins} Coins</span>
+                    <span className="xs:hidden">{coins}</span>
                   </div>
                 </div>
               </div>
@@ -270,7 +351,10 @@ export default function DashboardPage() {
                   {profile?.full_name} {profile?.email ? `(${profile.email})` : ""}
                 </div>
                 <Button
-                  onClick={async () => { await supabase.auth.signOut(); navigate("/login"); }}
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    navigate("/login");
+                  }}
                   variant="destructive"
                   size="sm"
                   className="text-xs sm:text-sm"
@@ -284,25 +368,34 @@ export default function DashboardPage() {
         </header>
 
         <main className="flex-1 overflow-y-auto py-4 sm:py-6">
-          <motion.div variants={container} initial="hidden" animate="show" className="mx-auto max-w-7xl px-3 sm:px-4 space-y-4 sm:space-y-6">
+          <motion.div
+            variants={container}
+            initial="hidden"
+            animate="show"
+            className="mx-auto max-w-7xl px-3 sm:px-4 space-y-4 sm:space-y-6"
+          >
             {/* welcome card - Mobile Responsive */}
             <motion.div variants={item}>
               <Card className="border card-soft">
                 <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="text-[16px] sm:text-[18px] font-[650] tracking-[-0.01em] truncate" style={{ color: INK }}>
+                    <CardTitle
+                      className="text-[16px] sm:text-[18px] font-[650] tracking-[-0.01em] truncate"
+                      style={{ color: INK }}
+                    >
                       Welcome back, {profile?.full_name || "there"}!
                     </CardTitle>
-                    <CardDescription className="tracking-[-0.005em] text-xs sm:text-sm" style={{ color: SLATE }}>
+                    <CardDescription
+                      className="tracking-[-0.005em] text-xs sm:text-sm"
+                      style={{ color: SLATE }}
+                    >
                       Generate curriculum-perfect tests with AI. Pick a quick action to get started.
                     </CardDescription>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-start md:justify-end">
                     <Link to="/dashboard/test-generator" className="flex-1 sm:flex-none min-w-0">
-                      <Button
-                        className="gap-2 w-full sm:w-auto rounded-xl bg-gray-900 text-white hover:bg-black active:scale-[.98] shadow-lg text-xs sm:text-sm"
-                      >
-                        <Rocket className="h-3 w-3 sm:h-4 sm:w-4" /> 
+                      <Button className="gap-2 w-full sm:w-auto rounded-xl bg-gray-900 text-white hover:bg-black active:scale-[.98] shadow-lg text-xs sm:text-sm">
+                        <Rocket className="h-3 w-3 sm:h-4 sm:w-4" />
                         <span className="truncate">Create Test</span>
                       </Button>
                     </Link>
@@ -313,7 +406,7 @@ export default function DashboardPage() {
 
                     <Link to="/pricing" className="flex-1 sm:flex-none min-w-0">
                       <Button variant="ghost" className="gap-1 w-full sm:w-auto text-xs sm:text-sm">
-                        <Zap className="h-3 w-3 sm:h-4 sm:w-4" /> 
+                        <Zap className="h-3 w-3 sm:h-4 sm:w-4" />
                         <span className="truncate">Upgrade</span>
                       </Button>
                     </Link>
@@ -334,35 +427,65 @@ export default function DashboardPage() {
               {/* recent tests - Mobile Optimized */}
               <motion.div variants={item} className="lg:col-span-2 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-[14px] sm:text-[16px] font-[600] tracking-[-0.01em]" style={{ color: INK }}>Recent Tests</h2>
+                  <h2 className="text-[14px] sm:text-[16px] font-[600] tracking-[-0.01em]" style={{ color: INK }}>
+                    Recent Tests
+                  </h2>
                   <Button variant="ghost" size="sm" className="text-gray-900 dark:text-gray-50 text-xs sm:text-sm" onClick={goToHistory}>
                     View All
                   </Button>
                 </div>
                 <AnimatePresence initial={false}>
                   {recentTests.map((t) => (
-                    <motion.div key={t.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="group">
+                    <motion.div
+                      key={t.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="group"
+                    >
                       <Card className="border">
                         <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${t.subject === "Physics" ? "bg-red-400"
-                                : t.subject === "Mathematics" ? "bg-sky-400"
-                                  : "bg-emerald-400"
-                                }`} />
-                              <h3 className="font-[600] tracking-[-0.01em] truncate text-sm sm:text-base" style={{ color: INK }}>{t.name}</h3>
-                              <Badge variant="secondary" className="ml-1 shrink-0 text-xs">{t.subject}</Badge>
+                              <span
+                                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                  t.subject === "Physics"
+                                    ? "bg-red-400"
+                                    : t.subject === "Mathematics"
+                                    ? "bg-sky-400"
+                                    : "bg-emerald-400"
+                                }`}
+                              />
+                              <h3
+                                className="font-[600] tracking-[-0.01em] truncate text-sm sm:text-base"
+                                style={{ color: INK }}
+                              >
+                                {t.name}
+                              </h3>
+                              <Badge variant="secondary" className="ml-1 shrink-0 text-xs">
+                                {t.subject}
+                              </Badge>
                               {t.status === "Ready" ? (
-                                <Badge className="ml-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0 text-xs">Ready</Badge>
+                                <Badge className="ml-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0 text-xs">
+                                  Ready
+                                </Badge>
                               ) : (
-                                <Badge className="ml-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0 text-xs">Draft</Badge>
+                                <Badge className="ml-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0 text-xs">
+                                  Draft
+                                </Badge>
                               )}
                             </div>
-                            <p className="text-xs sm:text-sm text-muted-foreground truncate">{t.date} • {t.questions} questions</p>
+                            <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                              {t.date} • {t.questions} questions
+                            </p>
                           </div>
                           <div className="flex gap-2 justify-end sm:justify-start">
-                            <Button variant="outline" size="sm" className="text-xs sm:text-sm flex-1 sm:flex-none">View</Button>
-                            <Button variant="outline" size="sm" className="text-xs sm:text-sm hidden sm:inline-flex">Edit</Button>
+                            <Button variant="outline" size="sm" className="text-xs sm:text-sm flex-1 sm:flex-none">
+                              View
+                            </Button>
+                            <Button variant="outline" size="sm" className="text-xs sm:text-sm hidden sm:inline-flex">
+                              Edit
+                            </Button>
                           </div>
                         </div>
                       </Card>
@@ -377,7 +500,10 @@ export default function DashboardPage() {
                   <CardHeader className="pb-2">
                     <div className="flex items-center gap-2">
                       <BellDot className="h-4 w-4" />
-                      <CardTitle className="text-sm sm:text-base font-[600] tracking-[-0.01em]" style={{ color: INK }}>
+                      <CardTitle
+                        className="text-sm sm:text-base font-[600] tracking-[-0.01em]"
+                        style={{ color: INK }}
+                      >
                         Announcements
                       </CardTitle>
                     </div>
@@ -387,7 +513,7 @@ export default function DashboardPage() {
                     {announcements.map((a) => (
                       <div key={a.id} className="rounded-lg border bg-muted/40 p-2 sm:p-3">
                         <div className="flex items-center gap-2 font-medium text-sm sm:text-base">
-                          <a.icon className="h-3 w-3 sm:h-4 sm:w-4" /> 
+                          <a.icon className="h-3 w-3 sm:h-4 sm:w-4" />
                           <span className="truncate">{a.title}</span>
                         </div>
                         <div className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2">{a.desc}</div>
@@ -395,7 +521,9 @@ export default function DashboardPage() {
                       </div>
                     ))}
                     <Link to="/changelog">
-                      <Button variant="ghost" className="w-full text-xs sm:text-sm">See changelog</Button>
+                      <Button variant="ghost" className="w-full text-xs sm:text-sm">
+                        See changelog
+                      </Button>
                     </Link>
                   </CardContent>
                 </Card>
@@ -403,17 +531,25 @@ export default function DashboardPage() {
             </div>
 
             {/* CTA - Mobile Responsive */}
-            <motion.div variants={item} className="rounded-xl sm:rounded-2xl border p-[1px] shadow-[0_8px_24px_rgba(0,0,0,0.08),0_12px_40px_rgba(0,0,0,0.06)]">
+            <motion.div
+              variants={item}
+              className="rounded-xl sm:rounded-2xl border p-[1px] shadow-[0_8px_24px_rgba(0,0,0,0.08),0_12px_40px_rgba(0,0,0,0.06)]"
+            >
               <div className="rounded-xl sm:rounded-2xl bg-card card-soft px-4 sm:px-6 py-4 sm:py-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="text-[16px] sm:text-[18px] font-[600] tracking-[-0.01em] truncate" style={{ color: INK }}>Host a live contest</div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Proctor with camera checks, rankings and exports.</div>
+                  <div
+                    className="text-[16px] sm:text-[18px] font-[600] tracking-[-0.01em] truncate"
+                    style={{ color: INK }}
+                  >
+                    Host a live contest
+                  </div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">
+                    Proctor with camera checks, rankings and exports.
+                  </div>
                 </div>
                 <Link to="/dashboard/contest/create" className="w-full sm:w-auto">
-                  <Button
-                    className="gap-2 w-full sm:w-auto rounded-xl bg-gray-900 text-white hover:bg-black active:scale-[.98] shadow-lg text-xs sm:text-sm"
-                  >
-                    <Rocket className="h-3 w-3 sm:h-4 sm:w-4" /> 
+                  <Button className="gap-2 w-full sm:w-auto rounded-xl bg-gray-900 text-white hover:bg-black active:scale-[.98] shadow-lg text-xs sm:text-sm">
+                    <Rocket className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span>Create contest</span>
                   </Button>
                 </Link>
@@ -426,8 +562,10 @@ export default function DashboardPage() {
   );
 }
 
-/* ------- KPI Card - Mobile Responsive ------- */
-function KpiCard({
+/* ------- KPI Card - Mobile Responsive (memoized) ------- */
+type IconType = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+
+const KpiCard = memo(function KpiCard({
   title,
   value,
   icon: Icon,
@@ -436,20 +574,28 @@ function KpiCard({
 }: {
   title: string;
   value: string | number;
-  icon: any;
+  icon: IconType;
   tone?: "blue" | "teal" | "amber";
   interactive: boolean;
 }) {
-  const mx = useMotionValue(60), my = useMotionValue(40);
+  const mx = useMotionValue(60);
+  const my = useMotionValue(40);
   const rotateX = useTransform(my, [0, 120], [6, -6]);
   const rotateY = useTransform(mx, [0, 180], [-8, 8]);
 
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const onMoveRaw = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!interactive) return;
     const r = e.currentTarget.getBoundingClientRect();
     mx.set(e.clientX - r.left);
     my.set(e.clientY - r.top);
-  };
+  }, [interactive, mx, my]);
+
+  const onMove = useRafThrottle(onMoveRaw);
+
+  const resetPos = useCallback(() => {
+    mx.set(60);
+    my.set(40);
+  }, [mx, my]);
 
   const TONES = {
     blue: { border: "from-[#76B6FF66] to-[#2F6DF466]", chip: "bg-[#E8F1FF] text-[#1E3A8A]" },
@@ -459,22 +605,27 @@ function KpiCard({
   const t = TONES[tone];
 
   return (
-    <div onMouseMove={onMove} onMouseLeave={() => { mx.set(60); my.set(40); }} style={{ perspective: 1000 }}>
+    <div onMouseMove={onMove} onMouseLeave={resetPos} style={{ perspective: 1000 }}>
       <motion.div
         style={interactive ? { rotateX, rotateY } : undefined}
-        whileHover={!interactive ? { scale: 1.01 } : undefined}
+        whileHover={!interactive ? ({ scale: 1.01 } as any) : undefined}
         className="relative rounded-xl sm:rounded-2xl border bg-card card-soft transition-all shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.05)] p-[1px]"
       >
         {/* ultra-thin gradient border */}
         <div className={`rounded-xl sm:rounded-2xl bg-gradient-to-tr ${t.border} p-0.5`}>
           <div className="rounded-xl sm:rounded-2xl bg-card/95 backdrop-blur px-3 sm:px-5 py-3 sm:py-4">
             <div className="flex items-center justify-between">
-              <div className="text-xs sm:text-sm text-muted-foreground tracking-[-0.005em] truncate">{title}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground tracking-[-0.005em] truncate">
+                {title}
+              </div>
               <div className={`p-1 sm:p-2 rounded-lg ${t.chip}`}>
                 <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
             </div>
-            <div className="mt-1 sm:mt-2 text-[20px] sm:text-[30px] leading-none font-[700] tracking-[-0.015em] num" style={{ color: INK }}>
+            <div
+              className="mt-1 sm:mt-2 text-[20px] sm:text-[30px] leading-none font-[700] tracking-[-0.015em] num"
+              style={{ color: INK }}
+            >
               {value}
             </div>
           </div>
@@ -482,4 +633,4 @@ function KpiCard({
       </motion.div>
     </div>
   );
-}
+});
