@@ -1,0 +1,251 @@
+{
+  "timestamp": "20251213_022839",
+  "database_checks": {
+    "table_exists": true,
+    "row_count": 961,
+    "columns": [
+      "id",
+      "class_grade",
+      "subject",
+      "chapter",
+      "content",
+      "embedding",
+      "created_at"
+    ],
+    "has_required_columns": true,
+    "chapter_distribution": {
+      "Chemical Reactions and Equations": 71,
+      "Acids, Bases and Salts": 86,
+      "How do Organisms Reproduce": 79,
+      "Light - Reflection and Refraction": 125,
+      "Metals and Non-metals": 93,
+      "Human Eye and Colourful World": 54,
+      "Magnetic Effects of Electric Current": 63,
+      "Carbon and its Compounds": 93,
+      "Our Environment": 35,
+      "Life Processes": 86,
+      "Control and Coordination": 67,
+      "Heredity and Evolution": 33,
+      "Electricity": 76
+    },
+    "unique_chapters": 13,
+    "rpc_function_exists": false
+  },
+  "query_tests": [
+    {
+      "test_description": "Test covalent bonding in correct chapter",
+      "query": "Explain covalent bonding in carbon compounds",
+      "target_chapter": "Carbon and its Compounds",
+      "with_filter_results": [
+        {
+          "id": "7e30f69c-21f2-4f52-8b07-bfd388a91dbb",
+          "content": "[Chapter: Carbon and its Compounds]",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.8
+        },
+        {
+          "id": "d3dcdcb4-1fe7-485e-93f6-51c11386ead6",
+          "content": "Science 58Carbon and its Compounds4 CHAPTER In the last Chapter , we came to know many compounds of importance to us. In this Chapter we will study about some more interesting compounds and their properties. Also, we shall be learning about carbon, an element which is of immense significance to us i",
+          "chapter": "Carbon and its Compounds",
+          "similarity": 0.8
+        }
+      ],
+      "without_filter_results": [
+        {
+          "id": "8da25c73-dd63-49b1-98cd-6251411b13df",
+          "content": "[Chapter: Chemical Reactions and Equations]",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "f5205475-73c0-4093-b5a6-9b933965e30e",
+          "content": "Chemical Reactions and Equations1 CHAPTER Consider the following situations of daily life and think what happens when – /square6milk is left at room temperature during summers. /square6an iron tawa/pan/nail is left exposed to humid atmosphere. /square6grapes get fermented. /square6food is cooked. /s",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "4ef1172e-5e72-44e3-9d52-81879c7780fc",
+          "content": ". You may per haps be wondering as to what is actually meant by a chemical reaction. How do we come to know that a chemical reaction has taken place? Let us perform some activities to find the answer to these questions. Figure 1.1 Burning of a magnesium ribbon in air and collection of magnesium oxid",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        }
+      ],
+      "filtered_count": 3,
+      "unfiltered_count": 5,
+      "chapters_found_without_filter": [
+        "Chemical Reactions and Equations"
+      ]
+    },
+    {
+      "test_description": "Test pH scale query",
+      "query": "What is the pH scale and how does it work?",
+      "target_chapter": "Acids, Bases and Salts",
+      "with_filter_results": [
+        {
+          "id": "9f29d3c9-e439-4ea0-8b92-117c4012d403",
+          "content": ". 2.6). Generally paper impregnated with the universal indicator is used for measuring pH.QUESTIONS ?1. Why do HCl, HNO3, etc., show acidic characters in aqueous solutions while solutions of compounds like alcohol and glucose do not show acidic character? 2. Why does an aqueous solution of an acid c",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.8
+        },
+        {
+          "id": "ac64f58a-d451-4907-949a-b71cbdc50832",
+          "content": ". How is the concentration of hydronium ions (H3O+) affected when a solution of an acid is diluted? 6. How is the concentration of hydroxide ions (O H–) affected when excess base is dissolved in a solution of sodium hydroxide? Figure 2.6Figure 2.6Figure 2.6Figure 2.6Figure 2.6 Variation of pH with t",
+          "chapter": "Acids, Bases and Salts",
+          "similarity": 0.8
+        }
+      ],
+      "without_filter_results": [
+        {
+          "id": "8da25c73-dd63-49b1-98cd-6251411b13df",
+          "content": "[Chapter: Chemical Reactions and Equations]",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "f5205475-73c0-4093-b5a6-9b933965e30e",
+          "content": "Chemical Reactions and Equations1 CHAPTER Consider the following situations of daily life and think what happens when – /square6milk is left at room temperature during summers. /square6an iron tawa/pan/nail is left exposed to humid atmosphere. /square6grapes get fermented. /square6food is cooked. /s",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "4ef1172e-5e72-44e3-9d52-81879c7780fc",
+          "content": ". You may per haps be wondering as to what is actually meant by a chemical reaction. How do we come to know that a chemical reaction has taken place? Let us perform some activities to find the answer to these questions. Figure 1.1 Burning of a magnesium ribbon in air and collection of magnesium oxid",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        }
+      ],
+      "filtered_count": 3,
+      "unfiltered_count": 5,
+      "chapters_found_without_filter": [
+        "Chemical Reactions and Equations"
+      ]
+    },
+    {
+      "test_description": "Test metals reactivity",
+      "query": "How do metals react with acids?",
+      "target_chapter": "Metals and Non-metals",
+      "with_filter_results": [
+        {
+          "id": "be20012e-a98c-4f6b-a5e9-a37f6ed650b1",
+          "content": "Metals and Non-metals 413.2.1 What happens when Metals are bur nt in Air? You have seen in Activity 3.8 that magnesium bur ns in air with a dazzling white flame. Do all metals react in the same manner? Let us check by performing the following Activity. Activity 3.9Activity 3.9Activity 3.9Activity 3.",
+          "chapter": "Metals and Non-metals",
+          "similarity": 0.8
+        },
+        {
+          "id": "d82b3373-cb96-4da1-832b-032a423a83d0",
+          "content": "[Chapter: Metals and Non-metals]",
+          "chapter": "Metals and Non-metals",
+          "similarity": 0.8
+        }
+      ],
+      "without_filter_results": [
+        {
+          "id": "8da25c73-dd63-49b1-98cd-6251411b13df",
+          "content": "[Chapter: Chemical Reactions and Equations]",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "f5205475-73c0-4093-b5a6-9b933965e30e",
+          "content": "Chemical Reactions and Equations1 CHAPTER Consider the following situations of daily life and think what happens when – /square6milk is left at room temperature during summers. /square6an iron tawa/pan/nail is left exposed to humid atmosphere. /square6grapes get fermented. /square6food is cooked. /s",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "4ef1172e-5e72-44e3-9d52-81879c7780fc",
+          "content": ". You may per haps be wondering as to what is actually meant by a chemical reaction. How do we come to know that a chemical reaction has taken place? Let us perform some activities to find the answer to these questions. Figure 1.1 Burning of a magnesium ribbon in air and collection of magnesium oxid",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        }
+      ],
+      "filtered_count": 3,
+      "unfiltered_count": 5,
+      "chapters_found_without_filter": [
+        "Chemical Reactions and Equations"
+      ]
+    },
+    {
+      "test_description": "Test photosynthesis query",
+      "query": "What is photosynthesis and where does it occur?",
+      "target_chapter": "Life Processes",
+      "with_filter_results": [
+        {
+          "id": "c8df469b-31c5-4b3d-b8cb-dc72c6e0f03b",
+          "content": "Science 80class, even if we are just asleep, this maintenance job has to go on. The processes which together perform this maintenance job are life processes. Since these maintenance processes are needed to prevent damage and break-down, energy is needed for them. This energy comes from outside the b",
+          "chapter": "Life Processes",
+          "similarity": 0.8
+        },
+        {
+          "id": "39554a3d-6a70-46ef-827b-bcf5568e2c78",
+          "content": "Life Processes5 CHAPTER How do we tell the difference between what is alive and what is not alive? If we see a dog running, or a cow chewing cud, or a man shouting loudly on the street, we know that these are living beings. What if the dog or the cow or the man wer e asleep? W e would still think th",
+          "chapter": "Life Processes",
+          "similarity": 0.8
+        }
+      ],
+      "without_filter_results": [
+        {
+          "id": "8da25c73-dd63-49b1-98cd-6251411b13df",
+          "content": "[Chapter: Chemical Reactions and Equations]",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "f5205475-73c0-4093-b5a6-9b933965e30e",
+          "content": "Chemical Reactions and Equations1 CHAPTER Consider the following situations of daily life and think what happens when – /square6milk is left at room temperature during summers. /square6an iron tawa/pan/nail is left exposed to humid atmosphere. /square6grapes get fermented. /square6food is cooked. /s",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "4ef1172e-5e72-44e3-9d52-81879c7780fc",
+          "content": ". You may per haps be wondering as to what is actually meant by a chemical reaction. How do we come to know that a chemical reaction has taken place? Let us perform some activities to find the answer to these questions. Figure 1.1 Burning of a magnesium ribbon in air and collection of magnesium oxid",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        }
+      ],
+      "filtered_count": 3,
+      "unfiltered_count": 5,
+      "chapters_found_without_filter": [
+        "Chemical Reactions and Equations"
+      ]
+    },
+    {
+      "test_description": "Test query without chapter filter",
+      "query": "Explain reflection of light",
+      "target_chapter": null,
+      "with_filter_results": [],
+      "without_filter_results": [
+        {
+          "id": "8da25c73-dd63-49b1-98cd-6251411b13df",
+          "content": "[Chapter: Chemical Reactions and Equations]",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "f5205475-73c0-4093-b5a6-9b933965e30e",
+          "content": "Chemical Reactions and Equations1 CHAPTER Consider the following situations of daily life and think what happens when – /square6milk is left at room temperature during summers. /square6an iron tawa/pan/nail is left exposed to humid atmosphere. /square6grapes get fermented. /square6food is cooked. /s",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        },
+        {
+          "id": "4ef1172e-5e72-44e3-9d52-81879c7780fc",
+          "content": ". You may per haps be wondering as to what is actually meant by a chemical reaction. How do we come to know that a chemical reaction has taken place? Let us perform some activities to find the answer to these questions. Figure 1.1 Burning of a magnesium ribbon in air and collection of magnesium oxid",
+          "chapter": "Chemical Reactions and Equations",
+          "similarity": 0.8
+        }
+      ],
+      "filtered_count": 0,
+      "unfiltered_count": 5,
+      "chapters_found_without_filter": [
+        "Chemical Reactions and Equations"
+      ]
+    }
+  ],
+  "summary": {
+    "total_tests": 5,
+    "filtered_tests": 4,
+    "total_filtered_chunks": 12,
+    "total_unfiltered_chunks": 25,
+    "avg_filtered_chunks": 3.0,
+    "avg_unfiltered_chunks": 5.0
+  }
+}

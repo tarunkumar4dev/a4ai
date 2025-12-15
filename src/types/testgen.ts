@@ -1,262 +1,223 @@
-// src/utils/testGeneratorService.ts - ENHANCED VERSION
-import { TestBlueprint, GeneratedTest, GenerationStatus, TestGenerationError } from '../types/testgen';
+// /src/types/testgen.ts - UPDATED WITH RAG FIELDS
 
-export class EnhancedTestGenerator {
-  private static baseURL = '/functions/v1';
+/* ------------------------------------------------------------------ */
+/* ENUMS & UNIONS                                                     */
+/* ------------------------------------------------------------------ */
+export type DifficultyLevel = "easy" | "medium" | "hard" | "mixed";
+export type QuestionType = "mcq" | "short" | "long" | "numerical" | "case_based";
+export type CognitiveLevel = "remember" | "understand" | "apply" | "analyze" | "evaluate" | "create";
+export type OutputFormat = "pdf" | "docx" | "csv";
+export type BoardType = "CBSE" | "ICSE" | "State" | "IGCSE" | "IB";
 
-  static async generateTest(blueprint: TestBlueprint): Promise<GeneratedTest> {
-    try {
-      const response = await fetch(`${this.baseURL}/generate-test`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAuthToken()}` 
-        },
-        body: JSON.stringify({
-          ...blueprint,
-          // Ensure required fields
-          userId: blueprint.userId || 'default-user',
-          requestId: blueprint.requestId || this.generateRequestId(),
-          timestamp: new Date().toISOString()
-        })
-      });
-
-      if (!response.ok) {
-        throw await this.handleError(response);
-      }
-
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Generation failed');
-      }
-
-      return result.data;
-
-    } catch (error) {
-      console.error('Test generation failed:', error);
-      throw this.normalizeError(error);
-    }
-  }
-
-  static async scoreQuestions(questions: any[], blueprint: TestBlueprint) {
-    try {
-      const response = await fetch(`${this.baseURL}/score-questions`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAuthToken()}` 
-        },
-        body: JSON.stringify({ 
-          questions, 
-          blueprint,
-          timestamp: new Date().toISOString()
-        })
-      });
-
-      if (!response.ok) {
-        throw await this.handleError(response);
-      }
-
-      return await response.json();
-
-    } catch (error) {
-      console.error('Question scoring failed:', error);
-      throw this.normalizeError(error);
-    }
-  }
-
-  static async regenerateSimilar(question: any, keepFields: string[] = ['cognitive', 'difficulty', 'marks']) {
-    try {
-      const response = await fetch(`${this.baseURL}/regenerate-similar`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.getAuthToken()}` 
-        },
-        body: JSON.stringify({ 
-          question, 
-          keepFields,
-          timestamp: new Date().toISOString()
-        })
-      });
-
-      if (!response.ok) {
-        throw await this.handleError(response);
-      }
-
-      const result = await response.json();
-      return result.data || result;
-
-    } catch (error) {
-      console.error('Question regeneration failed:', error);
-      throw this.normalizeError(error);
-    }
-  }
-
-  // NEW: Get generation status
-  static async getGenerationStatus(testId: string): Promise<GenerationStatus> {
-    try {
-      const response = await fetch(`${this.baseURL}/generation-status/${testId}`, {
-        headers: {
-          'Authorization': `Bearer ${this.getAuthToken()}`
-        }
-      });
-
-      if (!response.ok) {
-        throw await this.handleError(response);
-      }
-
-      return await response.json();
-
-    } catch (error) {
-      console.error('Status check failed:', error);
-      throw this.normalizeError(error);
-    }
-  }
-
-  // NEW: Cancel generation
-  static async cancelGeneration(testId: string): Promise<void> {
-    try {
-      const response = await fetch(`${this.baseURL}/cancel-generation/${testId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.getAuthToken()}`
-        }
-      });
-
-      if (!response.ok) {
-        throw await this.handleError(response);
-      }
-
-    } catch (error) {
-      console.error('Cancel generation failed:', error);
-      throw this.normalizeError(error);
-    }
-  }
-
-  // NEW: Validate blueprint before generation
-  static validateBlueprint(blueprint: TestBlueprint): { isValid: boolean; errors: string[] } {
-    const errors: string[] = [];
-
-    if (!blueprint.subject) errors.push('Subject is required');
-    if (!blueprint.classNum) errors.push('Class number is required');
-    if (!blueprint.board) errors.push('Board is required');
-    if (!blueprint.userId) errors.push('User ID is required');
-    
-    if (!blueprint.buckets || blueprint.buckets.length === 0) {
-      errors.push('At least one question bucket is required');
-    } else {
-      blueprint.buckets.forEach((bucket, index) => {
-        if (bucket.count <= 0) errors.push(`Bucket ${index + 1}: Count must be positive`);
-        if (bucket.marks <= 0) errors.push(`Bucket ${index + 1}: Marks must be positive`);
-        if (!bucket.chapters || bucket.chapters.length === 0) {
-          errors.push(`Bucket ${index + 1}: At least one chapter is required`);
-        }
-      });
-    }
-
-    if (blueprint.cognitiveLevels.length === 0) {
-      errors.push('At least one cognitive level is required');
-    }
-
-    if (blueprint.ncertWeight < 0 || blueprint.ncertWeight > 1) {
-      errors.push('NCERT weight must be between 0 and 1');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
-  }
-
-  // NEW: Calculate estimated time
-  static estimateGenerationTime(blueprint: TestBlueprint): number {
-    const totalQuestions = blueprint.buckets.reduce((sum, bucket) => sum + bucket.count, 0);
-    // Base time + per question time
-    return 5000 + (totalQuestions * 2000); // milliseconds
-  }
-
-  // Utility methods
-  private static getAuthToken(): string {
-    // Implementation depends on your auth system
-    return localStorage.getItem('auth_token') || '';
-  }
-
-  private static generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private static async handleError(response: Response): Promise<Error> {
-    try {
-      const errorData = await response.json();
-      return new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-    } catch {
-      return new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-  }
-
-  private static normalizeError(error: any): TestGenerationError {
-    if (error instanceof Error) {
-      return {
-        code: 'GENERATION_ERROR',
-        message: error.message,
-        suggestion: 'Please check your blueprint and try again'
-      };
-    }
-    
-    return {
-      code: 'UNKNOWN_ERROR',
-      message: 'An unexpected error occurred',
-      suggestion: 'Please try again later'
-    };
-  }
+/* ------------------------------------------------------------------ */
+/* RAG-SPECIFIC TYPES                                                 */
+/* ------------------------------------------------------------------ */
+export interface RAGSource {
+  content: string;
+  metadata: {
+    source?: string;
+    page?: string | number;
+    chapter?: string;
+    document_id?: string;
+    [key: string]: any;
+  };
+  similarity: number;
 }
 
-// NEW: Custom hook for React components (agar aap React use kar rahe hain)
-export const useTestGeneration = () => {
-  const [status, setStatus] = useState<GenerationStatus | null>(null);
-  const [error, setError] = useState<TestGenerationError | null>(null);
-  const [result, setResult] = useState<GeneratedTest | null>(null);
+export interface RAGContext {
+  // Context text from NCERT (summarized/processed)
+  content: string;
+  
+  // Raw sources for reference
+  sources: RAGSource[];
+  
+  // RAG query used
+  query: string;
+  
+  // Metadata
+  chunksRetrieved: number;
+  confidence?: number;
+}
 
-  const generateTest = async (blueprint: TestBlueprint) => {
-    setStatus({ status: 'pending', progress: 0 });
-    setError(null);
+/* ------------------------------------------------------------------ */
+/* UI COMPONENT TYPES (From TestRowEditor)                            */
+/* ------------------------------------------------------------------ */
+export interface SimpleRowData {
+  id: string;
+  topic: string;
+  subtopic?: string;
+  quantity: number;
+  difficulty: "Easy" | "Medium" | "Hard" | "Mixed"; // UI casing
+  format: "PDF" | "DOC";
+  refFile?: File;
+  
+  // Optional RAG-specific fields
+  useNCERT?: boolean;
+  ncertChapter?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* BACKEND BUCKET TYPES                                               */
+/* ------------------------------------------------------------------ */
+export interface TestBucket {
+  type: QuestionType;
+  difficulty: DifficultyLevel;
+  cognitive?: CognitiveLevel;
+  count: number;
+  marks: number;
+  negativeMarking?: number;
+  chapters?: string[];
+  
+  // RAG-specific: Which NCERT chapters to focus on for this bucket
+  ncertChapters?: string[];
+  useNCERT?: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* API PAYLOAD REQUEST (For generateTest.ts)                          */
+/* ------------------------------------------------------------------ */
+export interface GenerateTestRequest {
+  // Core Identity
+  userId: string;
+  requestId?: string;
+  
+  // Meta Data
+  subject: string;
+  classNum: number; // Always number for backend
+  board?: BoardType;
+  examTitle?: string;
+  
+  // Topic/Scope
+  topic?: string;
+  chapters?: string[];
+  
+  // Question Configuration
+  qCount?: number;
+  difficulty?: DifficultyLevel;
+  patternMode?: "simple" | "blueprint" | "matrix";
+  
+  // NCERT Configuration (CRITICAL FOR FILTERING)
+  useNCERT: boolean;
+  ncertClass?: number;
+  ncertSubject?: string;
+  ncertChapters: string[];
+  ncertWeight?: number;
+  
+  // RAG-Specific Configuration
+  ragContext?: string;                    // Pre-fetched NCERT context
+  ragSources?: RAGSource[];               // Source documents
+  ragQuery?: string;                      // The query used to get context
+  useRAG?: boolean;                       // Explicit flag to use RAG
+  
+  // Buckets (Processed from simpleData)
+  buckets?: TestBucket[];
+  
+  // Simple Data (For fallback/context)
+  simpleData?: SimpleRowData[];
+  
+  // Settings
+  language?: "English" | "Hindi";
+  outputFormat?: OutputFormat;
+  watermark?: boolean;
+  shuffleQuestions?: boolean;
+  
+  // Optional
+  notes?: string;
+  teacherName?: string;
+  examDate?: string;
+  
+  // Advanced RAG options
+  ragThreshold?: number;                  // Similarity threshold
+  ragTopK?: number;                       // Number of chunks to retrieve
+  includePageNumbers?: boolean;           // Include page numbers in questions
+}
+
+/* ------------------------------------------------------------------ */
+/* API RESPONSE TYPES                                                 */
+/* ------------------------------------------------------------------ */
+export interface GenerateTestResponse {
+  ok: boolean;
+  pdfUrl?: string | null;
+  docxUrl?: string | null;
+  csvUrl?: string | null;
+  requestId?: string;
+  meta: {
+    mode?: string;
+    totalQuestions?: number;
+    useNCERT?: boolean;
+    ncertWeight?: number;
+    sections?: string[];
     
-    try {
-      // Validate first
-      const validation = EnhancedTestGenerator.validateBlueprint(blueprint);
-      if (!validation.isValid) {
-        throw {
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid blueprint',
-          details: validation.errors
-        };
-      }
-
-      setStatus({ status: 'processing', progress: 30 });
-      
-      const test = await EnhancedTestGenerator.generateTest(blueprint);
-      setResult(test);
-      setStatus({ status: 'completed', progress: 100 });
-
-      return test;
-
-    } catch (err) {
-      const normalizedError = EnhancedTestGenerator.normalizeError(err);
-      setError(normalizedError);
-      setStatus({ status: 'failed', progress: 0 });
-      throw normalizedError;
-    }
+    // RAG Metadata
+    ragUsed?: boolean;
+    ragSourcesCount?: number;
+    ragConfidence?: number;
+    ncertBased?: boolean;
+    chaptersCovered?: string[];
+    
+    [key: string]: any;
   };
+  json: any;
+  
+  // Optional: Include RAG context in response for debugging/display
+  ragContext?: RAGContext;
+}
 
-  return {
-    generateTest,
-    status,
-    error,
-    result,
-    isGenerating: status?.status === 'processing',
-    isCompleted: status?.status === 'completed',
-    isFailed: status?.status === 'failed'
+/* ------------------------------------------------------------------ */
+/* CHAT/QA RELATED TYPES                                              */
+/* ------------------------------------------------------------------ */
+export interface NCERTQueryRequest {
+  question: string;
+  subject?: string;
+  classNum?: number;
+  chapter?: string;
+  includeSources?: boolean;
+}
+
+export interface NCERTQueryResponse {
+  success: boolean;
+  answer: string;
+  sources?: RAGSource[];
+  queryTime?: number;
+  confidence?: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* HELPER TYPES                                                       */
+/* ------------------------------------------------------------------ */
+export interface HealthCheck {
+  ok: boolean;
+  keys: {
+    openai: boolean;
+    deepseek: boolean;
+    gemini: boolean;
   };
-};
+  models: {
+    openai: string;
+    deepseek: string;
+    gemini: string;
+  };
+  // Add RAG health check
+  rag?: {
+    available: boolean;
+    chunksCount?: number;
+    apiEndpoint?: string;
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* DOCUMENT INGESTION TYPES (Optional - for admin)                    */
+/* ------------------------------------------------------------------ */
+export interface DocumentIngestionRequest {
+  documentId: string;
+  text: string;
+  metadata: {
+    source: string;
+    subject: string;
+    class: number;
+    chapter: string;
+    pages?: string;
+    author?: string;
+    year?: number;
+  };
+}

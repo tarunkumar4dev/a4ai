@@ -1,4 +1,4 @@
-// src/lib/types.ts
+// src/integrations/supabase/types.ts
 
 export type Json =
   | string
@@ -7,6 +7,37 @@ export type Json =
   | null
   | { [key: string]: Json | undefined }
   | Json[];
+
+/** ------ RAG-related types (frontend use) ------ */
+export interface ChunkMetadata {
+  chunk_index?: number;
+  start_char?: number;
+  end_char?: number;
+  chunk_number?: number;
+  total_chunks?: number;
+  source?: string;
+  page?: string | number;
+  document_id?: string;
+  [key: string]: any;
+}
+
+export interface RetrievedChunk {
+  id?: string;
+  content: string;
+  metadata: ChunkMetadata;
+  similarity?: number;
+}
+
+export interface RAGResponse {
+  question: string;
+  answer: string;
+  sources: Array<{
+    content: string;
+    metadata: ChunkMetadata;
+    similarity: number;
+  }>;
+  chunks_retrieved: number;
+}
 
 /** ------ Your actual DB schema (public) ------ */
 export type Database = {
@@ -61,12 +92,54 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["generated_tests"]["Insert"]>;
         Relationships: []; // add FK to profiles if you want strict typing
       };
+
+      // NEW: Document chunks table for RAG
+      document_chunks: {
+        Row: {
+          id: string;               // uuid
+          content: string;
+          embedding: number[];      // vector embedding
+          metadata: Json;           // JSON containing metadata
+          document_id: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          content: string;
+          embedding: number[];
+          metadata: Json;
+          document_id?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["document_chunks"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      // Add RPC functions for vector search
+      match_documents: {
+        Args: {
+          query_embedding: number[];
+          match_threshold?: number;
+          match_count?: number;
+        };
+        Returns: Array<{
+          id: string;
+          content: string;
+          metadata: Json;
+          similarity: number;
+        }>;
+      };
+      // Optional: if you want text-to-embedding in DB
+      get_text_embedding?: {
+        Args: {
+          text: string;
+        };
+        Returns: number[];
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -188,3 +261,4 @@ export const Constants = {
 /** Handy row aliases (optional but nice) */
 export type Profile = Tables<"profiles">;
 export type GeneratedTest = Tables<"generated_tests">;
+export type DocumentChunk = Tables<"document_chunks">;

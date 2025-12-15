@@ -1,73 +1,84 @@
-Here's a professional, production-ready rewrite for your **a4ai** project documentation, tailored for a startup/company context:
+# **a4ai**  
+**Artificial Intelligence for All India**  
+*Practical AI tools for Indian education*
 
 ---
 
-# **a4ai – AI-Powered Solutions Platform**  
-*Accelerating Innovation with Artificial Intelligence*  
-
-## **Project Overview**  
-**Live URL**: [https://a4ai.in](https://a4ai.in)  
-**Mission**: Democratizing AI tools for businesses and developers.  
+## 🌱 **Live & Building**
+**Website**: [https://a4ai.in](https://a4ai.in)  
+**Current Focus**: AI Test Generator for Teachers  
+**Status**: Actively being tested with real educators
 
 ---
 
-## **Development Workflow**  
+## 🎯 **What We Solve**
+Teachers spend hours creating tests. We help them do it in **minutes** using AI that understands Indian curriculum.
 
-### **1. Collaborative Editing**  
-- **Via GitHub**:  
-  ```bash
-  git clone https://github.com/[your-org]/a4ai.git
-  cd a4ai
-  npm install
-  npm run dev  # Local dev server (http://localhost:5173)
-  ```
-- **Direct GitHub Edits**:  
-  Edit files via GitHub UI (pencil icon) for quick fixes.  
-
-### **2. Tech Stack**  
-- **Frontend**: React + TypeScript (Vite)  
-- **Styling**: Tailwind CSS + shadcn/ui  
-- **Deployment**: Vercel (CI/CD via GitHub)  
+**How it works**:  
+1. Upload textbook/notes (PDF or text)  
+2. AI generates relevant questions  
+3. Download ready-to-use test  
+4. (Coming) Track student performance
 
 ---
 
-## **Production Deployment**  
-### **Automated Deploys**  
-- Push to `main` branch triggers Vercel production deployment.  
-- Manual redeploys: [Vercel Dashboard](https://vercel.com/a4ai).  
-
-### **Custom Domain (Hostinger)**  
-- Configured via Vercel:  
-  ```txt
-  CNAME: a4ai.in → cname.vercel-dns.com
-  ```
-  [Domain Settings Guide](https://vercel.com/docs/projects/domains).  
+## 🛠️ **Tech Stack**
+| Frontend | Backend | AI | Database |
+|----------|---------|----|----------|
+| React + TypeScript | FastAPI | RAG + OpenAI | Supabase |
+| Tailwind CSS | Railway | Custom prompts | PostgreSQL |
+| Vercel Hosting | Python | Vector search | |
 
 ---
 
-## **Team Guidelines**  
-### **Code Standards**  
-- **Commits**: Follow [Conventional Commits](https://www.conventionalcommits.org).  
-- **Branches**: `feature/`, `fix/`, `release/` prefixes.  
+## 🏃 **Quick Start (For Developers)**
+```bash
+git clone https://github.com/tarunkumar4dev/a4ai.git
+cd a4ai
+npm install
+npm run dev
+# Open http://localhost:5173
+```
 
-### **Critical Files**  
-- `src/`: Core application logic.  
-- `public/`: Assets (favicon: `ICON.ico`).  
-- `vite.config.ts`: Build configuration.  
-
----
-
-## **Support & Maintenance**  
-**Issues?**  
-1. Check [Vercel Deployment Logs](https://vercel.com/a4ai).  
-2. Clear cache: `npm run clean && npm run build`.  
-
-**Scale Up**:  
-- Enable Vercel Analytics for performance monitoring.  
+**Environment**: Copy `.env.example` to `.env.local` and add your keys.
 
 ---
 
-**© 2025 a4ai Technologies** | [Privacy Policy](#) | [Contact](#)  
+## 👥 **Team**
+- **Tarun Kumar** – Backend & AI
+- **Yash** – Frontend
+- **Aakash** – Frontend & Ops  
+- **Krishna** – Testing & Outreach
+- **Durgesh** – Marketing
+- **Nishant** – Strategy
 
---- 
+---
 
+## 📅 **Roadmap**
+**Phase 1**: Test Generator MVP ✓ (In Progress)  
+**Phase 2**: Multi-language, Analytics  
+**Phase 3**: School Management Features
+
+---
+
+## 📞 **Contact**
+**For Educators**: demo@a4ai.in  
+**For Schools**: partnerships@a4ai.in  
+**General**: team@a4ai.in
+
+---
+
+## 🌟 **Why We're Different**
+We're not just another AI wrapper. We're building tools that actually understand:
+- Indian curriculum patterns (CBSE, ICSE, State Boards)
+- Multilingual content needs
+- Real classroom challenges
+
+---
+
+**"Built slowly, honestly, with respect for Indian education."**  
+**Team a4ai** | est. 2024
+
+---
+
+*For investors & detailed documentation, please contact us directly.*

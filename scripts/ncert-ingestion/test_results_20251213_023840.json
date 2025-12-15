@@ -1,0 +1,88 @@
+{
+  "timestamp": "20251213_023840",
+  "database_checks": {
+    "table_exists": true,
+    "row_count": 961,
+    "columns": [
+      "id",
+      "class_grade",
+      "subject",
+      "chapter",
+      "content",
+      "embedding",
+      "created_at"
+    ],
+    "has_required_columns": true,
+    "chapter_distribution": {
+      "Chemical Reactions and Equations": 71,
+      "Acids, Bases and Salts": 86,
+      "How do Organisms Reproduce": 79,
+      "Light - Reflection and Refraction": 125,
+      "Metals and Non-metals": 93,
+      "Human Eye and Colourful World": 54,
+      "Magnetic Effects of Electric Current": 63,
+      "Carbon and its Compounds": 93,
+      "Our Environment": 35,
+      "Life Processes": 86,
+      "Control and Coordination": 67,
+      "Heredity and Evolution": 33,
+      "Electricity": 76
+    },
+    "unique_chapters": 13
+  },
+  "query_tests": [
+    {
+      "test_description": "Test covalent bonding in correct chapter",
+      "query": "Explain covalent bonding in carbon compounds",
+      "target_chapter": "Carbon and its Compounds",
+      "with_filter_results": [],
+      "without_filter_results": [],
+      "filtered_chapters": [],
+      "unfiltered_chapters": []
+    },
+    {
+      "test_description": "Test pH scale query",
+      "query": "What is the pH scale and how does it work?",
+      "target_chapter": "Acids, Bases and Salts",
+      "with_filter_results": [],
+      "without_filter_results": [],
+      "filtered_chapters": [],
+      "unfiltered_chapters": []
+    },
+    {
+      "test_description": "Test metals reactivity",
+      "query": "How do metals react with acids?",
+      "target_chapter": "Metals and Non-metals",
+      "with_filter_results": [],
+      "without_filter_results": [],
+      "filtered_chapters": [],
+      "unfiltered_chapters": []
+    },
+    {
+      "test_description": "Test photosynthesis query",
+      "query": "What is photosynthesis and where does it occur?",
+      "target_chapter": "Life Processes",
+      "with_filter_results": [],
+      "without_filter_results": [],
+      "filtered_chapters": [],
+      "unfiltered_chapters": []
+    },
+    {
+      "test_description": "Test query without chapter filter",
+      "query": "Explain reflection of light",
+      "target_chapter": null,
+      "with_filter_results": [],
+      "without_filter_results": [],
+      "filtered_chapters": [],
+      "unfiltered_chapters": []
+    }
+  ],
+  "summary": {
+    "total_tests": 5,
+    "filtered_tests": 4,
+    "total_filtered_chunks": 0,
+    "total_unfiltered_chunks": 0,
+    "avg_filtered_chunks": 0.0,
+    "avg_unfiltered_chunks": 0.0
+  }
+}

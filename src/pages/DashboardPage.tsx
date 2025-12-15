@@ -44,6 +44,7 @@ import {
   Zap,
   Coins,
   Menu,
+  ArrowLeft,
 } from "lucide-react";
 
 /* ------------ tiny media hook (stable) ------------ */
@@ -145,6 +146,11 @@ export default function DashboardPage() {
   const popupTimers = useRef<number[]>([]);
 
   /** Check if new user and show coins popup (robust & abortable) */
+  // Handle back navigation
+  const handleBack = useCallback(() => {
+    navigate(-1); // Go back to previous page
+  }, [navigate]);
+
   useEffect(() => {
     if (loading || !profile) return;
 
@@ -175,6 +181,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, profile?.id, profile?.coins, searchParams.get("newUser")]);
 
+  /* ensure profile */
   // Avoid duplicating profile fetch logic already handled by useUserProfile; keep only auth gate + best-effort ensure row
   useEffect(() => {
     let aborted = false;
@@ -316,16 +323,27 @@ export default function DashboardPage() {
         <header className="bg-background/80 backdrop-blur border-b sticky top-0 z-30">
           <div className="mx-auto w-full max-w-7xl px-3 sm:px-4 py-3">
             <div className="flex items-center justify-between">
-              {/* Left Section - Menu & Title */}
-              <div className="flex items-center gap-3 flex-1 min-w-0">
+              {/* Left Section - Back Button, Menu & Title */}
+              <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                {/* Back Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-2 h-9 w-9 flex-shrink-0 hover:bg-gray-100/80 active:scale-95 transition-all"
+                  onClick={handleBack}
+                  aria-label="Go back"
+                >
+                  <ArrowLeft size={18} className="text-gray-700" />
+                </Button>
+
                 {/* Mobile Menu Button */}
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="lg:hidden p-2"
+                  className="lg:hidden p-2 h-9 w-9 flex-shrink-0"
                   onClick={openMobileSidebar}
                 >
-                  <Menu size={20} />
+                  <Menu size={18} />
                 </Button>
 
                 <div className="flex items-center gap-3 min-w-0 flex-1">

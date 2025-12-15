@@ -332,7 +332,11 @@ function SidebarContent() {
 }
 
 /* ---------------- Responsive Sidebar ---------------- */
-export default function DashboardSidebar() {
+interface DashboardSidebarProps {
+  onClose?: () => void;
+}
+
+export default function DashboardSidebar({ onClose }: DashboardSidebarProps) {
   useLocation(); // rerender on route change
   const [open, setOpen] = useState(false);
 
@@ -368,7 +372,10 @@ export default function DashboardSidebar() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+                onClose?.();
+              }}
             />
             <motion.aside
               key="mobile"

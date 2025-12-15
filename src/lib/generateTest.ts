@@ -1,64 +1,34 @@
-// /src/lib/generateTest.ts
-import { supabase } from "@/lib/supabaseClient";
+// /src/lib/generateTest.ts - UPDATED WITH RAG
+import { supabase } from "@/integrations/supabase/client";
 import type { GenerateTestRequest } from "@/types/testgen";
+import { RAGClient } from "@/integrations/supabase/client";
 
 /* ------------------------------------------------------------------ */
-/* Types                                                               */
+/* TYPES                                                              */
 /* ------------------------------------------------------------------ */
 export type GenerateTestResponse = {
-  ok: true;
-  /** Primary PDF (new backend) or legacy single URL */
-  url: string;
-  /** New backend explicit urls (may be undefined if legacy) */
+  ok: boolean;
   pdfUrl?: string | null;
   docxUrl?: string | null;
   csvUrl?: string | null;
-  /** Optional requestId we attached/passed through */
   requestId?: string;
-  /** Raw meta from server */
   meta: any;
-  /** Entire raw JSON for debugging */
   json: any;
-  /** Model info if returned */
-  used: { modelGPT: string; modelDeepseek: string };
 };
 
 type RawJson = {
   ok?: boolean;
-  // legacy/various url fields
-  url?: string;
-  publicUrl?: string;
-  downloadUrl?: string;
-  file_url?: string;
-  signed_url?: string;
-
-  // new explicit fields
   pdfUrl?: string;
   docxUrl?: string;
   csvUrl?: string;
-
-  // misc storage paths
-  filePath?: string;
-  storagePath?: string | { pdfPath?: string; docxPath?: string; csvPath?: string };
-  path?: string;
-  storage_path?: string;
-
   meta?: Record<string, any>;
-  used?: { modelGPT?: string; modelDeepseek?: string };
   error?: string;
   rid?: string;
   [k: string]: any;
 };
 
-export type Health = {
-  openaiOk: boolean;
-  deepseekOk: boolean;
-  modelGPT: string;
-  modelDeepseek: string;
-};
-
 /* ------------------------------------------------------------------ */
-/* Helpers                                                             */
+/* HELPERS                                                            */
 /* ------------------------------------------------------------------ */
 function getFunctionsBaseUrl(): string {
   const fn = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL as string | undefined;
@@ -74,181 +44,271 @@ function getFunctionsBaseUrl(): string {
 async function getAuthToken(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
   if (session?.access_token) return session.access_token;
-
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
   return anon ?? null;
 }
 
-function preferUrl(raw: RawJson): string | undefined {
-  return (
-    raw.pdfUrl ||
-    raw.publicUrl ||
-    raw.url ||
-    raw.downloadUrl ||
-    raw.file_url ||
-    raw.signed_url
-  );
-}
-
 function normalizeServerJson(raw: RawJson): GenerateTestResponse {
-  const primary = preferUrl(raw);
-  const ok = raw.ok ?? !!primary;
-
   return {
-    ok: !!ok,
-    url: (primary as string) || "",
-    pdfUrl: raw.pdfUrl ?? primary ?? null,
+    ok: !!raw.ok,
+    pdfUrl: raw.pdfUrl ?? null,
     docxUrl: raw.docxUrl ?? null,
     csvUrl: raw.csvUrl ?? null,
-    requestId: typeof raw?.meta?.requestId === "string" ? raw.meta.requestId : raw?.requestId,
+    requestId: raw.rid,
     meta: raw.meta ?? {},
     json: raw,
-    used: {
-      modelGPT: raw.used?.modelGPT ?? "unknown",
-      modelDeepseek: raw.used?.modelDeepseek ?? "unknown",
-    },
   };
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+/* ------------------------------------------------------------------ */
+/* RAG INTEGRATION HELPERS                                            */
+/* ------------------------------------------------------------------ */
+async function getRAGContextForTest(payload: GenerateTestRequest): Promise<{
+  context: string;
+  sources: any[];
+}> {
+  try {
+    // Create a comprehensive query for RAG based on test parameters
+    const query = `NCERT ${payload.subject} Class ${payload.classNum} content for generating a test with: 
+    - Topic: ${payload.topic || 'general'}
+    - Difficulty: ${payload.difficulty || 'medium'}
+    - Question types needed: ${payload.buckets?.map(b => b.type).join(', ') || 'mixed'}
+    - Total questions: ${payload.qCount || 10}
+    
+    Provide relevant textbook content, concepts, examples, and exercises that can be used to create questions.`;
 
-function shouldRetry(status: number) {
-  return status === 429 || status === 502 || status === 503 || status === 504;
+    console.log("🔍 Querying RAG for NCERT context...");
+    
+    // Query RAG system (FastAPI backend)
+    const ragResponse = await RAGClient.query(
+      query,
+      import.meta.env.VITE_RAG_API_URL || "http://localhost:8000"
+    );
+
+    if (!ragResponse) {
+      console.warn("⚠️ RAG query returned no response");
+      return { context: "", sources: [] };
+    }
+
+    console.log(`📚 Retrieved ${ragResponse.chunks_retrieved} NCERT chunks for context`);
+
+    // Format context for test generation
+    const context = `Based on NCERT ${payload.subject} Class ${payload.classNum}:
+
+${ragResponse.answer}
+
+Relevant NCERT Sources:
+${ragResponse.sources.map((src, i) => 
+  `[${i+1}] ${src.content.substring(0, 150)}...`
+).join('\n')}`;
+
+    return {
+      context,
+      sources: ragResponse.sources
+    };
+  } catch (error) {
+    console.error("Error getting RAG context:", error);
+    return { context: "", sources: [] };
+  }
 }
 
 /* ------------------------------------------------------------------ */
-/* Public API                                                          */
+/* VALIDATION & SAFETY TRANSFORMATION                                 */
 /* ------------------------------------------------------------------ */
+function validateAndTransformPayload(payload: GenerateTestRequest): any {
+  // 1. Critical Validation
+  if (!payload.userId) throw new Error("User ID is required");
+  if (!payload.subject) throw new Error("Subject is required");
+  if (!payload.classNum) throw new Error("Class Number is required");
 
-export async function checkHealth(): Promise<Health> {
-  const ref = (import.meta.env.VITE_SUPABASE_REF as string | undefined)?.trim();
-  const base = ref ? `https://${ref}.functions.supabase.co` : getFunctionsBaseUrl();
-  const r = await fetch(`${base}/generate-test/health`);
-  if (!r.ok) throw new Error("Health check failed");
+  // 2. Generate Request ID if missing
+  const requestId = payload.requestId || crypto.randomUUID();
 
-  const j = (await r.json()) as any;
-  // server returns: { ok, keys: { openai, deepseek, ... }, models: { openai, deepseek } }
-  const openaiOk = !!j?.keys?.openai;
-  const deepseekOk = !!j?.keys?.deepseek;
-  const modelGPT = String(j?.models?.openai ?? "unknown");
-  const modelDeepseek = String(j?.models?.deepseek ?? "unknown");
+  // 3. SAFETY NET: Ensure 'buckets' exist
+  let buckets = payload.buckets;
 
-  return { openaiOk, deepseekOk, modelGPT, modelDeepseek };
+  if (!buckets || buckets.length === 0) {
+    console.warn("⚠️ Warning: No buckets found in payload. Attempting fallback generation.");
+    
+    const rawData = payload as any;
+    if (rawData.simpleData && Array.isArray(rawData.simpleData)) {
+      buckets = rawData.simpleData.map((row: any) => ({
+        type: "mcq",
+        difficulty: (row.difficulty || "medium").toLowerCase(),
+        cognitive: "understand",
+        count: row.quantity || 5,
+        marks: 1,
+      }));
+    } else {
+      buckets = [{
+        type: "mcq",
+        difficulty: "medium",
+        cognitive: "understand",
+        count: payload.qCount || 10,
+        marks: 1,
+      }];
+    }
+  }
+
+  return {
+    ...payload,
+    requestId,
+    buckets
+  };
 }
+
+/* ------------------------------------------------------------------ */
+/* PUBLIC API                                                         */
+/* ------------------------------------------------------------------ */
 
 export async function generateTest(
-  payload: GenerateTestRequest,
-  options?: { timeoutMs?: number; retries?: number }
+  payload: GenerateTestRequest
 ): Promise<GenerateTestResponse> {
-  // Attach a requestId (non-breaking) so backend can track status rows
-  const requestId = (globalThis.crypto && "randomUUID" in globalThis.crypto)
-    ? (globalThis.crypto as Crypto).randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  
+  console.log("📝 Input Payload:", payload);
+  
+  // 1. Validate & Fix Payload
+  const enhancedPayload = validateAndTransformPayload(payload);
+  
+  // 2. Get RAG context from NCERT
+  const ragContext = await getRAGContextForTest(payload);
+  
+  // 3. Add RAG context to payload for backend
+  const payloadWithRAG = {
+    ...enhancedPayload,
+    ragContext: ragContext.context,
+    ragSources: ragContext.sources,
+    useNCERT: true // Flag to indicate NCERT-based generation
+  };
 
-  const fullPayload: any = { ...payload, requestId };
+  console.log("🚀 Enhanced Payload with RAG (Sending to Brain):", {
+    ...payloadWithRAG,
+    ragContext: ragContext.context.substring(0, 200) + "..." // Log preview
+  });
 
-  // ---- Path A: supabase.functions.invoke (preferred) ----
+  // 4. Call Edge Function (with RAG context)
   try {
     const { data, error } = await supabase.functions.invoke("generate-test", {
-      body: fullPayload,
+      body: payloadWithRAG,
     });
 
     if (error) throw error;
 
     if (data && typeof data === "object") {
       const normalized = normalizeServerJson(data as RawJson);
-      if (!normalized.ok || !normalized.url) {
-        // fallback to throw so we try direct fetch
-        throw new Error((data as any)?.error || "Generation failed (invoke path)");
+      
+      // Add RAG metadata to response
+      normalized.meta = {
+        ...normalized.meta,
+        ragUsed: true,
+        ragSourcesCount: ragContext.sources.length,
+        ncertBased: true
+      };
+      
+      if (!normalized.ok) {
+        throw new Error((data as any)?.error || "Generation failed (invoke)");
       }
-      // ensure we surface requestId we generated
-      normalized.requestId = normalized.requestId || requestId;
       return normalized;
     }
 
-    throw new Error("Unexpected response from generate-test (invoke)");
-  } catch {
-    // fall through to direct fetch
-  }
+    throw new Error("Unexpected response format from backend");
+  } catch (error: any) {
+    console.error("Supabase Invoke Failed:", error);
+    
+    // Fallback: Direct Fetch
+    console.log("🔄 Attempting Direct Fetch Fallback...");
+    
+    const base = getFunctionsBaseUrl();
+    const url = `${base}/generate-test`;
+    const token = await getAuthToken();
 
-  // ---- Path B: direct fetch with retries ----
-  const base = getFunctionsBaseUrl();
-  const url = `${base}/generate-test`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}` 
+      },
+      body: JSON.stringify(payloadWithRAG),
+    });
 
-  const maxRetries = Math.max(0, options?.retries ?? 2);
-  let attempt = 0;
-
-  while (true) {
-    const ctrl = new AbortController();
-    const timeoutMs = options?.timeoutMs && options.timeoutMs > 0 ? options.timeoutMs : undefined;
-    const timer = timeoutMs ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
-
-    try {
-      const token = await getAuthToken();
-
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers.Authorization = `Bearer ${token}`;
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(fullPayload),
-        signal: ctrl.signal,
-      });
-
-      if (!res.ok) {
-        if (shouldRetry(res.status) && attempt < maxRetries) {
-          attempt++;
-          const backoff = 500 * attempt; // 0.5s, 1s
-          await sleep(backoff);
-          continue;
-        }
-
-        let detail: unknown = null;
-        try { detail = await res.json(); }
-        catch { try { detail = await res.text(); } catch { /* ignore */ } }
-
-        throw new Error(
-          `generate-test failed (${res.status})${
-            detail ? `: ${typeof detail === "string" ? detail : JSON.stringify(detail)}` : ""
-          }`
-        );
-      }
-
-      const ctype = res.headers.get("content-type") ?? "";
-
-      if (ctype.includes("application/json")) {
-        const raw = (await res.json()) as RawJson;
-        const normalized = normalizeServerJson(raw);
-        if (!normalized.ok || !normalized.url) {
-          throw new Error(raw.error || "Generation failed (no URL in response)");
-        }
-        normalized.requestId = normalized.requestId || requestId;
-        return normalized;
-      }
-
-      if (ctype.includes("application/pdf")) {
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        return {
-          ok: true,
-          url: objectUrl, // ephemeral blob URL
-          pdfUrl: objectUrl,
-          docxUrl: null,
-          csvUrl: null,
-          requestId,
-          meta: {},
-          json: { note: "Streamed PDF (blob URL)", content_type: ctype },
-          used: { modelGPT: "unknown", modelDeepseek: "unknown" },
-        };
-      }
-
-      const text = await res.text();
-      throw new Error(`Unexpected content-type: ${ctype || "n/a"}${text ? ` • ${text}` : ""}`);
-    } finally {
-      if (timer) clearTimeout(timer);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Backend Error (${res.status}): ${errText}`);
     }
+
+    const raw = await res.json();
+    const normalized = normalizeServerJson(raw);
+    
+    // Add RAG metadata to fallback response
+    normalized.meta = {
+      ...normalized.meta,
+      ragUsed: true,
+      ragSourcesCount: ragContext.sources.length,
+      ncertBased: true
+    };
+    
+    return normalized;
+  }
+}
+
+// Helper to get user ID from auth
+export async function getCurrentUserId(): Promise<string | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.id || null;
+  } catch (error) {
+    console.error("Failed to get user ID:", error);
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* ADDITIONAL RAG FUNCTIONS                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Query NCERT content directly (for chat/QA interface)
+ */
+export async function queryNCERT(
+  question: string,
+  subject?: string,
+  classNum?: string
+): Promise<{
+  answer: string;
+  sources: any[];
+  success: boolean;
+}> {
+  try {
+    // Enhance query with subject/class if provided
+    let enhancedQuery = question;
+    if (subject && classNum) {
+      enhancedQuery = `NCERT ${subject} Class ${classNum}: ${question}`;
+    }
+    
+    const ragResponse = await RAGClient.query(
+      enhancedQuery,
+      import.meta.env.VITE_RAG_API_URL || "http://localhost:8000"
+    );
+    
+    if (!ragResponse) {
+      return {
+        answer: "Sorry, I couldn't retrieve NCERT information for your question.",
+        sources: [],
+        success: false
+      };
+    }
+    
+    return {
+      answer: ragResponse.answer,
+      sources: ragResponse.sources,
+      success: true
+    };
+  } catch (error) {
+    console.error("Error querying NCERT:", error);
+    return {
+      answer: "An error occurred while accessing NCERT content.",
+      sources: [],
+      success: false
+    };
   }
 }

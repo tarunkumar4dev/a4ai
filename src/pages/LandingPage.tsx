@@ -2,10 +2,10 @@ import React, { lazy, Suspense, memo, useMemo, useState, useEffect } from "react
 import Navbar from "@/components/Navbar";
 import LandingHero from "@/components/LandingHero";
 
-// Heavy components with preload hint
-const LandingDemo = lazy(() => import(
+// Heavy components with preload hint - UPDATED
+const OptimizedDemo = lazy(() => import(
   /* webpackPrefetch: true */ 
-  "@/components/LandingDemo"
+  "@/components/OptimizedDemo"
 ));
 const LandingFeatures = lazy(() => import(
   /* webpackPrefetch: true */
@@ -102,14 +102,10 @@ export default function LandingPage() {
         {/* Hero - Critical, render immediately */}
         <LandingHero />
 
-        {/* Lazy components with optimized loading strategy */}
+        {/* Lazy components with optimized loading strategy - UPDATED */}
         <Suspense fallback={<div className="h-96" />}>
           <LazySection>
-            <LandingDemo 
-              videoSrcMp4="/demo.mp4" 
-              poster="/demo-poster.png" 
-              showHud 
-            />
+            <OptimizedDemo />
           </LazySection>
         </Suspense>
 
