@@ -31,7 +31,7 @@ export default function PricingPage() {
     individual: [
       {
         name: "Starter",
-        price: { monthly: "₹299", yearly: "₹2,999" },
+        price: { monthly: "199", yearly: "₹2,999" },
         description: "All essential features.",
         features: [
           "Test Generation",

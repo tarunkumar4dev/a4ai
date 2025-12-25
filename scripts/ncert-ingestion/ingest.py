@@ -1,497 +1,446 @@
-# ingest.py - FAST PAID TIER VERSION
+"""
+NCERT PDF Ingestion Script
+Processes Class 10 Science PDFs and stores in database with embeddings.
+"""
+
+import asyncio
+import asyncpg
+import fitz  # PyMuPDF
 import os
-import time
-import google.generativeai as genai
-from supabase import create_client, Client
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pypdf import PdfReader
-from dotenv import load_dotenv
 import re
 import sys
-from typing import List, Optional, Tuple
 import logging
+from pathlib import Path
+from typing import List, Dict, Optional
+import google.generativeai as genai
+from datetime import datetime
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    handlers=[
+        logging.FileHandler('ingest.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
-load_dotenv()
+# Load environment variables
+def load_env():
+    """Load environment variables from .env file."""
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and '=' in line and not line.startswith('#'):
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip().strip('"').strip("'")
+    else:
+        logger.warning(f".env file not found at {env_path}")
 
-# --- CONFIGURATION ---
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+load_env()
 
-# PAID TIER SETTINGS (Much faster!)
-GEMINI_EMBEDDING_BATCH_SIZE = 50  # Process 50 chunks at once!
-GEMINI_BATCH_DELAY = 1.0  # Only 1 second between batches
-CHAPTER_DELAY = 5.0  # 5 seconds between chapters
-
-def validate_env() -> bool:
-    """Validate all required environment variables"""
-    missing = []
+class PDFProcessor:
+    """Process PDF files and create meaningful chunks."""
     
-    if not SUPABASE_URL:
-        missing.append("SUPABASE_URL")
-    if not SUPABASE_SERVICE_ROLE_KEY:
-        missing.append("SUPABASE_SERVICE_ROLE_KEY")
-    if not GEMINI_API_KEY:
-        missing.append("GEMINI_API_KEY")
-    
-    if missing:
-        logger.error("❌ Missing environment variables:")
-        for var in missing:
-            logger.error(f"   - {var}")
-        logger.info("\n💡 Create a .env file with:")
-        logger.info("   SUPABASE_URL=your-project-url")
-        logger.info("   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key")
-        logger.info("   GEMINI_API_KEY=your-gemini-api-key")
-        return False
-    
-    logger.info("✅ Environment variables validated")
-    return True
-
-if not validate_env():
-    sys.exit(1)
-
-# --- CHAPTER NAMES ---
-CHAPTER_NAMES = {
-    1: "Chemical Reactions and Equations",
-    2: "Acids, Bases and Salts", 
-    3: "Metals and Non-metals",
-    4: "Carbon and its Compounds",
-    5: "Life Processes",
-    6: "Control and Coordination",
-    7: "How do Organisms Reproduce",
-    8: "Heredity and Evolution",
-    9: "Light - Reflection and Refraction",
-    10: "Human Eye and Colourful World",
-    11: "Electricity",
-    12: "Magnetic Effects of Electric Current",
-    13: "Our Environment"
-}
-
-# --- INITIALIZATION ---
-logger.info("🔧 Initializing NCERT Class 10 Science Ingestion (13 Chapters)")
-logger.info("💰 BILLING ACTIVE: Using PAID TIER settings")
-
-try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-    logger.info("✅ Gemini & Supabase clients initialized")
-except Exception as e:
-    logger.error(f"❌ Failed to initialize clients: {e}")
-    sys.exit(1)
-
-# Optimal Chunking for Paid Tier
-splitter = RecursiveCharacterTextSplitter(
-    chunk_size=800,
-    chunk_overlap=150,
-    separators=["\n\n", "\n", ". ", " ", ""],
-    length_function=len,
-    keep_separator=True
-)
-
-def get_batch_embeddings_fast(texts: List[str]) -> Optional[List[List[float]]]:
-    """
-    Fast embedding generation for PAID tier.
-    Process up to 50 texts in one API call.
-    """
-    if not texts:
-        return []
-    
-    valid_texts = [text for text in texts if text and len(text.strip()) >= 30]
-    if not valid_texts:
-        return []
-    
-    try:
-        result = genai.embed_content(
-            model="models/embedding-001",
-            content=valid_texts,
-            task_type="retrieval_document"
-        )
+    def __init__(self, chunk_size: int = 800, chunk_overlap: int = 100):
+        """
+        Initialize PDF processor.
         
-        if 'embedding' in result:
-            return result['embedding']
-            
-    except Exception as e:
-        error_str = str(e)
-        logger.error(f"❌ Embedding failed: {str(e)[:100]}")
+        Args:
+            chunk_size: Number of characters per chunk
+            chunk_overlap: Overlap between chunks in characters
+        """
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
         
-        # Still handle rate limits, but they should be rare now
-        if "429" in error_str or "rate limit" in error_str.lower():
-            logger.warning("⚠️ Unexpected rate limit, waiting 10s...")
-            time.sleep(10)
-            # Try one more time
-            try:
-                result = genai.embed_content(
-                    model="models/embedding-001",
-                    content=valid_texts,
-                    task_type="retrieval_document"
-                )
-                if 'embedding' in result:
-                    return result['embedding']
-            except:
-                pass
-    
-    return None
-
-def clean_text(text: str) -> str:
-    """Clean extracted text while preserving meaningful structure"""
-    if not text:
-        return ""
-    
-    lines = [line.strip() for line in text.split('\n') if line.strip()]
-    cleaned = ' '.join(lines)
-    cleaned = re.sub(r'\s+', ' ', cleaned)
-    cleaned = re.sub(r'\.\s+', '. ', cleaned)
-    cleaned = re.sub(r'\?\s+', '? ', cleaned)
-    cleaned = re.sub(r'!\s+', '! ', cleaned)
-    
-    return cleaned.strip()
-
-def safe_pdf_extraction(page) -> str:
-    """Safely extract text from PDF page with error handling"""
-    try:
-        return page.extract_text() or ""
-    except Exception:
-        try:
-            return page.extract_text(extraction_mode="layout") or ""
-        except:
+    def clean_text(self, text: str) -> str:
+        """Clean extracted text from PDF."""
+        if not text:
             return ""
-
-def process_chunks_batch(chunks_data: List[dict], batch_size: int = 100) -> int:
-    """Process and upload chunks in batches for efficiency"""
-    successful = 0
-    total_batches = (len(chunks_data) + batch_size - 1) // batch_size
-    
-    for batch_idx in range(0, len(chunks_data), batch_size):
-        batch = chunks_data[batch_idx:batch_idx + batch_size]
-        batch_num = (batch_idx // batch_size) + 1
-        
-        try:
-            response = supabase.table("ncert_chunks").insert(batch).execute()
-            if response.data:
-                successful += len(response.data)
-                logger.info(f"  ✅ Batch {batch_num}/{total_batches}: Uploaded {len(response.data)} chunks")
-            else:
-                logger.warning(f"  ⚠️ Batch {batch_num}: No data returned")
-                
-            # Tiny delay between upload batches
-            if batch_num < total_batches:
-                time.sleep(0.1)
-                
-        except Exception as e:
-            error_str = str(e).lower()
-            if "rate limit" in error_str or "429" in error_str:
-                logger.warning(f"  ⏳ Supabase rate limit hit, waiting 10 seconds...")
-                time.sleep(10)
-                try:
-                    response = supabase.table("ncert_chunks").insert(batch).execute()
-                    if response.data:
-                        successful += len(response.data)
-                        logger.info(f"  ✅ Batch {batch_num} (retry): Uploaded {len(response.data)} chunks")
-                except Exception as retry_error:
-                    logger.error(f"  ❌ Batch {batch_num} failed on retry: {str(retry_error)[:100]}")
-            else:
-                logger.error(f"  ❌ Batch {batch_num} failed: {str(e)[:100]}")
-    
-    return successful
-
-def generate_embeddings_fast(chunks: List[str], chapter_name: str) -> Tuple[List[dict], int]:
-    """
-    Generate embeddings FAST for paid tier.
-    """
-    chunks_data = []
-    embedding_failures = 0
-    
-    # Process chunks in large batches
-    total_batches = (len(chunks) + GEMINI_EMBEDDING_BATCH_SIZE - 1) // GEMINI_EMBEDDING_BATCH_SIZE
-    
-    logger.info(f"  ⚡ Generating embeddings in {total_batches} batches of {GEMINI_EMBEDDING_BATCH_SIZE} chunks...")
-    logger.info(f"  📊 Total chunks to process: {len(chunks)}")
-    
-    for batch_idx in range(0, len(chunks), GEMINI_EMBEDDING_BATCH_SIZE):
-        batch_num = (batch_idx // GEMINI_EMBEDDING_BATCH_SIZE) + 1
-        batch_end = min(batch_idx + GEMINI_EMBEDDING_BATCH_SIZE, len(chunks))
-        
-        # Get current batch
-        batch_texts = chunks[batch_idx:batch_end]
-        
-        # Filter valid texts
-        valid_texts = []
-        for text in batch_texts:
-            if text and len(text.strip()) >= 30:
-                valid_texts.append(text)
-        
-        if not valid_texts:
-            continue
-        
-        logger.info(f"  📦 Batch {batch_num}/{total_batches}: Processing {len(valid_texts)} chunks...")
-        
-        try:
-            embeddings = get_batch_embeddings_fast(valid_texts)
             
-            if embeddings and len(embeddings) == len(valid_texts):
-                # Add successful chunks to data
-                for idx, (chunk_text, embedding) in enumerate(zip(valid_texts, embeddings)):
-                    chunks_data.append({
-                        "class_grade": "10",
-                        "subject": "Science",
-                        "chapter": chapter_name,
-                        "content": chunk_text,
-                        "embedding": embedding
+        # Remove excessive whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Remove page numbers (e.g., "1", "2", etc. on their own line)
+        text = re.sub(r'\n\d+\s*\n', '\n', text)
+        
+        # Remove common PDF artifacts
+        text = re.sub(r'\x0c', '', text)  # Form feed
+        text = re.sub(r'\uf0b7', '•', text)  # Bullet points
+        
+        # Remove headers/footers
+        text = re.sub(r'NCERT\s+.*?\s+CLASS\s+X', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'Science\s*-\s*Class\s*X', '', text, flags=re.IGNORECASE)
+        
+        return text.strip()
+    
+    def extract_chapter_title(self, text: str, filename: str) -> str:
+        """Extract chapter title from text or filename."""
+        # Try to extract from text first
+        patterns = [
+            r'CHAPTER\s+\d+[:\-]\s*(.+?)(?:\n|$)',
+            r'Chapter\s+\d+[:\-]\s*(.+?)(?:\n|$)',
+            r'\d+\.\s+(.+?)(?:\n|$)',
+            r'(\b[A-Z][A-Za-z\s]+\b)(?=\s+CHAPTER|\s+Chapter)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text[:1000], re.IGNORECASE)
+            if match:
+                title = match.group(1).strip()
+                title = re.sub(r'\s+', ' ', title)
+                if len(title) > 3:  # Valid title
+                    logger.debug(f"Extracted title from text: {title}")
+                    return title[:150]
+        
+        # Fallback: Extract from filename
+        filename_patterns = [
+            r'Chapter(\d+)[_\-\s]*(.+)\.pdf',
+            r'Ch(\d+)[_\-\s]*(.+)\.pdf'
+        ]
+        
+        for pattern in filename_patterns:
+            match = re.search(pattern, filename, re.IGNORECASE)
+            if match:
+                chapter_num = match.group(1)
+                title = match.group(2).replace('_', ' ').replace('-', ' ').strip()
+                if title:
+                    return f"Chapter {chapter_num}: {title}"
+                else:
+                    return f"Chapter {chapter_num}"
+        
+        return "Science Chapter"
+    
+    def chunk_text(self, text: str, chapter: str) -> List[Dict]:
+        """Split text into meaningful chunks with sentence awareness."""
+        if not text or len(text) < 100:
+            return []
+        
+        chunks = []
+        
+        # Split by sentences first for better boundaries
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        current_chunk = []
+        current_length = 0
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+                
+            sentence_length = len(sentence)
+            
+            # If adding this sentence would exceed chunk size and we have content
+            if current_length + sentence_length > self.chunk_size and current_chunk:
+                # Save current chunk
+                chunk_text = ' '.join(current_chunk)
+                if len(chunk_text) > 200:  # Minimum chunk size
+                    chunks.append({
+                        'content': chunk_text,
+                        'chapter': chapter
                     })
                 
-                logger.info(f"  ✅ Batch {batch_num}: Embedded {len(valid_texts)} chunks")
-                
-            else:
-                embedding_failures += len(valid_texts)
-                logger.warning(f"  ⚠️ Batch {batch_num}: Failed to embed")
-                
+                # Start new chunk with overlap
+                overlap_start = max(0, len(current_chunk) - 3)  # Keep last 3 sentences
+                current_chunk = current_chunk[overlap_start:]
+                current_length = sum(len(s) + 1 for s in current_chunk)
+            
+            current_chunk.append(sentence)
+            current_length += sentence_length + 1
+        
+        # Add the last chunk if it's large enough
+        if current_chunk:
+            chunk_text = ' '.join(current_chunk)
+            if len(chunk_text) > 200:
+                chunks.append({
+                    'content': chunk_text,
+                    'chapter': chapter
+                })
+        
+        return chunks
+    
+    def process_pdf(self, pdf_path: Path, class_grade: str, subject: str) -> List[Dict]:
+        """Process a single PDF file."""
+        logger.info(f"Processing: {pdf_path.name}")
+        
+        try:
+            doc = fitz.open(pdf_path)
+            full_text = ""
+            
+            for page_num, page in enumerate(doc):
+                text = page.get_text()
+                cleaned_text = self.clean_text(text)
+                if cleaned_text:
+                    full_text += cleaned_text + "\n\n"
+            
+            doc.close()
+            
+            if not full_text.strip():
+                logger.warning(f"No text extracted from {pdf_path.name}")
+                return []
+            
+            # Extract chapter title
+            chapter = self.extract_chapter_title(full_text, pdf_path.name)
+            
+            # Create chunks
+            raw_chunks = self.chunk_text(full_text, chapter)
+            
+            # Add metadata
+            chunks_with_metadata = []
+            for chunk in raw_chunks:
+                chunks_with_metadata.append({
+                    'class_grade': class_grade,
+                    'subject': subject,
+                    'chapter': chapter,
+                    'content': chunk['content']
+                })
+            
+            logger.info(f"  Created {len(chunks_with_metadata)} chunks for '{chapter}'")
+            return chunks_with_metadata
+            
         except Exception as e:
-            embedding_failures += len(valid_texts)
-            logger.error(f"  ❌ Batch {batch_num} failed: {str(e)[:100]}")
-        
-        # Very short delay between batches (paid tier!)
-        if batch_num < total_batches:
-            time.sleep(GEMINI_BATCH_DELAY)
-    
-    return chunks_data, embedding_failures
+            logger.error(f"Error processing {pdf_path.name}: {str(e)}")
+            return []
 
-def ingest_chapter_pdf(pdf_path: str, chapter_num: int) -> int:
-    """Ingest a single chapter PDF with FAST processing"""
-    chapter_name = CHAPTER_NAMES.get(chapter_num)
-    if not chapter_name:
-        logger.error(f"❌ Invalid chapter number: {chapter_num}")
-        return 0
+class DatabaseManager:
+    """Handle database operations."""
     
-    logger.info(f"\n📚 CHAPTER {chapter_num}: {chapter_name}")
-    logger.info("   " + "="*50)
-    
-    try:
-        # Check if PDF exists
-        if not os.path.exists(pdf_path):
-            logger.error(f"  ❌ PDF not found: {pdf_path}")
-            return 0
+    def __init__(self):
+        self.conn = None
         
-        # Read PDF
-        reader = PdfReader(pdf_path)
-        total_pages = len(reader.pages)
-        logger.info(f"  📄 Pages: {total_pages}")
-        
-        # Extract text from all pages
-        all_text = []
-        for page_num, page in enumerate(reader.pages, 1):
-            page_text = safe_pdf_extraction(page)
-            cleaned_text = clean_text(page_text)
-            
-            if cleaned_text:
-                # Add chapter context to each page
-                page_with_context = f"[Chapter: {chapter_name}]\n{cleaned_text}"
-                all_text.append(page_with_context)
-            
-            if page_num % 5 == 0 or page_num == total_pages:
-                logger.info(f"  📖 Processed page {page_num}/{total_pages}")
-        
-        if not all_text:
-            logger.warning(f"  ⚠️ No text extracted from PDF")
-            return 0
-        
-        # Process text
-        full_text = '\n\n'.join(all_text)
-        logger.info(f"  📊 Extracted {len(full_text):,} characters")
-        
-        # Split into chunks
-        chunks = splitter.split_text(full_text)
-        logger.info(f"  ✂️ Split into {len(chunks)} chunks")
-        
-        # Generate embeddings FAST
-        chunks_data, embedding_failures = generate_embeddings_fast(chunks, chapter_name)
-        
-        if embedding_failures > 0:
-            logger.warning(f"  ⚠️ Failed to generate embeddings for {embedding_failures} chunks")
-        
-        if not chunks_data:
-            logger.error(f"  ❌ No valid chunks to upload")
-            return 0
-        
-        logger.info(f"  ✅ Generated embeddings for {len(chunks_data)} chunks")
-        
-        # Upload to Supabase
-        logger.info(f"  🚀 Uploading {len(chunks_data)} chunks to Supabase...")
-        successful_uploads = process_chunks_batch(chunks_data, batch_size=100)
-        
-        logger.info(f"  ✅ Upload complete: {successful_uploads}/{len(chunks_data)} successful")
-        return successful_uploads
-        
-    except Exception as e:
-        logger.error(f"❌ Error processing Chapter {chapter_num}: {e}")
-        import traceback
-        traceback.print_exc()
-        return 0
-
-def find_pdf_files(pdf_folder: str) -> dict:
-    """Find PDF files (Chapter1.pdf to Chapter13.pdf)"""
-    pdf_files = {}
-    
-    if not os.path.exists(pdf_folder):
-        logger.error(f"❌ PDF folder not found: {pdf_folder}")
-        return pdf_files
-    
-    # Look for Chapter1.pdf to Chapter13.pdf
-    for i in range(1, 14):
-        expected_name = f"Chapter{i}.pdf"
-        expected_path = os.path.join(pdf_folder, expected_name)
-        
-        if os.path.exists(expected_path):
-            pdf_files[i] = expected_path
-            logger.info(f"  📄 Found: {expected_name}")
-        else:
-            logger.warning(f"  ⚠️ Missing: {expected_name}")
-    
-    return pdf_files
-
-def clean_database():
-    """Clean existing data from database"""
-    logger.info("🧹 Cleaning existing data from database...")
-    try:
-        # First check if table exists and has data
-        response = supabase.table("ncert_chunks").select("*").execute()
-        if response.data and len(response.data) > 0:
-            logger.info(f"  Found {len(response.data)} existing rows")
-            
-            # Get all IDs to delete
-            ids_to_delete = [row['id'] for row in response.data]
-            
-            # Delete in batches of 100
-            for i in range(0, len(ids_to_delete), 100):
-                batch = ids_to_delete[i:i+100]
-                supabase.table("ncert_chunks").delete().in_("id", batch).execute()
-                time.sleep(0.1)
-            
-            logger.info("  ✅ Database cleaned successfully")
+    async def connect(self):
+        """Connect to database."""
+        try:
+            self.conn = await asyncpg.connect(
+                host='db.dcmnzvjftmdbywrjkust.supabase.co',
+                port=5432,
+                user='postgres',
+                password=os.getenv("DATABASE_PASSWORD"),
+                database='postgres',
+                ssl='require',
+                timeout=30
+            )
+            logger.info("Connected to database")
             return True
-        else:
-            logger.info("  ℹ️ Database is already empty")
+        except Exception as e:
+            logger.error(f"Database connection failed: {str(e)}")
+            return False
+    
+    async def insert_chunk(self, chunk: Dict, embedding: List[float]) -> bool:
+        """Insert a single chunk into database."""
+        try:
+            embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+            
+            await self.conn.execute("""
+                INSERT INTO ncert_chunks 
+                (class_grade, subject, chapter, content, embedding, created_at)
+                VALUES ($1, $2, $3, $4, $5::vector, $6)
+            """, 
+            chunk['class_grade'], 
+            chunk['subject'], 
+            chunk['chapter'], 
+            chunk['content'], 
+            embedding_str,
+            datetime.utcnow())
+            
             return True
-    except Exception as e:
-        logger.error(f"  ❌ Failed to clean database: {e}")
-        return False
+            
+        except Exception as e:
+            logger.error(f"Failed to insert chunk: {str(e)[:100]}")
+            return False
+    
+    async def close(self):
+        """Close database connection."""
+        if self.conn:
+            await self.conn.close()
+            logger.info("Database connection closed")
 
-def main():
-    """Main ingestion function - FAST VERSION for paid tier"""
-    logger.info("\n" + "="*60)
-    logger.info("📚 NCERT CLASS 10 SCIENCE - FAST INGESTION (PAID TIER)")
-    logger.info("💰 Billing: ACTIVE | Credits: ₹26,782 available")
+async def ingest_pdfs():
+    """Main function to ingest PDFs."""
+    logger.info("="*60)
+    logger.info("STARTING NCERT PDF INGESTION")
     logger.info("="*60)
     
-    # Find PDF folder
-    pdf_folder = "Class10_Science"
+    # Check for required environment variables
+    required_env_vars = ['DATABASE_PASSWORD', 'GEMINI_API_KEY']
+    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     
-    if not os.path.exists(pdf_folder):
-        logger.error(f"❌ PDF folder not found: {pdf_folder}")
-        logger.info(f"   Current directory: {os.getcwd()}")
-        logger.info(f"   Looking for: {os.path.abspath(pdf_folder)}")
+    if missing_vars:
+        logger.error(f"Missing environment variables: {', '.join(missing_vars)}")
         return
     
-    logger.info(f"📁 PDF Folder: {os.path.abspath(pdf_folder)}")
+    # Configure Gemini
+    try:
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        logger.info("Gemini API configured")
+    except Exception as e:
+        logger.error(f"Gemini configuration failed: {str(e)}")
+        return
     
-    # Find PDF files
-    pdf_files = find_pdf_files(pdf_folder)
+    # Find PDF directory
+    current_dir = Path(__file__).parent
+    # Try different possible locations
+    possible_paths = [
+        current_dir.parent.parent / "Class10_Science",  # product/Class10_Science
+        current_dir.parent / "Class10_Science",         # scripts/Class10_Science
+        Path(".") / "Class10_Science",                  # Current directory
+    ]
+    
+    pdf_dir = None
+    for path in possible_paths:
+        if path.exists() and path.is_dir():
+            pdf_dir = path
+            break
+    
+    if not pdf_dir:
+        logger.error(f"PDF directory not found. Tried: {possible_paths}")
+        return
+    
+    logger.info(f"PDF directory: {pdf_dir}")
+    
+    # Get PDF files
+    pdf_files = list(pdf_dir.glob("Chapter*.pdf"))
+    if not pdf_files:
+        logger.warning(f"No Chapter*.pdf files found in {pdf_dir}")
+        pdf_files = list(pdf_dir.glob("*.pdf"))
     
     if not pdf_files:
-        logger.error("❌ No PDF files found in the folder")
-        logger.info("Expected files: Chapter1.pdf to Chapter13.pdf")
+        logger.error("No PDF files found to process")
         return
     
-    logger.info(f"\n📄 Found {len(pdf_files)}/13 PDF files")
+    logger.info(f"Found {len(pdf_files)} PDF files to process")
     
-    # Ask for confirmation
-    logger.info("\n⚠️  This will delete all existing data and ingest new data.")
-    logger.info("   Estimated time: 10-15 minutes (PAID TIER)")
-    response = input("   Continue? (yes/no): ").strip().lower()
+    # Initialize components
+    db = DatabaseManager()
+    processor = PDFProcessor(chunk_size=600, chunk_overlap=50)
     
-    if response not in ['yes', 'y']:
-        logger.info("⏹️ Ingestion cancelled by user")
+    # Connect to database
+    if not await db.connect():
         return
     
-    # Clean database
-    if not clean_database():
-        logger.error("❌ Cannot proceed without cleaning database")
-        return
+    total_added = 0
+    total_failed = 0
+    processed_files = 0
     
-    # Process each chapter
-    total_chunks = 0
-    processed_chapters = 0
-    
-    for chapter_num in sorted(pdf_files.keys()):
-        if chapter_num > 13:
-            continue
-            
-        pdf_path = pdf_files[chapter_num]
-        logger.info(f"\n{'='*60}")
-        
-        start_time = time.time()
-        chunks_added = ingest_chapter_pdf(pdf_path, chapter_num)
-        end_time = time.time()
-        
-        total_chunks += chunks_added
-        processed_chapters += 1
-        
-        chapter_time = end_time - start_time
-        logger.info(f"  ⏱️ Chapter processed in {chapter_time:.1f} seconds")
-        
-        # Short pause between chapters
-        if chapter_num < 13:
-            logger.info(f"\n   ⏳ Pausing for {CHAPTER_DELAY} seconds before next chapter...")
-            time.sleep(CHAPTER_DELAY)
-    
-    # Final summary
-    logger.info("\n" + "="*60)
-    logger.info("🎉 INGESTION COMPLETE - SUMMARY")
-    logger.info("="*60)
-    logger.info(f"Chapters processed: {processed_chapters}/13")
-    logger.info(f"Total chunks added: {total_chunks}")
-    
-    # Cost estimate
-    estimated_tokens = total_chunks * 800  # Rough estimate
-    estimated_cost = estimated_tokens * 0.0001 / 1000  # $0.0001 per 1K tokens
-    logger.info(f"💰 Estimated cost: ${estimated_cost:.4f} (negligible!)")
-    
-    # Verify database
-    logger.info("\n🔍 Verifying database...")
     try:
-        result = supabase.table("ncert_chunks").select("*").execute()
-        logger.info(f"📊 Database contains {len(result.data)} rows")
-        
-        # Get chapter distribution
-        if result.data:
-            chapter_counts = {}
-            for item in result.data:
-                chapter = item.get('chapter', 'Unknown')
-                chapter_counts[chapter] = chapter_counts.get(chapter, 0) + 1
+        for pdf_file in sorted(pdf_files):
+            logger.info(f"\n{'='*40}")
+            logger.info(f"Processing file {processed_files + 1}/{len(pdf_files)}: {pdf_file.name}")
             
-            logger.info("\n📚 Chapter distribution:")
-            for chapter, count in sorted(chapter_counts.items()):
-                logger.info(f"  {chapter}: {count} chunks")
-        
+            # Process PDF
+            chunks = processor.process_pdf(
+                pdf_file, 
+                class_grade="Class 10",
+                subject="Science"
+            )
+            
+            if not chunks:
+                logger.warning(f"No chunks created from {pdf_file.name}")
+                continue
+            
+            # Process each chunk
+            chunk_count = 0
+            for chunk in chunks:
+                try:
+                    # Generate embedding
+                    embedding_result = genai.embed_content(
+                        model="models/embedding-001",
+                        content=chunk['content'],
+                        task_type="retrieval_document"
+                    )
+                    
+                    embedding = embedding_result["embedding"]
+                    
+                    # Insert into database
+                    success = await db.insert_chunk(chunk, embedding)
+                    
+                    if success:
+                        total_added += 1
+                        chunk_count += 1
+                    else:
+                        total_failed += 1
+                        
+                except Exception as e:
+                    logger.error(f"Error processing chunk: {str(e)[:100]}")
+                    total_failed += 1
+            
+            logger.info(f"  Added {chunk_count} chunks from {pdf_file.name}")
+            processed_files += 1
+            
+    except KeyboardInterrupt:
+        logger.warning("\nProcess interrupted by user")
     except Exception as e:
-        logger.error(f"❌ Verification failed: {e}")
+        logger.error(f"Unexpected error: {str(e)}")
+    finally:
+        await db.close()
     
-    logger.info("\n✅ Check your data: Supabase → Table Editor → ncert_chunks")
+    # Summary
+    logger.info("\n" + "="*60)
+    logger.info("INGESTION SUMMARY")
     logger.info("="*60)
+    logger.info(f"Processed files: {processed_files}/{len(pdf_files)}")
+    logger.info(f"Total chunks added: {total_added}")
+    logger.info(f"Total chunks failed: {total_failed}")
+    
+    if total_added > 0:
+        logger.info("✅ INGESTION COMPLETED SUCCESSFULLY")
+    else:
+        logger.warning("⚠️  No chunks were added to database")
+
+def check_dependencies():
+    """Check and install required dependencies."""
+    try:
+        import asyncpg
+        import fitz
+        import google.generativeai
+        logger.info("All dependencies are installed")
+        return True
+    except ImportError as e:
+        logger.warning(f"Missing dependency: {e.name}")
+        logger.info("Installing required packages...")
+        
+        packages = {
+            'asyncpg': 'asyncpg',
+            'fitz': 'pymupdf',
+            'google.generativeai': 'google-generativeai'
+        }
+        
+        missing = e.name
+        if missing in packages:
+            import subprocess
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", packages[missing]])
+                logger.info(f"Successfully installed {packages[missing]}")
+                return True
+            except subprocess.CalledProcessError:
+                logger.error(f"Failed to install {packages[missing]}")
+                return False
+        return False
 
 if __name__ == "__main__":
+    print("\n" + "="*60)
+    print("NCERT PDF INGESTION SYSTEM")
+    print("="*60 + "\n")
+    
+    # Check dependencies
+    if not check_dependencies():
+        print("❌ Please install missing dependencies manually:")
+        print("   pip install asyncpg pymupdf google-generativeai")
+        sys.exit(1)
+    
+    # Run ingestion
     try:
-        main()
+        asyncio.run(ingest_pdfs())
     except KeyboardInterrupt:
-        logger.info("\n\n⏹️ Ingestion stopped by user")
+        print("\nProcess interrupted by user")
     except Exception as e:
-        logger.error(f"\n❌ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Fatal error: {str(e)}")
+        print(f"\n❌ Fatal error occurred. Check ingest.log for details.")
+    
+    print("\n" + "="*60)
+    print("Process completed")
+    print("="*60)
