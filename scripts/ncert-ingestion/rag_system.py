@@ -1,729 +1,890 @@
-# rag_system.py - Production Ready RAG System for NCERT Content
+"""
+NCERT RAG SYSTEM - PRODUCTION READY
+Version: 2.0.1 (Fixed SQL Syntax)
+"""
+
 import os
-import json
 import asyncio
-import sys
-import io
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
 import logging
+import sys
+from pathlib import Path
+from typing import List, Dict, Any, Tuple
+import uuid
+from datetime import datetime, timezone
+import asyncpg
+import google.generativeai as genai
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
+import traceback
+import json
+import hashlib
 
-# Fix Windows console encoding for emojis
-if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# ========== CONFIGURATION ==========
+class Logger:
+    def __init__(self, level: str = "INFO"):
+        self.level = level
+        logging.basicConfig(
+            level=getattr(logging, level),
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        self.logger = logging.getLogger(__name__)
+    
+    def info(self, message: str):
+        self.logger.info(message)
+    
+    def debug(self, message: str):
+        self.logger.debug(message)
+    
+    def error(self, message: str, exc_info: bool = False):
+        self.logger.error(message, exc_info=exc_info)
+    
+    def warning(self, message: str):
+        self.logger.warning(message)
 
-# Try to import required packages with fallbacks
-try:
-    from fastapi import FastAPI, HTTPException
-    from pydantic import BaseModel
-    FASTAPI_AVAILABLE = True
-except ImportError:
-    FASTAPI_AVAILABLE = False
-    print("⚠️ FastAPI not installed. API mode disabled.")
+# ========== ENV LOADER ==========
+def load_env():
+    """Load environment variables from .env file."""
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        print(f"✓ Loading environment variables from: {env_path}")
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    try:
+                        key, value = line.split('=', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        
+                        # Remove quotes
+                        if (value.startswith('"') and value.endswith('"')) or \
+                           (value.startswith("'") and value.endswith("'")):
+                            value = value[1:-1]
+                        
+                        os.environ[key] = value
+                    except Exception as e:
+                        continue
+        return True
+    else:
+        print(f"⚠ .env file not found at {env_path}")
+        return False
 
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
-    print("⚠️ Sentence Transformers not installed.")
-
-try:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-    from psycopg2.pool import SimpleConnectionPool
-    PSYCOPG2_AVAILABLE = True
-except ImportError:
-    PSYCOPG2_AVAILABLE = False
-    print("⚠️ psycopg2 not installed.")
-
-try:
-    from supabase import create_client, Client
-    SUPABASE_AVAILABLE = True
-except ImportError:
-    SUPABASE_AVAILABLE = False
-    print("⚠️ Supabase not installed.")
-
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-    print("⚠️ Google Generative AI not installed.")
-
-from dotenv import load_dotenv
-load_dotenv()
-
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('rag_system.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# Only create FastAPI app if available
-if FASTAPI_AVAILABLE:
-    app = FastAPI(
-        title="NCERT RAG System API",
-        description="Retrieval Augmented Generation System for NCERT Textbook Content",
-        version="1.0.0"
-    )
-
-    class QueryRequest(BaseModel):
-        query: str
-        top_k: int = 5
-        similarity_threshold: float = 0.7
-        filters: Optional[Dict[str, str]] = None
-
-    class QueryResponse(BaseModel):
-        question: str
-        answer: str
-        context: str
-        sources: List[Dict[str, Any]]
-        chunks_retrieved: int
-        success: bool
-        processing_time_ms: float
-
-class RAGSystem:
-    """Production Ready Retrieval Augmented Generation System for NCERT content"""
+# ========== MAIN RAG SYSTEM ==========
+class NCERTRAGSystem:
+    """Production-ready NCERT RAG System with Supabase and Gemini."""
     
     def __init__(self):
-        logger.info("🚀 Initializing RAG System...")
-        
-        # Configuration
-        self.embedding_dimension = 768  # all-mpnet-base-v2 dimension
-        self.connection_pool = None
+        self.logger = Logger()
         
         # Load environment
-        self.supabase_url = os.getenv("SUPABASE_URL")
-        self.supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
-        self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.database_password = os.getenv("DATABASE_PASSWORD", "PasswordDatabaseSupasbase@2025")
+        if not load_env():
+            raise ValueError("Failed to load environment variables")
+        
+        # Validate credentials
+        self._validate_credentials()
         
         # Initialize components
-        self.supabase_client = None
-        self.embedding_model = None
-        self.gemini_model = None
+        self.db_config = self._get_db_config()
+        self.current_model = None
+        self.pool = None
+        self.thread_pool = ThreadPoolExecutor(max_workers=5)
+        self.embedding_cache = {}
         
-        self._initialize_components()
-        
-    def _initialize_components(self):
-        """Initialize all system components with error handling"""
-        
-        # Initialize Supabase if available
-        if SUPABASE_AVAILABLE and self.supabase_url and self.supabase_key:
-            try:
-                self.supabase_client = create_client(self.supabase_url, self.supabase_key)
-                logger.info("✅ Supabase client initialized")
-            except Exception as e:
-                logger.error(f"❌ Supabase initialization failed: {e}")
-        
-        # Initialize Sentence Transformers if available
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
-            try:
-                self.embedding_model = SentenceTransformer('all-mpnet-base-v2')
-                logger.info(f"✅ Embedding model loaded ({self.embedding_dimension} dimensions)")
-            except Exception as e:
-                logger.error(f"❌ Embedding model failed: {e}")
-        
-        # Initialize Gemini if available
-        if GEMINI_AVAILABLE and self.gemini_key:
-            try:
-                genai.configure(api_key=self.gemini_key)
-                self.gemini_model = genai.GenerativeModel('gemini-pro')
-                logger.info("✅ Gemini model loaded")
-            except Exception as e:
-                logger.error(f"❌ Gemini initialization failed: {e}")
-        
-        # Initialize connection pool
-        self._initialize_connection_pool()
-        
-        logger.info("✅ RAG System initialized successfully")
+        # Stats
+        self.stats = {
+            "queries_processed": 0,
+            "embeddings_generated": 0,
+            "cache_hits": 0,
+            "errors": 0
+        }
     
-    def _initialize_connection_pool(self):
-        """Initialize database connection pool"""
-        if not PSYCOPG2_AVAILABLE:
-            logger.warning("⚠️ psycopg2 not available, connection pool disabled")
-            return
+    def _validate_credentials(self):
+        """Validate all required credentials."""
+        required_vars = {
+            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
+            "DATABASE_PASSWORD": os.getenv("DATABASE_PASSWORD"),
+            "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY")
+        }
         
+        missing = [k for k, v in required_vars.items() if not v]
+        if missing:
+            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+        
+        self.logger.info("✓ All credentials validated")
+    
+    def _get_db_config(self):
+        """Extract database configuration from Supabase URL."""
+        supabase_url = os.getenv("SUPABASE_URL", "").strip()
+        
+        if supabase_url.startswith("https://"):
+            supabase_url = supabase_url[8:]
+        
+        if ".supabase.co" in supabase_url:
+            project_ref = supabase_url.split(".")[0]
+            db_host = f"db.{project_ref}.supabase.co"
+        else:
+            db_host = supabase_url
+        
+        return {
+            "host": db_host,
+            "port": 5432,
+            "user": "postgres",
+            "password": os.getenv("DATABASE_PASSWORD"),
+            "database": "postgres",
+            "ssl": "require",
+            "max_size": 10,
+            "min_size": 1,
+            "command_timeout": 30
+        }
+    
+    async def initialize(self):
+        """Initialize the RAG system."""
         try:
-            # Create connection pool using PARAMETERS instead of connection string
-            self.connection_pool = SimpleConnectionPool(
-                1, 10,  # min 1, max 10 connections
-                host="aws-0-ap-south-1.pooler.supabase.com",
-                port=5432,
-                database="postgres",
-                user="postgres.dcmnzvjftmdbywrjkust",
-                password=self.database_password  # Your password with @ symbol
-            )
-            logger.info("✅ Database connection pool initialized")
+            self.logger.info("🚀 Initializing NCERT RAG System...")
+            
+            # Print configuration
+            self._print_configuration()
+            
+            # Initialize database
+            if not await self._init_database():
+                return False
+            
+            # Initialize Gemini
+            if not await self._init_gemini():
+                return False
+            
+            self.logger.info("✅ RAG System initialized successfully!")
+            return True
             
         except Exception as e:
-            logger.error(f"❌ Connection pool initialization failed: {e}")
-            self.connection_pool = None
+            self.logger.error(f"❌ Initialization failed: {e}", exc_info=True)
+            return False
     
-    def get_connection(self):
-        """Get a database connection from pool"""
-        if not self.connection_pool:
-            logger.error("❌ Connection pool not available")
-            return None
-        
+    def _print_configuration(self):
+        """Print system configuration."""
+        print("\n" + "="*60)
+        print("NCERT RAG SYSTEM - PRODUCTION CONFIGURATION")
+        print("="*60)
+        print(f"Database Host: {self.db_config['host']}")
+        print(f"Database Port: {self.db_config['port']}")
+        print(f"Embedding Model: models/embedding-001")
+        print(f"LLM Models to try: gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro")
+        print("="*60 + "\n")
+    
+    async def _init_database(self):
+        """Initialize database connection and schema."""
         try:
-            conn = self.connection_pool.getconn()
-            return conn
+            self.logger.info("🔄 Connecting to Supabase PostgreSQL...")
+            
+            # Create connection pool
+            self.pool = await asyncpg.create_pool(**self.db_config)
+            
+            async with self.pool.acquire() as conn:
+                # Check connection
+                db_version = await conn.fetchval("SELECT version()")
+                self.logger.info(f"✓ Connected to PostgreSQL: {db_version.split(',')[0]}")
+                
+                # Ensure vector extension
+                await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                
+                # Setup schema
+                await self._setup_schema(conn)
+                
+                # Get stats
+                count = await conn.fetchval("SELECT COUNT(*) FROM ncert_chunks")
+                self.logger.info(f"✓ Found {count} records in database")
+                
+                # Check existing chapters
+                chapters = await conn.fetchval("SELECT COUNT(DISTINCT chapter) FROM ncert_chunks")
+                self.logger.info(f"✓ Found {chapters} unique chapters")
+            
+            return True
+            
         except Exception as e:
-            logger.error(f"❌ Failed to get connection from pool: {e}")
-            return None
+            self.logger.error(f"❌ Database initialization failed: {e}", exc_info=True)
+            return False
     
-    def return_connection(self, conn):
-        """Return connection to pool"""
-        if self.connection_pool and conn:
+    async def _setup_schema(self, conn):
+        """Setup database schema - SIMPLIFIED VERSION (NO SQL SYNTAX ERRORS)."""
+        # Check if table exists
+        table_exists = await conn.fetchval("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'ncert_chunks'
+            );
+        """)
+        
+        if not table_exists:
+            # Create table
+            await conn.execute("""
+                CREATE TABLE ncert_chunks (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    class_grade VARCHAR(50),
+                    subject VARCHAR(100),
+                    chapter VARCHAR(200),
+                    content TEXT,
+                    embedding vector(768),
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    metadata JSONB DEFAULT '{}'::jsonb
+                );
+            """)
+            self.logger.info("✓ Created new table 'ncert_chunks'")
+        else:
+            self.logger.info("✓ Table 'ncert_chunks' already exists")
+        
+        # Create indexes safely
+        await self._create_indexes_safely(conn)
+        
+        self.logger.info("✓ Database schema setup complete")
+    
+    async def _create_indexes_safely(self, conn):
+        """Create indexes with proper error handling."""
+        # 1. Embedding index
+        try:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ncert_embedding 
+                ON ncert_chunks USING ivfflat (embedding vector_cosine_ops);
+            """)
+            self.logger.info("✓ Created embedding index")
+        except Exception as e:
+            self.logger.warning(f"Could not create ivfflat index: {e}")
             try:
-                self.connection_pool.putconn(conn)
-            except Exception as e:
-                logger.error(f"❌ Failed to return connection to pool: {e}")
-    
-    def get_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text with fallback"""
-        if self.embedding_model:
+                await conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_ncert_embedding_simple 
+                    ON ncert_chunks USING gin (embedding);
+                """)
+                self.logger.info("✓ Created simple embedding index")
+            except Exception as e2:
+                self.logger.warning(f"Could not create simple embedding index: {e2}")
+        
+        # 2. Other indexes
+        indexes = [
+            ("idx_ncert_class_subject", "ON ncert_chunks (class_grade, subject)"),
+            ("idx_ncert_chapter", "ON ncert_chunks (chapter)"),
+            ("idx_ncert_created", "ON ncert_chunks (created_at DESC)"),
+            ("idx_ncert_content_hash", "ON ncert_chunks (md5(content))")
+        ]
+        
+        for idx_name, idx_def in indexes:
             try:
-                return self.embedding_model.encode(text).tolist()
+                await conn.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} {idx_def}")
+                self.logger.debug(f"✓ Created index: {idx_name}")
             except Exception as e:
-                logger.error(f"❌ Embedding generation failed: {e}")
-        
-        # Fallback: return normalized random embedding
-        import random
-        random.seed(hash(text) % 2**32)
-        embedding = [random.random() * 2 - 1 for _ in range(self.embedding_dimension)]
-        
-        # Normalize to unit length
-        norm = sum(x*x for x in embedding) ** 0.5
-        if norm > 0:
-            embedding = [x/norm for x in embedding]
-        
-        logger.warning("⚠️ Using fallback embedding")
-        return embedding
+                self.logger.debug(f"Could not create index {idx_name}: {e}")
     
-    def _build_filter_clauses(self, filters: Optional[Dict[str, str]]) -> Tuple[str, List[Any]]:
-        """Build SQL filter clauses from filters dictionary"""
-        if not filters:
-            return "", []
-        
-        clauses = []
-        params = []
-        for key, value in filters.items():
-            if key in ['class_grade', 'subject', 'chapter', 'topic', 'subtopic'] and value:
-                clauses.append(f"{key} = %s")
-                params.append(value)
-        
-        if clauses:
-            return " AND " + " AND ".join(clauses), params
-        return "", []
+    async def _init_gemini(self):
+        """Initialize Gemini API and test models."""
+        try:
+            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+            self.logger.info("✓ Gemini API configured")
+            
+            # Test embedding model
+            try:
+                genai.embed_content(
+                    model="models/embedding-001",
+                    content="test",
+                    task_type="retrieval_document"
+                )
+                self.logger.info("✓ Embedding model is working")
+            except Exception as e:
+                self.logger.error(f"❌ Embedding model failed: {e}")
+                return False
+            
+            # Test LLM models
+            self.logger.info("🔍 Testing LLM models...")
+            llm_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+            
+            for model_name in llm_models:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    
+                    def test_model():
+                        try:
+                            response = model.generate_content(
+                                "Hello",
+                                generation_config={"max_output_tokens": 5},
+                                safety_settings=self._get_safety_settings()
+                            )
+                            return True
+                        except:
+                            return False
+                    
+                    loop = asyncio.get_event_loop()
+                    success = await loop.run_in_executor(self.thread_pool, test_model)
+                    
+                    if success:
+                        self.current_model = model_name
+                        self.logger.info(f"✅ Selected model: {self.current_model}")
+                        return True
+                    else:
+                        self.logger.warning(f"✗ Model {model_name} failed")
+                        
+                except Exception as e:
+                    self.logger.debug(f"Model {model_name} error: {str(e)[:50]}")
+                    continue
+            
+            self.logger.warning("⚠ No LLM model worked, using fallback mode")
+            return True  # Still return True, will use fallback
+            
+        except Exception as e:
+            self.logger.error(f"❌ Gemini initialization failed: {e}", exc_info=True)
+            return False
     
-    async def retrieve_chunks_advanced(self, query: str, top_k: int = 5, 
-                                     similarity_threshold: float = 0.7,
-                                     filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
-        """Advanced retrieval with hybrid search (vector + keyword)"""
-        logger.info(f"🔍 Advanced search for: '{query}'")
+    def _get_safety_settings(self):
+        """Get safety settings for Gemini."""
+        return [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ]
+    
+    async def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding with caching."""
+        if not text:
+            return [0.0] * 768
         
-        conn = self.get_connection()
-        if not conn:
-            logger.error("❌ Database connection failed")
+        cache_key = hashlib.md5(text.encode()).hexdigest()
+        
+        # Cache hit
+        if cache_key in self.embedding_cache:
+            self.stats["cache_hits"] += 1
+            return self.embedding_cache[cache_key]
+        
+        # Cache miss - generate
+        try:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                self.thread_pool,
+                lambda: genai.embed_content(
+                    model="models/embedding-001",
+                    content=text,
+                    task_type="retrieval_document"
+                )
+            )
+            
+            embedding = result["embedding"]
+            self.embedding_cache[cache_key] = embedding
+            self.stats["embeddings_generated"] += 1
+            
+            return embedding
+            
+        except Exception as e:
+            self.logger.error(f"Embedding generation failed: {e}")
+            self.stats["errors"] += 1
+            return [0.0] * 768
+    
+    async def retrieve_chunks(self, query: str, top_k: int = 7, **filters) -> List[Dict]:
+        """Retrieve relevant chunks from database."""
+        if not self.pool:
+            self.logger.error("Database not connected")
             return []
         
         try:
             # Generate query embedding
-            query_embedding = self.get_embedding(query)
-            embedding_str = '[' + ','.join(str(x) for x in query_embedding) + ']'
+            query_embedding = await self.generate_embedding(query)
             
-            cur = conn.cursor(cursor_factory=RealDictCursor)
+            # Build SQL query
+            sql, params = self._build_retrieval_query(query_embedding, top_k, filters)
             
-            # Build filter clauses
-            filter_clause, filter_params = self._build_filter_clauses(filters)
+            # Execute query
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(sql, *params)
             
-            # Method 1: Try to use existing PostgreSQL function if available
-            try:
-                sql_function = """
-                    SELECT * FROM ncert_rag_search(
-                        query_text => %s,
-                        query_embedding => %s::vector(%s),
-                        match_threshold => %s,
-                        match_count => %s
-                    )
-                """
-                cur.execute(sql_function, (query, embedding_str, self.embedding_dimension, 
-                                         similarity_threshold, top_k))
-                rows = cur.fetchall()
-                if rows:
-                    logger.info(f"✅ Found {len(rows)} chunks via ncert_rag_search function")
-                    return [dict(row) for row in rows]
-            except Exception as e:
-                logger.debug(f"ncert_rag_search function not available: {e}")
+            # Process results
+            chunks = []
+            for row in rows:
+                chunks.append({
+                    "id": str(row["id"]),
+                    "class_grade": row["class_grade"] or "N/A",
+                    "subject": row["subject"] or "N/A",
+                    "chapter": row["chapter"] or "N/A",
+                    "content": row["content"] or "",
+                    "similarity": float(row["similarity"] or 0),
+                    "created_at": row["created_at"],
+                    "metadata": row["metadata"] or {}
+                })
             
-            # Method 2: Vector similarity search with filters
-            sql_vector = f"""
-                SELECT 
-                    id, 
-                    class_grade, 
-                    subject, 
-                    chapter, 
-                    content,
-                    topic,
-                    page_number,
-                    subtopic,
-                    source_book,
-                    chunk_size,
-                    created_at,
-                    1 - (embedding <=> %s::vector) as similarity
-                FROM ncert_chunks
-                WHERE embedding IS NOT NULL 
-                AND 1 - (embedding <=> %s::vector) > %s
-                {filter_clause}
-                ORDER BY embedding <=> %s::vector
-                LIMIT %s
-            """
-            
-            params = [embedding_str, embedding_str, similarity_threshold]
-            params.extend(filter_params)
-            params.extend([embedding_str, top_k])
-            
-            cur.execute(sql_vector, params)
-            rows = cur.fetchall()
-            
-            if rows:
-                chunks = [dict(row) for row in rows]
-                logger.info(f"✅ Found {len(chunks)} chunks via vector similarity")
-                return chunks
-            
-            # Method 3: Hybrid search (vector + keyword)
-            logger.info("Trying hybrid search...")
-            keywords = query.split()[:5]  # Use first 5 words as keywords
-            keyword_conditions = " OR ".join(["content ILIKE %s"] * len(keywords))
-            
-            sql_hybrid = f"""
-                SELECT 
-                    id, 
-                    class_grade, 
-                    subject, 
-                    chapter, 
-                    content,
-                    topic,
-                    page_number,
-                    subtopic,
-                    source_book,
-                    chunk_size,
-                    created_at,
-                    GREATEST(
-                        1 - (embedding <=> %s::vector),
-                        0.3  -- Minimum score for keyword matches
-                    ) as similarity
-                FROM ncert_chunks
-                WHERE embedding IS NOT NULL 
-                AND ({keyword_conditions})
-                {filter_clause}
-                ORDER BY similarity DESC
-                LIMIT %s
-            """
-            
-            keyword_params = [f'%{kw}%' for kw in keywords]
-            hybrid_params = [embedding_str] + keyword_params + filter_params + [top_k]
-            
-            cur.execute(sql_hybrid, hybrid_params)
-            rows = cur.fetchall()
-            
-            if rows:
-                chunks = [dict(row) for row in rows]
-                logger.info(f"✅ Found {len(chunks)} chunks via hybrid search")
-                return chunks
-            
-            # Method 4: Simple keyword search as final fallback
-            logger.info("Trying simple keyword search...")
-            sql_keyword = f"""
-                SELECT 
-                    id, 
-                    class_grade, 
-                    subject, 
-                    chapter, 
-                    content,
-                    topic,
-                    page_number,
-                    subtopic,
-                    source_book,
-                    chunk_size,
-                    created_at,
-                    0.5 as similarity
-                FROM ncert_chunks 
-                WHERE content ILIKE %s 
-                {filter_clause}
-                LIMIT %s
-            """
-            
-            keyword_params = [f'%{query}%'] + filter_params + [top_k]
-            cur.execute(sql_keyword, keyword_params)
-            rows = cur.fetchall()
-            
-            chunks = [dict(row) for row in rows]
-            if chunks:
-                logger.info(f"✅ Found {len(chunks)} chunks via keyword search")
-            else:
-                logger.warning("❌ No chunks found via any search method")
-            
+            self.logger.debug(f"Retrieved {len(chunks)} chunks")
             return chunks
             
         except Exception as e:
-            logger.error(f"❌ Retrieval error: {e}")
+            self.logger.error(f"Retrieval failed: {e}", exc_info=True)
+            self.stats["errors"] += 1
             return []
-        finally:
-            self.return_connection(conn)
     
-    async def retrieve_chunks(self, query: str, top_k: int = 5, 
-                            similarity_threshold: float = 0.7,
-                            filters: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
-        """Main retrieval method - wrapper for advanced retrieval"""
-        return await self.retrieve_chunks_advanced(
-            query, top_k, similarity_threshold, filters
-        )
+    def _build_retrieval_query(self, embedding: List[float], top_k: int, filters: Dict) -> Tuple[str, List]:
+        """Build SQL query for retrieval."""
+        embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
+        
+        sql = """
+            SELECT id, class_grade, subject, chapter, content, 
+                   created_at, metadata,
+                   1 - (embedding <=> $1::vector) as similarity
+            FROM ncert_chunks
+            WHERE 1 - (embedding <=> $1::vector) > 0.25
+        """
+        
+        params = [embedding_str]
+        param_count = 2
+        
+        # Add filters
+        if "class_grade" in filters and filters["class_grade"]:
+            sql += f" AND class_grade = ${param_count}"
+            params.append(filters["class_grade"])
+            param_count += 1
+        
+        if "subject" in filters and filters["subject"]:
+            sql += f" AND subject = ${param_count}"
+            params.append(filters["subject"])
+            param_count += 1
+        
+        sql += f" ORDER BY similarity DESC LIMIT ${param_count}"
+        params.append(top_k)
+        
+        return sql, params
     
-    async def generate_answer(self, query: str, context_chunks: List[Dict]) -> str:
-        """Generate answer using Gemini with proper citation"""
-        if not context_chunks:
-            return "No relevant information found in NCERT textbooks. Please try a different question or check if the topic is covered in NCERT curriculum."
+    async def generate_response(self, query: str, chunks: List[Dict]) -> str:
+        """Generate response using Gemini or fallback."""
+        if not chunks:
+            return "I couldn't find relevant information in my NCERT knowledge base to answer this question."
         
-        # Prepare context with citations
-        context_parts = []
-        for i, chunk in enumerate(context_chunks[:5], 1):  # Limit to 5 chunks
-            class_info = chunk.get('class_grade', 'Unknown')
-            subject = chunk.get('subject', 'Unknown')
-            chapter = chunk.get('chapter', 'Unknown')
-            topic = chunk.get('topic', '')
-            
-            citation = f"[Source {i}: NCERT Class {class_info} {subject}"
-            if chapter:
-                citation += f", Chapter: {chapter}"
-            if topic:
-                citation += f", Topic: {topic}"
-            citation += "]"
-            
-            content = chunk.get('content', '')
-            context_parts.append(f"{citation}\n{content}")
-        
-        context_text = "\n\n".join(context_parts)
-        
-        # Use Gemini if available
-        if self.gemini_model:
+        # Try Gemini first
+        if self.current_model:
             try:
-                prompt = f"""You are a helpful NCERT textbook assistant. Your task is to answer questions based ONLY on the provided NCERT textbook excerpts.
+                context = self._prepare_context(chunks)
+                prompt = self._build_prompt(query, context)
+                
+                model = genai.GenerativeModel(self.current_model)
+                
+                def generate():
+                    response = model.generate_content(
+                        prompt,
+                        generation_config={
+                            "temperature": 0.2,
+                            "top_p": 0.8,
+                            "top_k": 40,
+                            "max_output_tokens": 1000,
+                        },
+                        safety_settings=self._get_safety_settings()
+                    )
+                    return response.text
+                
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(self.thread_pool, generate)
+                
+                self.logger.info(f"Generated response using {self.current_model}")
+                return response
+                
+            except Exception as e:
+                self.logger.error(f"Gemini generation failed: {str(e)[:100]}")
+                self.stats["errors"] += 1
+        
+        # Fallback response
+        return self._generate_fallback_response(chunks)
+    
+    def _prepare_context(self, chunks: List[Dict]) -> str:
+        """Prepare context from chunks."""
+        context_parts = []
+        for i, chunk in enumerate(chunks[:3]):
+            context_parts.append(
+                f"[Source {i+1}: Class {chunk.get('class_grade', 'N/A')}, "
+                f"Subject: {chunk.get('subject', 'N/A')}, "
+                f"Chapter: {chunk.get('chapter', 'N/A')}]\n\n"
+                f"{chunk['content']}"
+            )
+        return "\n\n---\n\n".join(context_parts)
+    
+    def _build_prompt(self, query: str, context: str) -> str:
+        """Build prompt for Gemini."""
+        return f"""You are an expert NCERT tutor. Answer based ONLY on the provided NCERT content.
 
-CONTEXT EXCERPTS FROM NCERT TEXTBOOKS:
-{context_text}
+NCERT CONTENT:
+{context}
 
 QUESTION: {query}
 
-CRITICAL INSTRUCTIONS:
-1. Answer STRICTLY using ONLY information from the provided NCERT context
-2. If the information is NOT in the context, say: "This specific topic is not covered in the provided NCERT excerpts."
-3. Keep answers accurate, concise, and in simple language suitable for students
-4. Reference the class and subject when relevant
-5. Include citation numbers like [Source 1] when using specific information
-6. If multiple sources provide similar information, synthesize them into a coherent answer
-7. Do not add any information not present in the context
+INSTRUCTIONS:
+1. Answer concisely using ONLY the NCERT content above
+2. If answer not in content, say: "This information is not available in the provided NCERT content."
+3. Use simple, student-friendly language
+4. Do not add external information
+5. Mention relevant class and subject if applicable
 
-ANSWER:"""
-                
-                response = self.gemini_model.generate_content(prompt)
-                return response.text.strip()
-            except Exception as e:
-                logger.error(f"❌ Gemini error: {e}")
-                # Fall through to basic answer
-        
-        # Basic fallback answer
-        return self._generate_basic_answer(context_chunks)
+ANSWER: """
     
-    def _generate_basic_answer(self, context_chunks: List[Dict]) -> str:
-        """Generate basic answer when Gemini is unavailable"""
-        if not context_chunks:
-            return "No relevant information found."
+    def _generate_fallback_response(self, chunks: List[Dict]) -> str:
+        """Generate fallback response."""
+        if not chunks:
+            return "I couldn't find relevant information to answer this question."
         
-        answer_parts = ["Based on NCERT textbooks:"]
+        best = chunks[0]
+        preview = best["content"][:400] + "..." if len(best["content"]) > 400 else best["content"]
         
-        for i, chunk in enumerate(context_chunks[:3], 1):
-            class_info = chunk.get('class_grade', 'Unknown')
-            subject = chunk.get('subject', 'Unknown')
-            chapter = chunk.get('chapter', '')
-            content = chunk.get('content', '')[:300]
-            
-            source_info = f"Class {class_info} {subject}"
-            if chapter:
-                source_info += f" (Chapter: {chapter})"
-            
-            answer_parts.append(f"\n[{i}] {source_info}:\n{content}...")
-        
-        answer_parts.append("\n\n*Note: This is a summarized version. For complete information, refer to the original NCERT textbooks.*")
-        
-        return "\n".join(answer_parts)
+        return f"""Based on NCERT Class {best.get('class_grade', '')} {best.get('subject', '')}:
+
+Chapter: {best.get('chapter', '')}
+
+{preview}
+
+[Direct excerpt from NCERT textbook. Refer to original for complete explanation.]"""
     
-    async def query(self, question: str, top_k: int = 5, 
-                   similarity_threshold: float = 0.7,
-                   filters: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-        """Main RAG query function with performance tracking"""
-        import time
-        start_time = time.time()
+    async def query(self, question: str, **filters) -> Dict[str, Any]:
+        """Main query method - full RAG pipeline."""
+        self.stats["queries_processed"] += 1
         
-        logger.info(f"\n📝 Processing query: {question}")
+        start_time = asyncio.get_event_loop().time()
         
-        try:
-            # 1. Retrieve chunks
-            chunks = await self.retrieve_chunks(
-                question, top_k, similarity_threshold, filters
-            )
-            
-            # 2. Generate answer
-            answer = await self.generate_answer(question, chunks)
-            
-            # 3. Calculate processing time
-            processing_time_ms = (time.time() - start_time) * 1000
-            
-            # 4. Prepare detailed sources
-            sources = []
-            for chunk in chunks:
-                source_info = {
-                    "class": chunk.get("class_grade"),
-                    "subject": chunk.get("subject"),
-                    "chapter": chunk.get("chapter"),
-                    "topic": chunk.get("topic"),
-                    "page": chunk.get("page_number"),
-                    "content_preview": chunk.get("content", "")[:200] + "...",
-                    "similarity": round(float(chunk.get("similarity", 0.0)), 3),
-                    "chunk_size": chunk.get("chunk_size")
-                }
-                sources.append(source_info)
-            
-            # 5. Prepare context summary
-            context = f"Retrieved {len(chunks)} relevant chunks from NCERT textbooks."
-            if chunks:
-                class_dist = {}
-                for chunk in chunks:
-                    cls = chunk.get('class_grade', 'Unknown')
-                    class_dist[cls] = class_dist.get(cls, 0) + 1
-                context += f" Classes: {', '.join([f'Class {k} ({v})' for k, v in class_dist.items()])}."
-            
+        # Retrieve chunks
+        chunks = await self.retrieve_chunks(question, top_k=10, **filters)
+        retrieval_time = asyncio.get_event_loop().time() - start_time
+        
+        if not chunks:
             return {
                 "question": question,
-                "answer": answer,
-                "context": context,
-                "sources": sources,
-                "chunks_retrieved": len(chunks),
-                "success": len(chunks) > 0,
-                "processing_time_ms": round(processing_time_ms, 2),
-                "timestamp": datetime.now().isoformat()
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Query processing failed: {e}")
-            processing_time_ms = (time.time() - start_time) * 1000
-            return {
-                "question": question,
-                "answer": f"Error processing query: {str(e)}",
-                "context": "",
+                "answer": "I couldn't find relevant information in my NCERT knowledge base.",
                 "sources": [],
-                "chunks_retrieved": 0,
-                "success": False,
-                "processing_time_ms": round(processing_time_ms, 2),
-                "timestamp": datetime.now().isoformat()
+                "metadata": {
+                    "retrieval_time": f"{retrieval_time:.2f}s",
+                    "total_time": f"{retrieval_time:.2f}s",
+                    "chunks_found": 0,
+                    "top_similarity": "0%",
+                    "model": "none"
+                }
             }
-
-# Initialize system
-rag_system = RAGSystem()
-
-# FastAPI endpoints if available
-if FASTAPI_AVAILABLE:
-    @app.post("/api/rag/search", response_model=QueryResponse)
-    async def rag_search_endpoint(request: QueryRequest):
-        """Main RAG search endpoint"""
+        
+        # Generate response
+        generation_start = asyncio.get_event_loop().time()
+        answer = await self.generate_response(question, chunks)
+        generation_time = asyncio.get_event_loop().time() - generation_start
+        
+        total_time = asyncio.get_event_loop().time() - start_time
+        
+        # Prepare sources
+        sources = []
+        for i, chunk in enumerate(chunks[:3]):
+            sources.append({
+                "id": chunk.get("id", ""),
+                "class": chunk.get("class_grade", "N/A"),
+                "subject": chunk.get("subject", "N/A"),
+                "chapter": chunk.get("chapter", "N/A"),
+                "confidence": f"{chunk.get('similarity', 0):.1%}",
+                "preview": chunk.get("content", "")[:100] + "..." if len(chunk.get("content", "")) > 100 else chunk.get("content", ""),
+                "rank": i + 1
+            })
+        
+        return {
+            "question": question,
+            "answer": answer,
+            "sources": sources,
+            "metadata": {
+                "retrieval_time": f"{retrieval_time:.2f}s",
+                "generation_time": f"{generation_time:.2f}s",
+                "total_time": f"{total_time:.2f}s",
+                "chunks_found": len(chunks),
+                "top_similarity": f"{chunks[0].get('similarity', 0):.1%}",
+                "model": self.current_model or "fallback",
+                "filters": filters
+            }
+        }
+    
+    async def get_database_stats(self) -> Dict[str, Any]:
+        """Get database statistics."""
+        if not self.pool:
+            return {}
+        
         try:
-            result = await rag_system.query(
-                question=request.query,
-                top_k=request.top_k,
-                similarity_threshold=request.similarity_threshold,
-                filters=request.filters
-            )
-            return QueryResponse(**result)
+            async with self.pool.acquire() as conn:
+                # Basic stats
+                total = await conn.fetchval("SELECT COUNT(*) FROM ncert_chunks")
+                classes = await conn.fetchval("SELECT COUNT(DISTINCT class_grade) FROM ncert_chunks")
+                subjects = await conn.fetchval("SELECT COUNT(DISTINCT subject) FROM ncert_chunks")
+                chapters = await conn.fetchval("SELECT COUNT(DISTINCT chapter) FROM ncert_chunks")
+                
+                # Chapter distribution
+                chapter_dist = await conn.fetch("""
+                    SELECT chapter, COUNT(*) as count 
+                    FROM ncert_chunks 
+                    GROUP BY chapter 
+                    ORDER BY count DESC 
+                    LIMIT 10
+                """)
+                
+                chapters_list = [{"chapter": r["chapter"], "count": r["count"]} for r in chapter_dist]
+                
+                # Recent additions
+                recent = await conn.fetch("""
+                    SELECT class_grade, subject, chapter, created_at 
+                    FROM ncert_chunks 
+                    ORDER BY created_at DESC 
+                    LIMIT 5
+                """)
+                
+                recent_list = [
+                    {
+                        "class": r["class_grade"],
+                        "subject": r["subject"],
+                        "chapter": r["chapter"],
+                        "added": r["created_at"].strftime("%Y-%m-%d %H:%M")
+                    }
+                    for r in recent
+                ]
+                
+                return {
+                    "total_records": total,
+                    "unique_classes": classes,
+                    "unique_subjects": subjects,
+                    "unique_chapters": chapters,
+                    "top_chapters": chapters_list,
+                    "recent_additions": recent_list,
+                    "system_stats": self.stats,
+                    "current_model": self.current_model or "fallback"
+                }
+                
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            self.logger.error(f"Failed to get stats: {e}")
+            return {}
     
-    @app.get("/api/rag/health")
-    async def health_check():
-        """Health check endpoint"""
-        health_status = {
-            "status": "healthy",
-            "rag_system": "initialized",
-            "supabase": bool(rag_system.supabase_client),
-            "embedding_model": bool(rag_system.embedding_model),
-            "gemini": bool(rag_system.gemini_model),
-            "database_pool": bool(rag_system.connection_pool),
-            "timestamp": datetime.now().isoformat()
-        }
+    async def close(self):
+        """Cleanup resources."""
+        self.logger.info("🔄 Cleaning up resources...")
         
-        # Test database connection
-        if rag_system.connection_pool:
-            try:
-                conn = rag_system.get_connection()
-                if conn:
-                    health_status["database"] = "connected"
-                    rag_system.return_connection(conn)
-                else:
-                    health_status["database"] = "disconnected"
-            except Exception as e:
-                health_status["database"] = f"error: {str(e)}"
+        if self.pool:
+            await self.pool.close()
+            self.logger.info("✓ Database connection closed")
         
-        return health_status
-    
-    @app.get("/api/rag/stats")
-    async def get_stats():
-        """Get system statistics"""
-        return {
-            "embedding_dimension": rag_system.embedding_dimension,
-            "models_loaded": {
-                "embedding": bool(rag_system.embedding_model),
-                "gemini": bool(rag_system.gemini_model)
-            },
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    @app.get("/")
-    async def root():
-        """Root endpoint with API information"""
-        return {
-            "name": "NCERT RAG System API",
-            "version": "1.0.0",
-            "description": "Retrieval Augmented Generation for NCERT Textbook Content",
-            "endpoints": {
-                "/api/rag/search": "POST - Search NCERT content",
-                "/api/rag/health": "GET - System health check",
-                "/api/rag/stats": "GET - System statistics",
-                "/docs": "API documentation"
-            }
-        }
+        if self.thread_pool:
+            self.thread_pool.shutdown(wait=False)
+            self.logger.info("✓ Thread pool shutdown")
+        
+        self.embedding_cache.clear()
+        self.logger.info("✅ Cleanup complete")
 
-# Test function
-async def test():
-    """Comprehensive test of the RAG system"""
-    print("\n" + "="*60)
-    print("🧪 TESTING PRODUCTION RAG SYSTEM")
-    print("="*60)
-    
+# ========== COMMAND LINE INTERFACE ==========
+async def run_tests(rag):
+    """Run system tests."""
     test_questions = [
         "What is photosynthesis?",
-        "Explain Newton's laws of motion",
+        "Explain Newton's first law of motion",
+        "What are acids and bases?",
         "What is democracy?",
-        "Explain the water cycle",
-        "What is Pythagoras theorem?"
+        "Describe the human digestive system"
     ]
     
-    for i, q in enumerate(test_questions, 1):
-        print(f"\n❓ Question {i}: {q}")
-        result = await rag_system.query(q, top_k=3)
+    for question in test_questions:
+        print(f"\n{'='*40}")
+        print(f"Test: {question}")
+        print(f"{'='*40}")
         
-        print(f"✅ Chunks found: {result['chunks_retrieved']}")
-        print(f"⏱️  Processing time: {result['processing_time_ms']:.2f}ms")
-        print(f"📝 Answer preview: {result['answer'][:150]}...")
+        result = await rag.query(question)
         
-        if result['sources']:
-            print(f"📚 Sources: {len(result['sources'])} found")
-            for src in result['sources'][:2]:  # Show top 2 sources
-                print(f"   • Class {src['class']} {src['subject']}: similarity={src['similarity']}")
+        print(f"Answer: {result['answer'][:150]}...")
+        print(f"Time: {result['metadata']['total_time']}")
+        print(f"Chunks: {result['metadata']['chunks_found']}")
+        print(f"Model: {result['metadata']['model']}")
         
-        print("-" * 50)
+        await asyncio.sleep(0.5)
 
-# Interactive query mode
-async def interactive_query():
-    """Interactive query interface"""
-    print("\n🤖 NCERT RAG System - Interactive Mode")
-    print("="*40)
-    print("Type your questions (or 'quit' to exit)")
-    print("You can add filters like: 'class:10 subject:Science'")
-    print("="*40)
+async def show_stats(rag):
+    """Show system statistics."""
+    stats = await rag.get_database_stats()
+    
+    if not stats:
+        print("❌ Could not retrieve statistics")
+        return
+    
+    print(f"\n📈 DATABASE STATISTICS:")
+    print(f"   Total records: {stats.get('total_records', 0)}")
+    print(f"   Unique classes: {stats.get('unique_classes', 0)}")
+    print(f"   Unique subjects: {stats.get('unique_subjects', 0)}")
+    print(f"   Unique chapters: {stats.get('unique_chapters', 0)}")
+    print(f"   Current model: {stats.get('current_model', 'N/A')}")
+    
+    if stats.get('top_chapters'):
+        print(f"\n📚 TOP CHAPTERS:")
+        for i, chapter in enumerate(stats['top_chapters'][:5], 1):
+            print(f"   {i}. {chapter['chapter']}: {chapter['count']} records")
+    
+    if stats.get('system_stats'):
+        print(f"\n⚙️  SYSTEM STATS:")
+        sys_stats = stats['system_stats']
+        print(f"   Queries processed: {sys_stats.get('queries_processed', 0)}")
+        print(f"   Embeddings generated: {sys_stats.get('embeddings_generated', 0)}")
+        print(f"   Cache hits: {sys_stats.get('cache_hits', 0)}")
+        print(f"   Errors: {sys_stats.get('errors', 0)}")
+
+async def run_query(rag, question: str):
+    """Run a single query."""
+    print(f"\n🔍 Query: {question}")
+    print("⏳ Processing...")
+    
+    result = await rag.query(question)
+    
+    print(f"\n✅ ANSWER:")
+    print(f"{result['answer']}\n")
+    
+    if result['sources']:
+        print(f"📚 SOURCES:")
+        for i, source in enumerate(result['sources'], 1):
+            print(f"   {i}. Class {source['class']} - {source['subject']}")
+            print(f"      Chapter: {source['chapter']}")
+            print(f"      Confidence: {source['confidence']}")
+            if source['preview']:
+                print(f"      Preview: {source['preview']}")
+            print()
+    
+    print(f"⏱️  PERFORMANCE:")
+    print(f"   Total time: {result['metadata']['total_time']}")
+    print(f"   Chunks found: {result['metadata']['chunks_found']}")
+    print(f"   Top similarity: {result['metadata']['top_similarity']}")
+    print(f"   Model used: {result['metadata']['model']}")
+
+async def run_filtered_query(rag, question: str, class_grade: str, subject: str):
+    """Run a filtered query."""
+    print(f"\n🔍 Filtered Query:")
+    print(f"   Class: {class_grade}")
+    print(f"   Subject: {subject}")
+    print(f"   Question: {question}")
+    print("⏳ Processing...")
+    
+    result = await rag.query(question, class_grade=class_grade, subject=subject)
+    
+    print(f"\n✅ ANSWER:")
+    print(f"{result['answer']}\n")
+    
+    print(f"⏱️  PERFORMANCE:")
+    print(f"   Total time: {result['metadata']['total_time']}")
+    print(f"   Chunks found: {result['metadata']['chunks_found']}")
+
+async def interactive_mode(rag):
+    """Interactive mode."""
+    print("\n📚 INTERACTIVE NCERT RAG SYSTEM")
+    print("Type 'help' for commands, 'quit' to exit")
+    print("-" * 50)
     
     while True:
         try:
-            user_input = input("\n❓ Enter question: ").strip()
-            if user_input.lower() == 'quit':
+            user_input = input("\n🎯 Query/Command: ").strip()
+            
+            if not user_input:
+                continue
+                
+            if user_input.lower() in ['quit', 'exit', 'q']:
                 break
-            
-            # Parse filters from input
-            question = user_input
-            filters = {}
-            
-            # Simple filter parsing (e.g., "class:10 subject:Science")
-            if ':' in user_input:
-                parts = user_input.split()
-                question_parts = []
-                for part in parts:
-                    if ':' in part:
-                        key, value = part.split(':', 1)
-                        if key in ['class', 'subject', 'chapter']:
-                            filters[f"{key}_grade" if key == 'class' else key] = value
-                        else:
-                            question_parts.append(part)
-                    else:
-                        question_parts.append(part)
-                question = ' '.join(question_parts)
-            
-            if not question:
-                print("⚠️ Please enter a question")
+                
+            if user_input.lower() == 'help':
+                print("\n📖 COMMANDS:")
+                print("  <question>                    - Ask a question")
+                print("  filter <class> <subject> <q>  - Filtered query")
+                print("  stats                         - Show statistics")
+                print("  test                          - Run tests")
+                print("  quit/exit/q                   - Exit")
+                continue
+                
+            if user_input.lower() == 'stats':
+                await show_stats(rag)
+                continue
+                
+            if user_input.lower() == 'test':
+                await run_tests(rag)
                 continue
             
-            result = await rag_system.query(question, filters=filters)
+            # Check for filter command
+            if user_input.lower().startswith('filter '):
+                parts = user_input.split(' ', 3)
+                if len(parts) >= 4:
+                    await run_filtered_query(rag, parts[3], parts[1], parts[2])
+                else:
+                    print("❌ Usage: filter <class> <subject> <question>")
+                continue
             
-            print(f"\n📝 Answer: {result['answer']}")
-            print(f"\n📊 Statistics:")
-            print(f"   • Chunks retrieved: {result['chunks_retrieved']}")
-            print(f"   • Processing time: {result['processing_time_ms']:.2f}ms")
-            print(f"   • Success: {'✅' if result['success'] else '❌'}")
+            # Regular query
+            print("⏳ Processing...")
+            result = await rag.query(user_input)
+            
+            print(f"\n✅ ANSWER:")
+            print(f"{result['answer']}\n")
             
             if result['sources']:
-                print(f"\n📚 Top sources:")
-                for i, src in enumerate(result['sources'][:3], 1):
-                    print(f"   {i}. Class {src['class']} {src['subject']}")
-                    if src['chapter']:
-                        print(f"      Chapter: {src['chapter']}")
-                    if src.get('similarity'):
-                        print(f"      Similarity: {src['similarity']:.3f}")
+                print("📚 SOURCES:")
+                for source in result['sources']:
+                    print(f"  • Class {source['class']} {source['subject']}")
+                    print(f"    Chapter: {source['chapter']} ({source['confidence']})")
+            
+            print(f"⏱️  Time: {result['metadata']['total_time']}")
+            print("-" * 50)
             
         except KeyboardInterrupt:
-            print("\n👋 Exiting...")
+            print("\n\n🛑 Interrupted")
             break
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"\n❌ Error: {str(e)[:100]}")
 
-# Command line interface
-if __name__ == "__main__":
-    import sys
+def show_help():
+    """Show help message."""
+    print("\n📖 USAGE:")
+    print("  python rag_system.py test            - Run system tests")
+    print("  python rag_system.py stats           - Show statistics")
+    print("  python rag_system.py query <text>    - Run a query")
+    print("  python rag_system.py filter <class> <subject> <query>")
+    print("  python rag_system.py                 - Interactive mode")
+
+async def main():
+    """Main CLI entry point."""
+    print("\n" + "="*60)
+    print("NCERT RAG SYSTEM - PRODUCTION READY")
+    print("="*60)
     
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "test":
-            asyncio.run(test())
-        elif sys.argv[1] == "server" and FASTAPI_AVAILABLE:
-            import uvicorn
-            port = int(os.getenv("PORT", 8000))
-            host = os.getenv("HOST", "0.0.0.0")
-            print(f"🚀 Starting production server on http://{host}:{port}")
-            print(f"📚 API Documentation: http://{host}:{port}/docs")
-            uvicorn.run(
-                app, 
-                host=host, 
-                port=port,
-                log_level="info"
-            )
-        elif sys.argv[1] == "query":
-            asyncio.run(interactive_query())
+    rag = None
+    try:
+        # Initialize system
+        rag = NCERTRAGSystem()
+        
+        if not await rag.initialize():
+            print("\n❌ Initialization failed!")
+            return
+        
+        # Handle command line arguments
+        if len(sys.argv) > 1:
+            command = sys.argv[1].lower()
+            
+            if command == "test":
+                print("\n🧪 Running system test...")
+                await run_tests(rag)
+                
+            elif command == "stats":
+                print("\n📊 Getting system statistics...")
+                await show_stats(rag)
+                
+            elif command == "query" and len(sys.argv) > 2:
+                question = " ".join(sys.argv[2:])
+                await run_query(rag, question)
+                
+            elif command == "filter" and len(sys.argv) > 4:
+                class_grade = sys.argv[2]
+                subject = sys.argv[3]
+                question = " ".join(sys.argv[4:])
+                await run_filtered_query(rag, question, class_grade, subject)
+                
+            else:
+                show_help()
+                
         else:
-            print(f"❌ Unknown command: {sys.argv[1]}")
-    else:
-        # Default: interactive mode
-        asyncio.run(interactive_query())
+            # Interactive mode
+            await interactive_mode(rag)
+            
+    except KeyboardInterrupt:
+        print("\n\n👋 Interrupted by user")
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        traceback.print_exc()
+    finally:
+        if rag:
+            await rag.close()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n\n👋 Goodbye!")

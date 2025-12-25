@@ -2,3 +2,71 @@
 2025-12-14 12:24:45,950 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-mpnet-base-v2
 2025-12-14 19:13:30,718 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: cpu
 2025-12-14 19:13:30,719 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-mpnet-base-v2
+2025-12-15 14:00:51,382 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: cpu
+2025-12-15 14:00:51,383 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-mpnet-base-v2
+2025-12-16 00:55:12,317 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: cpu
+2025-12-16 00:55:12,319 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-mpnet-base-v2
+2025-12-16 00:58:38,646 - __main__ - INFO - === Initializing RAG System ===
+2025-12-16 00:58:38,654 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: cpu
+2025-12-16 00:58:38,655 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-mpnet-base-v2
+2025-12-16 00:58:45,388 - __main__ - INFO - OK - Embedding model loaded (768 dimensions)
+2025-12-16 00:58:45,389 - __main__ - INFO - OK - Gemini model loaded
+2025-12-16 00:58:45,936 - __main__ - INFO - OK - Database connection pool initialized
+2025-12-16 00:58:46,052 - __main__ - INFO - OK - Database connection test passed
+2025-12-16 00:58:46,059 - __main__ - INFO - PROCESSING - Query: What is photosynthesis?
+2025-12-16 00:58:48,210 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 00:58:48,281 - __main__ - INFO - PROCESSING - Query: Explain Newton's laws of motion
+2025-12-16 00:58:49,279 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 00:58:49,317 - __main__ - INFO - PROCESSING - Query: What is democracy?
+2025-12-16 00:58:50,199 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 00:58:50,242 - __main__ - INFO - PROCESSING - Query: Explain the water cycle
+2025-12-16 00:58:50,853 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 00:58:50,891 - __main__ - INFO - PROCESSING - Query: What is Pythagoras theorem?
+2025-12-16 00:58:51,444 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 01:03:43,409 - __main__ - INFO - === Initializing RAG System ===
+2025-12-16 01:03:43,449 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: cpu
+2025-12-16 01:03:43,479 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: all-mpnet-base-v2
+2025-12-16 01:03:55,439 - __main__ - INFO - OK - Embedding model loaded (768 dimensions)
+2025-12-16 01:03:55,442 - __main__ - INFO - OK - Gemini model loaded
+2025-12-16 01:03:56,003 - __main__ - INFO - OK - Database connection pool initialized
+2025-12-16 01:03:56,193 - __main__ - INFO - OK - Database connection test passed
+2025-12-16 01:03:56,214 - __main__ - INFO - PROCESSING - Query: What is photosynthesis?
+2025-12-16 01:03:59,198 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 01:03:59,248 - __main__ - INFO - PROCESSING - Query: Explain Newton's laws of motion
+2025-12-16 01:04:00,758 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 01:04:00,802 - __main__ - INFO - PROCESSING - Query: What is democracy?
+2025-12-16 01:04:02,263 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 01:04:02,303 - __main__ - INFO - PROCESSING - Query: Explain the water cycle
+2025-12-16 01:04:03,438 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+
+2025-12-16 01:04:03,475 - __main__ - INFO - PROCESSING - Query: What is Pythagoras theorem?
+2025-12-16 01:04:04,790 - __main__ - ERROR - ERROR - Retrieval error: column "topic" does not exist
+LINE 8:                     topic,
+                            ^
+

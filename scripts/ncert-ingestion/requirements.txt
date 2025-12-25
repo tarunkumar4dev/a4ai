@@ -1,9 +1,24 @@
-# requirements.txt
+# ===============================
+# NCERT RAG API - FINAL REQUIREMENTS
+# ===============================
+# Core Web Framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-sentence-transformers==2.2.2
-psycopg2-binary==2.9.9
-python-dotenv==1.0.0
-pydantic==2.5.0
+
+# Database (for Supabase PostgreSQL) - FIXED VERSION
+asyncpg>=0.31.0
+
+# Google Gemini AI
 google-generativeai==0.3.2
-# supabase==1.1.1  # Already installed, skip
+
+# Data Validation
+pydantic==2.4.2
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Async Utilities
+anyio>=3.7.1,<4.0.0
+
+# Type Hints Support
+typing-extensions==4.8.0
