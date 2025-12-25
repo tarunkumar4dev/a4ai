@@ -1,19 +1,24 @@
 // src/lib/supabaseClient.ts
 import { createClient } from "@supabase/supabase-js";
 
-/** ---------------- Env (fail fast) ---------------- */
+/** ---------------- Env (soft check) ---------------- */
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error(
-    "[a4ai] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. " +
-      "Check your .env and Vite env exposure."
+  // Don’t crash the entire app in local/dev if env is missing.
+  // Use obvious dummy values and log a clear warning instead.
+  console.warn(
+    "[a4ai] Warning: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing. " +
+      "Supabase calls will fail until you configure real credentials in .env.local."
   );
 }
 
 /** ---------------- Client (stable PKCE auth) ---------------- */
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabase = createClient(
+  SUPABASE_URL || "https://example.supabase.co",
+  SUPABASE_ANON_KEY || "public-anon-key",
+  {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -145,7 +150,7 @@ export const practiceDB = {
       console.log('📅 [practiceDB.savePracticeAttempt] Checking streak...');
       const { data: profile, error: streakError } = await supabase
         .from('practice_profiles')
-        .select('last_practice_date, practice_streak')
+        .select('last_practice_date, practice_streak, total_coins')
         .eq('id', userId)
         .single();
 

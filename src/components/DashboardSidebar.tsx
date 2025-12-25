@@ -1,7 +1,8 @@
+
 // src/components/DashboardSidebar.tsx
 import React, { useMemo, useState } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion, type Variants, type TargetAndTransition } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   FileText, BarChart2, Users, Bookmark, Settings, LayoutDashboard,
@@ -24,14 +25,19 @@ const theme = {
 };
 
 /* ---------------- Motion presets ---------------- */
-const enterFromLeft = {
+const enterFromLeft: Variants = {
   hidden: { x: -12, opacity: 0 },
   show: (i: number) => ({
-    x: 0, opacity: 1,
-    transition: { delay: 0.02 * i, type: "spring", stiffness: 280, damping: 22 },
+    x: 0,
+    opacity: 1,
+    transition: { delay: 0.02 * i, type: "spring" as const, stiffness: 280, damping: 22 },
   }),
 };
-const hoverLift = { scale: 1.02, x: 6, transition: { type: "spring", stiffness: 320, damping: 16 } };
+const hoverLift: TargetAndTransition = {
+  scale: 1.02,
+  x: 6,
+  transition: { type: "spring" as const, stiffness: 320, damping: 16 },
+};
 
 /* ---------------- Types ---------------- */
 interface SidebarItemProps {

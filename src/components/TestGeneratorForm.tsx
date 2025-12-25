@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useForm, FormProvider } from "react-hook-form";
+import React, { useState, useEffect } from "react";
+import { useForm, FormProvider, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { Library, GraduationCap, Book, ChevronDown, Clock, Zap } from "lucide-react";
@@ -73,6 +73,24 @@ export default function TestGeneratorForm() {
     },
   });
 
+  // Watch board and classGrade values
+  const board = useWatch({
+    control: methods.control,
+    name: "board"
+  });
+
+  const classGrade = useWatch({
+    control: methods.control,
+    name: "classGrade"
+  });
+
+  // Effect to automatically set subject to "Science" when CBSE and Class 10 are selected
+  useEffect(() => {
+    if (board === "CBSE" && classGrade === "Class 10") {
+      methods.setValue("subject", "Science");
+    }
+  }, [board, classGrade, methods]);
+
   const onSubmit = (data: FormSchema) => { 
       console.log("Generating V4 Pro Test:", data);
       // alert("Generating Test..."); 
@@ -120,7 +138,7 @@ export default function TestGeneratorForm() {
                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <PremiumSelect icon={Library} label="Board" name="board" options={["CBSE", "ICSE", "IGCSE", "IB"]} register={methods.register} />
                   <PremiumSelect icon={GraduationCap} label="Class" name="classGrade" options={["Class 9", "Class 10", "Class 11", "Class 12"]} register={methods.register} />
-                  <PremiumSelect icon={Book} label="Subject" name="subject" options={["Physics", "Math", "Chemistry", "Biology"]} register={methods.register} />
+                  <PremiumSelect icon={Book} label="Subject" name="subject" options={["Physics", "Math", "Chemistry", "Biology", "Science"]} register={methods.register} />
                </div>
             </div>
             
