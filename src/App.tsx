@@ -45,9 +45,12 @@ const ContactPage = lazy(() => import("./pages/ContactPage"));
 const ChemistryPracticePage = lazy(() => import("./practice/chemistry"));       //12th dec (chemistry class 10)
 
 /* ---------- Lazy Auth & App Pages ---------- */
+const RoleSelectionPage = lazy(() => import("./pages/RoleSelectionPage")); // Added from new code
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignupPage = lazy(() => import("./pages/SignupPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage")); // Added from new code
+const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage")); // Added from new code
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 const PracticeSessionPage = lazy(() => import("./practice/index"));
@@ -108,8 +111,15 @@ function ScrollToTop() {
 const queryClient = new QueryClient();
 
 /* ---------- Loaders ---------- */
+// Updated LoadingScreen from new code
 const LoadingScreen = () => (
-  <div className="p-8 text-center text-sm text-gray-500">Loading…</div>
+  <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <h2 className="text-lg font-semibold text-gray-900">Loading...</h2>
+      <p className="text-gray-500 mt-1">Please wait a moment</p>
+    </div>
+  </div>
 );
 
 const NotFound = () => (
@@ -134,6 +144,24 @@ function AuthGateForAuthPages({ children }: { children: ReactNode }) {
   const { loading, session } = useAuth();
   if (loading) return <LoadingScreen />;
   if (session) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+/* ---------- Role-based Auth Gate (Added from new code) ---------- */
+function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowedRoles: string[] }) {
+  const { loading, session, userProfile } = useAuth();
+  
+  if (loading) return <LoadingScreen />;
+  if (!session) return <Navigate to="/login" replace />;
+  
+  // Check if user has a profile and if their role is allowed
+  if (!userProfile || !allowedRoles.includes(userProfile.role)) {
+    // Redirect to appropriate dashboard based on actual role
+    const actualRole = userProfile?.role || 'student';
+    toast.error(`Access denied. You are registered as a ${actualRole}.`);
+    return <Navigate to="/dashboard" replace />;
+  }
+  
   return <>{children}</>;
 }
 
@@ -173,6 +201,10 @@ const App = () => {
       import("./pages/flashcards/FlashcardDashboard");
       import("./pages/flashcards/FlashcardChapter");
       import("./pages/flashcards/FlashcardSubject");
+      // Added from new code
+      import("./pages/RoleSelectionPage");
+      import("./pages/StudentDashboardPage");
+      import("./pages/TeacherDashboardPage");
     };
     (window as any).requestIdleCallback
       ? (window as any).requestIdleCallback(prefetch)
@@ -195,6 +227,9 @@ const App = () => {
                     <Routes>
                       {/* -------- Auth callback -------- */}
                       <Route path="/auth/callback/*" element={<CallbackPage />} />
+
+                      {/* -------- Role Selection (Public) - Added from new code -------- */}
+                      <Route path="/role-selection" element={<RoleSelectionPage />} />
 
                       {/* -------- Public marketing -------- */}
                       <Route path="/" element={<LandingPage />} />
@@ -266,6 +301,25 @@ const App = () => {
                           </PrivateRoute>
                         }
                       />
+
+                      {/* -------- Role-specific Dashboard Pages (Added from new code) -------- */}
+                      <Route
+                        path="/dashboard/student"
+                        element={
+                          <RoleAuthGate allowedRoles={["student"]}>
+                            <StudentDashboardPage />
+                          </RoleAuthGate>
+                        }
+                      />
+                      <Route
+                        path="/dashboard/teacher"
+                        element={
+                          <RoleAuthGate allowedRoles={["teacher"]}>
+                            <TeacherDashboardPage />
+                          </RoleAuthGate>
+                        }
+                      />
+
                       <Route
                         path="/dashboard/test-generator"
                         element={
@@ -440,6 +494,10 @@ const App = () => {
                       <Route path="/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
                       <Route path="/study/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
 
+                      {/* -------- Role-specific redirects (Added from new code) -------- */}
+                      <Route path="/host-contest" element={<Navigate to="/contests/create" replace />} />
+                      <Route path="/join-contest" element={<Navigate to="/contests/join" replace />} />
+
                       {/* -------- Fallback -------- */}
                       <Route path="/home" element={<Navigate to="/" replace />} />
                       <Route path="*" element={<NotFound />} />
@@ -449,7 +507,7 @@ const App = () => {
                 </BrowserRouter>
               </div>
             </TooltipProvider>
-          </CoinProvider>n
+          </CoinProvider>
         </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>

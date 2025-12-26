@@ -41,8 +41,8 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
     "Carbon & Its Compounds", "Periodic Classification", "Life Processes",
     "Control & Coordination", "How do Organisms Reproduce", "Heredity & Evolution",
     "Light - Reflection & Refraction", "Human Eye & Colorful World", "Electricity",
-    "Magnetic Effects of Electric Current", "Sources of Energy", "Our Environment",
-    "Management of Natural Resources"
+    "Magnetic Effects of Electric Current", "Our Environment"
+    
   ],
   "Physics": [
     "Electricity", "Magnetic Effects of Electric Current", "Light - Reflection & Refraction",
@@ -77,11 +77,21 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
 };
 
 const COMMON_SUBTOPICS: Record<string, string[]> = {
-  "Electricity": ["Ohm's Law", "Series & Parallel Circuits", "Electric Power", "Heating Effect"],
-  "Carbon & Its Compounds": ["Versatile Nature of Carbon", "Homologous Series", "Nomenclature", "Properties"],
-  "Light - Reflection & Refraction": ["Laws of Reflection", "Mirror Formula", "Refraction", "Lens Formula"],
+  "Chemical Reactions & Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
+  "Acids, Bases & Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
+  "Metals & Non-metals": ["Physical and chemical properties", "Reactivity series", "Extraction of metals", "Corrosion and prevention"],
+  "Carbon & Its Compounds": ["Covalent bonding", "Homologous series", "Functional groups", "Ethanol and ethanoic acid", "Soaps and detergents"],
+  "Periodic Classification": ["Mendeleev's table", "Modern periodic table", "Trends in periodic table"],
+  "Light - Reflection & Refraction": ["Reflection by mirrors", "Refraction", "Lenses", "Power of lens"],
+  "Human Eye & Colorful World": ["Structure of eye", "Defects of vision", "Dispersion and scattering of light"],
+  "Electricity": ["Electric current", "Ohm's law", "Resistance", "Electric power"],
+  "Magnetic Effects of Electric Current": ["Magnetic field", "Electric motor", "Electromagnetic induction", "Generator"],
   "Life Processes": ["Nutrition", "Respiration", "Transportation", "Excretion"],
-  "Chemical Reactions & Equations": ["Types of Reactions", "Balancing Equations", "Oxidation-Reduction"]
+  "Control & Coordination": ["Nervous system", "Hormonal coordination", "Endocrine glands"],
+  "How do Organisms Reproduce": ["Asexual reproduction", "Sexual reproduction", "Reproductive health"],
+  "Heredity & Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
+  "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution","Renewable and non-renewable sources", "Solar, wind, biogas, nuclear energy","Conservation", "Forest and wildlife", "Water resources", "Sustainable development"],
+  
 };
 
 // ==================== UUID GENERATOR ====================

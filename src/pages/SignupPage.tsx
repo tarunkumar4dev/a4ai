@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,20 +8,37 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { Confetti } from "@/components/ui/confetti";
+import { Eye, EyeOff, User, Mail, Lock, ArrowLeft } from "lucide-react";
 
 const SignupPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [showScratchCard, setShowScratchCard] = useState(false);
   const [coinsScratched, setCoinsScratched] = useState(false);
   const [scratchProgress, setScratchProgress] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<"student" | "teacher" | "institute" | null>(null);
+  
   const [formValues, setFormValues] = useState({
     name: "",
     email: "",
     password: "",
+    confirmPassword: "",
     acceptTerms: false,
   });
+
+  // Get role from location state (if coming from role selection)
+  useEffect(() => {
+    if (location.state?.role) {
+      setSelectedRole(location.state.role);
+    }
+    if (location.state?.email) {
+      setFormValues(prev => ({ ...prev, email: location.state.email }));
+    }
+  }, [location.state]);
 
   // Scratch card effect
   const handleScratch = (e: React.MouseEvent) => {
@@ -33,7 +50,6 @@ const SignupPage = () => {
   const handleScratchComplete = () => {
     if (scratchProgress >= 70 && !coinsScratched) {
       setCoinsScratched(true);
-      // Add coins to user profile here
       addWelcomeCoins();
     }
   };
@@ -41,17 +57,20 @@ const SignupPage = () => {
   const addWelcomeCoins = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      if (user && selectedRole) {
+        const initialCoins = selectedRole === "student" ? 100 : 
+                           selectedRole === "teacher" ? 200 : 500;
+        
         // Update user's coin balance in profiles table
         const { error } = await supabase
           .from('profiles')
-          .update({ coins: 100 })
+          .update({ coins: initialCoins })
           .eq('id', user.id);
 
         if (!error) {
           toast({
             title: "🎉 Congratulations!",
-            description: "100 FREE coins added to your account!",
+            description: `${initialCoins} FREE coins added to your account!`,
           });
         }
       }
@@ -72,13 +91,41 @@ const SignupPage = () => {
     }));
   };
 
+  const handleRoleChange = () => {
+    navigate("/role-selection", { 
+      state: { 
+        type: "signup",
+        email: formValues.email 
+      } 
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!selectedRole) {
+      navigate("/role-selection", { 
+        state: { 
+          type: "signup",
+          email: formValues.email 
+        } 
+      });
+      return;
+    }
     
     if (!formValues.acceptTerms) {
       toast({
         title: "Terms required",
         description: "Please accept the terms and conditions",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formValues.password !== formValues.confirmPassword) {
+      toast({
+        title: "Passwords don't match",
+        description: "Please make sure your passwords match.",
         variant: "destructive",
       });
       return;
@@ -105,7 +152,7 @@ const SignupPage = () => {
         options: {
           data: { 
             full_name: formValues.name, 
-            role: "teacher" 
+            role: selectedRole 
           },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
@@ -134,6 +181,10 @@ const SignupPage = () => {
       if (session && user) {
         console.log("🎉 Immediate session received");
         
+        // Calculate initial coins based on role
+        const initialCoins = selectedRole === "student" ? 100 : 
+                           selectedRole === "teacher" ? 200 : 500;
+        
         // Create profile
         try {
           const { error: profileError } = await supabase
@@ -142,8 +193,8 @@ const SignupPage = () => {
               id: user.id,
               email: formValues.email.trim(),
               full_name: formValues.name,
-              role: "teacher",
-              coins: 100, // Initial coins
+              role: selectedRole,
+              coins: initialCoins,
               updated_at: new Date().toISOString(),
             });
 
@@ -237,7 +288,15 @@ const SignupPage = () => {
 
   const closeScratchCard = () => {
     setShowScratchCard(false);
-    navigate("/dashboard?newUser=true", { replace: true });
+    navigate("/dashboard?newUser=true", { 
+      replace: true,
+      state: { newUser: true, role: selectedRole }
+    });
+  };
+
+  const getInitialCoins = () => {
+    return selectedRole === "student" ? 100 : 
+           selectedRole === "teacher" ? 200 : 500;
   };
 
   return (
@@ -284,7 +343,7 @@ const SignupPage = () => {
                   
                   {/* Revealed Content */}
                   <div className="text-center">
-                    <div className="text-4xl font-bold text-gray-800 mb-2">100</div>
+                    <div className="text-4xl font-bold text-gray-800 mb-2">{getInitialCoins()}</div>
                     <div className="text-2xl font-bold text-gray-800 mb-4">FREE COINS</div>
                     <div className="text-sm text-gray-600">
                       {coinsScratched ? "🎊 Congratulations!" : "Scratch to reveal!"}
@@ -321,7 +380,7 @@ const SignupPage = () => {
             <div className="flex items-center justify-center gap-3">
               <div className="text-2xl">🎁</div>
               <div>
-                <h3 className="font-bold text-lg">Get 100 FREE Coins!</h3>
+                <h3 className="font-bold text-lg">Get FREE Coins!</h3>
                 <p className="text-sm opacity-90">Sign up now & scratch to win</p>
               </div>
             </div>
@@ -366,53 +425,145 @@ const SignupPage = () => {
                 </div>
               </div>
 
+              {selectedRole && (
+                <div className="p-3 bg-gray-50 rounded-lg border">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Selected Role</p>
+                      <p className="text-sm text-gray-600 capitalize">{selectedRole}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRoleChange}
+                      disabled={isLoading}
+                    >
+                      Change Role
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <form className="space-y-5" onSubmit={handleSubmit}>
                 <div>
                   <Label htmlFor="name">Full name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    type="text"
-                    autoComplete="name"
-                    required
-                    value={formValues.name}
-                    onChange={handleChange}
-                    disabled={isLoading}
-                    className="mt-1 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
-                  />
+                  <div className="relative mt-1">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="name"
+                      name="name"
+                      type="text"
+                      autoComplete="name"
+                      required
+                      value={formValues.name}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className="pl-10 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="John Doe"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <Label htmlFor="email">Email address</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={formValues.email}
-                    onChange={handleChange}
-                    disabled={isLoading}
-                    className="mt-1 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
-                  />
+                  <div className="relative mt-1">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={formValues.email}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className="pl-10 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="you@example.com"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    minLength={6}
-                    value={formValues.password}
-                    onChange={handleChange}
-                    disabled={isLoading}
-                    className="mt-1 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
-                  />
+                  <div className="relative mt-1">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      required
+                      minLength={6}
+                      value={formValues.password}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className="pl-10 pr-10 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="••••••••"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-400" />
+                      )}
+                    </Button>
+                  </div>
                   <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
                 </div>
+
+                <div>
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <div className="relative mt-1">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      required
+                      value={formValues.confirmPassword}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                      className="pl-10 pr-10 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
+                      placeholder="••••••••"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-400" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {!selectedRole && (
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleRoleChange}
+                      disabled={isLoading}
+                    >
+                      Select Your Role
+                    </Button>
+                    <p className="text-sm text-gray-500 mt-2 text-center">
+                      You need to select your role before signing up
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center">
                   <Checkbox
@@ -438,7 +589,7 @@ const SignupPage = () => {
 
                 <Button
                   type="submit"
-                  disabled={isLoading || !formValues.acceptTerms}
+                  disabled={isLoading || !formValues.acceptTerms || !selectedRole}
                   className="w-full h-12 rounded-full text-white font-medium
                              bg-gradient-to-r from-green-600 to-emerald-700 
                              shadow-[0_8px_24px_rgba(34,197,94,0.3)]
@@ -446,7 +597,7 @@ const SignupPage = () => {
                              active:from-green-800 active:to-emerald-900
                              transition-all duration-300"
                 >
-                  {isLoading ? "Creating account..." : "🎁 Get FREE Coins!"}
+                  {isLoading ? "Creating account..." : `🎁 Get FREE Coins!`}
                 </Button>
               </form>
             </div>
@@ -471,7 +622,19 @@ const SignupPage = () => {
               <ul className="text-left space-y-3 text-gray-700">
                 <li className="flex items-center gap-3">
                   <span className="text-green-600">✅</span>
-                  <span><strong>100 FREE coins</strong> to get started</span>
+                  <span><strong>FREE coins</strong> based on your role</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-green-600">✅</span>
+                  <span><strong>Students:</strong> 100 coins to start with</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-green-600">✅</span>
+                  <span><strong>Teachers:</strong> 200 coins for premium features</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <span className="text-green-600">✅</span>
+                  <span><strong>Institutes:</strong> 500 coins for team collaboration</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <span className="text-green-600">✅</span>

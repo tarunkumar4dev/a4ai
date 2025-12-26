@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 
 /** Palette: cloud=#E0E6F7, slate=#5D687B, mist=#D6DEE7 */
 
@@ -20,6 +20,17 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [formValues, setFormValues] = useState({ email: "", password: "" });
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const [selectedRole, setSelectedRole] = useState<"student" | "teacher" | "institute" | null>(null);
+
+  // Get role from location state (if coming from role selection)
+  useEffect(() => {
+    if (location.state?.role) {
+      setSelectedRole(location.state.role);
+    }
+    if (location.state?.email) {
+      setFormValues(prev => ({ ...prev, email: location.state.email }));
+    }
+  }, [location.state]);
 
   // pointer for eyes (mouse + touch)
   useEffect(() => {
@@ -47,21 +58,55 @@ export default function LoginPage() {
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormValues((s) => ({ ...s, [e.target.name]: e.target.value }));
 
+  const handleRoleChange = () => {
+    navigate("/role-selection", { 
+      state: { 
+        type: "login",
+        email: formValues.email 
+      } 
+    });
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!selectedRole) {
+      navigate("/role-selection", { 
+        state: { 
+          type: "login",
+          email: formValues.email 
+        } 
+      });
+      return;
+    }
+    
     if (isLoading) return;
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: formValues.email.trim(),
         password: formValues.password,
       });
+      
       if (error) throw error;
+
+      // Check if user's role matches selected role
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+
+      if (profile?.role !== selectedRole) {
+        await supabase.auth.signOut();
+        throw new Error(`Please login as a ${profile?.role} or select the correct role.`);
+      }
+
       navigate("/dashboard", { replace: true });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Login failed",
-        description: error instanceof Error ? error.message : "An error occurred",
+        description: error.message || "An error occurred",
         variant: "destructive",
       });
     } finally {
@@ -69,7 +114,16 @@ export default function LoginPage() {
     }
   };
 
-  const google = async () => {
+  const handleGoogleLogin = async () => {
+    if (!selectedRole) {
+      toast({
+        title: "Select role first",
+        description: "Please select your role before continuing with Google",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (isLoading) return;
     setIsLoading(true);
     try {
@@ -82,10 +136,10 @@ export default function LoginPage() {
         },
       });
       if (error) throw error;
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Google login failed",
-        description: error instanceof Error ? error.message : "An error occurred",
+        description: error.message || "An error occurred",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -98,6 +152,18 @@ export default function LoginPage() {
         <div className="grid grid-cols-1 gap-6 lg:[grid-template-columns:480px_1fr]">
           {/* LEFT — compact card */}
           <div className="rounded-2xl sm:rounded-3xl bg-white shadow-xl ring-1 ring-[#D6DEE7] p-5 sm:p-6 md:p-8">
+            <div className="flex items-center justify-between mb-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/")}
+                className="text-[#5D687B] hover:text-[#0f172a]"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back
+              </Button>
+            </div>
+            
             <p className="text-2xl font-extrabold text-[#5D687B]">Hii,</p>
             <h1 className="mt-1 text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-[#0f172a]">
               Welcome back
@@ -110,9 +176,29 @@ export default function LoginPage() {
             </p>
 
             <div className="mt-6 sm:mt-8 space-y-5 sm:space-y-6">
+              {selectedRole && (
+                <div className="p-3 bg-[#F5F7FB] rounded-lg border border-[#D6DEE7]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-[#5D687B]">Login as</p>
+                      <p className="text-sm text-[#0f172a] capitalize">{selectedRole}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRoleChange}
+                      disabled={isLoading}
+                      className="border-[#D6DEE7] text-[#5D687B] hover:bg-[#E0E6F7]"
+                    >
+                      Change Role
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <Button
-                onClick={google}
-                disabled={isLoading}
+                onClick={handleGoogleLogin}
+                disabled={isLoading || !selectedRole}
                 variant="outline"
                 className="w-full h-11 sm:h-12 justify-center gap-2 rounded-xl border-[#D6DEE7] bg-white text-slate-800 hover:bg-[#F5F7FB]"
               >
@@ -134,19 +220,41 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {!selectedRole && (
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-[#D6DEE7] text-[#5D687B] hover:bg-[#F5F7FB]"
+                    onClick={handleRoleChange}
+                    disabled={isLoading}
+                  >
+                    Select Your Role
+                  </Button>
+                  <p className="text-sm text-slate-500 mt-2 text-center">
+                    You need to select your role before logging in
+                  </p>
+                </div>
+              )}
+
               <form onSubmit={onSubmit} className="space-y-4 sm:space-y-5">
                 <div>
                   <Label htmlFor="email" className="text-slate-700">Email address</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={formValues.email}
-                    onChange={onChange}
-                    className="mt-1 bg-[#F5F7FB] border-[#D6DEE7] focus:bg-white focus:ring-2 focus:ring-[#5D687B]/30"
-                  />
+                  <div className="relative mt-1">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-[#5D687B]" />
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={formValues.email}
+                      onChange={onChange}
+                      disabled={isLoading}
+                      className="pl-10 bg-[#F5F7FB] border-[#D6DEE7] focus:bg-white focus:ring-2 focus:ring-[#5D687B]/30"
+                      placeholder="you@example.com"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -156,7 +264,8 @@ export default function LoginPage() {
                       Forgot password?
                     </Link>
                   </div>
-                  <div className="relative">
+                  <div className="relative mt-1">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-[#5D687B]" />
                     <Input
                       id="password"
                       name="password"
@@ -165,13 +274,15 @@ export default function LoginPage() {
                       required
                       value={formValues.password}
                       onChange={onChange}
-                      className="mt-1 bg-[#F5F7FB] border-[#D6DEE7] pr-12 focus:bg-white focus:ring-2 focus:ring-[#5D687B]/30"
+                      disabled={isLoading}
+                      className="pl-10 pr-12 bg-[#F5F7FB] border-[#D6DEE7] focus:bg-white focus:ring-2 focus:ring-[#5D687B]/30"
+                      placeholder="••••••••"
                     />
                     <button
                       type="button"
                       aria-label={showPw ? "Hide password" : "Show password"}
                       onClick={() => setShowPw((s) => !s)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5D687B] hover:text-[#0f172a]"
                     >
                       {showPw ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
@@ -179,13 +290,18 @@ export default function LoginPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Checkbox id="remember" checked={remember} onCheckedChange={(c) => setRemember(Boolean(c))} />
+                  <Checkbox 
+                    id="remember" 
+                    checked={remember} 
+                    onCheckedChange={(c) => setRemember(Boolean(c))} 
+                    disabled={isLoading}
+                  />
                   <label htmlFor="remember" className="text-sm text-slate-700">Remember me</label>
                 </div>
 
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || !selectedRole}
                   className="w-full h-11 sm:h-12 rounded-full text-white font-medium bg-[#0f0f12] hover:bg-[#1a1a1e] transition-colors"
                 >
                   {isLoading ? "Signing in…" : "Log In"}
