@@ -57,6 +57,11 @@ const StudentsPage = lazy(() => import("./pages/StudentsPage"));
 const NotesPage = lazy(() => import("./pages/Notes"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
+/* ---------- FLASHCARDS - ADDED ---------- */
+const FlashcardDashboard = lazy(() => import("./pages/flashcards/FlashcardDashboard"));
+const FlashcardChapter = lazy(() => import("./pages/flashcards/FlashcardChapter"));
+const FlashcardSubject = lazy(() => import("./pages/flashcards/FlashcardSubject"));
+
 /* ---------- Contests ---------- */
 const ContestLandingPage = lazy(() => import("./pages/ContestLandingPage"));
 const CreateContestPage = lazy(() => import("./pages/CreateContestPage"));
@@ -164,6 +169,10 @@ const App = () => {
       import("./pages/ContestPreview");
       import("./practice/index");
       import("./practice/session");
+      // ADDED: Prefetch flashcard pages
+      import("./pages/flashcards/FlashcardDashboard");
+      import("./pages/flashcards/FlashcardChapter");
+      import("./pages/flashcards/FlashcardSubject");
     };
     (window as any).requestIdleCallback
       ? (window as any).requestIdleCallback(prefetch)
@@ -270,6 +279,32 @@ const App = () => {
                         element={
                           <PrivateRoute>
                             <AnalyticsPage />
+                          </PrivateRoute>
+                        }
+                      />
+
+                      {/* 🔥 FLASHCARD ROUTES - ADDED */}
+                      <Route
+                        path="/dashboard/flashcards"
+                        element={
+                          <PrivateRoute>
+                            <FlashcardDashboard />
+                          </PrivateRoute>
+                        }
+                      />
+                      <Route
+                        path="/dashboard/flashcards/:subject/:chapter"
+                        element={
+                          <PrivateRoute>
+                            <FlashcardChapter />
+                          </PrivateRoute>
+                        }
+                      />
+                      <Route
+                        path="/dashboard/flashcards/class/:class/subject/:subject"
+                        element={
+                          <PrivateRoute>
+                            <FlashcardSubject />
                           </PrivateRoute>
                         }
                       />
@@ -401,6 +436,9 @@ const App = () => {
                       <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
                       <Route path="/dashboard/contests" element={<Navigate to="/contests" replace />} />
                       <Route path="/dashboard/coinshop" element={<Navigate to="/coinshop" replace />} />
+                      {/* ADDED: Flashcard redirect */}
+                      <Route path="/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
+                      <Route path="/study/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
 
                       {/* -------- Fallback -------- */}
                       <Route path="/home" element={<Navigate to="/" replace />} />
@@ -411,7 +449,7 @@ const App = () => {
                 </BrowserRouter>
               </div>
             </TooltipProvider>
-          </CoinProvider>
+          </CoinProvider>n
         </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>

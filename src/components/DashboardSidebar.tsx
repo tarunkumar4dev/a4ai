@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   FileText, BarChart2, Users, Bookmark, Settings, LayoutDashboard,
   ChevronRight, Zap, Trophy, Notebook, CalendarDays, Users2,
-  Sparkles, Plus, Menu, X,
+  Sparkles, Plus, Menu, X, BookOpen, Brain, TrendingUp, 
 } from "lucide-react";
 
 /* ---------------- Cluely theme tokens ---------------- */
@@ -41,11 +41,12 @@ interface SidebarItemProps {
   alert?: boolean;
   premium?: boolean;
   index: number;
+  badge?: string;
 }
 
 /* ---------------- Item ---------------- */
 const SidebarItem = React.memo(function SidebarItem({
-  icon: Icon, label, to, alert, premium, index,
+  icon: Icon, label, to, alert, premium, index, badge,
 }: SidebarItemProps) {
   const prefersReducedMotion = useReducedMotion();
 
@@ -113,6 +114,16 @@ const SidebarItem = React.memo(function SidebarItem({
               )}
             />
             <span className="text-[0.95rem] font-medium flex-1">{label}</span>
+            
+            {badge && (
+              <span className={cn(
+                "text-xs font-semibold px-2 py-0.5 rounded-full",
+                isActive ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"
+              )}>
+                {badge}
+              </span>
+            )}
+            
             <ChevronRight
               className={cn(
                 "h-4 w-4 opacity-0 transition-all duration-300",
@@ -134,10 +145,17 @@ const useSidebarData = () =>
       items: [
         { icon: LayoutDashboard, label: "Overview", to: "/dashboard" },
         { icon: FileText, label: "Test Generator", to: "/dashboard/test-generator", alert: true },
+        { 
+          icon: Brain, 
+          label: "Flashcards", 
+          to: "/dashboard/flashcards",
+          badge: "NEW"
+        },
         { icon: Trophy, label: "Contests", to: "/dashboard/contests", premium: true },
         { icon: BarChart2, label: "Analytics", to: "/dashboard/analytics" },
         { icon: Users, label: "Students", to: "/dashboard/students", alert: true },
-        { icon: Notebook, label: "Notes", to: "/dashboard/notes" }, // <-- list page
+        { icon: Notebook, label: "Notes", to: "/dashboard/notes" },
+        { icon: TrendingUp, label: "Performance", to: "/dashboard/performance" },
         { icon: Settings, label: "Settings", to: "/dashboard/settings" },
       ],
       contestInfo: {
@@ -149,6 +167,12 @@ const useSidebarData = () =>
         premium: true,
       },
       notesSummary: { unread: 3, recentSubject: "Algebra II", lastUpdated: "2 hours ago", starred: 5 },
+      flashcardStats: {
+        mastered: 125,
+        total: 500,
+        streak: 7,
+        nextChapter: "Chemical Reactions"
+      },
     }),
     []
   );
@@ -223,6 +247,87 @@ const FeaturedContest = React.memo(function FeaturedContest({
   );
 });
 
+/* ---------------- Flashcard Quick Stats ---------------- */
+const FlashcardQuickStats = React.memo(function FlashcardQuickStats({
+  mastered, total, streak, nextChapter
+}: { mastered: number; total: number; streak: number; nextChapter: string }) {
+  const progress = Math.round((mastered / total) * 100);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", delay: 0.08 }}
+      className={cn(
+        "mx-3 mb-4 rounded-xl border p-4",
+        "bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200",
+        "shadow-[0_6px_16px_rgba(14,165,233,0.12)]",
+        "dark:from-blue-900/10 dark:to-cyan-800/10"
+      )}
+    >
+      <div className="mb-3 flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          <Brain className="h-5 w-5 text-blue-600" />
+          <h3 className="font-semibold text-foreground">Flashcards</h3>
+        </div>
+        <span className="flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-200">
+          <Sparkles className="h-3 w-3" /> Active
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        {/* Progress */}
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <span className="text-slate-700">Mastery Progress</span>
+            <span className="font-medium text-blue-700">{progress}%</span>
+          </div>
+          <div className="h-2 bg-blue-100 rounded-full overflow-hidden">
+            <motion.div 
+              className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 1 }}
+            />
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="p-2 bg-white/50 rounded-lg">
+            <div className="text-lg font-bold text-blue-700">{mastered}</div>
+            <div className="text-xs text-slate-600">Mastered</div>
+          </div>
+          <div className="p-2 bg-white/50 rounded-lg">
+            <div className="text-lg font-bold text-emerald-700">{streak}🔥</div>
+            <div className="text-xs text-slate-600">Day Streak</div>
+          </div>
+          <div className="p-2 bg-white/50 rounded-lg">
+            <div className="text-lg font-bold text-purple-700">{total}</div>
+            <div className="text-xs text-slate-600">Total</div>
+          </div>
+        </div>
+
+        {/* Next Chapter */}
+        <div className="text-sm text-slate-600">
+          <span className="font-medium">Next:</span> {nextChapter}
+        </div>
+      </div>
+
+      <Link to="/dashboard/flashcards" className="block">
+        <motion.button
+          whileHover={{ scale: 1.02, boxShadow: "0 6px 16px rgba(14,165,233,0.28)" }}
+          whileTap={{ scale: 0.98 }}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-white transition-all bg-gradient-to-r from-blue-500 to-cyan-500"
+        >
+          <BookOpen className="h-4 w-4" />
+          Continue Learning
+        </motion.button>
+      </Link>
+    </motion.div>
+  );
+});
+
 /* ---------------- Notes Quick ---------------- */
 const NotesQuick = React.memo(function NotesQuick({
   unread, recentSubject, lastUpdated, starred,
@@ -283,7 +388,6 @@ const NotesQuick = React.memo(function NotesQuick({
           </motion.button>
         </Link>
         <Link to="/dashboard/notes/new" className="flex-1">
-          {/* BLACK primary */}
           <motion.button
             whileHover={{ scale: 1.02, boxShadow: "0 6px 16px rgba(0,0,0,0.35)" }}
             whileTap={{ scale: 0.98 }}
@@ -300,7 +404,7 @@ const NotesQuick = React.memo(function NotesQuick({
 
 /* ---------------- Sidebar content ---------------- */
 function SidebarContent() {
-  const { items, contestInfo, notesSummary } = useSidebarData();
+  const { items, contestInfo, notesSummary, flashcardStats } = useSidebarData();
   const prefersReducedMotion = useReducedMotion();
 
   return (
@@ -315,16 +419,27 @@ function SidebarContent() {
             <Zap className="h-6 w-6 text-[#5D6B7B]" />
           </motion.div>
           a4ai
+          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">AI</span>
         </Link>
       </motion.div>
 
       {/* Nav */}
       <nav className="flex-1 space-y-1 px-3 py-2">
         {items.map((item, i) => (
-          <SidebarItem key={item.to} icon={item.icon} label={item.label} to={item.to} alert={item.alert} premium={item.premium} index={i} />
+          <SidebarItem 
+            key={item.to} 
+            icon={item.icon} 
+            label={item.label} 
+            to={item.to} 
+            alert={item.alert} 
+            premium={item.premium} 
+            badge={item.badge}
+            index={i} 
+          />
         ))}
       </nav>
 
+      <FlashcardQuickStats {...flashcardStats} />
       <FeaturedContest contest={contestInfo} />
       <NotesQuick {...notesSummary} />
     </>
@@ -353,7 +468,7 @@ export default function DashboardSidebar() {
         initial={{ x: -90, opacity: 0 }}
         animate={{ x: 0, opacity: 1, transition: { type: "spring", stiffness: 110, damping: 20 } }}
         exit={{ x: -90, opacity: 0 }}
-        className="sticky top-0 hidden h-[100dvh] w-64 md:flex md:flex-col overflow-y-auto border-r border-border bg-background"
+        className="sticky top-0 hidden h-[100dvh] w-64 md:flex md:flex-col overflow-y-auto border-r border-border bg-background custom-scrollbar"
       >
         <SidebarContent />
       </motion.aside>
@@ -364,7 +479,7 @@ export default function DashboardSidebar() {
           <>
             <motion.div
               key="backdrop"
-              className="md:hidden fixed inset-0 z-50 bg-black/40"
+              className="md:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -381,16 +496,19 @@ export default function DashboardSidebar() {
               transition={{ type: "spring", stiffness: 260, damping: 26 }}
             >
               <div className="flex items-center justify-between px-4 py-3 border-b">
-                <div className="font-semibold">Menu</div>
+                <div className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-[#5D6B7B]" />
+                  <div className="font-semibold">a4ai Menu</div>
+                </div>
                 <button
                   aria-label="Close sidebar"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border hover:bg-slate-100 transition-colors"
                   onClick={() => setOpen(false)}
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
                 <SidebarContent />
               </div>
             </motion.aside>
