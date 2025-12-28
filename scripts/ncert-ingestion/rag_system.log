@@ -70,3 +70,136 @@ LINE 8:                     topic,
 LINE 8:                     topic,
                             ^
 
+2025-12-27 16:08:23,218 - rag_system - INFO - Initializing NCERT RAG System...
+2025-12-27 16:08:23,220 - rag_system - INFO - Loaded environment variables
+2025-12-27 16:08:24,744 - rag_system - INFO - Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-27 16:08:24,878 - rag_system - INFO - Database has 1925 chunks
+2025-12-27 16:08:24,913 - rag_system - WARNING - No Gemini model worked
+2025-12-27 16:08:24,914 - rag_system - WARNING - Gemini initialization failed, using fallback mode
+2025-12-27 16:08:24,914 - rag_system - INFO - RAG System initialized successfully!
+2025-12-27 16:08:25,202 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.4:5000
+2025-12-27 16:08:25,202 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-27 16:08:25,207 - werkzeug - INFO -  * Restarting with stat
+2025-12-27 16:08:30,543 - rag_system - INFO - Initializing NCERT RAG System...
+2025-12-27 16:08:30,547 - rag_system - INFO - Loaded environment variables
+2025-12-27 16:08:32,305 - rag_system - INFO - Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-27 16:08:32,439 - rag_system - INFO - Database has 1925 chunks
+2025-12-27 16:08:32,473 - rag_system - WARNING - No Gemini model worked
+2025-12-27 16:08:32,473 - rag_system - WARNING - Gemini initialization failed, using fallback mode
+2025-12-27 16:08:32,473 - rag_system - INFO - RAG System initialized successfully!
+2025-12-27 16:08:32,715 - werkzeug - WARNING -  * Debugger is active!
+2025-12-27 16:08:34,239 - werkzeug - INFO -  * Debugger PIN: 414-424-594
+2025-12-27 16:09:52,322 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:09:52,338 - __main__ - INFO - Processing question
+2025-12-27 16:09:52,370 - rag_system - ERROR - Retrieval failed: cannot perform operation: another operation is in progress
+2025-12-27 16:09:52,371 - asyncio - ERROR - Future exception was never retrieved
+future: <Future finished exception=ConnectionDoesNotExistError('connection was closed in the middle of operation')>
+asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the middle of operation
+2025-12-27 16:09:52,388 - __main__ - INFO - Question answered
+2025-12-27 16:09:52,404 - __main__ - INFO - Request completed: 200
+2025-12-27 16:09:52,421 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:09:52] "POST /query HTTP/1.1" 200 -
+2025-12-27 16:10:00,822 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:10:00,827 - __main__ - INFO - Processing question
+2025-12-27 16:10:00,832 - rag_system - ERROR - Retrieval failed: cannot perform operation: another operation is in progress
+2025-12-27 16:10:00,841 - asyncio - ERROR - Future exception was never retrieved
+future: <Future finished exception=ConnectionDoesNotExistError('connection was closed in the middle of operation')>
+asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the middle of operation
+2025-12-27 16:10:00,862 - __main__ - INFO - Question answered
+2025-12-27 16:10:00,892 - __main__ - INFO - Request completed: 200
+2025-12-27 16:10:00,908 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:10:00] "POST /query HTTP/1.1" 200 -
+2025-12-27 16:12:29,442 - werkzeug - INFO -  * Detected change in 'C:\\Users\\login\\OneDrive\\Desktop\\product\\scripts\\ncert-ingestion\\rag_system.py', reloading
+2025-12-27 16:12:29,939 - werkzeug - INFO -  * Restarting with stat
+2025-12-27 16:15:16,193 - werkzeug - INFO -  * Restarting with stat
+2025-12-27 16:15:37,238 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-27 16:15:37,240 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-27 16:15:37,704 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-27 16:15:37,850 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-27 16:15:37,852 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-27 16:15:37,853 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-27 16:15:38,188 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.4:5000
+2025-12-27 16:15:38,189 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-27 16:15:38,194 - werkzeug - INFO -  * Restarting with stat
+2025-12-27 16:15:42,604 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-27 16:15:42,606 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-27 16:15:43,047 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-27 16:15:43,193 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-27 16:15:43,195 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-27 16:15:43,195 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-27 16:15:43,488 - werkzeug - WARNING -  * Debugger is active!
+2025-12-27 16:15:43,498 - werkzeug - INFO -  * Debugger PIN: 414-424-594
+2025-12-27 16:16:29,213 - __main__ - INFO - Request started: OPTIONS /query
+2025-12-27 16:16:29,216 - __main__ - INFO - Request completed: 200
+2025-12-27 16:16:29,236 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:16:29] "OPTIONS /query HTTP/1.1" 200 -
+2025-12-27 16:16:29,448 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:16:29,457 - __main__ - INFO - Processing question
+2025-12-27 16:16:29,492 - rag_system - ERROR - Retrieval failed: Event loop is closed
+2025-12-27 16:16:29,500 - __main__ - INFO - Question answered
+2025-12-27 16:16:29,517 - __main__ - INFO - Request completed: 200
+2025-12-27 16:16:29,530 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:16:29] "POST /query HTTP/1.1" 200 -
+2025-12-27 16:17:45,550 - werkzeug - INFO -  * Detected change in 'C:\\Users\\login\\OneDrive\\Desktop\\product\\scripts\\ncert-ingestion\\debug_test.py', reloading
+2025-12-27 16:17:46,633 - werkzeug - INFO -  * Restarting with stat
+2025-12-27 16:32:02,254 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-27 16:32:02,256 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-27 16:32:02,790 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-27 16:32:02,934 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-27 16:32:02,936 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-27 16:32:02,936 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-27 16:32:03,273 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.4:5000
+2025-12-27 16:32:03,274 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-27 16:32:03,279 - werkzeug - INFO -  * Restarting with stat
+2025-12-27 16:32:08,363 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-27 16:32:08,365 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-27 16:32:08,822 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-27 16:32:08,974 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-27 16:32:08,975 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-27 16:32:08,976 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-27 16:32:09,303 - werkzeug - WARNING -  * Debugger is active!
+2025-12-27 16:32:09,329 - werkzeug - INFO -  * Debugger PIN: 414-424-594
+2025-12-27 16:33:18,557 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:33:18,576 - __main__ - INFO - Processing question
+2025-12-27 16:33:18,611 - rag_system - ERROR - Retrieval failed: Event loop is closed
+2025-12-27 16:33:18,622 - __main__ - INFO - Question answered
+2025-12-27 16:33:18,628 - __main__ - INFO - Request completed: 200
+2025-12-27 16:33:18,660 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:33:18] "POST /query HTTP/1.1" 200 -
+2025-12-27 16:33:19,687 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:33:19,704 - __main__ - INFO - Processing question
+2025-12-27 16:33:19,707 - rag_system - ERROR - Retrieval failed: cannot perform operation: another operation is in progress
+2025-12-27 16:33:19,719 - __main__ - INFO - Question answered
+2025-12-27 16:33:19,723 - __main__ - INFO - Request completed: 200
+2025-12-27 16:33:19,726 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:33:19] "POST /query HTTP/1.1" 200 -
+2025-12-27 16:33:20,010 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:33:20,016 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:33:20,020 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:33:20,036 - __main__ - INFO - Processing question
+2025-12-27 16:33:20,039 - __main__ - INFO - Request started: POST /query
+2025-12-27 16:33:20,040 - __main__ - INFO - Processing question
+2025-12-27 16:33:20,068 - rag_system - ERROR - Retrieval failed: cannot perform operation: another operation is in progress
+2025-12-27 16:33:20,050 - __main__ - INFO - Processing question
+2025-12-27 16:33:20,076 - rag_system - ERROR - Retrieval failed: cannot perform operation: another operation is in progress
+2025-12-27 16:33:20,060 - __main__ - INFO - Processing question
+2025-12-27 16:33:20,083 - __main__ - INFO - Question answered
+2025-12-27 16:33:20,091 - rag_system - ERROR - Retrieval failed: cannot perform operation: another operation is in progress
+2025-12-27 16:33:20,092 - __main__ - INFO - Question answered
+2025-12-27 16:33:20,124 - rag_system - ERROR - Retrieval failed: cannot perform operation: another operation is in progress
+2025-12-27 16:33:20,110 - __main__ - INFO - Request completed: 200
+2025-12-27 16:33:20,134 - __main__ - INFO - Question answered
+2025-12-27 16:33:20,147 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:33:20] "POST /query HTTP/1.1" 200 -
+2025-12-27 16:33:20,135 - __main__ - INFO - Request completed: 200
+2025-12-27 16:33:20,142 - __main__ - INFO - Question answered
+2025-12-27 16:33:20,173 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:33:20] "POST /query HTTP/1.1" 200 -
+2025-12-27 16:33:20,159 - __main__ - INFO - Request completed: 200
+2025-12-27 16:33:20,175 - __main__ - INFO - Request completed: 200
+2025-12-27 16:33:20,236 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:33:20] "POST /query HTTP/1.1" 200 -
+2025-12-27 16:33:20,250 - werkzeug - INFO - 127.0.0.1 - - [27/Dec/2025 16:33:20] "POST /query HTTP/1.1" 200 -
+2025-12-27 17:05:52,910 - werkzeug - INFO -  * Detected change in 'C:\\Users\\login\\OneDrive\\Desktop\\product\\scripts\\ncert-ingestion\\api_server.py', reloading
+2025-12-27 17:05:54,074 - werkzeug - INFO -  * Restarting with stat
+2025-12-27 17:11:33,392 - werkzeug - INFO -  * Restarting with stat

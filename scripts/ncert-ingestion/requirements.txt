@@ -1,24 +1,17 @@
-# ===============================
-# NCERT RAG API - FINAL REQUIREMENTS
-# ===============================
-# Core Web Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+# Flask Framework
+Flask==3.0.0
+Flask-CORS==4.0.0
+Flask-Limiter==3.8.0
 
-# Database (for Supabase PostgreSQL) - FIXED VERSION
+# Database (if needed)
 asyncpg>=0.31.0
 
 # Google Gemini AI
 google-generativeai==0.3.2
 
-# Data Validation
-pydantic==2.4.2
-
 # Environment Variables
 python-dotenv==1.0.0
 
-# Async Utilities
-anyio>=3.7.1,<4.0.0
-
-# Type Hints Support
-typing-extensions==4.8.0
+# Utilities
+psutil==5.9.7  # For health check
+Werkzeug==3.0.1

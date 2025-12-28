@@ -82,7 +82,7 @@ async function getRAGContextForTest(payload: GenerateTestRequest): Promise<{
     // Query RAG system (FastAPI backend)
     const ragResponse = await RAGClient.query(
       query,
-      import.meta.env.VITE_RAG_API_URL || "http://localhost:8000"
+      import.meta.env.VITE_RAG_API_URL || "http://localhost:5000"
     );
 
     if (!ragResponse) {
@@ -287,7 +287,7 @@ export async function queryNCERT(
     
     const ragResponse = await RAGClient.query(
       enhancedQuery,
-      import.meta.env.VITE_RAG_API_URL || "http://localhost:8000"
+      import.meta.env.VITE_RAG_API_URL || "http://localhost:5000"
     );
     
     if (!ragResponse) {
