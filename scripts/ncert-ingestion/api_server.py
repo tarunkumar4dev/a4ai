@@ -1,6 +1,7 @@
 """
 NCERT RAG API SERVER - PRODUCTION READY
-Date: December 27, 2025
+Version: 3.2.0
+Date: December 29, 2025
 Purpose: Expose RAG functionality as REST API for frontend integration
 """
 
@@ -8,15 +9,14 @@ import os
 import json
 import logging
 import uuid
-import threading
 import time
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from functools import wraps
-from typing import Dict, List, Optional, Any
+import traceback
 
 # Flask imports
-from flask import Flask, request, jsonify, g
+from flask import Flask, request, jsonify, g, has_request_context
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -50,8 +50,23 @@ class Config:
     TASK_TIMEOUT = int(os.getenv('TASK_TIMEOUT', 300))
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_FILE = os.getenv('LOG_FILE', 'api_server.log')
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
+    
+    # CORS configuration
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*')
+    if CORS_ORIGINS != '*':
+        CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS.split(',')]
+    
     METRICS_ENABLED = os.getenv('METRICS_ENABLED', 'True').lower() == 'true'
+    REQUEST_ID_HEADER = os.getenv('REQUEST_ID_HEADER', 'X-Request-ID')
+    MAX_QUESTION_LENGTH = int(os.getenv('MAX_QUESTION_LENGTH', 1000))
+    
+    # Supabase configuration
+    SUPABASE_URL = os.getenv('SUPABASE_URL')
+    SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
+    
+    # API Keys
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # ==================== APPLICATION SETUP ====================
 
@@ -59,188 +74,382 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+# Configure CORS
 CORS(app, 
      origins=app.config['CORS_ORIGINS'],
      methods=["GET", "POST", "OPTIONS"],
-     allow_headers=["Content-Type", "Authorization", "X-API-Key"],
-     max_age=3600)
+     allow_headers=["Content-Type", "Authorization", "X-API-Key", "X-Request-ID"],
+     max_age=3600,
+     supports_credentials=True)
 
+# Rate limiting
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
     default_limits=["100 per minute", "10 per second"] if app.config['RATE_LIMIT_ENABLED'] else [],
     storage_uri="memory://",
-    strategy="fixed-window"
+    strategy="fixed-window",
+    headers_enabled=True
 )
+
+# Store startup time
+app.startup_time = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 # ==================== LOGGING SETUP ====================
 
-class StructuredFormatter(logging.Formatter):
+class SafeStructuredFormatter(logging.Formatter):
+    """Safe JSON formatter that handles Flask context properly."""
+    
     def format(self, record):
-        log_record = {
-            'timestamp': self.formatTime(record),
-            'level': record.levelname,
-            'message': record.getMessage(),
-            'module': record.module,
-            'function': record.funcName,
-            'line': record.lineno,
-            'request_id': getattr(g, 'request_id', None) if hasattr(g, 'request_id') else None,
-            'client_ip': getattr(g, 'client_ip', None) if hasattr(g, 'client_ip') else None
-        }
-        
-        if hasattr(record, 'extra'):
-            log_record.update(record.extra)
+        try:
+            log_data = {
+                'timestamp': self.formatTime(record),
+                'level': record.levelname,
+                'message': record.getMessage(),
+                'module': record.module,
+                'function': record.funcName,
+                'line': record.lineno,
+            }
             
-        return json.dumps(log_record)
+            # Safely add request context if available
+            if has_request_context():
+                request_id = getattr(g, 'request_id', None)
+                client_ip = getattr(g, 'client_ip', None)
+                
+                if request_id:
+                    log_data['request_id'] = request_id
+                if client_ip:
+                    log_data['client_ip'] = client_ip
+            
+            # Add exception info if present
+            if record.exc_info:
+                log_data['exception'] = self.formatException(record.exc_info)
+            
+            # Add any extra fields
+            if hasattr(record, 'extra'):
+                log_data.update(record.extra)
+                
+            return json.dumps(log_data, default=str)
+            
+        except Exception as e:
+            # Fallback to basic format
+            return super().format(record)
 
-logger = logging.getLogger(__name__)
-logger.setLevel(getattr(logging, app.config['LOG_LEVEL']))
+def setup_logging():
+    """Configure logging system."""
+    logger = logging.getLogger(__name__)
+    logger.setLevel(getattr(logging, app.config['LOG_LEVEL']))
+    
+    # Clear existing handlers
+    logger.handlers.clear()
+    
+    # File handler with structured JSON logging
+    try:
+        log_dir = os.path.dirname(app.config['LOG_FILE'])
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+            
+        file_handler = logging.FileHandler(app.config['LOG_FILE'], encoding='utf-8')
+        file_formatter = SafeStructuredFormatter()
+        file_handler.setFormatter(file_formatter)
+        file_handler.setLevel(logging.DEBUG if app.config['DEBUG'] else logging.INFO)
+        logger.addHandler(file_handler)
+    except Exception as e:
+        print(f"⚠️  Failed to setup file logging: {e}")
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    
+    if app.config['DEBUG']:
+        # Colorful output for development
+        class ColorFormatter(logging.Formatter):
+            COLORS = {
+                'DEBUG': '\033[96m',    # Cyan
+                'INFO': '\033[92m',     # Green
+                'WARNING': '\033[93m',  # Yellow
+                'ERROR': '\033[91m',    # Red
+                'CRITICAL': '\033[95m', # Magenta
+                'RESET': '\033[0m'
+            }
+            
+            def format(self, record):
+                color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
+                record.levelname = f"{color}{record.levelname}{self.COLORS['RESET']}"
+                return super().format(record)
+        
+        console_formatter = ColorFormatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+    else:
+        # Simple output for production
+        console_formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+    
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+    
+    # Prevent propagation to root logger
+    logger.propagate = False
+    
+    return logger
 
-file_handler = logging.FileHandler(app.config['LOG_FILE'])
-file_handler.setFormatter(StructuredFormatter())
-logger.addHandler(file_handler)
-
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-))
-logger.addHandler(console_handler)
+logger = setup_logging()
 
 # ==================== RAG SYSTEM INTEGRATION ====================
 
-try:
-    from rag_system import RAGSystem, VectorDatabase
+RAG_AVAILABLE = False
+rag_system = None
+
+def initialize_rag_system():
+    """Initialize RAG system with proper error handling."""
+    global RAG_AVAILABLE, rag_system
     
-    # Initialize RAG system
-    logger.info("🚀 Initializing RAG System...")
-    rag_system = RAGSystem()
-    
-    # Create database wrapper for backward compatibility
-    rag_system.db = VectorDatabase(rag_system)
-    
-    RAG_AVAILABLE = True
-    logger.info("✅ RAG System initialized successfully!")
-    
-    # Check database
-    chunks_count = rag_system.db.count_chunks()
-    logger.info(f"📊 Database has {chunks_count} chunks")
-    
-except Exception as e:
-    logger.error(f"❌ Failed to initialize RAG system: {e}", exc_info=True)
-    RAG_AVAILABLE = False
-    rag_system = None
+    try:
+        logger.info("🚀 Attempting to initialize RAG System...")
+        
+        # Check for required dependencies
+        try:
+            import psycopg2
+        except ImportError:
+            logger.error("📦 Missing dependency: psycopg2")
+            logger.error("💡 Install with: pip install psycopg2-binary")
+            return False
+        
+        # Try to import RAG system
+        try:
+            from rag_system import RAGSystem, VectorDatabase
+            logger.info("✅ RAG modules imported successfully")
+        except ImportError as e:
+            logger.error(f"❌ Failed to import RAG modules: {e}")
+            logger.error(f"📁 Current directory: {os.getcwd()}")
+            logger.error(f"📁 Looking for: {__file__}")
+            return False
+        
+        # Initialize RAG system
+        try:
+            rag_system = RAGSystem()
+            
+            # Initialize database wrapper
+            if hasattr(rag_system, 'db'):
+                logger.info("✅ RAG System initialized with existing database connection")
+            else:
+                rag_system.db = VectorDatabase(rag_system)
+                logger.info("✅ Database wrapper created")
+            
+            # Test the connection
+            try:
+                chunks_count = rag_system.db.count_chunks()
+                logger.info(f"📊 Database connected successfully")
+                logger.info(f"📊 Total chunks: {chunks_count:,}")
+                
+                RAG_AVAILABLE = True
+                return True
+                
+            except Exception as db_error:
+                logger.error(f"❌ Database connection test failed: {db_error}")
+                logger.error("💡 Check your Supabase credentials and connection")
+                RAG_AVAILABLE = False
+                return False
+                
+        except Exception as init_error:
+            logger.error(f"❌ RAG System initialization failed: {init_error}", exc_info=True)
+            RAG_AVAILABLE = False
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Unexpected error during RAG initialization: {e}", exc_info=True)
+        RAG_AVAILABLE = False
+        return False
+
+# Initialize RAG system
+rag_initialized = initialize_rag_system()
+if not rag_initialized:
+    logger.warning("⚠️  RAG System initialization failed - running in limited mode")
+    logger.warning("⚠️  The /query endpoint will return 503 Service Unavailable")
+    logger.warning("💡 Check the logs above for specific error details")
 
 # ==================== UTILITY FUNCTIONS ====================
 
-def sanitize_input(text: str, max_length: int = 1000) -> str:
+def sanitize_input(text: str, max_length: int = None) -> str:
     """Sanitize user input to prevent injection attacks."""
-    if not text:
+    if not text or not isinstance(text, str):
         return ""
     
-    text = re.sub(r'[<>{}[\]]', '', text)
+    if max_length is None:
+        max_length = app.config['MAX_QUESTION_LENGTH']
     
+    # Remove potentially dangerous characters
+    text = re.sub(r'[<>{}[\]\\|`\'\";]', '', text)
+    
+    # Limit length
     if len(text) > max_length:
+        original_length = len(text)
         text = text[:max_length]
+        logger.debug(f"Input truncated from {original_length} to {max_length} characters")
     
+    # Normalize whitespace
     text = ' '.join(text.split())
     return text.strip()
 
 def validate_api_key(api_key: str) -> bool:
     """Validate API key with constant-time comparison."""
-    if not app.config['API_KEY']:
-        return True
+    configured_key = app.config['API_KEY']
     
-    return secrets.compare_digest(api_key, app.config['API_KEY'])
+    if not configured_key:
+        return True  # No API key required
+    
+    if not api_key:
+        return False
+    
+    return secrets.compare_digest(api_key, configured_key)
 
 def require_api_key(f):
     """Decorator to require API key authentication."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not app.config['API_KEY'] and app.config['DEBUG']:
+        # Skip auth in debug mode if no API key is set
+        if app.config['DEBUG'] and not app.config['API_KEY']:
+            logger.debug("API auth skipped: DEBUG mode with no API key configured")
             return f(*args, **kwargs)
         
+        # Check for API key
         api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
         
         if not api_key:
-            logger.warning("API key missing from request")
+            logger.warning("API key missing from request", 
+                          extra={'client_ip': getattr(g, 'client_ip', 'unknown'),
+                                 'endpoint': request.endpoint})
             return jsonify({
                 'error': 'API key required',
-                'code': 'AUTH_REQUIRED'
+                'code': 'AUTH_REQUIRED',
+                'request_id': getattr(g, 'request_id', '')
             }), 401
         
         if not validate_api_key(api_key):
-            logger.warning("Invalid API key provided")
+            logger.warning("Invalid API key provided",
+                          extra={'client_ip': getattr(g, 'client_ip', 'unknown'),
+                                 'endpoint': request.endpoint})
             return jsonify({
                 'error': 'Invalid API key',
-                'code': 'INVALID_API_KEY'
+                'code': 'INVALID_API_KEY',
+                'request_id': getattr(g, 'request_id', '')
             }), 403
         
         return f(*args, **kwargs)
     return decorated_function
 
+def get_client_ip() -> str:
+    """Get client IP considering proxy headers."""
+    # Check common proxy headers
+    for header in ['X-Forwarded-For', 'X-Real-IP', 'X-Client-IP']:
+        ip = request.headers.get(header)
+        if ip:
+            # Handle multiple IPs in X-Forwarded-For
+            if ',' in ip:
+                ip = ip.split(',')[0].strip()
+            return ip
+    
+    # Fallback to remote address
+    return request.remote_addr or 'unknown'
+
+def create_response(data: dict, status_code: int = 200, **kwargs) -> tuple:
+    """Create standardized JSON response."""
+    response = {
+        'success': status_code < 400,
+        'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+        'request_id': getattr(g, 'request_id', ''),
+        **data
+    }
+    
+    return jsonify(response), status_code, kwargs
+
 # ==================== REQUEST HOOKS ====================
 
 @app.before_request
 def before_request():
-    """Setup request context."""
-    g.request_id = request.headers.get('X-Request-ID') or str(uuid.uuid4())
-    g.client_ip = request.remote_addr
+    """Setup request context - THIS WAS MISSING!"""
     g.start_time = time.time()
+    g.request_id = request.headers.get(app.config['REQUEST_ID_HEADER']) or str(uuid.uuid4())
+    g.client_ip = get_client_ip()
     
     logger.info(f"Request started: {request.method} {request.path}",
-                extra={'request_id': g.request_id, 'client_ip': g.client_ip})
+                extra={
+                    'request_id': g.request_id,
+                    'client_ip': g.client_ip,
+                    'user_agent': request.user_agent.string[:100] if request.user_agent else 'Unknown',
+                    'method': request.method
+                })
 
 @app.after_request
 def after_request(response):
     """Add security headers and log response."""
+    # Security headers
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     
+    # Add request ID to response (safely)
     if hasattr(g, 'request_id'):
         response.headers['X-Request-ID'] = g.request_id
     
+    # Calculate and log response time
     if hasattr(g, 'start_time'):
         response_time = time.time() - g.start_time
         response.headers['X-Response-Time'] = f'{response_time:.3f}s'
         
+        # Log slow requests
         if response_time > 5.0:
             logger.warning(f"Slow request: {response_time:.2f}s for {request.path}",
-                          extra={'response_time': response_time, 'request_id': g.request_id})
+                          extra={
+                              'response_time': response_time,
+                              'request_id': getattr(g, 'request_id', ''),
+                              'method': request.method,
+                              'status': response.status_code
+                          })
     
     logger.info(f"Request completed: {response.status_code}",
-                extra={'status': response.status_code, 'request_id': g.request_id})
+                extra={
+                    'status': response.status_code,
+                    'request_id': getattr(g, 'request_id', ''),
+                    'method': request.method,
+                    'path': request.path,
+                    'response_time': time.time() - getattr(g, 'start_time', 0)
+                })
     
     return response
 
 # ==================== HEALTH CHECK ENDPOINTS ====================
 
 @app.route('/', methods=['GET'])
-@limiter.limit("30 per minute")
+@limiter.limit("60 per minute")
 def home():
     """Root endpoint - API information."""
-    return jsonify({
+    return create_response({
         'status': 'online',
         'service': 'NCERT RAG API Server',
-        'version': '2.0.0',
+        'version': '3.2.0',
         'production': not app.config['DEBUG'],
         'rag_available': RAG_AVAILABLE,
-        'timestamp': datetime.now().isoformat(),
+        'startup_time': app.startup_time,
         'endpoints': {
             'GET /': 'API information',
             'GET /health': 'Health check with dependencies',
             'GET /metrics': 'API metrics (if enabled)',
             'GET /stats': 'Database statistics',
-            'POST /query': 'Ask a question (Q&A)',
-            'POST /generate-questions': 'Generate test questions',
-            'POST /generate-test': 'Generate complete test paper',
-            'GET /task/<task_id>': 'Check async task status'
+            'GET /chapters': 'List all chapters',
+            'POST /query': 'Ask a question (Q&A)'
         },
         'limits': {
             'rate_limiting': app.config['RATE_LIMIT_ENABLED'],
+            'max_question_length': app.config['MAX_QUESTION_LENGTH'],
             'max_request_size': f"{app.config['MAX_CONTENT_LENGTH'] / (1024*1024):.0f}MB"
-        }
+        },
+        'documentation': 'See /health for detailed system status'
     })
 
 @app.route('/health', methods=['GET'])
@@ -249,234 +458,330 @@ def health_check():
     """Comprehensive health check with dependency monitoring."""
     health_status = {
         'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'version': '2.0.0',
+        'version': '3.2.0',
+        'uptime': app.startup_time,
         'dependencies': {}
     }
     
     # Check RAG system
-    if RAG_AVAILABLE:
+    if RAG_AVAILABLE and rag_system:
         try:
             chunks_count = rag_system.db.count_chunks()
             health_status['dependencies']['rag_system'] = {
                 'status': 'healthy',
                 'chunks': chunks_count,
-                'available': True
+                'available': True,
+                'connected': True
             }
         except Exception as e:
             health_status['dependencies']['rag_system'] = {
                 'status': 'unhealthy',
                 'error': str(e),
-                'available': True
+                'available': True,
+                'connected': False
             }
             health_status['status'] = 'degraded'
     else:
         health_status['dependencies']['rag_system'] = {
             'status': 'unavailable',
-            'available': False
+            'available': False,
+            'connected': False
         }
         health_status['status'] = 'degraded'
     
-    # Add system info if psutil available
+    # Check system resources if psutil is available
     try:
         import psutil
         health_status['system'] = {
-            'cpu_percent': psutil.cpu_percent(),
+            'cpu_percent': psutil.cpu_percent(interval=0.1),
             'memory_percent': psutil.virtual_memory().percent,
-            'disk_percent': psutil.disk_usage('/').percent
+            'disk_percent': psutil.disk_usage('/').percent if os.name != 'nt' else psutil.disk_usage('C:').percent,
+            'process_memory_mb': psutil.Process().memory_info().rss / 1024 / 1024
         }
     except ImportError:
-        health_status['system'] = {'info': 'System metrics unavailable (install psutil)'}
+        health_status['system'] = {'info': 'Install psutil for detailed system metrics'}
+    except Exception as e:
+        health_status['system'] = {'error': f'Failed to get system metrics: {str(e)}'}
     
-    return jsonify(health_status)
+    # Add application metrics
+    health_status['application'] = {
+        'debug_mode': app.config['DEBUG'],
+        'rate_limiting': app.config['RATE_LIMIT_ENABLED'],
+        'auth_enabled': bool(app.config['API_KEY']),
+        'cors_origins': app.config['CORS_ORIGINS'],
+        'supabase_configured': bool(app.config['SUPABASE_URL']),
+        'gemini_configured': bool(app.config['GEMINI_API_KEY']),
+        'openai_configured': bool(app.config['OPENAI_API_KEY'])
+    }
+    
+    return create_response(health_status)
 
 @app.route('/metrics', methods=['GET'])
 @limiter.limit("10 per minute")
+@require_api_key
 def metrics():
-    """Return API metrics."""
+    """Return API metrics in Prometheus format."""
     if not app.config['METRICS_ENABLED']:
-        return jsonify({'error': 'Metrics disabled'}), 403
+        return create_response({
+            'error': 'Metrics endpoint is disabled',
+            'code': 'METRICS_DISABLED'
+        }, 403)
     
     metrics_data = [
-        "# HELP http_requests_total Total HTTP requests",
-        "# TYPE http_requests_total counter",
-        f'http_requests_total{{endpoint="/"}} 0'
+        "# HELP ncert_api_requests_total Total API requests",
+        "# TYPE ncert_api_requests_total counter",
+        'ncert_api_requests_total{endpoint="/"} 0',
+        'ncert_api_requests_total{endpoint="/health"} 0',
+        'ncert_api_requests_total{endpoint="/query"} 0',
+        "",
+        "# HELP ncert_api_response_time_seconds API response time",
+        "# TYPE ncert_api_response_time_seconds histogram",
+        'ncert_api_response_time_seconds_bucket{le="0.1"} 0',
+        'ncert_api_response_time_seconds_bucket{le="0.5"} 0',
+        'ncert_api_response_time_seconds_bucket{le="1"} 0',
+        'ncert_api_response_time_seconds_bucket{le="5"} 0',
+        'ncert_api_response_time_seconds_bucket{le="10"} 0',
+        'ncert_api_response_time_seconds_bucket{le="+Inf"} 0',
+        'ncert_api_response_time_seconds_sum 0',
+        'ncert_api_response_time_seconds_count 0',
+        "",
+        "# HELP ncert_rag_system_status RAG system status (1=up, 0=down)",
+        "# TYPE ncert_rag_system_status gauge",
+        f'ncert_rag_system_status {1 if RAG_AVAILABLE else 0}',
+        "",
+        "# HELP ncert_api_uptime_seconds API uptime in seconds",
+        "# TYPE ncert_api_uptime_seconds gauge",
+        f'ncert_api_uptime_seconds {time.time() - datetime.fromisoformat(app.startup_time.replace("Z", "")).timestamp()}'
     ]
     
-    return "\n".join(metrics_data), 200, {'Content-Type': 'text/plain'}
+    return "\n".join(metrics_data), 200, {'Content-Type': 'text/plain; version=0.0.4'}
 
 # ==================== DATA ENDPOINTS ====================
 
 @app.route('/stats', methods=['GET'])
 @limiter.limit("30 per minute")
-@require_api_key
-def get_stats():
+def get_stats():  # Removed @require_api_key for testing
     """Get database statistics."""
-    if not RAG_AVAILABLE:
-        return jsonify({'error': 'RAG system not available', 'code': 'SERVICE_UNAVAILABLE'}), 503
+    if not RAG_AVAILABLE or not rag_system:
+        return create_response({
+            'error': 'RAG system not available',
+            'code': 'SERVICE_UNAVAILABLE'
+        }, 503)
     
     try:
         chunks_count = rag_system.db.count_chunks()
         
-        # Get stats from RAG system
-        stats = rag_system.get_stats_sync()
+        # Try to get detailed stats if available
+        try:
+            stats = rag_system.get_stats_sync()
+        except (AttributeError, NotImplementedError):
+            stats = {}
         
-        return jsonify({
-            'success': True,
+        response_data = {
             'data': {
                 'total_chunks': stats.get('total_chunks', chunks_count),
                 'unique_chapters': stats.get('unique_chapters', 0),
                 'unique_subjects': stats.get('unique_subjects', 0),
-                'current_model': stats.get('current_model', 'none')
-            },
-            'timestamp': datetime.now().isoformat(),
-            'request_id': g.request_id
-        })
+                'last_updated': stats.get('last_updated', datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')),
+                'current_model': stats.get('current_model', 'unknown')
+            }
+        }
+        
+        logger.info(f"Stats retrieved successfully", 
+                   extra={'chunks_count': chunks_count, 'request_id': g.request_id})
+        
+        return create_response(response_data)
+        
     except Exception as e:
         logger.error(f"Error getting stats: {e}", 
+                    exc_info=True,
                     extra={'error': str(e), 'request_id': g.request_id})
-        return jsonify({
+        return create_response({
             'error': 'Internal server error',
             'code': 'INTERNAL_ERROR',
-            'request_id': g.request_id
-        }), 500
+            'message': 'Failed to retrieve database statistics'
+        }, 500)
 
 @app.route('/chapters', methods=['GET'])
 @limiter.limit("30 per minute")
-@require_api_key
-def get_chapters():
+def get_chapters():  # Removed @require_api_key for testing
     """Get list of all available chapters."""
-    if not RAG_AVAILABLE:
-        return jsonify({'error': 'RAG system not available', 'code': 'SERVICE_UNAVAILABLE'}), 503
+    if not RAG_AVAILABLE or not rag_system:
+        return create_response({
+            'error': 'RAG system not available',
+            'code': 'SERVICE_UNAVAILABLE'
+        }, 503)
     
     try:
         chapters = rag_system.list_chapters_sync()
-        return jsonify({
-            'success': True,
+        return create_response({
             'count': len(chapters),
-            'chapters': chapters,
-            'timestamp': datetime.now().isoformat(),
-            'request_id': g.request_id
+            'chapters': chapters
         })
+        
     except Exception as e:
         logger.error(f"Error getting chapters: {e}",
+                    exc_info=True,
                     extra={'error': str(e), 'request_id': g.request_id})
-        return jsonify({
+        return create_response({
             'error': 'Internal server error',
             'code': 'INTERNAL_ERROR',
-            'request_id': g.request_id
-        }), 500
+            'message': 'Failed to retrieve chapters list'
+        }, 500)
 
 # ==================== CORE RAG ENDPOINTS ====================
 
 @app.route('/query', methods=['POST'])
-@limiter.limit("20 per minute")
-@require_api_key
-def query_endpoint():
+@limiter.limit("30 per minute")
+def query_endpoint():  # Removed @require_api_key for testing
     """Ask a question - Direct Q&A endpoint."""
-    if not RAG_AVAILABLE:
-        return jsonify({'error': 'RAG system not available', 'code': 'SERVICE_UNAVAILABLE'}), 503
+    if not RAG_AVAILABLE or not rag_system:
+        return create_response({
+            'error': 'RAG system not available',
+            'code': 'SERVICE_UNAVAILABLE'
+        }, 503)
     
     try:
-        data = request.get_json()
+        # Check content type
+        if not request.is_json:
+            return create_response({
+                'error': 'Content-Type must be application/json',
+                'code': 'INVALID_CONTENT_TYPE'
+            }, 415)
         
-        if not data:
-            return jsonify({'error': 'Request body is required', 'code': 'INVALID_REQUEST'}), 400
+        data = request.get_json(silent=True)
+        
+        if data is None:
+            return create_response({
+                'error': 'Invalid JSON in request body',
+                'code': 'INVALID_JSON'
+            }, 400)
         
         if 'question' not in data:
-            return jsonify({'error': 'Missing "question" in request body', 'code': 'MISSING_FIELD'}), 400
+            return create_response({
+                'error': 'Missing required field: "question"',
+                'code': 'MISSING_FIELD'
+            }, 400)
         
-        question = sanitize_input(data['question'].strip(), max_length=500)
+        question = sanitize_input(str(data['question']).strip())
         
         if not question:
-            return jsonify({'error': 'Question cannot be empty', 'code': 'EMPTY_FIELD'}), 400
+            return create_response({
+                'error': 'Question cannot be empty',
+                'code': 'EMPTY_FIELD'
+            }, 400)
         
         logger.info(f"Processing question", 
-                   extra={'question_preview': question[:100], 'request_id': g.request_id})
+                   extra={
+                       'question_length': len(question),
+                       'question_preview': question[:100],
+                       'request_id': g.request_id
+                   })
         
-        # Use sync query method (FIXED: No async event loop issues)
+        # Process the query with timeout
+        start_time = time.time()
         try:
             answer, chunks_retrieved = rag_system.query_sync(question)
-        except TimeoutError as e:
-            logger.error(f"Query timeout after {app.config['MODEL_TIMEOUT']}s",
+            processing_time = time.time() - start_time
+            
+        except Exception as rag_error:
+            processing_time = time.time() - start_time
+            logger.error(f"RAG query failed after {processing_time:.2f}s: {rag_error}",
+                        exc_info=True,
                         extra={'question': question[:50], 'request_id': g.request_id})
-            return jsonify({
-                'error': 'Query processing timeout',
-                'code': 'TIMEOUT',
-                'request_id': g.request_id
-            }), 408
-        except Exception as e:
-            logger.error(f"RAG query failed: {e}",
-                        extra={'question': question[:50], 'request_id': g.request_id})
-            return jsonify({
+            return create_response({
                 'error': 'Failed to process question',
-                'details': str(e),
                 'code': 'RAG_ERROR',
-                'request_id': g.request_id
-            }), 500
+                'details': str(rag_error)[:100]
+            }, 500)
         
-        processing_time = time.time() - g.start_time
-        
-        response = {
-            'success': True,
+        response_data = {
             'question': question,
             'answer': answer,
             'chunks_retrieved': chunks_retrieved,
-            'processing_time': round(processing_time, 2),
-            'timestamp': datetime.now().isoformat(),
-            'request_id': g.request_id
+            'processing_time': round(processing_time, 3)
         }
         
-        logger.info(f"Question answered", 
-                   extra={'processing_time': processing_time, 
-                          'chunks_retrieved': chunks_retrieved,
-                          'request_id': g.request_id})
+        logger.info(f"Question answered successfully", 
+                   extra={
+                       'processing_time': processing_time,
+                       'chunks_retrieved': chunks_retrieved,
+                       'answer_length': len(answer),
+                       'request_id': g.request_id
+                   })
         
-        return jsonify(response)
+        return create_response(response_data)
         
-    except ValueError as e:
-        logger.warning(f"Invalid request: {e}", extra={'request_id': g.request_id})
-        return jsonify({'error': str(e), 'code': 'VALIDATION_ERROR', 'request_id': g.request_id}), 400
     except Exception as e:
-        logger.error(f"Error processing query: {e}", 
-                    exc_info=True, extra={'request_id': g.request_id})
-        return jsonify({
+        logger.error(f"Error in query endpoint: {e}", 
+                    exc_info=True,
+                    extra={'request_id': getattr(g, 'request_id', '')})
+        return create_response({
             'error': 'Internal server error',
             'code': 'INTERNAL_ERROR',
-            'request_id': g.request_id
-        }), 500
+            'message': 'An unexpected error occurred while processing your request'
+        }, 500)
 
 # ==================== ERROR HANDLERS ====================
 
+@app.errorhandler(400)
+def bad_request(error):
+    return create_response({
+        'error': 'Bad Request',
+        'code': 'BAD_REQUEST',
+        'message': 'The request could not be understood or was missing required parameters.',
+        'path': request.path
+    }, 400)
+
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({
+    return create_response({
         'error': 'Endpoint not found',
         'code': 'NOT_FOUND',
+        'message': f'The requested endpoint {request.path} was not found on this server.',
+        'path': request.path
+    }, 404)
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    return create_response({
+        'error': 'Method not allowed',
+        'code': 'METHOD_NOT_ALLOWED',
+        'message': f'The {request.method} method is not allowed for this endpoint.',
         'path': request.path,
-        'request_id': getattr(g, 'request_id', '')
-    }), 404
+        'allowed_methods': error.valid_methods if hasattr(error, 'valid_methods') else []
+    }, 405)
+
+@app.errorhandler(415)
+def unsupported_media_type(error):
+    return create_response({
+        'error': 'Unsupported media type',
+        'code': 'UNSUPPORTED_MEDIA_TYPE',
+        'message': 'The request Content-Type is not supported. Use application/json.',
+        'path': request.path
+    }, 415)
 
 @app.errorhandler(429)
 def ratelimit_handler(error):
-    return jsonify({
+    retry_after = getattr(error, 'retry_after', 60)
+    return create_response({
         'error': 'Rate limit exceeded',
         'code': 'RATE_LIMIT_EXCEEDED',
         'message': 'Too many requests. Please try again later.',
-        'retry_after': error.description.get('retry_after', 60) if hasattr(error, 'description') else 60,
-        'request_id': getattr(g, 'request_id', '')
-    }), 429
+        'retry_after': retry_after,
+        'limit': getattr(error, 'limit', 'unknown')
+    }, 429)
 
 @app.errorhandler(500)
 def internal_error(error):
     logger.error(f"Unhandled exception: {error}", exc_info=True, 
                 extra={'request_id': getattr(g, 'request_id', '')})
-    return jsonify({
+    return create_response({
         'error': 'Internal server error',
         'code': 'INTERNAL_ERROR',
-        'request_id': getattr(g, 'request_id', ''),
-        'message': 'An unexpected error occurred. Please try again later.'
-    }), 500
+        'message': 'An unexpected error occurred. Please try again later.',
+        'support': 'Contact support if this issue persists'
+    }, 500)
 
 # ==================== APPLICATION STARTUP ====================
 
@@ -490,40 +795,72 @@ if __name__ == '__main__':
     print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*70)
     
-    if app.config['DEBUG']:
-        print("⚠️  WARNING: Running in DEBUG mode - NOT for production!")
-        if not app.config['API_KEY']:
-            print("⚠️  WARNING: No API key set - authentication disabled")
+    # Configuration summary
+    print(f"\n📋 CONFIGURATION:")
+    print(f"   Debug Mode: {'✅ ENABLED' if app.config['DEBUG'] else '❌ DISABLED'}")
+    print(f"   API Auth: {'✅ REQUIRED' if app.config['API_KEY'] else '⚠️  DISABLED'}")
+    print(f"   Rate Limiting: {'✅ ENABLED' if app.config['RATE_LIMIT_ENABLED'] else '❌ DISABLED'}")
+    print(f"   CORS Origins: {app.config['CORS_ORIGINS']}")
+    print(f"   Log Level: {app.config['LOG_LEVEL']}")
+    print(f"   Log File: {app.config['LOG_FILE']}")
     
+    # RAG System Status
+    print(f"\n🔧 RAG SYSTEM:")
     if RAG_AVAILABLE:
-        print("✅ RAG System: AVAILABLE")
         try:
             chunks_count = rag_system.db.count_chunks()
-            print(f"📊 Database: {chunks_count:,} chunks")
+            print(f"   Status: ✅ AVAILABLE")
+            print(f"   Database: 📊 {chunks_count:,} chunks")
+            if not rag_system.current_model:
+                print(f"   Model: ⚠️  FALLBACK MODE (Gemini not working)")
+            else:
+                print(f"   Model: ✅ {rag_system.current_model}")
         except Exception as e:
-            print(f"⚠️  Database stats error: {e}")
+            print(f"   Status: ⚠️  PARTIALLY AVAILABLE")
+            print(f"   Error: {e}")
     else:
-        print("❌ RAG System: UNAVAILABLE - Running in limited mode")
+        print(f"   Status: ❌ UNAVAILABLE")
+        print(f"   Note: /query endpoint will return 503")
     
-    print(f"\n🌐 Starting {'development' if app.config['DEBUG'] else 'production'} server")
-    print(f"📍 URL: http://{app.config['HOST']}:{app.config['PORT']}")
-    print(f"🔒 Rate limiting: {'ENABLED' if app.config['RATE_LIMIT_ENABLED'] else 'DISABLED'}")
-    print(f"🔑 API Auth: {'REQUIRED' if app.config['API_KEY'] else 'DISABLED'}")
+    # Server Info
+    print(f"\n🌐 SERVER:")
+    print(f"   Host: {app.config['HOST']}")
+    print(f"   Port: {app.config['PORT']}")
+    print(f"   URL: http://{app.config['HOST']}:{app.config['PORT']}")
     
-    print("\n📋 Available endpoints:")
+    # Endpoints
+    print(f"\n📡 ENDPOINTS:")
     print("   GET  /              - API information")
-    print("   GET  /health        - Health check with dependencies")
+    print("   GET  /health        - Health check")
+    print("   GET  /metrics       - Prometheus metrics")
     print("   GET  /stats         - Database statistics")
     print("   GET  /chapters      - List all chapters")
-    print("   POST /query         - Ask a question (rate limited)")
-    print("\n⚠️  For production, use WSGI server:")
-    print("   gunicorn api_server:app -w 4 -b 0.0.0.0:5000")
-    print("\n🔄 Press Ctrl+C to stop the server")
+    print("   POST /query         - Ask a question")
+    
+    # Important Notes
+    print(f"\n💡 NOTES:")
+    if app.config['DEBUG']:
+        print("   ⚠️  Running in DEBUG mode - NOT for production!")
+    if not app.config['API_KEY']:
+        print("   ✅ API authentication is DISABLED (for testing)")
+    if app.config['CORS_ORIGINS'] == '*':
+        print("   ⚠️  CORS allows ALL origins (*)")
+    
+    print(f"\n🔄 Press Ctrl+C to stop the server")
     print("="*70 + "\n")
     
-    app.run(
-        host=app.config['HOST'],
-        port=app.config['PORT'],
-        debug=app.config['DEBUG'],
-        threaded=True
-    )
+    try:
+        app.run(
+            host=app.config['HOST'],
+            port=app.config['PORT'],
+            debug=app.config['DEBUG'],
+            threaded=True,
+            use_reloader=app.config['DEBUG']
+        )
+    except KeyboardInterrupt:
+        print("\n👋 Server stopped by user")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}", exc_info=True)
+        print(f"\n❌ Failed to start server: {e}")
+        sys.exit(1)

@@ -203,3 +203,167 @@ asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the mid
 2025-12-27 17:05:52,910 - werkzeug - INFO -  * Detected change in 'C:\\Users\\login\\OneDrive\\Desktop\\product\\scripts\\ncert-ingestion\\api_server.py', reloading
 2025-12-27 17:05:54,074 - werkzeug - INFO -  * Restarting with stat
 2025-12-27 17:11:33,392 - werkzeug - INFO -  * Restarting with stat
+2025-12-29 22:20:55,454 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-29 22:20:55,461 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-29 22:20:56,278 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-29 22:20:56,362 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-29 22:20:56,366 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-29 22:20:56,374 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-29 22:25:54,362 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-29 22:25:54,365 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-29 22:25:54,938 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-29 22:25:55,014 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-29 22:25:55,016 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-29 22:25:55,017 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-29 22:25:56,613 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.4:5000
+2025-12-29 22:25:56,613 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-29 22:25:56,619 - werkzeug - INFO -  * Restarting with stat
+2025-12-29 22:26:01,221 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-29 22:26:01,222 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-29 22:26:01,621 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-29 22:26:01,702 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-29 22:26:01,703 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-29 22:26:01,704 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-29 22:26:01,857 - werkzeug - WARNING -  * Debugger is active!
+2025-12-29 22:26:01,877 - werkzeug - INFO -  * Debugger PIN: 414-424-594
+2025-12-29 22:26:41,201 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:26:41] "GET / HTTP/1.1" 200 -
+2025-12-29 22:26:41,328 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:26:41] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-12-29 22:26:59,409 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:26:59] "GET / HTTP/1.1" 200 -
+2025-12-29 22:27:11,415 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:27:11] "GET /health HTTP/1.1" 200 -
+2025-12-29 22:31:59,652 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:31:59] "GET / HTTP/1.1" 200 -
+2025-12-29 22:31:59,942 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:31:59] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-12-29 22:33:14,963 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:33:14] "GET / HTTP/1.1" 200 -
+2025-12-29 22:33:36,801 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:33:36] "GET /health HTTP/1.1" 200 -
+2025-12-29 22:34:06,924 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:34:06] "OPTIONS /query HTTP/1.1" 200 -
+2025-12-29 22:36:30,966 - werkzeug - INFO -  * Detected change in 'C:\\Users\\login\\OneDrive\\Desktop\\product\\scripts\\ncert-ingestion\\api_server.py', reloading
+2025-12-29 22:36:31,440 - werkzeug - INFO -  * Restarting with stat
+2025-12-29 22:36:41,768 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-29 22:36:41,770 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-29 22:36:42,268 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-29 22:36:42,345 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-29 22:36:42,347 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-29 22:36:42,347 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-29 22:36:42,539 - werkzeug - WARNING -  * Debugger is active!
+2025-12-29 22:36:42,573 - werkzeug - INFO -  * Debugger PIN: 414-424-594
+2025-12-29 22:36:54,020 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-29 22:36:54,025 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-29 22:36:54,484 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-29 22:36:54,573 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-29 22:36:54,616 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-29 22:36:54,627 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-29 22:36:56,686 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.4:5000
+2025-12-29 22:36:56,686 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-29 22:36:56,691 - werkzeug - INFO -  * Restarting with stat
+2025-12-29 22:37:02,484 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-29 22:37:02,487 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-29 22:37:02,911 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-29 22:37:02,984 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-29 22:37:02,987 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-29 22:37:02,988 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-29 22:37:03,135 - werkzeug - WARNING -  * Debugger is active!
+2025-12-29 22:37:03,147 - werkzeug - INFO -  * Debugger PIN: 414-424-594
+2025-12-29 22:37:29,549 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:29] "[35m[1mGET / HTTP/1.1[0m" 500 -
+2025-12-29 22:37:30,058 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+2025-12-29 22:37:30,072 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+2025-12-29 22:37:30,299 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "[35m[1mGET / HTTP/1.1[0m" 500 -
+2025-12-29 22:37:30,357 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+2025-12-29 22:37:30,389 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+2025-12-29 22:37:30,474 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "GET /?__debugger__=yes&cmd=resource&f=console.png&s=SXrPWZJOywLmd5H15Ngr HTTP/1.1" 200 -
+2025-12-29 22:37:30,720 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "GET /?__debugger__=yes&cmd=resource&f=console.png&s=SXrPWZJOywLmd5H15Ngr HTTP/1.1" 200 -
+2025-12-29 22:37:30,766 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+2025-12-29 22:37:30,858 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:30] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+2025-12-29 22:37:31,460 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:31] "[35m[1mGET /health HTTP/1.1[0m" 500 -
+2025-12-29 22:37:31,530 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:31] "GET /health?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+2025-12-29 22:37:31,560 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:31] "GET /health?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+2025-12-29 22:37:31,757 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:31] "GET /health?__debugger__=yes&cmd=resource&f=console.png&s=SXrPWZJOywLmd5H15Ngr HTTP/1.1" 200 -
+2025-12-29 22:37:31,826 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:37:31] "GET /health?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+2025-12-29 22:38:47,256 - werkzeug - INFO -  * Detected change in 'C:\\Users\\login\\OneDrive\\Desktop\\product\\scripts\\ncert-ingestion\\api_server.py', reloading
+2025-12-29 22:38:47,688 - werkzeug - INFO -  * Restarting with stat
+2025-12-29 22:40:58,333 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-29 22:40:58,336 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-29 22:40:58,872 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-29 22:40:58,952 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-29 22:40:58,954 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-29 22:40:58,955 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-29 22:41:00,544 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.4:5000
+2025-12-29 22:41:00,545 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-29 22:41:00,559 - werkzeug - INFO -  * Restarting with stat
+2025-12-29 22:41:12,916 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-29 22:41:12,919 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-29 22:41:13,543 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-29 22:41:13,617 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-29 22:41:13,620 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-29 22:41:13,621 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-29 22:41:14,026 - werkzeug - WARNING -  * Debugger is active!
+2025-12-29 22:41:14,068 - werkzeug - INFO -  * Debugger PIN: 414-424-594
+2025-12-29 22:41:14,253 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:41:14] "GET / HTTP/1.1" 200 -
+2025-12-29 22:41:14,263 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:41:14] "GET / HTTP/1.1" 200 -
+2025-12-29 22:41:14,969 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:41:14] "GET /health HTTP/1.1" 200 -
+2025-12-29 22:43:31,260 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:43:31] "GET / HTTP/1.1" 200 -
+2025-12-29 22:43:42,718 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:43:42] "GET /health HTTP/1.1" 200 -
+2025-12-29 22:43:53,994 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:43:53] "OPTIONS /query HTTP/1.1" 200 -
+2025-12-29 22:43:53,996 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:43:53] "OPTIONS /query HTTP/1.1" 200 -
+2025-12-29 22:43:53,999 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:43:53] "OPTIONS /query HTTP/1.1" 200 -
+2025-12-29 22:43:54,257 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:43:54] "[35m[1mPOST /query HTTP/1.1[0m" 500 -
+2025-12-29 22:43:54,445 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:43:54] "[35m[1mPOST /query HTTP/1.1[0m" 500 -
+2025-12-29 22:43:54,459 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:43:54] "[35m[1mPOST /query HTTP/1.1[0m" 500 -
+2025-12-29 22:44:07,115 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:44:07] "GET / HTTP/1.1" 200 -
+2025-12-29 22:44:07,818 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:44:07] "GET /health HTTP/1.1" 200 -
+2025-12-29 22:44:08,222 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:44:08] "[35m[1mGET /stats HTTP/1.1[0m" 500 -
+2025-12-29 22:44:08,620 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:44:08] "GET /chapters HTTP/1.1" 200 -
+2025-12-29 22:44:18,788 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:44:18] "GET /health HTTP/1.1" 200 -
+2025-12-29 22:44:32,538 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:44:32] "GET / HTTP/1.1" 200 -
+2025-12-29 22:44:45,243 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:44:45] "[35m[1mPOST /query HTTP/1.1[0m" 500 -
+2025-12-29 22:44:45,644 - werkzeug - INFO - 127.0.0.1 - - [29/Dec/2025 22:44:45] "GET /health HTTP/1.1" 200 -
+2025-12-30 12:48:07,644 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-30 12:48:07,647 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-30 12:48:08,165 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-30 12:48:08,235 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-30 12:48:08,236 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-30 12:48:08,237 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-30 12:48:10,026 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.5:5000
+2025-12-30 12:48:10,027 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-12-30 12:48:10,032 - werkzeug - INFO -  * Restarting with stat
+2025-12-30 12:48:14,476 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-30 12:48:14,479 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-30 12:48:15,014 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-30 12:48:15,100 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-30 12:48:15,102 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-30 12:48:15,102 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-30 12:48:15,313 - werkzeug - WARNING -  * Debugger is active!
+2025-12-30 12:48:15,345 - werkzeug - INFO -  * Debugger PIN: 414-424-594
+2025-12-30 12:49:21,076 - werkzeug - INFO - 127.0.0.1 - - [30/Dec/2025 12:49:21] "OPTIONS /query HTTP/1.1" 200 -
+2025-12-30 12:49:21,398 - rag_system - INFO - Query processed in 0.12s, chunks: 13
+2025-12-30 12:49:21,414 - werkzeug - INFO - 127.0.0.1 - - [30/Dec/2025 12:49:21] "POST /query HTTP/1.1" 200 -
+2025-12-30 12:50:42,312 - rag_system - INFO - Query processed in 0.72s, chunks: 19
+2025-12-30 12:50:42,333 - werkzeug - INFO - 127.0.0.1 - - [30/Dec/2025 12:50:42] "POST /query HTTP/1.1" 200 -
+2025-12-30 12:50:42,491 - rag_system - INFO - Query processed in 0.90s, chunks: 30
+2025-12-30 12:50:42,493 - rag_system - INFO - Query processed in 0.75s, chunks: 20
+2025-12-30 12:50:42,494 - rag_system - INFO - Query processed in 0.72s, chunks: 26
+2025-12-30 12:50:42,535 - rag_system - INFO - Query processed in 0.88s, chunks: 38
+2025-12-30 12:50:42,692 - werkzeug - INFO - 127.0.0.1 - - [30/Dec/2025 12:50:42] "POST /query HTTP/1.1" 200 -
+2025-12-30 12:50:42,705 - werkzeug - INFO - 127.0.0.1 - - [30/Dec/2025 12:50:42] "POST /query HTTP/1.1" 200 -
+2025-12-30 12:50:42,733 - werkzeug - INFO - 127.0.0.1 - - [30/Dec/2025 12:50:42] "POST /query HTTP/1.1" 200 -
+2025-12-30 12:50:42,792 - werkzeug - INFO - 127.0.0.1 - - [30/Dec/2025 12:50:42] "POST /query HTTP/1.1" 200 -
+2025-12-30 13:50:13,445 - werkzeug - INFO -  * Detected change in 'C:\\Users\\login\\OneDrive\\Desktop\\product\\scripts\\ncert-ingestion\\rag_system.py', reloading
+2025-12-30 13:50:18,991 - werkzeug - INFO -  * Restarting with stat
+2025-12-30 13:50:27,811 - rag_system - INFO - 🚀 Initializing NCERT RAG System...
+2025-12-30 13:50:27,813 - rag_system - INFO - ✓ Loaded environment variables
+2025-12-30 13:50:28,487 - rag_system - INFO - ✓ Connected to: PostgreSQL 15.8 on aarch64-unknown-linux-gnu
+2025-12-30 13:50:28,586 - rag_system - INFO - ✓ Database has 1925 chunks
+2025-12-30 13:50:28,587 - rag_system - WARNING - ⚠ No Gemini model worked, using fallback mode
+2025-12-30 13:50:28,588 - rag_system - INFO - ✅ RAG System initialized successfully!
+2025-12-30 13:50:28,786 - werkzeug - WARNING -  * Debugger is active!
+2025-12-30 13:50:28,815 - werkzeug - INFO -  * Debugger PIN: 414-424-594

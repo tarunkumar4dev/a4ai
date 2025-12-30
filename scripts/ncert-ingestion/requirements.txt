@@ -1,17 +1,36 @@
+# ====================
+# NCERt RAG API Server
+# Production Dependencies
+# ====================
+
 # Flask Framework
 Flask==3.0.0
 Flask-CORS==4.0.0
 Flask-Limiter==3.8.0
+Werkzeug==3.0.1
 
-# Database (if needed)
-asyncpg>=0.31.0
+# Database (Supabase/PostgreSQL)
+psycopg2-binary==2.9.9  # PostgreSQL adapter - REQUIRED
+supabase==1.1.1  # Supabase client - REQUIRED
+asyncpg>=0.31.0  # Optional async PostgreSQL driver
 
-# Google Gemini AI
-google-generativeai==0.3.2
+# AI Models
+google-generativeai==0.3.2  # Google Gemini AI - REQUIRED
+openai==1.3.8  # OpenAI API - OPTIONAL (only if using OpenAI)
 
-# Environment Variables
-python-dotenv==1.0.0
+# Environment & Configuration
+python-dotenv==1.0.0  # Environment variables
+
+# System Monitoring
+psutil==5.9.7  # System metrics for health checks
 
 # Utilities
-psutil==5.9.7  # For health check
-Werkzeug==3.0.1
+requests==2.31.0  # HTTP client
+PyYAML==6.0  # YAML parsing (if needed)
+Jinja2==3.1.2  # Templating (included with Flask)
+click==8.1.3  # CLI (included with Flask)
+
+# Development (optional)
+black==23.12.1  # Code formatting
+pytest==7.4.4  # Testing
+pytest-flask==1.2.0  # Flask testing

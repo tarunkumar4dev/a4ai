@@ -1,4 +1,3 @@
-// src/App.tsx
 import { useEffect, Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import "./styles/globals.css";
@@ -31,36 +30,43 @@ import { toast } from "sonner";
 
 /* ---------- Vercel Analytics ---------- */
 import { Analytics } from "@vercel/analytics/react";
-import { injectSpeedInsights } from "@vercel/speed-insights";
-injectSpeedInsights();
+import { SpeedInsights } from "@vercel/speed-insights/react";
+
+/* ---------- Lazy Loading Configuration ---------- */
+const LAZY_LOADING_DELAY = 1000; // 1 second delay for better UX
 
 /* ---------- Lazy Marketing Pages ---------- */
-const LandingPage = lazy(() => import("./pages/LandingPage"));
+const LandingPage = lazy(() => 
+  Promise.all([
+    import("./pages/LandingPage"),
+    new Promise(resolve => setTimeout(resolve, LAZY_LOADING_DELAY))
+  ]).then(([module]) => module)
+);
+
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
 const PricingPage = lazy(() => import("./pages/product/PricingPage"));
 const ApiPage = lazy(() => import("./pages/product/ApiPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 
-const ChemistryPracticePage = lazy(() => import("./practice/chemistry"));       //12th dec (chemistry class 10)
+const ChemistryPracticePage = lazy(() => import("./practice/chemistry"));
 
 /* ---------- Lazy Auth & App Pages ---------- */
-const RoleSelectionPage = lazy(() => import("./pages/RoleSelectionPage")); // Added from new code
+const RoleSelectionPage = lazy(() => import("./pages/RoleSelectionPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignupPage = lazy(() => import("./pages/SignupPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
-const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage")); // Added from new code
-const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage")); // Added from new code
+const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage"));
+const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage"));
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
-const PracticeSessionPage = lazy(() => import("./practice/index"));
 
 /* ---------- Students / Notes / Settings ---------- */
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
 const NotesPage = lazy(() => import("./pages/Notes"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
-/* ---------- FLASHCARDS - ADDED ---------- */
+/* ---------- FLASHCARDS ---------- */
 const FlashcardDashboard = lazy(() => import("./pages/flashcards/FlashcardDashboard"));
 const FlashcardChapter = lazy(() => import("./pages/flashcards/FlashcardChapter"));
 const FlashcardSubject = lazy(() => import("./pages/flashcards/FlashcardSubject"));
@@ -72,6 +78,10 @@ const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
 const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
+
+/* ---------- Mega Contest Pages ---------- */
+const MegaContestLivePage = lazy(() => import("./pages/MegaContestLivePage"));
+const AdminAddQuestions = lazy(() => import("./pages/AdminAddQuestions"));
 
 /* ---------- Coins ---------- */
 const CoinShop = lazy(() => import("./pages/CoinShop"));
@@ -95,46 +105,75 @@ const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
 const CallbackPage = lazy(() => import("./pages/auth/callback"));
 const PaymentPage = lazy(() => import("./pages/payment/paymentPage"));
 
-/* ---------- NEW Daily Practice Module ---------- */
+/* ---------- Daily Practice Module ---------- */
 const PracticeSelectionPage = lazy(() => import("./practice/index"));
 const PracticeSession = lazy(() => import("./practice/session"));
 
 /* ---------- Scroll Helper ---------- */
 function ScrollToTop() {
   const { pathname } = useLocation();
+  
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Smooth scroll to top
+    window.scrollTo({ 
+      top: 0, 
+      behavior: pathname === "/" ? "auto" : "smooth" 
+    });
   }, [pathname]);
+  
   return null;
 }
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 /* ---------- Loaders ---------- */
-// Updated LoadingScreen from new code
 const LoadingScreen = () => (
-  <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-    <div className="text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-      <h2 className="text-lg font-semibold text-gray-900">Loading...</h2>
-      <p className="text-gray-500 mt-1">Please wait a moment</p>
+  <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
+    <div className="relative">
+      <div className="w-16 h-16 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+      <div className="absolute inset-0 w-16 h-16 border-3 border-purple-500/30 border-b-transparent rounded-full animate-spin-reverse"></div>
+    </div>
+    <h2 className="text-lg font-semibold text-slate-900 mt-4">Loading...</h2>
+    <p className="text-slate-500 text-sm mt-1">Please wait a moment</p>
+    <div className="mt-6 w-48 h-1 bg-slate-200 rounded-full overflow-hidden">
+      <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 animate-loading-bar"></div>
     </div>
   </div>
 );
 
 const NotFound = () => (
-  <div className="min-h-[60vh] flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-2xl font-semibold">Page not found</h1>
-      <p className="mt-2 text-gray-600 dark:text-gray-400">
-        The page you're looking for doesn't exist.
+  <div className="min-h-[70vh] flex flex-col items-center justify-center px-4">
+    <div className="text-center max-w-md">
+      <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl flex items-center justify-center">
+        <div className="text-4xl">🔍</div>
+      </div>
+      <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-3">Page Not Found</h1>
+      <p className="text-slate-600 mb-8">
+        The page you're looking for doesn't exist or has been moved.
       </p>
-      <a
-        href="/"
-        className="mt-4 inline-block rounded-lg bg-indigo-600 text-white px-4 py-2"
-      >
-        Go home
-      </a>
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <a
+          href="/"
+          className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg transition-shadow"
+        >
+          Go Home
+        </a>
+        <button
+          onClick={() => window.history.back()}
+          className="px-6 py-3 bg-white border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors"
+        >
+          Go Back
+        </button>
+      </div>
     </div>
   </div>
 );
@@ -147,16 +186,13 @@ function AuthGateForAuthPages({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/* ---------- Role-based Auth Gate (Added from new code) ---------- */
 function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowedRoles: string[] }) {
   const { loading, session, userProfile } = useAuth();
   
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
   
-  // Check if user has a profile and if their role is allowed
   if (!userProfile || !allowedRoles.includes(userProfile.role)) {
-    // Redirect to appropriate dashboard based on actual role
     const actualRole = userProfile?.role || 'student';
     toast.error(`Access denied. You are registered as a ${actualRole}.`);
     return <Navigate to="/dashboard" replace />;
@@ -170,12 +206,13 @@ function IdleLogoutManager() {
   const { session } = useAuth();
   return session ? <IdleLogoutEnabled /> : null;
 }
+
 function IdleLogoutEnabled() {
   useIdleLogout({
-    timeoutMs: 15 * 60 * 1000,
-    warnBeforeMs: 60 * 1000,
-    onWarn: () => toast("You've been inactive. Auto sign-out in 1 minute."),
-    onLogout: () => toast("Signed out due to inactivity."),
+    timeoutMs: 20 * 60 * 1000, // 20 minutes
+    warnBeforeMs: 60 * 1000, // 1 minute warning
+    onWarn: () => toast.warning("You've been inactive. Auto sign-out in 1 minute."),
+    onLogout: () => toast.info("Signed out due to inactivity."),
   });
   return null;
 }
@@ -183,32 +220,47 @@ function IdleLogoutEnabled() {
 /* ========================================================= */
 
 const App = () => {
-  // Prefetch heavy chunks on idle
+  // Enhanced prefetch strategy
   useEffect(() => {
-    const prefetch = () => {
-      import("./pages/FeaturesPage");
-      import("./pages/product/PricingPage");
-      import("./pages/company/CareersPage");
-      import("./pages/Resources/Documentation");
-      import("./pages/StudentsPage");
-      import("./pages/Notes");
-      import("./pages/SettingsPage");
-      import("./pages/CoinShop");
-      import("./pages/ContestPreview");
-      import("./practice/index");
-      import("./practice/session");
-      // ADDED: Prefetch flashcard pages
-      import("./pages/flashcards/FlashcardDashboard");
-      import("./pages/flashcards/FlashcardChapter");
-      import("./pages/flashcards/FlashcardSubject");
-      // Added from new code
-      import("./pages/RoleSelectionPage");
-      import("./pages/StudentDashboardPage");
-      import("./pages/TeacherDashboardPage");
+    const prefetchResources = () => {
+      // Critical pages for instant navigation
+      const criticalPages = [
+        import("./pages/FeaturesPage"),
+        import("./pages/product/PricingPage"),
+        import("./pages/DashboardPage"),
+        import("./pages/ContestLandingPage"),
+        import("./practice/index"),
+        import("./pages/MegaContestLivePage"),
+      ];
+
+      // Secondary pages (prefetch on idle)
+      const secondaryPages = () => {
+        import("./pages/company/CareersPage");
+        import("./pages/Resources/Documentation");
+        import("./pages/StudentsPage");
+        import("./pages/Notes");
+        import("./pages/SettingsPage");
+        import("./pages/CoinShop");
+        import("./pages/flashcards/FlashcardDashboard");
+        import("./pages/RoleSelectionPage");
+        import("./pages/StudentDashboardPage");
+        import("./pages/TeacherDashboardPage");
+        import("./pages/AdminAddQuestions");
+      };
+
+      // Load critical pages immediately
+      Promise.all(criticalPages);
+
+      // Load secondary pages on idle
+      if ('requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(() => secondaryPages());
+      } else {
+        setTimeout(secondaryPages, 2000);
+      }
     };
-    (window as any).requestIdleCallback
-      ? (window as any).requestIdleCallback(prefetch)
-      : setTimeout(prefetch, 1200);
+
+    // Start prefetching after initial render
+    setTimeout(prefetchResources, 100);
   }, []);
 
   return (
@@ -218,8 +270,25 @@ const App = () => {
         <ThemeProvider>
           <CoinProvider>
             <TooltipProvider>
-              <Toaster />
-              <Sonner />
+              <Toaster 
+                position="top-right"
+                toastOptions={{
+                  duration: 4000,
+                  style: {
+                    background: 'white',
+                    color: '#1f2937',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+                  },
+                }}
+              />
+              <Sonner 
+                position="top-right"
+                expand={false}
+                richColors
+                closeButton
+              />
               <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors">
                 <BrowserRouter>
                   <ScrollToTop />
@@ -228,7 +297,7 @@ const App = () => {
                       {/* -------- Auth callback -------- */}
                       <Route path="/auth/callback/*" element={<CallbackPage />} />
 
-                      {/* -------- Role Selection (Public) - Added from new code -------- */}
+                      {/* -------- Role Selection -------- */}
                       <Route path="/role-selection" element={<RoleSelectionPage />} />
 
                       {/* -------- Public marketing -------- */}
@@ -248,7 +317,7 @@ const App = () => {
                       <Route path="/terms" element={<TermsPage />} />
                       <Route path="/cookies" element={<CookiePolicyPage />} />
 
-
+                      {/* -------- Chemistry Practice -------- */}
                       <Route
                         path="/practice/chemistry"
                         element={
@@ -265,10 +334,8 @@ const App = () => {
                       <Route path="/blog" element={<BlogPage />} />
                       <Route path="/case-studies" element={<CaseStudiesPage />} />
 
-
-                      {/* --------Institute----------- */}
+                      {/* -------- Institute -------- */}
                       <Route path="/*" element={<ChankyaInstitutePublic />} />
-
 
                       {/* -------- Standalone -------- */}
                       <Route path="/demo" element={<LandingDemo />} />
@@ -302,7 +369,7 @@ const App = () => {
                         }
                       />
 
-                      {/* -------- Role-specific Dashboard Pages (Added from new code) -------- */}
+                      {/* -------- Role-specific Dashboard Pages -------- */}
                       <Route
                         path="/dashboard/student"
                         element={
@@ -337,7 +404,7 @@ const App = () => {
                         }
                       />
 
-                      {/* 🔥 FLASHCARD ROUTES - ADDED */}
+                      {/* -------- FLASHCARD ROUTES -------- */}
                       <Route
                         path="/dashboard/flashcards"
                         element={
@@ -363,7 +430,7 @@ const App = () => {
                         }
                       />
 
-                      {/* 🔥 Added missing pages */}
+                      {/* -------- Students / Notes / Settings -------- */}
                       <Route
                         path="/students"
                         element={
@@ -390,18 +457,17 @@ const App = () => {
                       />
 
                       {/* -------- Practice Routes -------- */}
-                      {/* 🔥 FIXED: Changed PracticeSessionPage to PracticeSession */}
                       <Route
                         path="/practice/session"
                         element={
                           <PrivateRoute>
-                            <PracticeSession />  {/* ✅ ये practice/session.tsx को render करेगा */}
+                            <PracticeSession />
                           </PrivateRoute>
                         }
                       />
                       <Route path="/practice" element={<PracticePage />} />
 
-                      {/* -------- NEW Daily Practice Module -------- */}
+                      {/* -------- Daily Practice Module -------- */}
                       <Route
                         path="/daily-practice"
                         element={
@@ -474,6 +540,24 @@ const App = () => {
                         }
                       />
 
+                      {/* -------- Mega Contest Routes -------- */}
+                      <Route
+                        path="/mega-contest/:contestId"
+                        element={
+                          <PrivateRoute>
+                            <MegaContestLivePage />
+                          </PrivateRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/contest/:contestId/questions"
+                        element={
+                          <PrivateRoute>
+                            <AdminAddQuestions />
+                          </PrivateRoute>
+                        }
+                      />
+
                       {/* -------- Coin Shop -------- */}
                       <Route
                         path="/coinshop"
@@ -490,11 +574,10 @@ const App = () => {
                       <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
                       <Route path="/dashboard/contests" element={<Navigate to="/contests" replace />} />
                       <Route path="/dashboard/coinshop" element={<Navigate to="/coinshop" replace />} />
-                      {/* ADDED: Flashcard redirect */}
                       <Route path="/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
                       <Route path="/study/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
 
-                      {/* -------- Role-specific redirects (Added from new code) -------- */}
+                      {/* -------- Role-specific redirects -------- */}
                       <Route path="/host-contest" element={<Navigate to="/contests/create" replace />} />
                       <Route path="/join-contest" element={<Navigate to="/contests/join" replace />} />
 
@@ -503,6 +586,7 @@ const App = () => {
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <Analytics />
+                    <SpeedInsights />
                   </Suspense>
                 </BrowserRouter>
               </div>
@@ -513,5 +597,44 @@ const App = () => {
     </QueryClientProvider>
   );
 };
+
+// Add CSS animations
+const styleSheet = document.createElement("style");
+styleSheet.textContent = `
+  @keyframes spin-reverse {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(-360deg); }
+  }
+  
+  @keyframes loading-bar {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  
+  .animate-spin-reverse {
+    animation: spin-reverse 1s linear infinite;
+  }
+  
+  .animate-loading-bar {
+    animation: loading-bar 1.5s ease-in-out infinite;
+  }
+  
+  /* Smooth transitions */
+  * {
+    scroll-behavior: smooth;
+  }
+  
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+`;
+document.head.appendChild(styleSheet);
 
 export default App;
