@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from '@/providers/AuthProvider'; // ✅ AuthProvider import करें
 import {
   Clock,
   ChevronLeft,
@@ -57,6 +58,7 @@ interface SubmissionStats {
 const MegaContestLivePage: React.FC = () => {
   const { contestId } = useParams<{ contestId: string }>();
   const navigate = useNavigate();
+  const { session } = useAuth(); // ✅ Auth context से session लें
   
   const [contest, setContest] = useState<Contest | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -64,7 +66,6 @@ const MegaContestLivePage: React.FC = () => {
   const [answers, setAnswers] = useState<Record<string, UserAnswer>>({});
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState(10800);
-  const [userId, setUserId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -79,6 +80,9 @@ const MegaContestLivePage: React.FC = () => {
   const [showTabSwitchWarning, setShowTabSwitchWarning] = useState(false);
   const [isTestBlocked, setIsTestBlocked] = useState(false);
   const [contestStarted, setContestStarted] = useState(false);
+
+  // Get user ID from session
+  const userId = useMemo(() => session?.user?.id || null, [session]);
 
   // Memoized calculations
   const answeredCount = useMemo(() => Object.keys(answers).length, [answers]);
@@ -142,24 +146,25 @@ const MegaContestLivePage: React.FC = () => {
   useEffect(() => {
     const initializeContest = async () => {
       try {
-        // Get user session
-        const { data: { user } } = await supabase.auth.getUser();
-        setUserId(user?.id || null);
+        // Check if user is logged in
+        if (!userId) {
+          alert('Please login to attempt the contest');
+          navigate('/login');
+          return;
+        }
 
         // ✅ CHECK IF USER ALREADY ATTEMPTED THIS CONTEST
-        if (user?.id) {
-          const { data: existingParticipation } = await supabase
-            .from('mega_contest_participants')
-            .select('finished_at')
-            .eq('contest_id', contestId)
-            .eq('user_id', user.id)
-            .single();
+        const { data: existingParticipation } = await supabase
+          .from('mega_contest_participants')
+          .select('finished_at')
+          .eq('contest_id', contestId)
+          .eq('user_id', userId)
+          .single();
 
-          // If user already completed
-          if (existingParticipation && existingParticipation.finished_at) {
-            navigate('/contests/already-attempted');
-            return;
-          }
+        // If user already completed
+        if (existingParticipation && existingParticipation.finished_at) {
+          navigate('/contests/already-attempted');
+          return;
         }
 
         // Fetch contest data
@@ -188,28 +193,36 @@ const MegaContestLivePage: React.FC = () => {
           setQuestions(questionsResponse.data);
         }
 
-        // Load saved answers - WITHOUT is_correct check
-        if (user?.id) {
-          const { data: savedAnswers } = await supabase
-            .from('mega_contest_submissions')
-            .select('question_id, selected_answer, updated_at')
-            .eq('user_id', user.id)
-            .eq('contest_id', contestId);
+        // Load saved answers
+        const { data: savedAnswers } = await supabase
+          .from('mega_contest_submissions')
+          .select('question_id, selected_answer, updated_at')
+          .eq('user_id', userId)
+          .eq('contest_id', contestId);
 
-          if (savedAnswers) {
-            const answersMap: Record<string, UserAnswer> = {};
-            savedAnswers.forEach(answer => {
-              answersMap[answer.question_id] = {
-                selectedIndex: answer.selected_answer,
-                timestamp: answer.updated_at
-              };
-            });
-            setAnswers(answersMap);
-          }
+        if (savedAnswers) {
+          const answersMap: Record<string, UserAnswer> = {};
+          savedAnswers.forEach(answer => {
+            answersMap[answer.question_id] = {
+              selectedIndex: answer.selected_answer,
+              timestamp: answer.updated_at
+            };
+          });
+          setAnswers(answersMap);
         }
 
         // Mark contest as started
         setContestStarted(true);
+        
+        // ✅ INSERT USER PARTICIPATION RECORD IF NOT EXISTS
+        await supabase
+          .from('mega_contest_participants')
+          .upsert({
+            contest_id: contestId,
+            user_id: userId,
+            started_at: new Date().toISOString(),
+            status: 'in_progress'
+          }, { onConflict: 'contest_id,user_id' });
         
       } catch (error) {
         console.error('Error initializing contest:', error);
@@ -218,8 +231,10 @@ const MegaContestLivePage: React.FC = () => {
       }
     };
 
-    initializeContest();
-  }, [contestId, navigate]);
+    if (contestId && userId) {
+      initializeContest();
+    }
+  }, [contestId, userId, navigate]);
 
   // Timer countdown
   useEffect(() => {
@@ -320,14 +335,35 @@ const MegaContestLivePage: React.FC = () => {
     
     if (userId && contestId) {
       try {
+        // ✅ Calculate score before submitting
+        const { data: questionsData } = await supabase
+          .from('mega_contest_questions')
+          .select('id, correct_answer')
+          .eq('contest_id', contestId);
+
+        let score = 0;
+        if (questionsData) {
+          questionsData.forEach(question => {
+            const userAnswer = answers[question.id];
+            if (userAnswer && userAnswer.selectedIndex === question.correct_answer) {
+              score += 4; // Assuming 4 marks per question
+            }
+          });
+        }
+
+        // ✅ Update participant record with score
         await supabase
           .from('mega_contest_participants')
           .upsert({
             contest_id: contestId,
             user_id: userId,
             finished_at: new Date().toISOString(),
-            status: 'completed'
+            status: 'completed',
+            score: score,
+            time_taken: contest?.duration_minutes ? (contest.duration_minutes * 60 - timeLeft) : 0
           }, { onConflict: 'contest_id,user_id' });
+        
+        console.log('✅ Test submitted with score:', score);
       } catch (error) {
         console.error('Error submitting contest:', error);
       }
@@ -335,7 +371,7 @@ const MegaContestLivePage: React.FC = () => {
     
     alert('Test submitted successfully! Results will be available soon.');
     navigate('/contests');
-  }, [userId, contestId, navigate]);
+  }, [userId, contestId, answers, contest, timeLeft, navigate]);
 
   const handleQuestionSelect = useCallback((index: number) => {
     setCurrentIndex(index);
