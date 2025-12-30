@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from '@/providers/AuthProvider'; // ✅ AuthProvider import करें
+import { useAuth } from '@/providers/AuthProvider';
 import {
   Clock,
   ChevronLeft,
@@ -58,7 +58,7 @@ interface SubmissionStats {
 const MegaContestLivePage: React.FC = () => {
   const { contestId } = useParams<{ contestId: string }>();
   const navigate = useNavigate();
-  const { session } = useAuth(); // ✅ Auth context से session लें
+  const { session } = useAuth();
   
   const [contest, setContest] = useState<Contest | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -153,11 +153,11 @@ const MegaContestLivePage: React.FC = () => {
           return;
         }
 
-        // ✅ CHECK IF USER ALREADY ATTEMPTED THIS CONTEST
+        // ✅ CHECK IF USER ALREADY ATTEMPTED THIS CONTEST - FIXED
         const { data: existingParticipation } = await supabase
           .from('mega_contest_participants')
           .select('finished_at')
-          .eq('contest_id', contestId)
+          .eq('contest_code', contestId)
           .eq('user_id', userId)
           .single();
 
@@ -193,19 +193,19 @@ const MegaContestLivePage: React.FC = () => {
           setQuestions(questionsResponse.data);
         }
 
-        // Load saved answers
+        // ✅ Load saved answers - FIXED column names
         const { data: savedAnswers } = await supabase
           .from('mega_contest_submissions')
-          .select('question_id, selected_answer, updated_at')
+          .select('question_id, selected_answer, submitted_at')
           .eq('user_id', userId)
-          .eq('contest_id', contestId);
+          .eq('contest_code', contestId);
 
         if (savedAnswers) {
           const answersMap: Record<string, UserAnswer> = {};
           savedAnswers.forEach(answer => {
             answersMap[answer.question_id] = {
               selectedIndex: answer.selected_answer,
-              timestamp: answer.updated_at
+              timestamp: answer.submitted_at
             };
           });
           setAnswers(answersMap);
@@ -214,15 +214,15 @@ const MegaContestLivePage: React.FC = () => {
         // Mark contest as started
         setContestStarted(true);
         
-        // ✅ INSERT USER PARTICIPATION RECORD IF NOT EXISTS
+        // ✅ INSERT USER PARTICIPATION RECORD IF NOT EXISTS - FIXED
         await supabase
           .from('mega_contest_participants')
           .upsert({
-            contest_id: contestId,
+            contest_code: contestId,
             user_id: userId,
             started_at: new Date().toISOString(),
             status: 'in_progress'
-          }, { onConflict: 'contest_id,user_id' });
+          }, { onConflict: 'contest_code,user_id' });
         
       } catch (error) {
         console.error('Error initializing contest:', error);
@@ -250,7 +250,7 @@ const MegaContestLivePage: React.FC = () => {
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  // Auto-save answers periodically
+  // ✅ Auto-save answers periodically - FIXED
   useEffect(() => {
     if (Object.keys(answers).length === 0 || !userId || !contestId) return;
 
@@ -260,12 +260,12 @@ const MegaContestLivePage: React.FC = () => {
           supabase
             .from('mega_contest_submissions')
             .upsert({
-              contest_id: contestId,
+              contest_code: contestId, // ✅ FIXED: contest_id → contest_code
               user_id: userId,
               question_id: questionId,
               selected_answer: answer.selectedIndex,
-              updated_at: new Date().toISOString()
-            }, { onConflict: 'contest_id,user_id,question_id' })
+              submitted_at: new Date().toISOString() // ✅ FIXED: updated_at → submitted_at
+            }, { onConflict: 'contest_code,user_id,question_id' })
         );
 
         await Promise.all(savePromises);
@@ -279,6 +279,7 @@ const MegaContestLivePage: React.FC = () => {
     return () => clearInterval(saveInterval);
   }, [answers, userId, contestId]);
 
+  // ✅ Handle answer selection - FIXED
   const handleAnswer = useCallback(async (questionId: string, selectedIndex: number) => {
     const updatedAnswer: UserAnswer = {
       selectedIndex,
@@ -296,12 +297,12 @@ const MegaContestLivePage: React.FC = () => {
         await supabase
           .from('mega_contest_submissions')
           .upsert({
-            contest_id: contestId,
+            contest_code: contestId, // ✅ FIXED: contest_id → contest_code
             user_id: userId,
             question_id: questionId,
             selected_answer: selectedIndex,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'contest_id,user_id,question_id' });
+            submitted_at: new Date().toISOString() // ✅ FIXED: updated_at → submitted_at
+          }, { onConflict: 'contest_code,user_id,question_id' });
         setLastSaved(new Date());
       } catch (error) {
         console.error('Error saving answer:', error);
@@ -309,23 +310,25 @@ const MegaContestLivePage: React.FC = () => {
     }
   }, [userId, contestId]);
 
+  // ✅ Auto submit when time ends - FIXED
   const handleAutoSubmit = useCallback(async () => {
     setIsSubmitting(true);
     if (userId && contestId) {
       await supabase
         .from('mega_contest_participants')
         .upsert({
-          contest_id: contestId,
+          contest_code: contestId, // ✅ FIXED: contest_id → contest_code
           user_id: userId,
           finished_at: new Date().toISOString(),
           status: 'completed'
-        }, { onConflict: 'contest_id,user_id' });
+        }, { onConflict: 'contest_code,user_id' });
     }
     
     alert('Time is up! Your test has been submitted automatically.');
     navigate('/contests/results/' + contestId);
   }, [userId, contestId, navigate]);
 
+  // ✅ Manual submit - FIXED
   const handleManualSubmit = useCallback(async () => {
     if (!window.confirm('Are you sure you want to submit? You cannot change answers after submission.')) {
       return;
@@ -351,17 +354,17 @@ const MegaContestLivePage: React.FC = () => {
           });
         }
 
-        // ✅ Update participant record with score
+        // ✅ Update participant record with score - FIXED
         await supabase
           .from('mega_contest_participants')
           .upsert({
-            contest_id: contestId,
+            contest_code: contestId, // ✅ FIXED: contest_id → contest_code
             user_id: userId,
             finished_at: new Date().toISOString(),
             status: 'completed',
             score: score,
             time_taken: contest?.duration_minutes ? (contest.duration_minutes * 60 - timeLeft) : 0
-          }, { onConflict: 'contest_id,user_id' });
+          }, { onConflict: 'contest_code,user_id' });
         
         console.log('✅ Test submitted with score:', score);
       } catch (error) {
