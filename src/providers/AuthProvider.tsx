@@ -4,7 +4,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 
-// Extended user profile type
+//extended the user profile type
 export interface UserProfile {
   id: string;
   email: string;
