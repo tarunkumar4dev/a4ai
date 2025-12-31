@@ -80,7 +80,37 @@ const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
 
 /* ---------- Mega Contest Pages ---------- */
-const MegaContestLivePage = lazy(() => import("./pages/MegaContestLivePage"));
+// IMPORTANT: Added error boundary to prevent crash if file doesn't exist
+const MegaContestLivePage = lazy(() => 
+  import("./pages/MegaContestLivePage")
+    .then(module => ({ default: module.default }))
+    .catch(error => {
+      console.error("Failed to load MegaContestLivePage:", error);
+      // Return a fallback component
+      return {
+        default: () => (
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="text-center p-8 bg-white rounded-xl shadow-lg max-w-md">
+              <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-2xl">⚠️</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Component Loading Error</h2>
+              <p className="text-gray-600 mb-6">
+                The contest page could not be loaded. This might be a temporary issue.
+              </p>
+              <button
+                onClick={() => window.location.href = "/contests"}
+                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Contests
+              </button>
+            </div>
+          </div>
+        )
+      };
+    })
+);
+
 const AdminAddQuestions = lazy(() => import("./pages/AdminAddQuestions"));
 
 /* ---------- Coins ---------- */
@@ -149,6 +179,41 @@ const LoadingScreen = () => (
     </div>
   </div>
 );
+
+/* ---------- Error Boundary Component ---------- */
+const ErrorBoundaryFallback = ({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
+      <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+        <span className="text-xl">❌</span>
+      </div>
+      <h2 className="text-2xl font-bold text-center text-gray-900 mb-3">Something went wrong</h2>
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <p className="text-red-700 font-medium mb-1">Error Details:</p>
+        <p className="text-red-600 text-sm font-mono break-all">{error.message}</p>
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={resetErrorBoundary}
+          className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Try Again
+        </button>
+        <button
+          onClick={() => window.location.href = "/"}
+          className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition-colors"
+        >
+          Go Home
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+/* ---------- Component Wrapper with Error Boundary ---------- */
+function SafeComponent({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
 
 const NotFound = () => (
   <div className="min-h-[70vh] flex flex-col items-center justify-center px-4">
@@ -230,7 +295,6 @@ const App = () => {
         import("./pages/DashboardPage"),
         import("./pages/ContestLandingPage"),
         import("./practice/index"),
-        import("./pages/MegaContestLivePage"),
       ];
 
       // Secondary pages (prefetch on idle)
@@ -246,6 +310,7 @@ const App = () => {
         import("./pages/StudentDashboardPage");
         import("./pages/TeacherDashboardPage");
         import("./pages/AdminAddQuestions");
+        // Note: Removed MegaContestLivePage from automatic prefetch
       };
 
       // Load critical pages immediately
@@ -322,7 +387,9 @@ const App = () => {
                         path="/practice/chemistry"
                         element={
                           <PrivateRoute>
-                            <ChemistryPracticePage />
+                            <SafeComponent>
+                              <ChemistryPracticePage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -364,7 +431,9 @@ const App = () => {
                         path="/dashboard"
                         element={
                           <PrivateRoute>
-                            <DashboardPage />
+                            <SafeComponent>
+                              <DashboardPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -374,7 +443,9 @@ const App = () => {
                         path="/dashboard/student"
                         element={
                           <RoleAuthGate allowedRoles={["student"]}>
-                            <StudentDashboardPage />
+                            <SafeComponent>
+                              <StudentDashboardPage />
+                            </SafeComponent>
                           </RoleAuthGate>
                         }
                       />
@@ -382,7 +453,9 @@ const App = () => {
                         path="/dashboard/teacher"
                         element={
                           <RoleAuthGate allowedRoles={["teacher"]}>
-                            <TeacherDashboardPage />
+                            <SafeComponent>
+                              <TeacherDashboardPage />
+                            </SafeComponent>
                           </RoleAuthGate>
                         }
                       />
@@ -391,7 +464,9 @@ const App = () => {
                         path="/dashboard/test-generator"
                         element={
                           <PrivateRoute>
-                            <TestGeneratorPage />
+                            <SafeComponent>
+                              <TestGeneratorPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -399,7 +474,9 @@ const App = () => {
                         path="/dashboard/analytics"
                         element={
                           <PrivateRoute>
-                            <AnalyticsPage />
+                            <SafeComponent>
+                              <AnalyticsPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -409,7 +486,9 @@ const App = () => {
                         path="/dashboard/flashcards"
                         element={
                           <PrivateRoute>
-                            <FlashcardDashboard />
+                            <SafeComponent>
+                              <FlashcardDashboard />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -417,7 +496,9 @@ const App = () => {
                         path="/dashboard/flashcards/:subject/:chapter"
                         element={
                           <PrivateRoute>
-                            <FlashcardChapter />
+                            <SafeComponent>
+                              <FlashcardChapter />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -425,7 +506,9 @@ const App = () => {
                         path="/dashboard/flashcards/class/:class/subject/:subject"
                         element={
                           <PrivateRoute>
-                            <FlashcardSubject />
+                            <SafeComponent>
+                              <FlashcardSubject />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -435,7 +518,9 @@ const App = () => {
                         path="/students"
                         element={
                           <PrivateRoute>
-                            <StudentsPage />
+                            <SafeComponent>
+                              <StudentsPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -443,7 +528,9 @@ const App = () => {
                         path="/notes"
                         element={
                           <PrivateRoute>
-                            <NotesPage />
+                            <SafeComponent>
+                              <NotesPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -451,7 +538,9 @@ const App = () => {
                         path="/settings"
                         element={
                           <PrivateRoute>
-                            <SettingsPage />
+                            <SafeComponent>
+                              <SettingsPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -461,7 +550,9 @@ const App = () => {
                         path="/practice/session"
                         element={
                           <PrivateRoute>
-                            <PracticeSession />
+                            <SafeComponent>
+                              <PracticeSession />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -472,7 +563,9 @@ const App = () => {
                         path="/daily-practice"
                         element={
                           <PrivateRoute>
-                            <PracticeSelectionPage />
+                            <SafeComponent>
+                              <PracticeSelectionPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -480,7 +573,9 @@ const App = () => {
                         path="/daily-practice/session"
                         element={
                           <PrivateRoute>
-                            <PracticeSession />
+                            <SafeComponent>
+                              <PracticeSession />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -495,7 +590,9 @@ const App = () => {
                         path="/contests"
                         element={
                           <PrivateRoute>
-                            <ContestLandingPage />
+                            <SafeComponent>
+                              <ContestLandingPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -503,7 +600,9 @@ const App = () => {
                         path="/contests/create"
                         element={
                           <PrivateRoute>
-                            <CreateContestPage />
+                            <SafeComponent>
+                              <CreateContestPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -511,7 +610,9 @@ const App = () => {
                         path="/contests/join"
                         element={
                           <PrivateRoute>
-                            <JoinContestPage />
+                            <SafeComponent>
+                              <JoinContestPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -519,7 +620,9 @@ const App = () => {
                         path="/contests/live/:contestId"
                         element={
                           <PrivateRoute>
-                            <ContestLivePage />
+                            <SafeComponent>
+                              <ContestLivePage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -527,7 +630,9 @@ const App = () => {
                         path="/contests/leaderboard"
                         element={
                           <PrivateRoute>
-                            <LeaderboardPage />
+                            <SafeComponent>
+                              <LeaderboardPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -535,7 +640,9 @@ const App = () => {
                         path="/contests/preview/:contestId"
                         element={
                           <PrivateRoute>
-                            <ContestPreviewPage />
+                            <SafeComponent>
+                              <ContestPreviewPage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -545,7 +652,9 @@ const App = () => {
                         path="/mega-contest/:contestId"
                         element={
                           <PrivateRoute>
-                            <MegaContestLivePage />
+                            <SafeComponent>
+                              <MegaContestLivePage />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -553,7 +662,9 @@ const App = () => {
                         path="/admin/contest/:contestId/questions"
                         element={
                           <PrivateRoute>
-                            <AdminAddQuestions />
+                            <SafeComponent>
+                              <AdminAddQuestions />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />
@@ -563,7 +674,9 @@ const App = () => {
                         path="/coinshop"
                         element={
                           <PrivateRoute>
-                            <CoinShop />
+                            <SafeComponent>
+                              <CoinShop />
+                            </SafeComponent>
                           </PrivateRoute>
                         }
                       />

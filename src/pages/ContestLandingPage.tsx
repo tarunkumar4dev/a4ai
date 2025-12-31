@@ -34,13 +34,15 @@ import {
   Menu,
   TrendingUp,
   BarChart3,
-  Target
+  Target,
+  Loader2
 } from "lucide-react";
 
 // contexts
 import { useCoins } from "@/context/CoinContext";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
+import { toast } from "sonner";
 
 /* ---------------------------
    Types
@@ -62,6 +64,21 @@ interface Problem {
   difficulty: "Easy" | "Medium" | "Hard";
   acceptance: string;
 }
+
+interface MegaContest {
+  id: string;
+  contest_code: string;
+  title: string;
+  class: string;
+  description: string;
+  subjects: string[];
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  total_questions?: number;
+  total_marks?: number;
+}
+
 /* -------------------------------------------
    Premium Bento FlashCard (Optimized)
 -------------------------------------------- */
@@ -75,6 +92,7 @@ function PremiumFlashCard({
    icon,
    isTrending = false,
    isPopular = false,
+   isLoading = false,
  }: {
    onClick: () => void;
    title: string;
@@ -85,6 +103,7 @@ function PremiumFlashCard({
    icon: React.ReactNode;
    isTrending?: boolean;
    isPopular?: boolean;
+   isLoading?: boolean;
  }) {
    return (
      <motion.div
@@ -95,63 +114,74 @@ function PremiumFlashCard({
        className="relative h-full w-full"
      >
        <div
-         onClick={onClick}
+         onClick={isLoading ? undefined : onClick}
          className={clsx(
-           "group relative overflow-hidden rounded-[16px] sm:rounded-[20px] md:rounded-[24px] h-[160px] sm:h-[180px] md:h-[200px] cursor-pointer transition-all duration-300",
-           "shadow-[0_4px_12px_-8px_rgba(0,0,0,0.15)] hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.3)]",
-           gradient
+           "group relative overflow-hidden rounded-[16px] sm:rounded-[20px] md:rounded-[24px] h-[160px] sm:h-[180px] md:h-[200px] transition-all duration-300",
+           isLoading 
+             ? "bg-gradient-to-br from-gray-200 to-gray-300 cursor-not-allowed"
+             : "cursor-pointer",
+           !isLoading && "shadow-[0_4px_12px_-8px_rgba(0,0,0,0.15)] hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.3)]",
+           !isLoading && gradient
          )}
        >
-         {/* Gradient Overlay */}
-         <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300">
-           <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent" />
-         </div>
-         
-         {/* Noise Texture */}
-         <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay" />
-         
-         {/* Top Right Live Badge */}
-         <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20">
-           <Badge className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 text-xs font-bold animate-pulse shadow-lg">
-             LIVE
-           </Badge>
-         </div>
- 
-         {/* Top Left Icon */}
-         <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20">
-           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
-             {icon}
+         {isLoading ? (
+           <div className="h-full flex items-center justify-center">
+             <Loader2 className="h-8 w-8 text-gray-400 animate-spin" />
            </div>
-         </div>
- 
-         {/* Content */}
-         <div className="relative z-10 h-full flex flex-col justify-between p-4 sm:p-5 md:p-6">
-           <div className="space-y-2 sm:space-y-3">
-             {/* Title - Top Aligned */}
-             <div className="pr-10 sm:pr-12 mt-8"> 
-               <h3 className="text-base sm:text-lg md:text-xl font-bold text-white leading-tight tracking-tight drop-shadow-lg line-clamp-2">
-                 {title}
-               </h3>
-               {/* Subtitle removed as requested */}
+         ) : (
+           <>
+             {/* Gradient Overlay */}
+             <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300">
+               <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent" />
              </div>
-           </div>
- 
-           {/* Join Now Button - Centered */}
-           <div className="flex justify-center">
-             <motion.div 
-               className="w-full max-w-[180px]"
-               whileHover={{ scale: 1.02 }}
-               whileTap={{ scale: 0.98 }}
-             >
-               <button className="w-full flex items-center justify-center px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-white/95 hover:bg-white text-slate-900 text-xs sm:text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-[0.98] group/btn">
-                 <span>{cta}</span>
-                 <div className="w-5 h-5 rounded-full bg-slate-100 group-hover/btn:bg-slate-200 transition-colors flex items-center justify-center ml-2">
-                   <ChevronRight size={12} className="text-slate-600" />
+             
+             {/* Noise Texture */}
+             <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay" />
+             
+             {/* Top Right Live Badge */}
+             <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20">
+               <Badge className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 text-xs font-bold animate-pulse shadow-lg">
+                 LIVE
+               </Badge>
+             </div>
+     
+             {/* Top Left Icon */}
+             <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20">
+               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
+                 {icon}
+               </div>
+             </div>
+     
+             {/* Content */}
+             <div className="relative z-10 h-full flex flex-col justify-between p-4 sm:p-5 md:p-6">
+               <div className="space-y-2 sm:space-y-3">
+                 {/* Title - Top Aligned */}
+                 <div className="pr-10 sm:pr-12 mt-8"> 
+                   <h3 className="text-base sm:text-lg md:text-xl font-bold text-white leading-tight tracking-tight drop-shadow-lg line-clamp-2">
+                     {title}
+                   </h3>
+                   {/* Subtitle removed as requested */}
                  </div>
-               </button>
-             </motion.div>
-           </div>
-         </div>
+               </div>
+     
+               {/* Join Now Button - Centered */}
+               <div className="flex justify-center">
+                 <motion.div 
+                   className="w-full max-w-[180px]"
+                   whileHover={{ scale: 1.02 }}
+                   whileTap={{ scale: 0.98 }}
+                 >
+                   <button className="w-full flex items-center justify-center px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-white/95 hover:bg-white text-slate-900 text-xs sm:text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-[0.98] group/btn">
+                     <span>{cta}</span>
+                     <div className="w-5 h-5 rounded-full bg-slate-100 group-hover/btn:bg-slate-200 transition-colors flex items-center justify-center ml-2">
+                       <ChevronRight size={12} className="text-slate-600" />
+                     </div>
+                   </button>
+                 </motion.div>
+               </div>
+             </div>
+           </>
+         )}
        </div>
      </motion.div>
    );
@@ -168,7 +198,7 @@ const ContestLandingPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [difficultyFilter, setDifficultyFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
-  const [megaContests, setMegaContests] = useState<any[]>([]);
+  const [megaContests, setMegaContests] = useState<MegaContest[]>([]);
   const [loading, setLoading] = useState(true);
   const [userStats, setUserStats] = useState({
     streak: 7,
@@ -184,14 +214,14 @@ const ContestLandingPage: React.FC = () => {
         const { data, error } = await supabase
           .from('mega_contests')
           .select('*')
-          .eq('is_active', true)
           .order('start_time', { ascending: true })
-          .limit(4);
+          .limit(8);
 
         if (error) throw error;
         setMegaContests(data || []);
       } catch (error) {
         console.error('Error fetching mega contests:', error);
+        toast.error('Failed to load contests');
       } finally {
         setLoading(false);
       }
@@ -205,75 +235,100 @@ const ContestLandingPage: React.FC = () => {
 
   // Mega Contest hero cards - Dynamic from database
   const heroCards = useMemo(() => {
-    if (megaContests.length > 0) {
-      const gradients = [
-        "bg-gradient-to-br from-purple-500 to-pink-500",
-        "bg-gradient-to-br from-blue-500 to-cyan-500",
-        "bg-gradient-to-br from-green-500 to-emerald-600",
-        "bg-gradient-to-br from-orange-500 to-red-500"
-      ];
-      
-      return megaContests.map((contest, index) => ({
-        id: contest.id,
-        key: `contest-${contest.id}`,
-        title: contest.title,
-        subtitle: "", // Empty as requested
-        cta: "Join Now",
+    const gradients = [
+      "bg-gradient-to-br from-purple-500 to-pink-500",
+      "bg-gradient-to-br from-blue-500 to-cyan-500",
+      "bg-gradient-to-br from-green-500 to-emerald-600",
+      "bg-gradient-to-br from-orange-500 to-red-500",
+      "bg-gradient-to-br from-indigo-500 to-purple-600",
+      "bg-gradient-to-br from-teal-500 to-green-500",
+      "bg-gradient-to-br from-red-500 to-orange-500",
+      "bg-gradient-to-br from-yellow-500 to-amber-500"
+    ];
+    
+    if (loading) {
+      return Array(4).fill(0).map((_, index) => ({
+        id: `loading-${index}`,
+        key: `loading-${index}`,
+        title: "Loading...",
+        subtitle: "",
+        cta: "Loading...",
         gradient: gradients[index % gradients.length],
-        badge: contest.class === '11' || contest.class === '12' ? 'PCMB' : 'Mega',
+        badge: "Mega",
         icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" />,
-        isTrending: index === 0,
-        isPopular: index === 1,
-        contestData: contest
+        isLoading: true
       }));
+    }
+    
+    if (megaContests.length > 0) {
+      return megaContests.slice(0, 4).map((contest, index) => {
+        const now = new Date();
+        const startTime = new Date(contest.start_time);
+        const endTime = new Date(contest.end_time);
+        const isLive = now >= startTime && now <= endTime;
+        
+        return {
+          id: contest.id,
+          key: `contest-${contest.id}-${index}`,
+          title: contest.title,
+          subtitle: "",
+          cta: isLive ? "Join Now" : "View Details",
+          gradient: gradients[index % gradients.length],
+          badge: contest.class === '11' || contest.class === '12' ? 'PCMB' : 'Mega',
+          icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" />,
+          isTrending: index === 0,
+          isPopular: index === 1,
+          contestData: contest
+        };
+      });
     }
     
     // Fallback if no contests in DB
     return [
       { 
         id: 1, 
-        key: "class9", 
+        key: "class9-1", 
         title: "Class 9 Mega Test", 
-        subtitle: "", // Empty
-        cta: "Join Now", 
-        gradient: "bg-gradient-to-br from-purple-500 to-pink-500",
+        subtitle: "",
+        cta: "Coming Soon", 
+        gradient: gradients[0],
         badge: "Mega", 
         icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" />, 
         isTrending: true 
       },
       { 
         id: 2, 
-        key: "class10", 
+        key: "class10-2", 
         title: "Class 10 Mega Test", 
-        subtitle: "", // Empty
-        cta: "Join Now", 
-        gradient: "bg-gradient-to-br from-blue-500 to-cyan-500", 
+        subtitle: "",
+        cta: "Coming Soon", 
+        gradient: gradients[1], 
         badge: "Mega", 
         icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" />, 
         isPopular: true 
       },
       { 
         id: 3, 
-        key: "class11", 
+        key: "class11-3", 
         title: "Class 11 Mega Test", 
-        subtitle: "", // Empty
-        cta: "Join Now", 
-        gradient: "bg-gradient-to-br from-green-500 to-emerald-600", 
+        subtitle: "",
+        cta: "Coming Soon", 
+        gradient: gradients[2], 
         badge: "PCMB", 
         icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" /> 
       },
       { 
         id: 4, 
-        key: "class12", 
+        key: "class12-4", 
         title: "Class 12 Mega Test", 
-        subtitle: "", // Empty
-        cta: "Join Now", 
-        gradient: "bg-gradient-to-br from-orange-500 to-red-500", 
+        subtitle: "",
+        cta: "Coming Soon", 
+        gradient: gradients[3], 
         badge: "PCMB", 
         icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" /> 
       },
     ];
-  }, [megaContests]);
+  }, [megaContests, loading]);
 
   const topics = useMemo(() => [
     { name: "All", count: 42, icon: <LayoutGrid size={12} className="sm:size-[14px]" />, color: "bg-slate-200" },
@@ -315,31 +370,13 @@ const ContestLandingPage: React.FC = () => {
   }, [navigate]);
 
   // Handle Mega Contest card clicks
-  const handleCardClick = useCallback((cardKey: string, contestData?: any) => {
-    console.log('🎯 Mega Contest clicked:', cardKey);
-    
-    if (contestData?.id) {
-      // If we have actual contest data from DB
-      navigate(`/mega-contest/${contestData.id}`);
-      return;
-    }
-    
-    // Fallback for demo contests
-    switch(cardKey) {
-      case "class9":
-        navigate("/mega-contest/class-9-mega");
-        break;
-      case "class10":
-        navigate("/mega-contest/class-10-mega");
-        break;
-      case "class11":
-        navigate("/mega-contest/class-11-pcmb");
-        break;
-      case "class12":
-        navigate("/mega-contest/class-12-pcmb");
-        break;
-      default:
-        navigate("/contests");
+  const handleCardClick = useCallback((cardKey: string, contestData?: MegaContest) => {
+    if (contestData?.contest_code) {
+      // Navigate to mega contest using contest_code
+      navigate(`/mega-contest/${contestData.contest_code}`);
+    } else {
+      // Fallback for demo contests
+      toast.info('Contest details loading...');
     }
   }, [navigate]);
 
@@ -351,7 +388,7 @@ const ContestLandingPage: React.FC = () => {
     return "T";
   };
 
-  if (loading) {
+  if (loading && megaContests.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
         <div className="text-center">
@@ -390,6 +427,10 @@ const ContestLandingPage: React.FC = () => {
                   src="/images/LOGO.png" 
                   alt="a4ai Logo" 
                   className="h-7 sm:h-9 w-auto object-contain" 
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
                 />
                 <div className="hidden sm:block">
                   <h1 className="text-lg font-bold tracking-tight text-slate-900">a4ai <span className="text-indigo-600">Contest Zone</span></h1>
@@ -534,9 +575,9 @@ const ContestLandingPage: React.FC = () => {
           
           {/* Responsive Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-            {heroCards.map((card, index) => (
+            {heroCards.map((card) => (
               <PremiumFlashCard 
-                key={card.id} 
+                key={card.key} 
                 {...card} 
                 onClick={() => handleCardClick(card.key, card.contestData)} 
               />
@@ -562,7 +603,7 @@ const ContestLandingPage: React.FC = () => {
                   const active = activeTopic === key;
                   return (
                     <motion.button
-                      key={topic.name}
+                      key={`${topic.name}-${index}`}
                       onClick={() => setActiveTopic(key)}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -624,7 +665,7 @@ const ContestLandingPage: React.FC = () => {
                 <TabsContent value="problems" className="p-0 m-0">
                   <div className="divide-y divide-slate-100">
                     {problems.map((p, i) => (
-                      <ProblemRow key={p.id} data={p} onClick={() => {}} index={i} />
+                      <ProblemRow key={`problem-${p.id}-${i}`} data={p} onClick={() => {}} index={i} />
                     ))}
                   </div>
                 </TabsContent>
@@ -820,7 +861,16 @@ function CoinsCard({ coins }: { coins: number }) {
 function ScheduleWidget() {
   const [currentDate] = useState(new Date());
   
-  const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const days = [
+    { id: 0, label: 'S', full: 'Sunday' },
+    { id: 1, label: 'M', full: 'Monday' },
+    { id: 2, label: 'T', full: 'Tuesday' },
+    { id: 3, label: 'W', full: 'Wednesday' },
+    { id: 4, label: 'T', full: 'Thursday' },
+    { id: 5, label: 'F', full: 'Friday' },
+    { id: 6, label: 'S', full: 'Saturday' }
+  ];
+  
   const today = currentDate.getDate();
   const currentDay = currentDate.getDay();
   
@@ -837,14 +887,14 @@ function ScheduleWidget() {
           </div>
         </div>
         
-        {/* Date Strip */}
+        {/* Date Strip - FIXED: Added unique keys */}
         <div className="flex justify-between mb-6">
           {days.map((day, index) => {
             const date = today - currentDay + index;
             const isToday = index === currentDay;
             return (
-              <div key={day} className="flex flex-col items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">{day}</span>
+              <div key={`${day.full}-${day.id}`} className="flex flex-col items-center gap-2">
+                <span className="text-xs font-medium text-slate-500">{day.label}</span>
                 <div className={clsx(
                   "w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all",
                   isToday 

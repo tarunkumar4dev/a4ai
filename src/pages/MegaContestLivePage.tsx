@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,34 +19,42 @@ import {
   BookOpen,
   Save,
   AlertTriangle,
-  Eye
+  Eye,
+  CheckCircle,
+  Loader2
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Interface definitions
 interface Question {
   id: string;
-  question_number: number;
+  question_order: number;
   question_text: string;
-  options: string[];
+  options: { [key: string]: string };
+  correct_answer: string;
   marks: number;
   subject: string;
   difficulty?: 'easy' | 'medium' | 'hard';
+  negative_marks: number;
+  contest_id: string;
 }
 
 interface Contest {
   id: string;
+  contest_code: string;
   title: string;
   class: string;
   subjects: string[];
+  start_time: string;
   end_time: string;
-  duration_minutes: number;
-  total_marks: number;
-  total_questions: number;
+  duration_minutes?: number;
+  total_questions?: number;
+  total_marks?: number;
 }
 
 interface UserAnswer {
-  selectedIndex: number;
-  timestamp: string;
+  selected_answer: string;
+  submitted_at: string;
 }
 
 interface SubmissionStats {
@@ -55,31 +63,50 @@ interface SubmissionStats {
   avgCompletion: number;
 }
 
+interface ParticipantRecord {
+  id: string;
+  contest_id: string;
+  user_id: string;
+  registration_time: string;
+  status: string;
+  score?: number;
+  time_taken?: number;
+}
+
 const MegaContestLivePage: React.FC = () => {
   const { contestId } = useParams<{ contestId: string }>();
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, userProfile } = useAuth();
   
   const [contest, setContest] = useState<Contest | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, UserAnswer>>({});
   const [loading, setLoading] = useState(true);
-  const [timeLeft, setTimeLeft] = useState(10800);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [stats, setStats] = useState<SubmissionStats>({
-    totalParticipants: 1247,
-    userRank: 42,
-    avgCompletion: 68
+    totalParticipants: 0,
+    userRank: 0,
+    avgCompletion: 0
   });
   
-  // NEW STATES FOR PROCTORING
+  // Proctoring states
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [showTabSwitchWarning, setShowTabSwitchWarning] = useState(false);
   const [isTestBlocked, setIsTestBlocked] = useState(false);
   const [contestStarted, setContestStarted] = useState(false);
+  const [participantId, setParticipantId] = useState<string | null>(null);
+  const [isContestValid, setIsContestValid] = useState(true);
+  const [participationChecked, setParticipationChecked] = useState(false);
+
+  // Refs
+  const autoSaveInterval = useRef<NodeJS.Timeout>();
+  const timerInterval = useRef<NodeJS.Timeout>();
+  const hasInitialized = useRef(false);
+  const isSubmittingRef = useRef(false);
 
   // Get user ID from session
   const userId = useMemo(() => session?.user?.id || null, [session]);
@@ -112,26 +139,45 @@ const MegaContestLivePage: React.FC = () => {
 
   // Tab switching detection
   useEffect(() => {
-    if (!contestStarted) return;
+    if (!contestStarted || isTestBlocked) return;
 
     const handleVisibilityChange = () => {
-      if (document.hidden) {
+      if (document.hidden && participantId) {
         // User switched tab
         const newCount = tabSwitchCount + 1;
         setTabSwitchCount(newCount);
         setShowTabSwitchWarning(true);
         
+        // Log proctoring event (simplified - remove if table doesn't exist)
+        const proctoringData = {
+          participant_id: participantId,
+          event_type: 'tab_switch',
+          severity: newCount >= 5 ? 'high' : 'medium',
+          details: { count: newCount, timestamp: new Date().toISOString() }
+        };
+        
+        // Try to log event, but don't crash if table doesn't exist
+        supabase.from('proctoring_events').insert(proctoringData).then(({ error }) => {
+          if (error && !error.message.includes('does not exist')) {
+            console.error('Error logging proctoring event:', error);
+          }
+        }).catch(() => {
+          // Silently fail if table doesn't exist
+        });
+        
         // Show warning for 3 seconds
-        setTimeout(() => {
+        const warningTimeout = setTimeout(() => {
           setShowTabSwitchWarning(false);
         }, 3000);
         
         // Block after 10 switches
         if (newCount >= 10) {
           setIsTestBlocked(true);
-          alert('❌ Test Terminated! You switched tabs too many times (10/10). This is considered cheating.');
+          toast.error('Test Terminated! You switched tabs too many times (10/10).');
           handleAutoSubmit();
         }
+
+        return () => clearTimeout(warningTimeout);
       }
     };
 
@@ -140,119 +186,256 @@ const MegaContestLivePage: React.FC = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [contestStarted, tabSwitchCount]);
+  }, [contestStarted, tabSwitchCount, participantId, isTestBlocked]);
 
   // Initialize contest data
   useEffect(() => {
+    if (hasInitialized.current || !contestId || !userId) return;
+    
     const initializeContest = async () => {
       try {
+        hasInitialized.current = true;
+        
         // Check if user is logged in
         if (!userId) {
-          alert('Please login to attempt the contest');
+          toast.error('Please login to attempt the contest');
           navigate('/login');
           return;
         }
 
-        // ✅ CHECK IF USER ALREADY ATTEMPTED THIS CONTEST - FIXED
-        const { data: existingParticipation } = await supabase
-          .from('mega_contest_participants')
-          .select('finished_at')
+        let contestData: Contest | null = null;
+        
+        // Try to fetch contest by contest_code first
+        const { data: contestByCode, error: codeError } = await supabase
+          .from('mega_contests')
+          .select('*')
           .eq('contest_code', contestId)
-          .eq('user_id', userId)
-          .single();
+          .maybeSingle();
 
-        // If user already completed
-        if (existingParticipation && existingParticipation.finished_at) {
-          navigate('/contests/already-attempted');
-          return;
-        }
-
-        // Fetch contest data
-        const [contestResponse, questionsResponse] = await Promise.all([
-          supabase
+        if (!codeError && contestByCode) {
+          contestData = contestByCode;
+        } else {
+          // Try by ID as fallback
+          const { data: contestById, error: idError } = await supabase
             .from('mega_contests')
             .select('*')
             .eq('id', contestId)
-            .single(),
-          supabase
-            .from('mega_contest_questions')
-            .select('*')
-            .eq('contest_id', contestId)
-            .order('question_number', { ascending: true })
-        ]);
+            .maybeSingle();
+          
+          if (idError || !contestById) {
+            toast.error('Contest not found');
+            setIsContestValid(false);
+            setLoading(false);
+            return;
+          }
+          
+          contestData = contestById;
+        }
 
-        if (contestResponse.data) {
-          setContest(contestResponse.data);
-          // Set initial time based on contest duration
-          if (contestResponse.data.duration_minutes) {
-            setTimeLeft(contestResponse.data.duration_minutes * 60);
+        if (!contestData) {
+          toast.error('Contest not found');
+          setIsContestValid(false);
+          setLoading(false);
+          return;
+        }
+
+        setContest(contestData);
+        
+        // Check contest time
+        const now = new Date();
+        const startTime = new Date(contestData.start_time);
+        const endTime = new Date(contestData.end_time);
+        
+        if (now < startTime) {
+          toast.error('Contest has not started yet');
+          navigate('/contests');
+          return;
+        }
+        
+        if (now > endTime) {
+          toast.error('Contest has ended');
+          navigate(`/contests/results/${contestData.contest_code}`);
+          return;
+        }
+        
+        // Calculate initial time left
+        const timeDiff = Math.floor((endTime.getTime() - now.getTime()) / 1000);
+        setTimeLeft(Math.max(0, timeDiff));
+
+        // Check if user already participated in this contest
+        const { data: existingParticipation, error: participationError } = await supabase
+          .from('mega_contest_participants')
+          .select('id, status')
+          .eq('contest_id', contestData.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (existingParticipation) {
+          setParticipantId(existingParticipation.id);
+          
+          // If already completed, redirect to results
+          if (existingParticipation.status === 'completed') {
+            toast.error('You have already attempted this contest');
+            navigate(`/contests/results/${contestData.contest_code}`);
+            return;
           }
         }
 
-        if (questionsResponse.data && questionsResponse.data.length > 0) {
-          setQuestions(questionsResponse.data);
+        // Fetch questions
+        const { data: questionsData, error: questionsError } = await supabase
+          .from('mega_contest_questions')
+          .select('*')
+          .eq('contest_id', contestData.id)
+          .order('question_order', { ascending: true });
+
+        if (questionsError) {
+          console.error('Error fetching questions:', questionsError);
+          toast.error('Failed to load questions');
+        } else if (questionsData) {
+          setQuestions(questionsData);
         }
 
-        // ✅ Load saved answers - FIXED column names
-        const { data: savedAnswers } = await supabase
-          .from('mega_contest_submissions')
-          .select('question_id, selected_answer, submitted_at')
-          .eq('user_id', userId)
-          .eq('contest_code', contestId);
+        // Load saved answers if participant exists
+        if (participantId) {
+          const { data: savedAnswers, error: answersError } = await supabase
+            .from('mega_contest_submissions')
+            .select('question_id, selected_answer, submitted_at')
+            .eq('participant_id', participantId);
 
-        if (savedAnswers) {
-          const answersMap: Record<string, UserAnswer> = {};
-          savedAnswers.forEach(answer => {
-            answersMap[answer.question_id] = {
-              selectedIndex: answer.selected_answer,
-              timestamp: answer.submitted_at
-            };
-          });
-          setAnswers(answersMap);
+          if (!answersError && savedAnswers) {
+            const answersMap: Record<string, UserAnswer> = {};
+            savedAnswers.forEach(answer => {
+              answersMap[answer.question_id] = {
+                selected_answer: answer.selected_answer,
+                submitted_at: answer.submitted_at
+              };
+            });
+            setAnswers(answersMap);
+          }
+        } else {
+          // Create new participation record
+          try {
+            const { data: newParticipation, error: insertError } = await supabase
+              .from('mega_contest_participants')
+              .insert({
+                contest_id: contestData.id,
+                user_id: userId,
+                registration_time: new Date().toISOString(),
+                status: 'in_progress'
+              })
+              .select()
+              .single();
+
+            if (insertError) {
+              // If duplicate, try to fetch existing
+              if (insertError.code === '23505') {
+                const { data: existingRecord } = await supabase
+                  .from('mega_contest_participants')
+                  .select('id')
+                  .eq('contest_id', contestData.id)
+                  .eq('user_id', userId)
+                  .single();
+                
+                if (existingRecord) {
+                  setParticipantId(existingRecord.id);
+                }
+              } else {
+                // Try simple insert as fallback
+                const { error: simpleError } = await supabase
+                  .from('mega_contest_participants')
+                  .insert({
+                    contest_id: contestData.id,
+                    user_id: userId,
+                    registration_time: new Date().toISOString(),
+                    status: 'in_progress'
+                  });
+                
+                if (!simpleError) {
+                  // Fetch the newly created record
+                  const { data: finalCheck } = await supabase
+                    .from('mega_contest_participants')
+                    .select('id')
+                    .eq('contest_id', contestData.id)
+                    .eq('user_id', userId)
+                    .single();
+                  
+                  if (finalCheck) {
+                    setParticipantId(finalCheck.id);
+                  }
+                }
+              }
+            } else if (newParticipation) {
+              setParticipantId(newParticipation.id);
+            }
+          } catch (error: any) {
+            console.error('Error creating participation:', error);
+            toast.error('Failed to register for contest');
+            navigate('/contests');
+            return;
+          }
+        }
+
+        // Fetch participant count
+        try {
+          const { count: participantCount, error: countError } = await supabase
+            .from('mega_contest_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('contest_id', contestData.id);
+
+          if (!countError) {
+            setStats(prev => ({
+              ...prev,
+              totalParticipants: participantCount || 0
+            }));
+          }
+        } catch (error) {
+          console.error('Error fetching stats:', error);
         }
 
         // Mark contest as started
         setContestStarted(true);
-        
-        // ✅ INSERT USER PARTICIPATION RECORD IF NOT EXISTS - FIXED
-        await supabase
-          .from('mega_contest_participants')
-          .upsert({
-            contest_code: contestId,
-            user_id: userId,
-            started_at: new Date().toISOString(),
-            status: 'in_progress'
-          }, { onConflict: 'contest_code,user_id' });
+        setParticipationChecked(true);
         
       } catch (error) {
         console.error('Error initializing contest:', error);
+        toast.error('Failed to load contest');
+        setIsContestValid(false);
       } finally {
         setLoading(false);
       }
     };
 
-    if (contestId && userId) {
-      initializeContest();
-    }
+    initializeContest();
+
+    return () => {
+      hasInitialized.current = false;
+    };
   }, [contestId, userId, navigate]);
 
   // Timer countdown
   useEffect(() => {
-    if (timeLeft <= 0) {
-      handleAutoSubmit();
-      return;
-    }
+    if (timeLeft <= 0 || !contestStarted) return;
 
-    const timer = setInterval(() => {
-      setTimeLeft(prev => prev - 1);
+    timerInterval.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          handleAutoSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [timeLeft]);
+    return () => {
+      if (timerInterval.current) {
+        clearInterval(timerInterval.current);
+      }
+    };
+  }, [timeLeft, contestStarted]);
 
-  // ✅ Auto-save answers periodically - FIXED
+  // Auto-save answers periodically
   useEffect(() => {
-    if (Object.keys(answers).length === 0 || !userId || !contestId) return;
+    if (Object.keys(answers).length === 0 || !participantId || !contest?.id || isSubmittingRef.current) return;
 
     const autoSave = async () => {
       try {
@@ -260,30 +443,56 @@ const MegaContestLivePage: React.FC = () => {
           supabase
             .from('mega_contest_submissions')
             .upsert({
-              contest_code: contestId, // ✅ FIXED: contest_id → contest_code
-              user_id: userId,
+              participant_id: participantId,
+              contest_id: contest.id,
               question_id: questionId,
-              selected_answer: answer.selectedIndex,
-              submitted_at: new Date().toISOString() // ✅ FIXED: updated_at → submitted_at
-            }, { onConflict: 'contest_code,user_id,question_id' })
+              selected_answer: answer.selected_answer,
+              submitted_at: answer.submitted_at
+            }, { onConflict: 'participant_id,question_id' })
         );
 
         await Promise.all(savePromises);
         setLastSaved(new Date());
+        
+        // Optional: Log save event if table exists
+        try {
+          await supabase.from('submission_events').insert({
+            participant_id: participantId,
+            action: 'auto_save',
+            event_time: new Date().toISOString()
+          });
+        } catch (e) {
+          // Silently fail if table doesn't exist
+        }
       } catch (error) {
         console.error('Auto-save failed:', error);
       }
     };
 
-    const saveInterval = setInterval(autoSave, 30000);
-    return () => clearInterval(saveInterval);
-  }, [answers, userId, contestId]);
+    autoSaveInterval.current = setInterval(autoSave, 30000);
 
-  // ✅ Handle answer selection - FIXED
-  const handleAnswer = useCallback(async (questionId: string, selectedIndex: number) => {
+    return () => {
+      if (autoSaveInterval.current) {
+        clearInterval(autoSaveInterval.current);
+      }
+    };
+  }, [answers, participantId, contest?.id]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveInterval.current) clearInterval(autoSaveInterval.current);
+      if (timerInterval.current) clearInterval(timerInterval.current);
+    };
+  }, []);
+
+  // Handle answer selection
+  const handleAnswer = useCallback(async (questionId: string, answer: string) => {
+    if (!participantId || !contest?.id || isSubmittingRef.current) return;
+
     const updatedAnswer: UserAnswer = {
-      selectedIndex,
-      timestamp: new Date().toISOString()
+      selected_answer: answer,
+      submitted_at: new Date().toISOString()
     };
 
     setAnswers(prev => ({
@@ -291,90 +500,142 @@ const MegaContestLivePage: React.FC = () => {
       [questionId]: updatedAnswer
     }));
 
-    // Immediate save if user is logged in
-    if (userId && contestId) {
-      try {
-        await supabase
-          .from('mega_contest_submissions')
-          .upsert({
-            contest_code: contestId, // ✅ FIXED: contest_id → contest_code
-            user_id: userId,
-            question_id: questionId,
-            selected_answer: selectedIndex,
-            submitted_at: new Date().toISOString() // ✅ FIXED: updated_at → submitted_at
-          }, { onConflict: 'contest_code,user_id,question_id' });
-        setLastSaved(new Date());
-      } catch (error) {
-        console.error('Error saving answer:', error);
-      }
-    }
-  }, [userId, contestId]);
-
-  // ✅ Auto submit when time ends - FIXED
-  const handleAutoSubmit = useCallback(async () => {
-    setIsSubmitting(true);
-    if (userId && contestId) {
-      await supabase
-        .from('mega_contest_participants')
+    // Immediate save
+    try {
+      const { error } = await supabase
+        .from('mega_contest_submissions')
         .upsert({
-          contest_code: contestId, // ✅ FIXED: contest_id → contest_code
-          user_id: userId,
-          finished_at: new Date().toISOString(),
-          status: 'completed'
-        }, { onConflict: 'contest_code,user_id' });
+          participant_id: participantId,
+          contest_id: contest.id,
+          question_id: questionId,
+          selected_answer: answer,
+          submitted_at: updatedAnswer.submitted_at
+        }, { onConflict: 'participant_id,question_id' });
+      
+      if (error) {
+        console.error('Error saving answer:', error);
+        toast.error('Failed to save answer');
+      } else {
+        setLastSaved(new Date());
+      }
+    } catch (error) {
+      console.error('Error saving answer:', error);
+      toast.error('Failed to save answer');
     }
-    
-    alert('Time is up! Your test has been submitted automatically.');
-    navigate('/contests/results/' + contestId);
-  }, [userId, contestId, navigate]);
+  }, [participantId, contest?.id]);
 
-  // ✅ Manual submit - FIXED
+  // Auto submit when time ends
+  const handleAutoSubmit = useCallback(async () => {
+    if (isSubmittingRef.current) return;
+    
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    toast.info('Time is up! Submitting your test...');
+    
+    try {
+      if (participantId && contest) {
+        // Calculate score
+        let score = 0;
+        let totalCorrect = 0;
+        
+        questions.forEach(question => {
+          const userAnswer = answers[question.id];
+          if (userAnswer) {
+            if (userAnswer.selected_answer === question.correct_answer) {
+              score += question.marks;
+              totalCorrect++;
+            } else if (userAnswer.selected_answer && userAnswer.selected_answer !== '') {
+              score -= question.negative_marks;
+            }
+          }
+        });
+
+        // Update participant record
+        const updateData = {
+          status: 'completed',
+          score: score,
+          time_taken: contest.duration_minutes ? (contest.duration_minutes * 60 - timeLeft) : 0
+        };
+        
+        await supabase
+          .from('mega_contest_participants')
+          .update(updateData)
+          .eq('id', participantId);
+          
+      }
+    } catch (error) {
+      console.error('Error auto-submitting contest:', error);
+    } finally {
+      setTimeout(() => {
+        navigate(`/contests/results/${contest?.contest_code || contestId}`);
+      }, 2000);
+    }
+  }, [participantId, answers, questions, contest, timeLeft, contestId, navigate]);
+
+  // Manual submit
   const handleManualSubmit = useCallback(async () => {
+    if (isSubmittingRef.current) return;
+    
     if (!window.confirm('Are you sure you want to submit? You cannot change answers after submission.')) {
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
+    toast.info('Submitting your test...');
     
-    if (userId && contestId) {
-      try {
-        // ✅ Calculate score before submitting
-        const { data: questionsData } = await supabase
-          .from('mega_contest_questions')
-          .select('id, correct_answer')
-          .eq('contest_id', contestId);
-
+    try {
+      if (participantId && contest) {
+        // Calculate score
         let score = 0;
-        if (questionsData) {
-          questionsData.forEach(question => {
-            const userAnswer = answers[question.id];
-            if (userAnswer && userAnswer.selectedIndex === question.correct_answer) {
-              score += 4; // Assuming 4 marks per question
-            }
-          });
-        }
-
-        // ✅ Update participant record with score - FIXED
-        await supabase
-          .from('mega_contest_participants')
-          .upsert({
-            contest_code: contestId, // ✅ FIXED: contest_id → contest_code
-            user_id: userId,
-            finished_at: new Date().toISOString(),
-            status: 'completed',
-            score: score,
-            time_taken: contest?.duration_minutes ? (contest.duration_minutes * 60 - timeLeft) : 0
-          }, { onConflict: 'contest_code,user_id' });
+        let totalCorrect = 0;
         
-        console.log('✅ Test submitted with score:', score);
-      } catch (error) {
-        console.error('Error submitting contest:', error);
+        questions.forEach(question => {
+          const userAnswer = answers[question.id];
+          if (userAnswer) {
+            if (userAnswer.selected_answer === question.correct_answer) {
+              score += question.marks;
+              totalCorrect++;
+            } else if (userAnswer.selected_answer && userAnswer.selected_answer !== '') {
+              score -= question.negative_marks;
+            }
+          }
+        });
+
+        // Update participant record
+        const updateData = {
+          status: 'completed',
+          score: score,
+          time_taken: contest.duration_minutes ? (contest.duration_minutes * 60 - timeLeft) : 0
+        };
+        
+        const { error } = await supabase
+          .from('mega_contest_participants')
+          .update(updateData)
+          .eq('id', participantId);
+        
+        if (error) {
+          console.error('Error submitting contest:', error);
+          toast.error('Failed to submit test');
+          setIsSubmitting(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+        
+        toast.success(`Test submitted successfully! Score: ${score}`);
       }
+    } catch (error) {
+      console.error('Error submitting contest:', error);
+      toast.error('Failed to submit test');
+      setIsSubmitting(false);
+      isSubmittingRef.current = false;
+      return;
     }
     
-    alert('Test submitted successfully! Results will be available soon.');
-    navigate('/contests');
-  }, [userId, contestId, answers, contest, timeLeft, navigate]);
+    setTimeout(() => {
+      navigate(`/contests/results/${contest?.contest_code || contestId}`);
+    }, 2000);
+  }, [participantId, answers, questions, contest, timeLeft, contestId, navigate]);
 
   const handleQuestionSelect = useCallback((index: number) => {
     setCurrentIndex(index);
@@ -383,13 +644,14 @@ const MegaContestLivePage: React.FC = () => {
 
   const getDifficultyColor = useCallback((difficulty?: string) => {
     switch (difficulty) {
-      case 'easy': return 'text-emerald-600 bg-emerald-50';
-      case 'medium': return 'text-amber-600 bg-amber-50';
-      case 'hard': return 'text-rose-600 bg-rose-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'easy': return 'bg-green-100 text-green-800 border-green-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'hard': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   }, []);
 
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
@@ -407,7 +669,8 @@ const MegaContestLivePage: React.FC = () => {
     );
   }
 
-  if (!contest) {
+  // Contest not found
+  if (!isContestValid || !contest) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
         <Card className="max-w-md w-full mx-4 shadow-lg">
@@ -419,7 +682,7 @@ const MegaContestLivePage: React.FC = () => {
             </div>
             <div className="space-y-2">
               <h2 className="text-2xl font-bold text-gray-900">Contest Not Found</h2>
-              <p className="text-gray-600">The requested contest could not be loaded.</p>
+              <p className="text-gray-600">The requested contest could not be loaded or has expired.</p>
             </div>
             <Button 
               onClick={() => navigate('/contests')}
@@ -433,6 +696,7 @@ const MegaContestLivePage: React.FC = () => {
     );
   }
 
+  // Test blocked due to cheating
   if (isTestBlocked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
@@ -460,6 +724,35 @@ const MegaContestLivePage: React.FC = () => {
     );
   }
 
+  // Participation check failed
+  if (!participationChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
+        <Card className="max-w-md w-full mx-4 shadow-lg">
+          <CardContent className="p-8 text-center space-y-6">
+            <div className="flex justify-center">
+              <div className="p-3 bg-yellow-50 rounded-full">
+                <AlertTriangle className="h-12 w-12 text-yellow-500" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-gray-900">Registration Issue</h2>
+              <p className="text-gray-600">There was a problem registering you for the contest.</p>
+              <p className="text-sm text-gray-500">Please try again or contact support.</p>
+            </div>
+            <Button 
+              onClick={() => navigate('/contests')}
+              className="w-full bg-gray-900 hover:bg-gray-800 text-white"
+            >
+              Back to Contests
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Main render
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Tab Switch Warning */}
@@ -484,6 +777,7 @@ const MegaContestLivePage: React.FC = () => {
                 size="sm"
                 onClick={() => navigate('/contests')}
                 className="hidden sm:flex"
+                disabled={isSubmitting}
               >
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 Back
@@ -497,9 +791,7 @@ const MegaContestLivePage: React.FC = () => {
                   <BookOpen className="h-3 w-3" />
                   <span>Class {contest.class}</span>
                   <span>•</span>
-                  <span>{contest.total_questions} Questions</span>
-                  <span>•</span>
-                  <span>{contest.total_marks} Marks</span>
+                  <span>{contest.subjects?.join(', ')}</span>
                   <span>•</span>
                   <span className="flex items-center text-red-500">
                     <Eye className="h-3 w-3 mr-1" />
@@ -524,6 +816,7 @@ const MegaContestLivePage: React.FC = () => {
                 size="icon"
                 className="sm:hidden"
                 onClick={() => setShowMobileSidebar(true)}
+                disabled={isSubmitting}
               >
                 <Menu className="h-5 w-5" />
               </Button>
@@ -536,7 +829,7 @@ const MegaContestLivePage: React.FC = () => {
               >
                 {isSubmitting ? (
                   <>
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Submitting...
                   </>
                 ) : (
@@ -623,6 +916,7 @@ const MegaContestLivePage: React.FC = () => {
                         <button
                           key={question.id}
                           onClick={() => handleQuestionSelect(index)}
+                          disabled={isSubmitting}
                           className={`
                             relative h-10 rounded-lg flex items-center justify-center font-medium text-sm transition-all
                             ${isCurrent 
@@ -631,6 +925,7 @@ const MegaContestLivePage: React.FC = () => {
                               ? 'bg-blue-100 text-blue-700 border border-blue-300'
                               : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'
                             }
+                            disabled:opacity-50 disabled:cursor-not-allowed
                           `}
                         >
                           {index + 1}
@@ -669,7 +964,7 @@ const MegaContestLivePage: React.FC = () => {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Your Position</span>
-                      <span className="font-semibold text-blue-600">#{stats.userRank}</span>
+                      <span className="font-semibold text-blue-600">#{stats.userRank || '--'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Avg. Completion</span>
@@ -699,13 +994,13 @@ const MegaContestLivePage: React.FC = () => {
                       )}
                     </div>
                     <div className="text-sm text-gray-600">
-                      Question {currentQuestion?.question_number || 0} of {totalQuestions}
+                      Question {currentQuestion?.question_order || 0} of {totalQuestions}
                       <span className="mx-2">•</span>
                       <span className="font-semibold text-gray-900">{currentQuestion?.marks || 4} Points</span>
                     </div>
                   </div>
                   <div className="text-lg font-bold text-gray-900">
-                    #{currentQuestion?.question_number || 0}
+                    #{currentQuestion?.question_order || 0}
                   </div>
                 </div>
 
@@ -720,14 +1015,13 @@ const MegaContestLivePage: React.FC = () => {
 
                 {/* Options */}
                 <div className="space-y-3 mb-8">
-                  {currentQuestion?.options?.map((option, index) => {
-                    const isSelected = userAnswer?.selectedIndex === index;
-                    const optionLetter = String.fromCharCode(65 + index);
+                  {currentQuestion && Object.entries(currentQuestion.options || {}).map(([key, value], index) => {
+                    const isSelected = userAnswer?.selected_answer === key;
                     
                     return (
                       <button
-                        key={index}
-                        onClick={() => handleAnswer(currentQuestion.id, index)}
+                        key={key}
+                        onClick={() => handleAnswer(currentQuestion.id, key)}
                         disabled={isSubmitting}
                         className={`
                           w-full p-4 text-left rounded-xl border-2 transition-all duration-200
@@ -746,13 +1040,11 @@ const MegaContestLivePage: React.FC = () => {
                               : 'bg-gray-100 text-gray-700'
                             }
                           `}>
-                            {optionLetter}
+                            {key}
                           </div>
-                          <span className="flex-1 text-gray-900">{option}</span>
+                          <span className="flex-1 text-gray-900">{value as string}</span>
                           {isSelected && (
-                            <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center flex-shrink-0">
-                              <div className="w-2 h-2 rounded-full bg-white"></div>
-                            </div>
+                            <CheckCircle className="w-6 h-6 text-blue-500 flex-shrink-0" />
                           )}
                         </div>
                       </button>
@@ -871,7 +1163,12 @@ const MegaContestLivePage: React.FC = () => {
                 size="lg"
               >
                 <Flag className="h-5 w-5 mr-2" />
-                {isSubmitting ? 'Submitting...' : 'Final Submit'}
+                {isSubmitting ? (
+                  <span className="flex items-center">
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Submitting...
+                  </span>
+                ) : 'Final Submit'}
               </Button>
             </div>
           </div>
@@ -887,6 +1184,7 @@ const MegaContestLivePage: React.FC = () => {
               size="sm"
               onClick={() => setShowMobileSidebar(true)}
               className="flex items-center gap-2"
+              disabled={isSubmitting}
             >
               <BarChart className="h-4 w-4" />
               <span className="font-medium">{answeredCount}/{totalQuestions}</span>
@@ -895,7 +1193,7 @@ const MegaContestLivePage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-                disabled={currentIndex === 0}
+                disabled={currentIndex === 0 || isSubmitting}
                 variant="outline"
                 size="icon"
               >
@@ -908,7 +1206,7 @@ const MegaContestLivePage: React.FC = () => {
               
               <Button
                 onClick={() => setCurrentIndex(prev => Math.min(totalQuestions - 1, prev + 1))}
-                disabled={currentIndex === totalQuestions - 1}
+                disabled={currentIndex === totalQuestions - 1 || isSubmitting}
                 variant="outline"
                 size="icon"
               >
@@ -935,6 +1233,7 @@ const MegaContestLivePage: React.FC = () => {
                   variant="ghost"
                   size="icon"
                   onClick={() => setShowMobileSidebar(false)}
+                  disabled={isSubmitting}
                 >
                   <X className="h-5 w-5" />
                 </Button>
@@ -984,6 +1283,7 @@ const MegaContestLivePage: React.FC = () => {
                           <button
                             key={question.id}
                             onClick={() => handleQuestionSelect(index)}
+                            disabled={isSubmitting}
                             className={`
                               h-10 rounded-lg flex items-center justify-center font-medium text-sm
                               ${isCurrent 
@@ -992,6 +1292,7 @@ const MegaContestLivePage: React.FC = () => {
                                 ? 'bg-blue-100 text-blue-700 border border-blue-300'
                                 : 'bg-gray-100 text-gray-700 border border-gray-200'
                               }
+                              disabled:opacity-50 disabled:cursor-not-allowed
                             `}
                           >
                             {index + 1}
@@ -1035,7 +1336,12 @@ const MegaContestLivePage: React.FC = () => {
                   size="lg"
                 >
                   <Flag className="h-5 w-5 mr-2" />
-                  {isSubmitting ? 'Submitting...' : 'Submit Test'}
+                  {isSubmitting ? (
+                    <span className="flex items-center">
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      Submitting...
+                    </span>
+                ) : 'Submit Test'}
                 </Button>
               </div>
             </div>
