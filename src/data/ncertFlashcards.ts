@@ -14,7 +14,7 @@ export const ncertClass10Science: Chapter[] = [
       },
       {
         id: "C1_002",
-        question: "What are chemical equations?",
+        question: "What are chemical ?",
         answer: "Chemical equations are symbolic representations of chemical reactions where reactants are written on the left side and products on the right side, separated by an arrow.",
         type: "definition"
       },
@@ -933,114 +933,1071 @@ export const class9Science: Chapter[] = [
   {
     chapter_number: 1,
     chapter_name: "Matter in Our Surroundings",
-    subject: "Science",
+    subject: "Chemistry",
     flashcards: [
       {
-        id: "9S1_001",
-        question: "What is matter?",
-        answer: "Matter is any substance that has mass and occupies space.",
+        id: "chap1_card_1",
+        question: "What is Matter?",
+        answer: "Anything that has mass and occupies space. Example: Book, table, air, water.",
         type: "definition"
       },
       {
-        id: "9S1_002",
-        question: "What are the three states of matter?",
-        answer: "1. Solid\n2. Liquid\n3. Gas",
+        id: "chap1_card_2",
+        question: "What is States of Matter?",
+        answer: "The distinct forms in which matter can exist: Solid, Liquid, and Gas. Example: Ice (Solid), Water (Liquid), Steam (Gas).",
         type: "definition"
       },
       {
-        id: "9S1_003",
-        question: "What is diffusion?",
-        answer: "Intermixing of particles of different matter on their own.",
+        id: "chap1_card_3",
+        question: "What is Solid State?",
+        answer: "State of matter with definite shape, volume, and high density. Particles are tightly packed. Example: Iron nail, wooden desk.",
         type: "definition"
       },
       {
-        id: "9S1_004",
-        question: "What is evaporation?",
-        answer: "Process by which liquid changes into vapor at any temperature below its boiling point.",
+        id: "chap1_card_4",
+        question: "What is Liquid State?",
+        answer: "State of matter with definite volume but no fixed shape. It takes the shape of its container. Particles are less tightly packed than solids. Example: Water, oil, milk.",
         type: "definition"
       },
       {
-        id: "9S1_005",
-        question: "What is latent heat?",
-        answer: "Heat energy required to change the state of a substance without changing its temperature.",
+        id: "chap1_card_5",
+        question: "What is Gaseous State?",
+        answer: "State of matter with no definite shape or volume. It completely fills its container. Particles are far apart. Example: Oxygen, carbon dioxide, nitrogen.",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_6",
+        question: "What is Melting (Fusion)?",
+        answer: "The process of change of state from solid to liquid at a fixed temperature (melting point). Example: Ice melting into water at 0°C.",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_7",
+        question: "What is Freezing?",
+        answer: "The process of change of state from liquid to solid at a fixed temperature (freezing point). Example: Water freezing into ice at 0°C.",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_8",
+        question: "What is Boiling / Vaporization?",
+        answer: "The process of change of state from liquid to gas at a fixed temperature (boiling point). Example: Water boiling into steam at 100°C.",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_9",
+        question: "What is Condensation?",
+        answer: "The process of change of state from gas to liquid. Example: Water droplets forming on a cold surface (like a cold drink can).",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_10",
+        question: "What is Sublimation?",
+        answer: "The process where a solid directly changes into gas without passing through the liquid state. Example: Camphor, iodine crystals, dry ice (solid CO2).",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_11",
+        question: "What is Latent Heat?",
+        answer: "The heat energy required to change the state of a substance without changing its temperature. Example: Latent heat of fusion for ice is 334 J/g.",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_12",
+        question: "What is Evaporation?",
+        answer: "The process of a liquid changing into vapor at any temperature below its boiling point, occurring only at the surface. \nExample: Drying of clothes.",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_13",
+        question: "What are Factors Affecting Evaporation?",
+        answer: "Surface area, temperature, humidity, and wind speed influence the rate of evaporation. Example: Wet clothes dry faster on a hot, windy day with low humidity.",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_14",
+        question: "What is Kelvin Scale?",
+        answer: "The SI unit of temperature. 0 K = -273.15°C. It is also called the absolute temperature scale. Example: Room temperature (25°C) is 298 K.",
+        type: "definition"
+      },
+      {
+        id: "chap1_card_15",
+        question: "What is Diffusion?",
+        answer: "The intermixing of particles of two different types of matter on their own. Example: Smell of perfume spreading in a room.",
         type: "definition"
       }
-    ]
-  },
-  {
+        ]
+      },
+      {
     chapter_number: 2,
-    chapter_name: "Is Matter Around Us Pure",
-    subject: "Science",
+    chapter_name: "Is Matter Around Us Pure?",
+    subject: "Chemistry",
     flashcards: [
-      {
-        id: "9S2_001",
-        question: "What is a pure substance?",
-        answer: "Substance made up of only one kind of particles and has fixed composition.",
-        type: "definition"
+          {
+            id: "chap2_card_1",
+            question: "What is Pure Substance?",
+            answer: "A substance consisting of only one type of particle, either an element or a compound. It has a fixed composition. \nExample: Gold (Au), distilled water (H2O).",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_2",
+            question: "What is Mixture?",
+            answer: "A substance containing two or more different kinds of particles (elements/compounds) mixed together in any proportion. Example: Air (mixture of gases), sea water.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_3",
+            question: "What is Homogeneous Mixture?",
+            answer: "A mixture with a uniform composition throughout. The components are not visible to the naked eye. \nExample: Sugar dissolved in water, air.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_4",
+            question: "What is Heterogeneous Mixture?",
+            answer: "A mixture with a non-uniform composition. The components are visible and can be separated easily. \nExample: Sand and iron filings, muddy water.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_5",
+            question: "What is Solution?",
+            answer: "A homogeneous mixture of two or more substances. It has a solute (minor component) and a solvent (major component). Example: Sugar in water (sugar=solute, water=solvent).",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_6",
+            question: "What is Concentration of a Solution?",
+            answer: "The amount of solute present in a given amount (mass or volume) of solution. Example: Mass by mass percentage: (Mass of solute / Mass of solution) x 100. Formula: Concentration = (Mass of solute / Mass of solution) × 100%",
+            type: "formula"
+          },
+          {
+            id: "chap2_card_7",
+            question: "What is Suspension?",
+            answer: "A heterogeneous mixture where the solute particles are visible, do not dissolve, and settle down when left undisturbed. Example: Muddy water, chalk powder in water.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_8",
+            question: "What is Colloid?",
+            answer: "A heterogeneous mixture where the particle size is intermediate (1 nm - 1000 nm). Particles do not settle and scatter light (Tyndall effect). Example: Milk, fog, blood, soap solution.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_9",
+            question: "What is Tyndall Effect?",
+            answer: "The scattering of light by colloidal particles, making the path of light visible. Example: beam of light in a foggy room.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_10",
+            question: "What is Separation Techniques - Filtration?",
+            answer: "Used to separate insoluble solid components from a liquid using a filter paper. \nExample: Separating tea leaves from prepared tea.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_11",
+            question: "What is Separation Techniques - Evaporation?",
+            answer: "Used to recover the solid solute from its solution by heating to vaporize the liquid solvent. \nExample: Obtaining salt from sea water.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_12",
+            question: "What is Separation Techniques - Centrifugation?",
+            answer: "Using centrifugal force to separate denser particles from lighter ones in a mixture. \nExample: Separating cream from milk, .",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_13",
+            question: "What is Separation Techniques - Distillation?",
+            answer: "Used to separate components of a mixture based on differences in their boiling points. \nExample: Separating pure water (distillate) from sea water.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_14",
+            question: "What is Separation Techniques - Chromatography?",
+            answer: "Technique used to separate different components of a mixture based on their different solubilities in a solvent. \nExample: Separating dyes in ink, pigments in plants.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_15",
+            question: "What is Physical Change?",
+            answer: "A change in which no new substance is formed and the change is usually reversible. Only physical properties like shape, size, state change. \nExample: Melting of ice, breaking of glass.",
+            type: "definition"
+          },
+          {
+            id: "chap2_card_16",
+            question: "What is Chemical Change?",
+            answer: "A change in which one or more new substances with different properties are formed. It is usually irreversible. \nExample: Burning of paper, rusting of iron. Reaction: 4Fe + 3O₂ + xH₂O → 2Fe₂O₃.xH₂O (Hydrated Iron Oxide/Rust)",
+            type: "reaction"
+          },
+          {
+            id: "chap2_card_17",
+            question: "What is Alloy?",
+            answer: "A homogeneous mixture of two or more metals, or a metal and a non-metal. It is prepared to improve the properties of the base metal. \nExample: Steel (Iron + Carbon), Brass (Copper + Zinc).",
+            type: "definition"
+          }
+        ]
       },
       {
-        id: "9S2_002",
-        question: "What is a mixture?",
-        answer: "Combination of two or more substances in any ratio.",
-        type: "definition"
-      },
-      {
-        id: "9S2_003",
-        question: "What are elements?",
-        answer: "Pure substances made of only one type of atom. Cannot be broken down further.",
-        type: "definition"
-      },
-      {
-        id: "9S2_004",
-        question: "What are compounds?",
-        answer: "Substances formed by chemical combination of two or more elements in fixed proportion.",
-        type: "definition"
-      },
-      {
-        id: "9S2_005",
-        question: "What is a solution?",
-        answer: "Homogeneous mixture of two or more substances.",
-        type: "definition"
-      }
-    ]
-  },
-  {
     chapter_number: 3,
     chapter_name: "Atoms and Molecules",
-    subject: "Science",
+    subject: "Chemistry",
     flashcards: [
-      {
-        id: "9S3_001",
-        question: "What is an atom?",
-        answer: "Smallest particle of an element that retains its chemical properties.",
-        type: "definition"
+          {
+            id: "chap3_card_1",
+            question: "What is Law of Conservation of Mass?",
+            answer: "In a chemical reaction, mass is neither created nor destroyed. The total mass of reactants equals the total mass of products. \nExample: Burning of magnesium. \nFormula: Mass of Reactants = Mass of Products",
+            type: "formula"
+          },
+          {
+            id: "chap3_card_2",
+            question: "What is Law of Constant Proportions?",
+            answer: "A pure chemical compound always contains the same elements combined together in a fixed proportion by mass.\n Example: Water (H2O) always has hydrogen and oxygen in a mass ratio of 1:8.",
+            type: "formula"
+          },
+          {
+            id: "chap3_card_3",
+            question: "What is Atom?",
+            answer: "The smallest particle of an element that can exist and may or may not have independent existence. It takes part in chemical reactions. \nExample: An atom of oxygen (O).",
+            type: "definition"
+          },
+          {
+            id: "chap3_card_4",
+            question: "What is Molecule?",
+            answer: "The smallest particle of an element or compound that can exist independently and retains all the properties of that substance.\n Example: H₂O (Water molecule).",
+            type: "definition"
+          },
+          {
+            id: "chap3_card_5",
+            question: "What is Atomicity?",
+            answer: "The number of atoms present in one molecule of an element.\n Example: Argon(Ar) is monatomic (1),Oxygen(O₂) is diatomic (2),.",
+            type: "definition"
+          },
+          {
+            id: "chap3_card_6",
+            question: "What is Ion?",
+            answer: "An atom or molecule with a net electric charge due to the loss or gain of one or more electrons. \nExample: Sodium ion (Na⁺), Chloride ion (Cl⁻),.",
+            type: "definition"
+          },
+          {
+            id: "chap3_card_7",
+            question: "What is Valency?",
+            answer: "The combining capacity of an element. It is equal to the number of electrons an atom can lose, gain, or share to become stable. \nExample: Valency of Sodium (Na) is 1+, Oxygen (O) is 2-.",
+            type: "definition"
+          },
+          {
+            id: "chap3_card_8",
+            question: "What is Chemical Formula?",
+            answer: "A symbolic representation of a molecule of a substance using symbols and valencies of its constituent elements. \nExample: Water is H₂O, Carbon dioxide is CO₂.",
+            type: "definition"
+          },
+          {
+            id: "chap3_card_9",
+            question: "What is Atomic Mass Unit (u)?",
+            answer: "A unit of mass used to express atomic and molecular weights. It is equal to 1/12th the mass of one carbon-12 atom. \nFormula: 1 u = 1/12 × mass of one C-12 atom",
+            type: "formula"
+          },
+          {
+            id: "chap3_card_10",
+            question: "What is Molecular Mass?",
+            answer: "The sum of the atomic masses of all the atoms in a molecule of the substance. \nExample: Molecular mass of water (H₂O) = (2×1) + 16 = 18 u.",
+            type: "formula"
+          },
+          {
+            id: "chap3_card_11",
+            question: "What is Formula Unit Mass?",
+            answer: "The sum of the atomic masses of all atoms in a formula unit of an ionic compound. \nExample: Formula unit mass of NaCl = 23 + 35.5 = 58.5 u.",
+            type: "formula"
+          },
+          {
+            id: "chap3_card_12",
+            question: "What is Mole Concept?",
+            answer: "One mole is the amount of substance that contains as many particles (atoms, molecules, ions) as there are atoms in exactly 12 g of carbon-12.\n Formula: 1 mole = 6.022 × 10²³ particles = molar mass in grams",
+            type: "formula"
+          },
+          {
+            id: "chap3_card_13",
+            question: "What is Avogadro's Number (Nₐ)?",
+            answer: "The number of particles (atoms, molecules, ions) present in one mole of a substance. Its value is 6.022 × 10²³ per mole.",
+            type: "definition"
+          },
+          {
+            id: "chap3_card_14",
+            question: "What is Writing Chemical Formula (Criss-cross method)?",
+            answer: "A method to write the formula of an ionic compound where the valencies of the cation and anion are crossed over to become subscripts.",
+            type: "definition"
+          }
+        ]
       },
       {
-        id: "9S3_002",
-        question: "What is a molecule?",
-        answer: "Group of two or more atoms chemically bonded together.",
-        type: "definition"
+    chapter_number: 4,
+    chapter_name: "Structure of the Atom",
+    subject: "Chemistry",
+    flashcards: [
+          {
+            id: "chap4_card_1",
+            question: "What is Subatomic Particles?",
+            answer: "The three fundamental particles that make up an atom: electrons, protons, and neutrons.\n Example: In a carbon-12 atom: 6 protons, 6 neutrons, 6 electrons.",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_2",
+            question: "What is Electron (e⁻)?",
+            answer: "A negatively charged subatomic particle found outside the nucleus in specific orbits/shells. Mass is negligible. \nFormula: Charge: -1.6 × 10⁻¹⁹ C, \nMass: 9.1 × 10⁻³¹ kg",
+            type: "formula"
+          },
+          {
+            id: "chap4_card_3",
+            question: "What is Proton (p⁺)?",
+            answer: "A positively charged subatomic particle found in the nucleus of an atom. Mass is approximately 1 u.\n Formula: Charge: +1.6 × 10⁻¹⁹ C, \nMass: 1.67 × 10⁻²⁷ kg (≈1 u)",
+            type: "formula"
+          },
+          {
+            id: "chap4_card_4",
+            question: "What is Neutron (n)?",
+            answer: "A neutral subatomic particle (no charge) found in the nucleus of an atom. Mass is approximately 1 u.\n Formula: Charge: 0, \nMass: 1.67 × 10⁻²⁷ kg (≈1 u)",
+            type: "formula"
+          },
+          {
+            id: "chap4_card_5",
+            question: "What is Atomic Number (Z)?",
+            answer: "The number of protons in the nucleus of an atom. It is unique for each element and defines the element.\n Example: Atomic number of Carbon is 6, meaning it has 6 protons.",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_6",
+            question: "What is Mass Number (A)?",
+            answer: "The sum of the number of protons and neutrons in the nucleus of an atom.\n Example: Carbon-14 has mass number 14 (6 protons + 8 neutrons). \nFormula: A = Number of protons (Z) + Number of neutrons (N)",
+            type: "formula"
+          },
+          {
+            id: "chap4_card_7",
+            question: "What is Thomson's Model (Plum Pudding Model)?",
+            answer: "An early atomic model proposing that the atom is a sphere of positive charge with negatively charged electrons embedded in it, like plums in a pudding.",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_8",
+            question: "What is Rutherford's Gold Foil Experiment?",
+            answer: "An experiment where alpha particles were fired at a thin gold foil. Most passed through, some deflected, proving the existence of a small, dense, positively charged nucleus.",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_9",
+            question: "What is Rutherford's Nuclear Model?",
+            answer: "Model stating that an atom has a tiny, dense, positively charged nucleus at the center, with electrons revolving around it in circular paths.",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_10",
+            question: "What is Bohr's Model?",
+            answer: "Model proposing that electrons revolve around the nucleus in specific, stable orbits or shells (K, L, M, N...) without radiating energy.",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_11",
+            question: "What is Electron Shells (Energy Levels)?",
+            answer: "The fixed circular paths around the nucleus where electrons revolve. Shells are designated as K (n=1), L (n=2), M (n=3), etc., with increasing energy.",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_12",
+            question: "What is Valence Electrons?",
+            answer: "The electrons present in the outermost shell of an atom. They determine the chemical properties and valency of the element.\n Example: Sodium (2,8,1) has 1 valence electron.",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_13",
+            question: "What is Isotopes?",
+            answer: "Atoms of the same element having the same atomic number but different mass numbers (i.e., same number of protons, different number of neutrons). \nExample: Hydrogen has isotopes: Protium (¹H), Deuterium (²H), Tritium (³H).",
+            type: "definition"
+          },
+          {
+            id: "chap4_card_14",
+            question: "What is Isobars?",
+            answer: "Atoms of different elements having different atomic numbers but the same mass number. \nExample: Argon-40 (Z=18) and Calcium-40 (Z=20) are isobars.",
+            type: "definition"
+          }
+        ]
       },
       {
-        id: "9S3_003",
-        question: "What is atomic mass?",
-        answer: "Mass of an atom expressed in atomic mass units (u).",
-        type: "definition"
+    chapter_number: 5,
+    chapter_name: "The Fundamental Unit of Life (The Cell)",
+    subject: "Biology",
+    flashcards: [
+          {
+            id: "chap5_card_1",
+            question: "What is Cell?",
+            answer: "The basic structural and functional unit of all living organisms. All living things are made up of cells. They are the smallest entities that can carry out all life processes like nutrition, respiration, and reproduction.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_2",
+            question: "What is Cell Theory?",
+            answer: "A fundamental biological theory stating that all living organisms are composed of cells, the cell is the basic unit of life, and all cells arise from pre-existing cells.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_3",
+            question: "What is Plasma Membrane (Cell Membrane)?",
+            answer: "A thin, flexible, selectively permeable barrier that surrounds the cell and regulates the entry and exit of substances. Made of lipids and proteins, it protects the cell and maintains homeostasis by allowing only specific materials (like oxygen, nutrients) in and wastes out.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_4",
+            question: "What is Cell Wall?",
+            answer: "A rigid, non-living outer layer present in plant cells, fungi, and some bacteria, made primarily of cellulose in plants. It lies outside the cell membrane, provides structural strength, prevents rupture from water influx, and allows substances to pass through its pores.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_5",
+            question: "What is Nucleus?",
+            answer: "A dense, spherical organelle that controls all activities of the cell and contains hereditary material (DNA). It regulates cell growth, metabolism, and reproduction. It contains chromosomes which carry genes responsible for inheritance of traits.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_6",
+            question: "What is Cytoplasm?",
+            answer: "The jelly-like fluid that fills the cell between the nucleus and the cell membrane. It contains all the organelles. It is where most cellular activities (like glycolysis) and chemical reactions occur. It also helps in the movement of materials within the cell.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_7",
+            question: "What is Endoplasmic Reticulum (ER)?",
+            answer: "A network of membranous tubes and sacs involved in the synthesis and transport of proteins and lipids. Rough ER (with ribosomes) synthesizes proteins. Smooth ER (without ribosomes) synthesizes lipids and detoxifies drugs.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_8",
+            question: "What is Golgi Apparatus (Golgi Body)?",
+            answer: "A stack of flattened membranous sacs that modifies, sorts, packages, and transports materials received from the ER. It packages proteins into vesicles for secretion from the cell or for use within the cell (e.g., lysosomes).",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_9",
+            question: "What is Lysosomes?",
+            answer: "Membrane-bound sacs filled with digestive enzymes that break down worn-out cell parts, food particles, and foreign invaders. They are involved in intracellular digestion and autolysis (breaking down of the cell after its death). Often called 'suicide bags'.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_10",
+            question: "What is Mitochondria?",
+            answer: "Double-membraned organelles that produce energy (ATP) through cellular respiration. They have their own DNA and ribosomes. They break down glucose in the presence of oxygen to release energy stored in ATP molecules.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_11",
+            question: "What is Plastids?",
+            answer: "Membrane-bound organelles found only in plant cells. They contain pigments and can store food. Types include Chloroplasts (green, for photosynthesis), Chromoplasts (colored, for attracting pollinators), and Leucoplasts (colorless, for storing starch, oil, proteins).",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_12",
+            question: "What is Chloroplast?",
+            answer: "A green-colored plastid containing chlorophyll, where photosynthesis takes place. They convert light energy, carbon dioxide, and water into glucose and oxygen. They also have their own DNA.",
+            type: "reaction"
+          },
+          {
+            id: "chap5_card_13",
+            question: "What is Vacuoles?",
+            answer: "Large, fluid-filled sacs in the cytoplasm used for storage of water, sap, food, and waste products. Plant cells have a single large central vacuole that maintains turgor pressure. Animal cells have many small vacuoles.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_14",
+            question: "What is Prokaryotic Cell?",
+            answer: "A primitive type of cell without a well-defined nucleus (nuclear material is naked) and without membrane-bound organelles. They are usually smaller, simpler, and believed to be the first cells on Earth. They have a cell wall and a single circular chromosome.",
+            type: "definition"
+          },
+          {
+            id: "chap5_card_15",
+            question: "What is Eukaryotic Cell?",
+            answer: "An advanced type of cell with a well-defined nucleus enclosed by a nuclear membrane and containing membrane-bound organelles. They are larger and more complex than prokaryotic cells. All multicellular organisms are made of eukaryotic cells.",
+            type: "definition"
+          }
+        ]
       },
       {
-        id: "9S3_004",
-        question: "What is molecular mass?",
-        answer: "Sum of atomic masses of all atoms in a molecule.",
-        type: "definition"
+    chapter_number: 6,
+    chapter_name: "Tissues",
+    subject: "Biology",
+    flashcards: [
+          {
+            id: "chap6_card_1",
+            question: "What is Tissue?",
+            answer: "A group of cells that are similar in structure and/or work together to perform a particular function. Tissues are the next level of organization after cells. They allow for division of labor, making multicellular life efficient.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_2",
+            question: "What is Plant Tissues?",
+            answer: "Tissues found in plants, categorized mainly into Meristematic (dividing) and Permanent (non-dividing) tissues. Plant tissues are specialized for functions like growth, support, transport of materials, and food storage.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_3",
+            question: "What is Meristematic Tissue?",
+            answer: "A tissue composed of cells that are in a state of continuous division, leading to plant growth. These cells are small, have thin walls, large nuclei, and dense cytoplasm. They are responsible for increase in length (primary growth) and girth (secondary growth).",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_4",
+            question: "What is Permanent Tissue?",
+            answer: "Tissues derived from meristematic tissue that have lost the ability to divide and have taken up a specific role.  Cells may be living or dead. They are classified into Simple Permanent (one cell type) and Complex Permanent (multiple cell types).\nExample: xylem, phloem.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_5",
+            question: "What is Simple Permanent Tissue - Parenchyma?",
+            answer: "A living tissue with thin-walled cells, loosely packed with large intercellular spaces. Involved in photosynthesis, storage, and secretion. It is the basic packing tissue. Cells can sometimes store food (as in potatoes) or air (as in aquatic plants for buoyancy).",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_6",
+            question: "What is Simple Permanent Tissue - Collenchyma?",
+            answer: "A living tissue with elongated cells having irregular thickening at the corners (pectin & cellulose). Provides mechanical support and flexibility. It allows plant parts like stems and tendrils to bend without breaking. Provides tensile strength.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_7",
+            question: "What is Simple Permanent Tissue - Sclerenchyma?",
+            answer: "A dead tissue at maturity, with long, narrow cells having thick walls due to lignin deposition. Provides rigid mechanical support. The lignin makes the walls hard and impermeable. \nTwo types: fibers (long) and sclereids (stone cells, irregular).",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_8",
+            question: "What is Complex Permanent Tissue - Xylem?",
+            answer: "A vascular tissue responsible for transporting water and minerals from roots to other parts of the plant. Also provides mechanical strength. It consists of four types of cells: tracheids, vessels, xylem parenchyma, and xylem fibers.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_9",
+            question: "What is Complex Permanent Tissue - Phloem?",
+            answer: "A vascular tissue responsible for transporting food (sucrose/amino acids) from leaves to all parts of the plant (bidirectional). It consists of sieve tubes, companion cells, phloem parenchyma, and phloem fibers.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_10",
+            question: "What is Animal Tissues?",
+            answer: "Tissues found in animals, classified into four main types: Epithelial, Connective, Muscular, and Nervous tissue.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_11",
+            question: "What is Epithelial Tissue?",
+            answer: "A protective tissue forming a continuous layer covering or lining all external and internal body surfaces. Cells are tightly packed with little intercellular matrix.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_12",
+            question: "What is Connective Tissue?",
+            answer: "A tissue that connects, supports, binds, or separates other tissues or organs. It has cells scattered in an extracellular matrix. The matrix can be fluid (blood), jelly-like (cartilage), or solid (bone). It is the most abundant and widely distributed tissue.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_13",
+            question: "What is Blood (Fluid Connective Tissue)?",
+            answer: "A fluid connective tissue with a liquid matrix called plasma, containing red blood cells (RBCs), white blood cells (WBCs), and platelets. Plasma is mostly water. RBCs carry O₂, WBCs fight infection, and platelets help in clotting.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_14",
+            question: "What is Bone?",
+            answer: "A hard, rigid connective tissue that forms the skeleton. The matrix is rich in calcium salts and collagen fibers, providing strength. It supports the body, protects vital organs, anchors muscles, and stores minerals like calcium.",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_15",
+            question: "What is Muscular Tissue?",
+            answer: "Tissue composed of cells (muscle fibers) that can contract and relax to produce movement. Contains contractile proteins.\n Three types: Striated (voluntary, skeletal), Smooth (involuntary, visceral), and Cardiac (involuntary, heart).",
+            type: "definition"
+          },
+          {
+            id: "chap6_card_16",
+            question: "What is Nervous Tissue?",
+            answer: "Tissue found in the brain, spinal cord, and nerves. It is responsible for receiving, transmitting, and processing stimuli. The functional unit is the neuron, which has a cell body, dendrites (receive signals), and an axon (sends signals). It controls and coordinates body activities.",
+            type: "definition"
+          }
+        ]
       },
       {
-        id: "9S3_005",
-        question: "What is Avogadro's number?",
-        answer: "6.022 × 10²³ particles per mole.",
-        type: "definition"
+    chapter_number: 7,
+    chapter_name: "Motion",
+    subject: "Physics",
+    flashcards: [
+          {
+            id: "chap7_card_1",
+            question: "What is Motion?",
+            answer: "A change in the position of an object with time relative to a reference point (observer).",
+            type: "definition"
+          },
+          {
+            id: "chap7_card_2",
+            question: "What is Reference Point?",
+            answer: "A fixed point or object with respect to which the position of another object is described.",
+            type: "definition"
+          },
+          {
+            id: "chap7_card_3",
+            question: "What is Distance?",
+            answer: "The total length of the actual path traveled by an object between its initial and final positions. It is a scalar quantity.",
+            type: "definition"
+          },
+          {
+            id: "chap7_card_4",
+            question: "What is Displacement?",
+            answer: "The shortest straight-line distance from the initial to the final position of the object. It has both magnitude and direction.",
+            type: "formula"
+          },
+          {
+            id: "chap7_card_5",
+            question: "What is Uniform Motion?",
+            answer: "Motion in which an object covers equal distances in equal intervals of time, no matter how small the time intervals. ",
+            type: "formula"
+          },
+          {
+            id: "chap7_card_6",
+            question: "What is Non-uniform Motion?",
+            answer: "Motion in which an object covers unequal distances in equal intervals of time.",
+            type: "definition"
+          },
+          {
+            id: "chap7_card_7",
+            question: "What is Speed?",
+            answer: "The distance traveled by an object per unit time. It is a scalar quantity.\n Formula: Speed (v) = Distance (s) / Time (t). \nSI Unit: m/s",
+            type: "formula"
+          },
+          {
+            id: "chap7_card_8",
+            question: "What is Velocity?",
+            answer: "The rate of change of displacement. It is speed with a specified direction. \n Formula: Velocity (v) = Displacement (s) / Time (t). \nSI Unit: m/s",
+            type: "definition"
+          },
+          {
+            id: "chap7_card_9",
+            question: "What is Acceleration?",
+            answer: "The rate of change of velocity with time. \n Formula: Acceleration (a) = (Final velocity (v) - Initial velocity (u)) / Time (t). \na = (v-u)/t. \nSI Unit: m/s²",
+            type: "formula"
+          },
+          {
+            id: "chap7_card_10",
+            question: "What is Uniform Acceleration?",
+            answer: "Acceleration in which the change in velocity of an object is equal in every equal time interval.",
+            type: "definition"
+          },
+          {
+            id: "chap7_card_11",
+            question: "What is Equations of Uniformly Accelerated Motion?",
+            answer: "Three key equations that describe the relationship between displacement (s), initial velocity (u), final velocity (v), acceleration (a), and time (t). \n Formula: 1. v = u + at\n2. s = ut + ½ at²\n3. v² = u² + 2as",
+            type: "formula"
+          },
+          {
+            id: "chap7_card_12",
+            question: "What is Distance-Time Graph?",
+            answer: "A graph with distance on the y-axis and time on the x-axis. Its slope gives the speed of the object.",
+            type: "definition"
+          },
+          {
+            id: "chap7_card_13",
+            question: "What is Velocity-Time Graph?",
+            answer: "A graph with velocity on the y-axis and time on the x-axis. Its slope gives acceleration, and the area under the graph gives displacement.",
+            type: "formula"
+          },
+          {
+            id: "chap7_card_14",
+            question: "What is Uniform Circular Motion?",
+            answer: "Motion of an object along a circular path with constant speed. The velocity is not constant because the direction changes continuously.",
+            type: "formula"
+          }
+        ]
+      },
+      {
+    chapter_number: 8,
+    chapter_name: "Force and Laws of Motion",
+    subject: "Physics",
+    flashcards: [
+          {
+            id: "chap8_card_1",
+            question: "What is Force?",
+            answer: "A push or a pull upon an object resulting from its interaction with another object. It can change the state of motion or shape of an object.\n SI Unit: Newton (N).",
+            type: "formula"
+          },
+          {
+            id: "chap8_card_2",
+            question: "What is Balanced Forces?",
+            answer: "Forces acting on an object that are equal in magnitude and opposite in direction, resulting in no change in its state of motion.",
+            type: "formula"
+          },
+          {
+            id: "chap8_card_3",
+            question: "What is Unbalanced Forces?",
+            answer: "Forces acting on an object that are not equal and opposite, resulting in a change in its state of motion (it accelerates).",
+            type: "formula"
+          },
+          {
+            id: "chap8_card_4",
+            question: "What is Newton's First Law of Motion (Law of Inertia)?",
+            answer: "An object at rest stays at rest, and an object in motion stays in motion with the same speed and in the same direction unless acted upon by an unbalanced force.",
+            type: "definition"
+          },
+          {
+            id: "chap8_card_5",
+            question: "What is Inertia?",
+            answer: "The natural tendency of an object to resist any change in its state of rest or of uniform motion. ",
+            type: "formula"
+          },
+          {
+            id: "chap8_card_6",
+            question: "What is Momentum (p)?",
+            answer: "The quantity of motion of a moving body, measured as the product of its mass and velocity.\n Formula: Momentum (p) = mass (m) × velocity (v). \nSI Unit: kg·m/s",
+            type: "formula"
+          },
+          {
+            id: "chap8_card_7",
+            question: "What is Newton's Second Law of Motion?",
+            answer: "The rate of change of momentum of an object is directly proportional to the applied unbalanced force and takes place in the direction of the force.\n Formula: Force (F) = mass (m) × acceleration (a)",
+            type: "formula"
+          },
+          {
+            id: "chap8_card_8",
+            question: "What is Newton's Third Law of Motion?",
+            answer: "For every action, there is an equal and opposite reaction. Forces always occur in pairs.",
+            type: "formula"
+          },
+          {
+            id: "chap8_card_9",
+            question: "What is Conservation of Momentum?",
+            answer: "In the absence of an external unbalanced force, the total momentum of a system of objects remains constant.",
+            type: "formula"
+          },
+          {
+            id: "chap8_card_10",
+            question: "What is Friction?",
+            answer: "A force that opposes the relative motion between two surfaces in contact. It acts opposite to the direction of motion. \nExample: walking without slipping.",
+            type: "definition"
+          }
+        ]
+      },
+      {
+    chapter_number: 9,
+    chapter_name: "Gravitation",
+    subject: "Physics",
+    flashcards: [
+          {
+            id: "chap9_card_1",
+            question: "What is Gravitation?",
+            answer: "The universal force of attraction acting between any two objects in the universe that have mass.",
+            type: "definition"
+          },
+          {
+            id: "chap9_card_2",
+            question: "What is Universal Law of Gravitation?",
+            answer: "Every object in the universe attracts every other object with a force which is directly proportional to the product of their masses and inversely proportional to the square of the distance between them.",
+            type: "definition"
+          },
+          {
+            id: "chap9_card_3",
+            question: "What is Free Fall?",
+            answer: "The motion of an object under the influence of gravitational force alone. All objects, regardless of mass, fall with the same acceleration (g) in vacuum.",
+            type: "formula"
+          },
+          {
+            id: "chap9_card_4",
+            question: "What is Acceleration due to Gravity (g)?",
+            answer: "The acceleration with which an object falls freely towards the earth. Its value is approximately 9.8 m/s² near the earth's surface.",
+            type: "formula"
+          },
+          {
+            id: "chap9_card_5",
+            question: "What is Mass?",
+            answer: "The amount of matter present in an object. It is a scalar quantity and constant everywhere.\n SI Unit: Kilogram (kg)",
+            type: "definition"
+          },
+          {
+            id: "chap9_card_6",
+            question: "What is Weight?",
+            answer: "The force with which an object is attracted towards the earth .\n Formula: Weight (W) = mass (m) × g\nSI Unit: Newton (N)",
+            type: "definition"
+          },
+          {
+            id: "chap9_card_7",
+            question: "What is Thrust?",
+            answer: "The force acting on an object perpendicular to its surface.",
+            type: "definition"
+          },
+          {
+            id: "chap9_card_8",
+            question: "What is Pressure?",
+            answer: "The thrust (force) per unit area.\n Formula: Pressure (P) = Force (F) / Area (A)\nSI Unit: Pascal (Pa) = N/m²",
+            type: "formula"
+          },
+          {
+            id: "chap9_card_9",
+            question: "What is Buoyancy (Buoyant Force)?",
+            answer: "The upward force exerted by a fluid (liquid or gas) on an object immersed in it.",
+            type: "definition"
+          },
+          {
+            id: "chap9_card_10",
+            question: "What is Archimedes' Principle?",
+            answer: "When an object is immersed fully or partially in a fluid, it experiences an upward buoyant force equal to the weight of the fluid displaced by the object.",
+            type: "formula"
+          },
+          {
+            id: "chap9_card_11",
+            question: "What is Density?",
+            answer: "Mass per unit volume of a substance. It is a characteristic property.\n Formula: Density (ρ) = Mass (m) / Volume (V)\nSI Unit: kg/m³",
+            type: "definition"
+          },
+          {
+            id: "chap9_card_12",
+            question: "What is Relative Density?",
+            answer: "The ratio of the density of a substance to the density of water at 4°C. It is a dimensionless number.\n Formula: Relative Density = Density of substance / Density of water",
+            type: "formula"
+          }
+        ]
+      },
+      {
+    chapter_number: 10,
+    chapter_name: "Work and Energy",
+    subject: "Physics",
+    flashcards: [
+          {
+            id: "chap10_card_1",
+            question: "What is Work?",
+            answer: "Work is said to be done when a force applied on an object causes a displacement in the direction of the force. Formula: Work (W) = Force (F) × Displacement (s) \nSI Unit: Joule (J) = 1 N·m",
+            type: "formula"
+          },
+          {
+            id: "chap10_card_2",
+            question: "What is Energy?",
+            answer: "The capacity or ability to do work. It is a scalar quantity.\n SI Unit: Joule (J)",
+            type: "formula"
+          },
+          {
+            id: "chap10_card_3",
+            question: "What is Kinetic Energy (KE)?",
+            answer: "The energy possessed by an object due to its motion. \n Formula: KE = ½ × mass (m) × velocity² (v²)\nKE = ½ mv²",
+            type: "formula"
+          },
+          {
+            id: "chap10_card_4",
+            question: "What is Potential Energy (PE)?",
+            answer: "The energy possessed by an object due to its position or configuration. \n Formula: Gravitational PE = mass (m) × g × height (h)\nPE = mgh",
+            type: "formula"
+          },
+          {
+            id: "chap10_card_5",
+            question: "What is Law of Conservation of Energy?",
+            answer: "Energy can neither be created nor destroyed; it can only be transformed from one form to another. The total energy in an isolated system remains constant.",
+            type: "definition"
+          },
+          {
+            id: "chap10_card_6",
+            question: "What is Power?",
+            answer: "The rate of doing work or the rate of transfer of energy. Formula: Power (P) = Work (W) / Time (t) = Energy / Time\nSI Unit: Watt (W) = 1 J/s",
+            type: "formula"
+          },
+          {
+            id: "chap10_card_7",
+            question: "What is Commercial Unit of Energy?",
+            answer: "Kilowatt-hour (kWh), used for measuring electrical energy consumption.",
+            type: "definition"
+          }
+        ]
+      },
+      {
+    chapter_number: 11,
+    chapter_name: "Sound",
+    subject: "Physics",
+    flashcards: [
+          {
+            id: "chap11_card_1",
+            question: "What is Sound?",
+            answer: "A form of energy that produces a sensation of hearing in our ears. It is produced by vibrating objects. ",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_2",
+            question: "What is Production of Sound?",
+            answer: "Sound is produced by vibrating objects. The matter or substance through which sound is transmitted is called a medium.",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_3",
+            question: "What is Propagation of Sound?",
+            answer: "Sound travels through a medium (solid, liquid, gas) by creating compressions (high pressure) and rarefactions (low pressure). It cannot travel in a vacuum.",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_4",
+            question: "What is Longitudinal Wave?",
+            answer: "A wave in which the particles of the medium vibrate back and forth along the direction of wave propagation.",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_5",
+            question: "What is Transverse Wave?",
+            answer: "A wave in which the particles of the medium vibrate perpendicular to the direction of wave propagation.",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_6",
+            question: "What is Wavelength (λ)?",
+            answer: "The distance between two consecutive compressions (or rarefactions) in a longitudinal wave, or two consecutive crests (or troughs) in a transverse wave.\n SI Unit: Meter (m)",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_7",
+            question: "What is Amplitude?",
+            answer: "The magnitude of maximum displacement of a vibrating particle from its mean position. It determines the loudness of sound.",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_8",
+            question: "What is Frequency (ν)?",
+            answer: "The number of complete oscillations (vibrations) per second. It determines the pitch of sound.\n Formula: ν = 1 / Time Period (T)\nSI Unit: Hertz (Hz) = 1/s",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_9",
+            question: "What is Time Period (T)?",
+            answer: "The time taken to complete one oscillation. \n Formula: T = 1 / Frequency (ν) \nSI Unit: Second (s)",
+            type: "formula"
+          },
+          {
+            id: "chap11_card_10",
+            question: "What is Speed of Sound (v)?",
+            answer: "The distance traveled by a sound wave per unit time. It depends on the medium and its state (temperature, humidity).",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_11",
+            question: "What is Reflection of Sound?",
+            answer: "The bouncing back of sound waves when they strike a hard surface. Laws of reflection are similar to light. \n Formula: Angle of incidence = Angle of reflection",
+            type: "formula"
+          },
+          {
+            id: "chap11_card_12",
+            question: "What is Echo?",
+            answer: "The repetition of sound caused by the reflection of sound waves from a large, hard surface. The original sound and the reflected sound should be at least 0.1 seconds apart to be heard distinctly. \n Formula: Minimum distance for echo = (Speed of sound × 0.1 s) / 2",
+            type: "formula"
+          },
+          {
+            id: "chap11_card_13",
+            question: "What is Audible Range?",
+            answer: "The range of frequencies that the average human ear can hear, typically from 20 Hz to 20,000 Hz.",
+            type: "definition"
+          },
+          {
+            id: "chap11_card_14",
+            question: "What is Ultrasound?",
+            answer: "Sound waves with a frequency higher than the upper audible limit of human hearing (>20,000 Hz).",
+            type: "formula"
+          },
+          {
+            id: "chap11_card_15",
+            question: "What is SONAR?",
+            answer: "Sound Navigation and Ranging. A technique that uses ultrasonic waves to detect and locate objects underwater, and measure water depth. \nExample: Used by ships and submarines. \nFormula: Distance (d) = (Speed of sound in water × Time for echo) / 2",
+            type: "formula"
+          }
+        ]
+      },
+      {
+    chapter_number: 12,
+    chapter_name: "Improvement in Food Resources",
+    subject: "Biology",
+    flashcards: [
+          {
+            id: "chap12_card_1",
+            question: "What is Food Resources?",
+            answer: "Resources that provide nutrients necessary for growth, health, and energy. They come from agriculture (crops) and animal husbandry (livestock). Improving food resources is essential to meet the demands of a growing population and ensure food security.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_2",
+            question: "What is Crop Variety Improvement?",
+            answer: "The process of developing new varieties of crops with desired traits like higher yield, better quality, and resistance to biotic/abiotic stresses. Done through plant breeding to incorporate useful genes from wild varieties or other species.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_3",
+            question: "What is Crop Production Management?",
+            answer: "Involves practices related to nutrient management, irrigation, and cropping patterns to maximize crop yield. It aims to increase productivity per unit area, per unit time, and per unit input of resources.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_4",
+            question: "What is Nutrient Management?",
+            answer: "The science of supplying and managing the essential nutrients for crops to optimize growth and yield. Ensures plants get the right amount of macro (N, P, K) and micronutrients (Fe, Zn, etc.) at the right time.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_5",
+            question: "What is Manure?",
+            answer: "Organic matter (decomposed plant/animal waste) added to soil to improve its fertility and structure. It enriches soil with humus and nutrients, improves soil texture, and increases water retention.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_6",
+            question: "What is Fertilizers?",
+            answer: "Commercially produced, inorganic chemical substances containing specific nutrients in high concentrations to promote plant growth. They give a quick boost of nutrients but excessive use can make soil acidic or saline and cause water pollution.\n Example: Urea (Nitrogen)",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_7",
+            question: "What is Irrigation?",
+            answer: "The artificial application of water to soil for assisting in the growth of crops, especially in areas of insufficient rainfall. Proper irrigation prevents water stress, increases yield, and allows cultivation in dry areas. Methods should conserve water.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_8",
+            question: "What is Cropping Patterns?",
+            answer: "Different ways of growing crops to maximize the use of land and resources throughout the year. These practices help in pest control, reduce soil erosion, maintain soil fertility, and reduce risk of crop failure.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_9",
+            question: "What is Crop Protection Management?",
+            answer: "Protection of crops from losses due to weeds, insects, pests, and diseases. \nExample: Using pesticides, fungicides, and biological control methods.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_10",
+            question: "What is Weeds?",
+            answer: "Unwanted plants that grow along with the cultivated crop, competing for resources like nutrients, water, and light. They reduce crop yield and quality. Can be controlled by manual weeding, using weedicides, or proper seedbed preparation.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_11",
+            question: "What is Animal Husbandry?",
+            answer: "The branch of agriculture concerned with the care, breeding, and management of domesticated animals (livestock) for food and other products. \nExample: Dairy farming (milk), poultry farming (eggs and meat).",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_12",
+            question: "What is Cattle Farming?",
+            answer: "Raising cattle for milk (dairy animals) and for work (draught animals).",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_13",
+            question: "What is Poultry Farming?",
+            answer: "Raising domesticated birds like chickens, ducks, and turkeys for their eggs and meat.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_14",
+            question: "What is Fish Production (Fisheries)?",
+            answer: "Culturing and capturing fish and other aquatic organisms for food.",
+            type: "definition"
+          },
+          {
+            id: "chap12_card_15",
+            question: "What is Bee Keeping (Apiculture)?",
+            answer: "The maintenance of honeybee colonies, commonly in hives, for the production of honey and wax, and for crop pollination. Bees are good pollinators. Bee keeping needs low investment and is a source of additional income for farmers.",
+            type: "definition"
+          }
+        ]
       }
-    ]
-  }
 ];
 
 // Additional chapters for other classes and subjects
