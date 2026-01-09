@@ -1,13 +1,28 @@
 export interface Flashcard {
-    id: string;
-    question: string;
-    answer: string;
-    type: 'definition' | 'formula' | 'reaction';
+    id: string | number;
+    type: 'definition' | 'formula' | 'reaction' | 'concept' | 'comparison' | 'assumption';
+    // Format 1: question/answer
+    question?: string;
+    answer?: string;
+    // Format 2: front/back with additional fields
+    title?: string;
+    front?: string;
+    back?: string;
+    open?: string;
+    formula?: string | null;
+    units?: string | null;
+    conditions_or_notes?: string | null;
+    examples_or_comparison?: string | null;
   }
   
   export interface Chapter {
-    chapter_number: number;
-    chapter_name: string;
+    // Format 1: chapter_number/chapter_name format
+    chapter_number?: number;
+    chapter_name?: string;
+    // Format 2: class/chapter format
+    class?: string;
+    chapter?: string;
+    // Common fields
     subject: string;
     flashcards: Flashcard[];
   }

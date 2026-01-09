@@ -12,7 +12,10 @@ export default function FlashcardSubject() {
   const classNum = classParam ? parseInt(classParam) : null;
 
   return (
-    <FlashcardProvider>
+    <FlashcardProvider 
+      initialClass={classNum ?? undefined}
+      initialSubject={subject || undefined}
+    >
       <FlashcardSubjectContent 
         classNum={classNum} 
         subject={subject || ''} 
@@ -156,8 +159,10 @@ function FlashcardSubjectContent({ classNum, subject, onBack }: FlashcardSubject
           selectedChapter={selectedChapter}
           onSelectChapter={(chapterNum) => {
             selectChapter(chapterNum);
-            // Navigate to chapter page
-            navigate(`/dashboard/flashcards/${subject}/${chapterNum}`);
+            // Navigate to chapter page with class in state
+            navigate(`/dashboard/flashcards/${subject}/${chapterNum}`, {
+              state: { class: classNum }
+            });
           }}
           subject={subject}
         />

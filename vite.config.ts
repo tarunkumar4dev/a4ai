@@ -12,14 +12,14 @@ export default defineConfig(({ mode }): UserConfig => {
     server: {
       host: "::",        // ok (IPv6 + localhost). If needed, use "localhost" or "0.0.0.0"
       port: 8080,        // keep login + callback on this origin
-      strictPort: true,  // 👈 critical: never auto-switch to another port
+      strictPort: false,  // 👈 allow auto-switch to another port if 8080 is busy
       cors: true,        // fine in dev
       // Optional: uncomment if you access via LAN/IP and HMR has issues
       // hmr: { host: "localhost", protocol: "ws", port: 8080 },
     },
     preview: {
       port: 8080,        // 👈 preview build also same origin
-      strictPort: true,
+      strictPort: false, // allow auto-switch if port is busy
     },
     plugins: [
       react(),
