@@ -8443,10 +8443,1545 @@ export const class10Mathematics: Chapter[] = [
   }
 ];
 
+export const class9Mathematics: Chapter[] = [
+  {
+    chapter_number: 1,
+    chapter_name: "Number Systems",
+    subject: "Mathematics",
+    flashcards: [
+      {
+        id: "9M1_001",
+        question: "What is a number system?",
+        answer: "A number system is a collection of numbers together with operations on those numbers and the properties that the operations satisfy.",
+        type: "definition"
+      },
+      {
+        id: "9M1_002",
+        question: "What are natural numbers?",
+        answer: "Natural numbers are counting numbers. All positive numbers except 0 are natural numbers.",
+        type: "definition"
+      },
+      {
+        id: "9M1_003",
+        question: "What are whole numbers?",
+        answer: "Whole numbers are the set of natural numbers including 0.",
+        type: "definition"
+      },
+      {
+        id: "9M1_004",
+        question: "What are integers?",
+        answer: "Integers are the set of all whole numbers and their negatives.",
+        type: "definition"
+      },
+      {
+        id: "9M1_005",
+        question: "What are rational numbers?",
+        answer: "Any number that can be written in the form p/q, where q ≠ 0, is called a rational number.",
+        type: "definition"
+      },
+      {
+        id: "9M1_006",
+        question: "What are irrational numbers?",
+        answer: "Numbers that cannot be written in the form p/q are called irrational numbers.",
+        type: "definition"
+      },
+      {
+        id: "9M1_007",
+        question: "What are real numbers?",
+        answer: "Any number that can be represented on the number line is called a real number.",
+        type: "definition"
+      },
+      {
+        id: "9M1_008",
+        question: "What is a terminating decimal?",
+        answer: "A decimal expansion that ends after a finite number of steps is called a terminating decimal.",
+        type: "definition"
+      },
+      {
+        id: "9M1_009",
+        question: "What is a non-terminating decimal?",
+        answer: "A decimal expansion that does not end is called a non-terminating decimal.",
+        type: "definition"
+      },
+      {
+        id: "9M1_010",
+        question: "The sum or difference of a rational number and an irrational number is?",
+        answer: "Irrational",
+        type: "concept"
+      },
+      {
+        id: "9M1_011",
+        question: "The product or quotient of a non-zero rational number and an irrational number is?",
+        answer: "Irrational",
+        type: "concept"
+      },
+      {
+        id: "9M1_012",
+        question: "What is the symbol √ called?",
+        answer: "The symbol √ is called the radical sign.",
+        type: "definition"
+      },
+      {
+        id: "9M1_013",
+        question: "Simplify √a / √b",
+        answer: "√a / √b = √(a / b)",
+        type: "formula"
+      },
+      {
+        id: "9M1_014",
+        question: "Simplify √ab",
+        answer: "√ab = √a × √b",
+        type: "formula"
+      },
+      {
+        id: "9M1_015",
+        question: "Expand (a + √b)(√c + √d)",
+        answer: "a√c + a√d + √bc + √bd",
+        type: "formula"
+      },
+      {
+        id: "9M1_016",
+        question: "Simplify (√a + √b)(√a − √b)",
+        answer: "a − b",
+        type: "formula"
+      },
+      {
+        id: "9M1_017",
+        question: "Simplify (a + √b)(a − √b)",
+        answer: "a² − b",
+        type: "formula"
+      },
+      {
+        id: "9M1_018",
+        question: "Simplify (√a + √b)²",
+        answer: "a + 2√ab + b",
+        type: "formula"
+      },
+      {
+        id: "9M1_019",
+        question: "What is a^m × a^n?",
+        answer: "a^(m+n)",
+        type: "formula"
+      },
+      {
+        id: "9M1_020",
+        question: "What is (a^m)^n?",
+        answer: "a^(mn)",
+        type: "formula"
+      },
+      {
+        id: "9M1_021",
+        question: "What is a^m / a^n?",
+        answer: "a^(m−n)",
+        type: "formula"
+      },
+      {
+        id: "9M1_022",
+        question: "What is a^m × b^m?",
+        answer: "(ab)^m",
+        type: "formula"
+      },
+      {
+        id: "9M1_023",
+        question: "What is a⁰?",
+        answer: "a⁰ = 1, where a ≠ 0",
+        type: "formula"
+      }
+    ]
+  },
+  {
+  chapter_number: 2,
+  chapter_name: "Polynomials",
+  subject: "Mathematics",
+  flashcards: [
+    {
+      id: "9M2_001",
+      question: "Simplify √ab",
+      answer: "√ab = √a × √b",
+      type: "formula"
+    },
+    {
+      id: "9M2_002",
+      question: "Simplify √a / √b",
+      answer: "√a / √b = √(a / b)",
+      type: "formula"
+    },
+    {
+      id: "9M2_003",
+      question: "Expand (a + b)²",
+      answer: "a² + 2ab + b²",
+      type: "formula"
+    },
+    {
+      id: "9M2_004",
+      question: "Expand (a − b)²",
+      answer: "a² − 2ab + b²",
+      type: "formula"
+    },
+    {
+      id: "9M2_005",
+      question: "Simplify (a + b)(a − b)",
+      answer: "a² − b²",
+      type: "formula"
+    },
+    {
+      id: "9M2_006",
+      question: "Factorize a² − b²",
+      answer: "(a + b)(a − b)",
+      type: "formula"
+    },
+    {
+      id: "9M2_007",
+      question: "Expand (x + a)(x + b)",
+      answer: "x² + (a + b)x + ab",
+      type: "formula"
+    },
+    {
+      id: "9M2_008",
+      question: "Expand (a + b + c)²",
+      answer: "a² + b² + c² + 2(ab + bc + ca)",
+      type: "formula"
+    },
+    {
+      id: "9M2_009",
+      question: "Expand (a + b)³",
+      answer: "a³ + b³ + 3ab(a + b)",
+      type: "formula"
+    },
+    {
+      id: "9M2_010",
+      question: "Expand (a − b)³",
+      answer: "a³ − b³ − 3ab(a − b)",
+      type: "formula"
+    },
+    {
+      id: "9M2_011",
+      question: "Factorize a³ + b³",
+      answer: "(a + b)(a² + b² − ab)",
+      type: "formula"
+    },
+    {
+      id: "9M2_012",
+      question: "Factorize a³ − b³",
+      answer: "(a − b)(a² + b² + ab)",
+      type: "formula"
+    },
+    {
+      id: "9M2_013",
+      question: "Simplify a³ + b³ + c³ − 3abc",
+      answer: "(a + b + c)(a² + b² + c² − ab − bc − ca)",
+      type: "formula"
+    },
+    {
+      id: "9M2_014",
+      question: "Simplify a² + b² + c² − ab − bc − ca",
+      answer: "½[(a − b)² + (b − c)² + (a − c)²]",
+      type: "formula"
+    }
+  ]
+  },
+  {
+  chapter_number: 3,
+  chapter_name: "Coordinate Geometry",
+  subject: "Mathematics",
+  flashcards: [
+    {
+      id: "9M3_001",
+      question: "What is the origin in a Cartesian plane?",
+      answer: "The point from which distances are measured on the Cartesian plane is called the origin.",
+      type: "definition"
+    },
+    {
+      id: "9M3_002",
+      question: "What is abscissa?",
+      answer: "The x-coordinate of a point is called its abscissa.",
+      type: "definition"
+    },
+    {
+      id: "9M3_003",
+      question: "What is ordinate?",
+      answer: "The y-coordinate of a point is called its ordinate.",
+      type: "definition"
+    },
+    {
+      id: "9M3_004",
+      question: "What are the coordinates of a point on the x-axis?",
+      answer: "(x, 0)",
+      type: "concept"
+    },
+    {
+      id: "9M3_005",
+      question: "What are the coordinates of a point on the y-axis?",
+      answer: "(0, y)",
+      type: "concept"
+    },
+    {
+      id: "9M3_006",
+      question: "Define abscissa and ordinate in terms of distance from axes.",
+      answer: "The distance of a point from the y-axis is its x-coordinate (abscissa) and the distance from the x-axis is its y-coordinate (ordinate).",
+      type: "definition"
+    },
+    {
+      id: "9M3_007",
+      question: "What is required to locate the position of a point in a plane?",
+      answer: "Two perpendicular lines, one horizontal and one vertical, are required.",
+      type: "concept"
+    },
+    {
+      id: "9M3_008",
+      question: "What is the x-axis?",
+      answer: "The horizontal line in the Cartesian plane is called the x-axis.",
+      type: "definition"
+    },
+    {
+      id: "9M3_009",
+      question: "What is the y-axis?",
+      answer: "The vertical line in the Cartesian plane is called the y-axis.",
+      type: "definition"
+    },
+    {
+      id: "9M3_010",
+      question: "What are the coordinates of a point in the first quadrant?",
+      answer: "(+, +)",
+      type: "concept"
+    },
+    {
+      id: "9M3_011",
+      question: "What are the coordinates of a point in the second quadrant?",
+      answer: "(−, +)",
+      type: "concept"
+    },
+    {
+      id: "9M3_012",
+      question: "What are the coordinates of a point in the third quadrant?",
+      answer: "(−, −)",
+      type: "concept"
+    },
+    {
+      id: "9M3_013",
+      question: "What are the coordinates of a point in the fourth quadrant?",
+      answer: "(+, −)",
+      type: "concept"
+    },
+    {
+      id: "9M3_014",
+      question: "What are the coordinates of the origin?",
+      answer: "(0, 0)",
+      type: "concept"
+    },
+    {
+      id: "9M3_015",
+      question: "If a point moves parallel to the x-axis, which coordinate remains constant?",
+      answer: "The y-coordinate remains constant.",
+      type: "concept"
+    },
+    {
+      id: "9M3_016",
+      question: "If a point moves parallel to the y-axis, which coordinate remains constant?",
+      answer: "The x-coordinate remains constant.",
+      type: "concept"
+    }
+  ]
+  },
+  {
+  chapter_number: 4,
+  chapter_name: "Linear Equations in Two Variables",
+  subject: "Mathematics",
+  flashcards: [
+    {
+      id: "9M4_001",
+      question: "What is a solution of an equation?",
+      answer: "The value of the variable that makes an equation true is called the solution.",
+      type: "definition"
+    },
+    {
+      id: "9M4_002",
+      question: "What is a root of an equation?",
+      answer: "The value of the variable that makes an equation true is called the root of the equation.",
+      type: "definition"
+    },
+    {
+      id: "9M4_003",
+      question: "What is a constant term?",
+      answer: "A term that contains no variables and whose value does not change is called a constant term.",
+      type: "definition"
+    },
+    {
+      id: "9M4_004",
+      question: "What is a formula?",
+      answer: "An algebraic relationship between two or more variables is called a formula.",
+      type: "definition"
+    },
+    {
+      id: "9M4_005",
+      question: "What is an equation?",
+      answer: "A mathematical statement that says two expressions are equal is called an equation.",
+      type: "definition"
+    },
+    {
+      id: "9M4_006",
+      question: "What is a variable?",
+      answer: "A variable is a symbol, usually a letter, that represents an unknown value.",
+      type: "definition"
+    },
+    {
+      id: "9M4_007",
+      question: "What is a linear equation in two variables?",
+      answer: "A linear equation in two variables is an equation of the form ax + by + c = 0, where a, b and c are real numbers and a and b are not both zero.",
+      type: "definition"
+    },
+    {
+      id: "9M4_008",
+      question: "What is the solution of a linear equation in two variables?",
+      answer: "An ordered pair (x, y) that satisfies the given linear equation is called its solution.",
+      type: "definition"
+    },
+    {
+      id: "9M4_009",
+      question: "What is the graph of a linear equation in two variables?",
+      answer: "The graph of a linear equation in two variables is always a straight line.",
+      type: "concept"
+    },
+    {
+      id: "9M4_010",
+      question: "How many solutions does a linear equation in two variables have?",
+      answer: "A linear equation in two variables has infinitely many solutions.",
+      type: "concept"
+    }
+  ]
+  },
+  {
+  chapter_number: 5,
+  chapter_name: "Introduction to Euclid’s Geometry",
+  subject: "Mathematics",
+  flashcards: [
+    {
+      id: "9M5_001",
+      question: "From which language is Geometry derived?",
+      answer: "Geometry is derived from the Greek words ‘geo’ meaning earth and ‘metrein’ meaning to measure.",
+      type: "definition"
+    },
+    {
+      id: "9M5_002",
+      question: "What were the manuals of geometric constructions in ancient India called?",
+      answer: "Sulbasutras",
+      type: "fact"
+    },
+    {
+      id: "9M5_003",
+      question: "Which Greek mathematician gave the first known proof in geometry?",
+      answer: "Thales",
+      type: "fact"
+    },
+    {
+      id: "9M5_004",
+      question: "What was Thales’ first proof?",
+      answer: "A circle is bisected by its diameter.",
+      type: "theorem"
+    },
+    {
+      id: "9M5_005",
+      question: "Who was the famous student of Thales?",
+      answer: "Pythagoras",
+      type: "fact"
+    },
+    {
+      id: "9M5_006",
+      question: "Who was a teacher of mathematics at Alexandria in Egypt?",
+      answer: "Euclid",
+      type: "fact"
+    },
+    {
+      id: "9M5_007",
+      question: "What is Euclid’s famous treatise called?",
+      answer: "Elements",
+      type: "fact"
+    },
+    {
+      id: "9M5_008",
+      question: "How many chapters are there in Euclid’s Elements?",
+      answer: "13",
+      type: "fact"
+    },
+    {
+      id: "9M5_009",
+      question: "What was each chapter of Euclid’s Elements called?",
+      answer: "Book",
+      type: "definition"
+    },
+    {
+      id: "9M5_010",
+      question: "What is a solid according to geometry?",
+      answer: "A solid has shape, size, position and can be moved from one place to another.",
+      type: "definition"
+    },
+    {
+      id: "9M5_011",
+      question: "What are the boundaries of a solid?",
+      answer: "Surfaces",
+      type: "definition"
+    },
+    {
+      id: "9M5_012",
+      question: "How many dimensions does a solid have?",
+      answer: "3",
+      type: "fact"
+    },
+    {
+      id: "9M5_013",
+      question: "How many dimensions does a point have?",
+      answer: "None",
+      type: "fact"
+    },
+    {
+      id: "9M5_014",
+      question: "State Euclid’s definition of a point.",
+      answer: "A point is that which has no part.",
+      type: "definition"
+    },
+    {
+      id: "9M5_015",
+      question: "State Euclid’s definition of a line.",
+      answer: "A line is breadthless length.",
+      type: "definition"
+    },
+    {
+      id: "9M5_016",
+      question: "What are the ends of a line called?",
+      answer: "Points",
+      type: "definition"
+    },
+    {
+      id: "9M5_017",
+      question: "What is a straight line according to Euclid?",
+      answer: "A straight line is a line which lies evenly with the points on itself.",
+      type: "definition"
+    },
+    {
+      id: "9M5_018",
+      question: "What is a surface according to Euclid?",
+      answer: "A surface is that which has length and breadth only.",
+      type: "definition"
+    },
+    {
+      id: "9M5_019",
+      question: "What are the edges of a surface called?",
+      answer: "Lines",
+      type: "definition"
+    },
+    {
+      id: "9M5_020",
+      question: "What is a plane surface?",
+      answer: "A plane surface is a surface which lies evenly with the lines on itself.",
+      type: "definition"
+    },
+    {
+      id: "9M5_021",
+      question: "What are axioms?",
+      answer: "Assumptions which are obvious universal truths used throughout mathematics are called axioms.",
+      type: "definition"
+    },
+    {
+      id: "9M5_022",
+      question: "What are postulates?",
+      answer: "Assumptions which are obvious universal truths specific to geometry are called postulates.",
+      type: "definition"
+    },
+    {
+      id: "9M5_023",
+      question: "State Euclid’s first axiom.",
+      answer: "Things which are equal to the same thing are equal to one another.",
+      type: "axiom"
+    },
+    {
+      id: "9M5_024",
+      question: "State Euclid’s second axiom.",
+      answer: "If equals are added to equals, the wholes are equal.",
+      type: "axiom"
+    },
+    {
+      id: "9M5_025",
+      question: "State Euclid’s third axiom.",
+      answer: "If equals are subtracted from equals, the remainders are equal.",
+      type: "axiom"
+    },
+    {
+      id: "9M5_026",
+      question: "State Euclid’s fourth axiom.",
+      answer: "Things which coincide with one another are equal to one another.",
+      type: "axiom"
+    },
+    {
+      id: "9M5_027",
+      question: "State Euclid’s fifth axiom.",
+      answer: "The whole is greater than the part.",
+      type: "axiom"
+    },
+    {
+      id: "9M5_028",
+      question: "State Euclid’s first postulate.",
+      answer: "A straight line may be drawn from any one point to any other point.",
+      type: "postulate"
+    },
+    {
+      id: "9M5_029",
+      question: "State Euclid’s second postulate.",
+      answer: "A terminated line can be produced indefinitely.",
+      type: "postulate"
+    },
+    {
+      id: "9M5_030",
+      question: "State Euclid’s third postulate.",
+      answer: "A circle can be drawn with any centre and any radius.",
+      type: "postulate"
+    },
+    {
+      id: "9M5_031",
+      question: "State Euclid’s fourth postulate.",
+      answer: "All right angles are equal to one another.",
+      type: "postulate"
+    },
+    {
+      id: "9M5_032",
+      question: "State Euclid’s fifth postulate.",
+      answer: "If a straight line falling on two straight lines makes interior angles on the same side less than two right angles, the two straight lines meet on that side.",
+      type: "postulate"
+    },
+    {
+      id: "9M5_033",
+      question: "What does a consistent system of axioms mean?",
+      answer: "A system of axioms is consistent if no statement contradicts any axiom or previously proved statement.",
+      type: "definition"
+    },
+    {
+      id: "9M5_034",
+      question: "What are propositions or theorems?",
+      answer: "Statements that are proved using axioms, postulates and previously proved results.",
+      type: "definition"
+    }
+  ]
+  },
+  {
+  "chapter_number": 6,
+  "chapter_name": "Basic Geometry Concepts",
+  "subject": "Mathematics",
+  "flashcards": [
+    {
+      "id": "9M6_001",
+      "question": "What is a point in geometry?",
+      "answer": "A dot is known as a point. It is dimensionless and the building block of geometry.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_002",
+      "question": "What is a line in geometry?",
+      "answer": "A line is a combination of points placed so close together one after the other such that the length formed on either side is infinite. Representation: AB.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_003",
+      "question": "What is a line segment?",
+      "answer": "A line segment is a combination of points placed so close together that the length formed is of fixed size. Representation: Line AB.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_004",
+      "question": "What is a ray?",
+      "answer": "A ray is a special type of line which is infinite from one side and has an endpoint on the other side.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_005",
+      "question": "What is an angle in geometry?",
+      "answer": "An angle is the space occupied between two rays that have a common endpoint (vertex) and arms in different directions. Representation: m<ABC or <ABC.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_006",
+      "question": "What is a zero angle?",
+      "answer": "When the angle formed between two rays is 0°, it is called a zero angle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_007",
+      "question": "What is a straight angle?",
+      "answer": "When the angle formed between two rays is 180°, it is called a straight angle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_008",
+      "question": "What is a right angle?",
+      "answer": "An angle that is equal to 90° is called a right angle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_009",
+      "question": "What is an acute angle?",
+      "answer": "An angle that lies between 0° and 90° is called an acute angle. (0° < θ < 90°)",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_010",
+      "question": "What is an obtuse angle?",
+      "answer": "An angle that lies between 90° and 180° is called an obtuse angle. (90° < θ < 180°)",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_011",
+      "question": "What is a reflex angle?",
+      "answer": "An angle greater than 180° but less than 360° is called a reflex angle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_012",
+      "question": "What is a complete angle?",
+      "answer": "An angle equal to 360° is called a complete angle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_013",
+      "question": "Which sequence of angles is true: acute -> right -> obtuse?",
+      "answer": "True",
+      "type": "true_false"
+    },
+    {
+      "id": "9M6_014",
+      "question": "Which sequence of angles is true: obtuse -> right -> acute?",
+      "answer": "True",
+      "type": "true_false"
+    },
+    {
+      "id": "9M6_015",
+      "question": "What are equal angles?",
+      "answer": "When two angles are equal, they are called equal angles.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_016",
+      "question": "What are anticlockwise angles called?",
+      "answer": "Anticlockwise angles are called positive or normal angles.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_017",
+      "question": "What are clockwise angles called?",
+      "answer": "Clockwise angles are called negative angles.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_018",
+      "question": "What is an angle bisector?",
+      "answer": "A ray drawn from the vertex of an angle that divides it into two equal parts is called an angle bisector.",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_019",
+      "question": "What are complementary angles?",
+      "answer": "Two angles whose sum is 90° are called complementary angles. Formula: <A + <B = 90°",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_020",
+      "question": "What are supplementary angles?",
+      "answer": "Two angles whose sum is 180° are called supplementary angles. Formula: <A + <B = 180°",
+      "type": "definition"
+    },
+    {
+      "id": "9M6_021",
+      "question": "What is the interior of an angle?",
+      "answer": "The interior of an angle consists of points that lie between the arms of the angle and the common vertex.",
+      "type": "definition"
+    }
+  ]
+  },
+  {
+  "chapter_number": 7,
+  "chapter_name": "Triangles",
+  "subject": "Mathematics",
+  "flashcards": [
+    {
+      "id": "9M7_001",
+      "question": "What is a triangle?",
+      "answer": "A triangle is a closed figure formed by three line segments joining three non-collinear points called vertices.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_002",
+      "question": "What are the sides of a triangle?",
+      "answer": "The three line segments that form a triangle are called its sides.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_003",
+      "question": "What are the vertices of a triangle?",
+      "answer": "The three points where the sides of a triangle meet are called vertices.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_004",
+      "question": "What are the angles of a triangle?",
+      "answer": "The three angles formed at the vertices of a triangle are called its interior angles.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_005",
+      "question": "State the Triangle Angle Sum Property.",
+      "answer": "The sum of the interior angles of a triangle is always 180°.",
+      "type": "property"
+    },
+    {
+      "id": "9M7_006",
+      "question": "What is an equilateral triangle?",
+      "answer": "A triangle in which all three sides are equal and all three angles are 60° each is called an equilateral triangle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_007",
+      "question": "What is an isosceles triangle?",
+      "answer": "A triangle with two sides equal and the angles opposite those sides equal is called an isosceles triangle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_008",
+      "question": "What is a scalene triangle?",
+      "answer": "A triangle in which all three sides and all three angles are unequal is called a scalene triangle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_009",
+      "question": "What is a right-angled triangle?",
+      "answer": "A triangle in which one of the interior angles is 90° is called a right-angled triangle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_010",
+      "question": "What is an acute-angled triangle?",
+      "answer": "A triangle in which all interior angles are less than 90° is called an acute-angled triangle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_011",
+      "question": "What is an obtuse-angled triangle?",
+      "answer": "A triangle in which one of the interior angles is greater than 90° is called an obtuse-angled triangle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_012",
+      "question": "State the Pythagoras Theorem for right-angled triangles.",
+      "answer": "In a right-angled triangle, the square of the hypotenuse is equal to the sum of the squares of the other two sides. Formula: c² = a² + b².",
+      "type": "theorem"
+    },
+    {
+      "id": "9M7_013",
+      "question": "What is the median of a triangle?",
+      "answer": "A median of a triangle is a line segment joining a vertex to the midpoint of the opposite side.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_014",
+      "question": "What is the altitude of a triangle?",
+      "answer": "An altitude of a triangle is a perpendicular drawn from a vertex to the opposite side or its extension.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_015",
+      "question": "What is the angle bisector of a triangle?",
+      "answer": "An angle bisector of a triangle is a line segment that divides an angle of the triangle into two equal angles.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_016",
+      "question": "What is the perimeter of a triangle?",
+      "answer": "The perimeter of a triangle is the sum of the lengths of its three sides.",
+      "type": "definition"
+    },
+    {
+      "id": "9M7_017",
+      "question": "What is the area of a triangle?",
+      "answer": "The area of a triangle is given by 1/2 × base × height.",
+      "type": "formula"
+    },
+    {
+      "id": "9M7_018",
+      "question": "State the properties of the medians of a triangle.",
+      "answer": "The three medians of a triangle intersect at a point called the centroid, which divides each median in a 2:1 ratio.",
+      "type": "property"
+    },
+    {
+      "id": "9M7_019",
+      "question": "State the properties of the angle bisectors of a triangle.",
+      "answer": "The three angle bisectors of a triangle intersect at a point called the incenter, which is the center of the inscribed circle.",
+      "type": "property"
+    },
+    {
+      "id": "9M7_020",
+      "question": "What are exterior angles of a triangle?",
+      "answer": "An exterior angle of a triangle is formed by extending one side of the triangle. It is equal to the sum of the two opposite interior angles.",
+      "type": "definition"
+    }
+  ]
+  },
+  {
+  "chapter_number": 8,
+  "chapter_name": "3D Shapes, Quadrilaterals & Areas",
+  "subject": "Mathematics",
+  "flashcards": [
+    {
+      "id": "9M8_001",
+      "question": "What is the hypotenuse?",
+      "answer": "The hypotenuse is the longest side of a right triangle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_002",
+      "question": "State the Pythagorean Theorem.",
+      "answer": "In a right triangle, the square of the hypotenuse equals the sum of the squares of the other two sides. Formula: c² = a² + b².",
+      "type": "theorem"
+    },
+    {
+      "id": "9M8_003",
+      "question": "What is surface area?",
+      "answer": "Surface area is the total number of square units needed to cover a 3D object.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_004",
+      "question": "What is volume?",
+      "answer": "Volume is the space occupied by an object, measured in cubic units.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_005",
+      "question": "Define a pyramid.",
+      "answer": "A pyramid has a polygon base and triangular faces that meet at a single vertex.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_006",
+      "question": "What are lateral faces?",
+      "answer": "The faces of a prism or pyramid that are not bases.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_007",
+      "question": "Define a cone.",
+      "answer": "A cone has a circular base and a curved surface that meets at a vertex.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_008",
+      "question": "Define a sphere.",
+      "answer": "A sphere is a round 3D object where all points on the surface are equidistant from the center.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_009",
+      "question": "What is a parallelogram?",
+      "answer": "A quadrilateral with both pairs of opposite sides parallel.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_010",
+      "question": "Name six types of quadrilaterals.",
+      "answer": "Trapezium, Parallelogram, Rectangle, Rhombus, Square, Kite.",
+      "type": "fact"
+    },
+    {
+      "id": "9M8_011",
+      "question": "Properties of a square?",
+      "answer": "All sides equal, all angles 90°, regular quadrilateral.",
+      "type": "property"
+    },
+    {
+      "id": "9M8_012",
+      "question": "Properties of a rectangle?",
+      "answer": "Opposite sides equal, all angles 90°, parallelogram type.",
+      "type": "property"
+    },
+    {
+      "id": "9M8_013",
+      "question": "Properties of a rhombus?",
+      "answer": "All sides equal, opposite angles equal, diagonals bisect each other.",
+      "type": "property"
+    },
+    {
+      "id": "9M8_014",
+      "question": "State the midpoint theorem.",
+      "answer": "The line joining midpoints of two sides of a triangle is half the length of the third side.",
+      "type": "theorem"
+    },
+    {
+      "id": "9M8_015",
+      "question": "Converse of the midpoint theorem?",
+      "answer": "A line through the midpoint of one side, parallel to another side, bisects the third side.",
+      "type": "theorem"
+    },
+    {
+      "id": "9M8_016",
+      "question": "What does 'same base and between same parallels' mean?",
+      "answer": "Figures sharing a common base and lying between two parallel lines.",
+      "type": "definition"
+    },
+    {
+      "id": "9M8_017",
+      "question": "State the axioms of area.",
+      "answer": "1) Area of 1-unit square = 1. 2) Sum of areas of non-overlapping surfaces = area of combined surface. 3) Equal surfaces have equal areas.",
+      "type": "axiom"
+    },
+    {
+      "id": "9M8_018",
+      "question": "Area of a parallelogram?",
+      "answer": "Area = base × height.",
+      "type": "formula"
+    },
+    {
+      "id": "9M8_019",
+      "question": "Area of a triangle?",
+      "answer": "Area = 1/2 × base × height.",
+      "type": "formula"
+    },
+    {
+      "id": "9M8_020",
+      "question": "When does a parallelogram become a rectangle?",
+      "answer": "If it has one right angle, then all angles are right angles.",
+      "type": "fact"
+    },
+    {
+      "id": "9M8_021",
+      "question": "When does a parallelogram become a square?",
+      "answer": "If its diagonals are congruent and perpendicular.",
+      "type": "fact"
+    },
+    {
+      "id": "9M8_022",
+      "question": "When does a parallelogram become a rhombus?",
+      "answer": "If one diagonal bisects two angles or diagonals are perpendicular.",
+      "type": "fact"
+    },
+    {
+      "id": "9M8_023",
+      "question": "Define a quadrilateral.",
+      "answer": "A polygon with four sides and four vertices.",
+      "type": "definition"
+    }
+  ]
+  },
+  {
+  "chapter_number": 9,
+  "chapter_name": "Circles",
+  "subject": "Mathematics",
+  "flashcards": [
+    {
+      "id": "9M9_001",
+      "question": "What is the center of a circle?",
+      "answer": "The center is the point equidistant from all points on the circle.",
+      "type": "definition",
+    },
+    {
+      "id": "9M9_002",
+      "question": "Define the diameter of a circle.",
+      "answer": "The diameter is the longest chord of a circle, passing through the center.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_003",
+      "question": "What is a semicircle?",
+      "answer": "A semicircle is an arc with endpoints that are the endpoints of a diameter.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_004",
+      "question": "What is a chord?",
+      "answer": "A chord is a line segment connecting any two points on a circle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_005",
+      "question": "What is the radius of a circle?",
+      "answer": "The radius is the distance from the center to any point on the circle (half of the diameter).",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_006",
+      "question": "Define a segment of a circle.",
+      "answer": "A segment of a circle is the region between an arc and its chord.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_007",
+      "question": "Define a sector of a circle.",
+      "answer": "A sector is the region bounded by two radii of the circle and their intercepted arc.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_008",
+      "question": "What is a minor arc?",
+      "answer": "The smaller arc subtended by an angle less than 180°.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_009",
+      "question": "What is a major arc?",
+      "answer": "The larger arc subtended by an angle greater than 180°.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_010",
+      "question": "Define a minor sector and a major sector.",
+      "answer": "Minor sector: sector with central angle < 180°. Major sector: sector with central angle > 180°.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_011",
+      "question": "Define a major segment and a minor segment.",
+      "answer": "Major segment: the larger segment of a circle. Minor segment: the smaller segment.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_012",
+      "question": "How many points are needed to determine a circle?",
+      "answer": "Three non-collinear points.",
+      "type": "fact"
+    },
+    {
+      "id": "9M9_013",
+      "question": "How many points determine a line?",
+      "answer": "Two points.",
+      "type": "fact"
+    },
+    {
+      "id": "9M9_014",
+      "question": "What is a central angle?",
+      "answer": "An angle whose vertex is the center of the circle and whose sides are radii.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_015",
+      "question": "What do equal chords of a circle subtend at the center?",
+      "answer": "Equal angles at the center.",
+      "type": "theorem"
+    },
+    {
+      "id": "9M9_016",
+      "question": "What does the perpendicular from the center to a chord do?",
+      "answer": "It bisects the chord.",
+      "type": "theorem"
+    },
+    {
+      "id": "9M9_017",
+      "question": "How many circles pass through three given non-collinear points?",
+      "answer": "Exactly one.",
+      "type": "fact"
+    },
+    {
+      "id": "9M9_018",
+      "question": "Equal chords of a circle are at what distance from the center?",
+      "answer": "Equidistant from the center.",
+      "type": "theorem"
+    },
+    {
+      "id": "9M9_019",
+      "question": "Angle subtended by an arc at the center vs on the circle?",
+      "answer": "Angle at center = 2 × angle on circle.",
+      "type": "theorem"
+    },
+    {
+      "id": "9M9_020",
+      "question": "Angles in the same segment of a circle?",
+      "answer": "They are equal.",
+      "type": "theorem"
+    },
+    {
+      "id": "9M9_021",
+      "question": "Four points concyclic condition?",
+      "answer": "If a line joining two points subtends equal angles at two other points on the same side, the four points lie on a circle.",
+      "type": "theorem"
+    },
+    {
+      "id": "9M9_022",
+      "question": "What is a cyclic quadrilateral?",
+      "answer": "A quadrilateral whose vertices all lie on a circle.",
+      "type": "definition"
+    },
+    {
+      "id": "9M9_023",
+      "question": "Sum of opposite angles in a cyclic quadrilateral?",
+      "answer": "They add up to 180°.",
+      "type": "theorem"
+    }
+  ]
+  },
+  {
+  "chapter_number": 10,
+  "chapter_name": "Areas and Perimeters",
+  "subject": "Mathematics",
+  "flashcards": [
+    {
+      "id": "9M10_001",
+      "question": "What is the area of a rectangle?",
+      "answer": "Area = length × breadth",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_002",
+      "question": "What is the perimeter of a rectangle?",
+      "answer": "Perimeter = 2 × (length + breadth)",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_003",
+      "question": "What is the diagonal of a rectangle?",
+      "answer": "Diagonal = √(length² + breadth²)",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_004",
+      "question": "What is the area of a square?",
+      "answer": "Area = side²",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_005",
+      "question": "What is the perimeter of a square?",
+      "answer": "Perimeter = 4 × side",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_006",
+      "question": "What is the diagonal of a square?",
+      "answer": "Diagonal = √2 × side",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_007",
+      "question": "What is the area of a triangle with base (b) and height (h)?",
+      "answer": "Area = 1/2 × b × h",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_008",
+      "question": "What is the semi-perimeter of a triangle with sides a, b, c?",
+      "answer": "s = (a + b + c) / 2",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_009",
+      "question": "What is the area of a triangle with sides a, b, c?",
+      "answer": "Area = √(s × (s - a) × (s - b) × (s - c))",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_010",
+      "question": "What is the area of an isosceles triangle with base a and equal sides b?",
+      "answer": "Area = (a / 4) × √(4b² - a²)",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_011",
+      "question": "What is the area of an equilateral triangle with side a?",
+      "answer": "Area = (√3 / 4) × a²",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_012",
+      "question": "What is the area of a parallelogram with base b and height h?",
+      "answer": "Area = b × h",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_013",
+      "question": "What is the area of a rhombus with diagonals d1 and d2?",
+      "answer": "Area = 1/2 × d1 × d2",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_014",
+      "question": "What is the perimeter of a rhombus with diagonals d1 and d2?",
+      "answer": "Perimeter = 2 × √(d1² + d2²)",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_015",
+      "question": "What is the area of a trapezium with parallel sides a and b, and height h?",
+      "answer": "Area = 1/2 × (a + b) × h",
+      "type": "formula"
+    },
+    {
+      "id": "9M10_016",
+      "question": "What is the area of a regular hexagon with side a?",
+      "answer": "Area = 6 × area of an equilateral triangle = (3√3 / 2) × a²",
+      "type": "formula"
+    }
+  ]
+  },
+  {
+  "chapter_number": 11,
+  "chapter_name": "3D Shapes – Volume & Surface Area",
+  "subject": "Mathematics",
+  "flashcards": [
+    {
+      "id": "9M11_001",
+      "question": "Perimeter of a square with side a?",
+      "answer": "Perimeter = 4a",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_002",
+      "question": "Area of a square with side a?",
+      "answer": "Area = a²",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_003",
+      "question": "Perimeter of a rectangle with length l and breadth b?",
+      "answer": "Perimeter = 2 × (l + b)",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_004",
+      "question": "Area of a rectangle with length l and breadth b?",
+      "answer": "Area = l × b",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_005",
+      "question": "Circumference of a circle with radius r?",
+      "answer": "Circumference = 2πr",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_006",
+      "question": "Area of a circle with radius r?",
+      "answer": "Area = πr²",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_007",
+      "question": "Total length of edges of a cuboid with l, b, h?",
+      "answer": "Total edges = 4 × (l + b + h)",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_008",
+      "question": "Total length of edges of a cube with side a?",
+      "answer": "Total edges = 12a",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_009",
+      "question": "Diagonal of a cuboid with l, b, h?",
+      "answer": "Diagonal = √(l² + b² + h²)",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_010",
+      "question": "Diagonal of a cube with side l?",
+      "answer": "Diagonal = √3 × l",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_011",
+      "question": "Pythagoras theorem in a right-angled triangle?",
+      "answer": "(Hypotenuse)² = (side1)² + (side2)²",
+      "type": "theorem"
+    },
+    {
+      "id": "9M11_012",
+      "question": "Volume of a cuboid with l, b, h?",
+      "answer": "Volume = l × b × h",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_013",
+      "question": "Volume of a cube with side l?",
+      "answer": "Volume = l³",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_014",
+      "question": "Volume of a right circular cylinder with radius r and height h?",
+      "answer": "Volume = πr²h",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_015",
+      "question": "Volume of a hollow cylinder with outer radius R, inner radius r and height h?",
+      "answer": "Volume = π(R² - r²)h",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_016",
+      "question": "Volume of a right circular cone with radius r and height h?",
+      "answer": "Volume = 1/3 × π × r² × h",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_017",
+      "question": "Volume of a sphere with radius r?",
+      "answer": "Volume = 4/3 × π × r³",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_018",
+      "question": "Volume of a hemisphere with radius r?",
+      "answer": "Volume = 2/3 × π × r³",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_019",
+      "question": "Curved surface area of a right circular cylinder with radius r and height h?",
+      "answer": "CSA = 2 × π × r × h",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_020",
+      "question": "Curved surface area of a right circular cone with radius r and slant height l?",
+      "answer": "CSA = π × r × l",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_021",
+      "question": "Curved surface area of a hemisphere with radius r?",
+      "answer": "CSA = 2 × π × r²",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_022",
+      "question": "Lateral surface area of a cuboid with l, b, h?",
+      "answer": "LSA = 2 × (l × h + b × h) = 2 × (l + b) × h",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_023",
+      "question": "Lateral surface area of a cube with side l?",
+      "answer": "LSA = 4 × l²",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_024",
+      "question": "Lateral surface area of a right circular cylinder with radius r and height h?",
+      "answer": "LSA = 2 × π × r × h",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_025",
+      "question": "Total surface area of a cuboid with l, b, h?",
+      "answer": "TSA = 2 × (l × b + b × h + l × h)",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_026",
+      "question": "Total surface area of a cube with side l?",
+      "answer": "TSA = 6 × l²",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_027",
+      "question": "Total surface area of a right circular cylinder with radius r and height h?",
+      "answer": "TSA = 2 × π × r × (r + h)",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_028",
+      "question": "Total surface area of a right circular cone with radius r and slant height l?",
+      "answer": "TSA = π × r × (r + l)",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_029",
+      "question": "Total surface area of a sphere with radius r?",
+      "answer": "TSA = 4 × π × r²",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_030",
+      "question": "Total surface area of a hemisphere with radius r?",
+      "answer": "TSA = 3 × π × r²",
+      "type": "formula"
+    },
+    {
+      "id": "9M11_031",
+      "question": "Relationship between slant height l, radius r, and height h of a cone?",
+      "answer": "l = √(r² + h²)",
+      "type": "formula"
+    }
+  ]
+  },
+  {
+  "chapter_number": 12,
+  "chapter_name": "Statistics",
+  "subject": "Mathematics",
+  "flashcards": [
+    {
+      "id": "9M12_001",
+      "question": "What is Statistics?",
+      "answer": "Statistics is the science of collecting, organizing, analyzing, and interpreting data to make meaningful conclusions.",
+      "type": "definition"
+    },
+    {
+      "id": "9M12_002",
+      "question": "Define Data in statistics.",
+      "answer": "Data refers to the facts, figures, and information collected for analysis and interpretation.",
+      "type": "definition"
+    },
+    {
+      "id": "9M12_003",
+      "question": "What are the types of data?",
+      "answer": "Two types: Quantitative (numerical) and Qualitative (categorical).",
+      "type": "fact"
+    },
+    {
+      "id": "9M12_004",
+      "question": "Define Mean (Average) and its formula.",
+      "answer": "Mean is the sum of all data values divided by the number of values. Formula: Mean = Σx / n",
+      "type": "formula"
+    },
+    {
+      "id": "9M12_005",
+      "question": "Define Median.",
+      "answer": "Median is the middle value of an ordered dataset. If the number of values is even, it is the average of the two middle numbers.",
+      "type": "definition"
+    },
+    {
+      "id": "9M12_006",
+      "question": "Define Mode.",
+      "answer": "Mode is the value that appears most frequently in a dataset.",
+      "type": "definition"
+    },
+    {
+      "id": "9M12_007",
+      "question": "What is Range?",
+      "answer": "Range is the difference between the largest and smallest values. Formula: Range = Maximum - Minimum",
+      "type": "formula"
+    },
+    {
+      "id": "9M12_008",
+      "question": "Define Standard Deviation.",
+      "answer": "Standard Deviation measures the average distance of data values from the mean. Formula: σ = √(Σ(x - μ)² / n)",
+      "type": "formula"
+    },
+    {
+      "id": "9M12_009",
+      "question": "What is a histogram?",
+      "answer": "A histogram is a graph using bars to represent the frequency of numerical data.",
+      "type": "definition"
+    },
+    {
+      "id": "9M12_010",
+      "question": "What is the usefulness of statistics?",
+      "answer": "Statistics helps in summarizing data, understanding patterns, making predictions, and decision-making.",
+      "type": "fact"
+    }
+  ]
+  }
+];
+
+
 // Complete allFlashcards object
 export const allFlashcards = {
   "9": {
-    "Science": class9Science
+    "Science": class9Science,
+    "Mathematics": class9Mathematics
   },
   "10": {
     "Science": ncertClass10Science,
@@ -8466,7 +10001,7 @@ export const subjectsData = [
     code: "Sci",
     color: "emerald",
     icon: "🔬",
-    availableClasses: [9, 10, 11, 12]
+    availableClasses: [9, 10, ]
   },
   {
     name: "Mathematics",
@@ -8487,14 +10022,14 @@ export const subjectsData = [
     code: "Chem",
     color: "blue",
     icon: "🧪",
-    availableClasses: [10, 11, 12]
+    availableClasses: [ 11, 12]
   },
   {
     name: "Biology",
     code: "Bio",
     color: "green",
     icon: "🧬",
-    availableClasses: [10, 11, 12]
+    availableClasses: [ 11, 12]
   }
 ];
 

@@ -1,6 +1,6 @@
 export interface Flashcard {
     id: string | number;
-    type: 'definition' | 'formula' | 'reaction' | 'concept' | 'comparison' | 'assumption';
+    type: 'definition' | 'formula' | 'reaction' | 'concept' | 'comparison' | 'assumption' | 'fact' | 'theorem' | 'axiom' | 'postulate' | 'true_false' | 'property';
     // Format 1: question/answer
     question?: string;
     answer?: string;
