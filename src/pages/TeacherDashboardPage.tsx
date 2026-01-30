@@ -69,7 +69,50 @@ import {
   Pause,
   RefreshCw,
   EyeOff,
-  Eye as EyeIcon
+  Eye as EyeIcon,
+  // New imports for Practice Zone
+  Layers,
+  Grid3x3,
+  BookMarked,
+  TestTube,
+  Calculator,
+  Atom,
+  Beaker,
+  FlaskConical,
+  History,
+  Repeat,
+  TrendingUp as TrendingUpIcon,
+  BarChart4,
+  ActivitySquare,
+  BrainCircuit,
+  UserCog,
+  Database,
+  FileCode,
+  FileCheck,
+  FileX,
+  FileQuestion,
+  ClipboardList,
+  ListChecks,
+  BookCheck,
+  FileSearch,
+  FileBarChart,
+  ChartBarIncreasing,
+  ChartPie,
+  ChartLine,
+  ChartArea,
+  ChartNoAxesColumnIncreasing,
+  ChartNoAxesGantt,
+  ChartCandlestick,
+  ChartScatter,
+  ChartBar,
+  ChartColumnIncreasing,
+  ChartColumn,
+  ChartBarBig,
+  Plus,
+  Copy,
+  Upload,
+  FileSpreadsheet,
+  Download as DownloadIcon
 } from "lucide-react";
 
 // A4AI Color Palette from images
@@ -91,6 +134,21 @@ const A4AI_COLORS = {
   highlight: "#eff6ff", // Blue highlight
 };
 
+// Interface for Practice Zone Stats
+interface PracticeZoneStats {
+  totalQuestions: number;
+  class10Questions: number;
+  class12Questions: number;
+  pyqCount: number;
+  hotsCount: number;
+  popularCount: number;
+  repeatedCount: number;
+  lastUpdated: string;
+  subjectsCovered: number;
+  chaptersCovered: number;
+  totalMarks: number;
+}
+
 export default function TeacherDashboardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -99,6 +157,19 @@ export default function TeacherDashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedClass, setSelectedClass] = useState("All Classes");
   const [showStudentDetails, setShowStudentDetails] = useState<number | null>(null);
+  const [practiceZoneStats, setPracticeZoneStats] = useState<PracticeZoneStats>({
+    totalQuestions: 0,
+    class10Questions: 0,
+    class12Questions: 0,
+    pyqCount: 0,
+    hotsCount: 0,
+    popularCount: 0,
+    repeatedCount: 0,
+    lastUpdated: new Date().toISOString().split('T')[0],
+    subjectsCovered: 0,
+    chaptersCovered: 0,
+    totalMarks: 0
+  });
   
   // Scratch Card State
   const [showScratchCard, setShowScratchCard] = useState(false);
@@ -127,6 +198,35 @@ export default function TeacherDashboardPage() {
     }
   }, [profile, loading, searchParams]);
 
+  // Load practice zone stats
+  useEffect(() => {
+    if (profile) {
+      loadPracticeZoneStats();
+    }
+  }, [profile]);
+
+  const loadPracticeZoneStats = async () => {
+    try {
+      // Mock data - replace with actual API call
+      const mockStats: PracticeZoneStats = {
+        totalQuestions: 1247,
+        class10Questions: 658,
+        class12Questions: 589,
+        pyqCount: 834,
+        hotsCount: 187,
+        popularCount: 156,
+        repeatedCount: 70,
+        lastUpdated: '2024-03-15',
+        subjectsCovered: 12,
+        chaptersCovered: 86,
+        totalMarks: 5480
+      };
+      setPracticeZoneStats(mockStats);
+    } catch (error) {
+      console.error('Error loading practice stats:', error);
+    }
+  };
+
   // Handle scratch card close
   const handleScratchCardClose = () => {
     setShowScratchCard(false);
@@ -143,6 +243,10 @@ export default function TeacherDashboardPage() {
   const goToAnalytics = () => navigate("/dashboard/analytics");
   const goToResources = () => navigate("/dashboard/resources");
   const goToSettings = () => navigate("/dashboard/settings");
+  const goToPracticeZone = () => navigate("/practice/zone");
+  const goToPYQAdmin = () => navigate("/admin/pyq");
+  const goToBulkUpload = () => navigate("/admin/pyq?tab=bulk");
+  const goToQuestionBank = () => navigate("/admin/pyq?tab=manage");
 
   /* ensure teacher profile */
   useEffect(() => {
@@ -698,6 +802,17 @@ export default function TeacherDashboardPage() {
                 >
                   <Brain className="h-4 w-4 mr-2" />
                   AI Tools
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="practice" 
+                  className="px-4 py-2 data-[state=active]:border-b-2 data-[state=active]:font-semibold rounded-none"
+                  style={{ 
+                    color: activeTab === 'practice' ? A4AI_COLORS.primary : A4AI_COLORS.muted,
+                    borderColor: A4AI_COLORS.primary 
+                  }}
+                >
+                  <BookMarked className="h-4 w-4 mr-2" />
+                  Practice Zone
                 </TabsTrigger>
               </TabsList>
 
@@ -1670,6 +1785,675 @@ export default function TeacherDashboardPage() {
                       </div>
                     </div>
                   </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Practice Zone Tab */}
+              <TabsContent value="practice" className="space-y-6">
+                {/* Practice Zone Header */}
+                <Card className="border shadow-sm overflow-hidden">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 opacity-10"></div>
+                    <CardHeader className="relative">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <CardTitle className="text-2xl flex items-center gap-3">
+                            <div className="p-2 rounded-lg" style={{ backgroundColor: `${A4AI_COLORS.primary}10` }}>
+                              <BookMarked className="h-6 w-6" style={{ color: A4AI_COLORS.primary }} />
+                            </div>
+                            PYQ Practice Zone - Admin Panel
+                          </CardTitle>
+                          <CardDescription className="text-lg mt-2">
+                            Manage Previous Year Questions, HOTS, and Practice Materials for Classes 10 & 12
+                          </CardDescription>
+                        </div>
+                        <Button 
+                          onClick={goToPYQAdmin}
+                          size="lg"
+                          style={{ 
+                            backgroundColor: A4AI_COLORS.primary,
+                            color: 'white'
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add New Question
+                        </Button>
+                      </div>
+                    </CardHeader>
+                  </div>
+                </Card>
+
+                {/* Quick Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <Card className="border shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm mb-2" style={{ color: A4AI_COLORS.muted }}>Total Questions</p>
+                          <p className="text-3xl font-bold" style={{ color: A4AI_COLORS.text }}>
+                            {practiceZoneStats.totalQuestions.toLocaleString()}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className="flex items-center gap-1">
+                              <GraduationCap className="h-3 w-3" style={{ color: A4AI_COLORS.info }} />
+                              <span className="text-xs">Class 10: {practiceZoneStats.class10Questions}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <School className="h-3 w-3" style={{ color: A4AI_COLORS.accent2 }} />
+                              <span className="text-xs">Class 12: {practiceZoneStats.class12Questions}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-lg" style={{ backgroundColor: `${A4AI_COLORS.primary}10` }}>
+                          <Database className="h-6 w-6" style={{ color: A4AI_COLORS.primary }} />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm mb-2" style={{ color: A4AI_COLORS.muted }}>Question Types</p>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm">PYQs</span>
+                              <span className="font-bold" style={{ color: A4AI_COLORS.success }}>{practiceZoneStats.pyqCount}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm">HOTS</span>
+                              <span className="font-bold" style={{ color: A4AI_COLORS.warning }}>{practiceZoneStats.hotsCount}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm">Repeated</span>
+                              <span className="font-bold" style={{ color: A4AI_COLORS.danger }}>{practiceZoneStats.repeatedCount}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-lg" style={{ backgroundColor: `${A4AI_COLORS.success}10` }}>
+                          <Layers className="h-6 w-6" style={{ color: A4AI_COLORS.success }} />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm mb-2" style={{ color: A4AI_COLORS.muted }}>Coverage</p>
+                          <p className="text-2xl font-bold mb-1" style={{ color: A4AI_COLORS.text }}>
+                            {practiceZoneStats.subjectsCovered} Subjects
+                          </p>
+                          <p className="text-lg font-semibold" style={{ color: A4AI_COLORS.muted }}>
+                            {practiceZoneStats.chaptersCovered} Chapters
+                          </p>
+                          <p className="text-xs mt-2" style={{ color: A4AI_COLORS.muted }}>
+                            Total Marks: {practiceZoneStats.totalMarks}
+                          </p>
+                        </div>
+                        <div className="p-3 rounded-lg" style={{ backgroundColor: `${A4AI_COLORS.accent2}10` }}>
+                          <Target className="h-6 w-6" style={{ color: A4AI_COLORS.accent2 }} />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border shadow-sm hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm mb-2" style={{ color: A4AI_COLORS.muted }}>Last Updated</p>
+                          <p className="text-2xl font-bold mb-2" style={{ color: A4AI_COLORS.text }}>
+                            {new Date(practiceZoneStats.lastUpdated).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </p>
+                          <div className="flex items-center gap-1 text-xs" style={{ color: A4AI_COLORS.muted }}>
+                            <Clock className="h-3 w-3" />
+                            <span>Updated weekly</span>
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-lg" style={{ backgroundColor: `${A4AI_COLORS.warning}10` }}>
+                          <RefreshCw className="h-6 w-6" style={{ color: A4AI_COLORS.warning }} />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Main Actions Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {/* Question Management Card */}
+                  <Card className="border shadow-sm hover:shadow-lg transition-all duration-300">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Plus className="h-5 w-5" style={{ color: A4AI_COLORS.primary }} />
+                        Add Questions
+                      </CardTitle>
+                      <CardDescription>Add individual questions or bulk upload</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Button 
+                        onClick={goToPYQAdmin}
+                        className="w-full justify-start gap-3 py-6"
+                        style={{ 
+                          backgroundColor: A4AI_COLORS.primary,
+                          color: 'white'
+                        }}
+                      >
+                        <Plus className="h-5 w-5" />
+                        <div className="text-left">
+                          <p className="font-semibold">Add Single Question</p>
+                          <p className="text-xs opacity-90">Manual entry with full options</p>
+                        </div>
+                        <ChevronRight className="ml-auto h-4 w-4" />
+                      </Button>
+                      
+                      <Button 
+                        onClick={goToBulkUpload}
+                        variant="outline"
+                        className="w-full justify-start gap-3 py-6 border-2"
+                        style={{ 
+                          borderColor: A4AI_COLORS.accent,
+                          color: A4AI_COLORS.accent
+                        }}
+                      >
+                        <Upload className="h-5 w-5" />
+                        <div className="text-left">
+                          <p className="font-semibold">Bulk Upload (CSV)</p>
+                          <p className="text-xs" style={{ color: A4AI_COLORS.muted }}>Upload multiple questions at once</p>
+                        </div>
+                      </Button>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button variant="outline" className="py-3">
+                          <Copy className="h-4 w-4 mr-2" />
+                          Duplicate
+                        </Button>
+                        <Button variant="outline" className="py-3">
+                          <Download className="h-4 w-4 mr-2" />
+                          Export
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Question Bank Card */}
+                  <Card className="border shadow-sm hover:shadow-lg transition-all duration-300">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Database className="h-5 w-5" style={{ color: A4AI_COLORS.success }} />
+                        Question Bank
+                      </CardTitle>
+                      <CardDescription>Manage existing questions</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Button 
+                        onClick={goToQuestionBank}
+                        className="w-full justify-start gap-3 py-6"
+                        style={{ 
+                          backgroundColor: A4AI_COLORS.success,
+                          color: 'white'
+                        }}
+                      >
+                        <FileSearch className="h-5 w-5" />
+                        <div className="text-left">
+                          <p className="font-semibold">Browse Question Bank</p>
+                          <p className="text-xs opacity-90">View, edit, and manage all questions</p>
+                        </div>
+                        <ChevronRight className="ml-auto h-4 w-4" />
+                      </Button>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span style={{ color: A4AI_COLORS.muted }}>Active Questions</span>
+                          <span className="font-semibold">{practiceZoneStats.totalQuestions}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span style={{ color: A4AI_COLORS.muted }}>Pending Review</span>
+                          <span className="font-semibold text-yellow-600">12</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span style={{ color: A4AI_COLORS.muted }}>Drafts</span>
+                          <span className="font-semibold text-blue-600">8</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button variant="outline" className="flex-1">
+                          <Filter className="h-4 w-4 mr-2" />
+                          Filter
+                        </Button>
+                        <Button variant="outline" className="flex-1">
+                          <Search className="h-4 w-4 mr-2" />
+                          Search
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Analytics & Reports Card */}
+                  <Card className="border shadow-sm hover:shadow-lg transition-all duration-300">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart4 className="h-5 w-5" style={{ color: A4AI_COLORS.accent2 }} />
+                        Analytics & Reports
+                      </CardTitle>
+                      <CardDescription>Track usage and performance</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button 
+                          variant="outline" 
+                          className="py-4 flex flex-col items-center justify-center"
+                          onClick={() => navigate("/admin/pyq?tab=stats")}
+                        >
+                          <PieChart className="h-5 w-5 mb-2" style={{ color: A4AI_COLORS.primary }} />
+                          <span className="text-xs font-medium">Usage Stats</span>
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="py-4 flex flex-col items-center justify-center"
+                        >
+                          <ActivitySquare className="h-5 w-5 mb-2" style={{ color: A4AI_COLORS.success }} />
+                          <span className="text-xs font-medium">Performance</span>
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="py-4 flex flex-col items-center justify-center"
+                        >
+                          <ChartLine className="h-5 w-5 mb-2" style={{ color: A4AI_COLORS.warning }} />
+                          <span className="text-xs font-medium">Trends</span>
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          className="py-4 flex flex-col items-center justify-center"
+                        >
+                          <ChartBar className="h-5 w-5 mb-2" style={{ color: A4AI_COLORS.danger }} />
+                          <span className="text-xs font-medium">Reports</span>
+                        </Button>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span style={{ color: A4AI_COLORS.muted }}>Total Attempts</span>
+                          <span className="font-semibold">1,847</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span style={{ color: A4AI_COLORS.muted }}>Avg Score</span>
+                          <span className="font-semibold text-green-600">72%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span style={{ color: A4AI_COLORS.muted }}>Most Popular</span>
+                          <span className="font-semibold">Mathematics</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Recent Activity & Quick Actions */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Recent Activity */}
+                  <Card className="border shadow-sm lg:col-span-2">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <History className="h-5 w-5" style={{ color: A4AI_COLORS.primary }} />
+                        Recent Activity
+                      </CardTitle>
+                      <CardDescription>Latest questions and updates</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {[
+                          { 
+                            id: 1, 
+                            action: 'Added', 
+                            type: 'PYQ', 
+                            subject: 'Mathematics', 
+                            chapter: 'Calculus', 
+                            user: 'You', 
+                            time: '10 mins ago',
+                            color: A4AI_COLORS.primary 
+                          },
+                          { 
+                            id: 2, 
+                            action: 'Edited', 
+                            type: 'HOTS', 
+                            subject: 'Physics', 
+                            chapter: 'Electromagnetism', 
+                            user: 'Dr. Sharma', 
+                            time: '2 hours ago',
+                            color: A4AI_COLORS.warning 
+                          },
+                          { 
+                            id: 3, 
+                            action: 'Reviewed', 
+                            type: 'Repeated', 
+                            subject: 'Chemistry', 
+                            chapter: 'Organic', 
+                            user: 'Review Team', 
+                            time: '5 hours ago',
+                            color: A4AI_COLORS.danger 
+                          },
+                          { 
+                            id: 4, 
+                            action: 'Published', 
+                            type: 'PYQ', 
+                            subject: 'Biology', 
+                            chapter: 'Genetics', 
+                            user: 'You', 
+                            time: '1 day ago',
+                            color: A4AI_COLORS.success 
+                          },
+                        ].map(activity => (
+                          <div 
+                            key={activity.id} 
+                            className="flex items-center justify-between p-4 rounded-lg border hover:border-gray-300 transition-colors"
+                            style={{ 
+                              backgroundColor: A4AI_COLORS.card,
+                              borderColor: A4AI_COLORS.border
+                            }}
+                          >
+                            <div className="flex items-center gap-4">
+                              <div 
+                                className="p-2 rounded-lg"
+                                style={{ backgroundColor: `${activity.color}10` }}
+                              >
+                                <FileText className="h-5 w-5" style={{ color: activity.color }} />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-semibold">{activity.action}</span>
+                                  <Badge 
+                                    variant="outline" 
+                                    className="text-xs"
+                                    style={{ 
+                                      borderColor: activity.color,
+                                      color: activity.color
+                                    }}
+                                  >
+                                    {activity.type}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm" style={{ color: A4AI_COLORS.text }}>
+                                  {activity.subject} • {activity.chapter}
+                                </p>
+                                <p className="text-xs mt-1" style={{ color: A4AI_COLORS.muted }}>
+                                  By {activity.user} • {activity.time}
+                                </p>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Quick Actions */}
+                  <Card className="border shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Zap className="h-5 w-5" style={{ color: A4AI_COLORS.warning }} />
+                        Quick Actions
+                      </CardTitle>
+                      <CardDescription>Frequently used tools</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start gap-3"
+                        onClick={() => navigate('/admin/pyq/templates')}
+                      >
+                        <FileCode className="h-4 w-4" />
+                        <span>Question Templates</span>
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start gap-3"
+                        onClick={() => navigate('/admin/pyq/import')}
+                      >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        <span>Import from Excel</span>
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start gap-3"
+                        onClick={() => navigate('/admin/pyq/export')}
+                      >
+                        <DownloadIcon className="h-4 w-4" />
+                        <span>Export to CSV</span>
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start gap-3"
+                        onClick={() => navigate('/admin/pyq/batch')}
+                      >
+                        <Copy className="h-4 w-4" />
+                        <span>Batch Operations</span>
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start gap-3"
+                        onClick={() => navigate('/admin/pyq/quality')}
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        <span>Quality Check</span>
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start gap-3"
+                        onClick={() => navigate('/admin/pyq/reports')}
+                      >
+                        <FileBarChart className="h-4 w-4" />
+                        <span>Generate Reports</span>
+                      </Button>
+
+                      <div className="pt-4 border-t" style={{ borderColor: A4AI_COLORS.border }}>
+                        <Button 
+                          onClick={goToPracticeZone}
+                          className="w-full"
+                          style={{ 
+                            backgroundColor: A4AI_COLORS.primary,
+                            color: 'white'
+                          }}
+                        >
+                          <Play className="h-4 w-4 mr-2" />
+                          Test Practice Zone
+                        </Button>
+                        <p className="text-xs text-center mt-2" style={{ color: A4AI_COLORS.muted }}>
+                          Experience the student interface
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Subject-wise Distribution */}
+                <Card className="border shadow-sm">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ChartPie className="h-5 w-5" style={{ color: A4AI_COLORS.accent2 }} />
+                      Subject-wise Distribution
+                    </CardTitle>
+                    <CardDescription>Questions distribution across subjects and classes</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Class 10 Subjects */}
+                      <div>
+                        <h4 className="font-semibold mb-4 flex items-center gap-2">
+                          <GraduationCap className="h-4 w-4" style={{ color: A4AI_COLORS.info }} />
+                          Class 10 Subjects
+                        </h4>
+                        <div className="space-y-4">
+                          {[
+                            { subject: 'Mathematics', count: 245, color: A4AI_COLORS.primary, icon: Calculator },
+                            { subject: 'Science', count: 198, color: A4AI_COLORS.success, icon: Beaker },
+                            { subject: 'Social Science', count: 135, color: A4AI_COLORS.warning, icon: Globe },
+                            { subject: 'English', count: 80, color: A4AI_COLORS.accent, icon: BookOpen },
+                          ].map(item => {
+                            const Icon = item.icon;
+                            return (
+                              <div key={item.subject} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1 rounded" style={{ backgroundColor: `${item.color}10` }}>
+                                      <Icon className="h-4 w-4" style={{ color: item.color }} />
+                                    </div>
+                                    <span className="font-medium">{item.subject}</span>
+                                  </div>
+                                  <span className="font-bold">{item.count}</span>
+                                </div>
+                                <Progress 
+                                  value={(item.count / practiceZoneStats.class10Questions) * 100} 
+                                  className="h-2" 
+                                  style={{ 
+                                    backgroundColor: A4AI_COLORS.surface,
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Class 12 Subjects */}
+                      <div>
+                        <h4 className="font-semibold mb-4 flex items-center gap-2">
+                          <School className="h-4 w-4" style={{ color: A4AI_COLORS.accent2 }} />
+                          Class 12 Subjects
+                        </h4>
+                        <div className="space-y-4">
+                          {[
+                            { subject: 'Physics', count: 156, color: A4AI_COLORS.danger, icon: Atom },
+                            { subject: 'Chemistry', count: 142, color: A4AI_COLORS.warning, icon: FlaskConical },
+                            { subject: 'Mathematics', count: 178, color: A4AI_COLORS.primary, icon: Calculator },
+                            { subject: 'Biology', count: 113, color: A4AI_COLORS.success, icon: TestTube },
+                          ].map(item => {
+                            const Icon = item.icon;
+                            return (
+                              <div key={item.subject} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1 rounded" style={{ backgroundColor: `${item.color}10` }}>
+                                      <Icon className="h-4 w-4" style={{ color: item.color }} />
+                                    </div>
+                                    <span className="font-medium">{item.subject}</span>
+                                  </div>
+                                  <span className="font-bold">{item.count}</span>
+                                </div>
+                                <Progress 
+                                  value={(item.count / practiceZoneStats.class12Questions) * 100} 
+                                  className="h-2" 
+                                  style={{ 
+                                    backgroundColor: A4AI_COLORS.surface,
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* AI-Powered Question Generation */}
+                <Card className="border shadow-sm overflow-hidden">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-purple-50"></div>
+                    <CardHeader className="relative">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2">
+                            <BrainCircuit className="h-5 w-5" style={{ color: A4AI_COLORS.accent2 }} />
+                            AI-Powered Question Generation
+                          </CardTitle>
+                          <CardDescription>
+                            Generate high-quality questions instantly using AI
+                          </CardDescription>
+                        </div>
+                        <Badge 
+                          className="px-3 py-1"
+                          style={{ 
+                            backgroundColor: `${A4AI_COLORS.accent2}10`,
+                            color: A4AI_COLORS.accent2
+                          }}
+                        >
+                          Beta
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="relative space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-lg border" style={{ borderColor: A4AI_COLORS.border }}>
+                          <h4 className="font-semibold mb-2">Smart Question Generator</h4>
+                          <p className="text-sm mb-3" style={{ color: A4AI_COLORS.muted }}>
+                            Generate questions based on topic, difficulty, and bloom's taxonomy
+                          </p>
+                          <Button size="sm" variant="outline" className="w-full">
+                            <Zap className="h-4 w-4 mr-2" />
+                            Generate
+                          </Button>
+                        </div>
+                        
+                        <div className="p-4 rounded-lg border" style={{ borderColor: A4AI_COLORS.border }}>
+                          <h4 className="font-semibold mb-2">HOTS Questions</h4>
+                          <p className="text-sm mb-3" style={{ color: A4AI_COLORS.muted }}>
+                            Create Higher Order Thinking Skills questions automatically
+                          </p>
+                          <Button size="sm" variant="outline" className="w-full">
+                            <Brain className="h-4 w-4 mr-2" />
+                            Create HOTS
+                          </Button>
+                        </div>
+                        
+                        <div className="p-4 rounded-lg border" style={{ borderColor: A4AI_COLORS.border }}>
+                          <h4 className="font-semibold mb-2">PYQ Analysis</h4>
+                          <p className="text-sm mb-3" style={{ color: A4AI_COLORS.muted }}>
+                            Analyze past patterns to predict important questions
+                          </p>
+                          <Button size="sm" variant="outline" className="w-full">
+                            <TrendingUpIcon className="h-4 w-4 mr-2" />
+                            Analyze
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-center gap-3 pt-4">
+                        <Button 
+                          variant="outline"
+                          onClick={() => navigate('/admin/ai/settings')}
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          AI Settings
+                        </Button>
+                        <Button 
+                          style={{ 
+                            backgroundColor: A4AI_COLORS.accent2,
+                            color: 'white'
+                          }}
+                          onClick={() => navigate('/admin/ai/assistant')}
+                        >
+                          <BrainCircuit className="h-4 w-4 mr-2" />
+                          Launch AI Assistant
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </div>
                 </Card>
               </TabsContent>
             </Tabs>
