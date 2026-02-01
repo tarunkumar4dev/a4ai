@@ -39,15 +39,37 @@ export const useFlashcards = () => {
 
 interface FlashcardProviderProps {
   children: ReactNode;
+  initialClass?: number | null;
+  initialSubject?: string | null;
+  initialChapter?: number | null;
 }
 
-export const FlashcardProvider: React.FC<FlashcardProviderProps> = ({ children }) => {
-  const [selectedClass, setSelectedClass] = useState<number | null>(10); // Default to Class 10
-  const [selectedSubject, setSelectedSubject] = useState<string | null>('Science');
-  const [selectedChapter, setSelectedChapter] = useState<number | null>(1);
+export const FlashcardProvider: React.FC<FlashcardProviderProps> = ({ 
+  children,
+  initialClass = null,
+  initialSubject = null,
+  initialChapter = null
+}) => {
+  const [selectedClass, setSelectedClass] = useState<number | null>(initialClass ?? 10); // Default to Class 10
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(initialSubject ?? 'Science');
+  const [selectedChapter, setSelectedChapter] = useState<number | null>(initialChapter ?? 1);
   const [currentDeck, setCurrentDeck] = useState<Flashcard[]>([]);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [masteredCards, setMasteredCards] = useState<Set<string>>(new Set());
+
+  // Normalize chapter data to handle both formats
+  const normalizeChapter = useCallback((chapter: Chapter, index: number): Chapter => {
+    // If chapter already has chapter_number, return as is
+    if (chapter.chapter_number !== undefined) {
+      return chapter;
+    }
+    // Otherwise, normalize from class/chapter format
+    return {
+      ...chapter,
+      chapter_number: index + 1,
+      chapter_name: chapter.chapter || `Chapter ${index + 1}`,
+    };
+  }, []);
 
   // Load deck when class, subject, or chapter changes
   const loadDeck = useCallback(() => {
@@ -60,18 +82,39 @@ export const FlashcardProvider: React.FC<FlashcardProviderProps> = ({ children }
     const subjectData = allFlashcards[classKey as keyof typeof allFlashcards]?.[selectedSubject];
     
     if (subjectData) {
-      const chapter = subjectData.find(ch => ch.chapter_number === selectedChapter);
+      // Normalize chapters and find by chapter_number
+      const normalizedChapters = subjectData.map((ch, idx) => normalizeChapter(ch, idx));
+      const chapter = normalizedChapters.find(ch => ch.chapter_number === selectedChapter);
       if (chapter) {
         setCurrentDeck(chapter.flashcards);
         setCurrentCardIndex(0);
       }
     }
-  }, [selectedClass, selectedSubject, selectedChapter]);
+  }, [selectedClass, selectedSubject, selectedChapter, normalizeChapter]);
 
   // Effects
   React.useEffect(() => {
     loadDeck();
   }, [loadDeck]);
+
+  // Update state when initial props change (for URL-based navigation)
+  React.useEffect(() => {
+    if (initialClass !== null && initialClass !== undefined) {
+      setSelectedClass(initialClass);
+    }
+  }, [initialClass]);
+
+  React.useEffect(() => {
+    if (initialSubject !== null && initialSubject !== undefined) {
+      setSelectedSubject(initialSubject);
+    }
+  }, [initialSubject]);
+
+  React.useEffect(() => {
+    if (initialChapter !== null && initialChapter !== undefined) {
+      setSelectedChapter(initialChapter);
+    }
+  }, [initialChapter]);
 
   // Load mastered cards from localStorage
   React.useEffect(() => {
@@ -146,7 +189,18 @@ export const FlashcardProvider: React.FC<FlashcardProviderProps> = ({ children }
   const getAvailableChapters = useCallback(() => {
     if (!selectedClass || !selectedSubject) return [];
     const classKey = selectedClass.toString();
-    return allFlashcards[classKey as keyof typeof allFlashcards]?.[selectedSubject] || [];
+    const chapters = allFlashcards[classKey as keyof typeof allFlashcards]?.[selectedSubject] || [];
+    // Normalize chapters to ensure they all have chapter_number and chapter_name
+    return chapters.map((ch, idx) => {
+      if (ch.chapter_number !== undefined) {
+        return ch;
+      }
+      return {
+        ...ch,
+        chapter_number: idx + 1,
+        chapter_name: ch.chapter || `Chapter ${idx + 1}`,
+      };
+    });
   }, [selectedClass, selectedSubject]);
 
   const getDeckTitle = useCallback(() => {
@@ -154,7 +208,18 @@ export const FlashcardProvider: React.FC<FlashcardProviderProps> = ({ children }
     
     const classKey = selectedClass.toString();
     const chapters = allFlashcards[classKey as keyof typeof allFlashcards]?.[selectedSubject] || [];
-    const chapter = chapters.find(ch => ch.chapter_number === selectedChapter);
+    // Normalize and find chapter
+    const normalizedChapters = chapters.map((ch, idx) => {
+      if (ch.chapter_number !== undefined) {
+        return ch;
+      }
+      return {
+        ...ch,
+        chapter_number: idx + 1,
+        chapter_name: ch.chapter || `Chapter ${idx + 1}`,
+      };
+    });
+    const chapter = normalizedChapters.find(ch => ch.chapter_number === selectedChapter);
     
     return chapter?.chapter_name || 'Unknown Chapter';
   }, [selectedClass, selectedSubject, selectedChapter]);
