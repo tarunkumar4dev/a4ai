@@ -1,736 +1,493 @@
-// src/pages/StudentDashboardPage.tsx
 import React, {
-    useEffect,
-    useState,
-    useMemo,
-    useCallback,
-    useRef,
-    lazy,
-    Suspense,
-    memo,
-  } from "react";
-  import { Link, useNavigate, useSearchParams } from "react-router-dom";
-  import {
-    motion,
-    AnimatePresence,
-    useMotionTemplate,
-    useMotionValue,
-    useTransform,
-    useReducedMotion,
-  } from "framer-motion";
-  import { supabase } from "@/lib/supabaseClient";
-  import { useUserProfile } from "@/hooks/useUserProfile";
-  
-  import DashboardSidebar from "@/components/DashboardSidebar";
-  // ScratchCard only shows conditionally → lazy-load to save initial bytes & paint time.
-  const ScratchCard = lazy(() => import("@/components/ScratchCard"));
-  
-  import { Button } from "@/components/ui/button";
-  import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-  } from "@/components/ui/card";
-  import { Badge } from "@/components/ui/badge";
-  import {
-    BellDot,
-    Flame,
-    Rocket,
-    TimerReset,
-    TrendingUp,
-    FileText,
-    Zap,
-    Coins,
-    Menu,
-    ArrowLeft,
-    BookOpen,
-    School,
-    BarChart3,
-    Clock,
-    Users,
-    Target,
-    Award,
-    Brain,
-  } from "lucide-react";
-  
-  /* ------------ tiny media hook (stable) ------------ */
-  function useMedia(q: string) {
-    const [m, setM] = useState(false);
-    useEffect(() => {
-      // guard SSR
-      if (typeof window === "undefined" || !("matchMedia" in window)) return;
-      const mq = window.matchMedia(q);
-      const h = () => setM(mq.matches);
-      h();
-      try {
-        mq.addEventListener("change", h);
-        return () => mq.removeEventListener("change", h);
-      } catch {
-        // Safari
-        // @ts-ignore
-        mq.addListener(h);
-        // @ts-ignore
-        return () => mq.removeListener(h);
-      }
-    }, [q]);
-    return m;
-  }
-  const useIsMobile = () => useMedia("(max-width: 768px)");
-  const useCoarse = () => useMedia("(pointer: coarse)");
-  
-  /* ------------ animations (constants) ------------ */
-  const container = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.06 } },
-  } as const;
-  const item = {
-    hidden: { opacity: 0, y: 8 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.28 } },
-  } as const;
-  
-  /* ------------ brand ink/slate for headings/body ------------ */
-  const INK = "#2F3A44";
-  const SLATE = "#5D6B7B";
-  
-  /** rAF-based throttler to keep mousemove ultra-cheap */
-  function useRafThrottle<T extends (...args: any[]) => void>(fn: T) {
-    const frame = useRef<number | null>(null);
-    const lastArgs = useRef<any[]>([]);
-    const cb = useCallback((...args: any[]) => {
-      lastArgs.current = args;
-      if (frame.current == null) {
-        frame.current = requestAnimationFrame(() => {
-          frame.current = null;
-          // @ts-ignore
-          fn(...lastArgs.current);
-        });
-      }
-    }, [fn]);
-    useEffect(() => () => frame.current != null && cancelAnimationFrame(frame.current), []);
-    return cb as T;
-  }
-  
-  /** safe localStorage read/write (won't throw under SSR/private mode) */
-  const safeStorage = {
-    get(key: string) {
-      try {
-        return typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
-      } catch {
-        return null;
-      }
-    },
-    set(key: string, value: string) {
-      try {
-        if (typeof window !== "undefined") window.localStorage.setItem(key, value);
-      } catch {
-        /* no-op */
-      }
-    },
+  useEffect,
+  useState,
+  useMemo,
+  lazy,
+  Suspense,
+  useCallback,
+} from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/lib/supabaseClient";
+import { useUserProfile } from "@/hooks/useUserProfile";
+
+const ScratchCard = lazy(() => import("@/components/ScratchCard"));
+
+import {
+  Bell,
+  Search,
+  ChevronRight,
+  LayoutGrid,
+  MessageSquare,
+  Users,
+  FileText,
+  Settings,
+  LogOut,
+  Zap,
+  Rocket,
+  BarChart3,
+  Flame,
+  BookOpen,
+  Award,
+  TrendingUp,
+  Menu,
+  X
+} from "lucide-react";
+
+/* ------------------- UTILS ------------------- */
+
+const safeStorage = {
+  get(key: string) {
+    try {
+      return typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
+    } catch { return null; }
+  },
+  set(key: string, value: string) {
+    try {
+      if (typeof window !== "undefined") window.localStorage.setItem(key, value);
+    } catch { /* no-op */ }
+  },
+};
+
+/* ------------------- CUSTOM COMPONENTS ------------------- */
+
+const GlossyButton = ({
+  icon: Icon,
+  label,
+  subLabel,
+  variant = "blue",
+  onClick,
+  fullWidth = false,
+  small = false,
+  className = "",
+}: {
+  icon?: any;
+  label: string;
+  subLabel?: string;
+  variant?: "blue" | "dark" | "green" | "crimson" | "yellow" | "orange" | "teal" | "purple"; 
+  onClick?: () => void;
+  fullWidth?: boolean;
+  small?: boolean;
+  className?: string;
+}) => {
+  const styles = {
+    blue: "bg-gradient-to-b from-[#60a5fa] to-[#2563eb] shadow-lg text-white border-t border-white/20",
+    dark: "bg-[#111827]/80 backdrop-blur-sm shadow-lg text-white border border-white/10",
+    green: "bg-gradient-to-b from-[#4ade80] to-[#16a34a] shadow-lg text-white border-t border-white/20",
+    crimson: "bg-gradient-to-b from-[#f472b6] to-[#db2777] shadow-lg text-white border-t border-white/20",
+    yellow: "bg-gradient-to-b from-[#facc15] to-[#ca8a04] shadow-lg text-white border-t border-white/20",
+    orange: "bg-gradient-to-b from-[#fb923c] to-[#ea580c] shadow-[0_8px_20px_-6px_rgba(234,88,12,0.6)] text-white border-t border-white/20",
+    teal: "bg-gradient-to-b from-[#2dd4bf] to-[#0d9488] shadow-lg text-white border-t border-white/20", 
+    purple: "bg-gradient-to-b from-[#a855f7] to-[#7e22ce] shadow-lg text-white border-t border-white/20",
   };
-  
-  export default function StudentDashboardPage() {
-    const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
-    const { profile, loading } = useUserProfile();
-  
-    const prefersReducedMotion = useReducedMotion();
-    const isMobile = useIsMobile();
-    const isCoarse = useCoarse();
-    const interactiveCards = !(isMobile || isCoarse || prefersReducedMotion);
-  
-    const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-    const openMobileSidebar = useCallback(() => setMobileSidebarOpen(true), []);
-    const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), []);
-  
-    // Scratch Card State
-    const [showScratchCard, setShowScratchCard] = useState(false);
-    const closeScratch = useCallback(() => {
-      setShowScratchCard(false);
-      safeStorage.set("hasSeenCoinPopup", "true");
-    }, []);
-    // keep timeout ids for cleanup
-    const popupTimers = useRef<number[]>([]);
-  
-    /** Check if new user and show coins popup (robust & abortable) */
-    useEffect(() => {
-      if (loading || !profile) return;
-  
-      const isNewUser = searchParams.get("newUser") === "true";
-      const storedHasSeenPopup = safeStorage.get("hasSeenCoinPopup");
-      const shouldShowForCoins = !!profile?.coins && profile.coins >= 100 && !storedHasSeenPopup;
-      const shouldShowForNewUser = isNewUser && !storedHasSeenPopup;
-  
-      const ids: number[] = [];
-      if (shouldShowForCoins) {
-        ids.push(
-          window.setTimeout(() => setShowScratchCard(true), 1500)
-        );
-      }
-      if (shouldShowForNewUser) {
-        ids.push(
-          window.setTimeout(() => setShowScratchCard(true), 2000)
-        );
-      }
-  
-      popupTimers.current = ids;
-      return () => {
-        // clear any pending timers to avoid state updates after unmount/route changes
-        popupTimers.current.forEach((id) => clearTimeout(id));
-        popupTimers.current = [];
-      };
-      // We only want to re-run when actual values change, not object identity
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loading, profile?.id, profile?.coins, searchParams.get("newUser")]);
-  
-    /* ensure profile */
-    // Avoid duplicating profile fetch logic already handled by useUserProfile; keep only auth gate + best-effort ensure row
-    useEffect(() => {
-      let aborted = false;
-      (async () => {
-        const { data } = await supabase.auth.getUser();
-        const user = data?.user;
-        if (!user) {
-          navigate("/login");
-          return;
-        }
-        // If hook already gave a profile row, skip insert.
-        if (profile?.id) return;
-  
-        // Best-effort check to ensure profile row; no UI change if this fails (RLS etc.)
-        const { data: existing } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("id", user.id)
-          .single();
-  
-        if (aborted || existing) return;
-  
-        // Try insert only if missing; swallow errors to avoid blocking UX under traffic
-        await supabase.from("profiles").insert({
-          id: user.id,
-          email: user.email,
-          full_name: (user.user_metadata?.full_name as string) || "Student",
-          role: "student",
-          coins: 100,
-          updated_at: new Date().toISOString(),
-        });
-      })();
-      return () => {
-        aborted = true;
-      };
-    }, [navigate, profile?.id]);
-  
-    // memoized demo content (static)
-    const recentTests = useMemo(
-      () => [
-        { id: 1, name: "Physics Midterm Practice", date: "May 14, 2025", questions: 15, subject: "Physics", status: "Completed", score: 87 },
-        { id: 2, name: "Calculus Quiz", date: "May 10, 2025", questions: 10, subject: "Mathematics", status: "In Progress", progress: 60 },
-        { id: 3, name: "Chemistry Practice Set", date: "May 02, 2025", questions: 12, subject: "Chemistry", status: "Completed", score: 92 },
-        { id: 4, name: "Biology Revision Test", date: "Apr 28, 2025", questions: 20, subject: "Biology", status: "Completed", score: 78 },
-      ],
-      []
-    );
-  
-    const announcements = useMemo(
-      () => [
-        { id: "a1", title: "Weekly Math Challenge", desc: "Join the math contest every Friday at 5 PM. Win up to 500 coins!", icon: School, date: "2d ago" },
-        { id: "a2", title: "New Notes Feature", desc: "Create and organize your study notes with our new note-taking system.", icon: BookOpen, date: "1w ago" },
-        { id: "a3", title: "Study Streak Bonus", desc: "Maintain a 7-day streak to earn 50 bonus coins!", icon: Flame, date: "3d ago" },
-      ],
-      []
-    );
-  
-    const studyStats = useMemo(
-      () => ({
-        testsTaken: 12,
-        avgScore: 85,
-        studyHours: 56,
-        streak: 7,
-        rank: 23,
-        accuracy: 78,
-      }),
-      []
-    );
-  
-    // cursor-reactive background (disabled on mobile/low motion) – rAF throttled
-    const mx = useMotionValue(320);
-    const my = useMotionValue(160);
-    const onMoveRaw = useCallback((e: React.MouseEvent<HTMLElement>) => {
-      if (!interactiveCards) return;
-      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      mx.set(e.clientX - r.left);
-      my.set(e.clientY - r.top);
-    }, [interactiveCards, mx, my]);
-    const onMove = useRafThrottle(onMoveRaw);
-    const bgGlow = useMotionTemplate`
-      radial-gradient(900px 450px at ${mx}px ${my}px, rgba(47,58,68,.08), transparent 70%)
-    `;
-  
-    // stable callbacks
-    const goToHistory = useCallback(
-      () => navigate("/dashboard/test-generator?tab=history"),
-      [navigate]
-    );
-  
-    const handleBack = useCallback(() => {
-      navigate(-1); // Go back to previous page
-    }, [navigate]);
-  
-    const coins = profile?.coins ?? 100;
-  
-    // Get first name for personalized greeting
-    const getFirstName = () => {
-      if (!profile?.full_name) return "Student";
-      return profile.full_name.split(' ')[0];
-    };
-  
-    if (loading) {
-      return (
-        <div className="grid h-screen place-items-center bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-gray-900">
-          <div className="animate-pulse text-sm text-muted-foreground">Loading…</div>
+
+  return (
+    <motion.button
+      whileHover={{ scale: 1.02, y: -1 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      className={`relative flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 ${styles[variant]} ${fullWidth ? "w-full" : "w-auto"} ${small ? "px-3 py-2 md:px-4" : "px-4 py-3 md:px-5 md:py-4"} ${className}`}
+    >
+      {Icon && (
+        <div className={`flex ${small ? 'h-5 w-5 md:h-6 md:w-6' : 'h-7 w-7 md:h-8 md:w-8'} items-center justify-center rounded-full bg-white/20 backdrop-blur-sm`}>
+          <Icon size={small ? 14 : 18} className="text-white" />
         </div>
-      );
+      )}
+      <div className="flex flex-col text-left">
+        <span className={`${small ? 'text-xs' : 'text-sm md:text-sm'} font-bold leading-none tracking-tight truncate`}>{label}</span>
+        {subLabel && !small && <span className="mt-1 text-[10px] font-medium opacity-90 truncate">{subLabel}</span>}
+      </div>
+      {!small && <div className="ml-auto opacity-80 hidden md:block"><ChevronRight size={16} /></div>}
+    </motion.button>
+  );
+};
+
+const NavItem = ({ icon: Icon, label, active = false, to, onClick }: { 
+  icon: any, 
+  label: string, 
+  active?: boolean, 
+  to?: string,
+  onClick?: () => void 
+}) => {
+  const navigate = useNavigate();
+  const handleClick = useCallback(() => {
+    if (to) navigate(to);
+    if (onClick) onClick();
+  }, [to, navigate, onClick]);
+
+  return (
+    <div 
+      onClick={handleClick}
+      className={`flex items-center gap-3 md:gap-4 p-3 rounded-xl md:rounded-2xl cursor-pointer transition-all ${
+          active 
+          ? 'bg-[#111827]/90 text-white font-bold shadow-md border border-white/10' 
+          : 'text-slate-500 hover:bg-[#111827]/10 hover:text-black'
+      }`}
+    >
+      <Icon size={20} strokeWidth={active ? 2.5 : 2} className="flex-shrink-0" />
+      <span className="text-sm font-medium truncate">{label}</span>
+    </div>
+  )
+};
+
+const uniformGlassStyle = "bg-slate-200 border border-slate-300/50 rounded-2xl md:rounded-[30px] shadow-sm p-4 md:p-6";
+
+export default function StudentDashboardPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { profile, loading } = useUserProfile();
+  const [showScratchCard, setShowScratchCard] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+
+  // Update window width on resize
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Close mobile menu on larger screens
+  useEffect(() => {
+    if (windowWidth >= 1024 && mobileMenuOpen) {
+      setMobileMenuOpen(false);
     }
-  
-    return (
-      <div
-        className="flex min-h-dvh text-gray-900 dark:text-gray-100"
-        style={{
-          background:
-            `radial-gradient(60rem 36rem at 50% 20%, rgba(255,255,255,0.95), rgba(255,255,255,0.65) 40%, transparent 72%),
-             #DFE4EF`,
-        }}
-        onMouseMove={onMove}
-      >
-        {/* Scratch Card Popup (lazy) */}
-        <Suspense fallback={null}>
-          <ScratchCard isOpen={showScratchCard} onClose={closeScratch} coins={100} />
-        </Suspense>
-  
-        {interactiveCards && (
-          <motion.div aria-hidden className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundImage: bgGlow }} />
+  }, [windowWidth, mobileMenuOpen]);
+
+  const recentTests = useMemo(() => [
+      { id: 1, name: "Composition in web design", date: "June 09, 2022", status: "Active", type: "Web" },
+      { id: 2, name: "Responsive vs. Adaptive", date: "June 10, 2022", status: "Active", type: "Design" },
+      { id: 3, name: "8 point grid system in UX", date: "June 11, 2022", status: "Review", type: "UX" },
+  ], []);
+
+  const upcomingEvents = useMemo(() => [
+      { id: 1, title: "Composition | Class 3A", time: "10:30", type: "Offline" },
+      { id: 2, title: "Design Sys | Class 3B", time: "11:30", type: "Offline" },
+  ], []);
+
+  const studyStats = [
+      { day: 'Mon', hours: 45, color: 'bg-blue-400' },
+      { day: 'Tue', hours: 72, color: 'bg-purple-400' },
+      { day: 'Wed', hours: 38, color: 'bg-teal-400' },
+      { day: 'Thu', hours: 90, color: 'bg-orange-500' },
+      { day: 'Fri', hours: 55, color: 'bg-crimson' },
+      { day: 'Sat', hours: 25, color: 'bg-slate-400' },
+      { day: 'Sun', hours: 15, color: 'bg-slate-300' },
+  ];
+
+  useEffect(() => {
+    if (loading || !profile) return;
+    if (searchParams.get("newUser") === "true" && !safeStorage.get("hasSeenCoinPopup")) {
+      setTimeout(() => setShowScratchCard(true), 1500);
+    }
+  }, [loading, profile, searchParams]);
+
+  if (loading) return <div className="h-screen flex items-center justify-center bg-[#F8F9FC] text-gray-400">Loading...</div>;
+
+  return (
+    <div className="min-h-screen bg-[#F0F2F5] font-sans text-slate-800 flex overflow-hidden">
+      <Suspense fallback={null}>
+        <ScratchCard isOpen={showScratchCard} onClose={() => setShowScratchCard(false)} coins={100} />
+      </Suspense>
+
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <motion.aside
+              initial={{ x: -300 }}
+              animate={{ x: 0 }}
+              exit={{ x: -300 }}
+              transition={{ type: "tween", duration: 0.3 }}
+              className="w-[280px] h-screen flex flex-col p-6 fixed left-0 top-0 z-50 bg-white/95 backdrop-blur-md border-r border-white/50 lg:hidden"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                  <img src="/ICON.ico" alt="Logo" className="w-10 h-10 object-contain" />
+                  <span className="font-bold text-xl tracking-tight text-slate-800">a4ai</span>
+                </div>
+                <button onClick={() => setMobileMenuOpen(false)} className="p-2 rounded-lg hover:bg-gray-100">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <nav className="flex-1 space-y-1">
+                <NavItem icon={LayoutGrid} label="Dashboard" active to="/dashboard" onClick={() => setMobileMenuOpen(false)} />
+                <NavItem icon={BookOpen} label="Notes" to="/dashboard/notes" onClick={() => setMobileMenuOpen(false)} />
+                <NavItem icon={MessageSquare} label="Inbox" to="/dashboard/messages" onClick={() => setMobileMenuOpen(false)} />
+                <NavItem icon={Users} label="Students" to="/dashboard/leaderboard" onClick={() => setMobileMenuOpen(false)} />
+                <NavItem icon={Settings} label="Settings" to="/dashboard/settings" onClick={() => setMobileMenuOpen(false)} />
+              </nav>
+
+              <div className="mt-auto">
+                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-400 to-pink-500 p-5 text-center shadow-lg shadow-orange-200 mb-4">
+                  <h4 className="text-white font-bold mb-1 text-sm">Get Premium</h4>
+                  <p className="text-white/80 text-xs mb-3">Unlock all features</p>
+                  <GlossyButton label="Upgrade Plan" variant="dark" fullWidth small />
+                </div>
+                <div 
+                  className="flex items-center gap-3 p-3 text-gray-400 cursor-pointer hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                  onClick={() => supabase.auth.signOut().then(() => navigate('/login'))}
+                >
+                  <LogOut size={18} />
+                  <span className="text-sm font-medium">Log out</span>
+                </div>
+              </div>
+            </motion.aside>
+          </>
         )}
-        <div className="fixed inset-0 -z-20 opacity-[0.035] dark:opacity-[0.03] [background-image:linear-gradient(to_right,#000_1px,transparent_1px),linear-gradient(to_bottom,#000_1px,transparent_1px)] [background-size:48px_48px]" />
-  
-        {/* Mobile Sidebar Overlay */}
-        <AnimatePresence>
-          {mobileSidebarOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-                onClick={closeMobileSidebar}
-              />
-              <motion.div
-                initial={{ x: -300 }}
-                animate={{ x: 0 }}
-                exit={{ x: -300 }}
-                className="fixed inset-y-0 left-0 z-50 lg:hidden will-change-transform"
-              >
-                <DashboardSidebar onClose={closeMobileSidebar} />
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
-  
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:block">
-          <DashboardSidebar />
+      </AnimatePresence>
+
+      {/* Desktop Sidebar */}
+      <aside className={`w-[260px] h-screen flex flex-col p-6 fixed left-0 top-0 z-20 hidden lg:flex bg-white/60 backdrop-blur-md border-r border-white/50`}>
+        <div className="flex items-center gap-4 mb-12 px-2">
+          <img src="/ICON.ico" alt="Logo" className="w-12 h-12 object-contain" />
+          <span className="font-bold text-2xl tracking-tight text-slate-800">a4ai</span>
         </div>
-  
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* header - Mobile Responsive */}
-          <header className="bg-background/80 backdrop-blur border-b sticky top-0 z-30">
-            <div className="mx-auto w-full max-w-7xl px-3 sm:px-4 py-3">
-              <div className="flex items-center justify-between">
-                {/* Left Section - Back Button, Menu & Title */}
-                <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                  {/* Back Button */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="p-2 h-9 w-9 flex-shrink-0 hover:bg-gray-100/80 active:scale-95 transition-all"
-                    onClick={handleBack}
-                    aria-label="Go back"
-                  >
-                    <ArrowLeft size={18} className="text-gray-700" />
-                  </Button>
-  
-                  {/* Mobile Menu Button */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="lg:hidden p-2 h-9 w-9 flex-shrink-0"
-                    onClick={openMobileSidebar}
-                  >
-                    <Menu size={18} />
-                  </Button>
-  
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <h1
-                      className="text-[18px] sm:text-[24px] font-[700] tracking-[-0.012em] leading-tight truncate"
-                      style={{ color: INK }}
-                    >
-                      {getFirstName()}'s Dashboard <span className="text-muted-foreground">— Student</span>
-                    </h1>
-  
-                    {/* Coin Balance - Mobile Responsive */}
-                    <div className="flex items-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium shrink-0">
-                      <Coins size={14} className="sm:size-4" />
-                      <span className="hidden xs:inline">{coins} Coins</span>
-                      <span className="xs:hidden">{coins}</span>
-                    </div>
-  
-                    {/* Student Badge */}
-                    <div className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium shrink-0">
-                      <School size={14} className="sm:size-4" />
-                      <span className="hidden xs:inline">Student</span>
-                    </div>
+
+        <nav className="flex-1 space-y-2">
+          <NavItem icon={LayoutGrid} label="Dashboard" active to="/dashboard" />
+          <NavItem icon={BookOpen} label="Notes" to="/dashboard/notes" />
+          <NavItem icon={MessageSquare} label="Inbox" to="/dashboard/messages" />
+          <NavItem icon={Users} label="Students" to="/dashboard/leaderboard" />
+          <NavItem icon={Settings} label="Settings" to="/dashboard/settings" />
+        </nav>
+
+        <div className="mt-auto">
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-orange-400 to-pink-500 p-6 text-center shadow-lg shadow-orange-200">
+            <h4 className="text-white font-bold mb-1">Get Premium</h4>
+            <p className="text-white/80 text-xs mb-4">Unlock all features</p>
+            <GlossyButton label="Upgrade Plan" variant="dark" fullWidth small />
+          </div>
+          <div 
+            className="mt-6 flex items-center gap-3 px-2 text-gray-400 cursor-pointer hover:text-gray-600 transition-colors" 
+            onClick={() => supabase.auth.signOut().then(() => navigate('/login'))}
+          >
+            <LogOut size={18} />
+            <span className="text-sm font-medium">Log out</span>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 ml-0 lg:ml-[260px] p-3 sm:p-4 lg:p-6 xl:p-8 overflow-y-auto h-screen">
+        {/* Mobile Header */}
+        <div className="lg:hidden flex items-center justify-between mb-6 p-2">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-2 rounded-xl bg-white/80 backdrop-blur-sm shadow-sm"
+            >
+              <Menu size={20} />
+            </button>
+            <div className="flex items-center gap-2">
+              <img src="/ICON.ico" alt="Logo" className="w-8 h-8 object-contain" />
+              <span className="font-bold text-lg tracking-tight text-slate-800">a4ai</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="p-2 bg-white/80 rounded-xl shadow-sm"><Search size={18} /></button>
+            <button className="p-2 bg-white/80 rounded-xl shadow-sm relative"><Bell size={18} /><span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span></button>
+          </div>
+        </div>
+
+        <div className="max-w-[1400px] mx-auto grid grid-cols-12 gap-4 sm:gap-6 md:gap-8">
+          {/* Left Column - Full width on mobile, 8 columns on desktop */}
+          <div className="col-span-12 xl:col-span-8 flex flex-col gap-4 sm:gap-6 md:gap-8">
+            {/* Header */}
+            <div className="px-2 sm:px-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Welcome back, {profile?.full_name?.split(' ')[0]}</h1>
+              <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+
+            {/* Progress Card */}
+            <div className={`${uniformGlassStyle} relative p-5 sm:p-6 md:p-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 overflow-hidden`}>
+              <div className="relative z-10 max-w-full sm:max-w-[70%]">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold leading-tight mb-2">
+                  Your average course progress is <span className="text-orange-600">73%</span>.
+                </h2>
+                <p className="text-slate-500 text-xs sm:text-sm mb-4 sm:mb-6 font-medium">Level up your learning to improve your student rank!</p>
+                <GlossyButton label="Continue Learning" variant="orange" icon={Rocket} className="w-full sm:w-auto" />
+              </div>
+              <div className="absolute right-0 bottom-0 h-40 w-40 sm:h-full sm:w-[30%] bg-[url('https://illustrations.popsy.co/amber/student-going-to-school.svg')] bg-contain bg-bottom bg-no-repeat opacity-10 grayscale"></div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+              {/* Learning Activity */}
+              <div className={uniformGlassStyle}>
+                <div className="flex justify-between items-center mb-4 sm:mb-6">
+                  <h3 className="font-bold text-slate-800 text-sm sm:text-base">Learning Activity</h3>
+                  <div className="flex items-center gap-1 text-teal-600 bg-teal-50 px-2 py-1 rounded-lg text-[10px] font-bold">
+                    <TrendingUp size={10} className="hidden sm:block" /> +12.5%
                   </div>
                 </div>
-  
-                {/* Right Section - User Info & Logout */}
-                <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-                  <div className="hidden sm:block text-muted-foreground max-w-[120px] lg:max-w-[200px] truncate text-sm">
-                    {profile?.full_name} {profile?.email ? `(${profile.email})` : ""}
+                
+                <div className="flex items-end justify-between h-28 sm:h-32 gap-2 sm:gap-3 px-1 sm:px-2 mb-4">
+                  {studyStats.map((item, i) => (
+                    <div key={i} className="flex-1 group flex flex-col items-center gap-1 sm:gap-2">
+                      <div className="w-full bg-white/40 rounded-xl sm:rounded-2xl h-full relative overflow-hidden shadow-inner">
+                        <motion.div 
+                          initial={{ height: 0 }} 
+                          animate={{ height: `${item.hours}%` }} 
+                          transition={{ duration: 1, delay: i * 0.1 }}
+                          className={`absolute bottom-0 w-full rounded-xl sm:rounded-2xl shadow-sm ${item.color}`} 
+                        />
+                      </div>
+                      <span className="text-[8px] sm:text-[9px] font-bold text-slate-400">{item.day}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex justify-between items-center pt-3 sm:pt-4 border-t border-slate-300/30">
+                  <div className="text-center">
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase font-bold tracking-wider">Total Time</p>
+                    <p className="text-xs sm:text-sm font-black text-slate-700">24.5 hrs</p>
                   </div>
-                  <Button
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      navigate("/login");
-                    }}
-                    variant="destructive"
-                    size="sm"
-                    className="text-xs sm:text-sm"
-                  >
-                    <span className="hidden sm:inline">Logout</span>
-                    <span className="sm:hidden">Out</span>
-                  </Button>
+                  <div className="text-center">
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase font-bold tracking-wider">Courses</p>
+                    <p className="text-xs sm:text-sm font-black text-slate-700">08</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase font-bold tracking-wider">Rank</p>
+                    <p className="text-xs sm:text-sm font-black text-slate-700">#12</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className={`${uniformGlassStyle} flex flex-col gap-3 sm:gap-4`}>
+                <h3 className="font-bold text-slate-800 text-sm sm:text-base">Quick Actions</h3>
+                <div className="flex-1 flex flex-col justify-center gap-2 sm:gap-3">
+                  <Link to="/dashboard/contests" className="block">
+                    <GlossyButton label="Join Contests" variant="blue" icon={Award} fullWidth />
+                  </Link>
+                  <Link to="/dashboard/leaderboard" className="block">
+                    <GlossyButton label="Leaderboard" variant="yellow" icon={Flame} fullWidth />
+                  </Link>
                 </div>
               </div>
             </div>
-          </header>
-  
-          <main className="flex-1 overflow-y-auto py-4 sm:py-6">
-            <motion.div
-              variants={container}
-              initial="hidden"
-              animate="show"
-              className="mx-auto max-w-7xl px-3 sm:px-4 space-y-4 sm:space-y-6"
-            >
-              {/* welcome card - Mobile Responsive */}
-              <motion.div variants={item}>
-                <Card className="border card-soft bg-gradient-to-r from-blue-50 to-indigo-50">
-                  <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle
-                        className="text-[16px] sm:text-[18px] font-[650] tracking-[-0.01em] truncate"
-                        style={{ color: INK }}
-                      >
-                        Welcome back, {getFirstName()}! 👋
-                      </CardTitle>
-                      <CardDescription
-                        className="tracking-[-0.005em] text-xs sm:text-sm"
-                        style={{ color: SLATE }}
-                      >
-                        Ready to continue your learning journey? Practice with AI-powered tests.
-                      </CardDescription>
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-start md:justify-end">
-                      <Link to="/dashboard/test-generator" className="flex-1 sm:flex-none min-w-0">
-                        <Button className="gap-2 w-full sm:w-auto rounded-xl bg-gray-900 text-white hover:bg-black active:scale-[.98] shadow-lg text-xs sm:text-sm">
-                          <Brain className="h-3 w-3 sm:h-4 sm:w-4" />
-                          <span className="truncate">Take Practice Test</span>
-                        </Button>
-                      </Link>
-  
-                      <Button variant="outline" onClick={goToHistory} className="flex-1 sm:flex-none text-xs sm:text-sm">
-                        <span className="truncate">View History</span>
-                      </Button>
-  
-                      <Link to="/dashboard/contests" className="flex-1 sm:flex-none min-w-0">
-                        <Button variant="ghost" className="gap-1 w-full sm:w-auto text-xs sm:text-sm">
-                          <Award className="h-3 w-3 sm:h-4 sm:w-4" />
-                          <span className="truncate">Join Contests</span>
-                        </Button>
-                      </Link>
-                    </div>
-                  </CardHeader>
-                </Card>
-              </motion.div>
-  
-              {/* Study KPIs - Mobile Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
-                <KpiCard title="Tests Taken" value={studyStats.testsTaken} icon={FileText} tone="blue" interactive={interactiveCards} />
-                <KpiCard title="Avg Score" value={`${studyStats.avgScore}%`} icon={TrendingUp} tone="green" interactive={interactiveCards} />
-                <KpiCard title="Study Hours" value={studyStats.studyHours} icon={Clock} tone="purple" interactive={interactiveCards} />
-                <KpiCard title="Day Streak" value={studyStats.streak} icon={Flame} tone="amber" interactive={interactiveCards} />
-                <KpiCard title="Rank" value={`#${studyStats.rank}`} icon={Target} tone="indigo" interactive={interactiveCards} />
-                <KpiCard title="Accuracy" value={`${studyStats.accuracy}%`} icon={BarChart3} tone="teal" interactive={interactiveCards} />
+
+            {/* Upcoming Assignments */}
+            <div className={uniformGlassStyle}>
+              <div className="flex justify-between items-center mb-4 sm:mb-6">
+                <h3 className="font-bold text-slate-800 text-sm sm:text-base">Upcoming Assignments</h3>
+                <GlossyButton label="All tests" variant="dark" small />
               </div>
-  
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-                {/* recent tests - Mobile Optimized */}
-                <motion.div variants={item} className="lg:col-span-2 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[14px] sm:text-[16px] font-[600] tracking-[-0.01em]" style={{ color: INK }}>
-                      Recent Practice Tests
-                    </h2>
-                    <Button variant="ghost" size="sm" className="text-gray-900 dark:text-gray-50 text-xs sm:text-sm" onClick={goToHistory}>
-                      View All
-                    </Button>
-                  </div>
-                  <AnimatePresence initial={false}>
+              <div className="overflow-x-auto -mx-2 sm:mx-0">
+                <table className="w-full min-w-[500px] text-left text-slate-600">
+                  <thead className="text-xs text-slate-400 border-b border-slate-300/30">
+                    <tr>
+                      <th className="pb-3 px-2 sm:px-0">Test name</th>
+                      <th className="pb-3 px-2 sm:px-0">Deadline</th>
+                      <th className="pb-3 px-2 sm:px-0 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {recentTests.map((t) => (
-                      <motion.div
-                        key={t.id}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="group"
-                      >
-                        <Card className="border hover:shadow-md transition-shadow">
-                          <div className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <span
-                                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                                    t.subject === "Physics"
-                                      ? "bg-red-400"
-                                      : t.subject === "Mathematics"
-                                      ? "bg-blue-400"
-                                      : t.subject === "Chemistry"
-                                      ? "bg-green-400"
-                                      : "bg-purple-400"
-                                  }`}
-                                />
-                                <h3
-                                  className="font-[600] tracking-[-0.01em] truncate text-sm sm:text-base"
-                                  style={{ color: INK }}
-                                >
-                                  {t.name}
-                                </h3>
-                                <Badge variant="secondary" className="ml-1 shrink-0 text-xs">
-                                  {t.subject}
-                                </Badge>
-                                {t.status === "Completed" ? (
-                                  <Badge className="ml-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0 text-xs">
-                                    <Target className="h-3 w-3 mr-1" />
-                                    {t.score}%
-                                  </Badge>
-                                ) : (
-                                  <Badge className="ml-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0 text-xs">
-                                    <TimerReset className="h-3 w-3 mr-1" />
-                                    {t.progress}%
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs sm:text-sm text-muted-foreground truncate">
-                                {t.date} • {t.questions} questions
-                              </p>
-                            </div>
-                            <div className="flex gap-2 justify-end sm:justify-start">
-                              <Button variant="outline" size="sm" className="text-xs sm:text-sm flex-1 sm:flex-none">
-                                {t.status === "Completed" ? "Review" : "Continue"}
-                              </Button>
-                              <Button variant="outline" size="sm" className="text-xs sm:text-sm hidden sm:inline-flex">
-                                Retake
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      </motion.div>
+                      <tr key={t.id} className="border-b border-slate-300/20 last:border-0">
+                        <td className="py-3 sm:py-4 font-semibold text-slate-700 text-xs sm:text-sm px-2 sm:px-0 truncate max-w-[150px] sm:max-w-none">{t.name}</td>
+                        <td className="py-3 sm:py-4 text-xs px-2 sm:px-0">{t.date}</td>
+                        <td className="py-3 sm:py-4 text-right px-2 sm:px-0">
+                          <span className="bg-orange-100 text-orange-600 px-2 py-1 sm:px-3 sm:py-1 rounded-full font-bold text-[10px] inline-block min-w-[60px] text-center">{t.status}</span>
+                        </td>
+                      </tr>
                     ))}
-                  </AnimatePresence>
-                </motion.div>
-  
-                {/* Right Column */}
-                <div className="space-y-4 sm:space-y-6">
-                  {/* Announcements - Mobile Optimized */}
-                  <motion.div variants={item}>
-                    <Card className="h-full">
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center gap-2">
-                          <BellDot className="h-4 w-4" />
-                          <CardTitle
-                            className="text-sm sm:text-base font-[600] tracking-[-0.01em]"
-                            style={{ color: INK }}
-                          >
-                            Updates & Announcements
-                          </CardTitle>
-                        </div>
-                        <CardDescription className="text-xs sm:text-sm">Stay updated with what's new</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-3 sm:space-y-4">
-                        {announcements.map((a) => (
-                          <div key={a.id} className="rounded-lg border bg-muted/40 p-2 sm:p-3 hover:bg-muted/60 transition-colors">
-                            <div className="flex items-center gap-2 font-medium text-sm sm:text-base">
-                              <a.icon className="h-3 w-3 sm:h-4 sm:w-4" />
-                              <span className="truncate">{a.title}</span>
-                            </div>
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2">{a.desc}</div>
-                            <div className="mt-1 text-[10px] sm:text-[11px] text-muted-foreground">{a.date}</div>
-                          </div>
-                        ))}
-                        <Link to="/announcements">
-                          <Button variant="ghost" className="w-full text-xs sm:text-sm">
-                            View all announcements
-                          </Button>
-                        </Link>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-  
-                  {/* Quick Links */}
-                  <motion.div variants={item}>
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle
-                          className="text-sm sm:text-base font-[600] tracking-[-0.01em]"
-                          style={{ color: INK }}
-                        >
-                          Quick Actions
-                        </CardTitle>
-                        <CardDescription className="text-xs sm:text-sm">Access your tools faster</CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <Link to="/dashboard/notes">
-                          <Button variant="outline" className="w-full justify-start gap-2 text-xs sm:text-sm">
-                            <BookOpen className="h-3 w-3 sm:h-4 sm:w-4" />
-                            <span>My Study Notes</span>
-                          </Button>
-                        </Link>
-                        <Link to="/dashboard/contests">
-                          <Button variant="outline" className="w-full justify-start gap-2 text-xs sm:text-sm">
-                            <School className="h-3 w-3 sm:h-4 sm:w-4" />
-                            <span>Join Contests</span>
-                          </Button>
-                        </Link>
-                        <Link to="/dashboard/analytics">
-                          <Button variant="outline" className="w-full justify-start gap-2 text-xs sm:text-sm">
-                            <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
-                            <span>Performance Analytics</span>
-                          </Button>
-                        </Link>
-                        <Link to="/dashboard/leaderboard">
-                          <Button variant="outline" className="w-full justify-start gap-2 text-xs sm:text-sm">
-                            <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-                            <span>View Leaderboard</span>
-                          </Button>
-                        </Link>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </div>
-              </div>
-  
-              {/* CTA - Mobile Responsive */}
-              <motion.div
-                variants={item}
-                className="rounded-xl sm:rounded-2xl border p-[1px] shadow-[0_8px_24px_rgba(0,0,0,0.08),0_12px_40px_rgba(0,0,0,0.06)]"
-              >
-                <div className="rounded-xl sm:rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 px-4 sm:px-6 py-4 sm:py-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 text-white">
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className="text-[16px] sm:text-[18px] font-[600] tracking-[-0.01em] truncate"
-                    >
-                      🎯 Ready for a Challenge?
-                    </div>
-                    <div className="text-sm opacity-90">
-                      Join today's live contest and compete with students worldwide!
-                    </div>
-                  </div>
-                  <Link to="/dashboard/contest/create" className="w-full sm:w-auto">
-                    <Button className="gap-2 w-full sm:w-auto rounded-xl bg-white text-blue-600 hover:bg-gray-100 active:scale-[.98] shadow-lg text-xs sm:text-sm">
-                      <Rocket className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span>Join Contest Now</span>
-                    </Button>
-                  </Link>
-                </div>
-              </motion.div>
-            </motion.div>
-          </main>
-        </div>
-      </div>
-    );
-  }
-  
-  /* ------- KPI Card - Mobile Responsive (memoized) ------- */
-  type IconType = React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  
-  const KpiCard = memo(function KpiCard({
-    title,
-    value,
-    icon: Icon,
-    tone = "blue",
-    interactive,
-  }: {
-    title: string;
-    value: string | number;
-    icon: IconType;
-    tone?: "blue" | "green" | "purple" | "amber" | "indigo" | "teal";
-    interactive: boolean;
-  }) {
-    const mx = useMotionValue(60);
-    const my = useMotionValue(40);
-    const rotateX = useTransform(my, [0, 120], [6, -6]);
-    const rotateY = useTransform(mx, [0, 180], [-8, 8]);
-  
-    const onMoveRaw = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-      if (!interactive) return;
-      const r = e.currentTarget.getBoundingClientRect();
-      mx.set(e.clientX - r.left);
-      my.set(e.clientY - r.top);
-    }, [interactive, mx, my]);
-  
-    const onMove = useRafThrottle(onMoveRaw);
-  
-    const resetPos = useCallback(() => {
-      mx.set(60);
-      my.set(40);
-    }, [mx, my]);
-  
-    const TONES = {
-      blue: { border: "from-blue-400/45 to-blue-500/45", chip: "bg-blue-500/10 text-blue-700" },
-      green: { border: "from-emerald-400/45 to-green-500/45", chip: "bg-emerald-500/10 text-emerald-700" },
-      purple: { border: "from-purple-400/45 to-purple-500/45", chip: "bg-purple-500/10 text-purple-700" },
-      amber: { border: "from-amber-400/45 to-orange-400/45", chip: "bg-amber-500/10 text-amber-700" },
-      indigo: { border: "from-indigo-400/45 to-indigo-500/45", chip: "bg-indigo-500/10 text-indigo-700" },
-      teal: { border: "from-teal-400/45 to-cyan-400/45", chip: "bg-teal-500/10 text-teal-700" },
-    } as const;
-    const t = TONES[tone] || TONES.blue;
-  
-    return (
-      <div onMouseMove={onMove} onMouseLeave={resetPos} style={{ perspective: 1000 }}>
-        <motion.div
-          style={interactive ? { rotateX, rotateY } : undefined}
-          whileHover={!interactive ? ({ scale: 1.01 } as any) : undefined}
-          className="relative rounded-xl sm:rounded-2xl border bg-card card-soft transition-all shadow-[0_1px_0_rgba(0,0,0,0.04),0_8px_20px_rgba(0,0,0,0.05)] p-[1px]"
-        >
-          {/* ultra-thin gradient border */}
-          <div className={`rounded-xl sm:rounded-2xl bg-gradient-to-tr ${t.border} p-0.5`}>
-            <div className="rounded-xl sm:rounded-2xl bg-card/95 backdrop-blur px-3 sm:px-5 py-3 sm:py-4">
-              <div className="flex items-center justify-between">
-                <div className="text-xs sm:text-sm text-muted-foreground tracking-[-0.005em] truncate">
-                  {title}
-                </div>
-                <div className={`p-1 sm:p-2 rounded-lg ${t.chip}`}>
-                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-              </div>
-              <div
-                className="mt-1 sm:mt-2 text-[20px] sm:text-[30px] leading-none font-[700] tracking-[-0.015em] num"
-                style={{ color: INK }}
-              >
-                {value}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-        </motion.div>
-      </div>
-    );
-  });
+
+          {/* Right Column - Full width on mobile, 4 columns on desktop */}
+          <div className="col-span-12 xl:col-span-4 flex flex-col gap-4 sm:gap-6 md:gap-8">
+            {/* Desktop Search & Notifications */}
+            <div className="hidden lg:flex justify-end gap-4 items-center h-[40px]">
+              <button className="p-2 bg-slate-200 rounded-xl shadow-sm"><Search size={18} /></button>
+              <button className="p-2 bg-slate-200 rounded-xl shadow-sm relative"><Bell size={18} /><span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-slate-200"></span></button>
+            </div>
+
+            {/* Profile Card */}
+            <div className={`${uniformGlassStyle} flex items-center gap-3 sm:gap-4`}>
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-orange-100 flex items-center justify-center text-orange-500 font-bold text-lg sm:text-xl flex-shrink-0">
+                {profile?.full_name?.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-slate-900 text-sm sm:text-base truncate">{profile?.full_name}</h3>
+                <p className="text-slate-500 text-xs truncate">{profile?.email}</p>
+              </div>
+            </div>
+
+            {/* Calendar */}
+            <div className={uniformGlassStyle}>
+              <h3 className="font-bold text-slate-800 mb-4 sm:mb-6 text-xs sm:text-sm text-center">June 2026</h3>
+              <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs">
+                {Array.from({length: 28}, (_, i) => (
+                  <div 
+                    key={i} 
+                    className={`aspect-square flex items-center justify-center rounded-lg sm:rounded-xl transition-all ${
+                      i === 7 
+                        ? 'bg-orange-500 text-white font-bold' 
+                        : 'text-slate-600 hover:bg-slate-300'
+                    }`}
+                  >
+                    {i+1}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Extra Tools */}
+            <div className={`${uniformGlassStyle} flex flex-col gap-3 sm:gap-4`}>
+              <h4 className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">Extra Tools</h4>
+              <div className="flex flex-col gap-2 sm:gap-3">
+                <Link to="/dashboard/notes" className="block">
+                  <GlossyButton label="Study Notes" variant="green" icon={BookOpen} fullWidth />
+                </Link>
+                <Link to="/dashboard/analytics" className="block">
+                  <GlossyButton label="Performance" variant="crimson" icon={BarChart3} fullWidth />
+                </Link>
+                <Link to="/dashboard/leaderboard" className="block">
+                  <GlossyButton label="Students" variant="purple" icon={Users} fullWidth />
+                </Link>
+              </div>
+            </div>
+
+            {/* Upcoming Classes */}
+            <div className={`${uniformGlassStyle} flex-1`}>
+              <h3 className="font-bold text-slate-800 mb-4 sm:mb-6 text-xs uppercase tracking-widest opacity-60">Upcoming Classes</h3>
+              <div className="space-y-3 sm:space-y-4">
+                {upcomingEvents.map((evt) => (
+                  <div 
+                    key={evt.id} 
+                    className="flex items-center gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white/40 border border-white/60 hover:bg-white transition-all cursor-pointer"
+                  >
+                    <div className="bg-slate-200 px-2 py-1 sm:px-3 sm:py-1 rounded-lg text-[9px] sm:text-[10px] font-bold text-slate-700 whitespace-nowrap">
+                      {evt.time}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-slate-800 text-sm truncate">{evt.title}</h4>
+                      <p className="text-slate-400 text-[9px] sm:text-[10px] truncate">{evt.type} • Portal</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

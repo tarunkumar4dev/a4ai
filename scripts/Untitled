@@ -1,0 +1,50 @@
+# scripts/config.py
+"""
+Configuration for NCERT Test Generator
+"""
+
+import os
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class DatabaseConfig:
+    host: str = os.getenv("DB_HOST", "localhost")
+    port: int = int(os.getenv("DB_PORT", "5432"))
+    database: str = os.getenv("DB_NAME", "ncert_rag")
+    user: str = os.getenv("DB_USER", "postgres")
+    password: str = os.getenv("DB_PASSWORD", "password")
+    
+    @property
+    def connection_string(self):
+        return f"dbname={self.database} user={self.user} password={self.password} host={self.host} port={self.port}"
+
+@dataclass
+class EmbeddingConfig:
+    model_name: str = "all-MiniLM-L6-v2"
+    dimension: int = 384
+    batch_size: int = 32
+    similarity_threshold: float = 0.7
+
+@dataclass
+class LLMConfig:
+    gemini_api_key: Optional[str] = os.getenv("GEMINI_API_KEY")
+    model_name: str = "gemini-pro"
+    temperature: float = 0.7
+    max_tokens: int = 4000
+
+@dataclass 
+class AppConfig:
+    db: DatabaseConfig = DatabaseConfig()
+    embedding: EmbeddingConfig = EmbeddingConfig()
+    llm: LLMConfig = LLMConfig()
+
+# Global config instance
+config = AppConfig()
+
+# Test function
+if __name__ == "__main__":
+    print("✅ Config loaded successfully")
+    print(f"Database: {config.db.database}")
+    print(f"Embedding model: {config.embedding.model_name}")
+    print(f"Gemini API Key set: {bool(config.llm.gemini_api_key)}")
