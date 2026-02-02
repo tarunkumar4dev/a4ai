@@ -1,18 +1,40 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FlashcardProvider } from '@/context/FlashcardContext';
 import { useFlashcards } from '@/context/FlashcardContext';
 import FlashcardDeck from '@/components/flashcards/FlashcardDeck';
 import { ArrowLeft, BookOpen, Home, Share2, Download } from 'lucide-react';
+import { allFlashcards } from '@/data/ncertFlashcards';
+
+// Helper to derive class from subject by checking allFlashcards
+function getClassFromSubject(subject: string | null): number | null {
+  if (!subject) return null;
+  // Check which classes have this subject
+  for (const [classKey, subjects] of Object.entries(allFlashcards)) {
+    if (subjects[subject]) {
+      return parseInt(classKey);
+    }
+  }
+  return null;
+}
 
 export default function FlashcardChapter() {
-  const { subject, chapter } = useParams<{ subject: string; chapter: string }>();
+  const { subject, chapter, class: classParam } = useParams<{ subject: string; chapter: string; class?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const chapterNumber = chapter ? parseInt(chapter) : null;
+  // Get class from URL params, navigation state, or derive from subject
+  const classNum = classParam ? parseInt(classParam) : 
+                   (location.state as any)?.class || 
+                   getClassFromSubject(subject || null);
 
   return (
-    <FlashcardProvider>
+    <FlashcardProvider 
+      initialClass={classNum ?? undefined}
+      initialSubject={subject || undefined}
+      initialChapter={chapterNumber ?? undefined}
+    >
       <FlashcardChapterContent 
         subject={subject || ''} 
         chapterNumber={chapterNumber} 

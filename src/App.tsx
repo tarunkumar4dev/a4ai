@@ -1,3 +1,4 @@
+// src/App.tsx
 import { useEffect, Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import "./styles/globals.css";
@@ -49,7 +50,7 @@ const ApiPage = lazy(() => import("./pages/product/ApiPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 
-const ChemistryPracticePage = lazy(() => import("./practice/chemistry"));
+const ChemistryPracticePage = lazy(() => import("@/practice/chemistry")); // Changed to @/practice
 
 /* ---------- Lazy Auth & App Pages ---------- */
 const RoleSelectionPage = lazy(() => import("./pages/RoleSelectionPage"));
@@ -60,6 +61,11 @@ const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage"));
 const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage"));
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
+
+/* ---------- Lazy PYQ Practice Pages ---------- */
+const PracticeZonePage = lazy(() => import("./pages/PracticeZonePage"));
+const PYQPracticeSessionPage = lazy(() => import("./pages/PYQPracticeSessionPage"));
+const PYQAdminPage = lazy(() => import("./pages/admin/PYQAdminPage"));
 
 /* ---------- Students / Notes / Settings ---------- */
 const StudentsPage = lazy(() => import("./pages/StudentsPage"));
@@ -80,13 +86,11 @@ const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
 
 /* ---------- Mega Contest Pages ---------- */
-// IMPORTANT: Added error boundary to prevent crash if file doesn't exist
 const MegaContestLivePage = lazy(() => 
   import("./pages/MegaContestLivePage")
     .then(module => ({ default: module.default }))
     .catch(error => {
       console.error("Failed to load MegaContestLivePage:", error);
-      // Return a fallback component
       return {
         default: () => (
           <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -136,15 +140,14 @@ const CallbackPage = lazy(() => import("./pages/auth/callback"));
 const PaymentPage = lazy(() => import("./pages/payment/paymentPage"));
 
 /* ---------- Daily Practice Module ---------- */
-const PracticeSelectionPage = lazy(() => import("./practice/index"));
-const PracticeSession = lazy(() => import("./practice/session"));
+const PracticeSelectionPage = lazy(() => import("@/practice/index")); // Changed to @/practice
+const PracticeSessionPage = lazy(() => import("@/practice/session/index")); // Changed to @/practice and added /index
 
 /* ---------- Scroll Helper ---------- */
 function ScrollToTop() {
   const { pathname } = useLocation();
   
   useEffect(() => {
-    // Smooth scroll to top
     window.scrollTo({ 
       top: 0, 
       behavior: pathname === "/" ? "auto" : "smooth" 
@@ -157,8 +160,8 @@ function ScrollToTop() {
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
       retry: 1,
       refetchOnWindowFocus: false,
     },
@@ -179,41 +182,6 @@ const LoadingScreen = () => (
     </div>
   </div>
 );
-
-/* ---------- Error Boundary Component ---------- */
-const ErrorBoundaryFallback = ({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-    <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
-      <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
-        <span className="text-xl">❌</span>
-      </div>
-      <h2 className="text-2xl font-bold text-center text-gray-900 mb-3">Something went wrong</h2>
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-        <p className="text-red-700 font-medium mb-1">Error Details:</p>
-        <p className="text-red-600 text-sm font-mono break-all">{error.message}</p>
-      </div>
-      <div className="flex gap-3">
-        <button
-          onClick={resetErrorBoundary}
-          className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Try Again
-        </button>
-        <button
-          onClick={() => window.location.href = "/"}
-          className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition-colors"
-        >
-          Go Home
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-/* ---------- Component Wrapper with Error Boundary ---------- */
-function SafeComponent({ children }: { children: ReactNode }) {
-  return <>{children}</>;
-}
 
 const NotFound = () => (
   <div className="min-h-[70vh] flex flex-col items-center justify-center px-4">
@@ -274,8 +242,8 @@ function IdleLogoutManager() {
 
 function IdleLogoutEnabled() {
   useIdleLogout({
-    timeoutMs: 20 * 60 * 1000, // 20 minutes
-    warnBeforeMs: 60 * 1000, // 1 minute warning
+    timeoutMs: 20 * 60 * 1000,
+    warnBeforeMs: 60 * 1000,
     onWarn: () => toast.warning("You've been inactive. Auto sign-out in 1 minute."),
     onLogout: () => toast.info("Signed out due to inactivity."),
   });
@@ -285,19 +253,16 @@ function IdleLogoutEnabled() {
 /* ========================================================= */
 
 const App = () => {
-  // Enhanced prefetch strategy
   useEffect(() => {
     const prefetchResources = () => {
-      // Critical pages for instant navigation
       const criticalPages = [
         import("./pages/FeaturesPage"),
         import("./pages/product/PricingPage"),
         import("./pages/DashboardPage"),
         import("./pages/ContestLandingPage"),
-        import("./practice/index"),
+        import("@/practice/index"), // Changed to @/practice
       ];
 
-      // Secondary pages (prefetch on idle)
       const secondaryPages = () => {
         import("./pages/company/CareersPage");
         import("./pages/Resources/Documentation");
@@ -310,13 +275,13 @@ const App = () => {
         import("./pages/StudentDashboardPage");
         import("./pages/TeacherDashboardPage");
         import("./pages/AdminAddQuestions");
-        // Note: Removed MegaContestLivePage from automatic prefetch
+        import("./pages/PracticeZonePage");
+        import("./pages/PYQPracticeSessionPage");
+        import("./pages/admin/PYQAdminPage");
       };
 
-      // Load critical pages immediately
       Promise.all(criticalPages);
 
-      // Load secondary pages on idle
       if ('requestIdleCallback' in window) {
         (window as any).requestIdleCallback(() => secondaryPages());
       } else {
@@ -324,7 +289,6 @@ const App = () => {
       }
     };
 
-    // Start prefetching after initial render
     setTimeout(prefetchResources, 100);
   }, []);
 
@@ -359,13 +323,8 @@ const App = () => {
                   <ScrollToTop />
                   <Suspense fallback={<LoadingScreen />}>
                     <Routes>
-                      {/* -------- Auth callback -------- */}
                       <Route path="/auth/callback/*" element={<CallbackPage />} />
-
-                      {/* -------- Role Selection -------- */}
                       <Route path="/role-selection" element={<RoleSelectionPage />} />
-
-                      {/* -------- Public marketing -------- */}
                       <Route path="/" element={<LandingPage />} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/pricing" element={<PricingPage />} />
@@ -373,315 +332,55 @@ const App = () => {
                       <Route path="/about" element={<AboutPage />} />
                       <Route path="/contact" element={<ContactPage />} />
                       <Route path="/payment" element={<PaymentPage />} />
-
-                      {/* -------- Company -------- */}
                       <Route path="/careers" element={<CareersPage />} />
                       <Route path="/privacy" element={<PrivacyPolicyPage />} />
-
-                      {/* -------- Legal -------- */}
                       <Route path="/terms" element={<TermsPage />} />
                       <Route path="/cookies" element={<CookiePolicyPage />} />
-
-                      {/* -------- Chemistry Practice -------- */}
-                      <Route
-                        path="/practice/chemistry"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <ChemistryPracticePage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- Resources -------- */}
+                      <Route path="/practice/chemistry" element={<PrivateRoute><ChemistryPracticePage /></PrivateRoute>} />
                       <Route path="/resources" element={<ResourcesHome />} />
                       <Route path="/docs" element={<DocsPage />} />
                       <Route path="/help" element={<HelpCenterPage />} />
                       <Route path="/blog" element={<BlogPage />} />
                       <Route path="/case-studies" element={<CaseStudiesPage />} />
-
-                      {/* -------- Institute -------- */}
                       <Route path="/*" element={<ChankyaInstitutePublic />} />
-
-                      {/* -------- Standalone -------- */}
                       <Route path="/demo" element={<LandingDemo />} />
                       <Route path="/faq" element={<FAQ />} />
+                      <Route path="/login" element={<AuthGateForAuthPages><LoginPage /></AuthGateForAuthPages>} />
+                      <Route path="/signup" element={<AuthGateForAuthPages><SignupPage /></AuthGateForAuthPages>} />
+                      <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
+                      <Route path="/dashboard/student" element={<RoleAuthGate allowedRoles={["student"]}><StudentDashboardPage /></RoleAuthGate>} />
+                      <Route path="/dashboard/teacher" element={<RoleAuthGate allowedRoles={["teacher"]}><TeacherDashboardPage /></RoleAuthGate>} />
+                      <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} />
+                      <Route path="/dashboard/analytics" element={<PrivateRoute><AnalyticsPage /></PrivateRoute>} />
 
-                      {/* -------- Auth Pages -------- */}
-                      <Route
-                        path="/login"
-                        element={
-                          <AuthGateForAuthPages>
-                            <LoginPage />
-                          </AuthGateForAuthPages>
-                        }
-                      />
-                      <Route
-                        path="/signup"
-                        element={
-                          <AuthGateForAuthPages>
-                            <SignupPage />
-                          </AuthGateForAuthPages>
-                        }
-                      />
+                      {/* -------- PYQ Practice Routes -------- */}
+                      <Route path="/practice/zone" element={<PrivateRoute><PracticeZonePage /></PrivateRoute>} />
+                      <Route path="/practice/pyq-session" element={<PrivateRoute><PYQPracticeSessionPage /></PrivateRoute>} />
+                      <Route path="/admin/pyq" element={<RoleAuthGate allowedRoles={["teacher", "admin"]}><PYQAdminPage /></RoleAuthGate>} />
 
-                      {/* -------- Protected Routes -------- */}
-                      <Route
-                        path="/dashboard"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <DashboardPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- Role-specific Dashboard Pages -------- */}
-                      <Route
-                        path="/dashboard/student"
-                        element={
-                          <RoleAuthGate allowedRoles={["student"]}>
-                            <SafeComponent>
-                              <StudentDashboardPage />
-                            </SafeComponent>
-                          </RoleAuthGate>
-                        }
-                      />
-                      <Route
-                        path="/dashboard/teacher"
-                        element={
-                          <RoleAuthGate allowedRoles={["teacher"]}>
-                            <SafeComponent>
-                              <TeacherDashboardPage />
-                            </SafeComponent>
-                          </RoleAuthGate>
-                        }
-                      />
-
-                      <Route
-                        path="/dashboard/test-generator"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <TestGeneratorPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/dashboard/analytics"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <AnalyticsPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- FLASHCARD ROUTES -------- */}
-                      <Route
-                        path="/dashboard/flashcards"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <FlashcardDashboard />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/dashboard/flashcards/:subject/:chapter"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <FlashcardChapter />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/dashboard/flashcards/class/:class/subject/:subject"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <FlashcardSubject />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- Students / Notes / Settings -------- */}
-                      <Route
-                        path="/students"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <StudentsPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/notes"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <NotesPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/settings"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <SettingsPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- Practice Routes -------- */}
-                      <Route
-                        path="/practice/session"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <PracticeSession />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
+                      <Route path="/dashboard/flashcards" element={<PrivateRoute><FlashcardDashboard /></PrivateRoute>} />
+                      <Route path="/dashboard/flashcards/:subject/:chapter" element={<PrivateRoute><FlashcardChapter /></PrivateRoute>} />
+                      <Route path="/dashboard/flashcards/class/:class/subject/:subject" element={<PrivateRoute><FlashcardSubject /></PrivateRoute>} />
+                      <Route path="/students" element={<PrivateRoute><StudentsPage /></PrivateRoute>} />
+                      <Route path="/notes" element={<PrivateRoute><NotesPage /></PrivateRoute>} />
+                      <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
+                      <Route path="/practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} /> {/* Changed to PracticeSessionPage */}
                       <Route path="/practice" element={<PracticePage />} />
-
-                      {/* -------- Daily Practice Module -------- */}
-                      <Route
-                        path="/daily-practice"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <PracticeSelectionPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/daily-practice/session"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <PracticeSession />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- Contests -------- */}
+                      <Route path="/daily-practice" element={<PrivateRoute><PracticeSelectionPage /></PrivateRoute>} />
+                      <Route path="/daily-practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} /> {/* Changed to PracticeSessionPage */}
                       <Route path="/contests/math-weekly" element={<JoinContestPageAurora />} />
                       <Route path="/contests/sci-lab" element={<JoinContestPageAurora />} />
                       <Route path="/contests/gk-rapid" element={<JoinContestPageAurora />} />
                       <Route path="rules" element={<Rules />} />
-
-                      <Route
-                        path="/contests"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <ContestLandingPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/contests/create"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <CreateContestPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/contests/join"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <JoinContestPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/contests/live/:contestId"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <ContestLivePage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/contests/leaderboard"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <LeaderboardPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/contests/preview/:contestId"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <ContestPreviewPage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- Mega Contest Routes -------- */}
-                      <Route
-                        path="/mega-contest/:contestId"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <MegaContestLivePage />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-                      <Route
-                        path="/admin/contest/:contestId/questions"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <AdminAddQuestions />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- Coin Shop -------- */}
-                      <Route
-                        path="/coinshop"
-                        element={
-                          <PrivateRoute>
-                            <SafeComponent>
-                              <CoinShop />
-                            </SafeComponent>
-                          </PrivateRoute>
-                        }
-                      />
-
-                      {/* -------- Redirect shims -------- */}
+                      <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
+                      <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
+                      <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
+                      <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
+                      <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />
+                      <Route path="/contests/preview/:contestId" element={<PrivateRoute><ContestPreviewPage /></PrivateRoute>} />
+                      <Route path="/mega-contest/:contestId" element={<PrivateRoute><MegaContestLivePage /></PrivateRoute>} />
+                      <Route path="/admin/contest/:contestId/questions" element={<PrivateRoute><AdminAddQuestions /></PrivateRoute>} />
+                      <Route path="/coinshop" element={<PrivateRoute><CoinShop /></PrivateRoute>} />
                       <Route path="/dashboard/students" element={<Navigate to="/students" replace />} />
                       <Route path="/dashboard/notes" element={<Navigate to="/notes" replace />} />
                       <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
@@ -689,12 +388,6 @@ const App = () => {
                       <Route path="/dashboard/coinshop" element={<Navigate to="/coinshop" replace />} />
                       <Route path="/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
                       <Route path="/study/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
-
-                      {/* -------- Role-specific redirects -------- */}
-                      <Route path="/host-contest" element={<Navigate to="/contests/create" replace />} />
-                      <Route path="/join-contest" element={<Navigate to="/contests/join" replace />} />
-
-                      {/* -------- Fallback -------- */}
                       <Route path="/home" element={<Navigate to="/" replace />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
@@ -711,7 +404,6 @@ const App = () => {
   );
 };
 
-// Add CSS animations
 const styleSheet = document.createElement("style");
 styleSheet.textContent = `
   @keyframes spin-reverse {
@@ -730,22 +422,6 @@ styleSheet.textContent = `
   
   .animate-loading-bar {
     animation: loading-bar 1.5s ease-in-out infinite;
-  }
-  
-  /* Smooth transitions */
-  * {
-    scroll-behavior: smooth;
-  }
-  
-  /* Hide scrollbar for Chrome, Safari and Opera */
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-  
-  /* Hide scrollbar for IE, Edge and Firefox */
-  .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
   }
 `;
 document.head.appendChild(styleSheet);

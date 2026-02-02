@@ -27,6 +27,10 @@ export default function FlashcardCard({
     setTimeout(() => setIsAnimating(false), 600);
   };
 
+  // Support both question/answer and front/back formats
+  const question = card.question || card.front || '';
+  const answer = card.answer || card.back || '';
+
   return (
     <div className="relative w-full max-w-2xl mx-auto">
       {/* Card counter */}
@@ -67,7 +71,7 @@ export default function FlashcardCard({
               </div>
               
               <h3 className="text-xl md:text-2xl font-bold text-slate-900 leading-snug mb-8 px-4">
-                {card.question}
+                {question}
               </h3>
               
               <div className="absolute bottom-6 left-0 right-0">
@@ -98,7 +102,7 @@ export default function FlashcardCard({
               </div>
               
               <div className="text-lg md:text-xl font-semibold text-white leading-relaxed mb-8 px-4 whitespace-pre-line">
-                {card.answer}
+                {answer}
               </div>
               
               <div className="absolute bottom-6 left-0 right-0">

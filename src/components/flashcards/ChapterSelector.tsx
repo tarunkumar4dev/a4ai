@@ -70,15 +70,17 @@ export default function ChapterSelector({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {chapters.map((chapter) => {
-          const isSelected = selectedChapter === chapter.chapter_number;
+        {chapters.map((chapter, index) => {
+          // Ensure chapter_number exists (normalize if needed)
+          const chapterNum = chapter.chapter_number ?? (index + 1);
+          const isSelected = selectedChapter === chapterNum;
           
           return (
             <motion.button
-              key={chapter.chapter_number}
+              key={chapterNum}
               whileHover={{ y: -4 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => onSelectChapter(chapter.chapter_number)}
+              onClick={() => onSelectChapter(chapterNum)}
               className={`group relative p-4 rounded-2xl border transition-all duration-300 ${
                 isSelected
                   ? 'bg-white border-blue-300 ring-2 ring-offset-2 ring-blue-400 shadow-lg'
@@ -103,13 +105,13 @@ export default function ChapterSelector({
                   <span className={`text-lg font-bold ${
                     isSelected ? 'text-blue-600' : 'text-slate-700'
                   }`}>
-                    {chapter.chapter_number}
+                    {chapterNum}
                   </span>
                 </div>
 
                 {/* Chapter name */}
                 <span className="text-sm font-semibold text-slate-900 leading-tight mb-1 line-clamp-2">
-                  {chapter.chapter_name}
+                  {chapter.chapter_name || chapter.chapter || `Chapter ${chapter.chapter_number}`}
                 </span>
 
                 {/* Card count and subject */}
