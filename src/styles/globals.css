@@ -1,92 +1,51 @@
-/* ---------------------------
-   Fonts
---------------------------- */
+/* -----------------------------------------------------------
+   GLOBAL DARK MODE SYSTEM
+----------------------------------------------------------- */
 
-/* Halenoir Expanded Demi Bold */
-@font-face {
-  font-family: "Halenoir Expanded";
-  src: url("/fonts/Halenoir-Expanded-DemiBold.woff2") format("woff2");
-  font-weight: 600; /* demi bold */
-  font-style: normal;
-  font-display: swap;
-}
-
-
-@keyframes bg-pan {
-  0% { background-position: 0% 50% }
-  100% { background-position: 200% 50% }
-}
-
-@keyframes pill-shimmer {
-  0% { transform: translateX(-120%) skewX(-20deg); opacity: 0 }
-  20% { opacity: .9 }
-  100% { transform: translateX(220%) skewX(-20deg); opacity: 0 }
-}
-
-
-/* Utility class — use this if you don't want to edit Tailwind config */
-.font-halenoir {
-  font-family: "Halenoir Expanded", ui-sans-serif, system-ui, -apple-system,
-               "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
-               "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
-}
-
-/* Used by the animated headline fill */
-@keyframes bg-pan {
-  0% { background-position: 0% 50% }
-  100% { background-position: 200% 50% }
-}
-
-/* ---------------------------
-   Theme Tokens
-   (app-wide glossy blue)
---------------------------- */
+/* 1. Define Theme Tokens */
 :root {
-  /* Primary glossy blue */
-  --primary: 224 88% 56%;              /* #2F6DF4 */
-  --primary-foreground: 0 0% 100%;
-
-  /* Rings and accents */
-  --ring: 217 91% 60%;                 /* #3B82F6 */
-  --accent: 213 94% 68%;               /* #76B6FF */
-  --muted: 215 25% 95%;                /* light background tint */
-
-  /* Background / card */
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;           /* slate-900 */
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-
-  /* Border */
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-
-  /* Muted text */
-  --muted-foreground: 215 16% 47%;
+  --dark-hero-gradient: linear-gradient(90deg, #CBD5E1 0%, #94A3B8 40%, #CBD5E1 100%);
+  --dark-surface-gradient: linear-gradient(180deg, rgba(30, 41, 59, 0.78), rgba(15, 23, 42, 0.70));
 }
 
-/* Add in globals.css for 3D effect */
-.logo-3d {
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.25));
-  background: linear-gradient(145deg, #1f2544, #3b82f6);
-  padding: 6px;
-  border-radius: 20%;
+/* 2. Unified Selector: Handles both System Pref and Manual .dark class */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --stroke: rgba(51, 65, 85, 0.5);
+    --muted-700: rgb(203, 213, 225);
+    --ink-800: rgb(226, 232, 240);
+    --muted-600: rgb(148, 163, 184);
+  }
 }
 
 .dark {
-  --primary: 224 88% 60%;              /* slightly brighter blue in dark */
-  --primary-foreground: 0 0% 100%;
+  --stroke: rgba(51, 65, 85, 0.5);
+  --muted-700: rgb(203, 213, 225);
+  --ink-800: rgb(226, 232, 240);
+  --muted-600: rgb(148, 163, 184);
+}
 
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  --card: 222 47% 13%;
-  --card-foreground: 210 40% 98%;
+/* 3. The "Force Fix" for Inline Styles */
+/* We use shorter selectors to avoid "Exact Match" failures */
 
-  --border: 217 33% 17%;
-  --input: 217 33% 17%;
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .hero-headline {
+    background-image: var(--dark-hero-gradient) !important;
+  }
+  
+  /* Matches any inline background containing a white rgba gradient */
+  :root:not(.light) [style*="background"][style*="255,255,255"],
+  :root:not(.light) [style*="background"][style*="255, 255, 255"] {
+    background: var(--dark-surface-gradient) !important;
+  }
+}
 
-  --muted: 215 20% 22%;
-  --muted-foreground: 215 16% 75%;
+.dark .hero-headline {
+  background-image: var(--dark-hero-gradient) !important;
+}
 
-  --ring: 217 91% 60%;
+/* Handles the inline background for manual dark class */
+.dark [style*="background"][style*="255,255,255"],
+.dark [style*="background"][style*="255, 255, 255"] {
+  background: var(--dark-surface-gradient) !important;
 }

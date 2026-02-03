@@ -318,7 +318,11 @@ export default function StudentDashboardPage() {
                   Your average course progress is <span className="text-orange-600">73%</span>.
                 </h2>
                 <p className="text-slate-500 text-xs sm:text-sm mb-4 sm:mb-6 font-medium">Level up your learning to improve your student rank!</p>
-                <GlossyButton label="Continue Learning" variant="orange" icon={Rocket} className="w-full sm:w-auto" />
+                
+                {/* यहाँ Link component add किया है */}
+                <Link to="/dashboard/practice">
+                  <GlossyButton label="PYQ Practice!!" variant="orange" icon={Rocket} className="w-full sm:w-auto" />
+                </Link>
               </div>
               <div className="absolute right-0 bottom-0 h-40 w-40 sm:h-full sm:w-[30%] bg-[url('https://illustrations.popsy.co/amber/student-going-to-school.svg')] bg-contain bg-bottom bg-no-repeat opacity-10 grayscale"></div>
             </div>

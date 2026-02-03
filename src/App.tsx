@@ -5,7 +5,6 @@ import "./styles/globals.css";
 
 import ChankyaInstitutePublic from "@/pages/institute/chanakya";
 /* -------- Core Imports -------- */
-import PracticePage from "@/practice/index";
 import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
 import Rules from "@/pages/Rules";
 
@@ -143,6 +142,9 @@ const PaymentPage = lazy(() => import("./pages/payment/paymentPage"));
 const PracticeSelectionPage = lazy(() => import("@/practice/index")); // Changed to @/practice
 const PracticeSessionPage = lazy(() => import("@/practice/session/index")); // Changed to @/practice and added /index
 
+/* ---------- Practice page (same module as PracticeSelectionPage, used for /practice and /dashboard/practice) ---------- */
+const PracticePage = lazy(() => import("@/practice/index"));
+
 /* ---------- Scroll Helper ---------- */
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -261,6 +263,7 @@ const App = () => {
         import("./pages/DashboardPage"),
         import("./pages/ContestLandingPage"),
         import("@/practice/index"), // Changed to @/practice
+        import("@/practice/index"), // Prefetch practice page
       ];
 
       const secondaryPages = () => {
@@ -357,6 +360,9 @@ const App = () => {
                       <Route path="/practice/zone" element={<PrivateRoute><PracticeZonePage /></PrivateRoute>} />
                       <Route path="/practice/pyq-session" element={<PrivateRoute><PYQPracticeSessionPage /></PrivateRoute>} />
                       <Route path="/admin/pyq" element={<RoleAuthGate allowedRoles={["teacher", "admin"]}><PYQAdminPage /></RoleAuthGate>} />
+
+                      {/* -------- NEW: Practice Route for Dashboard -------- */}
+                      <Route path="/dashboard/practice" element={<PrivateRoute><PracticePage /></PrivateRoute>} />
 
                       <Route path="/dashboard/flashcards" element={<PrivateRoute><FlashcardDashboard /></PrivateRoute>} />
                       <Route path="/dashboard/flashcards/:subject/:chapter" element={<PrivateRoute><FlashcardChapter /></PrivateRoute>} />
