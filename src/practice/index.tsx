@@ -597,13 +597,326 @@ const PracticeSelectionPage = () => {
     }
   ];
 
-  // All questions organized by chapter
+  // Questions data for Class 10 Maths Chapter 8 (Introduction to Trigonometry)
+  const mathsChapter8Questions = [
+    // PYQ 2025
+    {
+      id: 1,
+      question: "If x(2tan30°/(1+tan²30°)) = y(2tan30°/(1-tan²30°)), then x:y =",
+      options: ["1:1", "1:2", "2:1", "4:1"],
+      correctAnswer: "2:1",
+      marks: 1,
+      year: "2025"
+    },
+    {
+      id: 2,
+      question: "In a right triangle ABC, right-angled at A, if sin B = 1/4, then the value of sec B is",
+      options: ["4", "√15/4", "√15", "4/√15"],
+      correctAnswer: "4/√15",
+      marks: 1,
+      year: "2025"
+    },
+    {
+      id: 3,
+      question: "If x = cos30° – sin30° and y = tan60° – cot60°, then",
+      options: ["x = y", "x > y", "x < y", "x > 1, y < 1"],
+      correctAnswer: "x < y",
+      marks: 1,
+      year: "2025"
+    },
+    {
+      id: 4,
+      question: "Which of the following is a trigonometric identity?",
+      options: [
+        "sin²θ = 1 + cos²θ",
+        "cosec²θ + cot²θ = 1",
+        "sec²θ = 1 + tan²θ",
+        "sin2θ = 2sinθ"
+      ],
+      correctAnswer: "sec²θ = 1 + tan²θ",
+      marks: 1,
+      year: "2025"
+    },
+    // PYQ 2024
+    {
+      id: 5,
+      question: "If sin θ = cos θ, (0° < θ < 90°), then value of (sec θ · sin θ) is:",
+      options: ["1/√2", "√2", "1", "0"],
+      correctAnswer: "1",
+      marks: 1,
+      year: "2024"
+    },
+    {
+      id: 6,
+      question: "If cos θ = √3/2 and sin φ = 1/2, then tan (θ + φ) is:",
+      options: ["√3", "1/√3", "1", "not defined"],
+      correctAnswer: "√3",
+      marks: 1,
+      year: "2024"
+    },
+    {
+      id: 7,
+      question: "If 4 sec θ – 5 = 0, then the value of cot θ is:",
+      options: ["3/4", "4/5", "5/3", "4/3"],
+      correctAnswer: "4/3",
+      marks: 1,
+      year: "2024"
+    },
+    {
+      id: 8,
+      question: "If x/3 = 2 sin A, y/3 = 2 cos A, then the value of x² + y² is:",
+      options: ["36", "9", "6", "18"],
+      correctAnswer: "36",
+      marks: 1,
+      year: "2024"
+    },
+    {
+      id: 9,
+      question: "If 5 tan θ – 12 = 0, then the value of sin θ is:",
+      options: ["5/12", "12/13", "5/13", "12/5"],
+      correctAnswer: "12/13",
+      marks: 1,
+      year: "2024"
+    },
+    // PYQ 2023
+    {
+      id: 10,
+      question: "(1 − tan² 30°)/(1 + tan² 30°) is equal to:",
+      options: ["sin 60°", "cos 60°", "tan 60°", "cos 30°"],
+      correctAnswer: "cos 60°",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 11,
+      question: "(2 tan 30°)/(1 + tan² 30°) is equal to:",
+      options: ["sin 60°", "cos 60°", "tan 60°", "sin 30°"],
+      correctAnswer: "sin 60°",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 12,
+      question: "cos² θ/sin² θ − 1/sin² θ, in simplified form, is:",
+      options: ["tan² θ", "sec² θ", "1", "–1"],
+      correctAnswer: "–1",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 13,
+      question: "If tan θ = 5/12, then the value of (sin θ + cos θ)/(sin θ − cos θ) is:",
+      options: ["−17/7", "17/7", "17/13", "−7/13"],
+      correctAnswer: "−17/7",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 14,
+      question: "If sec θ − tan θ = 1/3, then the value of (sec θ + tan θ) is:",
+      options: ["4/3", "2/3", "1/3", "3"],
+      correctAnswer: "3",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 15,
+      question: "If tan θ = x/y, then cos θ is equal to",
+      options: [
+        "x/√(x² + y²)",
+        "y/√(x² + y²)",
+        "x/√(x² − y²)",
+        "y/√(x² − y²)"
+      ],
+      correctAnswer: "y/√(x² + y²)",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 16,
+      question: "If θ is an acute angle of a right angled triangle, then which of the following equation is not true?",
+      options: [
+        "sin θ cot θ = cos θ",
+        "cos θ tan θ = sin θ",
+        "csc² θ − cot² θ = 1",
+        "tan² θ − sec² θ = 1"
+      ],
+      correctAnswer: "tan² θ − sec² θ = 1",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 17,
+      question: "(cos⁴ A − sin⁴ A) on simplification, gives",
+      options: ["2 sin² A − 1", "2 sin² A + 1", "2 cos² A + 1", "2 cos² A − 1"],
+      correctAnswer: "2 cos² A − 1",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 18,
+      question: "Assertion (A): For 0 < θ ≤ 90°, csc θ − cot θ and csc θ + cot θ are reciprocal of each other. Reason (R): csc² θ − cot² θ = 1",
+      options: [
+        "Both Assertion (A) and Reason (R) are true; and Reason (R) is the correct explanation of Assertion (A).",
+        "Both Assertion (A) and Reason (R) are true; but Reason (R) is not the correct explanation of Assertion (A).",
+        "Assertion (A) is true but Reason (R) is false.",
+        "Assertion (A) is false but Reason (R) is true."
+      ],
+      correctAnswer: "Both Assertion (A) and Reason (R) are true; and Reason (R) is the correct explanation of Assertion (A).",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 19,
+      question: "The hour-hand of a clock is 6 cm long. The angle swept by it between 7:20 a.m. and 7:55 a.m. is:",
+      options: ["(35/4)°", "(35/2)°", "35°", "70°"],
+      correctAnswer: "(35/2)°",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 20,
+      question: "sec θ when expressed in terms of cot θ, is equal to:",
+      options: [
+        "√(1 + cot² θ)/cot θ",
+        "√(1 + cot² θ)",
+        "cot θ/√(1 + cot² θ)",
+        "√(1 − cot² θ)/cot θ"
+      ],
+      correctAnswer: "√(1 + cot² θ)/cot θ",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 21,
+      question: "Which of the following is true for all values of θ (0° ≤ θ ≤ 90°)?",
+      options: [
+        "cos² θ − sin² θ = 1",
+        "csc² θ − sec² θ = 1",
+        "sec² θ − tan² θ = 1",
+        "cot² θ − tan² θ = 1"
+      ],
+      correctAnswer: "sec² θ − tan² θ = 1",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 22,
+      question: "(sec² θ − 1)(csc² θ − 1) is equal to:",
+      options: ["–1", "1", "0", "2"],
+      correctAnswer: "1",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 23,
+      question: "If 2 tan A = 3, then the value of (4 sin A + 3 cos A)/(4 sin A − 3 cos A) is",
+      options: ["7/13", "1/13", "3", "does not exist"],
+      correctAnswer: "3",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 24,
+      question: "[3/4 tan² 30° − sec² 45° + sin² 60°] is equal to",
+      options: ["–1", "5/6", "−3/2", "1/6"],
+      correctAnswer: "–1",
+      marks: 1,
+      year: "2023"
+    },
+    {
+      id: 25,
+      question: "[5/8 sec² 60° − tan² 60° + cos² 45°] is equal to",
+      options: ["−5/3", "−1/2", "0", "−1/4"],
+      correctAnswer: "0",
+      marks: 1,
+      year: "2023"
+    }
+  ];
+
+  // Questions data for Class 10 Maths Chapter 9 (Some Applications of Trigonometry)
+  const mathsChapter9Questions = [
+    // PYQ 2025
+    {
+      id: 1,
+      question: "A peacock sitting on the top of a tree of height 10 m observes a snake moving on the ground. If the snake is 10√3 m away from the base of the tree, then angle of depression of the snake from the eye of the peacock is",
+      options: ["30°", "45°", "60°", "90°"],
+      correctAnswer: "30°",
+      marks: 1,
+      year: "2025"
+    },
+    {
+      id: 2,
+      question: "A 30 m long rope is tightly stretched and tied from the top of a pole to the ground. If the rope makes an angle of 60° with the ground, the height of the pole is:",
+      options: ["10√3 m", "30√3 m", "15 m", "15√3 m"],
+      correctAnswer: "15√3 m",
+      marks: 1,
+      year: "2025"
+    },
+    // PYQ 2024
+    {
+      id: 3,
+      question: "From a point on the ground, which is 30 m away from the foot of a vertical tower, the angle of elevation of the top of the tower is found to be 60°. The height (in metres) of the tower is:",
+      options: ["10√3", "30√3", "60", "30"],
+      correctAnswer: "30√3",
+      marks: 1,
+      year: "2024"
+    },
+    {
+      id: 4,
+      question: "At some time of the day, the length of the shadow of a tower is equal to its height. Then, the Sun's altitude at that time is:",
+      options: ["30°", "45°", "60°", "90°"],
+      correctAnswer: "45°",
+      marks: 1,
+      year: "2024"
+    },
+    {
+      id: 5,
+      question: "The ratio of the length of a pole and its shadow on the ground is 1 : √3. The angle of elevation of the Sun is:",
+      options: ["90°", "60°", "45°", "30°"],
+      correctAnswer: "30°",
+      marks: 1,
+      year: "2024"
+    },
+    {
+      id: 6,
+      question: "The length of the shadow of a tower on the plane ground is √3 times the height of the tower. The angle of elevation of the Sun is:",
+      options: ["30°", "45°", "60°", "90°"],
+      correctAnswer: "30°",
+      marks: 1,
+      year: "2024"
+    },
+    {
+      id: 7,
+      question: "If a vertical pole of length 7.5 m casts a shadow 5 m long on the ground and at the same time, a tower casts a shadow 24 m long, then the height of the tower is:",
+      options: ["20 m", "40 m", "60 m", "36 m"],
+      correctAnswer: "36 m",
+      marks: 1,
+      year: "2024"
+    },
+    // PYQ 2023
+    {
+      id: 8,
+      question: "If a pole 6 m high casts a shadow 2√3 m long on the ground, then sun's elevation is:",
+      options: ["60°", "45°", "30°", "90°"],
+      correctAnswer: "60°",
+      marks: 1,
+      year: "2023"
+    }
+  ];
+
+  // All questions organized by class, subject, and chapter
   const allQuestions = {
     '10': {
       'science': {
         'chapter-1': chapter1Questions,
         'chapter-2': chapter2Questions
         // Add more chapters here as needed
+      },
+      'maths': {
+        'chapter-8': mathsChapter8Questions,
+        'chapter-9': mathsChapter9Questions
+        // Add more maths chapters here as needed
       }
     }
   };
@@ -664,19 +977,59 @@ const PracticeSelectionPage = () => {
     const questions = allQuestions[classKey]?.[subjectKey]?.[chapterKey];
     
     if (questions) {
-      // Navigate to practice session with questions
+      // For daily practice, send only 5 random questions
+      const shuffledQuestions = [...questions].sort(() => 0.5 - Math.random());
+      const dailyQuestions = shuffledQuestions.slice(0, 5);
+      
       navigate('/daily-practice/session', { 
         state: { 
           classId: selectedClass,
           subject: selectedSubject,
           chapter: chapterId,
-          questions: questions.slice(0, 5) // Send first 5 questions for practice
+          questions: dailyQuestions,
+          totalQuestions: questions.length // Send total count for reference
         }
       });
     } else {
       // For chapters without questions, navigate to session page
       navigate(`/daily-practice/session?class=${selectedClass}&subject=${selectedSubject}&chapter=${chapterId}`);
     }
+  };
+
+  // Function to get chapter name
+  const getChapterName = (chapterNumber: number, subject: string) => {
+    if (subject === 'science') {
+      switch(chapterNumber) {
+        case 1: return "Chemical Reactions";
+        case 2: return "Acids, Bases & Salts";
+        default: return `Chapter ${chapterNumber}`;
+      }
+    } else if (subject === 'maths') {
+      switch(chapterNumber) {
+        case 8: return "Introduction to Trigonometry";
+        case 9: return "Applications of Trigonometry";
+        default: return `Chapter ${chapterNumber}`;
+      }
+    }
+    return `Chapter ${chapterNumber}`;
+  };
+
+  // Function to get chapter question count
+  const getChapterQuestionCount = (chapterNumber: number, subject: string) => {
+    if (subject === 'science') {
+      switch(chapterNumber) {
+        case 1: return "10 Qs";
+        case 2: return "37 Qs";
+        default: return "";
+      }
+    } else if (subject === 'maths') {
+      switch(chapterNumber) {
+        case 8: return "25 Qs";
+        case 9: return "8 Qs";
+        default: return "";
+      }
+    }
+    return "";
   };
 
   if (loading) {
@@ -857,7 +1210,9 @@ const PracticeSelectionPage = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
               {chapters.map((chapter, index) => {
                 // Check if this chapter has questions available
-                const hasQuestions = allQuestions[selectedClass]?.[selectedSubject]?.[`chapter-${chapter.number}`];
+                const chapterKey = `chapter-${chapter.number}`;
+                const hasQuestions = allQuestions[selectedClass]?.[selectedSubject]?.[chapterKey];
+                const questionCount = getChapterQuestionCount(chapter.number, selectedSubject);
                 
                 return (
                   <motion.div
@@ -872,28 +1227,27 @@ const PracticeSelectionPage = () => {
                       className={`rounded-xl border cursor-pointer transition-all ${
                         hasQuestions 
                           ? 'border-slate-200 hover:border-indigo-300 hover:shadow-md' 
-                          : 'border-slate-100 hover:border-slate-200 opacity-50'
+                          : 'border-slate-100 hover:border-slate-200 opacity-50 cursor-not-allowed'
                       }`}
                       onClick={() => hasQuestions && handleChapterSelect(chapter.id)}
                     >
                       <CardContent className="p-4 text-center">
                         <div className="text-2xl mb-2">{chapter.icon}</div>
-                        <h3 className="font-semibold text-slate-900">{chapter.name}</h3>
+                        <h3 className="font-semibold text-slate-900">
+                          {getChapterName(chapter.number, selectedSubject)}
+                        </h3>
                         <p className="text-xs text-slate-500 mt-1">
-                          {hasQuestions ? "5 Questions" : "Coming Soon"}
+                          {hasQuestions ? "5 Questions Daily" : "Coming Soon"}
                         </p>
-                        {hasQuestions && (
+                        {hasQuestions && questionCount && (
                           <div className="mt-2">
-                            {selectedClass === '10' && selectedSubject === 'science' && chapter.number === 1 && (
-                              <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 text-xs">
-                                Chemical Reactions
-                              </Badge>
-                            )}
-                            {selectedClass === '10' && selectedSubject === 'science' && chapter.number === 2 && (
-                              <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
-                                Acids, Bases & Salts
-                              </Badge>
-                            )}
+                            <Badge className={
+                              selectedSubject === 'science' 
+                                ? "bg-green-100 text-green-800 hover:bg-green-100 text-xs"
+                                : "bg-purple-100 text-purple-800 hover:bg-purple-100 text-xs"
+                            }>
+                              {questionCount}
+                            </Badge>
                           </div>
                         )}
                       </CardContent>
@@ -906,21 +1260,46 @@ const PracticeSelectionPage = () => {
         )}
 
         {/* Questions Count */}
-        {selectedClass === '10' && selectedSubject === 'science' && (
+        {selectedClass === '10' && selectedSubject && (
           <Card className="rounded-2xl border-slate-200 shadow-sm mb-8">
             <CardContent className="p-6">
               <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                 <BookOpen size={16} className="text-indigo-500" />
                 Available Questions
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-blue-50 rounded-xl">
-                  <h4 className="font-bold text-blue-900 mb-2">Chapter 1: Chemical Reactions</h4>
-                  <p className="text-blue-700 text-sm">10 questions available</p>
-                </div>
-                <div className="p-4 bg-green-50 rounded-xl">
-                  <h4 className="font-bold text-green-900 mb-2">Chapter 2: Acids, Bases & Salts</h4>
-                  <p className="text-green-700 text-sm">37 PYQ questions (2022-2025)</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {selectedSubject === 'science' && (
+                  <>
+                    <div className="p-4 bg-blue-50 rounded-xl">
+                      <h4 className="font-bold text-blue-900 mb-2">Chapter 1: Chemical Reactions</h4>
+                      <p className="text-blue-700 text-sm">10 questions available</p>
+                      <p className="text-blue-600 text-xs mt-1">PYQs: 2022-2025</p>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-xl">
+                      <h4 className="font-bold text-green-900 mb-2">Chapter 2: Acids, Bases & Salts</h4>
+                      <p className="text-green-700 text-sm">37 PYQ questions</p>
+                      <p className="text-green-600 text-xs mt-1">PYQs: 2022-2025</p>
+                    </div>
+                  </>
+                )}
+                {selectedSubject === 'maths' && (
+                  <>
+                    <div className="p-4 bg-purple-50 rounded-xl">
+                      <h4 className="font-bold text-purple-900 mb-2">Chapter 8: Introduction to Trigonometry</h4>
+                      <p className="text-purple-700 text-sm">25 PYQ questions</p>
+                      <p className="text-purple-600 text-xs mt-1">PYQs: 2023-2025</p>
+                    </div>
+                    <div className="p-4 bg-indigo-50 rounded-xl">
+                      <h4 className="font-bold text-indigo-900 mb-2">Chapter 9: Applications of Trigonometry</h4>
+                      <p className="text-indigo-700 text-sm">8 PYQ questions</p>
+                      <p className="text-indigo-600 text-xs mt-1">PYQs: 2023-2025</p>
+                    </div>
+                  </>
+                )}
+                <div className="p-4 bg-yellow-50 rounded-xl">
+                  <h4 className="font-bold text-yellow-900 mb-2">Daily Practice</h4>
+                  <p className="text-yellow-700 text-sm">5 random questions daily</p>
+                  <p className="text-yellow-600 text-xs mt-1">New questions each day</p>
                 </div>
               </div>
             </CardContent>
@@ -951,13 +1330,13 @@ const PracticeSelectionPage = () => {
                 {
                   step: 3,
                   title: "Solve Questions",
-                  description: "Answer 5 questions with timer",
+                  description: "Answer 5 random questions",
                   icon: "📝"
                 },
                 {
                   step: 4,
                   title: "Earn Rewards",
-                  description: "Get coins for correct answers",
+                  description: "Get 5 coins for each correct answer",
                   icon: "🪙"
                 }
               ].map((item) => (
@@ -971,8 +1350,73 @@ const PracticeSelectionPage = () => {
                 </div>
               ))}
             </div>
+            
+            {/* Additional Info */}
+            <div className="mt-8 p-4 bg-indigo-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <Sparkles size={16} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-indigo-900">Question Bank</h4>
+                  <p className="text-indigo-700 text-sm mt-1">
+                    We have a large question bank for each chapter. Each day, you'll get 5 random questions from the available pool. 
+                    This ensures you get new practice every day! Total: <span className="font-bold">80+ PYQ questions</span> available.
+                  </p>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
+
+        {/* Total Questions Summary */}
+        {selectedClass === '10' && (
+          <Card className="rounded-2xl border-slate-200 shadow-sm mb-8">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <Trophy size={16} className="text-yellow-600" />
+                Total Questions Available
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-900">Science</h4>
+                      <p className="text-slate-600 text-sm">Chapters 1 & 2</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-blue-700">47</span>
+                      <p className="text-blue-600 text-xs">PYQ Questions</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-900">Mathematics</h4>
+                      <p className="text-slate-600 text-sm">Chapters 8 & 9</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-purple-700">33</span>
+                      <p className="text-purple-600 text-xs">PYQ Questions</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-yellow-100 rounded-md">
+                      <Award size={14} className="text-yellow-600" />
+                    </div>
+                    <span className="text-sm font-bold text-yellow-800">Total Available</span>
+                  </div>
+                  <span className="text-xl font-bold text-yellow-700">80+ PYQ Questions</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Safety Note */}
         <div className="rounded-2xl border border-blue-100 bg-blue-50/30 p-4 flex items-start gap-4">
@@ -982,7 +1426,7 @@ const PracticeSelectionPage = () => {
           <div>
             <h4 className="text-sm font-bold text-blue-900">Fair Practice Environment</h4>
             <p className="text-xs text-blue-700/80 mt-1 leading-relaxed">
-              Your practice progress is saved automatically. Complete all 5 questions to earn bonus coins.
+              Your practice progress is saved automatically. Complete all 5 questions daily to maintain your streak and earn bonus coins.
             </p>
           </div>
         </div>
