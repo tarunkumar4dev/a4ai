@@ -57,8 +57,8 @@ const translations = {
   en: {
     dashboard: "Dashboard",
     notes: "Notes",
-    inbox: "Inbox",
-    students: "Flashcards",
+    inbox: "Flashcards ",
+    students: "Students",
     settings: "Settings",
     getPremium: "Get Premium",
     unlockFeatures: "Unlock all features",
