@@ -5,12 +5,13 @@ import React, {
   useMemo,
   lazy,
   Suspense,
+  useRef,
 } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
-import { useTheme } from "@/context/ThemeContext"; // Imported Theme Hook
+import { useTheme } from "@/context/ThemeContext"; 
 
 const ScratchCard = lazy(() => import("@/components/ScratchCard"));
 
@@ -34,7 +35,10 @@ import {
   Moon,
   Sun,
   Globe,
-  X
+  X,
+  Target,
+  Send,
+  Loader2
 } from "lucide-react";
 
 /* ------------------- UTILS ------------------- */
@@ -57,7 +61,7 @@ const translations = {
   en: {
     dashboard: "Dashboard",
     notes: "Notes",
-    inbox: "Flashcards ",
+    inbox: "Inbox",
     students: "Students",
     settings: "Settings",
     getPremium: "Get Premium",
@@ -67,7 +71,7 @@ const translations = {
     welcome: "Welcome back",
     courseProgress: "Your average course progress is",
     levelUp: "Level up your learning to improve your student rank!",
-    continueLearning: "PYQ Practice",
+    continueLearning: "Continue Learning",
     learningActivity: "Learning Activity",
     totalTime: "Total Time",
     courses: "Courses",
@@ -75,6 +79,7 @@ const translations = {
     quickActions: "Quick Actions",
     joinContests: "Join Contests",
     leaderboard: "Leaderboard",
+    practice: "Practice", 
     upcomingAssignments: "Upcoming Assignments",
     allTests: "All tests",
     testName: "Test name",
@@ -92,7 +97,7 @@ const translations = {
     searchPlaceholder: "Search...",
     notifications: "Notifications",
     noNotifications: "No new notifications",
-    chatHello: "Hello! How can I help you with your studies today?",
+    chatHello: "Hello! I am your AI assistant . How can I help you?",
     typeMessage: "Type a message..."
   },
   hi: {
@@ -116,6 +121,7 @@ const translations = {
     quickActions: "त्वरित कार्य",
     joinContests: "प्रतियोगिताओं में शामिल हों",
     leaderboard: "लीडरबोर्ड",
+    practice: "अभ्यास", 
     upcomingAssignments: "आगामी कार्य",
     allTests: "सभी परीक्षण",
     testName: "परीक्षण का नाम",
@@ -133,7 +139,7 @@ const translations = {
     searchPlaceholder: "खोजें...",
     notifications: "सूचनाएं",
     noNotifications: "कोई नई सूचना नहीं",
-    chatHello: "नमस्ते! आज मैं आपकी पढ़ाई में कैसे मदद कर सकता हूँ?",
+    chatHello: "नमस्ते! मैं a4ai हूँ, भारतीय शिक्षा के लिए आपका AI सहायक। मैं कैसे मदद कर सकता हूँ?",
     typeMessage: "संदेश टाइप करें..."
   }
 };
@@ -152,7 +158,7 @@ const GlossyButton = ({
   icon?: any;
   label: string;
   subLabel?: string;
-  variant?: "blue" | "dark" | "green" | "crimson" | "yellow" | "orange" | "teal" | "purple";
+  variant?: "blue" | "dark" | "green" | "crimson" | "yellow" | "orange" | "teal" | "purple" | "red";
   onClick?: () => void;
   fullWidth?: boolean;
   small?: boolean;
@@ -166,6 +172,7 @@ const GlossyButton = ({
     orange: "bg-gradient-to-b from-[#fb923c] to-[#ea580c] shadow-[0_8px_20px_-6px_rgba(234,88,12,0.6)] text-white border-t border-white/20",
     teal: "bg-gradient-to-b from-[#2dd4bf] to-[#0d9488] shadow-lg text-white border-t border-white/20",
     purple: "bg-gradient-to-b from-[#a855f7] to-[#7e22ce] shadow-lg text-white border-t border-white/20",
+    red: "bg-gradient-to-b from-[#ff6b81] to-[#DC143C] shadow-[0_8px_20px_-6px_rgba(220,20,60,0.6)] text-white border-t border-white/20",
   };
 
   return (
@@ -189,6 +196,7 @@ const GlossyButton = ({
   );
 };
 
+// Dark Black Text (text-slate-900)
 const NavItem = ({ icon: Icon, label, active = false, to }: { icon: any, label: string, active?: boolean, to?: string }) => {
   const navigate = useNavigate();
   return (
@@ -198,7 +206,7 @@ const NavItem = ({ icon: Icon, label, active = false, to }: { icon: any, label: 
       onClick={() => to && navigate(to)}
       className={`flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all ${active
           ? 'bg-[#111827]/90 text-white font-bold shadow-md border border-white/10'
-          : 'text-slate-500 hover:bg-[#111827]/10 hover:text-black dark:text-slate-400 dark:hover:text-white'
+          : 'text-slate-900 hover:bg-[#111827]/10 hover:text-black dark:text-slate-400 dark:hover:text-white'
         }`}
     >
       <Icon size={20} strokeWidth={active ? 2.5 : 2} />
@@ -209,21 +217,136 @@ const NavItem = ({ icon: Icon, label, active = false, to }: { icon: any, label: 
 
 const uniformGlassStyle = "bg-slate-200 dark:bg-slate-800 border border-slate-300/50 dark:border-slate-700 rounded-[30px] shadow-sm p-6 transition-colors duration-300";
 
+// --- CHAT INTERFACE TYPES ---
+type Message = {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+};
+
+// --- API CONFIGURATION ---
+const AI_CONFIG = {
+    // API KEY from .env.local
+    apiKey: import.meta.env.VITE_GROQ_API_KEY, 
+    // New Model to fix decommissioning error
+    model: "llama-3.3-70b-versatile", 
+};
+
 export default function StudentDashboardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile, loading } = useUserProfile();
-  const { theme, toggleTheme } = useTheme(); // Hook for Dark Mode
+  const { theme, toggleTheme } = useTheme(); 
   
   const [showScratchCard, setShowScratchCard] = useState(false);
-  const [lang, setLang] = useState<'en' | 'hi'>('en'); // Language State
+  const [lang, setLang] = useState<'en' | 'hi'>('en'); 
   const t = translations[lang];
 
   // Header Interaction States
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  
+  // --- CHATBOT STATE & LOGIC ---
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom of chat
+  useEffect(() => {
+    if (chatEndRef.current) {
+        chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, isChatOpen]);
+
+  // API Call Function
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim()) return;
+
+    // Check if API Key exists
+    if (!AI_CONFIG.apiKey) {
+       setChatMessages(prev => [...prev, { role: 'assistant', content: "Error: API Key is missing. Please add VITE_GROQ_API_KEY to your .env.local file." }]);
+       return;
+    }
+
+    const userMsg: Message = { role: 'user', content: inputMessage };
+    setChatMessages(prev => [...prev, userMsg]);
+    setInputMessage("");
+    setIsChatLoading(true);
+
+    try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${AI_CONFIG.apiKey}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: AI_CONFIG.model, 
+                messages: [
+                    // --- DETAILED AI PERSONA ---
+                    { 
+                        role: "system", 
+                        content: `You are a4ai (Artificial Intelligence for All India), a practical AI tool designed specifically for Indian education.
+                        
+                        Your Core Identity & Mission:
+                        - You are not just another AI wrapper; you are built to solve real classroom challenges.
+                        - You deeply understand Indian curriculum patterns (CBSE, ICSE, State Boards).
+                        - You support multilingual content needs appropriate for India.
+                        - Website: https://a4ai.in
+                        
+                        Your Primary Function (For Teachers):
+                        - Teachers spend hours creating tests. You help them do it in minutes.
+                        - You act as an "AI Test Generator".
+                        - Process: Users upload textbooks/notes (PDF/Text) -> You generate relevant questions -> They download ready-to-use tests.
+                        - Future feature: Tracking student performance.
+                        
+                        Current Status:
+                        - Actively being tested with real educators.
+                        
+                        Instructions:
+                        - Keep answers helpful, encouraging, and concise.
+                        - If asked about your capabilities, mention the Test Generator and Indian curriculum focus.
+                        - Be polite and professional.` 
+                    },
+                    ...chatMessages.filter(m => m.role !== 'system'), // Send history
+                    userMsg
+                ],
+                temperature: 0.7,
+                max_tokens: 1024
+            })
+        });
+
+        const data = await response.json();
+        
+        if (data.error) {
+           console.error("API Error Detail:", data.error);
+           throw new Error(data.error.message);
+        }
+
+        if (data.choices && data.choices[0]) {
+            const aiMsg: Message = { role: 'assistant', content: data.choices[0].message.content };
+            setChatMessages(prev => [...prev, aiMsg]);
+        } else {
+            throw new Error("No response from API");
+        }
+
+    } catch (error: any) {
+        console.error("Chat Error:", error);
+        setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message || "Connection failed"}. Please check your internet or API key.` }]);
+    } finally {
+        setIsChatLoading(false);
+    }
+  };
+
+  // Handle Enter Key in Chat
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+        handleSendMessage();
+    }
+  };
+
 
   // Calendar Logic
   const date = new Date();
@@ -375,6 +498,8 @@ export default function StudentDashboardPage() {
                 <div className="flex-1 flex flex-col justify-center gap-3">
                   <Link to="/dashboard/contests"><GlossyButton label={t.joinContests} variant="blue" icon={Award} fullWidth /></Link>
                   <Link to="/dashboard/leaderboard"><GlossyButton label={t.leaderboard} variant="yellow" icon={Flame} fullWidth /></Link>
+                  {/* Practice Button */}
+                  <Link to="/practice"><GlossyButton label={t.practice} variant="red" icon={Target} fullWidth /></Link>
                 </div>
               </div>
             </div>
@@ -583,11 +708,9 @@ export default function StudentDashboardPage() {
           </div>
         </div>
 
-        {/* --- CHATBOT FAB (Bloody Red & Interactive) --- */}
+        {/* --- CHATBOT FAB (Bloody Red & Interactive with Groq) --- */}
         <div 
             className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-2"
-            onMouseEnter={() => setIsChatOpen(true)}
-            onMouseLeave={() => setIsChatOpen(false)}
         >
              <AnimatePresence>
                 {isChatOpen && (
@@ -595,34 +718,71 @@ export default function StudentDashboardPage() {
                         initial={{ opacity: 0, y: 20, scale: 0.8 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.8 }}
-                        className={`mb-2 w-72 rounded-2xl shadow-2xl overflow-hidden border ${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
+                        className={`mb-2 w-80 h-96 rounded-2xl shadow-2xl overflow-hidden border flex flex-col ${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
                     >
-                        <div className="bg-gradient-to-r from-red-600 to-red-800 p-4 flex justify-between items-center text-white">
-                            <span className="font-bold text-sm">AI Assistant</span>
-                            <X size={14} className="cursor-pointer" />
+                        <div className="bg-gradient-to-r from-red-600 to-red-800 p-4 flex justify-between items-center text-white shrink-0">
+                            <span className="font-bold text-sm">a4ai Assistant</span>
+                            <X size={16} className="cursor-pointer hover:scale-110" onClick={() => setIsChatOpen(false)} />
                         </div>
-                        <div className="p-4 h-64 overflow-y-auto text-sm space-y-3">
-                            <div className={`p-3 rounded-lg rounded-tl-none ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'}`}>
+                        
+                        <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50 dark:bg-slate-900/50">
+                            <div className={`p-3 rounded-lg rounded-tl-none max-w-[85%] text-sm ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700 shadow-sm'}`}>
                                 {t.chatHello}
                             </div>
+                            
+                            {chatMessages.map((msg, idx) => (
+                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`p-3 rounded-lg max-w-[85%] text-sm ${
+                                        msg.role === 'user' 
+                                            ? 'bg-red-600 text-white rounded-tr-none' 
+                                            : `${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700 shadow-sm'} rounded-tl-none`
+                                    }`}>
+                                        {msg.content}
+                                    </div>
+                                </div>
+                            ))}
+                            
+                            {isChatLoading && (
+                                <div className="flex justify-start">
+                                    <div className={`p-3 rounded-lg rounded-tl-none bg-slate-200 dark:bg-slate-800 flex items-center gap-2`}>
+                                        <Loader2 size={16} className="animate-spin text-slate-500" />
+                                        <span className="text-xs text-slate-500">Thinking...</span>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={chatEndRef} />
                         </div>
-                        <div className={`p-3 border-t ${theme === 'dark' ? 'border-slate-800' : 'border-slate-100'}`}>
-                            <input 
-                                type="text" 
-                                placeholder={t.typeMessage}
-                                className={`w-full text-xs p-2 rounded-full border ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200'}`} 
-                            />
+
+                        <div className={`p-3 border-t shrink-0 ${theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'}`}>
+                            <div className="relative flex items-center">
+                                <input 
+                                    type="text" 
+                                    value={inputMessage}
+                                    onChange={(e) => setInputMessage(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder={t.typeMessage}
+                                    className={`w-full text-sm p-3 pr-10 rounded-xl border focus:outline-none focus:ring-2 focus:ring-red-500/50 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-100 border-slate-200 text-slate-800'}`} 
+                                />
+                                <button 
+                                    onClick={handleSendMessage}
+                                    disabled={isChatLoading || !inputMessage.trim()}
+                                    className="absolute right-2 p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <Send size={14} />
+                                </button>
+                            </div>
                         </div>
                     </motion.div>
                 )}
              </AnimatePresence>
              
             <motion.button
+                onClick={() => setIsChatOpen(!isChatOpen)}
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 whileTap={{ scale: 0.9 }}
                 className="w-16 h-16 bg-[#DC143C] hover:bg-[#B91C1C] rounded-full shadow-[0_0_20px_rgba(220,20,60,0.5)] flex items-center justify-center text-white border-4 border-white/10 transition-colors"
             >
-                <MessageCircle size={32} fill="white" />
+                {isChatOpen ? <X size={32} /> : <MessageCircle size={32} fill="white" />}
             </motion.button>
         </div>
 
