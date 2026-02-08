@@ -1,75 +1,117 @@
-// src/pages/practice/session/index.tsx
+// src/practice/session/index.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
-  ArrowLeft, 
-  Check, 
-  X, 
-  Clock, 
-  Award,
-  ChevronRight,
-  ChevronLeft,
-  Trophy,
-  Sparkles
+  ArrowLeft, Check, Clock, Trophy, Sparkles, ChevronRight, AlertCircle, Moon, Sun, BarChart2, CheckCircle, XCircle, Target
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { supabase, practiceDB } from '@/lib/supabaseClient';
+import { useTheme } from '@/context/ThemeContext';
+
+import { class10MathsData } from '../data/class10Maths';
+import { class10ScienceData } from '../data/class10Science';
+
+// --- GLOSSY BUTTON (INLINE STYLES FORCED) ---
+const GlossyButton = ({ icon: Icon, label, variant = "indigo", onClick, fullWidth = false, small = false, disabled = false }: any) => {
+  const getGradient = () => {
+    switch (variant) {
+        case 'indigo': return 'linear-gradient(180deg, #6366f1 0%, #4338ca 100%)';
+        case 'purple': return 'linear-gradient(180deg, #a855f7 0%, #7e22ce 100%)';
+        case 'dark': return 'linear-gradient(180deg, #374151 0%, #111827 100%)';
+        default: return 'linear-gradient(180deg, #6366f1 0%, #4338ca 100%)';
+    }
+  };
+
+  return (
+    <motion.button
+      whileHover={!disabled ? { scale: 1.05, translateY: -2 } : {}}
+      whileTap={!disabled ? { scale: 0.95 } : {}}
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: getGradient(),
+        boxShadow: disabled ? 'none' : '0px 4px 15px rgba(0, 0, 0, 0.3), inset 0px 1px 0px rgba(255, 255, 255, 0.3)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        color: 'white',
+        fontWeight: 'bold',
+        borderRadius: '16px',
+        padding: small ? '8px 16px' : '14px 32px',
+        width: fullWidth ? '100%' : 'auto',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1
+      }}
+    >
+      {Icon && <Icon size={small ? 18 : 22} />}
+      <span>{label}</span>
+    </motion.button>
+  );
+};
 
 const PracticeSessionPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { theme, toggleTheme } = useTheme();
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [userAnswers, setUserAnswers] = useState<Array<{questionId: number, answer: string, isCorrect: boolean}>>([]);
-  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(600); 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false); 
+  const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const classId = searchParams.get('class');
   const subject = searchParams.get('subject');
   const chapter = searchParams.get('chapter');
-  
-  // Get questions from location state or fetch from database
-  const questions = location.state?.questions || [];
 
   useEffect(() => {
-    const initializeSession = async () => {
-      setLoading(true);
-      
-      // If no questions in state, fetch from database
-      if (questions.length === 0) {
-        // Here you would fetch questions from your database
-        // For now, we'll use the Chapter 1 questions as fallback
-        setLoading(false);
-      } else {
-        setLoading(false);
-      }
-    };
-
-    initializeSession();
-  }, []);
-
-  useEffect(() => {
-    // Timer logic
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleSubmit();
-          return 0;
+    const init = async () => {
+        if (location.state?.questions) {
+            setQuestions(location.state.questions);
+        } else if (classId === '10') {
+            if (subject === 'maths') {
+                // @ts-ignore
+                setQuestions(class10MathsData[chapter] || []);
+            } else if (subject === 'science') {
+                // Returns correct chapter questions from Object
+                setQuestions(class10ScienceData[chapter] || []);
+            }
         }
-        return prev - 1;
-      });
-    }, 1000);
+        setLoading(false);
+    };
+    init();
+  }, [classId, subject, chapter, location.state]);
 
+  useEffect(() => {
+    if (showResults) return;
+    const timer = setInterval(() => setTimeLeft((p) => (p > 0 ? p - 1 : 0)), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [showResults]);
+
+  const handleNext = () => {
+    const q = questions[currentQuestionIndex];
+    let isCorrect = false;
+    if (typeof q.correctAnswer === 'string') isCorrect = selectedOption === q.correctAnswer;
+    else if (typeof q.correct_option_index === 'number') isCorrect = q.options.indexOf(selectedOption) === q.correct_option_index;
+
+    const newAnswers = [...userAnswers.filter(a => a.questionId !== q.id), { questionId: q.id, answer: selectedOption!, isCorrect }];
+    setUserAnswers(newAnswers);
+
+    if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex(p => p + 1);
+        setSelectedOption(null);
+    } else {
+        setIsSubmitted(true);
+        setShowResults(true);
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -77,408 +119,149 @@ const PracticeSessionPage = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleOptionSelect = (option: string) => {
-    if (!isSubmitted) {
-      setSelectedOption(option);
-    }
-  };
+  if (loading) return <div className={`min-h-screen flex items-center justify-center ${theme === 'dark' ? 'bg-[#0f172a]' : 'bg-[#F0F2F5]'}`}>Loading...</div>;
+  if (!questions.length) return <div className="p-10 text-center">No Questions Found.</div>;
 
-  const handleNext = () => {
-    if (selectedOption) {
-      const currentQuestion = questions[currentQuestionIndex];
-      const isCorrect = selectedOption === currentQuestion.correctAnswer;
-      
-      // Save answer
-      setUserAnswers(prev => [...prev, {
-        questionId: currentQuestion.id,
-        answer: selectedOption,
-        isCorrect
-      }]);
+  if (showAnalysis) {
+    const correctCount = userAnswers.filter(a => a.isCorrect).length;
+    const accuracy = Math.round((correctCount / questions.length) * 100);
 
-      // Move to next question or show results
-      if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setSelectedOption(null);
-      } else {
-        handleSubmit();
-      }
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
-      // Find previous answer if exists
-      const prevAnswer = userAnswers.find(a => a.questionId === questions[currentQuestionIndex - 1]?.id);
-      setSelectedOption(prevAnswer?.answer || null);
-    }
-  };
-
-  const handleSubmit = async () => {
-    setIsSubmitted(true);
-    
-    // Calculate score
-    const score = userAnswers.filter(answer => answer.isCorrect).length;
-    
-    // Save results to database
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await practiceDB.savePracticeResults({
-          userId: user.id,
-          classId: classId || '10',
-          subject: subject || 'science',
-          chapter: chapter || 'chapter-1',
-          score: score,
-          totalQuestions: questions.length,
-          answers: userAnswers,
-          timeSpent: 600 - timeLeft
-        });
-      }
-    } catch (error) {
-      console.error('Error saving results:', error);
-    }
-
-    setShowResults(true);
-  };
-
-  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading questions...</p>
+        <div className={`min-h-screen p-4 ${theme === 'dark' ? 'bg-[#0f172a] text-white' : 'bg-[#F0F2F5] text-slate-900'}`}>
+            <div className="max-w-4xl mx-auto">
+                <div className="flex justify-between items-center mb-6">
+                    <button onClick={() => setShowAnalysis(false)} className="flex items-center gap-2 font-bold opacity-70 hover:opacity-100 transition-opacity">
+                        <ArrowLeft size={20}/> Back to Summary
+                    </button>
+                    <h2 className="text-2xl font-bold">Detailed Analysis</h2>
+                </div>
+
+                <div className="rounded-[30px] p-8 text-white shadow-xl mb-8 flex flex-col md:flex-row justify-between items-center gap-6"
+                     style={{ background: 'linear-gradient(90deg, #2563eb 0%, #4f46e5 100%)' }}>
+                    <div>
+                        <h2 className="text-3xl font-bold mb-1">{accuracy >= 80 ? "Great Job!" : "Keep Practicing!"}</h2>
+                        <p className="opacity-90 text-lg">You scored {correctCount} out of {questions.length}</p>
+                    </div>
+                    <div className="bg-white/20 backdrop-blur-md rounded-2xl p-4 min-w-[100px] border border-white/10 text-center">
+                        <div className="text-2xl font-bold">{accuracy}%</div>
+                        <div className="text-xs opacity-80 font-bold uppercase">Accuracy</div>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    {questions.map((q, idx) => {
+                        const ans = userAnswers.find(a => a.questionId === q.id);
+                        const isCorrect = ans?.isCorrect;
+                        const correctText = typeof q.correctAnswer === 'string' ? q.correctAnswer : q.options[q.correct_option_index];
+
+                        return (
+                            <div key={q.id} className={`p-6 rounded-2xl border-l-8 shadow-sm ${isCorrect ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'} ${theme === 'dark' ? (isCorrect ? 'bg-green-900/20 text-white' : 'bg-red-900/20 text-white') : 'text-slate-900 bg-white'}`}>
+                                <div className="flex justify-between mb-3">
+                                    <span className="font-bold opacity-60 text-sm uppercase tracking-wide">Question {idx + 1}</span>
+                                    {isCorrect ? 
+                                        <span className="flex items-center gap-1 text-green-600 font-bold bg-white dark:bg-slate-800 px-3 py-1 rounded-full text-xs shadow-sm"><CheckCircle size={14}/> Correct</span> : 
+                                        <span className="flex items-center gap-1 text-red-600 font-bold bg-white dark:bg-slate-800 px-3 py-1 rounded-full text-xs shadow-sm"><XCircle size={14}/> Incorrect</span>
+                                    }
+                                </div>
+                                <h3 className="text-xl font-bold mb-6">{q.question}</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className={`p-4 rounded-xl border ${theme === 'dark' ? 'bg-green-900/40 text-green-100 border-green-700' : 'bg-green-100 text-green-900 border-green-200'}`}>
+                                        <div className="text-xs font-bold uppercase mb-1 opacity-70">Correct Answer</div>
+                                        <div className="font-semibold text-lg">{correctText}</div>
+                                    </div>
+                                    {!isCorrect && (
+                                        <div className={`p-4 rounded-xl border ${theme === 'dark' ? 'bg-red-900/40 text-red-100 border-red-700' : 'bg-red-100 text-red-900 border-red-200'}`}>
+                                            <div className="text-xs font-bold uppercase mb-1 opacity-70">Your Answer</div>
+                                            <div className="font-semibold text-lg">{ans?.answer || "Skipped"}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="flex justify-center mt-12 pb-10">
+                    <GlossyButton label="Finish Review" variant="dark" onClick={() => navigate('/practice')} />
+                </div>
+            </div>
         </div>
-      </div>
     );
   }
 
   if (showResults) {
-    const correctAnswers = userAnswers.filter(a => a.isCorrect).length;
-    const totalQuestions = questions.length;
-    const score = Math.round((correctAnswers / totalQuestions) * 100);
-    const coinsEarned = correctAnswers * 5;
+    const correctCount = userAnswers.filter(a => a.isCorrect).length;
+    const accuracy = Math.round((correctCount / questions.length) * 100);
+    const coins = correctCount * 5;
 
     return (
-      <div className="min-h-screen bg-gradient-to-b from-indigo-50 to-white p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <button
-              onClick={() => navigate('/practice')}
-              className="flex items-center gap-2 text-slate-600 hover:text-slate-900"
-            >
-              <ArrowLeft size={20} />
-              Back to Practice
-            </button>
-            <div className="text-sm text-slate-500">
-              Class {classId} • {subject} • {chapter}
-            </div>
-          </div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-8"
-          >
-            <h1 className="text-3xl font-bold text-slate-900 mb-4">
-              Practice Session Completed! 🎉
-            </h1>
-            <p className="text-slate-600">
-              You've completed {chapter} of {subject}
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <Card className="rounded-2xl border-blue-200">
-              <CardContent className="p-6 text-center">
-                <div className="text-4xl font-bold text-blue-600 mb-2">{score}%</div>
-                <div className="text-sm text-slate-600">Score</div>
-                <div className="text-lg font-bold text-slate-900 mt-2">
-                  {correctAnswers}/{totalQuestions} Correct
+        <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${theme === 'dark' ? 'bg-[#0f172a] text-white' : 'bg-[#F0F2F5] text-slate-900'}`}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center w-full max-w-2xl">
+                <h1 className="text-5xl font-extrabold mb-4">Session Complete! 🎉</h1>
+                <p className="text-xl opacity-70 mb-12">Great job practicing today</p>
+                <div className="flex flex-wrap justify-center gap-6 mb-12">
+                    <div className="w-40 p-6 rounded-3xl bg-blue-500 text-white shadow-xl"><div className="text-5xl font-bold mb-2">{accuracy}%</div><div className="text-sm font-medium opacity-90">Accuracy</div></div>
+                    <div className="w-40 p-6 rounded-3xl bg-yellow-500 text-white shadow-xl"><div className="text-5xl font-bold mb-2">{coins}</div><div className="text-sm font-medium opacity-90">Coins</div></div>
+                    <div className="w-40 p-6 rounded-3xl bg-green-500 text-white shadow-xl"><div className="text-5xl font-bold mb-2">{formatTime(600 - timeLeft)}</div><div className="text-sm font-medium opacity-90">Time</div></div>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-2xl border-yellow-200">
-              <CardContent className="p-6 text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Award className="text-yellow-600" size={24} />
-                  <div className="text-3xl font-bold text-yellow-600">{coinsEarned}</div>
+                <div className="flex justify-center gap-6">
+                    <GlossyButton label="Detailed Analysis" icon={BarChart2} variant="purple" onClick={() => setShowAnalysis(true)} />
+                    <GlossyButton label="Continue Practicing" icon={Sparkles} variant="indigo" onClick={() => navigate('/practice')} />
                 </div>
-                <div className="text-sm text-slate-600">Coins Earned</div>
-                <div className="text-lg font-bold text-slate-900 mt-2">
-                  +{coinsEarned} coins
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-2xl border-green-200">
-              <CardContent className="p-6 text-center">
-                <div className="text-4xl font-bold text-green-600 mb-2">
-                  {formatTime(600 - timeLeft)}
-                </div>
-                <div className="text-sm text-slate-600">Time Taken</div>
-                <div className="text-lg font-bold text-slate-900 mt-2">
-                  {600 - timeLeft} seconds
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="rounded-2xl border-slate-200 mb-8">
-            <CardContent className="p-8">
-              <h2 className="text-xl font-bold text-slate-900 mb-6">Question Review</h2>
-              <div className="space-y-6">
-                {questions.map((question: any, index: number) => {
-                  const userAnswer = userAnswers.find(a => a.questionId === question.id);
-                  return (
-                    <div key={question.id} className="border-b border-slate-100 pb-6 last:border-0">
-                      <div className="flex items-start gap-3 mb-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          userAnswer?.isCorrect ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                        }`}>
-                          {userAnswer?.isCorrect ? <Check size={14} /> : <X size={14} />}
-                        </div>
-                        <div>
-                          <div className="text-sm text-slate-500 mb-1">Question {index + 1}</div>
-                          <h3 className="font-medium text-slate-900">{question.question}</h3>
-                        </div>
-                      </div>
-                      
-                      <div className="ml-9 space-y-2">
-                        {question.options.map((option: string, optIndex: number) => {
-                          const isCorrect = option === question.correctAnswer;
-                          const isSelected = userAnswer?.answer === option;
-                          return (
-                            <div
-                              key={optIndex}
-                              className={`p-3 rounded-lg border ${
-                                isCorrect
-                                  ? 'bg-green-50 border-green-200'
-                                  : isSelected && !isCorrect
-                                  ? 'bg-red-50 border-red-200'
-                                  : 'bg-slate-50 border-slate-200'
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                  isCorrect
-                                    ? 'bg-green-100 text-green-600'
-                                    : isSelected && !isCorrect
-                                    ? 'bg-red-100 text-red-600'
-                                    : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  {String.fromCharCode(65 + optIndex)}
-                                </div>
-                                <span className={
-                                  isCorrect
-                                    ? 'text-green-700 font-medium'
-                                    : isSelected && !isCorrect
-                                    ? 'text-red-700'
-                                    : 'text-slate-700'
-                                }>
-                                  {option}
-                                </span>
-                                {isCorrect && (
-                                  <span className="ml-auto text-xs font-medium text-green-600">
-                                    Correct Answer
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-4">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => navigate('/practice')}
-            >
-              Back to Practice
-            </Button>
-            <Button
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700"
-              onClick={() => navigate(`/practice/session?class=${classId}&subject=${subject}&chapter=${chapter}`, {
-                state: { questions }
-              })}
-            >
-              <Sparkles size={16} className="mr-2" />
-              Try Again
-            </Button>
-          </div>
+            </motion.div>
         </div>
-      </div>
     );
   }
 
-  const currentQuestion = questions[currentQuestionIndex];
-
+  const q = questions[currentQuestionIndex];
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <button
-            onClick={() => navigate('/practice')}
-            className="flex items-center gap-2 text-slate-600 hover:text-slate-900"
-          >
-            <ArrowLeft size={20} />
-            Back
-          </button>
-          
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full">
-              <Clock size={16} className="text-blue-600" />
-              <span className="font-bold text-blue-700">{formatTime(timeLeft)}</span>
+    <div className={`min-h-screen p-4 font-sans transition-colors duration-300 ${theme === 'dark' ? 'bg-[#0f172a] text-white' : 'bg-[#F0F2F5] text-slate-900'}`}>
+        <div className="max-w-4xl mx-auto">
+            <div className="flex justify-between items-center mb-10">
+                <button onClick={() => navigate('/practice')} className={`p-3 rounded-full border transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                    <ArrowLeft size={24}/>
+                </button>
+                <div className="flex items-center gap-4">
+                    <div className={`flex items-center gap-3 px-5 py-2.5 rounded-full border shadow-sm ${theme === 'dark' ? 'bg-blue-900/40 border-blue-500/50 text-blue-300' : 'bg-white border-blue-200 text-blue-700'}`}>
+                        <Clock size={20} className="text-blue-500" /><span className="font-bold text-lg tabular-nums tracking-wide">{formatTime(timeLeft)}</span>
+                    </div>
+                    <button onClick={toggleTheme} className={`p-3 rounded-full border transition-all ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-yellow-400' : 'bg-white border-slate-200 text-slate-600'}`}>
+                        {theme === 'dark' ? <Sun size={24}/> : <Moon size={24}/>}
+                    </button>
+                </div>
             </div>
             
-            <div className="hidden sm:block text-sm text-slate-500">
-              Class {classId} • {subject} • {chapter}
-            </div>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm text-slate-600">
-              Question {currentQuestionIndex + 1} of {questions.length}
-            </span>
-            <span className="text-sm font-medium text-slate-900">
-              {Math.round(((currentQuestionIndex + 1) / questions.length) * 100)}%
-            </span>
-          </div>
-          <Progress 
-            value={((currentQuestionIndex + 1) / questions.length) * 100} 
-            className="h-2"
-          />
-        </div>
-
-        {/* Question Card */}
-        <motion.div
-          key={currentQuestionIndex}
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-        >
-          <Card className="rounded-2xl border-slate-200 shadow-lg mb-8">
-            <CardContent className="p-8">
-              <div className="mb-6">
-                <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium mb-4">
-                  <Trophy size={14} />
-                  Question {currentQuestionIndex + 1} • {currentQuestion.marks} mark
+            <div className="mb-10">
+                <div className="flex justify-between text-sm mb-2 font-medium opacity-70">
+                    <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
+                    <span>Progress</span>
                 </div>
-                <h2 className="text-xl font-bold text-slate-900 leading-relaxed">
-                  {currentQuestion.question}
-                </h2>
-              </div>
-
-              <div className="space-y-4">
-                {currentQuestion.options.map((option: string, index: number) => (
-                  <motion.div
-                    key={index}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                  >
-                    <div
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selectedOption === option
-                          ? 'border-indigo-500 bg-indigo-50'
-                          : 'border-slate-200 hover:border-slate-300 bg-white'
-                      }`}
-                      onClick={() => handleOptionSelect(option)}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          selectedOption === option
-                            ? 'bg-indigo-100 text-indigo-600'
-                            : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          {String.fromCharCode(65 + index)}
-                        </div>
-                        <span className={`font-medium ${
-                          selectedOption === option ? 'text-indigo-700' : 'text-slate-700'
-                        }`}>
-                          {option}
-                        </span>
-                        {selectedOption === option && (
-                          <div className="ml-auto w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center">
-                            <Check size={14} className="text-white" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Navigation Buttons */}
-        <div className="flex justify-between items-center">
-          <Button
-            variant="outline"
-            onClick={handlePrevious}
-            disabled={currentQuestionIndex === 0}
-            className="flex items-center gap-2"
-          >
-            <ChevronLeft size={16} />
-            Previous
-          </Button>
-          
-          <div className="text-center">
-            <div className="text-sm text-slate-500 mb-1">
-              {currentQuestionIndex + 1} of {questions.length}
+                <div className="h-3 w-full bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${((currentQuestionIndex + 1) / questions.length) * 100}%` }} className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full" />
+                </div>
             </div>
-            <div className="flex gap-2">
-              {questions.map((_, index) => (
-                <div
-                  key={index}
-                  className={`w-2 h-2 rounded-full ${
-                    index === currentQuestionIndex
-                      ? 'bg-indigo-500'
-                      : index < currentQuestionIndex
-                      ? 'bg-green-500'
-                      : 'bg-slate-300'
-                  }`}
-                />
-              ))}
+
+            <div className={`p-10 rounded-[40px] shadow-2xl mb-10 relative overflow-hidden ${theme === 'dark' ? 'bg-slate-800 border border-slate-700' : 'bg-white'}`}>
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+                <div className="inline-block px-4 py-1.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-extrabold mb-6 uppercase tracking-widest">1 Mark</div>
+                <h2 className="text-3xl font-bold mb-10 leading-snug">{q.question}</h2>
+                <div className="space-y-4">
+                    {q.options.map((opt: string, i: number) => (
+                        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} key={i}>
+                            <div onClick={() => !isSubmitted && setSelectedOption(opt)}
+                                className={`p-6 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-6 ${selectedOption === opt ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20 shadow-md ring-1 ring-indigo-500' : `border-transparent ${theme === 'dark' ? 'bg-slate-700/50 hover:bg-slate-700' : 'bg-slate-50 hover:bg-slate-100 hover:border-slate-200'}`}`}>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-colors ${selectedOption === opt ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-300'}`}>{String.fromCharCode(65 + i)}</div>
+                                <span className={`font-medium text-xl ${selectedOption === opt ? 'text-indigo-700 dark:text-indigo-300' : ''}`}>{opt}</span>
+                                {selectedOption === opt && <div className="ml-auto bg-indigo-600 rounded-full p-1 text-white shadow-lg"><Check size={20} /></div>}
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
             </div>
-          </div>
 
-          <Button
-            onClick={handleNext}
-            disabled={!selectedOption}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700"
-          >
-            {currentQuestionIndex === questions.length - 1 ? 'Submit' : 'Next'}
-            <ChevronRight size={16} />
-          </Button>
+            <div className="flex justify-end pb-10">
+                <GlossyButton label={currentQuestionIndex === questions.length - 1 ? "Submit Quiz" : "Next Question"} icon={ChevronRight} variant="indigo" onClick={handleNext} disabled={!selectedOption} />
+            </div>
         </div>
-
-        {/* Instructions */}
-        <div className="mt-12 p-4 bg-blue-50 rounded-xl border border-blue-100">
-          <h3 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
-            <Sparkles size={16} />
-            Instructions
-          </h3>
-          <ul className="text-sm text-blue-700 space-y-1">
-            <li>• Select one answer for each question</li>
-            <li>• You can navigate between questions using Previous/Next buttons</li>
-            <li>• Timer will auto-submit when time runs out</li>
-            <li>• Earn +5 coins for each correct answer</li>
-          </ul>
-        </div>
-      </div>
     </div>
   );
 };
