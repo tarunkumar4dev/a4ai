@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
-  ArrowLeft, Check, Clock, Trophy, Sparkles, ChevronRight, AlertCircle, Moon, Sun, BarChart2, CheckCircle, XCircle, Target
+  ArrowLeft, Check, Clock, Trophy, Sparkles, ChevronRight, AlertCircle, Moon, Sun, BarChart2, CheckCircle, XCircle, Target, X
 } from 'lucide-react';
 import { supabase, practiceDB } from '@/lib/supabaseClient';
 import { useTheme } from '@/context/ThemeContext';
@@ -18,6 +18,7 @@ const GlossyButton = ({ icon: Icon, label, variant = "indigo", onClick, fullWidt
         case 'indigo': return 'linear-gradient(180deg, #6366f1 0%, #4338ca 100%)';
         case 'purple': return 'linear-gradient(180deg, #a855f7 0%, #7e22ce 100%)';
         case 'dark': return 'linear-gradient(180deg, #374151 0%, #111827 100%)';
+        case 'green': return 'linear-gradient(180deg, #22c55e 0%, #15803d 100%)'; // Added for "Check" state
         default: return 'linear-gradient(180deg, #6366f1 0%, #4338ca 100%)';
     }
   };
@@ -66,6 +67,9 @@ const PracticeSessionPage = () => {
   const [showAnalysis, setShowAnalysis] = useState(false); 
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // New State for "Check Answer" functionality
+  const [isChecked, setIsChecked] = useState(false);
 
   const classId = searchParams.get('class');
   const subject = searchParams.get('subject');
@@ -81,6 +85,7 @@ const PracticeSessionPage = () => {
                 setQuestions(class10MathsData[chapter] || []);
             } else if (subject === 'science') {
                 // Returns correct chapter questions from Object
+                // @ts-ignore
                 setQuestions(class10ScienceData[chapter] || []);
             }
         }
@@ -95,21 +100,31 @@ const PracticeSessionPage = () => {
     return () => clearInterval(timer);
   }, [showResults]);
 
-  const handleNext = () => {
-    const q = questions[currentQuestionIndex];
-    let isCorrect = false;
-    if (typeof q.correctAnswer === 'string') isCorrect = selectedOption === q.correctAnswer;
-    else if (typeof q.correct_option_index === 'number') isCorrect = q.options.indexOf(selectedOption) === q.correct_option_index;
+  // Combined Handler for Checking and Moving Next
+  const handleCheckOrNext = () => {
+    if (!isChecked) {
+        // --- STEP 1: CHECK ANSWER ---
+        const q = questions[currentQuestionIndex];
+        let isCorrect = false;
+        if (typeof q.correctAnswer === 'string') isCorrect = selectedOption === q.correctAnswer;
+        else if (typeof q.correct_option_index === 'number') isCorrect = q.options.indexOf(selectedOption) === q.correct_option_index;
 
-    const newAnswers = [...userAnswers.filter(a => a.questionId !== q.id), { questionId: q.id, answer: selectedOption!, isCorrect }];
-    setUserAnswers(newAnswers);
-
-    if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex(p => p + 1);
-        setSelectedOption(null);
+        // Save answer immediately so we don't lose it
+        const newAnswers = [...userAnswers.filter(a => a.questionId !== q.id), { questionId: q.id, answer: selectedOption!, isCorrect }];
+        setUserAnswers(newAnswers);
+        
+        // Show feedback
+        setIsChecked(true); 
     } else {
-        setIsSubmitted(true);
-        setShowResults(true);
+        // --- STEP 2: MOVE TO NEXT QUESTION ---
+        if (currentQuestionIndex < questions.length - 1) {
+            setCurrentQuestionIndex(p => p + 1);
+            setSelectedOption(null);
+            setIsChecked(false); // Reset for next question
+        } else {
+            setIsSubmitted(true);
+            setShowResults(true);
+        }
     }
   };
 
@@ -244,22 +259,75 @@ const PracticeSessionPage = () => {
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
                 <div className="inline-block px-4 py-1.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-extrabold mb-6 uppercase tracking-widest">1 Mark</div>
                 <h2 className="text-3xl font-bold mb-10 leading-snug">{q.question}</h2>
+                
+                {/* Image Rendering Support */}
+                {q.image && (
+                   <div className="mb-8 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                      <img src={q.image} alt="Question Diagram" className="w-full h-auto object-contain max-h-[400px] bg-white" />
+                   </div>
+                )}
+
                 <div className="space-y-4">
-                    {q.options.map((opt: string, i: number) => (
-                        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} key={i}>
-                            <div onClick={() => !isSubmitted && setSelectedOption(opt)}
-                                className={`p-6 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-6 ${selectedOption === opt ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20 shadow-md ring-1 ring-indigo-500' : `border-transparent ${theme === 'dark' ? 'bg-slate-700/50 hover:bg-slate-700' : 'bg-slate-50 hover:bg-slate-100 hover:border-slate-200'}`}`}>
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-colors ${selectedOption === opt ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-300'}`}>{String.fromCharCode(65 + i)}</div>
-                                <span className={`font-medium text-xl ${selectedOption === opt ? 'text-indigo-700 dark:text-indigo-300' : ''}`}>{opt}</span>
-                                {selectedOption === opt && <div className="ml-auto bg-indigo-600 rounded-full p-1 text-white shadow-lg"><Check size={20} /></div>}
-                            </div>
-                        </motion.div>
-                    ))}
+                    {q.options.map((opt: string, i: number) => {
+                        const isOptCorrect = opt === q.correctAnswer;
+                        const isOptSelected = selectedOption === opt;
+                        
+                        let cardStyle = `p-6 rounded-2xl border-2 transition-all flex items-center gap-6 `;
+                        let icon = null;
+
+                        if (isChecked) {
+                            // Checked State Styling
+                            if (isOptCorrect) {
+                                // Correct Answer (Green)
+                                cardStyle += `border-green-500 bg-green-50/50 dark:bg-green-900/20 shadow-md ring-1 ring-green-500`;
+                                icon = <div className="ml-auto bg-green-600 rounded-full p-1 text-white shadow-lg"><Check size={20} /></div>;
+                            } else if (isOptSelected && !isOptCorrect) {
+                                // Wrong Selected Answer (Red)
+                                cardStyle += `border-red-500 bg-red-50/50 dark:bg-red-900/20 shadow-md ring-1 ring-red-500`;
+                                icon = <div className="ml-auto bg-red-600 rounded-full p-1 text-white shadow-lg"><X size={20} /></div>;
+                            } else {
+                                // Unselected options (Dimmed)
+                                cardStyle += `border-transparent opacity-50 bg-slate-50 dark:bg-slate-800/50`;
+                            }
+                        } else {
+                            // Unchecked State Styling (Normal interaction)
+                            cardStyle += 'cursor-pointer ';
+                            if (selectedOption === opt) {
+                                cardStyle += `border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20 shadow-md ring-1 ring-indigo-500`;
+                                icon = <div className="ml-auto bg-indigo-600 rounded-full p-1 text-white shadow-lg"><Check size={20} /></div>;
+                            } else {
+                                cardStyle += `border-transparent ${theme === 'dark' ? 'bg-slate-700/50 hover:bg-slate-700' : 'bg-slate-50 hover:bg-slate-100 hover:border-slate-200'}`;
+                            }
+                        }
+
+                        return (
+                            <motion.div whileHover={!isChecked ? { scale: 1.01 } : {}} whileTap={!isChecked ? { scale: 0.99 } : {}} key={i}>
+                                <div onClick={() => !isChecked && !isSubmitted && setSelectedOption(opt)} className={cardStyle}>
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg transition-colors 
+                                        ${isChecked && isOptCorrect ? 'bg-green-600 text-white' : 
+                                          isChecked && isOptSelected && !isOptCorrect ? 'bg-red-600 text-white' :
+                                          selectedOption === opt ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-200 dark:bg-slate-600 text-slate-500 dark:text-slate-300'}`}>
+                                        {String.fromCharCode(65 + i)}
+                                    </div>
+                                    <span className={`font-medium text-xl ${isChecked && isOptCorrect ? 'text-green-700 dark:text-green-300' : isChecked && isOptSelected && !isOptCorrect ? 'text-red-700 dark:text-red-300' : selectedOption === opt ? 'text-indigo-700 dark:text-indigo-300' : ''}`}>
+                                        {opt}
+                                    </span>
+                                    {icon}
+                                </div>
+                            </motion.div>
+                        );
+                    })}
                 </div>
             </div>
 
             <div className="flex justify-end pb-10">
-                <GlossyButton label={currentQuestionIndex === questions.length - 1 ? "Submit Quiz" : "Next Question"} icon={ChevronRight} variant="indigo" onClick={handleNext} disabled={!selectedOption} />
+                <GlossyButton 
+                    label={!isChecked ? "Check Answer" : (currentQuestionIndex === questions.length - 1 ? "Finish Quiz" : "Next Question")} 
+                    icon={!isChecked ? Target : ChevronRight} 
+                    variant={!isChecked ? "indigo" : "green"} 
+                    onClick={handleCheckOrNext} 
+                    disabled={!selectedOption && !isChecked} 
+                />
             </div>
         </div>
     </div>

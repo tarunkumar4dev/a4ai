@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,20 +8,43 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence } from "framer-motion";
 import { Confetti } from "@/components/ui/confetti";
-import { Eye, EyeOff, User, Mail, Lock, ArrowLeft } from "lucide-react";
+import { 
+  Eye, 
+  EyeOff, 
+  User, 
+  Mail, 
+  Lock, 
+  ArrowLeft, 
+  GraduationCap, 
+  School, 
+  Building2, 
+  ChevronDown,
+  CheckCircle2,
+  Sun,
+  Moon,
+  Gift
+} from "lucide-react";
 
-const SignupPage = () => {
+type Role = "student" | "teacher" | "institute";
+
+export default function SignupPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+
   const [isLoading, setIsLoading] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  
+  // Scratch Card States
   const [showScratchCard, setShowScratchCard] = useState(false);
   const [coinsScratched, setCoinsScratched] = useState(false);
   const [scratchProgress, setScratchProgress] = useState(0);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<"student" | "teacher" | "institute" | null>(null);
-  
+  const [pointer, setPointer] = useState({ x: 0, y: 0 });
+
   const [formValues, setFormValues] = useState({
     name: "",
     email: "",
@@ -30,631 +53,306 @@ const SignupPage = () => {
     acceptTerms: false,
   });
 
-  // Get role from location state (if coming from role selection)
   useEffect(() => {
-    if (location.state?.role) {
-      setSelectedRole(location.state.role);
-    }
-    if (location.state?.email) {
-      setFormValues(prev => ({ ...prev, email: location.state.email }));
-    }
+    if (location.state?.role) setSelectedRole(location.state.role);
+    if (location.state?.email) setFormValues(prev => ({ ...prev, email: location.state.email }));
   }, [location.state]);
 
-  // Scratch card effect
-  const handleScratch = (e: React.MouseEvent) => {
-    if (!coinsScratched) {
-      setScratchProgress(prev => Math.min(prev + 25, 100));
-    }
-  };
-
-  const handleScratchComplete = () => {
-    if (scratchProgress >= 70 && !coinsScratched) {
-      setCoinsScratched(true);
-      addWelcomeCoins();
-    }
-  };
-
-  const addWelcomeCoins = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && selectedRole) {
-        const initialCoins = selectedRole === "student" ? 100 : 
-                           selectedRole === "teacher" ? 200 : 500;
-        
-        // Update user's coin balance in profiles table
-        const { error } = await supabase
-          .from('profiles')
-          .update({ coins: initialCoins })
-          .eq('id', user.id);
-
-        if (!error) {
-          toast({
-            title: "🎉 Congratulations!",
-            description: `${initialCoins} FREE coins added to your account!`,
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Error adding coins:", error);
-    }
-  };
-
   useEffect(() => {
-    handleScratchComplete();
-  }, [scratchProgress]);
+    const onMove = (e: PointerEvent) => setPointer({ x: e.clientX, y: e.clientY });
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormValues((prev) => ({
+  const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
+
+  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target;
+    setFormValues(prev => ({
       ...prev,
-      [e.target.name]:
-        e.target.type === "checkbox" ? (e.target as any).checked : e.target.value,
+      [name]: type === "checkbox" ? checked : value
     }));
   };
 
-  const handleRoleChange = () => {
-    navigate("/role-selection", { 
-      state: { 
-        type: "signup",
-        email: formValues.email 
-      } 
-    });
+  const handleScratch = () => {
+    if (!coinsScratched) {
+      setScratchProgress(prev => {
+        const next = Math.min(prev + 15, 100);
+        if (next >= 70 && !coinsScratched) {
+          setCoinsScratched(true);
+          toast({
+            title: "🎉 Coins Added!",
+            description: `${getInitialCoins()} coins successfully added to your wallet.`,
+          });
+        }
+        return next;
+      });
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const getInitialCoins = () => {
+    if (selectedRole === "student") return 100;
+    if (selectedRole === "teacher") return 200;
+    return 500;
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!selectedRole) {
-      navigate("/role-selection", { 
-        state: { 
-          type: "signup",
-          email: formValues.email 
-        } 
-      });
-      return;
-    }
-    
-    if (!formValues.acceptTerms) {
-      toast({
-        title: "Terms required",
-        description: "Please accept the terms and conditions",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!selectedRole) { setIsExpanded(true); return; }
     if (formValues.password !== formValues.confirmPassword) {
-      toast({
-        title: "Passwords don't match",
-        description: "Please make sure your passwords match.",
-        variant: "destructive",
-      });
+      toast({ title: "Passwords mismatch", variant: "destructive" });
       return;
     }
 
-    if (formValues.password.length < 6) {
-      toast({
-        title: "Weak password",
-        description: "Password must be at least 6 characters",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (isLoading) return;
     setIsLoading(true);
-
     try {
-      console.log("🔄 Starting signup process...");
-
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: formValues.email.trim(),
         password: formValues.password,
         options: {
-          data: { 
-            full_name: formValues.name, 
-            role: selectedRole 
-          },
+          data: { full_name: formValues.name, role: selectedRole },
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       });
 
-      if (signUpError) {
-        console.error("❌ Signup error:", signUpError);
-        throw signUpError;
+      if (error) throw error;
+
+      if (data.session) {
+        setShowScratchCard(true);
+      } else {
+        toast({ title: "Verify your email", description: "Link sent to your inbox." });
+        navigate("/login");
       }
-
-      console.log("✅ Auth signup successful:", data);
-
-      const { user, session } = data;
-
-      // Case 1: Email confirmation required
-      if (!user) {
-        toast({
-          title: "Check your email!",
-          description: "We've sent a verification link to your email address.",
-        });
-        navigate("/login?message=check-email");
-        return;
-      }
-
-      // Case 2: Auto-confirmed - Show scratch card!
-      if (session && user) {
-        console.log("🎉 Immediate session received");
-        
-        // Calculate initial coins based on role
-        const initialCoins = selectedRole === "student" ? 100 : 
-                           selectedRole === "teacher" ? 200 : 500;
-        
-        // Create profile
-        try {
-          const { error: profileError } = await supabase
-            .from("profiles")
-            .upsert({
-              id: user.id,
-              email: formValues.email.trim(),
-              full_name: formValues.name,
-              role: selectedRole,
-              coins: initialCoins,
-              updated_at: new Date().toISOString(),
-            });
-
-          if (profileError) {
-            console.warn("⚠️ Profile creation warning:", profileError);
-          }
-        } catch (profileError) {
-          console.warn("⚠️ Profile creation optional error:", profileError);
-        }
-
-        // Show scratch card after a brief delay
-        setTimeout(() => {
-          setShowScratchCard(true);
-        }, 1000);
-
-        return;
-      }
-
-      // Case 3: Email confirmation pending
-      toast({
-        title: "Almost there!",
-        description: "Please check your email to verify your account.",
-      });
-      navigate("/login?message=verify-email");
-
     } catch (error: any) {
-      console.error("💥 Signup failed:", error);
-      
-      let errorMessage = "Please try again.";
-      
-      if (error?.message?.includes("already registered")) {
-        errorMessage = "This email is already registered. Try logging in instead.";
-      } else if (error?.message?.includes("password")) {
-        errorMessage = "Password should be at least 6 characters.";
-      } else if (error?.message?.includes("email")) {
-        errorMessage = "Please enter a valid email address.";
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-
-      toast({
-        title: "Signup failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      toast({ title: "Signup failed", description: error.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleSignup = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-    try {
-      console.log("🔄 Starting Google OAuth...");
-      
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: { 
-            access_type: "offline", 
-            prompt: "consent" 
-          },
-        },
-      });
-      
-      if (error) {
-        console.error("❌ Google OAuth error:", error);
-        throw error;
-      }
-      
-      console.log("✅ Google OAuth initiated successfully");
-      
-    } catch (error: any) {
-      console.error("💥 Google signup failed:", error);
-      
-      let errorMessage = "Please try again.";
-      if (error?.message?.includes("popup")) {
-        errorMessage = "Popup blocked. Please allow popups for this site.";
-      }
-      
-      toast({
-        title: "Google signup failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      setIsLoading(false);
-    }
-  };
-
-  const closeScratchCard = () => {
-    setShowScratchCard(false);
-    navigate("/dashboard?newUser=true", { 
-      replace: true,
-      state: { newUser: true, role: selectedRole }
-    });
-  };
-
-  const getInitialCoins = () => {
-    return selectedRole === "student" ? 100 : 
-           selectedRole === "teacher" ? 200 : 500;
-  };
+  const roles = [
+    { id: "student", title: "Student", icon: GraduationCap, color: "text-blue-500", desc: "100 Welcome Coins" },
+    { id: "teacher", title: "Teacher", icon: School, color: "text-slate-900", desc: "200 Welcome Coins" },
+    { id: "institute", title: "Institute", icon: Building2, color: "text-green-500", desc: "500 Welcome Coins" }
+  ];
 
   return (
-    <div className="flex min-h-screen bg-[#DFE4EF] relative">
-      {/* Confetti Effect */}
-      <AnimatePresence>
-        {coinsScratched && <Confetti />}
-      </AnimatePresence>
+    <div className={`h-screen w-full flex items-center justify-center p-6 font-sans transition-colors duration-500 overflow-hidden ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#E0E6F7]'}`}>
+      
+      {coinsScratched && <Confetti />}
+
+      {/* Dark Mode Toggle */}
+      <button onClick={toggleDarkMode} className={`fixed top-8 right-8 p-3 rounded-2xl backdrop-blur-md border transition-all z-50 shadow-lg ${isDarkMode ? 'bg-white/10 border-white/20 text-yellow-400' : 'bg-black/5 border-black/10 text-slate-700'}`}>
+        {isDarkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
+      </button>
 
       {/* Scratch Card Modal */}
       <AnimatePresence>
         {showScratchCard && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
-              className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl p-8 max-w-md w-full mx-auto"
-            >
-              <div className="text-center text-white">
-                <h2 className="text-3xl font-bold mb-4">🎉 Welcome Bonus! 🎉</h2>
-                <p className="text-lg mb-6">Scratch to reveal your FREE coins!</p>
-                
-                {/* Scratch Card */}
-                <div 
-                  className="relative bg-gradient-to-br from-amber-200 to-yellow-300 rounded-2xl p-8 cursor-pointer mx-auto max-w-xs"
-                  onMouseMove={handleScratch}
-                  onClick={handleScratch}
-                >
-                  {/* Scratchable Layer */}
-                  <div 
-                    className="absolute inset-0 bg-gradient-to-br from-gray-400 to-gray-600 rounded-2xl transition-all duration-300"
-                    style={{ 
-                      clipPath: `inset(0 0 ${100 - scratchProgress}% 0)`,
-                      WebkitMask: `linear-gradient(black, black) content-box, linear-gradient(black, black)`,
-                      WebkitMaskComposite: 'xor'
-                    }}
-                  />
-                  
-                  {/* Revealed Content */}
-                  <div className="text-center">
-                    <div className="text-4xl font-bold text-gray-800 mb-2">{getInitialCoins()}</div>
-                    <div className="text-2xl font-bold text-gray-800 mb-4">FREE COINS</div>
-                    <div className="text-sm text-gray-600">
-                      {coinsScratched ? "🎊 Congratulations!" : "Scratch to reveal!"}
-                    </div>
-                  </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-xl bg-black/40">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-white rounded-[3rem] p-10 max-w-md w-full text-center shadow-2xl">
+              <h2 className="text-3xl font-black text-slate-900 mb-2">Welcome Bonus!</h2>
+              <p className="text-slate-500 mb-8 font-medium">Scratch the card to reveal your coins</p>
+              
+              <div className="relative w-64 h-40 mx-auto bg-slate-100 rounded-3xl overflow-hidden cursor-crosshair border-4 border-slate-50 shadow-inner" onMouseMove={handleScratch} onClick={handleScratch}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-5xl font-black text-slate-900">{getInitialCoins()}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Free Coins</span>
                 </div>
-
-                <div className="mt-6 text-sm text-white/90 bg-white/20 rounded-lg p-3">
-                  <p>✨ <strong>Use these coins in contests</strong> to win amazing prizes!</p>
-                  <p className="text-xs mt-1">Create test papers, join competitions & more!</p>
-                </div>
-
-                <Button
-                  onClick={closeScratchCard}
-                  className="mt-6 bg-white text-orange-600 hover:bg-gray-100 font-bold py-3 px-8 rounded-full"
+                <motion.div 
+                  className="absolute inset-0 bg-slate-800 flex items-center justify-center"
+                  style={{ clipPath: `circle(${100 - scratchProgress}% at center)` }}
                 >
-                  Start Creating! 🚀
-                </Button>
+                  <Gift className="w-12 h-12 text-white animate-bounce" />
+                </motion.div>
               </div>
+
+              <Button onClick={() => navigate("/dashboard")} className="mt-10 w-full h-14 rounded-2xl bg-black text-white font-bold hover:bg-slate-900">
+                Go to Dashboard
+              </Button>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Left: form card */}
-      <div className="flex flex-1 flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto w-full max-w-md">
-          {/* Welcome Bonus Banner */}
-          <motion.div
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-4 mb-6 text-white text-center shadow-lg"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <div className="text-2xl">🎁</div>
-              <div>
-                <h3 className="font-bold text-lg">Get FREE Coins!</h3>
-                <p className="text-sm opacity-90">Sign up now & scratch to win</p>
+      <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 items-center relative z-10">
+        
+        {/* LOGIN CARD */}
+        <div className={`backdrop-blur-[30px] saturate-[180%] border rounded-[3rem] shadow-2xl p-10 flex flex-col transition-all duration-500 ${isDarkMode ? 'bg-slate-900/60 border-white/10' : 'bg-white/40 border-white/50 shadow-slate-300/50'}`}>
+          
+          <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className={`mb-6 -ml-2 rounded-full w-fit ${isDarkMode ? 'text-slate-400 hover:bg-white/10' : 'text-slate-600 hover:bg-white/20'}`}>
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+          </Button>
+
+          <div className="mb-6">
+            <h1 className={`text-4xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Create Account</h1>
+            <p className={`text-sm font-semibold mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              Already have an account? <Link to="/login" className={`font-bold hover:underline ${isDarkMode ? 'text-white' : 'text-black'}`}>Sign in</Link>
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {/* ROLE SELECTOR (Expansion pushing content down) */}
+            <div className="space-y-2">
+              <button type="button" onClick={() => setIsExpanded(!isExpanded)} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all duration-200 ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white/30 border-white/50 shadow-sm'}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDarkMode ? 'bg-slate-800' : 'bg-white/80 shadow-inner'}`}>
+                    {selectedRole === "student" && <GraduationCap className="w-5 h-5 text-blue-500" />}
+                    {selectedRole === "teacher" && <School className={`w-5 h-5 ${isDarkMode ? 'text-white' : 'text-black'}`} />}
+                    {selectedRole === "institute" && <Building2 className="w-5 h-5 text-green-500" />}
+                    {!selectedRole && <div className="w-2 h-2 rounded-full bg-slate-400" />}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Identity</p>
+                    <p className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{selectedRole || "Select Role"}</p>
+                  </div>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+              </button>
+
+              <div className={`grid transition-all duration-200 ease-out ${isExpanded ? "grid-rows-[1fr] opacity-100 mb-2" : "grid-rows-[0fr] opacity-0"}`}>
+                <div className="overflow-hidden space-y-2">
+                  {roles.map((r) => (
+                    <button key={r.id} onClick={() => { setSelectedRole(r.id as Role); setIsExpanded(false); }} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border duration-150 ${selectedRole === r.id ? (isDarkMode ? "bg-white/20 border-white/40" : "bg-white/80 border-black shadow-md scale-[1.01]") : (isDarkMode ? "bg-white/5 border-white/5 hover:bg-white/10" : "bg-white/10 border-white/10 hover:bg-white/30")}`}>
+                      <div className="flex items-center gap-4">
+                        <r.icon className={`w-5 h-5 ${r.id === 'teacher' ? (isDarkMode ? 'text-white' : 'text-black') : r.color}`} />
+                        <div className="text-left">
+                          <p className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{r.title}</p>
+                          <p className="text-[10px] font-medium text-slate-500">{r.desc}</p>
+                        </div>
+                      </div>
+                      {selectedRole === r.id && <CheckCircle2 className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-black'}`} />}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          </motion.div>
 
-          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl ring-1 ring-black/5 p-8">
-            <div className="text-center">
-              <Link to="/" className="inline-block">
-                <span className="text-2xl font-extrabold text-gray-900 tracking-tight">a4ai</span>
-              </Link>
-              <h2 className="mt-4 text-3xl font-bold text-gray-900">Create your account</h2>
-              <p className="mt-2 text-sm text-gray-600">
-                Already have an account?{" "}
-                <Link to="/login" className="font-medium text-gray-800 underline-offset-4 hover:underline">
-                  Sign in
-                </Link>
-              </p>
-            </div>
+            <form onSubmit={onSubmit} className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Full Name</Label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input name="name" required value={formValues.name} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white/40 border-white/40'}`} placeholder="John Doe" />
+                </div>
+              </div>
+              
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input type="email" name="email" required value={formValues.email} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white/40 border-white/40'}`} placeholder="john@example.com" />
+                </div>
+              </div>
 
-            <div className="mt-8 space-y-6">
-              <Button
-                onClick={handleGoogleSignup}
-                disabled={isLoading}
-                variant="outline"
-                className="w-full flex items-center justify-center gap-2 rounded-lg border-gray-300 bg-white hover:bg-gray-100"
-              >
-                <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l-3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                </svg>
-                Sign up with Google
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Password</Label>
+                  <div className="relative">
+                    <Input type={showPw ? "text" : "password"} name="password" required value={formValues.password} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white/40 border-white/40'}`} />
+                    <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Confirm</Label>
+                  <div className="relative">
+                    <Input type={showConfirmPw ? "text" : "password"} name="confirmPassword" required value={formValues.confirmPassword} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white/40 border-white/40'}`} />
+                    <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 px-2 py-2">
+                <Checkbox id="acceptTerms" name="acceptTerms" checked={formValues.acceptTerms} onCheckedChange={(c) => setFormValues(s => ({ ...s, acceptTerms: Boolean(c) }))} />
+                <label htmlFor="acceptTerms" className={`text-[11px] font-medium leading-tight ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  I agree to the <Link to="#" className="font-bold underline">Terms</Link> & <Link to="#" className="font-bold underline">Privacy</Link>
+                </label>
+              </div>
+
+              <Button type="submit" disabled={isLoading} className={`w-full h-14 rounded-[1.5rem] font-bold shadow-lg transition-transform active:scale-[0.98] ${isDarkMode ? 'bg-white text-black hover:bg-slate-100' : 'bg-black text-white hover:bg-slate-900'}`}>
+                {isLoading ? "Creating..." : "🎁 Get FREE Coins!"}
               </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="bg-white px-2 text-gray-500">Or continue with</span>
-                </div>
-              </div>
-
-              {selectedRole && (
-                <div className="p-3 bg-gray-50 rounded-lg border">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Selected Role</p>
-                      <p className="text-sm text-gray-600 capitalize">{selectedRole}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRoleChange}
-                      disabled={isLoading}
-                    >
-                      Change Role
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <form className="space-y-5" onSubmit={handleSubmit}>
-                <div>
-                  <Label htmlFor="name">Full name</Label>
-                  <div className="relative mt-1">
-                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="name"
-                      name="name"
-                      type="text"
-                      autoComplete="name"
-                      required
-                      value={formValues.name}
-                      onChange={handleChange}
-                      disabled={isLoading}
-                      className="pl-10 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
-                      placeholder="John Doe"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="email">Email address</Label>
-                  <div className="relative mt-1">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      value={formValues.email}
-                      onChange={handleChange}
-                      disabled={isLoading}
-                      className="pl-10 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
-                      placeholder="you@example.com"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative mt-1">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="password"
-                      name="password"
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      required
-                      minLength={6}
-                      value={formValues.password}
-                      onChange={handleChange}
-                      disabled={isLoading}
-                      className="pl-10 pr-10 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
-                      placeholder="••••••••"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-400" />
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
-                </div>
-
-                <div>
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <div className="relative mt-1">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      required
-                      value={formValues.confirmPassword}
-                      onChange={handleChange}
-                      disabled={isLoading}
-                      className="pl-10 pr-10 bg-gray-50/80 border-gray-300 focus:bg-white focus:ring-2 focus:ring-blue-500/40"
-                      placeholder="••••••••"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-400" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {!selectedRole && (
-                  <div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      onClick={handleRoleChange}
-                      disabled={isLoading}
-                    >
-                      Select Your Role
-                    </Button>
-                    <p className="text-sm text-gray-500 mt-2 text-center">
-                      You need to select your role before signing up
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex items-center">
-                  <Checkbox
-                    id="acceptTerms"
-                    name="acceptTerms"
-                    checked={formValues.acceptTerms}
-                    onCheckedChange={(checked) =>
-                      setFormValues((s) => ({ ...s, acceptTerms: checked as boolean }))
-                    }
-                    disabled={isLoading}
-                  />
-                  <label htmlFor="acceptTerms" className="ml-2 text-sm text-gray-700">
-                    I agree to the{" "}
-                    <Link to="/terms" className="font-medium text-gray-900 underline-offset-4 hover:underline">
-                      Terms of Service
-                    </Link>{" "}
-                    and{" "}
-                    <Link to="/privacy" className="font-medium text-gray-900 underline-offset-4 hover:underline">
-                      Privacy Policy
-                    </Link>
-                  </label>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={isLoading || !formValues.acceptTerms || !selectedRole}
-                  className="w-full h-12 rounded-full text-white font-medium
-                             bg-gradient-to-r from-green-600 to-emerald-700 
-                             shadow-[0_8px_24px_rgba(34,197,94,0.3)]
-                             hover:from-green-700 hover:to-emerald-800
-                             active:from-green-800 active:to-emerald-900
-                             transition-all duration-300"
-                >
-                  {isLoading ? "Creating account..." : `🎁 Get FREE Coins!`}
-                </Button>
-              </form>
-            </div>
+            </form>
           </div>
         </div>
-      </div>
 
-      {/* Right: soft grey showcase panel */}
-      <div className="hidden lg:block relative flex-1">
-        <div className="absolute inset-0 bg-[#DFE4EF]" />
-        <div className="absolute inset-0 opacity-90 bg-[radial-gradient(1000px_600px_at_30%_20%,rgba(255,255,255,0.9),transparent_60%)]" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="max-w-md text-center p-10">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Join a4ai Today</h2>
-            <p className="text-lg text-gray-700 mb-6">
-              Create customized, high-quality test papers in minutes using the power of AI.
-            </p>
-            
-            {/* Bonus Features List */}
-            <div className="bg-white/80 rounded-2xl p-6 shadow-lg">
-              <h3 className="font-bold text-lg text-gray-900 mb-4">🎊 Signup Benefits:</h3>
-              <ul className="text-left space-y-3 text-gray-700">
-                <li className="flex items-center gap-3">
-                  <span className="text-green-600">✅</span>
-                  <span><strong>FREE coins</strong> based on your role</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-green-600">✅</span>
-                  <span><strong>Students:</strong> 100 coins to start with</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-green-600">✅</span>
-                  <span><strong>Teachers:</strong> 200 coins for premium features</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-green-600">✅</span>
-                  <span><strong>Institutes:</strong> 500 coins for team collaboration</span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-green-600">✅</span>
-                  <span>Use coins in <strong>contests & competitions</strong></span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-green-600">✅</span>
-                  <span>Create unlimited <strong>AI test papers</strong></span>
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="text-green-600">✅</span>
-                  <span>Win amazing <strong>prizes & rewards</strong></span>
-                </li>
-              </ul>
-            </div>
-          </div>
+        {/* CHARACTER SECTION */}
+        <div className={`hidden lg:flex items-center justify-center p-10 h-[600px] rounded-[3.5rem] transition-all duration-500 ${isDarkMode ? 'bg-slate-800/40' : 'bg-white/40 shadow-inner'}`}>
+          <RubberHoseShapes pointer={pointer} isDarkMode={isDarkMode} />
         </div>
       </div>
     </div>
   );
-};
+}
 
-export default SignupPage;
+function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: number }, isDarkMode: boolean }) {
+  const ref = useRef<SVGSVGElement>(null);
+  const getMove = (baseX: number, baseY: number, max = 5) => {
+    if (!ref.current) return { x: 0, y: 0 };
+    const r = ref.current.getBoundingClientRect();
+    const centerX = r.left + baseX * (r.width / 460);
+    const centerY = r.top + baseY * (r.height / 330);
+    const dx = pointer.x - centerX;
+    const dy = pointer.y - centerY;
+    const dist = Math.hypot(dx, dy) || 1;
+    return { x: (dx / dist) * max, y: (dy / dist) * max };
+  };
+
+  const EyeItem = ({ x, y, r=7, pr=3.5, w="#0F0F12", p="#FFF" }: any) => {
+    const m = getMove(x, y, 3);
+    return (
+      <g>
+        <circle cx={x} cy={y} r={r} fill={w} />
+        <circle cx={x + m.x} cy={y + m.y} r={pr} fill={p} />
+      </g>
+    );
+  };
+
+  return (
+    <svg ref={ref} viewBox="0 0 460 330" className="w-full h-full drop-shadow-2xl select-none">
+      <ellipse cx="230" cy="305" rx="170" ry="10" fill={isDarkMode ? "#1e293b" : "#cbd5e1"} opacity="0.6" />
+      <g>
+        <path d="M60 300 A110 110 0 0 1 280 300 L60 300 Z" fill="#FF7A2B" />
+        <g transform={`translate(${getMove(170, 270).x}, ${getMove(170, 270).y})`}>
+          <EyeItem x={155} y={270} /> <EyeItem x={185} y={270} />
+          <path d="M150 282 Q170 294 190 282" stroke="#0F0F12" strokeWidth="3" fill="none" strokeLinecap="round" />
+        </g>
+      </g>
+      <g>
+        <rect x="190" y="110" width="95" height="140" rx="18" fill="#7B48FF" />
+        <g transform={`translate(${getMove(240, 145).x}, ${getMove(240, 145).y})`}>
+          <EyeItem x={225} y={145} r={6.5} /> <EyeItem x={255} y={145} r={6.5} />
+          <path d="M225 160 Q240 168 255 160" stroke="#0F0F12" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        </g>
+      </g>
+      <g>
+        <rect x="280" y="200" width="75" height="90" rx="15" fill="#0F0F12" />
+        <g transform={`translate(${getMove(315, 240, 3).x}, ${getMove(315, 240, 3).y})`}>
+          <EyeItem x={300} y={240} r={7.5} w="#FFF" p="#0F0F12" /> <EyeItem x={330} y={240} r={7.5} w="#FFF" p="#0F0F12" />
+          <line x1="300" y1="255" x2="330" y2="255" stroke="#FFF" strokeWidth="3" strokeLinecap="round" />
+        </g>
+      </g>
+      <g>
+        <path d="M320 80 L390 140 L250 140 Z" fill="#4ECDC4" />
+        <g transform={`translate(${getMove(320, 120).x}, ${getMove(320, 120).y})`}>
+          <EyeItem x={310} y={120} r={5} pr={2} /> <EyeItem x={335} y={120} r={5} pr={2} />
+          <path d="M315 130 L323 135 L331 130" stroke="#0F0F12" strokeWidth="2" fill="none" />
+        </g>
+      </g>
+      <g>
+        <rect x="350" y="180" width="95" height="110" rx="28" fill="#F2C500" />
+        <g transform={`translate(${getMove(400, 220).x}, ${getMove(400, 220).y})`}>
+          <EyeItem x={385} y={225} r={7} /> <EyeItem x={415} y={225} r={7} />
+          <path d="M385 240 q14 10 28 0" stroke="#0F0F12" strokeWidth="3" fill="none" strokeLinecap="round" />
+        </g>
+      </g>
+      <g>
+        <circle cx="120" cy="110" r="28" fill="#FF6B6B" />
+        <g transform={`translate(${getMove(120, 110).x}, ${getMove(120, 110).y})`}>
+          <EyeItem x={110} y={105} r={5} pr={2} /> <EyeItem x={130} y={105} r={5} pr={2} />
+          <path d="M115 112 a5 5 0 0 0 10 0" fill="#0F0F12" />
+        </g>
+      </g>
+    </svg>
+  );
+}
