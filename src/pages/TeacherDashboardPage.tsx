@@ -11,7 +11,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
-import { useTheme } from "@/context/ThemeContext"; 
+import { useTheme } from "@/context/ThemeContext";
 
 const ScratchCard = lazy(() => import("@/components/ScratchCard"));
 
@@ -30,7 +30,7 @@ import {
   BookOpen,
   Award,
   TrendingUp,
-  MessageCircle, 
+  MessageCircle,
   User,
   Moon,
   Sun,
@@ -71,7 +71,7 @@ const translations = {
     welcome: "Welcome back",
     courseProgress: "Your average course progress is",
     levelUp: "Level up your learning to improve your student rank!",
-    continueLearning: "Continue Learning",
+    takeQuiz: "Take quiz", // CHANGED: specific label for the button
     learningActivity: "Learning Activity",
     totalTime: "Total Time",
     courses: "Courses",
@@ -79,7 +79,7 @@ const translations = {
     quickActions: "Quick Actions",
     joinContests: "Join Contests",
     leaderboard: "Leaderboard",
-    practice: "Practice", 
+    practice: "Practice",
     upcomingAssignments: "Upcoming Assignments",
     allTests: "All tests",
     testName: "Test name",
@@ -113,7 +113,7 @@ const translations = {
     welcome: "वापसी पर स्वागत है",
     courseProgress: "आपकी औसत पाठ्यक्रम प्रगति है",
     levelUp: "अपनी रैंक सुधारने के लिए पढ़ाई का स्तर बढ़ाएं!",
-    continueLearning: "पढ़ना जारी रखें",
+    takeQuiz: "क्विज़ लें", // CHANGED: Hindi translation
     learningActivity: "सीखने की गतिविधि",
     totalTime: "कुल समय",
     courses: "पाठ्यक्रम",
@@ -121,7 +121,7 @@ const translations = {
     quickActions: "त्वरित कार्य",
     joinContests: "प्रतियोगिताओं में शामिल हों",
     leaderboard: "लीडरबोर्ड",
-    practice: "अभ्यास", 
+    practice: "अभ्यास",
     upcomingAssignments: "आगामी कार्य",
     allTests: "सभी परीक्षण",
     testName: "परीक्षण का नाम",
@@ -226,26 +226,26 @@ type Message = {
 // --- API CONFIGURATION ---
 const AI_CONFIG = {
     // API KEY from .env.local
-    apiKey: import.meta.env.VITE_GROQ_API_KEY, 
+    apiKey: import.meta.env.VITE_GROQ_API_KEY,
     // New Model to fix decommissioning error
-    model: "llama-3.3-70b-versatile", 
+    model: "llama-3.3-70b-versatile",
 };
 
 export default function StudentDashboardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { profile, loading } = useUserProfile();
-  const { theme, toggleTheme } = useTheme(); 
-  
+  const { theme, toggleTheme } = useTheme();
+
   const [showScratchCard, setShowScratchCard] = useState(false);
-  const [lang, setLang] = useState<'en' | 'hi'>('en'); 
+  const [lang, setLang] = useState<'en' | 'hi'>('en');
   const t = translations[lang];
 
   // Header Interaction States
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  
+
   // --- CHATBOT STATE & LOGIC ---
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
@@ -283,32 +283,32 @@ export default function StudentDashboardPage() {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                model: AI_CONFIG.model, 
+                model: AI_CONFIG.model,
                 messages: [
                     // --- DETAILED AI PERSONA ---
-                    { 
-                        role: "system", 
+                    {
+                        role: "system",
                         content: `You are a4ai (Artificial Intelligence for All India), a practical AI tool designed specifically for Indian education.
-                        
+
                         Your Core Identity & Mission:
                         - You are not just another AI wrapper; you are built to solve real classroom challenges.
                         - You deeply understand Indian curriculum patterns (CBSE, ICSE, State Boards).
                         - You support multilingual content needs appropriate for India.
                         - Website: https://a4ai.in
-                        
+
                         Your Primary Function (For Teachers):
                         - Teachers spend hours creating tests. You help them do it in minutes.
                         - You act as an "AI Test Generator".
                         - Process: Users upload textbooks/notes (PDF/Text) -> You generate relevant questions -> They download ready-to-use tests.
                         - Future feature: Tracking student performance.
-                        
+
                         Current Status:
                         - Actively being tested with real educators.
-                        
+
                         Instructions:
                         - Keep answers helpful, encouraging, and concise.
                         - If asked about your capabilities, mention the Test Generator and Indian curriculum focus.
-                        - Be polite and professional.` 
+                        - Be polite and professional.`
                     },
                     ...chatMessages.filter(m => m.role !== 'system'), // Send history
                     userMsg
@@ -319,7 +319,7 @@ export default function StudentDashboardPage() {
         });
 
         const data = await response.json();
-        
+
         if (data.error) {
            console.error("API Error Detail:", data.error);
            throw new Error(data.error.message);
@@ -415,12 +415,12 @@ export default function StudentDashboardPage() {
             <h4 className="text-white font-bold mb-1">{t.getPremium}</h4>
             <p className="text-white/80 text-xs mb-4">{t.unlockFeatures}</p>
             {/* Upgrade Button Action */}
-            <GlossyButton 
-                label={t.upgradePlan} 
-                variant="dark" 
-                fullWidth 
-                small 
-                onClick={() => navigate('/dashboard/subscription')} 
+            <GlossyButton
+                label={t.upgradePlan}
+                variant="dark"
+                fullWidth
+                small
+                onClick={() => navigate('/dashboard/subscription')}
             />
           </div>
         </div>
@@ -446,7 +446,13 @@ export default function StudentDashboardPage() {
                   {t.courseProgress} <span className="text-orange-600">73%</span>.
                 </h2>
                 <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 font-medium">{t.levelUp}</p>
-                <GlossyButton label={t.continueLearning} variant="orange" icon={Rocket} />
+                {/* MODIFIED BUTTON: Take Quiz */}
+                <GlossyButton
+                    label={t.takeQuiz}
+                    variant="orange"
+                    icon={Rocket}
+                    onClick={() => navigate('/quiz')}
+                />
               </div>
               <div className="absolute right-0 bottom-0 h-full w-[30%] bg-[url('https://illustrations.popsy.co/amber/student-going-to-school.svg')] bg-contain bg-bottom bg-no-repeat opacity-10 grayscale dark:opacity-20"></div>
             </div>
@@ -531,12 +537,12 @@ export default function StudentDashboardPage() {
 
           {/* RIGHT COLUMN (4/12) */}
           <div className="col-span-12 xl:col-span-4 flex flex-col gap-8">
-            
+
             {/* --- NEW HEADER ACTION BAR --- */}
             <div className="flex justify-end gap-4 items-center h-[50px] relative">
-              
+
               {/* Expanding Search Bar */}
-              <motion.div 
+              <motion.div
                 className={`flex items-center rounded-xl shadow-sm overflow-hidden ${theme === 'dark' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-700'}`}
                 initial={{ width: "40px" }}
                 whileHover={{ width: "200px" }}
@@ -546,9 +552,9 @@ export default function StudentDashboardPage() {
                 <button className={`p-2.5 flex-shrink-0 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
                   <Search size={18} />
                 </button>
-                <input 
-                  type="text" 
-                  placeholder={t.searchPlaceholder} 
+                <input
+                  type="text"
+                  placeholder={t.searchPlaceholder}
                   className={`bg-transparent border-none outline-none text-sm w-full pr-3 placeholder-slate-400 h-full ${theme === 'dark' ? 'text-white' : 'text-slate-700'}`}
                   onFocus={() => setIsSearchFocused(true)}
                   onBlur={() => setIsSearchFocused(false)}
@@ -556,12 +562,12 @@ export default function StudentDashboardPage() {
               </motion.div>
 
               {/* Animated Notification Bell (Opens on Hover) */}
-              <div 
+              <div
                   className="relative z-40"
                   onMouseEnter={() => setIsNotificationsOpen(true)}
                   onMouseLeave={() => setIsNotificationsOpen(false)}
               >
-                  <motion.button 
+                  <motion.button
                     whileHover={{ rotate: [0, -20, 20, -10, 10, 0], scale: 1.1 }}
                     className={`p-2.5 rounded-xl shadow-sm relative ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-600'}`}
                   >
@@ -594,12 +600,12 @@ export default function StudentDashboardPage() {
               </div>
 
               {/* Profile Dropdown */}
-              <div 
+              <div
                 className="relative z-50"
                 onMouseEnter={() => setIsProfileOpen(true)}
                 onMouseLeave={() => setIsProfileOpen(false)}
               >
-                <motion.div 
+                <motion.div
                     whileHover={{ scale: 1.05 }}
                     className={`flex items-center gap-2 cursor-pointer p-1.5 pr-4 rounded-full border shadow-sm ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-200/80 border-white/40'}`}
                 >
@@ -626,12 +632,12 @@ export default function StudentDashboardPage() {
                                 <p className={`text-sm font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{profile?.full_name || "Guest Student"}</p>
                                 <p className="text-xs text-slate-500 truncate">{profile?.email || "student@example.com"}</p>
                             </div>
-                            
+
                             <div className="space-y-1">
                                 <Link to="/dashboard/settings" className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer text-sm transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}>
                                     <User size={16} /> {t.profile}
                                 </Link>
-                                
+
                                 {/* Dark Mode Toggle */}
                                 <div onClick={toggleTheme} className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer text-sm transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}>
                                     {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
@@ -646,7 +652,7 @@ export default function StudentDashboardPage() {
                                 <Link to="/dashboard/settings" className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer text-sm transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}>
                                     <Settings size={16} /> {t.settings}
                                 </Link>
-                                <div 
+                                <div
                                     onClick={() => supabase.auth.signOut().then(() => navigate('/login'))}
                                     className="flex items-center gap-3 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-xl cursor-pointer text-sm transition-colors mt-2 border-t border-slate-100 dark:border-slate-700"
                                 >
@@ -691,9 +697,9 @@ export default function StudentDashboardPage() {
               <h3 className={`font-bold mb-6 text-xs uppercase tracking-widest opacity-60 ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{t.upcomingClasses}</h3>
               <div className="space-y-4">
                 {upcomingEvents.map((evt) => (
-                  <motion.div 
+                  <motion.div
                     whileHover={{ scale: 1.02 }}
-                    key={evt.id} 
+                    key={evt.id}
                     className={`flex items-center gap-4 p-4 rounded-2xl border transition-all cursor-pointer ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700 hover:bg-slate-800' : 'bg-white/40 border-white/60 hover:bg-white'}`}
                   >
                     <div className="bg-slate-200 dark:bg-slate-700 px-3 py-1 rounded-lg text-[10px] font-bold text-slate-700 dark:text-slate-300">{evt.time}</div>
@@ -709,12 +715,12 @@ export default function StudentDashboardPage() {
         </div>
 
         {/* --- CHATBOT FAB (Bloody Red & Interactive with Groq) --- */}
-        <div 
+        <div
             className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-2"
         >
              <AnimatePresence>
                 {isChatOpen && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, y: 20, scale: 0.8 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.8 }}
@@ -724,24 +730,24 @@ export default function StudentDashboardPage() {
                             <span className="font-bold text-sm">a4ai Assistant</span>
                             <X size={16} className="cursor-pointer hover:scale-110" onClick={() => setIsChatOpen(false)} />
                         </div>
-                        
+
                         <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50 dark:bg-slate-900/50">
                             <div className={`p-3 rounded-lg rounded-tl-none max-w-[85%] text-sm ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700 shadow-sm'}`}>
                                 {t.chatHello}
                             </div>
-                            
+
                             {chatMessages.map((msg, idx) => (
                                 <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`p-3 rounded-lg max-w-[85%] text-sm ${
-                                        msg.role === 'user' 
-                                            ? 'bg-red-600 text-white rounded-tr-none' 
+                                        msg.role === 'user'
+                                            ? 'bg-red-600 text-white rounded-tr-none'
                                             : `${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700 shadow-sm'} rounded-tl-none`
                                     }`}>
-                                        {msg.content}
+                                            {msg.content}
                                     </div>
                                 </div>
                             ))}
-                            
+
                             {isChatLoading && (
                                 <div className="flex justify-start">
                                     <div className={`p-3 rounded-lg rounded-tl-none bg-slate-200 dark:bg-slate-800 flex items-center gap-2`}>
@@ -755,15 +761,15 @@ export default function StudentDashboardPage() {
 
                         <div className={`p-3 border-t shrink-0 ${theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'}`}>
                             <div className="relative flex items-center">
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     value={inputMessage}
                                     onChange={(e) => setInputMessage(e.target.value)}
                                     onKeyDown={handleKeyDown}
                                     placeholder={t.typeMessage}
-                                    className={`w-full text-sm p-3 pr-10 rounded-xl border focus:outline-none focus:ring-2 focus:ring-red-500/50 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-100 border-slate-200 text-slate-800'}`} 
+                                    className={`w-full text-sm p-3 pr-10 rounded-xl border focus:outline-none focus:ring-2 focus:ring-red-500/50 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-100 border-slate-200 text-slate-800'}`}
                                 />
-                                <button 
+                                <button
                                     onClick={handleSendMessage}
                                     disabled={isChatLoading || !inputMessage.trim()}
                                     className="absolute right-2 p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -775,7 +781,7 @@ export default function StudentDashboardPage() {
                     </motion.div>
                 )}
              </AnimatePresence>
-             
+
             <motion.button
                 onClick={() => setIsChatOpen(!isChatOpen)}
                 whileHover={{ scale: 1.1, rotate: 5 }}
