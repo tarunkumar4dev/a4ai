@@ -61,6 +61,9 @@ const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage"));
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
+/* ---------- NEW QUIZ PAGE ---------- */
+const QuizPage = lazy(() => import("./pages/Quiz")); // <--- ADDED THIS
+
 /* ---------- Lazy PYQ Practice Pages ---------- */
 const PracticeZonePage = lazy(() => import("./pages/PracticeZonePage"));
 const PYQPracticeSessionPage = lazy(() => import("./pages/PYQPracticeSessionPage"));
@@ -276,6 +279,11 @@ const App = () => {
                       <Route path="/dashboard/teacher" element={<RoleAuthGate allowedRoles={["teacher"]}><TeacherDashboardPage /></RoleAuthGate>} />
                       <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} />
                       <Route path="/dashboard/analytics" element={<PrivateRoute><AnalyticsPage /></PrivateRoute>} />
+                      
+                      {/* === ADDED QUIZ ROUTE HERE === */}
+                      <Route path="/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} /> 
+                      {/* Alternatively, if you want it under dashboard: */}
+                      {/* <Route path="/dashboard/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} /> */}
 
                       {/* Practice & PYQ Routes */}
                       <Route path="/practice/zone" element={<PrivateRoute><PracticeZonePage /></PrivateRoute>} />
