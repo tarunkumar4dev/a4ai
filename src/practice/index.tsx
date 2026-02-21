@@ -115,7 +115,7 @@ const PracticeSelectionPage = () => {
 
   const getChapterName = (chapterNumber: number, subject: string) => {
     if (subject === 'science') {
-      const names = ["Chemical Reactions", "Acids, Bases & Salts", "Metals & Non-Metals", "Carbon & Its Compounds", "Life Processes", "Control & Coordination", "Reproduction", "Heredity", "Light", "Human Eye"];
+      const names = ["Chemical Reactions", "Acids, Bases & Salts", "Metals & Non-Metals", "Carbon & Its Compounds", "Life Processes", "Control & Coordination", "Reproduction", "Heredity", "Light", "Human Eye"," Electricity","Magnetic Effects of Electric Current","Our Environment"];
       return names[chapterNumber - 1] || `Chapter ${chapterNumber}`;
     } else if (subject === 'maths') {
       const names = ["Real Numbers", "Polynomials", "Linear Equations", "Quadratic Equations", "Arithmetic Progressions"];
