@@ -1,6 +1,6 @@
 import React, { useRef, memo, useCallback, forwardRef } from "react";
 import { useFieldArray, useFormContext, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
-import { GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen } from "lucide-react";
+import { GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen, AlignLeft, ListChecks, ArrowLeftRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ==================== TYPES ====================
@@ -42,7 +42,6 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
     "Control & Coordination", "How do Organisms Reproduce", "Heredity & Evolution",
     "Light - Reflection & Refraction", "Human Eye & Colorful World", "Electricity",
     "Magnetic Effects of Electric Current", "Our Environment"
-    
   ],
   "Physics": [
     "Electricity", "Magnetic Effects of Electric Current", "Light - Reflection & Refraction",
@@ -65,6 +64,16 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
     "Some Applications of Trigonometry", "Circles", "Constructions", "Areas Related to Circles",
     "Surface Areas & Volumes", "Statistics", "Probability"
   ],
+  "Maths": [
+    "Real Numbers", "Polynomials", "Pair of Linear Equations", "Quadratic Equations",
+    "Arithmetic Progressions", "Triangles", "Coordinate Geometry", "Introduction to Trigonometry",
+    "Some Applications of Trigonometry", "Circles", "Constructions", "Areas Related to Circles",
+    "Surface Areas & Volumes", "Statistics", "Probability"
+  ],
+  "Political Science": [
+    "Power Sharing", "Federalism", "Gender, Religion and Caste",
+    "Political Parties", "Outcomes of Democracy"
+  ],
   "Social Science": [
     "The Rise of Nationalism in Europe", "Nationalism in India", "The Making of a Global World",
     "The Age of Industrialisation", "Print Culture & Modern World", "Resources & Development",
@@ -73,7 +82,21 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
     "Democracy & Diversity", "Gender, Religion & Caste", "Popular Struggles & Movements",
     "Political Parties", "Outcomes of Democracy", "Development", "Sectors of Indian Economy",
     "Money & Credit", "Globalisation & Indian Economy", "Consumer Rights"
-  ]
+  ],
+  "Accountancy": [
+    "Accounting for Partnership Basic Concepts", "Dissolution of Partnership Firm",
+    "Reconstitution of a Partnership Firm - Admission of a Partner",
+    "Reconstitution of a Partnership Firm - Retirement of a Partner"
+  ],
+  "Economics": [],
+  "History": [],
+  "Geography": [],
+  "English": [],
+  "Mathematics": [],
+  "Business Studies": [],
+  "Psychology": [],
+  "Sociology": [],
+  "Physical Education": []
 };
 
 const COMMON_SUBTOPICS: Record<string, string[]> = {
@@ -90,9 +113,21 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Control & Coordination": ["Nervous system", "Hormonal coordination", "Endocrine glands"],
   "How do Organisms Reproduce": ["Asexual reproduction", "Sexual reproduction", "Reproductive health"],
   "Heredity & Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
-  "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution","Renewable and non-renewable sources", "Solar, wind, biogas, nuclear energy","Conservation", "Forest and wildlife", "Water resources", "Sustainable development"],
-  
+  "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution", "Renewable and non-renewable sources", "Solar, wind, biogas, nuclear energy", "Conservation", "Forest and wildlife", "Water resources", "Sustainable development"],
+  "Power Sharing": ["Belgium model", "Sri Lanka model", "Forms of power sharing"],
+  "Federalism": ["Union list", "State list", "Concurrent list", "Decentralisation", "Panchayati Raj"],
+  "Gender, Religion and Caste": ["Gender division", "Religion and politics", "Caste and politics"],
+  "Political Parties": ["Functions of parties", "National parties", "State parties"],
+  "Outcomes of Democracy": ["Accountability", "Economic growth", "Inequality", "Social diversity"],
 };
+
+// ==================== QUESTION TYPE CONFIG (NEW) ====================
+const QUESTION_FORMATS = [
+  { value: "MCQ",              label: "MCQ",   icon: ListChecks,     color: "bg-gray-800 text-white" },
+  { value: "Short Answer",     label: "Short",  icon: AlignLeft,      color: "bg-blue-600 text-white" },
+  { value: "Long Answer",      label: "Long",   icon: FileText,       color: "bg-purple-600 text-white" },
+  { value: "Assertion-Reason", label: "A&R",    icon: ArrowLeftRight, color: "bg-amber-600 text-white" },
+];
 
 // ==================== UUID GENERATOR ====================
 const generateUUID = (): string => {
@@ -113,12 +148,9 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    
-    // FIX: Reset input value to allow same file re-upload
     if (fileRef.current) {
       fileRef.current.value = '';
     }
-    
     if (selectedFile) {
       setValue(`simpleData.${index}.refFile`, selectedFile);
     } else {
@@ -139,22 +171,22 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
 
   return (
     <div className="relative">
-      <input 
-        type="file" 
-        ref={fileRef} 
-        className="hidden" 
+      <input
+        type="file"
+        ref={fileRef}
+        className="hidden"
         onChange={handleFileChange}
         accept=".pdf,.doc,.docx,.txt,.md"
         aria-label={`Upload reference file for row ${index + 1}`}
       />
-      <motion.button 
-        whileHover={{ scale: 1.05 }} 
+      <motion.button
+        whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        type="button" 
+        type="button"
         onClick={handleButtonClick}
         className={`p-2.5 rounded-xl transition-all border shadow-sm ${
-          file 
-            ? 'bg-gray-800 text-white border-gray-800 hover:bg-gray-900' 
+          file
+            ? 'bg-gray-800 text-white border-gray-800 hover:bg-gray-900'
             : 'bg-white text-gray-400 border-[#E5E7EB] hover:border-gray-400 hover:text-gray-600'
         }`}
         title={file ? `Reference: ${file.name}` : "Upload Reference"}
@@ -169,7 +201,7 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
           )}
         </div>
       </motion.button>
-      
+
       {file && (
         <button
           type="button"
@@ -186,45 +218,79 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
 
 RefUploadButton.displayName = 'RefUploadButton';
 
+// ==================== QUESTION TYPE SELECTOR (NEW) ====================
+const FormatSelector = memo(({ index }: { index: number }) => {
+  const { watch, setValue } = useFormContext();
+  const currentFormat = watch(`simpleData.${index}.format`) || "PDF";
+
+  // Map old "PDF"/"DOC" to "MCQ" for display
+  const activeValue = (currentFormat === "PDF" || currentFormat === "DOC") ? "MCQ" : currentFormat;
+
+  return (
+    <div className="flex gap-1">
+      {QUESTION_FORMATS.map((fmt) => {
+        const isActive = activeValue === fmt.value;
+        const Icon = fmt.icon;
+        return (
+          <button
+            key={fmt.value}
+            type="button"
+            onClick={() => setValue(`simpleData.${index}.format`, fmt.value)}
+            className={`px-2 py-1.5 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all border ${
+              isActive
+                ? `${fmt.color} border-transparent shadow-sm`
+                : 'bg-white text-gray-400 border-[#E5E7EB] hover:border-gray-400 hover:text-gray-600'
+            }`}
+            title={fmt.value}
+          >
+            <Icon size={10} /> {fmt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+});
+FormatSelector.displayName = 'FormatSelector';
+
 // ==================== FORWARD REF TABLE ROW FOR ANIMATIONS ====================
-const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({ 
-  index, 
-  field, 
-  availableTopics, 
-  remove 
+const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
+  index,
+  field,
+  availableTopics,
+  remove
 }, ref) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
-  const subOptions = COMMON_SUBTOPICS[currentTopic] || 
+  const subOptions = COMMON_SUBTOPICS[currentTopic] ||
     (currentTopic?.includes("Electricity") ? COMMON_SUBTOPICS["Electricity"] : []) ||
     (currentTopic?.includes("Carbon") ? COMMON_SUBTOPICS["Carbon & Its Compounds"] : []) ||
     [];
-  
+
   const rowNumber = index + 1;
 
   return (
-    <motion.tr 
+    <motion.tr
       ref={ref}
-      initial={{ opacity: 0, x: -20 }} 
-      animate={{ opacity: 1, x: 0 }} 
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20, transition: { duration: 0.2 } }}
       transition={{ type: "spring", stiffness: 120 }}
       className="group hover:bg-[#F9FAFB] transition-colors"
-      layout // FIX: Enables proper layout animations
+      layout
     >
       <td className="py-3 px-6 text-center">
-        <GripVertical 
-          size={16} 
-          className="text-gray-300 cursor-grab hover:text-gray-600 transition-colors" 
+        <GripVertical
+          size={16}
+          className="text-gray-300 cursor-grab hover:text-gray-600 transition-colors"
           aria-label={`Drag to reorder row ${rowNumber}`}
         />
       </td>
-      
+
       <td className="py-3 px-4">
         <div className="flex flex-col gap-2">
-          <select 
-            {...register(`simpleData.${index}.topic`, { 
-              required: "Topic is required" 
+          <select
+            {...register(`simpleData.${index}.topic`, {
+              required: "Topic is required"
             })}
             className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600"
             aria-label={`Select topic for row ${rowNumber}`}
@@ -234,10 +300,10 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
               <option key={topic} value={topic}>{topic}</option>
             ))}
           </select>
-          
+
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-[#E5E7EB] group-hover:bg-gray-400 transition-colors" aria-hidden="true" />
-            <select 
+            <select
               {...register(`simpleData.${index}.subtopic`)}
               className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none cursor-pointer disabled:opacity-50 hover:text-gray-700 appearance-none"
               disabled={!currentTopic}
@@ -251,24 +317,24 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
           </div>
         </div>
       </td>
-      
+
       <td className="py-3 px-4 text-center">
-        <input 
-          type="number" 
-          {...register(`simpleData.${index}.quantity`, { 
+        <input
+          type="number"
+          {...register(`simpleData.${index}.quantity`, {
             valueAsNumber: true,
             min: { value: 1, message: "Minimum 1 question" },
             max: { value: 50, message: "Maximum 50 questions" },
             required: "Quantity is required"
           })}
-          className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-sm font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 transition-all outline-none" 
+          className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-sm font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 transition-all outline-none"
           aria-label={`Number of questions for row ${rowNumber}`}
         />
       </td>
-      
+
       <td className="py-3 px-4">
-        <select 
-          {...register(`simpleData.${index}.difficulty`)} 
+        <select
+          {...register(`simpleData.${index}.difficulty`)}
           className="w-full bg-white border border-[#E5E7EB] text-xs font-bold text-gray-600 rounded-xl py-2 px-3 outline-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm appearance-none"
           aria-label={`Select difficulty for row ${rowNumber}`}
         >
@@ -278,25 +344,22 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
           <option value="Mixed">Mixed</option>
         </select>
       </td>
-      
+
+      {/* ===== CHANGED: Question Type selector instead of static PDF badge ===== */}
       <td className="py-3 px-4">
-        <div className="inline-flex bg-[#F3F4F6] p-1 rounded-xl" role="presentation">
-          <div className="px-3 py-1.5 text-[10px] font-bold bg-gray-800 shadow-sm rounded-lg text-white flex items-center gap-1.5 border border-gray-800">
-            <FileText size={10} aria-hidden="true" /> PDF
-          </div>
-        </div>
+        <FormatSelector index={index} />
       </td>
-      
+
       <td className="py-3 px-4 text-center">
         <RefUploadButton index={index} setValue={setValue} watch={watch} />
       </td>
-      
+
       <td className="py-3 px-4 text-center">
-        <motion.button 
-          whileHover={{ scale: 1.1 }} 
-          whileTap={{ scale: 0.9 }} 
-          type="button" 
-          onClick={() => remove(index)} 
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          type="button"
+          onClick={() => remove(index)}
           className="p-2 rounded-full bg-white border border-transparent hover:border-red-100 hover:bg-red-50 text-gray-300 hover:text-red-500 transition-all shadow-sm"
           aria-label={`Remove row ${rowNumber}`}
         >
@@ -321,6 +384,7 @@ const SimpleModeView: React.FC = () => {
   const useNCERT = watch("useNCERT");
   const ncertChapters = watch("ncertChapters") || [];
 
+  // ===== ORIGINAL LOGIC — backend chapters first, then hardcoded fallback =====
   const getTopicsForSubject = useCallback((): string[] => {
     if (useNCERT && ncertChapters.length > 0) {
       return ncertChapters;
@@ -341,9 +405,9 @@ const SimpleModeView: React.FC = () => {
   }, [append]);
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }} 
-      animate={{ opacity: 1, y: 0 }} 
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className="bg-white rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50 backdrop-blur-sm p-2"
     >
@@ -362,7 +426,7 @@ const SimpleModeView: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[900px]">
           <caption className="sr-only">Test configuration table with chapters and questions</caption>
@@ -372,7 +436,8 @@ const SimpleModeView: React.FC = () => {
               <th scope="col" className="py-4 px-4">Chapter & Topics</th>
               <th scope="col" className="py-4 px-4 w-28 text-center">Quantity</th>
               <th scope="col" className="py-4 px-4 w-40">Difficulty</th>
-              <th scope="col" className="py-4 px-4 w-28">Format</th>
+              {/* ===== CHANGED: "Format" → "Question Type" ===== */}
+              <th scope="col" className="py-4 px-4 w-52">Question Type</th>
               <th scope="col" className="py-4 px-4 w-20 text-center">Reference</th>
               <th scope="col" className="py-4 px-4 w-12 text-center" aria-label="Actions"></th>
             </tr>
@@ -392,16 +457,16 @@ const SimpleModeView: React.FC = () => {
           </tbody>
         </table>
       </div>
-      
-      <motion.button 
-        whileHover={{ backgroundColor: "#F3F4F6" }} 
+
+      <motion.button
+        whileHover={{ backgroundColor: "#F3F4F6" }}
         whileTap={{ scale: 0.99 }}
-        type="button" 
+        type="button"
         onClick={handleAddRow}
         className="w-full py-5 mt-2 bg-[#F9FAFB] text-sm font-bold text-gray-400 hover:text-gray-600 rounded-b-[22px] flex items-center justify-center gap-2 transition-all group"
         aria-label="Add new chapter section"
       >
-        <PlusCircle size={18} className="group-hover:scale-110 transition-transform" aria-hidden="true" /> 
+        <PlusCircle size={18} className="group-hover:scale-110 transition-transform" aria-hidden="true" />
         Add Chapter Section
       </motion.button>
     </motion.div>
@@ -412,7 +477,7 @@ const SimpleModeView: React.FC = () => {
 export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
   if (activeMode !== "Simple") {
     return (
-      <div 
+      <div
         className="p-16 text-center text-gray-400 font-bold bg-white rounded-[24px] border border-white shadow-sm"
         aria-live="polite"
       >
@@ -420,6 +485,6 @@ export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
       </div>
     );
   }
-  
+
   return <SimpleModeView />;
 };

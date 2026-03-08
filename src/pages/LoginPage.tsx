@@ -24,6 +24,30 @@ import {
 
 type Role = "student" | "teacher" | "institute";
 
+// Helper function to format phone number for India
+const formatPhoneForIndia = (phone: string): string => {
+  // Remove all non-digits
+  const cleaned = phone.replace(/\D/g, '');
+  
+  // If it's a 10-digit Indian number, add +91
+  if (cleaned.length === 10) {
+    return `+91${cleaned}`;
+  }
+  
+  // If it's 12 digits and starts with 91, add +
+  if (cleaned.length === 12 && cleaned.startsWith('91')) {
+    return `+${cleaned}`;
+  }
+  
+  // If it already has +, return as is
+  if (phone.startsWith('+')) {
+    return phone;
+  }
+  
+  // Default: return as is (might already be formatted)
+  return phone;
+};
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,9 +106,24 @@ export default function LoginPage() {
       toast({ title: "Error", description: "Enter phone number", variant: "destructive" });
       return;
     }
-    setOtpSent(true);
-    setTimer(60);
-    toast({ title: "OTP Sent", description: "Check your mobile device" });
+    
+    // Format phone number for India
+    const formattedPhone = formatPhoneForIndia(formValues.phone);
+    
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: formattedPhone,
+      });
+      if (error) throw error;
+      setOtpSent(true);
+      setTimer(60);
+      toast({ title: "OTP Sent", description: "Check your mobile" });
+    } catch (error: any) {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleLogin = async () => {
@@ -123,10 +162,65 @@ export default function LoginPage() {
           password: formValues.password,
         });
         if (error) throw error;
+        
+        // Wait a bit for the session to be fully established
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Get the current session to ensure we have the latest user data
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          // Get role from user metadata or fallback to selectedRole
+          const role = session.user.user_metadata?.role || selectedRole;
+          
+          // Role-based redirect
+          if (role === "teacher") {
+            navigate("/teacher/dashboard", { replace: true });
+          } else if (role === "institute") {
+            navigate("/institute/dashboard", { replace: true });
+          } else {
+            navigate("/student/dashboard", { replace: true });
+          }
+        } else {
+          // Fallback to selected role if no session
+          if (selectedRole === "teacher") {
+            navigate("/teacher/dashboard", { replace: true });
+          } else if (selectedRole === "institute") {
+            navigate("/institute/dashboard", { replace: true });
+          } else {
+            navigate("/student/dashboard", { replace: true });
+          }
+        }
+      } else {
+        // Format phone number for India
+        const formattedPhone = formatPhoneForIndia(formValues.phone);
+        
+        // Phone login with OTP verification
+        const { error } = await supabase.auth.verifyOtp({
+          phone: formattedPhone,
+          token: otp.join(""),
+          type: "sms",
+        });
+        if (error) throw error;
+
+        // Wait a bit for the session to be fully established
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Role-based redirect
+        if (selectedRole === "teacher") {
+          navigate("/teacher/dashboard", { replace: true });
+        } else if (selectedRole === "institute") {
+          navigate("/institute/dashboard", { replace: true });
+        } else {
+          navigate("/student/dashboard", { replace: true });
+        }
       }
-      navigate("/dashboard", { replace: true });
     } catch (error: any) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
+      toast({ 
+        title: "Login failed", 
+        description: error.message, 
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -274,7 +368,7 @@ export default function LoginPage() {
                       <Button 
                         type="button"
                         onClick={sendOtp}
-                        disabled={timer > 0}
+                        disabled={timer > 0 || isLoading}
                         className={`h-11 rounded-xl px-4 text-xs font-bold transition-all ${
                           isDarkMode ? 'bg-white text-black hover:bg-slate-200' : 'bg-black text-white hover:bg-slate-900'
                         }`}
@@ -282,6 +376,7 @@ export default function LoginPage() {
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
                       </Button>
                     </div>
+                    <p className="text-xs text-slate-500 mt-1">Enter 10-digit mobile number (e.g., 9310200167)</p>
                   </div>
                   {otpSent && (
                     <div className="space-y-1 animate-in zoom-in-95 duration-200">
