@@ -369,9 +369,9 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     try {
       await downloadFile(activeQuestions, {
         examTitle: result.examTitle,
-        board: "CBSE",
-        classGrade: "Class 10",
-        subject: "Science",
+        board: result.meta?.board || "CBSE",
+        classGrade: result.meta?.classGrade || "Class 10",
+        subject: result.meta?.subject || "Science",
       }, format, mode, logoBase64);
     } catch (err) {
       console.error("Export failed:", err);

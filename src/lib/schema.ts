@@ -16,13 +16,14 @@ export const bloomEnum = z.enum(["Remember", "Understand", "Apply", "Analyze", "
 
 // 1. Simple Mode Row (matches TestRowEditor)
 export const simpleRowSchema = z.object({
-  id: z.string(),
-  topic: z.string().min(1, "Topic is required"),
-  subtopic: z.string().optional(),
-  quantity: z.number().min(1).max(50).default(5),
-  difficulty: difficultyEnum.default("Medium"),
-  format: z.string().default("MCQ"),
-  refFile: z.any().optional(),
+    id: z.string(),
+    topic: z.string().min(1, "Topic is required"),
+    subtopic: z.string().optional(),
+    quantity: z.number().min(1).max(50).default(5),
+    marks: z.number().min(1).max(10).default(1),    // ← ADD THIS LINE
+    difficulty: difficultyEnum.default("Medium"),
+    format: z.string().default("MCQ"),
+    refFile: z.any().optional(),
 });
 
 // 2. Blueprint Mode Row
@@ -37,7 +38,7 @@ export const blueprintItemSchema = z.object({
 // 3. Main Form Schema
 export const formSchema = z.object({
   // Metadata
-  examTitle: z.string().default("Untitled Test"),
+  examTitle: z.string().min(3, "Exam title is required"),
   board: z.string().min(1, "Board is required"),
   classGrade: z.string().min(1, "Class is required"),
   subject: z.string().min(1, "Subject is required"),

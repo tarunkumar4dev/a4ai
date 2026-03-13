@@ -9,8 +9,9 @@ interface SimpleRowData {
   topic: string;
   subtopic?: string;
   quantity: number;
+  marks: number;
   difficulty: "Easy" | "Medium" | "Hard" | "Mixed";
-  format: "PDF" | "DOC";
+  format: "MCQ" | "Short" | "Long" | "Essay";
   refFile?: File;
 }
 
@@ -58,21 +59,13 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
     "Heredity & Evolution", "Our Environment", "Management of Natural Resources",
     "Diversity in Living Organisms", "Tissues", "Why do We Fall Ill"
   ],
-  "Math": [
-    "Real Numbers", "Polynomials", "Pair of Linear Equations", "Quadratic Equations",
-    "Arithmetic Progressions", "Triangles", "Coordinate Geometry", "Introduction to Trigonometry",
-    "Some Applications of Trigonometry", "Circles", "Constructions", "Areas Related to Circles",
-    "Surface Areas & Volumes", "Statistics", "Probability"
-  ],
-  "Maths": [
-    "Real Numbers", "Polynomials", "Pair of Linear Equations", "Quadratic Equations",
-    "Arithmetic Progressions", "Triangles", "Coordinate Geometry", "Introduction to Trigonometry",
-    "Some Applications of Trigonometry", "Circles", "Constructions", "Areas Related to Circles",
-    "Surface Areas & Volumes", "Statistics", "Probability"
-  ],
-  "Political Science": [
-    "Power Sharing", "Federalism", "Gender, Religion and Caste",
-    "Political Parties", "Outcomes of Democracy"
+  "Mathematics": [
+    "SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS", 
+    "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES", 
+    "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM", 
+    "SEQUENCES AND SERIES", "STRAIGHT LINES", 
+    "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES", 
+    "STATISTICS", "PROBABILITY"
   ],
   "Social Science": [
     "The Rise of Nationalism in Europe", "Nationalism in India", "The Making of a Global World",
@@ -83,20 +76,10 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
     "Political Parties", "Outcomes of Democracy", "Development", "Sectors of Indian Economy",
     "Money & Credit", "Globalisation & Indian Economy", "Consumer Rights"
   ],
-  "Accountancy": [
-    "Accounting for Partnership Basic Concepts", "Dissolution of Partnership Firm",
-    "Reconstitution of a Partnership Firm - Admission of a Partner",
-    "Reconstitution of a Partnership Firm - Retirement of a Partner"
-  ],
-  "Economics": [],
-  "History": [],
-  "Geography": [],
-  "English": [],
-  "Mathematics": [],
-  "Business Studies": [],
-  "Psychology": [],
-  "Sociology": [],
-  "Physical Education": []
+  "Political Science": [
+    "Power Sharing", "Federalism", "Gender, Religion and Caste",
+    "Political Parties", "Outcomes of Democracy"
+  ]
 };
 
 const COMMON_SUBTOPICS: Record<string, string[]> = {
@@ -113,7 +96,7 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Control & Coordination": ["Nervous system", "Hormonal coordination", "Endocrine glands"],
   "How do Organisms Reproduce": ["Asexual reproduction", "Sexual reproduction", "Reproductive health"],
   "Heredity & Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
-  "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution", "Renewable and non-renewable sources", "Solar, wind, biogas, nuclear energy", "Conservation", "Forest and wildlife", "Water resources", "Sustainable development"],
+  "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution"],
   "Power Sharing": ["Belgium model", "Sri Lanka model", "Forms of power sharing"],
   "Federalism": ["Union list", "State list", "Concurrent list", "Decentralisation", "Panchayati Raj"],
   "Gender, Religion and Caste": ["Gender division", "Religion and politics", "Caste and politics"],
@@ -121,12 +104,12 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Outcomes of Democracy": ["Accountability", "Economic growth", "Inequality", "Social diversity"],
 };
 
-// ==================== QUESTION TYPE CONFIG (NEW) ====================
+// ==================== QUESTION TYPE CONFIG ====================
 const QUESTION_FORMATS = [
-  { value: "MCQ",              label: "MCQ",   icon: ListChecks,     color: "bg-gray-800 text-white" },
-  { value: "Short Answer",     label: "Short",  icon: AlignLeft,      color: "bg-blue-600 text-white" },
-  { value: "Long Answer",      label: "Long",   icon: FileText,       color: "bg-purple-600 text-white" },
-  { value: "Assertion-Reason", label: "A&R",    icon: ArrowLeftRight, color: "bg-amber-600 text-white" },
+  { value: "MCQ",    label: "MCQ",   icon: ListChecks,     color: "bg-gray-800 text-white" },
+  { value: "Short",  label: "Short", icon: AlignLeft,      color: "bg-blue-600 text-white" },
+  { value: "Long",   label: "Long",  icon: FileText,       color: "bg-purple-600 text-white" },
+  { value: "Essay",  label: "Essay", icon: ArrowLeftRight, color: "bg-amber-600 text-white" },
 ];
 
 // ==================== UUID GENERATOR ====================
@@ -141,7 +124,7 @@ const generateUUID = (): string => {
   });
 };
 
-// ==================== FIXED FILE UPLOAD HANDLER ====================
+// ==================== FILE UPLOAD HANDLER ====================
 const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue, watch }) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const file = watch(`simpleData.${index}.refFile`);
@@ -218,18 +201,15 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
 
 RefUploadButton.displayName = 'RefUploadButton';
 
-// ==================== QUESTION TYPE SELECTOR (NEW) ====================
+// ==================== QUESTION TYPE SELECTOR ====================
 const FormatSelector = memo(({ index }: { index: number }) => {
   const { watch, setValue } = useFormContext();
-  const currentFormat = watch(`simpleData.${index}.format`) || "PDF";
-
-  // Map old "PDF"/"DOC" to "MCQ" for display
-  const activeValue = (currentFormat === "PDF" || currentFormat === "DOC") ? "MCQ" : currentFormat;
+  const currentFormat = watch(`simpleData.${index}.format`) || "MCQ";
 
   return (
     <div className="flex gap-1">
       {QUESTION_FORMATS.map((fmt) => {
-        const isActive = activeValue === fmt.value;
+        const isActive = currentFormat === fmt.value;
         const Icon = fmt.icon;
         return (
           <button
@@ -252,7 +232,7 @@ const FormatSelector = memo(({ index }: { index: number }) => {
 });
 FormatSelector.displayName = 'FormatSelector';
 
-// ==================== FORWARD REF TABLE ROW FOR ANIMATIONS ====================
+// ==================== TABLE ROW ====================
 const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
   index,
   field,
@@ -261,10 +241,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
 }, ref) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
-  const subOptions = COMMON_SUBTOPICS[currentTopic] ||
-    (currentTopic?.includes("Electricity") ? COMMON_SUBTOPICS["Electricity"] : []) ||
-    (currentTopic?.includes("Carbon") ? COMMON_SUBTOPICS["Carbon & Its Compounds"] : []) ||
-    [];
+  const subOptions = COMMON_SUBTOPICS[currentTopic] || [];
 
   const rowNumber = index + 1;
 
@@ -318,20 +295,35 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </div>
       </td>
 
+      {/* QUANTITY FIELD - NEW */}
       <td className="py-3 px-4 text-center">
-        <input
-          type="number"
-          {...register(`simpleData.${index}.quantity`, {
-            valueAsNumber: true,
-            min: { value: 1, message: "Minimum 1 question" },
-            max: { value: 50, message: "Maximum 50 questions" },
-            required: "Quantity is required"
-          })}
-          className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-sm font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 transition-all outline-none"
-          aria-label={`Number of questions for row ${rowNumber}`}
-        />
+        <select
+          {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
+          className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
+          aria-label={`Select number of questions for row ${rowNumber}`}
+        >
+          {[1,2,3,4,5,6,7,8,9,10].map(num => (
+            <option key={num} value={num}>{num}</option>
+          ))}
+        </select>
       </td>
 
+      {/* MARKS FIELD */}
+     {/* After quantity td, add this: */}
+     <td className="py-3 px-4 text-center">
+        <select
+          {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
+          className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
+        >
+          <option value={1}>1m</option>
+          <option value={2}>2m</option>
+          <option value={3}>3m</option>
+          <option value={4}>4m</option>
+          <option value={5}>5m</option>
+        </select>
+      </td>
+
+      {/* DIFFICULTY FIELD */}
       <td className="py-3 px-4">
         <select
           {...register(`simpleData.${index}.difficulty`)}
@@ -345,15 +337,17 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </select>
       </td>
 
-      {/* ===== CHANGED: Question Type selector instead of static PDF badge ===== */}
+      {/* QUESTION TYPE FIELD */}
       <td className="py-3 px-4">
         <FormatSelector index={index} />
       </td>
 
+      {/* REFERENCE FIELD */}
       <td className="py-3 px-4 text-center">
         <RefUploadButton index={index} setValue={setValue} watch={watch} />
       </td>
 
+      {/* DELETE BUTTON */}
       <td className="py-3 px-4 text-center">
         <motion.button
           whileHover={{ scale: 1.1 }}
@@ -384,7 +378,6 @@ const SimpleModeView: React.FC = () => {
   const useNCERT = watch("useNCERT");
   const ncertChapters = watch("ncertChapters") || [];
 
-  // ===== ORIGINAL LOGIC — backend chapters first, then hardcoded fallback =====
   const getTopicsForSubject = useCallback((): string[] => {
     if (useNCERT && ncertChapters.length > 0) {
       return ncertChapters;
@@ -399,8 +392,9 @@ const SimpleModeView: React.FC = () => {
       id: generateUUID(),
       topic: "",
       quantity: 5,
+      marks: 1,           // ← ADD THIS
       difficulty: "Medium",
-      format: "PDF",
+      format: "MCQ",
     });
   }, [append]);
 
@@ -428,16 +422,16 @@ const SimpleModeView: React.FC = () => {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[900px]">
+        <table className="w-full text-left border-collapse min-w-[1000px]">
           <caption className="sr-only">Test configuration table with chapters and questions</caption>
           <thead>
             <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
               <th scope="col" className="py-4 px-6 w-12 text-center" aria-label="Drag handle"></th>
               <th scope="col" className="py-4 px-4">Chapter & Topics</th>
-              <th scope="col" className="py-4 px-4 w-28 text-center">Quantity</th>
-              <th scope="col" className="py-4 px-4 w-40">Difficulty</th>
-              {/* ===== CHANGED: "Format" → "Question Type" ===== */}
-              <th scope="col" className="py-4 px-4 w-52">Question Type</th>
+              <th scope="col" className="py-4 px-4 w-20 text-center">Quantity</th>
+              <th scope="col" className="py-4 px-4 w-20 text-center">Marks</th>
+              <th scope="col" className="py-4 px-4 w-32">Difficulty</th>
+              <th scope="col" className="py-4 px-4 w-48">Question Type</th>
               <th scope="col" className="py-4 px-4 w-20 text-center">Reference</th>
               <th scope="col" className="py-4 px-4 w-12 text-center" aria-label="Actions"></th>
             </tr>
