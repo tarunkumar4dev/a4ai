@@ -1,11 +1,13 @@
 // src/lib/contestApi.ts
 // ──────────────────────────────────────────────────────────
 // Frontend API client for Contest endpoints
+// Works on both localhost and production
 // ──────────────────────────────────────────────────────────
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+// Same base as api.ts — no /api/v1 suffix here
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// ── Types matching backend responses ──
+// ── Types ──
 
 export interface CreateContestPayload {
   title: string;
@@ -114,129 +116,108 @@ export interface SubmitResponse {
   questions_with_answers?: any[];
 }
 
-// ── Helper: get auth token ──
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem("supabase_token") || "";
+// ── Auth helper ──
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  try {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers["Authorization"] = `Bearer ${session.access_token}`;
+    }
+  } catch {
+    // No auth
   }
   return headers;
 }
 
 // ═══════════════════════════════════════════════════════════
-// API FUNCTIONS
+// API FUNCTIONS — all use /api/v1/contests prefix
 // ═══════════════════════════════════════════════════════════
 
 export const contestApi = {
 
-  /**
-   * Teacher creates a contest from generated questions
-   */
   async createContest(payload: CreateContestPayload): Promise<CreateContestResponse> {
-    const res = await fetch(`${API_BASE}/contests`, {
+    const res = await fetch(`${API_BASE}/api/v1/contests`, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: await getAuthHeaders(),
       body: JSON.stringify(payload),
     });
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Failed to create contest (${res.status})`);
     }
-
     return res.json();
   },
 
-  /**
-   * Get public contest info (student landing page)
-   */
   async getContestInfo(shortCode: string): Promise<ContestInfo> {
-    const res = await fetch(`${API_BASE}/contests/${shortCode}/info`, {
+    const res = await fetch(`${API_BASE}/api/v1/contests/${shortCode}/info`, {
       headers: { "Content-Type": "application/json" },
     });
-
     if (res.status === 404) throw new Error("Contest not found");
     if (res.status === 410) throw new Error("This contest has ended");
     if (res.status === 403) throw new Error("This contest is paused");
     if (!res.ok) throw new Error("Failed to load contest");
-
     return res.json();
   },
 
-  /**
-   * Student starts a contest attempt — returns questions
-   */
   async startAttempt(
     shortCode: string,
     studentName?: string,
     studentEmail?: string,
   ): Promise<ContestData> {
-    const res = await fetch(`${API_BASE}/contests/${shortCode}/start`, {
+    const res = await fetch(`${API_BASE}/api/v1/contests/${shortCode}/start`, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: await getAuthHeaders(),
       body: JSON.stringify({
         student_name: studentName,
         student_email: studentEmail,
       }),
     });
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Failed to start contest");
     }
-
     return res.json();
   },
 
-  /**
-   * Student submits answers
-   */
   async submitAttempt(
     contestId: string,
     attemptId: string,
     payload: SubmitPayload,
   ): Promise<SubmitResponse> {
-    const headers = getAuthHeaders();
+    const headers = await getAuthHeaders();
     headers["X-Attempt-Id"] = attemptId;
-
-    const res = await fetch(`${API_BASE}/contests/${contestId}/submit`, {
+    const res = await fetch(`${API_BASE}/api/v1/contests/${contestId}/submit`, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
     });
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || "Failed to submit");
     }
-
     return res.json();
   },
 
-  /**
-   * Teacher gets leaderboard for a contest
-   */
   async getLeaderboard(contestId: string) {
-    const res = await fetch(`${API_BASE}/contests/${contestId}/leaderboard`, {
-      headers: getAuthHeaders(),
+    const res = await fetch(`${API_BASE}/api/v1/contests/${contestId}/leaderboard`, {
+      headers: await getAuthHeaders(),
     });
-
     if (!res.ok) throw new Error("Failed to load leaderboard");
     return res.json();
   },
 
-  /**
-   * Teacher lists their contests
-   */
   async listMyContests() {
-    const res = await fetch(`${API_BASE}/contests/my`, {
-      headers: getAuthHeaders(),
+    const res = await fetch(`${API_BASE}/api/v1/contests/my`, {
+      headers: await getAuthHeaders(),
     });
-
     if (!res.ok) throw new Error("Failed to load contests");
     return res.json();
   },
 };
+
+export default contestApi;
