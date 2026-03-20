@@ -1,4 +1,3 @@
-// src/App.tsx
 import { useEffect, Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import "./styles/globals.css";
@@ -86,6 +85,9 @@ const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
 const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
+
+// ADDED: Contest Page for students
+const ContestPage = lazy(() => import("./pages/ContestPage"));
 
 /* ---------- Mega Contest Pages ---------- */
 const MegaContestLivePage = lazy(() => 
@@ -321,6 +323,10 @@ const App = () => {
                       <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
                       <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />
                       <Route path="/contests/preview/:contestId" element={<PrivateRoute><ContestPreviewPage /></PrivateRoute>} />
+                      
+                      {/* ADDED: Contest route for students */}
+                      <Route path="/contest/:shortCode" element={<PrivateRoute><ContestPage /></PrivateRoute>} />
+                      
                       <Route path="/mega-contest/:contestId" element={<PrivateRoute><MegaContestLivePage /></PrivateRoute>} />
                       <Route path="/admin/contest/:contestId/questions" element={<PrivateRoute><AdminAddQuestions /></PrivateRoute>} />
                       <Route path="/coinshop" element={<PrivateRoute><CoinShop /></PrivateRoute>} />

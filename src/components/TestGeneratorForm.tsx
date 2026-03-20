@@ -14,7 +14,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useForm, FormProvider, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
   Library, GraduationCap, Book, ChevronDown, Clock, Zap,
   Loader2, AlertCircle, Lock, Timer,
@@ -243,7 +243,7 @@ export default function TestGeneratorForm() {
       classGrade: "Class 10",
       subject: "Science",
       mode: "Simple",
-      simpleData: [{ id: "1", topic: "", quantity: 5, difficulty: "Medium", format: "PDF" }],
+      simpleData: [{ id: "1", topic: "", quantity: 5, marks: 1, difficulty: "Medium", format: "MCQ" }],
       useNCERT: true,
       ncertChapters: [],
     },
@@ -319,11 +319,11 @@ export default function TestGeneratorForm() {
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.2 } },
-  };
+  } satisfies Variants;
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100 } },
-  };
+    visible: { y: 0, opacity: 1, transition: { type: "spring" as const, stiffness: 100 } },
+  } satisfies Variants;
 
   return (
     <FormProvider {...methods}>

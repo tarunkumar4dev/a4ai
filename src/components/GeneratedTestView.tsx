@@ -7,6 +7,7 @@
 //   - Regenerate rejected questions
 //   - Download as PDF / DOCX (Student, Answer Key, Teacher copy)
 //   - Logo pass-through to PDF export
+//   - Share as Contest button with modal
 //   - Smoother animations & transitions
 // ──────────────────────────────────────────────────────────────────────
 
@@ -15,11 +16,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown, ChevronUp, CheckCircle2, XCircle, Copy, FileDown,
   Eye, EyeOff, BookOpen, Brain, Zap, Edit3, RotateCcw, Check,
-  X, Download, FileText, Loader2, Save,
+  X, Download, FileText, Loader2, Save, Share2,
 } from "lucide-react";
 import MathText from "./MathText";
 import { api } from "@/lib/api";
 import type { GenerateTestResponse, GeneratedQuestion } from "@/lib/api";
+import { CreateContestModal } from "./contest/CreateContestModal";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -277,6 +279,9 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  
+  // Contest modal state
+  const [showContestModal, setShowContestModal] = useState(false);
 
   const [questions, setQuestions] = useState<QuestionWithStatus[]>(
     result.questions.map((q) => ({ ...q, status: "pending" as QuestionStatus }))
@@ -430,6 +435,14 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
               <Copy size={14} /> Copy
             </button>
 
+            {/* Share as Contest Button - New */}
+            <button
+              onClick={() => setShowContestModal(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+            >
+              <Share2 size={14} /> Share as Contest
+            </button>
+
             {/* Download Menu */}
             <div className="relative">
               <button
@@ -521,6 +534,22 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
           />
         ))}
       </div>
+
+      {/* ── Contest Modal ───────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showContestModal && (
+          <CreateContestModal
+            isOpen={showContestModal}
+            onClose={() => setShowContestModal(false)}
+            questions={activeQuestions}
+            testTitle={result.examTitle || "Test Paper"}
+            subject={result.meta?.subject || "Science"}
+            classGrade={result.meta?.classGrade || "Class 10"}
+            board={result.meta?.board || "CBSE"}
+            logoBase64={logoBase64}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

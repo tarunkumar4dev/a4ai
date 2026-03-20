@@ -1,6 +1,6 @@
-import React, { useRef, memo, useCallback, forwardRef } from "react";
+import React, { useRef, memo, useCallback, forwardRef, useState, useEffect } from "react";
 import { useFieldArray, useFormContext, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
-import { GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen, AlignLeft, ListChecks, ArrowLeftRight } from "lucide-react";
+import { GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen, AlignLeft, ListChecks, ArrowLeftRight, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ==================== TYPES ====================
@@ -25,18 +25,97 @@ interface TableRowProps {
   index: number;
   field: { id: string };
   availableTopics: string[];
+  subtopicsMap: Record<string, string[]>;
+  chaptersLoading: boolean;
   remove: (index: number) => void;
 }
 
 interface FormValues {
+  classGrade: string;       // "Class 9", "Class 10", "Class 11", "Class 12"
   subject: string;
   useNCERT: boolean;
   ncertChapters: string[];
   simpleData: SimpleRowData[];
 }
 
-// ==================== DATA CONFIG ====================
-const SUBJECT_TOPICS: Record<string, string[]> = {
+interface ChapterAPIResponse {
+  chapters: {
+    name: string;
+    subtopics?: string[];
+  }[];
+}
+
+// ==================== API: FETCH CHAPTERS ====================
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
+
+async function fetchChaptersFromAPI(
+  classLevel: string,
+  subject: string
+): Promise<ChapterAPIResponse> {
+  const res = await fetch(
+    `${API_BASE}/chapters?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`
+  );
+  if (!res.ok) throw new Error(`Failed to fetch chapters: ${res.status}`);
+  return res.json();
+}
+
+// ==================== HOOK: useChapters ====================
+function useChapters(classLevel: string, subject: string) {
+  const [chapters, setChapters] = useState<string[]>([]);
+  const [subtopicsMap, setSubtopicsMap] = useState<Record<string, string[]>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!classLevel || !subject) {
+      setChapters([]);
+      setSubtopicsMap({});
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetchChaptersFromAPI(classLevel, subject)
+      .then((data) => {
+        if (cancelled) return;
+
+        const chapterNames = data.chapters.map((ch) => ch.name);
+        const sMap: Record<string, string[]> = {};
+        data.chapters.forEach((ch) => {
+          if (ch.subtopics && ch.subtopics.length > 0) {
+            sMap[ch.name] = ch.subtopics;
+          }
+        });
+
+        setChapters(chapterNames);
+        setSubtopicsMap((prev) => ({ ...prev, ...sMap }));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("Chapter fetch failed, using fallback:", err);
+        setError(err.message);
+
+        // Fallback to hardcoded data if API fails
+        const fallback = SUBJECT_TOPICS_FALLBACK[subject] || [];
+        setChapters(fallback);
+        setSubtopicsMap(COMMON_SUBTOPICS_FALLBACK);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [classLevel, subject]);
+
+  return { chapters, subtopicsMap, loading, error };
+}
+
+// ==================== FALLBACK DATA (used when API is down) ====================
+const SUBJECT_TOPICS_FALLBACK: Record<string, string[]> = {
   "Science": [
     "Chemical Reactions & Equations", "Acids, Bases & Salts", "Metals & Non-metals",
     "Carbon & Its Compounds", "Periodic Classification", "Life Processes",
@@ -60,11 +139,11 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
     "Diversity in Living Organisms", "Tissues", "Why do We Fall Ill"
   ],
   "Mathematics": [
-    "SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS", 
-    "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES", 
-    "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM", 
-    "SEQUENCES AND SERIES", "STRAIGHT LINES", 
-    "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES", 
+    "SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS",
+    "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES",
+    "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM",
+    "SEQUENCES AND SERIES", "STRAIGHT LINES",
+    "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES",
     "STATISTICS", "PROBABILITY"
   ],
   "Social Science": [
@@ -82,7 +161,7 @@ const SUBJECT_TOPICS: Record<string, string[]> = {
   ]
 };
 
-const COMMON_SUBTOPICS: Record<string, string[]> = {
+const COMMON_SUBTOPICS_FALLBACK: Record<string, string[]> = {
   "Chemical Reactions & Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
   "Acids, Bases & Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
   "Metals & Non-metals": ["Physical and chemical properties", "Reactivity series", "Extraction of metals", "Corrosion and prevention"],
@@ -237,11 +316,15 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
   index,
   field,
   availableTopics,
+  subtopicsMap,
+  chaptersLoading,
   remove
 }, ref) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
-  const subOptions = COMMON_SUBTOPICS[currentTopic] || [];
+
+  // Subtopics: API response first, then fallback
+  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS_FALLBACK[currentTopic] || [];
 
   const rowNumber = index + 1;
 
@@ -265,28 +348,43 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
 
       <td className="py-3 px-4">
         <div className="flex flex-col gap-2">
-          <select
-            {...register(`simpleData.${index}.topic`, {
-              required: "Topic is required"
-            })}
-            className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600"
-            aria-label={`Select topic for row ${rowNumber}`}
-          >
-            <option value="">Select Chapter/Topic...</option>
-            {availableTopics.map(topic => (
-              <option key={topic} value={topic}>{topic}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              {...register(`simpleData.${index}.topic`, {
+                required: "Topic is required"
+              })}
+              className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600 disabled:opacity-50"
+              disabled={chaptersLoading}
+              aria-label={`Select topic for row ${rowNumber}`}
+            >
+              <option value="">
+                {chaptersLoading ? "Loading chapters..." : "Select Chapter/Topic..."}
+              </option>
+              {availableTopics.map(topic => (
+                <option key={topic} value={topic}>{topic}</option>
+              ))}
+            </select>
+            {chaptersLoading && (
+              <Loader2 size={14} className="absolute right-2 top-2 animate-spin text-gray-400" />
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-[#E5E7EB] group-hover:bg-gray-400 transition-colors" aria-hidden="true" />
             <select
               {...register(`simpleData.${index}.subtopic`)}
               className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none cursor-pointer disabled:opacity-50 hover:text-gray-700 appearance-none"
-              disabled={!currentTopic}
+              disabled={!currentTopic || subOptions.length === 0}
               aria-label={`Select subtopic for ${currentTopic || 'topic'} in row ${rowNumber}`}
             >
-              <option value="">Select Subtopic (Optional)...</option>
+              <option value="">
+                {!currentTopic
+                  ? "Select Subtopic (Optional)..."
+                  : subOptions.length === 0
+                    ? "No subtopics available"
+                    : "Select Subtopic (Optional)..."
+                }
+              </option>
               {subOptions.map(subtopic => (
                 <option key={subtopic} value={subtopic}>{subtopic}</option>
               ))}
@@ -295,7 +393,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </div>
       </td>
 
-      {/* QUANTITY FIELD - NEW */}
+      {/* QUANTITY */}
       <td className="py-3 px-4 text-center">
         <select
           {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
@@ -308,9 +406,8 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </select>
       </td>
 
-      {/* MARKS FIELD */}
-     {/* After quantity td, add this: */}
-     <td className="py-3 px-4 text-center">
+      {/* MARKS */}
+      <td className="py-3 px-4 text-center">
         <select
           {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
           className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
@@ -323,7 +420,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </select>
       </td>
 
-      {/* DIFFICULTY FIELD */}
+      {/* DIFFICULTY */}
       <td className="py-3 px-4">
         <select
           {...register(`simpleData.${index}.difficulty`)}
@@ -337,17 +434,17 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </select>
       </td>
 
-      {/* QUESTION TYPE FIELD */}
+      {/* QUESTION TYPE */}
       <td className="py-3 px-4">
         <FormatSelector index={index} />
       </td>
 
-      {/* REFERENCE FIELD */}
+      {/* REFERENCE */}
       <td className="py-3 px-4 text-center">
         <RefUploadButton index={index} setValue={setValue} watch={watch} />
       </td>
 
-      {/* DELETE BUTTON */}
+      {/* DELETE */}
       <td className="py-3 px-4 text-center">
         <motion.button
           whileHover={{ scale: 1.1 }}
@@ -368,31 +465,47 @@ TableRow.displayName = 'TableRow';
 
 // ==================== SIMPLE MODE VIEW ====================
 const SimpleModeView: React.FC = () => {
-  const { control, watch } = useFormContext<FormValues>();
+  const { control, watch, setValue: setFormValue } = useFormContext<FormValues>();
   const { fields, append, remove } = useFieldArray({
     control,
     name: "simpleData",
   });
 
-  const currentSubject = watch("subject") || "Science";
+  const classLevel = watch("classGrade") || "";
+  const currentSubject = watch("subject") || "";
   const useNCERT = watch("useNCERT");
   const ncertChapters = watch("ncertChapters") || [];
 
-  const getTopicsForSubject = useCallback((): string[] => {
-    if (useNCERT && ncertChapters.length > 0) {
+  // ── Use chapters from parent form (TestGeneratorForm already fetches from API) ──
+  const availableTopics = React.useMemo(() => {
+    if (ncertChapters.length > 0) {
       return ncertChapters;
     }
-    return SUBJECT_TOPICS[currentSubject] || SUBJECT_TOPICS["Science"];
-  }, [currentSubject, useNCERT, ncertChapters]);
+    return SUBJECT_TOPICS_FALLBACK[currentSubject] || [];
+  }, [ncertChapters, currentSubject]);
 
-  const availableTopics = getTopicsForSubject();
+  const chaptersLoading = false; // Parent handles loading state
+  const subtopicsMap: Record<string, string[]> = {}; // Subtopics from fallback via TableRow
+
+  // ── Reset row topics when class/subject changes ──
+  const prevKeyRef = useRef(`${classLevel}-${currentSubject}`);
+  useEffect(() => {
+    const newKey = `${classLevel}-${currentSubject}`;
+    if (prevKeyRef.current !== newKey && prevKeyRef.current !== "-") {
+      fields.forEach((_, idx) => {
+        setFormValue(`simpleData.${idx}.topic` as any, "");
+        setFormValue(`simpleData.${idx}.subtopic` as any, "");
+      });
+    }
+    prevKeyRef.current = newKey;
+  }, [classLevel, currentSubject, fields, setFormValue]);
 
   const handleAddRow = useCallback(() => {
     append({
       id: generateUUID(),
       topic: "",
       quantity: 5,
-      marks: 1,           // ← ADD THIS
+      marks: 1,
       difficulty: "Medium",
       format: "MCQ",
     });
@@ -409,10 +522,17 @@ const SimpleModeView: React.FC = () => {
       <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 rounded-t-[22px]">
         <div className="flex items-center gap-2 text-sm text-blue-800">
           <BookOpen size={16} aria-hidden="true" />
-          <div>
-            <span className="font-semibold">Subject:</span> {currentSubject}
-            {useNCERT && ncertChapters.length > 0 && (
-              <span className="ml-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {classLevel && (
+              <span>
+                <span className="font-semibold">Class:</span> {classLevel}
+              </span>
+            )}
+            <span>
+              <span className="font-semibold">Subject:</span> {currentSubject || "Not selected"}
+            </span>
+            {ncertChapters.length > 0 && (
+              <span>
                 <span className="font-semibold">NCERT Chapters:</span> {ncertChapters.slice(0, 3).join(", ")}
                 {ncertChapters.length > 3 && ` +${ncertChapters.length - 3} more`}
               </span>
@@ -421,48 +541,64 @@ const SimpleModeView: React.FC = () => {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[1000px]">
-          <caption className="sr-only">Test configuration table with chapters and questions</caption>
-          <thead>
-            <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
-              <th scope="col" className="py-4 px-6 w-12 text-center" aria-label="Drag handle"></th>
-              <th scope="col" className="py-4 px-4">Chapter & Topics</th>
-              <th scope="col" className="py-4 px-4 w-20 text-center">Quantity</th>
-              <th scope="col" className="py-4 px-4 w-20 text-center">Marks</th>
-              <th scope="col" className="py-4 px-4 w-32">Difficulty</th>
-              <th scope="col" className="py-4 px-4 w-48">Question Type</th>
-              <th scope="col" className="py-4 px-4 w-20 text-center">Reference</th>
-              <th scope="col" className="py-4 px-4 w-12 text-center" aria-label="Actions"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            <AnimatePresence>
-              {fields.map((field, index) => (
-                <TableRow
-                  key={field.id}
-                  index={index}
-                  field={field}
-                  availableTopics={availableTopics}
-                  remove={remove}
-                />
-              ))}
-            </AnimatePresence>
-          </tbody>
-        </table>
-      </div>
+      {/* Empty state — no class/subject selected yet */}
+      {(!classLevel || !currentSubject) && (
+        <div className="py-12 text-center text-gray-400">
+          <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
+          <p className="font-semibold">Select a Class and Subject above</p>
+          <p className="text-xs mt-1">Chapters will load automatically</p>
+        </div>
+      )}
 
-      <motion.button
-        whileHover={{ backgroundColor: "#F3F4F6" }}
-        whileTap={{ scale: 0.99 }}
-        type="button"
-        onClick={handleAddRow}
-        className="w-full py-5 mt-2 bg-[#F9FAFB] text-sm font-bold text-gray-400 hover:text-gray-600 rounded-b-[22px] flex items-center justify-center gap-2 transition-all group"
-        aria-label="Add new chapter section"
-      >
-        <PlusCircle size={18} className="group-hover:scale-110 transition-transform" aria-hidden="true" />
-        Add Chapter Section
-      </motion.button>
+      {/* Table — visible only when class + subject selected */}
+      {classLevel && currentSubject && (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[1000px]">
+              <caption className="sr-only">Test configuration table with chapters and questions</caption>
+              <thead>
+                <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
+                  <th scope="col" className="py-4 px-6 w-12 text-center" aria-label="Drag handle"></th>
+                  <th scope="col" className="py-4 px-4">Chapter & Topics</th>
+                  <th scope="col" className="py-4 px-4 w-20 text-center">Quantity</th>
+                  <th scope="col" className="py-4 px-4 w-20 text-center">Marks</th>
+                  <th scope="col" className="py-4 px-4 w-32">Difficulty</th>
+                  <th scope="col" className="py-4 px-4 w-48">Question Type</th>
+                  <th scope="col" className="py-4 px-4 w-20 text-center">Reference</th>
+                  <th scope="col" className="py-4 px-4 w-12 text-center" aria-label="Actions"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                <AnimatePresence>
+                  {fields.map((field, index) => (
+                    <TableRow
+                      key={field.id}
+                      index={index}
+                      field={field}
+                      availableTopics={availableTopics}
+                      subtopicsMap={subtopicsMap}
+                      chaptersLoading={chaptersLoading}
+                      remove={remove}
+                    />
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+
+          <motion.button
+            whileHover={{ backgroundColor: "#F3F4F6" }}
+            whileTap={{ scale: 0.99 }}
+            type="button"
+            onClick={handleAddRow}
+            className="w-full py-5 mt-2 bg-[#F9FAFB] text-sm font-bold text-gray-400 hover:text-gray-600 rounded-b-[22px] flex items-center justify-center gap-2 transition-all group"
+            aria-label="Add new chapter section"
+          >
+            <PlusCircle size={18} className="group-hover:scale-110 transition-transform" aria-hidden="true" />
+            Add Chapter Section
+          </motion.button>
+        </>
+      )}
     </motion.div>
   );
 };
