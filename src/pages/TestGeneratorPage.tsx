@@ -6,8 +6,8 @@ import TestGeneratorForm from "@/components/TestGeneratorForm";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function TestGeneratorPage() {
-  const { userProfile } = useAuth?.() || {};
-  const displayName = userProfile?.full_name || "Teacher";
+  const { user } = useAuth();
+  const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
 
   return (

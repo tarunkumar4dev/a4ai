@@ -1,10 +1,4 @@
 // src/lib/api.ts
-// ──────────────────────────────────────────────────────────────────────
-// TestGen AI — Frontend API Client
-// 
-// Calls the FastAPI backend at /api/v1/test-generator/*
-// Replaces broken Supabase Edge Function calls.
-// ──────────────────────────────────────────────────────────────────────
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -23,6 +17,7 @@ export interface GeneratedQuestion {
   topic: string | null;
   format: string;
   validationStatus: string;
+  section: string | null;  // ← ADDED: CBSE section tag (A/B/C/D/E)
 }
 
 export interface GenerateTestResponse {
@@ -128,6 +123,7 @@ export const api = {
       topic: string;
       subtopic?: string;
       quantity: number;
+      marks?: number;
       difficulty: string;
       format: string;
     }[];
@@ -137,6 +133,7 @@ export const api = {
     useNCERT?: boolean;
     ncertChapters?: string[];
     userId?: string;
+    cbsePattern?: boolean;  // ← ADDED
   }): Promise<GenerateTestResponse> {
     return apiFetch<GenerateTestResponse>(
       "/api/v1/test-generator/generate-frontend",
@@ -146,7 +143,6 @@ export const api = {
 
   /**
    * Get NCERT chapters for a subject/class.
-   * GET /api/v1/test-generator/chapters
    */
   async getChapters(subject: string, classGrade: string): Promise<ChaptersResponse> {
     const classNum = classGrade.replace(/\D/g, "") || "10";
@@ -157,7 +153,6 @@ export const api = {
 
   /**
    * Get a saved test by ID.
-   * GET /api/v1/test-generator/test/{testId}
    */
   async getTest(testId: string, teacherId: string): Promise<any> {
     return apiFetch(
@@ -167,7 +162,6 @@ export const api = {
 
   /**
    * Submit teacher feedback.
-   * POST /api/v1/test-generator/feedback
    */
   async submitFeedback(payload: {
     testId: string;
@@ -192,7 +186,6 @@ export const api = {
 
   /**
    * Save a test.
-   * POST /api/v1/test-generator/save
    */
   async saveTest(testId: string, teacherId: string): Promise<any> {
     return apiFetch("/api/v1/test-generator/save", {
@@ -203,7 +196,6 @@ export const api = {
 
   /**
    * Export test as PDF or DOCX.
-   * POST /api/v1/test-generator/export
    */
   async exportTest(payload: {
     examTitle: string;

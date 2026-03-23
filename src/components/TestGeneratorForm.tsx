@@ -1,14 +1,11 @@
 // src/components/TestGeneratorForm.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V5 — Production Test Generator Form
+// V6 — CBSE Section Pattern Support
 //
-// Features:
-//   1. Class-based subject filtering (9-10 vs 11-12)
-//   2. Subject select → auto-loads NCERT chapters from backend
-//   3. Board: CBSE active, rest "Coming Soon" (disabled)
-//   4. Live generation timer with elapsed seconds
-//   5. Connected to FastAPI RAG backend
-//   6. Error handling + progress messages
+// v6 changes:
+//   - CBSE Pattern toggle (generates Section A-E paper)
+//   - Section breakdown info when toggle is ON
+//   - cbsePattern field passed to backend
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -17,7 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
   Library, GraduationCap, Book, ChevronDown, Clock, Zap,
-  Loader2, AlertCircle, Lock, Timer,
+  Loader2, AlertCircle, Lock, Timer, FileText,
 } from "lucide-react";
 
 import { formSchema, FormSchema } from "@/lib/schema";
@@ -34,7 +31,7 @@ import { api } from "@/lib/api";
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// SUBJECT CONFIG — Class-based subject mapping
+// SUBJECT CONFIG
 // ═══════════════════════════════════════════════════════════════════════
 
 const SUBJECTS_BY_CLASS: Record<string, string[]> = {
@@ -75,9 +72,6 @@ const PremiumInput = ({ label, name, placeholder, register }: any) => (
   </div>
 );
 
-
-// ── Board Select (CBSE active, rest Coming Soon) ───────────────────────
-
 const BoardSelect = ({ register, value }: { register: any; value: string }) => (
   <div className="space-y-2 group">
     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1 flex items-center gap-1.5 group-focus-within:text-gray-800 transition-colors">
@@ -103,9 +97,6 @@ const BoardSelect = ({ register, value }: { register: any; value: string }) => (
   </div>
 );
 
-
-// ── Class Select ───────────────────────────────────────────────────────
-
 const ClassSelect = ({ register }: { register: any }) => (
   <div className="space-y-2 group">
     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1 flex items-center gap-1.5 group-focus-within:text-gray-800 transition-colors">
@@ -128,9 +119,6 @@ const ClassSelect = ({ register }: { register: any }) => (
     </div>
   </div>
 );
-
-
-// ── Subject Select (class-aware) ───────────────────────────────────────
 
 const SubjectSelect = ({
   register, subjects, isLoadingChapters,
@@ -167,9 +155,6 @@ const SubjectSelect = ({
   </div>
 );
 
-
-// ── Generation Timer ───────────────────────────────────────────────────
-
 const GenerationTimer = ({ isRunning }: { isRunning: boolean }) => {
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -196,7 +181,6 @@ const GenerationTimer = ({ isRunning }: { isRunning: boolean }) => {
     ? `${minutes}:${seconds.toString().padStart(2, "0")}`
     : `${seconds}s`;
 
-  // Color shifts: green < 30s, yellow < 60s, orange < 90s, red > 90s
   const color =
     elapsed < 30 ? "text-emerald-400" :
     elapsed < 60 ? "text-yellow-400" :
@@ -223,6 +207,90 @@ const GenerationTimer = ({ isRunning }: { isRunning: boolean }) => {
 
 
 // ═══════════════════════════════════════════════════════════════════════
+// CBSE PATTERN TOGGLE COMPONENT
+// ═══════════════════════════════════════════════════════════════════════
+
+const CBSEPatternToggle = ({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: (val: boolean) => void;
+}) => (
+  <div className={`rounded-2xl border transition-all duration-300 ${
+    enabled
+      ? "bg-gradient-to-r from-[#111827]/5 to-[#1F2937]/5 border-[#111827]/20"
+      : "bg-white border-[#E5E7EB]"
+  }`}>
+    <div className="p-5">
+      {/* Toggle header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-xl transition-all ${
+            enabled ? "bg-[#111827] text-white" : "bg-gray-100 text-gray-400"
+          }`}>
+            <FileText size={16} />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-[#111827]">CBSE Pattern Paper</p>
+            <p className="text-[10px] text-gray-400 font-medium">
+              Sections A–E · 38 questions · 80 marks
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onToggle(!enabled)}
+          className={`relative w-12 h-7 rounded-full transition-all duration-300 ${
+            enabled ? "bg-[#111827]" : "bg-gray-200"
+          }`}
+        >
+          <div className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 ${
+            enabled ? "left-[22px]" : "left-0.5"
+          }`} />
+        </button>
+      </div>
+
+      {/* Section breakdown — shown when enabled */}
+      <AnimatePresence>
+        {enabled && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { sec: "A", q: 20, m: 1, type: "MCQ + A&R", color: "bg-blue-50 text-blue-700 border-blue-200" },
+                  { sec: "B", q: 5, m: 2, type: "Very Short", color: "bg-purple-50 text-purple-700 border-purple-200" },
+                  { sec: "C", q: 6, m: 3, type: "Short Ans", color: "bg-amber-50 text-amber-700 border-amber-200" },
+                  { sec: "D", q: 4, m: 5, type: "Long Ans", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                  { sec: "E", q: 3, m: 4, type: "Case Study", color: "bg-rose-50 text-rose-700 border-rose-200" },
+                ].map((s) => (
+                  <div key={s.sec} className={`rounded-xl border p-2.5 text-center ${s.color}`}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">Sec {s.sec}</p>
+                    <p className="text-sm font-black mt-0.5">{s.q} × {s.m}m</p>
+                    <p className="text-[9px] font-semibold mt-0.5 opacity-70">{s.type}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-3 text-center font-medium">
+                Chapters will be distributed evenly across all sections
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  </div>
+);
+
+
+// ═══════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -232,6 +300,7 @@ export default function TestGeneratorForm() {
   const [availableChapters, setAvailableChapters] = useState<string[]>([]);
   const [isLoadingChapters, setIsLoadingChapters] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [cbsePattern, setCbsePattern] = useState(true);
 
   const { generate, isLoading, result, error, reset, progress } = useTestGenerator();
 
@@ -253,10 +322,8 @@ export default function TestGeneratorForm() {
   const subject = useWatch({ control: methods.control, name: "subject" });
   const board = useWatch({ control: methods.control, name: "board" });
 
-  // ── Compute available subjects based on class ────────────────────────
   const availableSubjects = SUBJECTS_BY_CLASS[classGrade] || SUBJECTS_BY_CLASS["Class 10"];
 
-  // ── When class changes, reset subject if it's no longer valid ────────
   useEffect(() => {
     const subs = SUBJECTS_BY_CLASS[classGrade] || [];
     if (subject && !subs.includes(subject)) {
@@ -264,7 +331,6 @@ export default function TestGeneratorForm() {
     }
   }, [classGrade, subject, methods]);
 
-  // ── When subject or class changes, auto-load chapters from backend ───
   const loadChapters = useCallback(async () => {
     if (!subject || !classGrade) return;
 
@@ -289,7 +355,6 @@ export default function TestGeneratorForm() {
     loadChapters();
   }, [loadChapters]);
 
-  // ── Get user ID from auth ────────────────────────────────────────────
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -300,13 +365,13 @@ export default function TestGeneratorForm() {
     fetchUser();
   }, [methods]);
 
-  // ── Submit → backend ─────────────────────────────────────────────────
   const onSubmit = async (data: FormSchema) => {
-    console.log("📝 Form data:", data);
-    await generate(data);
+    // Inject cbsePattern into the data sent to backend
+    const payload = { ...data, cbsePattern };
+    console.log("📝 Form data:", payload);
+    await generate(payload);
   };
 
-  // ── Show results ─────────────────────────────────────────────────────
   if (result) {
     return (
       <div className="space-y-6 pb-32">
@@ -315,7 +380,6 @@ export default function TestGeneratorForm() {
     );
   }
 
-  // ── Animations ───────────────────────────────────────────────────────
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.2 } },
@@ -360,7 +424,6 @@ export default function TestGeneratorForm() {
                 />
               </div>
 
-              {/* Chapter count badge */}
               {availableChapters.length > 0 && (
                 <div className="flex items-center gap-2 ml-1">
                   <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
@@ -381,36 +444,94 @@ export default function TestGeneratorForm() {
 
 
         {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 1.5. CBSE PATTERN TOGGLE (NEW)                                */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <motion.div variants={itemVariants}>
+          <CBSEPatternToggle enabled={cbsePattern} onToggle={setCbsePattern} />
+        </motion.div>
+
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
         {/* 2. TABBED EDITOR SECTION                                      */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <motion.div variants={itemVariants}>
-          <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <TestRowEditor activeMode={activeTab} />
-            </motion.div>
-          </AnimatePresence>
+          {!cbsePattern && (
+            <>
+              <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <TestRowEditor activeMode={activeTab} />
+                </motion.div>
+              </AnimatePresence>
+            </>
+          )}
+
+          {cbsePattern && (
+            <div className="bg-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50">
+              <div className="text-center space-y-2">
+                <p className="text-sm font-bold text-[#111827]">Chapter Selection</p>
+                <p className="text-xs text-gray-400">
+                  Select chapters below — questions will be auto-distributed across CBSE sections
+                </p>
+              </div>
+              <div className="mt-4">
+                <TestRowEditor activeMode={activeTab} />
+              </div>
+            </div>
+          )}
         </motion.div>
 
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 3. DIFFICULTY MIX & STATS                                     */}
+        {/* 3. DIFFICULTY MIX & STATS (hidden when CBSE pattern ON)       */}
         {/* ═══════════════════════════════════════════════════════════════ */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50 backdrop-blur-sm flex flex-col lg:flex-row gap-8 items-center justify-between"
-        >
-          <div className="w-full lg:w-2/3">
-            <DifficultyMix />
-          </div>
-          <SummaryStats />
-        </motion.div>
+        {!cbsePattern && (
+          <motion.div
+            variants={itemVariants}
+            className="bg-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50 backdrop-blur-sm flex flex-col lg:flex-row gap-8 items-center justify-between"
+          >
+            <div className="w-full lg:w-2/3">
+              <DifficultyMix />
+            </div>
+            <SummaryStats />
+          </motion.div>
+        )}
+
+        {cbsePattern && (
+          <motion.div
+            variants={itemVariants}
+            className="bg-white rounded-[24px] p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-[#111827]">Paper Summary</p>
+                <p className="text-xs text-gray-400 mt-1">CBSE Standard Pattern</p>
+              </div>
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <p className="text-2xl font-black text-[#111827]">38</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase">Questions</p>
+                </div>
+                <div className="h-8 w-px bg-gray-200" />
+                <div className="text-center">
+                  <p className="text-2xl font-black text-[#111827]">80</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase">Marks</p>
+                </div>
+                <div className="h-8 w-px bg-gray-200" />
+                <div className="text-center">
+                  <p className="text-2xl font-black text-[#111827]">5</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase">Sections</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -445,7 +566,6 @@ export default function TestGeneratorForm() {
         >
           <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between bg-[#111827] text-white p-3 pl-6 rounded-[24px] shadow-[0_20px_40px_rgba(0,0,0,0.3)] pointer-events-auto border border-white/10 gap-4 md:gap-0">
 
-            {/* Left side — timer or est. time */}
             <div className="flex items-center gap-4">
               {isLoading ? (
                 <GenerationTimer isRunning={isLoading} />
@@ -453,13 +573,17 @@ export default function TestGeneratorForm() {
                 <div className="flex items-center gap-2 text-gray-400">
                   <Clock size={18} />
                   <span className="text-xs font-bold uppercase tracking-wider">
-                    Est. Time: <span className="text-white">30-90s</span>
+                    Est. Time: <span className="text-white">{cbsePattern ? "60-120s" : "30-90s"}</span>
                   </span>
+                  {cbsePattern && (
+                    <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold">
+                      CBSE Pattern
+                    </span>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Right side — buttons */}
             <div className="flex items-center gap-3 w-full md:w-auto">
               <motion.button
                 whileHover={{ scale: 1.03 }}
@@ -487,7 +611,7 @@ export default function TestGeneratorForm() {
                 ) : (
                   <>
                     <Zap size={18} className="fill-yellow-400 text-yellow-400" />
-                    Generate Test
+                    {cbsePattern ? "Generate CBSE Paper" : "Generate Test"}
                   </>
                 )}
               </motion.button>

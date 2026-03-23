@@ -1,170 +1,132 @@
 // src/pages/RoleSelectionPage.tsx
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/providers/AuthProvider";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, School, Building2, ArrowRight } from "lucide-react";
+import { GraduationCap, School, Building2, ArrowRight, LogOut } from "lucide-react";
+
+type Role = "student" | "teacher" | "institute";
 
 export default function RoleSelectionPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [selectedRole, setSelectedRole] = useState<"student" | "teacher" | "institute" | null>(null);
-  
-  // Get the auth type from location state
-  const authType = location.state?.type || "signup"; // "signup" or "login"
-  const email = location.state?.email || "";
+  const { session, role: existingRole, updateRole, signOut } = useAuth();
+  const { toast } = useToast();
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // If not logged in, go to login
+  if (!session) {
+    navigate("/login", { replace: true });
+    return null;
+  }
+
+  // If role already exists, redirect to dashboard
+  if (existingRole) {
+    navigate(`/${existingRole}/dashboard`, { replace: true });
+    return null;
+  }
 
   const roles = [
     {
-      id: "student",
+      id: "student" as Role,
       title: "Student",
-      description: "Access learning materials, take tests, join contests, and track your progress",
+      description: "Access materials, take tests, join contests, track progress",
       icon: GraduationCap,
-      color: "from-blue-500 to-blue-700",
-      bgColor: "bg-blue-50",
-      iconColor: "text-blue-600"
+      gradient: "from-blue-500 to-blue-700",
+      bg: "bg-blue-50",
+      iconColor: "text-blue-600",
+      ring: "ring-blue-300",
     },
     {
-      id: "teacher",
+      id: "teacher" as Role,
       title: "Teacher",
-      description: "Create tests, host contests, manage students, and track class performance",
+      description: "Create tests, host contests, manage students, track performance",
       icon: School,
-      color: "from-purple-500 to-purple-700",
-      bgColor: "bg-purple-50",
-      iconColor: "text-purple-600"
+      gradient: "from-purple-500 to-purple-700",
+      bg: "bg-purple-50",
+      iconColor: "text-purple-600",
+      ring: "ring-purple-300",
     },
     {
-      id: "institute",
+      id: "institute" as Role,
       title: "Institute",
-      description: "Manage multiple teachers, track institution performance, and generate reports",
+      description: "Manage teachers, institution analytics, generate reports",
       icon: Building2,
-      color: "from-green-500 to-green-700",
-      bgColor: "bg-green-50",
-      iconColor: "text-green-600"
-    }
+      gradient: "from-green-500 to-green-700",
+      bg: "bg-green-50",
+      iconColor: "text-green-600",
+      ring: "ring-green-300",
+    },
   ];
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!selectedRole) return;
-    
-    if (authType === "signup") {
-      // Navigate to signup page with selected role
-      navigate("/signup", { 
-        state: { 
-          role: selectedRole,
-          email: email
-        }
-      });
-    } else {
-      // Navigate to login page with selected role
-      navigate("/login", { 
-        state: { 
-          role: selectedRole,
-          email: email
-        }
-      });
+    setIsLoading(true);
+    try {
+      await updateRole(selectedRole);
+      toast({ title: "Welcome!", description: `You're all set as a ${selectedRole}.` });
+      navigate(`/${selectedRole}/dashboard`, { replace: true });
+    } catch (error: any) {
+      toast({ title: "Failed to set role", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleBack = () => {
-    navigate(-1);
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/login", { replace: true });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-4xl border-0 shadow-xl">
-        <CardHeader className="text-center pb-2">
-          <CardTitle className="text-3xl font-bold text-gray-900">
-            {authType === "signup" ? "Join as..." : "Login as..."}
-          </CardTitle>
-          <CardDescription className="text-lg text-gray-600">
-            Select your role to continue {authType === "signup" ? "signing up" : "logging in"}
-          </CardDescription>
-          {email && (
-            <div className="mt-2 p-3 bg-gray-100 rounded-lg">
-              <p className="text-sm text-gray-700">
-                Continuing with: <span className="font-semibold">{email}</span>
-              </p>
-            </div>
-          )}
-        </CardHeader>
-        
-        <CardContent className="pb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {roles.map((role) => (
-              <Card 
-                key={role.id}
-                className={`cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg border-2 ${
-                  selectedRole === role.id 
-                    ? `border-blue-500 ring-2 ring-blue-200` 
-                    : 'border-gray-200'
-                }`}
-                onClick={() => setSelectedRole(role.id as "student" | "teacher" | "institute")}
-              >
-                <CardHeader className="pb-2">
-                  <div className={`w-16 h-16 ${role.bgColor} rounded-full flex items-center justify-center mb-4 mx-auto`}>
-                    <role.icon className={`h-8 w-8 ${role.iconColor}`} />
-                  </div>
-                  <CardTitle className="text-xl text-center text-gray-900">{role.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="pb-4">
-                  <p className="text-gray-600 text-center text-sm leading-relaxed">
-                    {role.description}
-                  </p>
-                </CardContent>
-                <CardFooter className="pt-0 justify-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    selectedRole === role.id 
-                      ? `bg-gradient-to-r ${role.color} text-white` 
-                      : 'bg-gray-200'
-                  }`}>
-                    {selectedRole === role.id && (
-                      <div className="w-4 h-4 bg-white rounded-full"></div>
-                    )}
-                  </div>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        </CardContent>
-
-        <CardFooter className="flex flex-col space-y-4 border-t pt-6">
-          <div className="flex flex-col sm:flex-row gap-4 w-full">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-              className="flex-1"
-            >
-              Go Back
-            </Button>
-            <Button
-              onClick={handleContinue}
-              disabled={!selectedRole}
-              className={`flex-1 bg-gradient-to-r ${
-                selectedRole === 'student' ? 'from-blue-600 to-blue-700' :
-                selectedRole === 'teacher' ? 'from-purple-600 to-purple-700' :
-                'from-green-600 to-green-700'
-              } hover:opacity-90 text-white`}
-            >
-              Continue {authType === "signup" ? "Sign Up" : "Login"}
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
-          
-          <p className="text-sm text-gray-500 text-center">
-            {authType === "signup" 
-              ? "Already have an account? " 
-              : "Don't have an account? "}
-            <Button 
-              variant="link" 
-              className="p-0 h-auto"
-              onClick={() => navigate(authType === "signup" ? "/login" : "/signup")}
-            >
-              {authType === "signup" ? "Login here" : "Sign up here"}
-            </Button>
+    <div className="min-h-screen bg-[#E0E6F7] flex items-center justify-center p-6">
+      <div className="w-full max-w-3xl">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-bold text-slate-900 tracking-tight">One last step</h1>
+          <p className="text-slate-500 mt-2 font-medium">
+            Welcome, {session.user.user_metadata?.full_name || session.user.email}! Choose your role to continue.
           </p>
-        </CardFooter>
-      </Card>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+          {roles.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setSelectedRole(r.id)}
+              className={`p-6 rounded-3xl border-2 transition-all duration-200 text-left ${
+                selectedRole === r.id
+                  ? `border-black bg-white shadow-xl scale-[1.03] ring-4 ${r.ring}`
+                  : "border-white/60 bg-white/50 hover:bg-white/80 hover:shadow-md"
+              }`}
+            >
+              <div className={`w-14 h-14 ${r.bg} rounded-2xl flex items-center justify-center mb-4`}>
+                <r.icon className={`w-7 h-7 ${r.iconColor}`} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">{r.title}</h3>
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">{r.description}</p>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-4">
+          <Button
+            variant="outline"
+            onClick={handleSignOut}
+            className="h-14 rounded-2xl px-6 font-bold"
+          >
+            <LogOut className="w-4 h-4 mr-2" /> Sign Out
+          </Button>
+          <Button
+            onClick={handleContinue}
+            disabled={!selectedRole || isLoading}
+            className="flex-1 h-14 rounded-2xl bg-black text-white font-bold hover:bg-slate-900 disabled:opacity-40"
+          >
+            {isLoading ? "Setting up..." : "Continue"}
+            {!isLoading && <ArrowRight className="w-4 h-4 ml-2" />}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

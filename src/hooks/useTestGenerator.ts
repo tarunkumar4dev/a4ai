@@ -1,11 +1,4 @@
 // src/hooks/useTestGenerator.ts
-// ──────────────────────────────────────────────────────────────────────
-// Hook that connects TestGeneratorForm → FastAPI backend.
-//
-// Usage in TestGeneratorForm.tsx:
-//   const { generate, isLoading, result, error } = useTestGenerator();
-//   const onSubmit = (data) => generate(data);
-// ──────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from "react";
 import { api, GenerateTestResponse, ApiError } from "@/lib/api";
@@ -17,7 +10,7 @@ export interface UseTestGeneratorReturn {
   result: GenerateTestResponse | null;
   error: string | null;
   reset: () => void;
-  progress: string;   // Live status message for UI
+  progress: string;
 }
 
 export function useTestGenerator(): UseTestGeneratorReturn {
@@ -64,11 +57,12 @@ export function useTestGenerator(): UseTestGeneratorReturn {
         classGrade: formData.classGrade || "Class 10",
         subject: formData.subject || "Science",
         simpleData: formData.simpleData
-          .filter((row) => row.topic)              // Skip empty rows
+          .filter((row) => row.topic)
           .map((row) => ({
             topic: row.topic,
             subtopic: row.subtopic || undefined,
             quantity: row.quantity || 5,
+            marks: row.marks || 1,
             difficulty: row.difficulty || "Medium",
             format: row.format || "PDF",
           })),
@@ -78,11 +72,14 @@ export function useTestGenerator(): UseTestGeneratorReturn {
         useNCERT: true,
         ncertChapters: formData.ncertChapters || [],
         userId: formData.userId || undefined,
+        cbsePattern: formData.cbsePattern ?? false,  // ← ADDED
       };
 
       // Step 3: Call backend
       setProgress(
-        `Generating ${totalQuestions} questions with NCERT RAG... This may take 30-90 seconds.`
+        payload.cbsePattern
+          ? `Generating CBSE Pattern paper (38 questions, 80 marks)... This may take 60-120 seconds.`
+          : `Generating ${totalQuestions} questions with NCERT RAG... This may take 30-90 seconds.`
       );
 
       const response = await api.generateTest(payload);

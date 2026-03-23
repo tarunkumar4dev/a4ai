@@ -1,12 +1,4 @@
 // src/lib/schema.ts
-// ──────────────────────────────────────────────────────────────────────
-// Zod validation schemas for the test generator form.
-//
-// FIXES from original:
-//   1. useMCERT → useNCERT (typo fixed)
-//   2. Added userId field for auth
-//   3. Aligned difficulty values with backend
-// ──────────────────────────────────────────────────────────────────────
 
 import { z } from "zod";
 
@@ -20,7 +12,7 @@ export const simpleRowSchema = z.object({
     topic: z.string().min(1, "Topic is required"),
     subtopic: z.string().optional(),
     quantity: z.number().min(1).max(50).default(5),
-    marks: z.number().min(1).max(10).default(1),    // ← ADD THIS LINE
+    marks: z.number().min(1).max(10).default(1),
     difficulty: difficultyEnum.default("Medium"),
     format: z.string().default("MCQ"),
     refFile: z.any().optional(),
@@ -49,11 +41,14 @@ export const formSchema = z.object({
   enableWatermark: z.boolean().default(true),
   shuffleQuestions: z.boolean().default(false),
 
+  // CBSE Pattern — ADDED
+  cbsePattern: z.boolean().default(false),
+
   // Data Arrays
   simpleData: z.array(simpleRowSchema),
   blueprintData: z.array(blueprintItemSchema).optional(),
 
-  // ✅ NCERT FIELDS (TYPO FIXED: useMCERT → useNCERT)
+  // NCERT FIELDS
   useNCERT: z.boolean().default(true),
   ncertClass: z.string().optional(),
   ncertSubject: z.string().optional(),

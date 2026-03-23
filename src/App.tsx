@@ -26,6 +26,7 @@ import FAQ from "@/components/FAQ";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 /* ---------- Vercel Analytics ---------- */
 import { Analytics } from "@vercel/analytics/react";
@@ -61,7 +62,7 @@ const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
 /* ---------- NEW QUIZ PAGE ---------- */
-const QuizPage = lazy(() => import("./pages/Quiz")); // <--- ADDED THIS
+const QuizPage = lazy(() => import("./pages/Quiz"));
 
 /* ---------- Lazy PYQ Practice Pages ---------- */
 const PracticeZonePage = lazy(() => import("./pages/PracticeZonePage"));
@@ -86,7 +87,6 @@ const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
 
-// ADDED: Contest Page for students
 const ContestPage = lazy(() => import("./pages/ContestPage"));
 
 /* ---------- Mega Contest Pages ---------- */
@@ -129,17 +129,18 @@ const PrivacyPolicyPage = lazy(() => import("./pages/company/PrivacyPolicyPage")
 const TermsPage = lazy(() => import("./pages/legal/TermsPage"));
 const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
 
-/* ---------- Auth Callback & Payment ---------- */
-const CallbackPage = lazy(() => import("./pages/auth/callback"));
+/* ---------- Payment ---------- */
 const PaymentPage = lazy(() => import("./pages/payment/paymentPage"));
 
 /* ---------- Daily Practice Module ---------- */
 const PracticeSelectionPage = lazy(() => import("@/practice/index")); 
-// CRITICAL FIX: Explicitly pointing to 'index' ensures we skip the old 'session.tsx' file
 const PracticeSessionPage = lazy(() => import("@/practice/session/index")); 
 
 /* ---------- Practice page alias ---------- */
 const PracticePage = lazy(() => import("@/practice/index"));
+
+/* ---------- Auth Callback (SINGLE file — replaces old pages/auth/callback.tsx) ---------- */
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 
 /* ---------- Scroll Helper ---------- */
 function ScrollToTop() {
@@ -190,27 +191,40 @@ const NotFound = () => (
   </div>
 );
 
-/* ---------- Auth Gates ---------- */
+/* ---------- Auth Gates (FIXED to use new AuthProvider) ---------- */
+
+/** Blocks auth pages (login/signup) if already logged in — redirects to role dashboard */
 function AuthGateForAuthPages({ children }: { children: ReactNode }) {
-  const { loading, session } = useAuth();
+  const { loading, session, role } = useAuth();
   if (loading) return <LoadingScreen />;
-  if (session) return <Navigate to="/dashboard" replace />;
+  if (session && role) return <Navigate to={`/${role}/dashboard`} replace />;
+  if (session && !role) return <Navigate to="/select-role" replace />;
   return <>{children}</>;
 }
 
+/** Role-based gate — checks if user has the right role */
 function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowedRoles: string[] }) {
-  const { loading, session, userProfile } = useAuth();
+  const { loading, session, role } = useAuth();
   
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
+  if (!role) return <Navigate to="/select-role" replace />;
   
-  if (!userProfile || !allowedRoles.includes(userProfile.role)) {
-    const actualRole = userProfile?.role || 'student';
-    toast.error(`Access denied. You are registered as a ${actualRole}.`);
-    return <Navigate to="/dashboard" replace />;
+  if (!allowedRoles.includes(role)) {
+    toast.error(`Access denied. You are registered as a ${role}.`);
+    return <Navigate to={`/${role}/dashboard`} replace />;
   }
   
   return <>{children}</>;
+}
+
+/** Smart dashboard redirect — sends user to their role-specific dashboard */
+function DashboardRedirect() {
+  const { loading, session, role } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!session) return <Navigate to="/login" replace />;
+  if (!role) return <Navigate to="/select-role" replace />;
+  return <Navigate to={`/${role}/dashboard`} replace />;
 }
 
 /* ---------- Idle Logout ---------- */
@@ -251,9 +265,10 @@ const App = () => {
                   <ScrollToTop />
                   <Suspense fallback={<LoadingScreen />}>
                     <Routes>
-                      {/* Public & Auth Routes */}
-                      <Route path="/auth/callback/*" element={<CallbackPage />} />
-                      <Route path="/role-selection" element={<RoleSelectionPage />} />
+
+                      {/* ============================================ */}
+                      {/*  PUBLIC ROUTES (no auth needed)               */}
+                      {/* ============================================ */}
                       <Route path="/" element={<LandingPage />} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/pricing" element={<PricingPage />} />
@@ -272,32 +287,57 @@ const App = () => {
                       <Route path="/case-studies" element={<CaseStudiesPage />} />
                       <Route path="/demo" element={<LandingDemo />} />
                       <Route path="/faq" element={<FAQ />} />
+                      <Route path="/rules" element={<Rules />} />
+
+                      {/* Public contest join pages */}
+                      <Route path="/contests/math-weekly" element={<JoinContestPageAurora />} />
+                      <Route path="/contests/sci-lab" element={<JoinContestPageAurora />} />
+                      <Route path="/contests/gk-rapid" element={<JoinContestPageAurora />} />
+
+                      {/* ============================================ */}
+                      {/*  AUTH ROUTES                                  */}
+                      {/* ============================================ */}
+                      <Route path="/auth/callback" element={<AuthCallback />} />
+                      <Route path="/select-role" element={<RoleSelectionPage />} />
                       <Route path="/login" element={<AuthGateForAuthPages><LoginPage /></AuthGateForAuthPages>} />
                       <Route path="/signup" element={<AuthGateForAuthPages><SignupPage /></AuthGateForAuthPages>} />
 
-                      {/* Dashboard Routes */}
-                      <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
-                      <Route path="/dashboard/student" element={<RoleAuthGate allowedRoles={["student"]}><StudentDashboardPage /></RoleAuthGate>} />
-                      <Route path="/dashboard/teacher" element={<RoleAuthGate allowedRoles={["teacher"]}><TeacherDashboardPage /></RoleAuthGate>} />
+                      {/* ============================================ */}
+                      {/*  DASHBOARD — smart redirect to role dashboard */}
+                      {/* ============================================ */}
+                      <Route path="/dashboard" element={<DashboardRedirect />} />
+
+                      {/* ============================================ */}
+                      {/*  STUDENT ROUTES                              */}
+                      {/* ============================================ */}
+                      <Route path="/student/dashboard" element={<RoleAuthGate allowedRoles={["student"]}><StudentDashboardPage /></RoleAuthGate>} />
+
+                      {/* ============================================ */}
+                      {/*  TEACHER ROUTES                              */}
+                      {/* ============================================ */}
+                      <Route path="/teacher/dashboard" element={<RoleAuthGate allowedRoles={["teacher"]}><TeacherDashboardPage /></RoleAuthGate>} />
+
+                      {/* ============================================ */}
+                      {/*  INSTITUTE ROUTES (add InstituteDashboard     */}
+                      {/*  page when ready)                            */}
+                      {/* ============================================ */}
+                      {/* <Route path="/institute/dashboard" element={<RoleAuthGate allowedRoles={["institute"]}><InstituteDashboardPage /></RoleAuthGate>} /> */}
+
+                      {/* ============================================ */}
+                      {/*  SHARED PROTECTED ROUTES (any logged-in user) */}
+                      {/* ============================================ */}
                       <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} />
                       <Route path="/dashboard/analytics" element={<PrivateRoute><AnalyticsPage /></PrivateRoute>} />
-                      
-                      {/* === ADDED QUIZ ROUTE HERE === */}
-                      <Route path="/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} /> 
-                      {/* Alternatively, if you want it under dashboard: */}
-                      {/* <Route path="/dashboard/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} /> */}
+                      <Route path="/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} />
 
                       {/* Practice & PYQ Routes */}
                       <Route path="/practice/zone" element={<PrivateRoute><PracticeZonePage /></PrivateRoute>} />
                       <Route path="/practice/pyq-session" element={<PrivateRoute><PYQPracticeSessionPage /></PrivateRoute>} />
                       <Route path="/admin/pyq" element={<RoleAuthGate allowedRoles={["teacher", "admin"]}><PYQAdminPage /></RoleAuthGate>} />
                       
-                      {/* === UPDATED PRACTICE ROUTES === */}
                       <Route path="/dashboard/practice" element={<PrivateRoute><PracticePage /></PrivateRoute>} />
                       <Route path="/practice" element={<PracticePage />} />
                       <Route path="/practice/chemistry" element={<PrivateRoute><SubjectHubPage /></PrivateRoute>} />
-                      
-                      {/* IMPORTANT: Both URLs now point to the NEW session file */}
                       <Route path="/practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} /> 
                       <Route path="/daily-practice" element={<PrivateRoute><PracticeSelectionPage /></PrivateRoute>} />
                       <Route path="/daily-practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} /> 
@@ -313,25 +353,23 @@ const App = () => {
                       <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
                       
                       {/* Contests */}
-                      <Route path="/contests/math-weekly" element={<JoinContestPageAurora />} />
-                      <Route path="/contests/sci-lab" element={<JoinContestPageAurora />} />
-                      <Route path="/contests/gk-rapid" element={<JoinContestPageAurora />} />
-                      <Route path="rules" element={<Rules />} />
                       <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
                       <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
                       <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
                       <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
                       <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />
                       <Route path="/contests/preview/:contestId" element={<PrivateRoute><ContestPreviewPage /></PrivateRoute>} />
-                      
-                      {/* ADDED: Contest route for students */}
                       <Route path="/contest/:shortCode" element={<PrivateRoute><ContestPage /></PrivateRoute>} />
-                      
                       <Route path="/mega-contest/:contestId" element={<PrivateRoute><MegaContestLivePage /></PrivateRoute>} />
                       <Route path="/admin/contest/:contestId/questions" element={<PrivateRoute><AdminAddQuestions /></PrivateRoute>} />
                       <Route path="/coinshop" element={<PrivateRoute><CoinShop /></PrivateRoute>} />
                       
-                      {/* Redirects */}
+                      {/* ============================================ */}
+                      {/*  REDIRECTS (old paths → new paths)           */}
+                      {/* ============================================ */}
+                      <Route path="/dashboard/student" element={<Navigate to="/student/dashboard" replace />} />
+                      <Route path="/dashboard/teacher" element={<Navigate to="/teacher/dashboard" replace />} />
+                      <Route path="/role-selection" element={<Navigate to="/select-role" replace />} />
                       <Route path="/dashboard/students" element={<Navigate to="/students" replace />} />
                       <Route path="/dashboard/notes" element={<Navigate to="/notes" replace />} />
                       <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
@@ -341,7 +379,9 @@ const App = () => {
                       <Route path="/study/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
                       <Route path="/home" element={<Navigate to="/" replace />} />
                       
-                      {/* Catch-All */}
+                      {/* ============================================ */}
+                      {/*  CATCH-ALL                                   */}
+                      {/* ============================================ */}
                       <Route path="/*" element={<ChankyaInstitutePublic />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
