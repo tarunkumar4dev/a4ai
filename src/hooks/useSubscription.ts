@@ -1,0 +1,99 @@
+// src/hooks/useSubscription.ts
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/providers/AuthProvider";
+
+export type PlanSlug = "free" | "starter" | "pro";
+
+export interface Plan {
+  id: string;
+  slug: PlanSlug;
+  display_name: string;
+  price_paise: number;
+  test_limit: number; // -1 = unlimited
+  billing_cycle: string;
+  features: string[];
+  sort_order: number;
+}
+
+export interface PlanStatus {
+  plan_slug: PlanSlug;
+  plan_name: string;
+  test_limit: number;
+  price_paise: number;
+  features: string[];
+  tests_used: number;
+  tests_remaining: number; // -1 = unlimited
+  billing_period: string;
+  subscription_status: string;
+  subscription_expires: string | null;
+}
+
+export function useSubscription() {
+  const { user } = useAuth();
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [status, setStatus] = useState<PlanStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch all available plans
+  const fetchPlans = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("plans")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order");
+
+    if (!error && data) {
+      setPlans(data as Plan[]);
+    }
+  }, []);
+
+  // Fetch current user's plan status
+  const fetchStatus = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await supabase.rpc("get_user_plan_status", {
+      p_user_id: user.id,
+    });
+    if (!error && data) {
+      setStatus(data as PlanStatus);
+    }
+  }, [user]);
+
+  // Check if user can generate a test (UI-level check only)
+  // Real enforcement happens in backend before Gemini call
+  const canGenerateTest = useCallback((): {
+    allowed: boolean;
+    reason?: string;
+  } => {
+    if (!status) return { allowed: false, reason: "loading" };
+    if (status.tests_remaining === -1) return { allowed: true }; // unlimited
+    if (status.tests_remaining > 0) return { allowed: true };
+    return {
+      allowed: false,
+      reason: `You've used all ${status.test_limit} test papers for this month. Upgrade to generate more.`,
+    };
+  }, [status]);
+
+  // Refresh status after generation (backend already incremented usage)
+  const refreshAfterGeneration = useCallback(async () => {
+    await fetchStatus();
+  }, [fetchStatus]);
+
+  useEffect(() => {
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([fetchPlans(), fetchStatus()]);
+      setLoading(false);
+    };
+    init();
+  }, [fetchPlans, fetchStatus]);
+
+  return {
+    plans,
+    status,
+    loading,
+    canGenerateTest,
+    refreshAfterGeneration,
+    refreshStatus: fetchStatus,
+  };
+}
