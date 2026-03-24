@@ -23,7 +23,7 @@ declare global {
 
 const RZP_KEY = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || "";
 const RAW_BACKEND_URL =
-  (import.meta.env.VITE_BACKEND_URL as string) || "https://api.a4ai.in/api/v1/payment";
+  (import.meta.env.VITE_PAYMENT_API_URL as string) || "https://api.a4ai.in/api/v1/payment";
 
 const joinUrl = (base: string, path: string) =>
   `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;

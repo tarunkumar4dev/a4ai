@@ -1,17 +1,17 @@
 // LandingHero.tsx — Single-line headline, Brand exact gradient, correct scale
 import { Link } from "react-router-dom";
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
-import { ArrowRight, Play, Sparkles } from "lucide-react";
+import { ArrowRight, Crown, Sparkles } from "lucide-react";
 import { useEffect } from "react";
 import { useTheme } from "@/context/ThemeContext";
 
 const features = [
-  { text: "AI-Powered" },
-  { text: "Curriculum-Aligned" },
-  { text: "Real Analytics" },
-  { text: "Instant Generation" },
+  { text: "NCERT-Aligned" },
+  { text: "CBSE Pattern Ready" },
   { text: "PDF & DOCX Export" },
   { text: "Answer Key Included" },
+  { text: "Section-wise Papers" },
+  { text: "Bloom's Taxonomy" },
 ];
 
 const CENTER_X = 300;
@@ -111,7 +111,7 @@ export default function LandingHero() {
             }}>
             <Sparkles className="h-3.5 w-3.5" style={{ color: isDark ? "#4ade80" : "#2dd4bf" }} />
             <span className="text-xs md:text-sm font-medium" style={{ color: isDark ? "#4ade80" : "#2dd4bf" }}>
-              Think Beyond
+              Built for CBSE Teachers
             </span>
           </motion.div>
         </div>
@@ -120,11 +120,6 @@ export default function LandingHero() {
         <div className="text-center relative z-10">
           <h1 className="font-halenoir font-bold tracking-[-0.02em]" style={{ lineHeight: 1 }}>
 
-            {/*
-              KEY FIX: whitespace-nowrap forces single line.
-              font-size uses clamp capped lower so it fits on one line at all widths.
-              "Smartest." = solid color, "Tests.Ever." = gradient
-            */}
             <span
               className="block whitespace-nowrap"
               style={{
@@ -160,15 +155,15 @@ export default function LandingHero() {
           <p
             className="mx-auto mt-5 md:mt-7 max-w-[300px] sm:max-w-lg md:max-w-2xl leading-relaxed"
             style={{ fontSize: "clamp(0.9rem, 1.2vw, 1.1rem)", color: isDark ? "#5f6b7a" : "#5f6368" }}>
-            Generate &amp; host curriculum-perfect tests in under 2 minutes — then track what actually matters.
+            Generate CBSE-pattern test papers from NCERT content in under 2 minutes — section-wise, with answer keys, ready to print.
           </p>
 
           {/* ── CTAs ── */}
           <div className="relative mt-9 md:mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
 
-            {/* Primary — black glossy */}
+            {/* Primary — Try for FREE */}
             <motion.div style={{ x: magX, y: magY }} className="isolate w-full sm:w-auto">
-              <Link to="/contact" className="w-full block">
+              <Link to="/signup" className="w-full block">
                 <button
                   className="group w-full sm:w-auto relative overflow-hidden transition-all duration-200 hover:-translate-y-[2px] flex items-center justify-center gap-2.5 font-semibold text-white"
                   style={{
@@ -192,14 +187,14 @@ export default function LandingHero() {
                   <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 rounded-t-[16px]"
                     style={{ height: "50%", background: "linear-gradient(180deg,rgba(255,255,255,0.18) 0%,transparent 100%)" }} />
                   <ArrowRight className="h-4 w-4 relative z-10 flex-shrink-0" />
-                  <span className="relative z-10">Get Free Domain</span>
+                  <span className="relative z-10">Try for FREE</span>
                 </button>
               </Link>
             </motion.div>
 
-            {/* Secondary — frosted macOS glass */}
+            {/* Secondary — View Pricing */}
             <div className="isolate w-full sm:w-auto">
-              <Link to="/login" className="w-full block">
+              <Link to="/pricing" className="w-full block">
                 <button
                   className="w-full sm:w-auto relative overflow-hidden transition-all duration-200 hover:-translate-y-[2px] flex items-center justify-center gap-2.5 font-semibold"
                   style={{
@@ -219,8 +214,8 @@ export default function LandingHero() {
                   }}>
                   <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 rounded-t-[16px]"
                     style={{ height: "50%", background: isDark ? "linear-gradient(180deg,rgba(255,255,255,0.1) 0%,transparent 100%)" : "linear-gradient(180deg,rgba(255,255,255,0.8) 0%,transparent 100%)" }} />
-                  <Play className="h-4 w-4 relative z-10 flex-shrink-0" />
-                  <span className="relative z-10">Login (FREE 100 Coins)</span>
+                  <Crown className="h-4 w-4 relative z-10 flex-shrink-0" />
+                  <span className="relative z-10">View Pricing</span>
                 </button>
               </Link>
             </div>

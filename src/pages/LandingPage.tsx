@@ -7,7 +7,7 @@ import FAQ from "@/components/FAQ";
 import Footer from "@/components/Footer";
 import { LazyMotion, domAnimation } from "framer-motion";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Sparkles, MessageSquare, Download, Settings, User } from "lucide-react";
+import { ArrowRight, Check, Sparkles, FileText, Download, Settings, User, Crown } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -16,9 +16,9 @@ const BRAND_GRADIENT = "linear-gradient(90deg, #4ade80, #2dd4bf, #60a5fa, #818cf
 const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
 
 const HOW_STEPS = Object.freeze([
-  { title: "Choose Specifications", desc: "Select subject, difficulty, question type, and other parameters.", Icon: Settings },
-  { title: "AI Generates Content", desc: "Multiple AI models create questions and answers instantly.", Icon: MessageSquare },
-  { title: "Download Test Paper", desc: "Get professionally formatted PDF/DOCX ready for distribution.", Icon: Download },
+  { title: "Set Your Paper", desc: "Pick subject, class, chapters, marks distribution, and question types.", Icon: Settings },
+  { title: "Generate from NCERT", desc: "Questions are pulled directly from NCERT content — chapter-accurate, Bloom's-tagged.", Icon: FileText },
+  { title: "Download & Print", desc: "Get a CBSE-pattern PDF or DOCX with sections, marks, and answer key.", Icon: Download },
 ]);
 const TRUST_FEATURES = Object.freeze([
   { title: "Encryption", desc: "Data encrypted in transit and at rest with modern standards.", icon: "🔒" },
@@ -27,14 +27,14 @@ const TRUST_FEATURES = Object.freeze([
   { title: "Controls", desc: "Role-based access, per-class sharing, and one-click export.", icon: "⚙️" },
 ]);
 const OUTCOME_STATS = Object.freeze([
-  { value: "12+", label: "Question Formats", description: "MCQ, SA, LA, Cloze, Match…" },
-  { value: "PDF & Word", label: "Export Options", description: "Print or share in your LMS" },
-  { value: "Instant", label: "Generation", description: "Get tests in seconds" },
+  { value: "6+", label: "Question Formats", description: "MCQ, Short, Long, A&R, Cloze…" },
+  { value: "PDF & Word", label: "Export Options", description: "Print-ready or share digitally" },
+  { value: "<2 min", label: "Per Paper", description: "Full CBSE-pattern test paper" },
 ]);
 const TESTIMONIALS = Object.freeze([
-  { quote: "a4ai has saved me hours every week. The quality of generated tests is impressive and engaging for students.", name: "Rahul Verma", role: "Director, Education Beast" },
-  { quote: "Perfect for creating differentiated assessments for my diverse classroom. The variety of question types is excellent.", name: "Abhay Gupta", role: "Director, Chanakya Institute" },
-  { quote: "Surprised by the accuracy and curriculum-aligned questions. The AI-generated content is remarkably good.", name: "Aman Singh", role: "Chemistry Teacher (10+ Years Exp)" },
+  { quote: "a4ai has saved me hours every week. The questions actually match what's in the NCERT textbook — no random internet stuff.", name: "Rahul Verma", role: "Director, Education Beast" },
+  { quote: "Perfect for creating differentiated assessments. I set chapters and difficulty, and the paper comes out section-wise ready to print.", name: "Abhay Gupta", role: "Director, Chanakya Institute" },
+  { quote: "Surprised by the accuracy. Questions come straight from NCERT content with proper Bloom's levels. Saves me 3-4 hours per week.", name: "Aman Singh", role: "Chemistry Teacher (10+ Years Exp)" },
 ]);
 
 /* ── Global styles ── */
@@ -258,11 +258,11 @@ const HowItWorks = memo(function HowItWorks({ isDark }) {
       <div className="sorb" style={{ width: 400, height: 400, left: -80, bottom: -50, background: isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)", filter: "blur(80px)" }} />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div ref={tr} className="rv mb-16 text-center">
-          <span {...pill(isDark)}><Sparkles className="h-3.5 w-3.5" />Simple & Fast</span>
+          <span {...pill(isDark)}><Sparkles className="h-3.5 w-3.5" />3 Steps, 2 Minutes</span>
           <h2 className="mt-4 text-4xl font-bold md:text-5xl" style={{ color: head(isDark) }}>
             How It <span className="nlm-text">Works</span>
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg" style={{ color: muted(isDark) }}>Create high-quality test papers in three simple steps</p>
+          <p className="mx-auto mt-4 max-w-xl text-lg" style={{ color: muted(isDark) }}>Pick chapters, set marks — get a print-ready CBSE paper</p>
         </div>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
           {HOW_STEPS.map(({ title, desc, Icon }, i) => (
@@ -300,12 +300,12 @@ const UpgradedCTA = memo(function UpgradedCTA({ isDark }) {
           <div className="relative z-10">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium"
               style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.8)", border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.07)", backdropFilter: "blur(20px)", color: isDark ? "#8a9bb0" : "#5f6368" }}>
-              <Sparkles className="h-3.5 w-3.5" style={{ color: "#2dd4bf" }} />No credit card required
+              <Sparkles className="h-3.5 w-3.5" style={{ color: "#2dd4bf" }} />2 free papers every month
             </div>
-            <h3 className="mb-4 text-3xl font-bold" style={{ color: head(isDark) }}>Create Your First Test <span className="nlm-text">in Minutes</span></h3>
-            <p className="mb-7 leading-relaxed" style={{ color: muted(isDark) }}>Start with a topic or paste your syllabus. We'll generate a fully formatted paper with answer key.</p>
+            <h3 className="mb-4 text-3xl font-bold" style={{ color: head(isDark) }}>Create Your First Paper <span className="nlm-text">in Minutes</span></h3>
+            <p className="mb-7 leading-relaxed" style={{ color: muted(isDark) }}>Pick your chapters, set difficulty and marks — get a complete CBSE-pattern paper with answer key, ready to print.</p>
             <div className="mb-7 flex flex-wrap justify-center gap-5">
-              {["Curriculum-aligned", "Multiple question types", "Instant answer key"].map(f => (
+              {["NCERT content only", "Section-wise layout", "Answer key included"].map(f => (
                 <div key={f} className="flex items-center gap-2 text-sm" style={{ color: isDark ? "#8a9bb0" : "#5f6368" }}>
                   <div className="flex h-5 w-5 items-center justify-center rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}><Check className="h-3 w-3 text-white" /></div>{f}
                 </div>
@@ -313,11 +313,11 @@ const UpgradedCTA = memo(function UpgradedCTA({ isDark }) {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link to={session ? "/dashboard/test-generator" : "/signup"}>
-                <button className="btn-blk px-8 py-3 text-base"><span className="relative z-10 flex items-center gap-2">Create Your First Test <ArrowRight className="h-4 w-4" /></span></button>
+                <button className="btn-blk px-8 py-3 text-base"><span className="relative z-10 flex items-center gap-2">Try for FREE <ArrowRight className="h-4 w-4" /></span></button>
               </Link>
-              <Link to="/demo">
+              <Link to="/pricing">
                 <button className={`px-8 py-3 text-base ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
-                  <span className="relative z-10">Watch Demo</span>
+                  <span className="relative z-10 flex items-center gap-2"><Crown className="h-4 w-4" /> View Pricing</span>
                 </button>
               </Link>
             </div>
@@ -337,9 +337,9 @@ const TrustSecurity = memo(function TrustSecurity({ isDark }) {
       <div className="sorb" style={{ width: 600, height: 400, left: "50%", top: "50%", transform: "translate(-50%,-50%)", background: isDark ? "rgba(96,165,250,0.04)" : "rgba(96,165,250,0.03)", filter: "blur(90px)" }} />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div ref={tr} className="rv mb-16 text-center">
-          <span {...pill(isDark)}>🛡️ Built for Education</span>
+          <span {...pill(isDark)}>🛡️ Built for Schools</span>
           <h2 className="mt-4 text-4xl font-bold md:text-5xl" style={{ color: head(isDark) }}>Trusted by <span className="nlm-text">Educators</span></h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg" style={{ color: muted(isDark) }}>Secure, reliable, and built specifically for educational institutions</p>
+          <p className="mx-auto mt-4 max-w-xl text-lg" style={{ color: muted(isDark) }}>Secure, reliable, and built specifically for Indian schools and coaching centres</p>
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {TRUST_FEATURES.map((f, i) => (
@@ -365,8 +365,8 @@ const Outcomes = memo(function Outcomes({ isDark }) {
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div ref={tr} className="rv mb-16 text-center">
           <div className="mx-auto mb-5 h-[3px] w-12 rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }} />
-          <h2 className="text-4xl font-bold md:text-5xl" style={{ color: head(isDark) }}>Outcomes That <span className="nlm-text">Matter</span></h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg" style={{ color: muted(isDark) }}>Less busywork. More teaching time. Better insights for every class.</p>
+          <h2 className="text-4xl font-bold md:text-5xl" style={{ color: head(isDark) }}>What You <span className="nlm-text">Get</span></h2>
+          <p className="mx-auto mt-4 max-w-xl text-lg" style={{ color: muted(isDark) }}>Less paper-setting busywork. More teaching time. Better test papers.</p>
         </div>
         <div className="grid grid-cols-1 gap-10 sm:grid-cols-3">
           {OUTCOME_STATS.map((s, i) => (
@@ -392,8 +392,8 @@ const Testimonials = memo(function Testimonials({ isDark }) {
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div ref={tr} className="rv mb-16 text-center">
           <span {...pill(isDark)}>💬 Community</span>
-          <h2 className="mt-4 text-4xl font-bold md:text-5xl" style={{ color: head(isDark) }}>What <span className="nlm-text">Educators</span> Say</h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg" style={{ color: muted(isDark) }}>Thousands of teachers trust a4ai to save time and improve student outcomes.</p>
+          <h2 className="mt-4 text-4xl font-bold md:text-5xl" style={{ color: head(isDark) }}>What <span className="nlm-text">Teachers</span> Say</h2>
+          <p className="mx-auto mt-4 max-w-xl text-lg" style={{ color: muted(isDark) }}>Used by teachers across CBSE schools and coaching centres.</p>
         </div>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {TESTIMONIALS.map((t, i) => (
@@ -427,15 +427,20 @@ const FinalCTA = memo(function FinalCTA({ isDark }) {
         <div ref={ref} className="rv">
           <div className="mx-auto mb-5 h-[3px] w-12 rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }} />
           <h2 className="text-5xl font-bold md:text-6xl lg:text-7xl leading-tight" style={{ color: head(isDark) }}>
-            Ready to Transform<br />Your <span className="nlm-text">Assessment</span><br />Process?
+            Stop Spending<br />Evenings on <span className="nlm-text">Paper-Setting</span>
           </h2>
-          <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed" style={{ color: muted(isDark) }}>Join thousands of educators saving time and improving outcomes with a4ai.</p>
+          <p className="mx-auto mt-6 max-w-xl text-lg leading-relaxed" style={{ color: muted(isDark) }}>Join teachers across India who create better test papers in minutes, not hours.</p>
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Link to="/signup">
-              <button className="btn-blk px-10 py-4 text-base"><span className="relative z-10 flex items-center gap-2">Get Started For Free <ArrowRight className="h-4 w-4" /></span></button>
+              <button className="btn-blk px-10 py-4 text-base"><span className="relative z-10 flex items-center gap-2">Try for FREE <ArrowRight className="h-4 w-4" /></span></button>
             </Link>
-            <p className="text-sm" style={{ color: muted(isDark) }}>No credit card · Free forever</p>
+            <Link to="/pricing">
+              <button className={`px-10 py-4 text-base ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                <span className="relative z-10 flex items-center gap-2"><Crown className="h-4 w-4" /> View Pricing</span>
+              </button>
+            </Link>
           </div>
+          <p className="mt-4 text-sm" style={{ color: muted(isDark) }}>2 free papers every month · No credit card needed</p>
         </div>
       </div>
     </section>
