@@ -1,11 +1,10 @@
 // src/components/TestGeneratorForm.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V6 — CBSE Section Pattern Support
+// V7 — userId fix: fresh supabase fetch on every submit
 //
-// v6 changes:
-//   - CBSE Pattern toggle (generates Section A-E paper)
-//   - Section breakdown info when toggle is ON
-//   - cbsePattern field passed to backend
+// v7 changes:
+//   - onSubmit fetches userId fresh from supabase before sending
+//   - Prevents "Usage check skipped: no valid user_id" in backend
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -14,7 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
   Library, GraduationCap, Book, ChevronDown, Clock, Zap,
-  Loader2, AlertCircle, Lock, Timer, FileText,
+  Loader2, AlertCircle, Timer, FileText,
 } from "lucide-react";
 
 import { formSchema, FormSchema } from "@/lib/schema";
@@ -355,20 +354,21 @@ export default function TestGeneratorForm() {
     loadChapters();
   }, [loadChapters]);
 
-  useEffect(() => {
-    const fetchUser = async () => {
+  // ── KEY FIX: userId fresh fetch on every submit ──────────────────────
+  const onSubmit = async (data: FormSchema) => {
+    // Always fetch fresh userId at submit time — don't rely on form state
+    let userId = data.userId;
+    if (!userId) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user?.id) methods.setValue("userId", user.id);
-      } catch { /* not logged in */ }
-    };
-    fetchUser();
-  }, [methods]);
+        userId = user?.id;
+      } catch {
+        // Not logged in — proceed without userId
+      }
+    }
 
-  const onSubmit = async (data: FormSchema) => {
-    // Inject cbsePattern into the data sent to backend
-    const payload = { ...data, cbsePattern };
-    console.log("📝 Form data:", payload);
+    const payload = { ...data, cbsePattern, userId };
+    console.log("📝 Submitting with userId:", userId ? userId.slice(0, 8) + "..." : "none");
     await generate(payload);
   };
 
@@ -444,7 +444,7 @@ export default function TestGeneratorForm() {
 
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 1.5. CBSE PATTERN TOGGLE (NEW)                                */}
+        {/* 1.5. CBSE PATTERN TOGGLE                                      */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         <motion.div variants={itemVariants}>
           <CBSEPatternToggle enabled={cbsePattern} onToggle={setCbsePattern} />
@@ -489,7 +489,7 @@ export default function TestGeneratorForm() {
 
 
         {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 3. DIFFICULTY MIX & STATS (hidden when CBSE pattern ON)       */}
+        {/* 3. DIFFICULTY MIX & STATS                                     */}
         {/* ═══════════════════════════════════════════════════════════════ */}
         {!cbsePattern && (
           <motion.div

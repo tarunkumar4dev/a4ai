@@ -1,17 +1,11 @@
 // src/components/GeneratedTestView.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V5 — Fully customizable test preview with:
-//   - MathText rendering (LaTeX → proper HTML, no $ signs)
-//   - Per-question: Approve / Reject / Edit
-//   - Inline editing (text, options, answer)
-//   - Regenerate rejected questions
-//   - Download as PDF / DOCX (Student, Answer Key, Teacher copy)
-//   - Logo pass-through to PDF export
-//   - Share as Contest button with modal
-//   - Smoother animations & transitions
+// V6 — Added sticky bottom bar with Save & Finish + New Test
+// All existing functionality preserved (Download, Contest, etc.)
 // ──────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown, ChevronUp, CheckCircle2, XCircle, Copy, FileDown,
@@ -22,6 +16,7 @@ import MathText from "./MathText";
 import { api } from "@/lib/api";
 import type { GenerateTestResponse, GeneratedQuestion } from "@/lib/api";
 import { CreateContestModal } from "./contest/CreateContestModal";
+import { supabase } from "@/integrations/supabase/client";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -126,7 +121,7 @@ const QuestionCard = ({
           </div>
         </div>
 
-        {/* Question Text — MathText renders LaTeX properly */}
+        {/* Question Text */}
         {isEditing ? (
           <textarea
             className="w-full text-sm font-semibold text-gray-800 bg-white border border-blue-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-300 resize-none"
@@ -227,7 +222,7 @@ const QuestionCard = ({
   );
 };
 
-// ── Download Helper (sends logo too) ───────────────────────────────────
+// ── Download Helper ────────────────────────────────────────────────────
 
 async function downloadFile(
   questions: GeneratedQuestion[],
@@ -275,17 +270,46 @@ interface GeneratedTestViewProps {
 }
 
 const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewProps) => {
+  const navigate = useNavigate();
+
   const [showAnswers, setShowAnswers] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-  
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
+
   // Contest modal state
   const [showContestModal, setShowContestModal] = useState(false);
 
   const [questions, setQuestions] = useState<QuestionWithStatus[]>(
     result.questions.map((q) => ({ ...q, status: "pending" as QuestionStatus }))
   );
+
+  // ── Save & Finish ────────────────────────────────────────────────
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const teacherId = user?.id || "00000000-0000-0000-0000-000000000000";
+      await api.saveTest(result.testId, teacherId);
+      setSaveStatus("saved");
+      // Small delay so user sees "Saved!" before redirect
+      setTimeout(() => navigate("/dashboard"), 800);
+    } catch (err) {
+      console.error("Save failed:", err);
+      alert("Save failed. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ── New Test ─────────────────────────────────────────────────────
+  const handleNewTest = () => {
+    if (saveStatus === "saved" || window.confirm("Start a new test? Download/save your test first if needed.")) {
+      onReset();
+    }
+  };
 
   // ── Per-question actions ─────────────────────────────────────────
   const handleStatusChange = useCallback((id: string, status: QuestionStatus) => {
@@ -435,7 +459,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
               <Copy size={14} /> Copy
             </button>
 
-            {/* Share as Contest Button - New */}
+            {/* Share as Contest Button */}
             <button
               onClick={() => setShowContestModal(true)}
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
@@ -515,13 +539,10 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
             Regenerate {rejectedCount} Rejected
           </button>
         )}
-        <button onClick={onReset} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors ml-auto">
-          Start Over
-        </button>
       </motion.div>
 
       {/* ── Questions ───────────────────────────────────────────────── */}
-      <div className="space-y-4">
+      <div className="space-y-4 pb-32">
         {questions.map((q, idx) => (
           <QuestionCard
             key={q.id}
@@ -550,6 +571,60 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
           />
         )}
       </AnimatePresence>
+
+      {/* ── Sticky Bottom Bar ───────────────────────────────────────── */}
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 80, damping: 15, delay: 0.5 }}
+        className="fixed bottom-8 left-0 w-full px-4 md:px-6 pointer-events-none z-50"
+      >
+        <div className="max-w-4xl mx-auto flex items-center justify-between bg-[#111827] text-white p-3 pl-6 rounded-[24px] shadow-[0_20px_40px_rgba(0,0,0,0.3)] pointer-events-auto border border-white/10">
+
+          {/* Left — status info */}
+          <div className="flex items-center gap-2 text-gray-400">
+            <CheckCircle2 size={16} className={approvedCount > 0 ? "text-emerald-400" : "text-gray-500"} />
+            <span className="text-xs font-bold uppercase tracking-wider hidden sm:block">
+              <span className="text-white">{activeQuestions.length}</span> questions
+              {approvedCount > 0 && (
+                <span className="text-emerald-400 ml-2">· {approvedCount} approved</span>
+              )}
+            </span>
+          </div>
+
+          {/* Right — actions */}
+          <div className="flex items-center gap-3">
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              onClick={handleNewTest}
+              className="px-6 py-3.5 rounded-xl text-sm font-bold bg-gray-700 text-gray-200 hover:bg-gray-600 transition-all"
+            >
+              New Test
+            </motion.button>
+
+            <motion.button
+              whileHover={!isSaving ? { scale: 1.03, boxShadow: "0 0 20px rgba(52,211,153,0.3)" } : {}}
+              whileTap={!isSaving ? { scale: 0.97 } : {}}
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving || saveStatus === "saved"}
+              className="px-8 py-3.5 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl font-bold text-sm text-white shadow-[0_4px_14px_rgba(0,0,0,0.4)] flex items-center gap-2 transition-all border border-white/10 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <><Loader2 size={18} className="animate-spin" /> Saving...</>
+              ) : saveStatus === "saved" ? (
+                <><Check size={18} /> Saved!</>
+              ) : (
+                <><Save size={18} /> Save & Finish</>
+              )}
+            </motion.button>
+          </div>
+
+        </div>
+      </motion.div>
+
     </motion.div>
   );
 };
