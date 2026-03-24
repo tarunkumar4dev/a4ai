@@ -25,7 +25,7 @@ import { PreviewModal } from "./PreviewModal";
 import { SummaryStats } from "./SummaryStats";
 import GeneratedTestView from "./GeneratedTestView";
 import { useTestGenerator } from "@/hooks/useTestGenerator";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/providers/AuthProvider";
 import { api } from "@/lib/api";
 
 
@@ -302,6 +302,7 @@ export default function TestGeneratorForm() {
   const [cbsePattern, setCbsePattern] = useState(true);
 
   const { generate, isLoading, result, error, reset, progress } = useTestGenerator();
+  const { user } = useAuth();
 
   const methods = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
@@ -354,19 +355,9 @@ export default function TestGeneratorForm() {
     loadChapters();
   }, [loadChapters]);
 
-  // ── KEY FIX: userId fresh fetch on every submit ──────────────────────
+  // ── KEY FIX: userId from useAuth hook — same instance as AuthProvider ──
   const onSubmit = async (data: FormSchema) => {
-    // Always fetch fresh userId at submit time — don't rely on form state
-    let userId = data.userId;
-    if (!userId) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        userId = user?.id;
-      } catch {
-        // Not logged in — proceed without userId
-      }
-    }
-
+    const userId = user?.id || data.userId;
     const payload = { ...data, cbsePattern, userId };
     console.log("📝 Submitting with userId:", userId ? userId.slice(0, 8) + "..." : "none");
     await generate(payload);
