@@ -64,7 +64,7 @@ export function useTestGenerator(): UseTestGeneratorReturn {
             quantity: row.quantity || 5,
             marks: row.marks || 1,
             difficulty: row.difficulty || "Medium",
-            format: row.format || "PDF",
+            format: row.format || "mcq",
           })),
         mode: formData.mode || "Simple",
         enableWatermark: formData.enableWatermark ?? true,

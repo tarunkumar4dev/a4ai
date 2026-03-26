@@ -11,7 +11,7 @@ interface SimpleRowData {
   quantity: number;
   marks: number;
   difficulty: "Easy" | "Medium" | "Hard" | "Mixed";
-  format: "MCQ" | "Short" | "Long" | "Essay";
+  format: "MCQ" | "Short" | "Long" | "Essay" | "JournalEntry" | "Ledger" | "TrialBalance";
   refFile?: File;
 }
 
@@ -31,7 +31,7 @@ interface TableRowProps {
 }
 
 interface FormValues {
-  classGrade: string;       // "Class 9", "Class 10", "Class 11", "Class 12"
+  classGrade: string;
   subject: string;
   useNCERT: boolean;
   ncertChapters: string[];
@@ -97,7 +97,6 @@ function useChapters(classLevel: string, subject: string) {
         console.error("Chapter fetch failed, using fallback:", err);
         setError(err.message);
 
-        // Fallback to hardcoded data if API fails
         const fallback = SUBJECT_TOPICS_FALLBACK[subject] || [];
         setChapters(fallback);
         setSubtopicsMap(COMMON_SUBTOPICS_FALLBACK);
@@ -114,7 +113,7 @@ function useChapters(classLevel: string, subject: string) {
   return { chapters, subtopicsMap, loading, error };
 }
 
-// ==================== FALLBACK DATA (used when API is down) ====================
+// ==================== FALLBACK DATA ====================
 const SUBJECT_TOPICS_FALLBACK: Record<string, string[]> = {
   "Science": [
     "Chemical Reactions & Equations", "Acids, Bases & Salts", "Metals & Non-metals",
@@ -158,7 +157,31 @@ const SUBJECT_TOPICS_FALLBACK: Record<string, string[]> = {
   "Political Science": [
     "Power Sharing", "Federalism", "Gender, Religion and Caste",
     "Political Parties", "Outcomes of Democracy"
-  ]
+  ],
+  "Accountancy": [
+    "Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions",
+    "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation",
+    "Provisions and Reserves", "Bill of Exchange", "Financial Statements",
+    "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership",
+    "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements",
+    "Cash Flow Statement"
+  ],
+  "Accounts": [
+    "Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions",
+    "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation",
+    "Provisions and Reserves", "Bill of Exchange", "Financial Statements",
+    "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership",
+    "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements",
+    "Cash Flow Statement"
+  ],
+  "Accounting": [
+    "Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions",
+    "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation",
+    "Provisions and Reserves", "Bill of Exchange", "Financial Statements",
+    "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership",
+    "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements",
+    "Cash Flow Statement"
+  ],
 };
 
 const COMMON_SUBTOPICS_FALLBACK: Record<string, string[]> = {
@@ -181,6 +204,14 @@ const COMMON_SUBTOPICS_FALLBACK: Record<string, string[]> = {
   "Gender, Religion and Caste": ["Gender division", "Religion and politics", "Caste and politics"],
   "Political Parties": ["Functions of parties", "National parties", "State parties"],
   "Outcomes of Democracy": ["Accountability", "Economic growth", "Inequality", "Social diversity"],
+  "Introduction to Accounting": ["Meaning and objectives", "Accounting as information system", "Users of accounting", "Accounting terms"],
+  "Recording of Transactions": ["Accounting equation", "Rules of debit and credit", "Journal", "Ledger posting"],
+  "Ledger": ["Format of ledger", "Posting from journal", "Balancing accounts", "T-account"],
+  "Trial Balance": ["Objectives", "Methods of preparation", "Errors and rectification"],
+  "Bank Reconciliation Statement": ["Need and purpose", "Preparation", "Adjustments"],
+  "Depreciation": ["Meaning and causes", "Methods", "Accounting treatment"],
+  "Financial Statements": ["Trading account", "Profit and loss account", "Balance sheet", "Adjustments"],
+  "Accounting for Partnership": ["Nature", "Partnership deed", "Profit sharing ratio", "Capital accounts"],
 };
 
 // ==================== QUESTION TYPE CONFIG ====================
@@ -190,6 +221,14 @@ const QUESTION_FORMATS = [
   { value: "Long",   label: "Long",  icon: FileText,       color: "bg-purple-600 text-white" },
   { value: "Essay",  label: "Essay", icon: ArrowLeftRight, color: "bg-amber-600 text-white" },
 ];
+
+const ACCOUNTANCY_FORMATS = [
+  { value: "JournalEntry", label: "Journal",  icon: FileText,       color: "bg-emerald-600 text-white" },
+  { value: "Ledger",       label: "Ledger",   icon: BookOpen,       color: "bg-teal-600 text-white" },
+  { value: "TrialBalance", label: "Trial Bal",icon: ListChecks,     color: "bg-cyan-600 text-white" },
+];
+
+const ACCOUNTANCY_SUBJECTS_FE = ["Accountancy", "Accounts", "Accounting"];
 
 // ==================== UUID GENERATOR ====================
 const generateUUID = (): string => {
@@ -280,14 +319,27 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
 
 RefUploadButton.displayName = 'RefUploadButton';
 
-// ==================== QUESTION TYPE SELECTOR ====================
-const FormatSelector = memo(({ index }: { index: number }) => {
+// ==================== QUESTION TYPE SELECTOR (FIXED) ====================
+const FormatSelector = memo(({ index, subject }: { index: number; subject: string }) => {
   const { watch, setValue } = useFormContext();
   const currentFormat = watch(`simpleData.${index}.format`) || "MCQ";
+  const isAccountancy = ACCOUNTANCY_SUBJECTS_FE.includes(subject);
+
+  const visibleFormats = isAccountancy
+    ? [...QUESTION_FORMATS, ...ACCOUNTANCY_FORMATS]
+    : QUESTION_FORMATS;
+
+  // Reset to MCQ if switching away from Accountancy but accountancy format is selected
+  React.useEffect(() => {
+    const accValues = ACCOUNTANCY_FORMATS.map(f => f.value);
+    if (!isAccountancy && accValues.includes(currentFormat)) {
+      setValue(`simpleData.${index}.format`, "MCQ");
+    }
+  }, [isAccountancy, currentFormat, index, setValue]);
 
   return (
-    <div className="flex gap-1">
-      {QUESTION_FORMATS.map((fmt) => {
+    <div className="flex gap-1 flex-wrap">
+      {visibleFormats.map((fmt) => {
         const isActive = currentFormat === fmt.value;
         const Icon = fmt.icon;
         return (
@@ -322,8 +374,8 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
 }, ref) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
+  const subject = watch("subject") || ""; // ← ADDED: Get subject from form context
 
-  // Subtopics: API response first, then fallback
   const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS_FALLBACK[currentTopic] || [];
 
   const rowNumber = index + 1;
@@ -436,7 +488,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
 
       {/* QUESTION TYPE */}
       <td className="py-3 px-4">
-        <FormatSelector index={index} />
+        <FormatSelector index={index} subject={subject} />
       </td>
 
       {/* REFERENCE */}
@@ -476,7 +528,6 @@ const SimpleModeView: React.FC = () => {
   const useNCERT = watch("useNCERT");
   const ncertChapters = watch("ncertChapters") || [];
 
-  // ── Use chapters from parent form (TestGeneratorForm already fetches from API) ──
   const availableTopics = React.useMemo(() => {
     if (ncertChapters.length > 0) {
       return ncertChapters;
@@ -484,10 +535,9 @@ const SimpleModeView: React.FC = () => {
     return SUBJECT_TOPICS_FALLBACK[currentSubject] || [];
   }, [ncertChapters, currentSubject]);
 
-  const chaptersLoading = false; // Parent handles loading state
-  const subtopicsMap: Record<string, string[]> = {}; // Subtopics from fallback via TableRow
+  const chaptersLoading = false;
+  const subtopicsMap: Record<string, string[]> = {};
 
-  // ── Reset row topics when class/subject changes ──
   const prevKeyRef = useRef(`${classLevel}-${currentSubject}`);
   useEffect(() => {
     const newKey = `${classLevel}-${currentSubject}`;
@@ -518,7 +568,6 @@ const SimpleModeView: React.FC = () => {
       transition={{ duration: 0.3 }}
       className="bg-white rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50 backdrop-blur-sm p-2"
     >
-      {/* Info Banner */}
       <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 rounded-t-[22px]">
         <div className="flex items-center gap-2 text-sm text-blue-800">
           <BookOpen size={16} aria-hidden="true" />
@@ -541,7 +590,6 @@ const SimpleModeView: React.FC = () => {
         </div>
       </div>
 
-      {/* Empty state — no class/subject selected yet */}
       {(!classLevel || !currentSubject) && (
         <div className="py-12 text-center text-gray-400">
           <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
@@ -550,7 +598,6 @@ const SimpleModeView: React.FC = () => {
         </div>
       )}
 
-      {/* Table — visible only when class + subject selected */}
       {classLevel && currentSubject && (
         <>
           <div className="overflow-x-auto">
@@ -617,4 +664,15 @@ export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
   }
 
   return <SimpleModeView />;
+};
+
+// ==================== FORMAT MAP FOR API CALL ====================
+export const FORMAT_MAP: Record<string, string> = {
+  MCQ:          "mcq",
+  Short:        "short_answer",
+  Long:         "long_answer",
+  Essay:        "long_answer",
+  JournalEntry: "journal_entry",
+  Ledger:       "ledger",
+  TrialBalance: "trial_balance",
 };

@@ -1,7 +1,12 @@
 // src/components/GeneratedTestView.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V6 — Added sticky bottom bar with Save & Finish + New Test
-// All existing functionality preserved (Download, Contest, etc.)
+// V7 — Accountancy Table Support (Journal Entry, Ledger, Trial Balance)
+// 
+// v7 changes:
+//   - AnswerTableView component for structured table answers
+//   - Table renders in question card when "Show Answers" is on
+//   - Supports journal_entry, ledger, trial_balance formats
+//   - All v6 features retained (Save & Finish, Contest, Download)
 // ──────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from "react";
@@ -22,9 +27,18 @@ import { supabase } from "@/integrations/supabase/client";
 
 type QuestionStatus = "pending" | "approved" | "rejected" | "editing";
 
+interface AnswerTable {
+  type: string;  // "journal_entry" | "ledger" | "trial_balance"
+  headers: string[];
+  rows: string[][];
+  total_row?: string[] | null;
+}
+
 interface QuestionWithStatus extends GeneratedQuestion {
   status: QuestionStatus;
   editData?: Partial<GeneratedQuestion>;
+  answer_table?: AnswerTable | null;
+  answerTable?: AnswerTable | null;
 }
 
 // ── Badges ─────────────────────────────────────────────────────────────
@@ -61,7 +75,157 @@ const BloomBadge = ({ level }: { level: string | null }) => {
   );
 };
 
-// ── Question Card ──────────────────────────────────────────────────────
+// ── Format Badge (NEW v7 — shows table format type) ────────────────────
+
+const formatBadgeConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  journal_entry:  { bg: "bg-indigo-50",  text: "text-indigo-700",  border: "border-indigo-200", label: "Journal Entry" },
+  ledger:         { bg: "bg-violet-50",  text: "text-violet-700",  border: "border-violet-200", label: "Ledger" },
+  trial_balance:  { bg: "bg-fuchsia-50", text: "text-fuchsia-700", border: "border-fuchsia-200", label: "Trial Balance" },
+};
+
+const FormatBadge = ({ format }: { format: string }) => {
+  const c = formatBadgeConfig[format];
+  if (!c) return null;
+  return (
+    <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${c.bg} ${c.text} ${c.border}`}>
+      {c.label}
+    </span>
+  );
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// NEW v7: AnswerTableView — Renders Accountancy tables
+// ═══════════════════════════════════════════════════════════════════════
+
+const TABLE_TITLES: Record<string, string> = {
+  journal_entry: "Journal Entry",
+  ledger: "Ledger Account",
+  trial_balance: "Trial Balance",
+};
+
+const AMOUNT_COLS: Record<string, number[]> = {
+  journal_entry: [3, 4],
+  trial_balance: [3, 4],
+  ledger: [3, 7],
+};
+
+const AnswerTableView = ({ table }: { table: AnswerTable }) => {
+  if (!table || !table.headers || !table.rows) return null;
+
+  const tableType = table.type || "journal_entry";
+  const title = TABLE_TITLES[tableType] || "Answer Table";
+  const amountCols = AMOUNT_COLS[tableType] || [];
+  const isLedger = tableType === "ledger";
+
+  return (
+    <div className="mt-3 mb-2 mx-5">
+      <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-2">
+        {title}
+      </p>
+      <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <table className="w-full text-xs border-collapse">
+          {/* Ledger: Dr/Cr super-header */}
+          {isLedger && table.headers.length >= 8 && (
+            <thead>
+              <tr>
+                <th
+                  colSpan={4}
+                  className="bg-emerald-50 text-emerald-800 font-bold text-center py-1.5 border-b border-r-2 border-gray-300 text-[10px] uppercase tracking-wider"
+                >
+                  Debit (Dr.)
+                </th>
+                <th
+                  colSpan={4}
+                  className="bg-rose-50 text-rose-800 font-bold text-center py-1.5 border-b border-gray-300 text-[10px] uppercase tracking-wider"
+                >
+                  Credit (Cr.)
+                </th>
+              </tr>
+            </thead>
+          )}
+
+          {/* Column headers */}
+          <thead>
+            <tr>
+              {table.headers.map((h: string, i: number) => (
+                <th
+                  key={i}
+                  className={`
+                    bg-gray-50 text-gray-700 font-bold py-2 px-3 border-b border-gray-200
+                    text-[10px] uppercase tracking-wider
+                    ${amountCols.includes(i) ? "text-right" : "text-left"}
+                    ${isLedger && i === 3 ? "border-r-2 border-gray-300" : ""}
+                  `}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          {/* Data rows */}
+          <tbody>
+            {table.rows.map((row: string[], rowIdx: number) => {
+              const isNarration = tableType === "journal_entry"
+                && row[1] && row[1].startsWith("(")
+                && !row[3] && !row[4];
+
+              return (
+                <tr
+                  key={rowIdx}
+                  className={`
+                    border-b border-gray-100
+                    ${isNarration ? "bg-gray-50/50 italic" : "hover:bg-gray-50/80"}
+                  `}
+                >
+                  {row.map((cell: string, cellIdx: number) => (
+                    <td
+                      key={cellIdx}
+                      className={`
+                        py-1.5 px-3 text-gray-700
+                        ${amountCols.includes(cellIdx) ? "text-right font-mono" : "text-left"}
+                        ${isLedger && cellIdx === 3 ? "border-r-2 border-gray-300" : ""}
+                        ${isNarration && cellIdx === 1 ? "text-gray-500 text-[10px]" : ""}
+                        ${cell && (cell.includes("Dr.") || cell.includes(" Dr")) ? "font-semibold" : ""}
+                        ${cell && (cell.startsWith("  To ") || cell.startsWith("To ")) ? "pl-8" : ""}
+                      `}
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+
+            {/* Total row */}
+            {table.total_row && (
+              <tr className="bg-gray-100 font-bold border-t-2 border-gray-400">
+                {table.total_row.map((cell: string, i: number) => (
+                  <td
+                    key={i}
+                    className={`
+                      py-2 px-3 text-gray-900
+                      ${amountCols.includes(i) ? "text-right font-mono" : "text-left"}
+                      ${isLedger && i === 3 ? "border-r-2 border-gray-300" : ""}
+                    `}
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// Question Card
+// ═══════════════════════════════════════════════════════════════════════
 
 const QuestionCard = ({
   question, index, showAnswer, onStatusChange, onEdit, onSaveEdit,
@@ -81,6 +245,10 @@ const QuestionCard = ({
   const correctLetter = (isEditing ? ed.correctAnswer : question.correctAnswer)?.trim()?.[0]?.toUpperCase();
   const correctIdx = labels.indexOf(correctLetter || "");
 
+  // v7: Get answer table from either key
+  const answerTable = (question as any).answerTable || (question as any).answer_table || null;
+  const questionFormat = (question as any).format || "mcq";
+
   return (
     <motion.div
       layout
@@ -96,6 +264,8 @@ const QuestionCard = ({
             <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg">Q{index + 1}</span>
             <DiffBadge level={question.difficulty} />
             <BloomBadge level={question.bloomLevel} />
+            {/* v7: Format badge for table types */}
+            <FormatBadge format={questionFormat} />
             {question.status === "approved" && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Approved</span>}
             {question.status === "rejected" && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Rejected</span>}
           </div>
@@ -136,7 +306,7 @@ const QuestionCard = ({
         )}
       </div>
 
-      {/* Options */}
+      {/* Options (MCQ / Assertion-Reason) */}
       {question.options && question.options.length > 0 && (
         <div className="px-5 pb-3 space-y-2">
           {(isEditing ? (ed.options || question.options) : question.options).map((opt, optIdx) => {
@@ -190,6 +360,11 @@ const QuestionCard = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* v7: Answer Table (Accountancy — Journal Entry / Ledger / Trial Balance) */}
+      {showAnswer && answerTable && (
+        <AnswerTableView table={answerTable} />
       )}
 
       {/* Explanation (collapsible) */}
@@ -261,7 +436,9 @@ async function downloadFile(
   URL.revokeObjectURL(url);
 }
 
-// ── Main Component ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// Main Component
+// ═══════════════════════════════════════════════════════════════════════
 
 interface GeneratedTestViewProps {
   result: GenerateTestResponse;
@@ -294,7 +471,6 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
       const teacherId = user?.id || "00000000-0000-0000-0000-000000000000";
       await api.saveTest(result.testId, teacherId);
       setSaveStatus("saved");
-      // Small delay so user sees "Saved!" before redirect
       setTimeout(() => navigate("/dashboard"), 800);
     } catch (err) {
       console.error("Save failed:", err);

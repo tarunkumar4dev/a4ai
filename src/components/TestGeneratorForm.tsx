@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { formSchema, FormSchema } from "@/lib/schema";
-import { TestRowEditor } from "./TestRowEditor";
+import { TestRowEditor, FORMAT_MAP } from "./TestRowEditor";
 import { LogoUpload } from "./LogoUpload";
 import { DifficultyMix } from "./DifficultyMix";
 import { TabBar } from "./TabBar";
@@ -355,10 +355,20 @@ export default function TestGeneratorForm() {
     loadChapters();
   }, [loadChapters]);
 
-  // ── KEY FIX: userId from useAuth hook — same instance as AuthProvider ──
+  // ── KEY FIX: userId from useAuth hook + FORMAT_MAP conversion ──
   const onSubmit = async (data: FormSchema) => {
     const userId = user?.id || data.userId;
-    const payload = { ...data, cbsePattern, userId };
+
+    // ← FORMAT_MAP conversion for backend compatibility
+    const mappedData = {
+      ...data,
+      simpleData: data.simpleData.map(row => ({
+        ...row,
+        format: FORMAT_MAP[row.format] ?? "mcq",
+      })),
+    };
+
+    const payload = { ...mappedData, cbsePattern, userId };
     console.log("📝 Submitting with userId:", userId ? userId.slice(0, 8) + "..." : "none");
     await generate(payload);
   };

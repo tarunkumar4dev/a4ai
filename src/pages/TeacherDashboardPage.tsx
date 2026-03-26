@@ -1,7 +1,11 @@
 // src/pages/TeacherDashboardPage.tsx
+// v2 — Test History fetches real data from Supabase `tests` table
+
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/providers/AuthProvider";
+import { supabase } from "@/lib/supabaseClient";
 
 /* ------------------- STYLES ------------------- */
 const customStyles = `
@@ -213,13 +217,125 @@ function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
   );
 }
 
+/* ------------------- TEST HISTORY COMPONENT ------------------- */
+
+interface SavedTest {
+  id: string;
+  exam_title: string;
+  board: string;
+  class_grade: string;
+  subject: string;
+  status: string;
+  total_questions: number;
+  total_marks: number;
+  created_at: string;
+}
+
+function TestHistory({ onCreateNew }: { onCreateNew: () => void }) {
+  const { user } = useAuth();
+  const [tests, setTests] = useState<SavedTest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchTests = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("tests")
+        .select("id, exam_title, board, class_grade, subject, status, total_questions, total_marks, created_at")
+        .eq("teacher_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (!error && data) setTests(data as SavedTest[]);
+      setLoading(false);
+    };
+    fetchTests();
+  }, [user]);
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  };
+
+  const statusColor = (status: string) => {
+    if (status === "saved") return "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300";
+    if (status === "draft") return "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300";
+    return "bg-slate-100 text-slate-600 border-slate-200";
+  };
+
+  return (
+    <div className="space-y-6 sm:space-y-8 animate-pop">
+      <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-10">
+          <div>
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">Test History</h2>
+            <p className="text-sm text-slate-500 mt-1 font-medium">{tests.length} tests found</p>
+          </div>
+          <GlossyButton label="Create Test" variant="blue" icon={Icons.Zap} small onClick={onCreateNew} />
+        </div>
+
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse h-20 bg-white/40 rounded-[20px]" />
+            ))}
+          </div>
+        ) : tests.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="w-16 h-16 inset-pill border-none text-blue-400 rounded-[24px] flex items-center justify-center mx-auto mb-4">
+              <Icons.FileText />
+            </div>
+            <p className="text-slate-500 font-bold text-lg">No tests yet</p>
+            <p className="text-slate-400 text-sm mt-1">Generate your first test to see it here</p>
+            <div className="mt-6">
+              <GlossyButton label="Create First Test" variant="blue" icon={Icons.Zap} small onClick={onCreateNew} />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 sm:space-y-4">
+            {tests.map((t) => (
+              <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-white/60 dark:border-white/10 hover:bg-white/80 transition-all group gap-3">
+                <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+                  <div className="p-3 sm:p-4 rounded-[16px] sm:rounded-[24px] inset-pill border-none text-blue-500 shadow-inner shrink-0">
+                    <Icons.FileText />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-extrabold text-slate-900 dark:text-white text-base sm:text-lg group-hover:text-blue-600 transition-colors truncate">
+                      {t.exam_title || "Untitled Test"}
+                    </h4>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                      Class {t.class_grade} • {t.subject} • {t.board} • {formatDate(t.created_at)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 sm:gap-4 ml-auto sm:ml-0 flex-shrink-0">
+                  {t.total_questions > 0 && (
+                    <span className="text-xs font-bold text-blue-700 dark:text-blue-300 inset-pill border-none px-3 py-1.5 rounded-[16px]">
+                      {t.total_questions}Q · {t.total_marks}M
+                    </span>
+                  )}
+                  <span className={`text-[10px] px-3 py-1.5 rounded-[16px] font-bold uppercase tracking-wider border ${statusColor(t.status)}`}>
+                    {t.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ------------------- CHATBOT ------------------- */
 type Message = { role: "user" | "assistant" | "system"; content: string };
 
 /* ------------------- MAIN PAGE ------------------- */
 export default function TeacherDashboardPage() {
   const navigate = useNavigate();
-  const profile = { full_name: "Tarun Sharma", email: "tarun.s@school.edu", coins: 250 };
+  const { user } = useAuth();
+  const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
 
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -231,7 +347,6 @@ export default function TeacherDashboardPage() {
   const [studentSearch, setStudentSearch] = useState("");
 
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showTestModal, setShowTestModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteSent, setInviteSent] = useState(false);
 
@@ -244,6 +359,20 @@ export default function TeacherDashboardPage() {
   const [inputMessage, setInputMessage] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Recent tests for dashboard tab (top 3)
+  const [recentTests, setRecentTests] = useState<SavedTest[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("tests")
+      .select("id, exam_title, board, class_grade, subject, status, total_questions, total_marks, created_at")
+      .eq("teacher_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(3)
+      .then(({ data }) => { if (data) setRecentTests(data as SavedTest[]); });
+  }, [user]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -297,12 +426,6 @@ export default function TeacherDashboardPage() {
     }
   };
 
-  const [tests] = useState([
-    { id: 1, name: "Physics Midterm", date: "May 14, 2025", class: "10A", status: "Published", avg: 78, isPrivate: true, code: "PHY-9X2" },
-    { id: 2, name: "Calculus Quiz", date: "May 10, 2025", class: "11B", status: "Draft", avg: null, isPrivate: false, code: null },
-    { id: 3, name: "Chemistry Lab", date: "May 02, 2025", class: "10B", status: "Graded", avg: 82, isPrivate: true, code: "CHM-4B1" },
-  ]);
-
   const [students, setStudents] = useState([
     { id: 1, name: "Sarah Johnson", email: "sarah.j@student.edu", class: "10A", score: 94, status: "Excellent" },
     { id: 2, name: "Michael Chen", email: "m.chen@student.edu", class: "11B", score: 87, status: "Good" },
@@ -311,7 +434,7 @@ export default function TeacherDashboardPage() {
 
   const filteredStudents = students.filter((s) => s.name.toLowerCase().includes(studentSearch.toLowerCase()));
   const removeStudent = (id: number) => setStudents(students.filter((s) => s.id !== id));
-  const getFirstName = () => profile?.full_name?.split(" ")[0] || "Educator";
+  const getFirstName = () => displayName?.split(" ")[0] || "Educator";
 
   const handleInvite = (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,16 +450,19 @@ export default function TeacherDashboardPage() {
     { id: "ai-tools", icon: Icons.Brain, label: "AI Tools" },
   ];
 
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  };
+
   return (
     <div className={isDarkMode ? "dark" : ""}>
       <div className="flex h-[100dvh] w-full font-sans text-slate-800 dark:text-slate-100 overflow-hidden relative bg-slate-100 dark:bg-slate-900 transition-colors duration-500">
         <style>{customStyles}</style>
 
-        {/* Ambient lights */}
         <div className="absolute top-0 left-0 w-full h-[70vh] bg-gradient-to-b from-sky-200/90 via-blue-100/40 to-transparent dark:from-blue-900/60 dark:via-blue-900/20 pointer-events-none z-0" />
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[40rem] sm:w-[60rem] h-[20rem] sm:h-[30rem] bg-sky-300/40 dark:bg-blue-800/40 rounded-full filter blur-[100px] pointer-events-none z-0" />
 
-        {/* Mobile backdrop */}
         {mobileMenuOpen && <div className="fixed inset-0 bg-white/20 dark:bg-black/60 backdrop-blur-md z-[190] lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
 
         {/* ===== SIDEBAR ===== */}
@@ -376,22 +502,20 @@ export default function TeacherDashboardPage() {
                 </button>
                 <div className="min-w-0">
                   <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white tracking-tight truncate">
-                    {activeTab === "profile" ? "Your Profile" : `Welcome, ${getFirstName()}`}
+                    Welcome, {getFirstName()}
                   </h1>
                   <p className="text-slate-600 dark:text-blue-200/70 text-sm sm:text-base mt-1 sm:mt-2 font-medium truncate">
-                    {activeTab === "profile" ? "Manage your account settings." : "Here's what's happening in your classes."}
+                    Here's what's happening in your classes.
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-end">
-                {/* Search - desktop only */}
                 <div className="hidden md:flex items-center inset-pill rounded-full p-1.5 w-48 lg:w-60">
                   <div className="pl-3 text-sky-500"><Icons.Search /></div>
                   <input type="text" placeholder="Search..." className="flex-1 bg-transparent outline-none text-sm font-bold text-slate-700 dark:text-white px-2 placeholder-slate-400" />
                 </div>
 
-                {/* Notifications */}
                 <div className="relative shrink-0" ref={notifRef}>
                   <button onClick={() => setIsNotifOpen(!isNotifOpen)} className={`p-2.5 sm:p-3 rounded-[20px] sm:rounded-[24px] inset-pill transition-all relative active:scale-95 ${isNotifOpen ? "text-blue-600" : "text-slate-500 dark:text-slate-300"}`}>
                     <Icons.Bell />
@@ -401,29 +525,23 @@ export default function TeacherDashboardPage() {
                     <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-4 sm:p-5 flex flex-col gap-2 animate-pop z-[150]">
                       <div className="flex justify-between items-center mb-3 px-2">
                         <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white">Notifications</h3>
-                        <span className="text-[10px] font-bold btn-glossy-blue px-2.5 py-1 rounded-full">3 New</span>
+                        <span className="text-[10px] font-bold btn-glossy-blue px-2.5 py-1 rounded-full">New</span>
                       </div>
-                      {[
-                        { icon: <Icons.Users />, title: "New Student Joined", desc: "Emma Williams enrolled in 10B." },
-                        { icon: <Icons.Check />, title: "Test Auto-Graded", desc: "Physics Midterm grading complete." },
-                      ].map((n, idx) => (
-                        <div key={idx} className="flex gap-3 items-start p-3 sm:p-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors cursor-pointer inset-pill border-none group">
-                          <div className="text-blue-500 shrink-0 mt-0.5">{n.icon}</div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{n.title}</p>
-                            <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">{n.desc}</p>
-                          </div>
+                      <div className="flex gap-3 items-start p-3 sm:p-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors cursor-pointer inset-pill border-none">
+                        <div className="text-blue-500 shrink-0 mt-0.5"><Icons.Check /></div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Welcome to a4ai!</p>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">Start generating CBSE papers.</p>
                         </div>
-                      ))}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Profile */}
                 <div className="relative shrink-0" ref={profileRef}>
                   <div onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 sm:gap-3 pl-2 sm:pl-4 border-l border-slate-300/50 dark:border-slate-600/50 cursor-pointer group">
                     <div className="text-right hidden sm:block">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors truncate max-w-[120px]">{profile.full_name}</p>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors truncate max-w-[120px]">{displayName}</p>
                       <p className="text-xs text-slate-500 font-medium">Educator</p>
                     </div>
                     <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-[20px] sm:rounded-[24px] inset-pill flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold group-hover:scale-105 transition-all shrink-0">
@@ -433,21 +551,14 @@ export default function TeacherDashboardPage() {
                   {isProfileOpen && (
                     <div className="absolute right-0 top-full mt-3 w-64 sm:w-72 glass-overlay rounded-[32px] sm:rounded-[40px] p-3 flex flex-col gap-1.5 sm:gap-2 animate-pop z-[150]">
                       <div className="px-4 sm:px-5 py-3 sm:py-4 mb-1 sm:mb-2 inset-pill rounded-[28px] sm:rounded-[32px] border-none">
-                        <p className="font-extrabold text-slate-800 dark:text-white text-base sm:text-lg truncate">{profile.full_name}</p>
-                        <p className="text-sm font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1"><Icons.Zap /> {profile.coins} Coins</p>
+                        <p className="font-extrabold text-slate-800 dark:text-white text-base sm:text-lg truncate">{displayName}</p>
+                        <p className="text-xs text-slate-500 truncate">{user?.email}</p>
                       </div>
-                      <button onClick={() => { setActiveTab("profile"); setIsProfileOpen(false); }} className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors">
-                        <Icons.User /> Profile
-                      </button>
                       <button onClick={(e) => { e.stopPropagation(); setIsDarkMode(!isDarkMode); }} className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors">
                         <div className="flex items-center gap-3"><Icons.Moon /> Dark Mode</div>
                         <div className={`w-11 h-6 rounded-full shadow-inner relative flex items-center px-1 transition-colors ${isDarkMode ? "bg-blue-500" : "bg-slate-300"}`}>
                           <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${isDarkMode ? "translate-x-5" : "translate-x-0"}`} />
                         </div>
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); setLanguage((l) => (l === "EN" ? "HI" : "EN")); }} className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors">
-                        <div className="flex items-center gap-3"><Icons.Globe /> Language</div>
-                        <span className="text-xs font-bold inset-pill px-2.5 py-1 rounded-full text-blue-600 border-none">{language}</span>
                       </button>
                       <div className="h-px bg-slate-200/50 dark:bg-slate-700/50 my-1 mx-4" />
                       <button onClick={() => navigate("/login")} className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-red-500 hover:bg-red-500/10 rounded-[24px] sm:rounded-[28px] transition-colors"><Icons.LogOut /> Logout</button>
@@ -461,7 +572,6 @@ export default function TeacherDashboardPage() {
             {activeTab === "dashboard" && (
               <div className="space-y-6 sm:space-y-8 animate-entrance">
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8">
-                  {/* Hero */}
                   <div className="xl:col-span-2 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 lg:p-14 relative overflow-hidden flex flex-col justify-center group">
                     <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/60 to-transparent pointer-events-none rounded-[48px]" />
                     <div className="relative z-10 max-w-xl">
@@ -479,7 +589,6 @@ export default function TeacherDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Quick Actions */}
                   <div className="xl:col-span-1 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col">
                     <div className="flex items-center gap-3 sm:gap-5 mb-6 sm:mb-8">
                       <div className="w-12 h-12 sm:w-16 sm:h-16 inset-pill border-none flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-inner rounded-[24px] sm:rounded-[32px] shrink-0"><Icons.Trophy /></div>
@@ -488,7 +597,7 @@ export default function TeacherDashboardPage() {
                     <div className="space-y-3 sm:space-y-5">
                       <GlossyButton label="New Test" subLabel="NCERT-based Generator" variant="light" icon={Icons.Plus} fullWidth onClick={() => navigate("/dashboard/test-generator")} />
                       <GlossyButton label="Host Contest" subLabel="Start Live Competition" variant="light" icon={Icons.Trophy} fullWidth onClick={() => navigate("/contests")} />
-                      <GlossyButton label="Analytics" subLabel="View Student Reports" variant="light" icon={Icons.Chart} fullWidth onClick={() => setActiveTab("analytics")} />
+                      <GlossyButton label="Test History" subLabel="View past papers" variant="light" icon={Icons.History} fullWidth onClick={() => setActiveTab("tests")} />
                     </div>
                   </div>
                 </div>
@@ -497,7 +606,7 @@ export default function TeacherDashboardPage() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-8">
                   {[
                     { t: "Active Students", v: "156", c: "+12%", i: Icons.Users },
-                    { t: "Tests Created", v: "24", c: "+5", i: Icons.FileText },
+                    { t: "Tests Created", v: String(recentTests.length > 0 ? "—" : "0"), c: "All time", i: Icons.FileText },
                     { t: "Engagement", v: "92%", c: "+3.2%", i: Icons.Chart },
                     { t: "Time Saved", v: "8h", c: "This week", i: Icons.Clock },
                   ].map((stat, i) => (
@@ -510,29 +619,37 @@ export default function TeacherDashboardPage() {
                   ))}
                 </div>
 
-                {/* Recent Tests */}
+                {/* Recent Tests — real data */}
                 <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12">
                   <div className="flex justify-between items-center mb-5 sm:mb-8">
                     <h3 className="font-black text-slate-900 dark:text-white text-xl sm:text-3xl">Recent Tests</h3>
                     <button onClick={() => setActiveTab("tests")} className="inset-pill text-blue-600 dark:text-blue-300 px-4 sm:px-6 py-2 sm:py-3 rounded-[20px] sm:rounded-[24px] font-bold text-xs hover:bg-white/80 transition-colors border-none">View All</button>
                   </div>
-                  <div className="space-y-3 sm:space-y-4">
-                    {tests.slice(0, 3).map((test) => (
-                      <div key={test.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-white/60 dark:border-white/10 hover:bg-white/80 transition-all duration-300 cursor-pointer group gap-3">
-                        <div className="flex items-center gap-3 sm:gap-5 min-w-0">
-                          <div className="p-3 sm:p-4 rounded-[16px] sm:rounded-[24px] inset-pill border-none text-blue-500 shadow-inner shrink-0"><Icons.FileText /></div>
-                          <div className="min-w-0">
-                            <h4 className="font-extrabold text-slate-900 dark:text-white text-base sm:text-xl group-hover:text-blue-600 transition-colors truncate">{test.name}</h4>
-                            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 font-medium">Class {test.class} • {test.date}</p>
+                  {recentTests.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-slate-400 font-medium">No tests yet — create your first one!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 sm:space-y-4">
+                      {recentTests.map((test) => (
+                        <div key={test.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-white/60 dark:border-white/10 hover:bg-white/80 transition-all duration-300 cursor-pointer group gap-3">
+                          <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+                            <div className="p-3 sm:p-4 rounded-[16px] sm:rounded-[24px] inset-pill border-none text-blue-500 shadow-inner shrink-0"><Icons.FileText /></div>
+                            <div className="min-w-0">
+                              <h4 className="font-extrabold text-slate-900 dark:text-white text-base sm:text-xl group-hover:text-blue-600 transition-colors truncate">{test.exam_title || "Untitled Test"}</h4>
+                              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 font-medium">Class {test.class_grade} · {test.subject} · {formatDate(test.created_at)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 sm:gap-6">
+                            {test.total_questions > 0 && (
+                              <span className="text-xs sm:text-sm font-bold text-blue-700 dark:text-blue-300 inset-pill border-none px-3 sm:px-4 py-1.5 sm:py-2 rounded-[16px] sm:rounded-[20px]">{test.total_questions}Q</span>
+                            )}
+                            <span className={`text-[10px] px-3 py-1.5 rounded-[16px] font-bold uppercase border ${test.status === "saved" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-amber-100 text-amber-700 border-amber-200"}`}>{test.status}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3 sm:gap-6 ml-auto sm:ml-0">
-                          {test.avg && <span className="text-xs sm:text-sm font-bold text-blue-700 dark:text-blue-300 inset-pill border-none px-3 sm:px-4 py-1.5 sm:py-2 rounded-[16px] sm:rounded-[20px]">Avg: {test.avg}%</span>}
-                          <button className="text-slate-400 hover:text-blue-600 transition-colors p-2 sm:p-3 inset-pill border-none rounded-[16px] sm:rounded-[20px]"><Icons.Eye /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -545,122 +662,40 @@ export default function TeacherDashboardPage() {
                     <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">Students</h2>
                     <GlossyButton label="Invite" variant="blue" icon={Icons.Plus} small onClick={() => setShowInviteModal(true)} />
                   </div>
-
                   <div className="relative mb-5 sm:mb-8">
                     <div className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 text-sky-500"><Icons.Search /></div>
                     <input type="text" placeholder="Search by name..." className="w-full pl-12 sm:pl-16 pr-4 sm:pr-6 py-3.5 sm:py-5 text-sm inset-pill rounded-[24px] sm:rounded-[32px] focus:outline-none focus:ring-2 focus:ring-sky-400/50 text-slate-800 dark:text-white placeholder-slate-400 font-bold" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
                   </div>
-
-                  {/* Mobile cards / Desktop table */}
-                  <div className="hidden md:block overflow-x-auto rounded-[32px] sm:rounded-[40px] border border-white/60 dark:border-white/10 bg-white/40 dark:bg-slate-800/20 backdrop-blur-md">
-                    <table className="w-full text-left border-collapse">
-                      <thead className="text-xs text-slate-500 dark:text-slate-300 bg-white/60 dark:bg-slate-800/40 uppercase tracking-widest font-black border-b border-white/60 dark:border-slate-700/50">
-                        <tr><th className="py-5 pl-8">Student</th><th className="py-5">Class</th><th className="py-5">Score</th><th className="py-5">Status</th><th className="py-5 text-right pr-8">Action</th></tr>
-                      </thead>
-                      <tbody className="text-sm">
-                        {filteredStudents.map((s) => (
-                          <tr key={s.id} className="border-b border-white/40 dark:border-slate-700/30 hover:bg-white/60 dark:hover:bg-slate-800/50 transition-colors group">
-                            <td className="py-4 pl-8">
-                              <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-[20px] inset-pill border-none flex items-center justify-center font-black text-blue-600 text-lg shrink-0">{s.name.charAt(0)}</div>
-                                <div className="min-w-0">
-                                  <p className="font-extrabold text-slate-900 dark:text-white truncate">{s.name}</p>
-                                  <p className="text-xs text-slate-500 truncate">{s.email}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-4 font-bold text-slate-500">{s.class}</td>
-                            <td className="py-4 font-black text-slate-900 dark:text-white text-lg">{s.score}%</td>
-                            <td className="py-4">
-                              <span className={`text-[10px] px-3 py-1.5 rounded-[16px] font-bold uppercase tracking-wider border ${s.status === "Excellent" ? "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300" : s.status === "Good" ? "bg-white/60 text-slate-700 border-white/80 dark:bg-slate-800/40 dark:text-slate-300" : "bg-white/40 text-slate-500 border-white/50 dark:bg-slate-900/40 dark:text-slate-400"}`}>{s.status}</span>
-                            </td>
-                            <td className="py-4 text-right pr-8">
-                              <button onClick={() => removeStudent(s.id)} className="p-2 text-slate-400 hover:text-red-500 inset-pill border-none rounded-[16px] opacity-0 group-hover:opacity-100 transition-all"><Icons.Trash /></button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile student cards */}
-                  <div className="md:hidden space-y-3">
+                  <div className="space-y-3">
                     {filteredStudents.map((s) => (
-                      <div key={s.id} className="p-4 rounded-[24px] bg-white/40 dark:bg-slate-800/30 border border-white/60 dark:border-white/10">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-[20px] inset-pill border-none flex items-center justify-center font-black text-blue-600 text-lg shrink-0">{s.name.charAt(0)}</div>
-                            <div className="min-w-0">
-                              <p className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{s.name}</p>
-                              <p className="text-xs text-slate-500 truncate">{s.email}</p>
-                            </div>
+                      <div key={s.id} className="flex items-center justify-between p-4 rounded-[24px] bg-white/40 dark:bg-slate-800/30 border border-white/60 dark:border-white/10">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-[20px] inset-pill border-none flex items-center justify-center font-black text-blue-600 text-lg shrink-0">{s.name.charAt(0)}</div>
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{s.name}</p>
+                            <p className="text-xs text-slate-500 truncate">{s.class} · {s.score}%</p>
                           </div>
-                          <button onClick={() => removeStudent(s.id)} className="p-2 text-slate-400 hover:text-red-500 shrink-0"><Icons.Trash /></button>
                         </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-slate-500 font-medium">Class {s.class}</span>
-                          <span className="font-black text-slate-900 dark:text-white">{s.score}%</span>
-                          <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase border ${s.status === "Excellent" ? "bg-blue-100 text-blue-700 border-blue-200" : s.status === "Good" ? "bg-white/60 text-slate-700 border-white/80" : "bg-white/40 text-slate-500 border-white/50"}`}>{s.status}</span>
-                        </div>
+                        <button onClick={() => removeStudent(s.id)} className="p-2 text-slate-400 hover:text-red-500"><Icons.Trash /></button>
                       </div>
                     ))}
-                    {filteredStudents.length === 0 && <p className="text-center py-10 text-slate-500 font-medium">No students found.</p>}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* ===== TESTS TAB ===== */}
+            {/* ===== TEST HISTORY TAB ===== */}
             {activeTab === "tests" && (
-              <div className="space-y-6 sm:space-y-8 animate-pop">
-                <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-10">
-                    <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">Test History</h2>
-                    <GlossyButton label="Create Test" variant="blue" icon={Icons.Zap} small onClick={() => navigate("/dashboard/test-generator")} />
-                  </div>
-                  <div className="space-y-3 sm:space-y-4">
-                    {tests.map((t) => (
-                      <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-white/60 dark:border-white/10 hover:bg-white/80 transition-all group gap-3">
-                        <div className="min-w-0">
-                          <p className="font-extrabold text-slate-900 dark:text-white text-base sm:text-lg group-hover:text-blue-600 transition-colors truncate">{t.name}</p>
-                          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1 font-medium">Class {t.class} • {t.date}</p>
-                        </div>
-                        <div className="flex items-center gap-3 sm:gap-4">
-                          {t.code && (
-                            <span className="font-mono text-xs sm:text-sm font-bold text-blue-700 dark:text-blue-200 inset-pill px-3 py-1.5 rounded-[16px] border-none tracking-widest">{t.code}</span>
-                          )}
-                          <button className="text-xs sm:text-sm text-blue-600 font-bold inset-pill border-none px-3 sm:px-5 py-2 sm:py-3 rounded-[16px] sm:rounded-[24px] hover:scale-105 transition-transform">View</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <TestHistory onCreateNew={() => navigate("/dashboard/test-generator")} />
             )}
 
             {/* ===== ANALYTICS TAB ===== */}
             {activeTab === "analytics" && (
               <div className="space-y-6 sm:space-y-8 animate-pop">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 sm:gap-8">
-                  <div className="md:col-span-2 glass-panel rounded-[32px] sm:rounded-[48px] p-8 sm:p-10 min-h-[300px] sm:min-h-[500px] flex flex-col justify-center items-center text-center">
-                    <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none text-blue-500 rounded-full flex items-center justify-center mb-6 sm:mb-8"><Icons.Chart /></div>
-                    <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3 sm:mb-4">Performance Trends</h3>
-                    <p className="text-slate-500 font-medium max-w-sm text-sm sm:text-lg">Graphs will appear after 5 tests are completed.</p>
-                  </div>
-                  <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col gap-5 sm:gap-8">
-                    <h3 className="font-black text-slate-900 dark:text-white text-xl sm:text-2xl">Top Performers</h3>
-                    {students.map((s, idx) => (
-                      <div key={s.id} className="flex items-center gap-3 sm:gap-5 inset-pill border-none p-3 sm:p-5 rounded-[24px] sm:rounded-[32px]">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-sky-400 to-blue-600 text-white flex items-center justify-center font-black text-lg sm:text-xl border border-white/20 shrink-0">{idx + 1}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-lg truncate">{s.name}</p>
-                          <div className="h-2 sm:h-3 bg-white/60 dark:bg-slate-800/50 rounded-full mt-1.5 sm:mt-2 overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-sky-400 to-blue-500 rounded-full" style={{ width: `${s.score}%` }} />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-8 sm:p-10 min-h-[300px] sm:min-h-[500px] flex flex-col justify-center items-center text-center">
+                  <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none text-blue-500 rounded-full flex items-center justify-center mb-6 sm:mb-8"><Icons.Chart /></div>
+                  <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3 sm:mb-4">Performance Trends</h3>
+                  <p className="text-slate-500 font-medium max-w-sm text-sm sm:text-lg">Graphs will appear after 5 tests are completed.</p>
                 </div>
               </div>
             )}
@@ -689,27 +724,6 @@ export default function TeacherDashboardPage() {
                       <GlossyButton label={tool.primary ? "Create Test" : "Launch"} variant={tool.primary ? "blue" : "light"} fullWidth small onClick={tool.action} />
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            {/* ===== PROFILE TAB ===== */}
-            {activeTab === "profile" && (
-              <div className="space-y-6 sm:space-y-8 animate-pop max-w-4xl mx-auto">
-                <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 lg:p-14 relative overflow-hidden group">
-                  <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-10">
-                    <div className="w-24 h-24 sm:w-36 sm:h-36 rounded-[28px] sm:rounded-[40px] inset-pill border-none flex items-center justify-center text-blue-600 shrink-0">
-                      <div className="scale-125 sm:scale-150"><Icons.GradCap /></div>
-                    </div>
-                    <div className="flex-1 text-center sm:text-left min-w-0">
-                      <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 truncate">{profile.full_name}</h2>
-                      <p className="text-base sm:text-xl text-slate-500 font-medium mb-5 sm:mb-8">Senior Educator</p>
-                      <div className="flex flex-wrap justify-center sm:justify-start gap-3 sm:gap-4">
-                        <span className="px-4 sm:px-5 py-2 sm:py-3 inset-pill border-none text-slate-800 dark:text-slate-200 rounded-[20px] sm:rounded-[24px] font-bold text-xs sm:text-sm flex items-center gap-2 sm:gap-3"><Icons.Mail /> {profile.email}</span>
-                        <span className="px-4 sm:px-5 py-2 sm:py-3 bg-blue-100 text-blue-700 border border-blue-200/50 rounded-[20px] sm:rounded-[24px] font-bold text-xs sm:text-sm flex items-center gap-2 sm:gap-3 dark:bg-blue-900/40 dark:text-blue-300"><Icons.Zap /> {profile.coins} Coins</span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             )}
