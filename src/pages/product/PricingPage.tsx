@@ -1,7 +1,9 @@
 // src/pages/product/PricingPage.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Users, Building, School, Clock, Sparkles, ArrowRight, Gift } from "lucide-react";
+import { Check, Users, Building, School, Clock, Sparkles, ArrowRight, Gift, MessageCircle } from "lucide-react";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/providers/AuthProvider";
 
 type AudienceKey = "individual" | "institute" | "school";
 type PeriodKey = "monthly" | "yearly";
@@ -16,122 +18,143 @@ export default function PricingPage() {
   const [audience, setAudience] = useState<AudienceKey>("individual");
   const [billingPeriod, setBillingPeriod] = useState<PeriodKey>("monthly");
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { status } = useSubscription();
 
+  // ═══════════════════════════════════════════════════════════
+  // PLAN DATA — matches database exactly
+  // slug is used for navigation to /payment?plan=slug&cycle=...
+  // ═══════════════════════════════════════════════════════════
   const plans: Record<
     AudienceKey,
     Array<{
+      slug: string;
       name: string;
       price: { monthly: string; yearly: string };
       priceNote?: { monthly: string; yearly: string };
+      perDay?: { monthly: string; yearly: string };
       description: string;
       features: string[];
       popular?: boolean;
       free?: boolean;
+      comingSoon?: boolean;
     }>
   > = {
     individual: [
       {
+        slug: "free",
         name: "Free",
         price: { monthly: "₹0", yearly: "₹0" },
         priceNote: { monthly: "forever", yearly: "forever" },
         description: "Try before you buy. No card needed.",
         features: [
           "2 test papers per month",
-          "Basic MCQ questions",
-          "PDF download with watermark",
+          "MCQ + Short + Long formats",
+          "PDF & DOCX export with watermark",
           "NCERT-aligned content",
           "Email support",
         ],
         free: true,
       },
       {
+        slug: "starter",
         name: "Starter",
-        price: { monthly: "₹149", yearly: "₹1,499" },
+        price: { monthly: "₹149", yearly: "₹1,430" },
         priceNote: { monthly: "/ month", yearly: "/ year" },
+        perDay: { monthly: "₹5/day", yearly: "₹4/day" },
         description: "Save 2+ hours daily. Everything you need.",
         features: [
-          "8 test papers per month",
+          "10 test papers/month (8+2 bonus)",
           "All question types (MCQ, Short, Long)",
           "Clean PDF & DOCX — no watermark",
+          "NCERT RAG powered generation",
+          "2 free contests with proctoring",
           "Quiz sharing via WhatsApp link",
           "Chapter-wise question bank",
-          "Basic student analytics",
-          "Print-ready school format",
         ],
         popular: true,
       },
       {
+        slug: "pro",
         name: "Pro",
-        price: { monthly: "₹299", yearly: "₹2,999" },
+        price: { monthly: "₹299", yearly: "₹2,870" },
         priceNote: { monthly: "/ month", yearly: "/ year" },
+        perDay: { monthly: "₹10/day", yearly: "₹8/day" },
         description: "Unlimited tests. Full proctored contests.",
         features: [
           "Unlimited test papers",
           "All Starter features",
-          "Proctored quiz/contest with camera",
-          "Tab-switch detection & auto-submit",
+          "Unlimited proctored contests",
+          "Camera + tab-switch detection",
           "Advanced analytics & tracking",
           "Custom school logo on papers",
-          "PYQ practice sets (coming soon)",
-          "Priority WhatsApp support",
+          "Answer key with explanations",
+          "Priority support",
         ],
       },
     ],
     institute: [
       {
-        name: "Growth",
-        price: { monthly: "₹1,999", yearly: "₹19,999" },
+        slug: "institute_start",
+        name: "Start",
+        price: { monthly: "₹999", yearly: "₹9,590" },
         priceNote: { monthly: "/ month", yearly: "/ year" },
-        description: "For small coaching centers. Up to 5 teachers.",
+        perDay: { monthly: "₹33/day", yearly: "₹26/day" },
+        description: "For small coaching centers. Up to 100 students.",
         features: [
-          "Up to 5 teacher accounts",
-          "500 student capacity",
-          "Institute admin dashboard",
-          "Teacher & student attendance",
-          "Contest hosting for batches",
-          "Basic performance analytics",
-          "Branded test papers",
+          "Up to 100 students",
+          "75 test papers per month",
+          "Attendance tracking",
+          "Contest mode with proctoring",
+          "PDF & DOCX export",
+          "Institute branding on papers",
+          "Basic analytics",
           "Email + chat support",
         ],
       },
       {
+        slug: "institute_scale",
         name: "Scale",
-        price: { monthly: "₹4,999", yearly: "₹49,999" },
+        price: { monthly: "₹1,499", yearly: "₹14,390" },
         priceNote: { monthly: "/ month", yearly: "/ year" },
-        description: "Advanced analytics & full control. Up to 15 teachers.",
+        perDay: { monthly: "₹50/day", yearly: "₹39/day" },
+        description: "Grow with confidence. Up to 250 students.",
         features: [
-          "All Growth features",
-          "Up to 15 teacher accounts",
-          "1,500 student capacity",
-          "Advanced reporting & benchmarking",
-          "Batch-wise performance comparison",
-          "Custom domain (yourname.a4ai.in)",
-          "API access for integration",
+          "All Start features",
+          "Up to 250 students",
+          "120 test papers per month",
+          "Analytics dashboard",
+          "Batch-wise performance tracking",
+          "Contest hosting for batches",
+          "Priority support",
           "Dedicated account manager",
         ],
         popular: true,
       },
       {
+        slug: "institute_enterprise",
         name: "Enterprise",
-        price: { monthly: "Custom", yearly: "Custom" },
-        description: "Unlimited everything. White-label solution.",
+        price: { monthly: "₹1,999", yearly: "₹19,190" },
+        priceNote: { monthly: "/ month", yearly: "/ year" },
+        perDay: { monthly: "₹67/day", yearly: "₹53/day" },
+        description: "Full power for large institutes. Up to 500 students.",
         features: [
-          "Unlimited teachers & students",
-          "Multi-branch management",
-          "White-label solution",
-          "SSO & custom integrations",
-          "Dedicated infrastructure",
-          "On-site training & onboarding",
-          "24/7 premium support",
-          "Custom feature development",
+          "All Scale features",
+          "Up to 500 students",
+          "Unlimited test papers",
+          "Advanced analytics & reports",
+          "Contest mode with full proctoring",
+          "Custom branding",
+          "Dedicated support",
+          "API access for integration",
         ],
       },
     ],
     school: [
       {
+        slug: "school_standard",
         name: "Standard",
-        price: { monthly: "₹8,333", yearly: "₹99,999" },
-        priceNote: { monthly: "/ month", yearly: "/ year" },
+        price: { monthly: "Coming Soon", yearly: "Coming Soon" },
         description: "Complete school package. Up to 30 teachers.",
         features: [
           "Up to 30 teacher accounts",
@@ -143,11 +166,12 @@ export default function PricingPage() {
           "Attendance management",
           "Print-ready with school letterhead",
         ],
+        comingSoon: true,
       },
       {
+        slug: "school_premium",
         name: "Premium",
-        price: { monthly: "₹16,666", yearly: "₹1,99,999" },
-        priceNote: { monthly: "/ month", yearly: "/ year" },
+        price: { monthly: "Coming Soon", yearly: "Coming Soon" },
         description: "Full-featured school management. Up to 75 teachers.",
         features: [
           "All Standard features",
@@ -160,8 +184,10 @@ export default function PricingPage() {
           "Priority phone support",
         ],
         popular: true,
+        comingSoon: true,
       },
       {
+        slug: "school_enterprise",
         name: "Enterprise",
         price: { monthly: "Custom", yearly: "Custom" },
         description: "For school chains. Fully customized.",
@@ -175,11 +201,38 @@ export default function PricingPage() {
           "24/7 premium support",
           "Dedicated success manager",
         ],
+        comingSoon: true,
       },
     ],
   };
 
   const cards = plans[audience];
+
+  // ═══════════════════════════════════════════════════════════
+  // NAVIGATION — sends user to /payment with plan + cycle
+  // ═══════════════════════════════════════════════════════════
+  const handlePlanClick = (plan: typeof cards[0]) => {
+    if (plan.free) {
+      navigate("/signup");
+      return;
+    }
+    if (plan.comingSoon) {
+      window.open("https://wa.me/919876543210?text=Hi%20I'm%20interested%20in%20the%20School%20plan%20for%20a4ai", "_blank");
+      return;
+    }
+    if (plan.slug.includes("enterprise") && plan.price.monthly === "Custom") {
+      navigate("/contact");
+      return;
+    }
+    // Check if current plan
+    if (status?.plan_slug === plan.slug) return;
+
+    if (!user) {
+      navigate("/login?redirect=/pricing");
+      return;
+    }
+    navigate(`/payment?plan=${plan.slug}&cycle=${billingPeriod}`);
+  };
 
   const blueBtn =
     "bg-[linear-gradient(180deg,#93c5fd,#3b82f6_85%)] text-white border border-blue-300 shadow-[0_8px_20px_rgba(59,130,246,0.25)] hover:brightness-[1.06] active:brightness-[1.03] transition";
@@ -211,6 +264,13 @@ export default function PricingPage() {
           <p className="mt-2 text-[15px] text-slate-600 dark:text-slate-300">
             AI-powered test papers in 30 seconds. Choose the perfect plan for your needs.
           </p>
+
+          {/* Current plan indicator */}
+          {status && (
+            <p className="mt-2 text-xs text-slate-400">
+              You're on <strong className="text-slate-600 dark:text-slate-200">{status.plan_name}</strong> ({status.tests_used}/{status.test_limit === -1 ? "∞" : status.test_limit} tests used)
+            </p>
+          )}
 
           {/* Audience toggle */}
           <div
@@ -262,18 +322,31 @@ export default function PricingPage() {
               Yearly
             </span>
             <span className="ml-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-emerald-400/15 dark:text-emerald-300">
-              2 months FREE
+              Save 20%
             </span>
           </div>
         </div>
+
+        {/* School coming soon banner */}
+        {audience === "school" && (
+          <div className="mt-8 mb-2 mx-auto max-w-2xl text-center">
+            <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium px-4 py-2.5 rounded-xl dark:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300">
+              <School size={16} />
+              School plans are coming soon! Contact us for early access pricing.
+            </div>
+          </div>
+        )}
 
         {/* Cards */}
         <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {cards.map((plan, i) => {
             const price = plan.price[billingPeriod];
             const note = plan.priceNote?.[billingPeriod] || "";
-            const isEnterprise = plan.name.toLowerCase().includes("enterprise");
             const isFree = plan.free;
+            const isComingSoon = plan.comingSoon;
+            const isCustom = price === "Custom" || price === "Coming Soon";
+            const isCurrent = status?.plan_slug === plan.slug;
+            const perDayLabel = plan.perDay?.[billingPeriod];
 
             return (
               <div
@@ -282,9 +355,10 @@ export default function PricingPage() {
                 ring-1 ring-slate-200 shadow-[0_14px_36px_-12px_rgba(2,6,23,0.12)] transition
                 hover:shadow-[0_18px_44px_-10px_rgba(2,6,23,0.16)] hover:translate-y-[-2px]
                 ${plan.popular ? "outline outline-2 outline-blue-300/60" : ""}
+                ${isComingSoon ? "opacity-75" : ""}
                 dark:bg-white/[0.06] dark:ring-white/10`}
               >
-                {plan.popular && (
+                {plan.popular && !isComingSoon && (
                   <div className="absolute -top-3 right-4 rounded-full bg-blue-600/90 px-3 py-1 text-xs text-white shadow" style={hx}>
                     Popular
                   </div>
@@ -292,6 +366,16 @@ export default function PricingPage() {
                 {isFree && (
                   <div className="absolute -top-3 right-4 rounded-full bg-emerald-600/90 px-3 py-1 text-xs text-white shadow flex items-center gap-1" style={hx}>
                     <Gift size={11} /> Free Forever
+                  </div>
+                )}
+                {isCurrent && !isFree && (
+                  <div className="absolute -top-3 left-4 rounded-full bg-green-600/90 px-3 py-1 text-xs text-white shadow" style={hx}>
+                    Current Plan
+                  </div>
+                )}
+                {isComingSoon && (
+                  <div className="absolute -top-3 right-4 rounded-full bg-slate-600/90 px-3 py-1 text-xs text-white shadow flex items-center gap-1" style={hx}>
+                    <Clock size={11} /> Coming Soon
                   </div>
                 )}
 
@@ -303,26 +387,42 @@ export default function PricingPage() {
                   <div className="flex items-baseline gap-2">
                     <span className="text-4xl tracking-tight text-slate-900 dark:text-white" style={hx}>{price}</span>
                     <span className="text-slate-500 text-base dark:text-slate-400">
-                      {price === "Custom" ? "" : note}
+                      {isCustom ? "" : note}
                     </span>
                   </div>
                 </div>
 
-                {!isFree && !isEnterprise && billingPeriod === "yearly" && audience === "individual" && (
+                {/* Per-day badge */}
+                {perDayLabel && !isFree && !isCustom && (
                   <div className="mb-3 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-medium px-2.5 py-1 rounded-full dark:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300">
                     <Clock size={10} />
-                    {plan.name === "Starter" ? "Just ₹4/day" : "Just ₹8/day"}
+                    Just {perDayLabel}
                   </div>
                 )}
 
                 <button
-                  onClick={() => isEnterprise ? navigate("/contact") : isFree ? navigate("/signup") : navigate("/payment")}
+                  onClick={() => handlePlanClick(plan)}
+                  disabled={isCurrent}
                   className={`inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-[14px] ${
-                    isFree ? "bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition" : blueBtn
+                    isCurrent
+                      ? "bg-green-50 text-green-600 border border-green-200 cursor-not-allowed"
+                      : isFree
+                      ? "bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition"
+                      : isComingSoon
+                      ? "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200 transition"
+                      : blueBtn
                   }`}
                   style={hx}
                 >
-                  {isFree ? "Start Free" : isEnterprise ? "Talk to Sales" : plan.popular ? "Subscribe" : "Get Started"}
+                  {isCurrent
+                    ? "Current Plan"
+                    : isFree
+                    ? "Start Free"
+                    : isComingSoon
+                    ? "Contact for Early Access"
+                    : plan.popular
+                    ? "Subscribe"
+                    : "Get Started"}
                 </button>
 
                 <div className="my-5 h-px w-full bg-gradient-to-r from-transparent via-slate-200 to-transparent dark:via-white/10" />
@@ -341,9 +441,6 @@ export default function PricingPage() {
                 </ul>
 
                 <div className="pointer-events-none absolute inset-x-0 -bottom-5 h-5 rounded-b-[22px] bg-black/5 blur-xl dark:bg-white/5" />
-                {isEnterprise && (
-                  <div className="pointer-events-none absolute inset-0 rounded-[22px] ring-1 ring-white/70 dark:ring-white/20" />
-                )}
               </div>
             );
           })}
@@ -379,7 +476,7 @@ export default function PricingPage() {
             {[
               { q: "Is the free plan really free?", a: "Yes, forever. 2 tests/month with NCERT content. No credit card needed." },
               { q: "Can I change plans anytime?", a: "Yes. Upgrade instantly, downgrade applies next billing cycle." },
-              { q: "What payment methods do you accept?", a: "UPI, all major cards, net banking, and bank transfers via Razorpay." },
+              { q: "What payment methods do you accept?", a: "UPI, all major cards, net banking, and wallets via Razorpay." },
               { q: "Do you offer discounts for schools?", a: "Yes, special pricing for government schools and non-profits. Contact us." },
               { q: "How accurate are the questions?", a: "Generated from actual NCERT textbooks using RAG. Review & edit before sharing." },
               { q: "Can students take tests on mobile?", a: "Yes! Full proctoring works on mobile, tablet, and laptop." },

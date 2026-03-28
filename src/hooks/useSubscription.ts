@@ -3,17 +3,18 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 
-export type PlanSlug = "free" | "starter" | "pro";
+export type PlanSlug = "free" | "starter" | "pro" | "institute_start" | "institute_scale" | "institute_enterprise";
 
 export interface Plan {
   id: string;
   slug: PlanSlug;
   display_name: string;
   price_paise: number;
-  test_limit: number; // -1 = unlimited
+  test_limit: number;
   billing_cycle: string;
   features: string[];
   sort_order: number;
+  category?: string;
 }
 
 export interface PlanStatus {
@@ -23,7 +24,7 @@ export interface PlanStatus {
   price_paise: number;
   features: string[];
   tests_used: number;
-  tests_remaining: number; // -1 = unlimited
+  tests_remaining: number;
   billing_period: string;
   subscription_status: string;
   subscription_expires: string | null;
@@ -35,7 +36,6 @@ export function useSubscription() {
   const [status, setStatus] = useState<PlanStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all available plans
   const fetchPlans = useCallback(async () => {
     const { data, error } = await supabase
       .from("plans")
@@ -48,25 +48,26 @@ export function useSubscription() {
     }
   }, []);
 
-  // Fetch current user's plan status
   const fetchStatus = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase.rpc("get_user_plan_status", {
-      p_user_id: user.id,
-    });
-    if (!error && data) {
-      setStatus(data as PlanStatus);
+    try {
+      const { data, error } = await supabase.rpc("get_user_plan_status", {
+        p_user_id: user.id,
+      });
+      if (!error && data) {
+        setStatus(data as PlanStatus);
+      }
+    } catch (err) {
+      console.warn("[useSubscription] fetchStatus error:", err);
     }
   }, [user]);
 
-  // Check if user can generate a test (UI-level check only)
-  // Real enforcement happens in backend before Gemini call
   const canGenerateTest = useCallback((): {
     allowed: boolean;
     reason?: string;
   } => {
     if (!status) return { allowed: false, reason: "loading" };
-    if (status.tests_remaining === -1) return { allowed: true }; // unlimited
+    if (status.tests_remaining === -1) return { allowed: true };
     if (status.tests_remaining > 0) return { allowed: true };
     return {
       allowed: false,
@@ -74,7 +75,6 @@ export function useSubscription() {
     };
   }, [status]);
 
-  // Refresh status after generation (backend already incremented usage)
   const refreshAfterGeneration = useCallback(async () => {
     await fetchStatus();
   }, [fetchStatus]);

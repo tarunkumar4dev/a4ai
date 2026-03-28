@@ -130,7 +130,7 @@ const TermsPage = lazy(() => import("./pages/legal/TermsPage"));
 const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
 
 /* ---------- Payment ---------- */
-const PaymentPage = lazy(() => import("./pages/payment/paymentPage"));
+const PaymentPage = lazy(() => import("./pages/payment/PaymentPage"));
 
 /* ---------- Daily Practice Module ---------- */
 const PracticeSelectionPage = lazy(() => import("@/practice/index")); 

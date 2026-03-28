@@ -210,7 +210,7 @@ function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
           variant="blue"
           small
           fullWidth
-          onClick={() => navigate("/payment")}
+          onClick={() => navigate("/pricing")}
         />
       )}
     </div>

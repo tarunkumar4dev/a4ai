@@ -46,14 +46,17 @@ interface ChapterAPIResponse {
 }
 
 // ==================== API: FETCH CHAPTERS ====================
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 async function fetchChaptersFromAPI(
   classLevel: string,
   subject: string
 ): Promise<ChapterAPIResponse> {
+  // Extract class number: "Class 10" → "10"
+  const classNum = classLevel.replace(/\D/g, "") || "10";
+  
   const res = await fetch(
-    `${API_BASE}/chapters?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`
+    `${API_BASE}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`
   );
   if (!res.ok) throw new Error(`Failed to fetch chapters: ${res.status}`);
   return res.json();

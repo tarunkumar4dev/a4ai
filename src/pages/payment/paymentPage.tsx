@@ -1,92 +1,107 @@
 // src/pages/PaymentPage.tsx
+// Reads ?plan=starter&cycle=yearly from URL (set by PricingPage)
 import { useState, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
-  CreditCard,
-  Smartphone,
-  QrCode,
-  Wallet,
-  Shield,
-  CheckCircle,
-  Zap,
-  Crown,
-  Sparkles,
-  Check,
+  CreditCard, Smartphone, QrCode, Wallet, Shield,
+  CheckCircle, Check, ArrowLeft, Zap, Crown,
+  Building2, Users, BarChart3,
 } from "lucide-react";
-import { useSubscription, type Plan, type PlanSlug } from "@/hooks/useSubscription";
+import { motion } from "framer-motion";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
 
 declare global {
-  interface Window {
-    Razorpay: any;
-  }
+  interface Window { Razorpay: any; }
 }
 
 const RZP_KEY = (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || "";
 const RAW_BACKEND_URL =
   (import.meta.env.VITE_PAYMENT_API_URL as string) || "https://api.a4ai.in/api/v1/payment";
 
-const joinUrl = (base: string, path: string) =>
-  `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+const joinUrl = (b: string, p: string) => `${b.replace(/\/+$/, "")}/${p.replace(/^\/+/, "")}`;
 
 type MethodId = "upi" | "card" | "wallet" | "netbanking";
 type BillingCycle = "monthly" | "yearly";
 
-// Yearly = 12 months at 20% discount
 const YEARLY_DISCOUNT = 0.20;
-const YEARLY_MONTHS = 12;
 
-const PLAN_ICONS: Record<PlanSlug, JSX.Element> = {
-  free: <Sparkles className="h-5 w-5" />,
-  starter: <Zap className="h-5 w-5" />,
-  pro: <Crown className="h-5 w-5" />,
-};
+// ═══════════════════════════════════════════════════════════
+// PLAN CONFIG (must match PricingPage + DB)
+// ═══════════════════════════════════════════════════════════
+interface PlanInfo {
+  slug: string;
+  name: string;
+  monthlyPaise: number;
+  testLimit: number;
+  features: string[];
+  icon: React.ReactNode;
+  studentLimit?: number;
+}
 
-const PLAN_COLORS: Record<PlanSlug, { ring: string; bg: string; badge: string }> = {
-  free: {
-    ring: "ring-gray-300 dark:ring-gray-600",
-    bg: "bg-gray-50 dark:bg-gray-800/50",
-    badge: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
-  },
+const PLAN_MAP: Record<string, PlanInfo> = {
   starter: {
-    ring: "ring-blue-500",
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-    badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+    slug: "starter", name: "Starter", monthlyPaise: 14900, testLimit: 10,
+    features: ["10 test papers/month", "All formats", "PDF & DOCX", "2 free contests"],
+    icon: <Zap className="h-5 w-5" />,
   },
   pro: {
-    ring: "ring-amber-500",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-    badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    slug: "pro", name: "Pro", monthlyPaise: 29900, testLimit: 50,
+    features: ["Unlimited test papers", "All formats", "Unlimited contests", "Priority generation"],
+    icon: <Crown className="h-5 w-5" />,
+  },
+  institute_start: {
+    slug: "institute_start", name: "Institute Start", monthlyPaise: 99900, testLimit: 75,
+    features: ["100 students", "75 papers/month", "Attendance", "Contests"],
+    icon: <Building2 className="h-5 w-5" />, studentLimit: 100,
+  },
+  institute_scale: {
+    slug: "institute_scale", name: "Institute Scale", monthlyPaise: 149900, testLimit: 120,
+    features: ["250 students", "120 papers/month", "Analytics", "Priority support"],
+    icon: <Users className="h-5 w-5" />, studentLimit: 250,
+  },
+  institute_enterprise: {
+    slug: "institute_enterprise", name: "Institute Enterprise", monthlyPaise: 199900, testLimit: 200,
+    features: ["500 students", "Unlimited papers", "Advanced analytics", "Dedicated support"],
+    icon: <BarChart3 className="h-5 w-5" />, studentLimit: 500,
   },
 };
 
-/** Calculate price in paise for the given billing cycle */
-function getPriceForCycle(plan: Plan, cycle: BillingCycle): number {
-  if (plan.slug === "free") return 0;
-  if (cycle === "monthly") return plan.price_paise;
-  // Yearly: 12 months × monthly price × (1 - discount)
-  return Math.round(plan.price_paise * YEARLY_MONTHS * (1 - YEARLY_DISCOUNT));
+function getPrice(paise: number, cycle: BillingCycle): number {
+  if (cycle === "yearly") return Math.round(paise * 12 * (1 - YEARLY_DISCOUNT));
+  return paise;
+}
+function getMonthlyEquiv(paise: number): number {
+  return Math.round((paise * 12 * (1 - YEARLY_DISCOUNT)) / 12);
+}
+function fmt(paise: number): string { return `₹${(paise / 100).toFixed(0)}`; }
+function fmtPerDay(paise: number, cycle: BillingCycle): string {
+  const total = getPrice(paise, cycle);
+  const days = cycle === "yearly" ? 365 : 30;
+  return `₹${(total / 100 / days).toFixed(0)}`;
 }
 
-/** Monthly equivalent when paying yearly */
-function getMonthlyEquivalent(plan: Plan): number {
-  return Math.round((plan.price_paise * YEARLY_MONTHS * (1 - YEARLY_DISCOUNT)) / YEARLY_MONTHS);
-}
-
+// ═══════════════════════════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════════════════════════
 export default function PaymentPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { plans, status, loading: plansLoading } = useSubscription();
-  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+  const { refreshStatus } = useSubscription();
+
+  const planSlug = searchParams.get("plan") || "starter";
+  const cycleParm = searchParams.get("cycle") as BillingCycle | null;
+
+  const plan = PLAN_MAP[planSlug];
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>(cycleParm || "monthly");
   const [selectedMethod, setSelectedMethod] = useState<MethodId>("upi");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   useEffect(() => {
-    if (plans.length && !selectedPlan) {
-      const starter = plans.find((p) => p.slug === "starter");
-      setSelectedPlan(starter || plans[1] || plans[0]);
-    }
-  }, [plans, selectedPlan]);
+    if (!plan) navigate("/pricing");
+  }, [plan, navigate]);
 
   const ensureRazorpay = () =>
     new Promise<void>((resolve, reject) => {
@@ -95,89 +110,72 @@ export default function PaymentPage() {
       s.src = "https://checkout.razorpay.com/v1/checkout.js";
       s.async = true;
       s.onload = () => resolve();
-      s.onerror = () => reject(new Error("Failed to load Razorpay Checkout"));
+      s.onerror = () => reject(new Error("Failed to load Razorpay"));
       document.head.appendChild(s);
     });
 
-  const paymentMethods = [
-    { id: "upi" as const, name: "UPI / Google Pay", icon: <Smartphone className="h-6 w-6 md:h-5 md:w-5" />, description: "Instant payment using UPI apps" },
-    { id: "card" as const, name: "Credit/Debit Card", icon: <CreditCard className="h-6 w-6 md:h-5 md:w-5" />, description: "Visa, Mastercard or RuPay" },
-    { id: "wallet" as const, name: "Paytm/PhonePe", icon: <Wallet className="h-6 w-6 md:h-5 md:w-5" />, description: "Pay using wallet apps" },
-    { id: "netbanking" as const, name: "Net Banking", icon: <QrCode className="h-6 w-6 md:h-5 md:w-5" />, description: "Direct bank transfer" },
-  ];
+  const actualPrice = plan ? getPrice(plan.monthlyPaise, billingCycle) : 0;
+  const monthlyEquiv = plan && billingCycle === "yearly" ? getMonthlyEquiv(plan.monthlyPaise) : plan?.monthlyPaise || 0;
+  const savings = plan && billingCycle === "yearly" ? (plan.monthlyPaise * 12) - actualPrice : 0;
 
-  async function openRazorpay() {
-    if (!selectedPlan || selectedPlan.slug === "free") return;
-    if (!RZP_KEY) {
-      alert("Razorpay key missing. Add VITE_RAZORPAY_KEY_ID in .env");
-      return;
-    }
+  async function handlePay() {
+    if (!plan || !user) return;
+    if (!RZP_KEY) { alert("Razorpay key missing"); return; }
 
     setIsProcessing(true);
     try {
       await ensureRazorpay();
 
-      const actualAmount = getPriceForCycle(selectedPlan, billingCycle);
-
-      const body: Record<string, any> = {
-        amount: actualAmount,
-        payment_method: selectedMethod,
-        plan_slug: selectedPlan.slug,
-        billing_cycle: billingCycle,
-        user_id: user?.id,
-      };
-      if (selectedMethod === "upi" && import.meta.env.MODE !== "production") {
-        body.vpa = "success@razorpay";
-      }
-
       const res = await fetch(joinUrl(RAW_BACKEND_URL, "create-order"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          amount: actualPrice,
+          payment_method: selectedMethod,
+          plan_slug: plan.slug,
+          billing_cycle: billingCycle,
+          user_id: user.id,
+        }),
       });
 
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
-        throw new Error(e?.details || e?.error || `Order failed (${res.status})`);
+        throw new Error(e?.detail || e?.error || `Order failed (${res.status})`);
       }
       const order = await res.json();
 
       const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
-      const options = {
+      const rzp = new window.Razorpay({
         key: RZP_KEY,
         order_id: order.id,
         amount: order.amount,
-        currency: order.currency || "INR",
+        currency: "INR",
         name: "a4ai.in",
-        description: `${selectedPlan.display_name} Plan — ${cycleLabel}`,
+        description: `${plan.name} Plan — ${cycleLabel}`,
         prefill: {
-          name: user?.user_metadata?.full_name || "",
-          email: user?.email || "",
-          contact: user?.user_metadata?.phone || "",
+          name: user.user_metadata?.full_name || "",
+          email: user.email || "",
         },
-        theme: { color: "#1D4ED8" },
-        notes: {
-          plan_slug: selectedPlan.slug,
-          billing_cycle: billingCycle,
-          user_id: user?.id,
-        },
+        theme: { color: "#111827" },
+        notes: { plan_slug: plan.slug, billing_cycle: billingCycle, user_id: user.id },
         handler: async (response: any) => {
           try {
-            const verifyRes = await fetch(joinUrl(RAW_BACKEND_URL, "verify-payment"), {
+            const vRes = await fetch(joinUrl(RAW_BACKEND_URL, "verify-payment"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 ...response,
-                plan_slug: selectedPlan.slug,
+                plan_slug: plan.slug,
                 billing_cycle: billingCycle,
-                user_id: user?.id,
+                user_id: user.id,
               }),
             });
-            const result = await verifyRes.json().catch(() => ({}));
-            if (verifyRes.ok && result?.success) {
+            const result = await vRes.json().catch(() => ({}));
+            if (vRes.ok && result?.success) {
               setPaymentSuccess(true);
+              refreshStatus();
             } else {
-              throw new Error(result?.error || "Verification Failed");
+              throw new Error(result?.error || "Verification failed");
             }
           } catch (err: any) {
             alert(err?.message || "Verification failed");
@@ -186,396 +184,254 @@ export default function PaymentPage() {
           }
         },
         modal: { ondismiss: () => setIsProcessing(false) },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", (resp: any) => {
-        alert(resp?.error?.description || "Payment failed");
+      });
+      rzp.on("payment.failed", (r: any) => {
+        alert(r?.error?.description || "Payment failed");
         setIsProcessing(false);
       });
       rzp.open();
-    } catch (error: any) {
-      alert(error?.message || "Payment failed. Please try again.");
+    } catch (err: any) {
+      alert(err?.message || "Payment failed");
       setIsProcessing(false);
     }
   }
 
-  // ── Success Screen ──
-  if (paymentSuccess && selectedPlan) {
+  if (!plan) return null;
+
+  // ── SUCCESS ──
+  if (paymentSuccess) {
     const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
     return (
-      <div className="min-h-[100svh] bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4 sm:p-6">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 sm:p-8 max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="h-10 w-10 text-green-600" />
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Payment Successful!
-          </h1>
-          <p className="text-gray-600 dark:text-gray-300 mb-1">
-            You're now on the <strong>{selectedPlan.display_name} ({cycleLabel})</strong> plan.
+      <div className="min-h-screen bg-[#FAFBFC] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white rounded-2xl shadow-xl ring-1 ring-gray-100 p-8 max-w-md w-full text-center"
+        >
+          <motion.div
+            initial={{ scale: 0 }} animate={{ scale: 1 }}
+            transition={{ type: "spring", delay: 0.2 }}
+            className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-6"
+          >
+            <CheckCircle className="h-9 w-9 text-green-500" />
+          </motion.div>
+          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">You're all set!</h1>
+          <p className="text-gray-500 mb-1">
+            <strong>{plan.name} ({cycleLabel})</strong> is now active.
           </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            {selectedPlan.test_limit === -1
-              ? "Unlimited test papers!"
-              : `${selectedPlan.test_limit} test papers/month unlocked.`}
+          <p className="text-sm text-gray-400 mb-6">
+            {plan.testLimit >= 200 ? "Unlimited" : plan.testLimit} test papers unlocked.
             {billingCycle === "yearly" && " You saved 20% with annual billing."}
           </p>
           <button
-            onClick={() => (window.location.href = "/dashboard")}
-            className="w-full rounded-full bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3.5 sm:py-4 px-6 shadow-md transition"
+            onClick={() => navigate("/dashboard")}
+            className="w-full py-3.5 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors"
           >
             Go to Dashboard
           </button>
-        </div>
+        </motion.div>
       </div>
     );
   }
 
-  // ── Loading ──
-  if (plansLoading) {
-    return (
-      <div className="min-h-[100svh] bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
-  const formatPrice = (paise: number) => `₹${(paise / 100).toFixed(0)}`;
+  // ── CHECKOUT ──
+  const methods = [
+    { id: "upi" as const, name: "UPI / Google Pay", icon: Smartphone, sub: "Instant payment" },
+    { id: "card" as const, name: "Credit/Debit Card", icon: CreditCard, sub: "Visa, Mastercard, RuPay" },
+    { id: "wallet" as const, name: "Paytm / PhonePe", icon: Wallet, sub: "Mobile wallets" },
+    { id: "netbanking" as const, name: "Net Banking", icon: QrCode, sub: "Bank transfer" },
+  ];
 
   return (
-    <div className="min-h-[100svh] bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
-      <div className="mx-auto max-w-6xl px-3 sm:px-6 lg:px-8 pt-6 pb-10 sm:pt-10 sm:pb-16">
-        {/* Header */}
-        <div className="text-center mb-6 sm:mb-10 lg:mb-8">
-          <h1 className="text-[22px] leading-tight sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-3">
-            Upgrade Your Plan
-          </h1>
-          <p className="text-sm sm:text-base md:text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-            {status
-              ? `You're on the ${status.plan_name} plan (${status.tests_used}/${status.test_limit === -1 ? "∞" : status.test_limit} tests used this month)`
-              : "Choose a plan that works for you"}
-          </p>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════
-            BILLING CYCLE TOGGLE (NEW)
-           ═══════════════════════════════════════════════════ */}
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <button
-            type="button"
-            onClick={() => setBillingCycle("monthly")}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-              billingCycle === "monthly"
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-          >
-            Monthly
+    <div className="min-h-screen bg-[#FAFBFC]">
+      {/* Top bar */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
+          <button onClick={() => navigate("/pricing")} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+            <ArrowLeft className="h-5 w-5" />
           </button>
-          <button
-            type="button"
-            onClick={() => setBillingCycle("yearly")}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${
-              billingCycle === "yearly"
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-          >
-            Yearly
-            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-              billingCycle === "yearly"
-                ? "bg-green-400 text-green-900"
-                : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-            }`}>
-              Save 20%
-            </span>
-          </button>
+          <div>
+            <h1 className="text-lg font-bold text-gray-900">Checkout</h1>
+            <p className="text-xs text-gray-400">{plan.name} Plan · Secure payment via Razorpay</p>
+          </div>
         </div>
+      </div>
 
-        {/* Plan Selection Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          {plans.map((plan) => {
-            const colors = PLAN_COLORS[plan.slug as PlanSlug] || PLAN_COLORS.free;
-            const isSelected = selectedPlan?.slug === plan.slug;
-            const isCurrent = status?.plan_slug === plan.slug;
-            const isFree = plan.slug === "free";
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
-            const displayPrice = getPriceForCycle(plan, billingCycle);
-            const monthlyEquiv = billingCycle === "yearly" ? getMonthlyEquivalent(plan) : plan.price_paise;
+          {/* ── Left: Payment Method ── */}
+          <div className="lg:col-span-3 space-y-5">
+            {/* Billing toggle */}
+            <div className="bg-white rounded-2xl ring-1 ring-gray-100 p-5">
+              <h2 className="text-sm font-bold text-gray-900 mb-3">Billing Cycle</h2>
+              <div className="grid grid-cols-2 gap-3">
+                {(["monthly", "yearly"] as const).map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setBillingCycle(c)}
+                    className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                      billingCycle === c
+                        ? "border-gray-900 bg-gray-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <p className="text-sm font-bold text-gray-900 capitalize">{c}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {c === "monthly"
+                        ? `${fmt(plan.monthlyPaise)}/month`
+                        : `${fmt(getPrice(plan.monthlyPaise, "yearly"))}/year`}
+                    </p>
+                    {c === "yearly" && (
+                      <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                        -20%
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-            return (
-              <button
-                key={plan.id}
-                type="button"
-                onClick={() => !isFree && setSelectedPlan(plan)}
-                disabled={isFree}
-                className={`relative text-left p-5 rounded-2xl border-2 transition-all ${
-                  isSelected && !isFree
-                    ? `${colors.ring} ring-2 ${colors.bg} border-transparent`
-                    : isFree
-                    ? "border-gray-200 dark:border-gray-700 opacity-60 cursor-not-allowed"
-                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-                }`}
-              >
-                {isCurrent && (
-                  <span className="absolute -top-2.5 right-4 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                    Current
-                  </span>
-                )}
-                {plan.slug === "pro" && !isCurrent && (
-                  <span className="absolute -top-2.5 right-4 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                    Popular
-                  </span>
-                )}
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`p-2 rounded-lg ${colors.badge}`}>
-                    {PLAN_ICONS[plan.slug as PlanSlug] || PLAN_ICONS.free}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {plan.display_name}
-                    </h3>
-                    {isFree ? (
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">Free</p>
-                    ) : billingCycle === "yearly" ? (
-                      <div>
-                        <p className="text-lg font-bold text-gray-900 dark:text-white">
-                          {formatPrice(displayPrice)}<span className="text-sm font-normal text-gray-500">/yr</span>
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatPrice(monthlyEquiv)}/mo
-                          <span className="ml-1 line-through text-gray-400">{formatPrice(plan.price_paise)}/mo</span>
-                        </p>
+            {/* Payment methods */}
+            <div className="bg-white rounded-2xl ring-1 ring-gray-100 p-5">
+              <h2 className="text-sm font-bold text-gray-900 mb-3">Payment Method</h2>
+              <div className="space-y-2">
+                {methods.map((m) => {
+                  const Icon = m.icon;
+                  const active = selectedMethod === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => setSelectedMethod(m.id)}
+                      className={`w-full flex items-center gap-4 p-3.5 rounded-xl border-2 transition-all text-left ${
+                        active ? "border-gray-900 bg-gray-50" : "border-gray-100 hover:border-gray-200"
+                      }`}
+                    >
+                      <div className={`p-2 rounded-lg ${active ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-400"}`}>
+                        <Icon className="h-4 w-4" />
                       </div>
-                    ) : (
-                      <p className="text-lg font-bold text-gray-900 dark:text-white">
-                        {formatPrice(displayPrice)}<span className="text-sm font-normal text-gray-500">/mo</span>
-                      </p>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900">{m.name}</p>
+                        <p className="text-[11px] text-gray-400">{m.sub}</p>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        active ? "border-gray-900 bg-gray-900" : "border-gray-300"
+                      }`}>
+                        {active && <Check className="h-3 w-3 text-white" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Security */}
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-100">
+              <Shield className="h-4 w-4 text-blue-500 flex-shrink-0" />
+              <p className="text-xs text-blue-600">
+                <strong>256-bit encrypted</strong> · Powered by Razorpay · We never store card details
+              </p>
+            </div>
+          </div>
+
+          {/* ── Right: Order Summary ── */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-2xl ring-1 ring-gray-100 p-5 lg:sticky lg:top-6">
+              <h2 className="text-sm font-bold text-gray-900 mb-4">Order Summary</h2>
+
+              {/* Plan card */}
+              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100 mb-4">
+                <div className="p-2 rounded-lg bg-gray-900 text-white">
+                  {plan.icon}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-gray-900">{plan.name}</p>
+                  <p className="text-xs text-gray-400 capitalize">{billingCycle} billing</p>
+                </div>
+              </div>
+
+              {/* Breakdown */}
+              <div className="space-y-2.5 text-sm mb-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{plan.name} plan</span>
+                  <span className="font-medium text-gray-900">
+                    {billingCycle === "yearly"
+                      ? `${fmt(plan.monthlyPaise)} × 12`
+                      : fmt(plan.monthlyPaise)}
+                  </span>
+                </div>
+                {billingCycle === "yearly" && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Annual discount (20%)</span>
+                    <span className="font-medium">-{fmt(savings)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-gray-500">
+                  <span>Test papers</span>
+                  <span className="font-medium text-gray-900">
+                    {plan.testLimit >= 200 ? "Unlimited" : `${plan.testLimit}/mo`}
+                  </span>
+                </div>
+                {plan.studentLimit && (
+                  <div className="flex justify-between text-gray-500">
+                    <span>Students</span>
+                    <span className="font-medium text-gray-900">Up to {plan.studentLimit}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-100 pt-3 mb-5">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-base font-bold text-gray-900">Total</span>
+                  <div className="text-right">
+                    <span className="text-2xl font-extrabold text-gray-900">{fmt(actualPrice)}</span>
+                    {billingCycle === "yearly" && (
+                      <p className="text-[11px] text-gray-400">{fmt(monthlyEquiv)}/mo effective</p>
                     )}
                   </div>
                 </div>
+                <p className="text-xs text-gray-400 mt-1 text-right">
+                  That's just {fmtPerDay(plan.monthlyPaise, billingCycle)}/day
+                </p>
+              </div>
+
+              {/* Pay button */}
+              <button
+                onClick={handlePay}
+                disabled={isProcessing}
+                className="w-full py-4 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg hover:shadow-xl"
+              >
+                {isProcessing ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  `Pay ${fmt(actualPrice)} Now`
+                )}
+              </button>
+
+              <p className="text-center text-[11px] text-gray-400 mt-3">
+                Cancel anytime · No hidden charges
+              </p>
+
+              {/* Features list */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">What you get</p>
                 <ul className="space-y-1.5">
-                  {(plan.features as string[]).map((f, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
-                      <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      {f}
+                  {plan.features.map((f, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs text-gray-500">
+                      <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" /> {f}
                     </li>
                   ))}
                 </ul>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Payment Section */}
-        {selectedPlan && selectedPlan.slug !== "free" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-7 lg:gap-6">
-            <div className="lg:col-span-5">
-              <div className="lg:sticky lg:top-6">
-                <MethodsCard
-                  paymentMethods={paymentMethods}
-                  selectedMethod={selectedMethod}
-                  setSelectedMethod={setSelectedMethod}
-                />
               </div>
             </div>
-            <div className="lg:col-span-7 space-y-4 sm:space-y-6">
-              <SummaryCard plan={selectedPlan} billingCycle={billingCycle} formatPrice={formatPrice} />
-              <ActionCard
-                isProcessing={isProcessing}
-                onPay={openRazorpay}
-                plan={selectedPlan}
-                billingCycle={billingCycle}
-                formatPrice={formatPrice}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Sub-components ---------- */
-
-function SummaryCard({ plan, billingCycle, formatPrice }: { plan: Plan; billingCycle: BillingCycle; formatPrice: (p: number) => string }) {
-  const actualPrice = getPriceForCycle(plan, billingCycle);
-  const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
-  const originalYearlyPrice = plan.price_paise * YEARLY_MONTHS;
-  const savings = billingCycle === "yearly" ? originalYearlyPrice - actualPrice : 0;
-
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 sm:p-6">
-      <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
-        Order Summary
-      </h2>
-      <div className="space-y-3 text-sm sm:text-base">
-        <Row label="Plan:" value={`Teacher ${plan.display_name}`} />
-        <Row label="Billing Cycle:" value={cycleLabel} />
-        <Row
-          label="Test Papers:"
-          value={plan.test_limit === -1 ? "Unlimited" : `${plan.test_limit}/month`}
-        />
-        <Row label="Amount:" value={formatPrice(actualPrice)} />
-        {billingCycle === "yearly" && savings > 0 && (
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-green-600 dark:text-green-400 font-medium">You save:</span>
-            <span className="font-semibold text-green-600 dark:text-green-400">
-              {formatPrice(savings)} (20% off)
-            </span>
-          </div>
-        )}
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
-          <div className="flex justify-between text-lg font-semibold">
-            <span className="text-gray-900 dark:text-white">Total:</span>
-            <span className="text-blue-600 dark:text-blue-400">
-              {formatPrice(actualPrice)}
-            </span>
-          </div>
-          {billingCycle === "yearly" && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-right mt-1">
-              Billed annually ({formatPrice(getMonthlyEquivalent(plan))}/mo effective)
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-gray-600 dark:text-gray-300">{label}</span>
-      <span className="font-medium text-gray-900 dark:text-white">{value}</span>
-    </div>
-  );
-}
-
-function ActionCard({
-  isProcessing,
-  onPay,
-  plan,
-  billingCycle,
-  formatPrice,
-}: {
-  isProcessing: boolean;
-  onPay: () => void;
-  plan: Plan;
-  billingCycle: BillingCycle;
-  formatPrice: (p: number) => string;
-}) {
-  const actualPrice = getPriceForCycle(plan, billingCycle);
-  const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
-
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 sm:p-8">
-      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">
-        Complete Payment
-      </h2>
-      <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-5 sm:mb-8">
-        You'll be redirected to Razorpay for your {plan.display_name} plan ({cycleLabel}).
-      </p>
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3.5 sm:p-4 mb-6 sm:mb-8">
-        <div className="flex items-start gap-3">
-          <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-          <div>
-            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-              Secure Payment
-            </h3>
-            <p className="text-xs sm:text-sm text-blue-700/90 dark:text-blue-300 mt-1">
-              Your payment details are encrypted. We do not store your card information.
-            </p>
           </div>
         </div>
-      </div>
-      <button
-        onClick={onPay}
-        disabled={isProcessing}
-        className="w-full rounded-full bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-4 px-6 shadow-[0_6px_20px_rgba(29,78,216,0.25)] focus:outline-none focus:ring-2 focus:ring-blue-400/70 transition disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isProcessing ? (
-          <div className="flex items-center justify-center">
-            <svg
-              className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            Processing...
-          </div>
-        ) : (
-          `Pay ${formatPrice(actualPrice)} Now`
-        )}
-      </button>
-      <p className="text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-4">
-        By completing this payment, you agree to our{" "}
-        <a href="#" className="text-blue-600 hover:text-blue-700 dark:text-blue-400">
-          Terms of Service
-        </a>{" "}
-        and{" "}
-        <a href="#" className="text-blue-600 hover:text-blue-700 dark:text-blue-400">
-          Privacy Policy
-        </a>
-        .
-      </p>
-    </div>
-  );
-}
-
-function MethodsCard({
-  paymentMethods,
-  selectedMethod,
-  setSelectedMethod,
-}: {
-  paymentMethods: { id: MethodId; name: string; icon: JSX.Element; description: string }[];
-  selectedMethod: MethodId;
-  setSelectedMethod: (m: MethodId) => void;
-}) {
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6">
-      <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
-        Select Payment Method
-      </h2>
-      <div className="space-y-3">
-        {paymentMethods.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            className={`w-full text-left p-3.5 sm:p-4 border rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              selectedMethod === m.id
-                ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-            }`}
-            onClick={() => setSelectedMethod(m.id)}
-          >
-            <div className="flex items-center">
-              <div
-                className={`p-2 rounded-lg ${
-                  selectedMethod === m.id ? "bg-blue-100 dark:bg-blue-800" : "bg-gray-100 dark:bg-gray-700"
-                }`}
-              >
-                {m.icon}
-              </div>
-              <div className="ml-3 sm:ml-4">
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-white">
-                  {m.name}
-                </h3>
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                  {m.description}
-                </p>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
-      <div className="mt-5 sm:mt-6 flex items-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-        <Shield className="h-4 w-4 mr-2 text-green-600" />
-        <span>Secure and encrypted payment processing</span>
       </div>
     </div>
   );
