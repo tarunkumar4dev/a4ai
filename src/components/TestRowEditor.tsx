@@ -469,6 +469,11 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
           <option value={3}>3m</option>
           <option value={4}>4m</option>
           <option value={5}>5m</option>
+          <option value={6}>6m</option>
+          <option value={6}>7m</option>
+          <option value={6}>8m</option>
+          <option value={6}>9m</option>
+          <option value={6}>10m</option>
         </select>
       </td>
 
