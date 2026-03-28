@@ -29,6 +29,11 @@ const joinUrl = (base: string, path: string) =>
   `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 
 type MethodId = "upi" | "card" | "wallet" | "netbanking";
+type BillingCycle = "monthly" | "yearly";
+
+// Yearly = 12 months at 20% discount
+const YEARLY_DISCOUNT = 0.20;
+const YEARLY_MONTHS = 12;
 
 const PLAN_ICONS: Record<PlanSlug, JSX.Element> = {
   free: <Sparkles className="h-5 w-5" />,
@@ -54,15 +59,28 @@ const PLAN_COLORS: Record<PlanSlug, { ring: string; bg: string; badge: string }>
   },
 };
 
+/** Calculate price in paise for the given billing cycle */
+function getPriceForCycle(plan: Plan, cycle: BillingCycle): number {
+  if (plan.slug === "free") return 0;
+  if (cycle === "monthly") return plan.price_paise;
+  // Yearly: 12 months × monthly price × (1 - discount)
+  return Math.round(plan.price_paise * YEARLY_MONTHS * (1 - YEARLY_DISCOUNT));
+}
+
+/** Monthly equivalent when paying yearly */
+function getMonthlyEquivalent(plan: Plan): number {
+  return Math.round((plan.price_paise * YEARLY_MONTHS * (1 - YEARLY_DISCOUNT)) / YEARLY_MONTHS);
+}
+
 export default function PaymentPage() {
   const { user } = useAuth();
   const { plans, status, loading: plansLoading } = useSubscription();
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [selectedMethod, setSelectedMethod] = useState<MethodId>("upi");
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
-  // Auto-select starter plan on load (most common upgrade path)
   useEffect(() => {
     if (plans.length && !selectedPlan) {
       const starter = plans.find((p) => p.slug === "starter");
@@ -99,10 +117,13 @@ export default function PaymentPage() {
     try {
       await ensureRazorpay();
 
+      const actualAmount = getPriceForCycle(selectedPlan, billingCycle);
+
       const body: Record<string, any> = {
-        amount: selectedPlan.price_paise,
+        amount: actualAmount,
         payment_method: selectedMethod,
         plan_slug: selectedPlan.slug,
+        billing_cycle: billingCycle,
         user_id: user?.id,
       };
       if (selectedMethod === "upi" && import.meta.env.MODE !== "production") {
@@ -121,13 +142,14 @@ export default function PaymentPage() {
       }
       const order = await res.json();
 
+      const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
       const options = {
         key: RZP_KEY,
         order_id: order.id,
         amount: order.amount,
         currency: order.currency || "INR",
         name: "a4ai.in",
-        description: `${selectedPlan.display_name} Plan — Monthly`,
+        description: `${selectedPlan.display_name} Plan — ${cycleLabel}`,
         prefill: {
           name: user?.user_metadata?.full_name || "",
           email: user?.email || "",
@@ -136,6 +158,7 @@ export default function PaymentPage() {
         theme: { color: "#1D4ED8" },
         notes: {
           plan_slug: selectedPlan.slug,
+          billing_cycle: billingCycle,
           user_id: user?.id,
         },
         handler: async (response: any) => {
@@ -146,6 +169,7 @@ export default function PaymentPage() {
               body: JSON.stringify({
                 ...response,
                 plan_slug: selectedPlan.slug,
+                billing_cycle: billingCycle,
                 user_id: user?.id,
               }),
             });
@@ -176,7 +200,9 @@ export default function PaymentPage() {
     }
   }
 
+  // ── Success Screen ──
   if (paymentSuccess && selectedPlan) {
+    const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
     return (
       <div className="min-h-[100svh] bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center p-4 sm:p-6">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 sm:p-8 max-w-md w-full text-center">
@@ -187,12 +213,13 @@ export default function PaymentPage() {
             Payment Successful!
           </h1>
           <p className="text-gray-600 dark:text-gray-300 mb-1">
-            You're now on the <strong>{selectedPlan.display_name}</strong> plan.
+            You're now on the <strong>{selectedPlan.display_name} ({cycleLabel})</strong> plan.
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
             {selectedPlan.test_limit === -1
-              ? "Unlimited test papers this month!"
+              ? "Unlimited test papers!"
               : `${selectedPlan.test_limit} test papers/month unlocked.`}
+            {billingCycle === "yearly" && " You saved 20% with annual billing."}
           </p>
           <button
             onClick={() => (window.location.href = "/dashboard")}
@@ -205,6 +232,7 @@ export default function PaymentPage() {
     );
   }
 
+  // ── Loading ──
   if (plansLoading) {
     return (
       <div className="min-h-[100svh] bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
@@ -213,7 +241,6 @@ export default function PaymentPage() {
     );
   }
 
-  const paidPlans = plans.filter((p) => p.slug !== "free");
   const formatPrice = (paise: number) => `₹${(paise / 100).toFixed(0)}`;
 
   return (
@@ -231,6 +258,41 @@ export default function PaymentPage() {
           </p>
         </div>
 
+        {/* ═══════════════════════════════════════════════════
+            BILLING CYCLE TOGGLE (NEW)
+           ═══════════════════════════════════════════════════ */}
+        <div className="flex items-center justify-center gap-3 mb-6">
+          <button
+            type="button"
+            onClick={() => setBillingCycle("monthly")}
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              billingCycle === "monthly"
+                ? "bg-blue-600 text-white shadow-md"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+            }`}
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            onClick={() => setBillingCycle("yearly")}
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${
+              billingCycle === "yearly"
+                ? "bg-blue-600 text-white shadow-md"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+            }`}
+          >
+            Yearly
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              billingCycle === "yearly"
+                ? "bg-green-400 text-green-900"
+                : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+            }`}>
+              Save 20%
+            </span>
+          </button>
+        </div>
+
         {/* Plan Selection Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {plans.map((plan) => {
@@ -238,6 +300,9 @@ export default function PaymentPage() {
             const isSelected = selectedPlan?.slug === plan.slug;
             const isCurrent = status?.plan_slug === plan.slug;
             const isFree = plan.slug === "free";
+
+            const displayPrice = getPriceForCycle(plan, billingCycle);
+            const monthlyEquiv = billingCycle === "yearly" ? getMonthlyEquivalent(plan) : plan.price_paise;
 
             return (
               <button
@@ -271,9 +336,23 @@ export default function PaymentPage() {
                     <h3 className="font-semibold text-gray-900 dark:text-white">
                       {plan.display_name}
                     </h3>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">
-                      {isFree ? "Free" : `${formatPrice(plan.price_paise)}/mo`}
-                    </p>
+                    {isFree ? (
+                      <p className="text-lg font-bold text-gray-900 dark:text-white">Free</p>
+                    ) : billingCycle === "yearly" ? (
+                      <div>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">
+                          {formatPrice(displayPrice)}<span className="text-sm font-normal text-gray-500">/yr</span>
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {formatPrice(monthlyEquiv)}/mo
+                          <span className="ml-1 line-through text-gray-400">{formatPrice(plan.price_paise)}/mo</span>
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-lg font-bold text-gray-900 dark:text-white">
+                        {formatPrice(displayPrice)}<span className="text-sm font-normal text-gray-500">/mo</span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 <ul className="space-y-1.5">
@@ -289,7 +368,7 @@ export default function PaymentPage() {
           })}
         </div>
 
-        {/* Payment Section (only if paid plan selected) */}
+        {/* Payment Section */}
         {selectedPlan && selectedPlan.slug !== "free" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-7 lg:gap-6">
             <div className="lg:col-span-5">
@@ -302,11 +381,12 @@ export default function PaymentPage() {
               </div>
             </div>
             <div className="lg:col-span-7 space-y-4 sm:space-y-6">
-              <SummaryCard plan={selectedPlan} formatPrice={formatPrice} />
+              <SummaryCard plan={selectedPlan} billingCycle={billingCycle} formatPrice={formatPrice} />
               <ActionCard
                 isProcessing={isProcessing}
                 onPay={openRazorpay}
                 plan={selectedPlan}
+                billingCycle={billingCycle}
                 formatPrice={formatPrice}
               />
             </div>
@@ -319,7 +399,12 @@ export default function PaymentPage() {
 
 /* ---------- Sub-components ---------- */
 
-function SummaryCard({ plan, formatPrice }: { plan: Plan; formatPrice: (p: number) => string }) {
+function SummaryCard({ plan, billingCycle, formatPrice }: { plan: Plan; billingCycle: BillingCycle; formatPrice: (p: number) => string }) {
+  const actualPrice = getPriceForCycle(plan, billingCycle);
+  const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
+  const originalYearlyPrice = plan.price_paise * YEARLY_MONTHS;
+  const savings = billingCycle === "yearly" ? originalYearlyPrice - actualPrice : 0;
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 sm:p-6">
       <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
@@ -327,19 +412,32 @@ function SummaryCard({ plan, formatPrice }: { plan: Plan; formatPrice: (p: numbe
       </h2>
       <div className="space-y-3 text-sm sm:text-base">
         <Row label="Plan:" value={`Teacher ${plan.display_name}`} />
-        <Row label="Billing Cycle:" value="Monthly" />
+        <Row label="Billing Cycle:" value={cycleLabel} />
         <Row
           label="Test Papers:"
           value={plan.test_limit === -1 ? "Unlimited" : `${plan.test_limit}/month`}
         />
-        <Row label="Amount:" value={formatPrice(plan.price_paise)} />
+        <Row label="Amount:" value={formatPrice(actualPrice)} />
+        {billingCycle === "yearly" && savings > 0 && (
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-green-600 dark:text-green-400 font-medium">You save:</span>
+            <span className="font-semibold text-green-600 dark:text-green-400">
+              {formatPrice(savings)} (20% off)
+            </span>
+          </div>
+        )}
         <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
           <div className="flex justify-between text-lg font-semibold">
             <span className="text-gray-900 dark:text-white">Total:</span>
             <span className="text-blue-600 dark:text-blue-400">
-              {formatPrice(plan.price_paise)}
+              {formatPrice(actualPrice)}
             </span>
           </div>
+          {billingCycle === "yearly" && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-right mt-1">
+              Billed annually ({formatPrice(getMonthlyEquivalent(plan))}/mo effective)
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -359,20 +457,25 @@ function ActionCard({
   isProcessing,
   onPay,
   plan,
+  billingCycle,
   formatPrice,
 }: {
   isProcessing: boolean;
   onPay: () => void;
   plan: Plan;
+  billingCycle: BillingCycle;
   formatPrice: (p: number) => string;
 }) {
+  const actualPrice = getPriceForCycle(plan, billingCycle);
+  const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-5 sm:p-8">
       <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">
         Complete Payment
       </h2>
       <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-5 sm:mb-8">
-        You'll be redirected to Razorpay to complete your {plan.display_name} plan purchase.
+        You'll be redirected to Razorpay for your {plan.display_name} plan ({cycleLabel}).
       </p>
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3.5 sm:p-4 mb-6 sm:mb-8">
         <div className="flex items-start gap-3">
@@ -406,7 +509,7 @@ function ActionCard({
             Processing...
           </div>
         ) : (
-          `Pay ${formatPrice(plan.price_paise)} Now`
+          `Pay ${formatPrice(actualPrice)} Now`
         )}
       </button>
       <p className="text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-4">
