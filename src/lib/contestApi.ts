@@ -1,10 +1,8 @@
 // src/lib/contestApi.ts
 // ──────────────────────────────────────────────────────────
 // Frontend API client for Contest endpoints
-// Works on both localhost and production
 // ──────────────────────────────────────────────────────────
 
-// Same base as api.ts — no /api/v1 suffix here
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // ── Types ──
@@ -116,26 +114,32 @@ export interface SubmitResponse {
   questions_with_answers?: any[];
 }
 
-// ── Auth helper ──
+// ═══════════════════════════════════════════════════════════
+// FIX: Auth helper — correct import path
+// BUG WAS: import("@/integrations/supabase/client")
+//          → module not found → catch swallowed error
+//          → no auth token → backend rejected request
+// ═══════════════════════════════════════════════════════════
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
   try {
-    const { supabase } = await import("@/integrations/supabase/client");
+    // FIX: Use correct import path matching the rest of the app
+    const { supabase } = await import("@/lib/supabaseClient");
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       headers["Authorization"] = `Bearer ${session.access_token}`;
     }
-  } catch {
-    // No auth
+  } catch (err) {
+    console.warn("[contestApi] Auth header failed:", err);
   }
   return headers;
 }
 
 // ═══════════════════════════════════════════════════════════
-// API FUNCTIONS — all use /api/v1/contests prefix
+// API FUNCTIONS
 // ═══════════════════════════════════════════════════════════
 
 export const contestApi = {
@@ -148,6 +152,7 @@ export const contestApi = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      console.error("[contestApi] createContest failed:", res.status, err);
       throw new Error(err.detail || `Failed to create contest (${res.status})`);
     }
     return res.json();
