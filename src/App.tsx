@@ -235,7 +235,7 @@ function IdleLogoutManager() {
 
 function IdleLogoutEnabled() {
   useIdleLogout({
-    timeoutMs: 20 * 60 * 1000,
+    timeoutMs: 2 * 60 * 60 * 1000,
     warnBeforeMs: 60 * 1000,
     onWarn: () => toast.warning("You've been inactive. Auto sign-out in 1 minute."),
     onLogout: () => toast.info("Signed out due to inactivity."),
