@@ -11,12 +11,21 @@ import { useAuth } from "@/providers/AuthProvider";
 import { motion, AnimatePresence } from "framer-motion";
 import { Confetti } from "@/components/ui/confetti";
 import {
-  Eye, EyeOff, User, Mail, ArrowLeft,
+  Eye, EyeOff, User, Mail, ArrowLeft, Phone,
   GraduationCap, School, Building2, ChevronDown,
   CheckCircle2, Sun, Moon, Gift
 } from "lucide-react";
 
 type Role = "student" | "teacher" | "institute";
+
+// Format 10-digit Indian number to +91XXXXXXXXXX
+const formatPhoneForIndia = (phone: string): string => {
+  const cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length === 10) return `+91${cleaned}`;
+  if (cleaned.length === 12 && cleaned.startsWith("91")) return `+${cleaned}`;
+  if (phone.startsWith("+")) return phone;
+  return phone;
+};
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -30,6 +39,12 @@ export default function SignupPage() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
+
+  // Phone OTP states
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otpSent, setOtpSent] = useState(false);
+  const [timer, setTimer] = useState(0);
 
   // Scratch Card States
   const [showScratchCard, setShowScratchCard] = useState(false);
@@ -38,7 +53,7 @@ export default function SignupPage() {
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
 
   const [formValues, setFormValues] = useState({
-    name: "", email: "", password: "", confirmPassword: "", acceptTerms: false,
+    name: "", email: "", password: "", confirmPassword: "", acceptTerms: false, phone: "",
   });
 
   // If already logged in with role, redirect
@@ -59,9 +74,29 @@ export default function SignupPage() {
     return () => window.removeEventListener("pointermove", onMove);
   }, []);
 
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (timer > 0) interval = setInterval(() => setTimer((p) => p - 1), 1000);
+    return () => clearInterval(interval);
+  }, [timer]);
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormValues((p) => ({ ...p, [name]: type === "checkbox" ? checked : value }));
+  };
+
+  const handleOtpChange = (value: string, index: number) => {
+    if (isNaN(Number(value))) return;
+    const next = [...otp];
+    next[index] = value.substring(value.length - 1);
+    setOtp(next);
+    if (value && index < 5) document.getElementById(`signup-otp-${index + 1}`)?.focus();
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      document.getElementById(`signup-otp-${index - 1}`)?.focus();
+    }
   };
 
   const getInitialCoins = () => {
@@ -83,6 +118,33 @@ export default function SignupPage() {
     }
   };
 
+  // ---------- Send OTP ----------
+  const sendOtp = async () => {
+    if (!selectedRole) {
+      setIsExpanded(true);
+      toast({ title: "Select role first", description: "Choose your role before signing up", variant: "destructive" });
+      return;
+    }
+    if (!formValues.phone || formValues.phone.replace(/\D/g, "").length < 10) {
+      toast({ title: "Error", description: "Enter valid 10-digit phone number", variant: "destructive" });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: formatPhoneForIndia(formValues.phone),
+      });
+      if (error) throw error;
+      setOtpSent(true);
+      setTimer(60);
+      toast({ title: "OTP Sent", description: "Check your mobile" });
+    } catch (error: any) {
+      toast({ title: "Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // ---------- Google Signup ----------
   const handleGoogleSignup = async () => {
     if (!selectedRole) {
@@ -92,9 +154,7 @@ export default function SignupPage() {
     }
     setIsLoading(true);
     try {
-      // Save role to localStorage BEFORE redirect (OAuth will lose state)
       localStorage.setItem("a4ai_pending_role", selectedRole);
-
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -109,38 +169,72 @@ export default function SignupPage() {
     }
   };
 
-  // ---------- Email Signup ----------
+  // ---------- Redirect after login ----------
+  const redirectAfterLogin = (userRole: string | null | undefined) => {
+    const finalRole = userRole || selectedRole;
+    if (finalRole && ["student", "teacher", "institute"].includes(finalRole)) {
+      setShowScratchCard(true);
+    } else {
+      navigate("/select-role", { replace: true });
+    }
+  };
+
+  // ---------- Submit (Email or Phone OTP) ----------
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRole) { setIsExpanded(true); return; }
-    if (formValues.password !== formValues.confirmPassword) {
-      toast({ title: "Passwords don't match", variant: "destructive" });
-      return;
-    }
-    if (!formValues.acceptTerms) {
-      toast({ title: "Accept terms to continue", variant: "destructive" });
-      return;
-    }
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: formValues.email.trim(),
-        password: formValues.password,
-        options: {
-          data: { full_name: formValues.name, role: selectedRole },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
-
-      if (data.session) {
-        // Immediate session — show scratch card, then go to dashboard
-        setShowScratchCard(true);
+      if (signupMethod === "email") {
+        if (formValues.password !== formValues.confirmPassword) {
+          toast({ title: "Passwords don't match", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        if (!formValues.acceptTerms) {
+          toast({ title: "Accept terms to continue", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        const { data, error } = await supabase.auth.signUp({
+          email: formValues.email.trim(),
+          password: formValues.password,
+          options: {
+            data: { full_name: formValues.name, role: selectedRole },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+        if (error) throw error;
+        if (data.session) {
+          setShowScratchCard(true);
+        } else {
+          toast({ title: "Verify your email", description: "Confirmation link sent to your inbox." });
+          navigate("/login");
+        }
       } else {
-        // Email confirmation required
-        toast({ title: "Verify your email", description: "Confirmation link sent to your inbox." });
-        navigate("/login");
+        // Phone OTP verification
+        const otpCode = otp.join("");
+        if (otpCode.length !== 6) {
+          toast({ title: "Enter 6-digit OTP", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        const { data, error } = await supabase.auth.verifyOtp({
+          phone: formatPhoneForIndia(formValues.phone),
+          token: otpCode,
+          type: "sms",
+        });
+        if (error) throw error;
+
+        // Set role in user metadata
+        if (data.user) {
+          await supabase.auth.updateUser({
+            data: { role: selectedRole },
+          });
+        }
+
+        redirectAfterLogin(selectedRole);
       }
     } catch (error: any) {
       toast({ title: "Signup failed", description: error.message, variant: "destructive" });
@@ -196,7 +290,7 @@ export default function SignupPage() {
       </AnimatePresence>
 
       <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 items-center relative z-10">
-        <div className={`backdrop-blur-[30px] saturate-[180%] border rounded-[3rem] shadow-2xl p-10 flex flex-col transition-all duration-500 ${isDarkMode ? "bg-slate-900/60 border-white/10" : "bg-white/40 border-white/50 shadow-slate-300/50"}`}>
+        <div className={`backdrop-blur-[30px] saturate-[180%] border rounded-[3rem] shadow-2xl p-10 flex flex-col transition-all duration-500 max-h-[90vh] overflow-y-auto ${isDarkMode ? "bg-slate-900/60 border-white/10" : "bg-white/40 border-white/50 shadow-slate-300/50"}`}>
           <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className={`mb-6 -ml-2 rounded-full w-fit ${isDarkMode ? "text-slate-400 hover:bg-white/10" : "text-slate-600 hover:bg-white/20"}`}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
@@ -222,7 +316,7 @@ export default function SignupPage() {
                   </div>
                   <div className="text-left">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Identity</p>
-                    <p className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{selectedRole || "Select Role"}</p>
+                    <p className={`text-sm font-bold ${isDarkMode ? "text-white" : "text-slate-900"}`}>{selectedRole ? selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1) : "Select Role"}</p>
                   </div>
                 </div>
                 <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
@@ -246,6 +340,18 @@ export default function SignupPage() {
               </div>
             </div>
 
+            {/* Toggle phone / email */}
+            <Button
+              type="button"
+              onClick={() => { setSignupMethod(signupMethod === "email" ? "phone" : "email"); setOtpSent(false); setOtp(["","","","","",""]); }}
+              className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
+                isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
+              }`}
+            >
+              {signupMethod === "phone" ? <Mail className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+              {signupMethod === "phone" ? "Use Email Instead" : "Use Mobile Number Instead"}
+            </Button>
+
             {/* Google Signup */}
             <Button
               variant="outline"
@@ -262,47 +368,105 @@ export default function SignupPage() {
               Sign up with Google
             </Button>
 
-            {/* Email Signup Form */}
+            {/* Form */}
             <form onSubmit={onSubmit} className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Full Name</Label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input name="name" required value={formValues.name} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="John Doe" />
+              {signupMethod === "phone" ? (
+                /* ── Phone OTP Signup ── */
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Phone Number</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="tel"
+                        name="phone"
+                        value={formValues.phone}
+                        onChange={onChange}
+                        className={`h-11 rounded-xl flex-1 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`}
+                        placeholder="9876543210"
+                        maxLength={10}
+                      />
+                      <Button
+                        type="button"
+                        onClick={sendOtp}
+                        disabled={timer > 0 || isLoading}
+                        className={`h-11 rounded-xl px-4 text-xs font-bold transition-all ${isDarkMode ? "bg-white text-black hover:bg-slate-200" : "bg-black text-white hover:bg-slate-900"}`}
+                      >
+                        {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">10-digit number (e.g. 9876543210)</p>
+                  </div>
+                  {otpSent && (
+                    <div className="space-y-1 animate-in zoom-in-95 duration-200">
+                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Enter OTP</Label>
+                      <div className="flex justify-between gap-2">
+                        {otp.map((digit, idx) => (
+                          <input
+                            key={idx}
+                            id={`signup-otp-${idx}`}
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={1}
+                            value={digit}
+                            onChange={(e) => handleOtpChange(e.target.value, idx)}
+                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                            className={`w-10 h-12 text-center text-lg font-bold rounded-xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input type="email" name="email" required value={formValues.email} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="john@example.com" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Password</Label>
-                  <div className="relative">
-                    <Input type={showPw ? "text" : "password"} name="password" required value={formValues.password} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} />
-                    <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+              ) : (
+                /* ── Email Signup ── */
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Full Name</Label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input name="name" required value={formValues.name} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="John Doe" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input type="email" name="email" required value={formValues.email} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="john@example.com" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Password</Label>
+                      <div className="relative">
+                        <Input type={showPw ? "text" : "password"} name="password" required value={formValues.password} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} />
+                        <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Confirm</Label>
+                      <div className="relative">
+                        <Input type={showConfirmPw ? "text" : "password"} name="confirmPassword" required value={formValues.confirmPassword} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} />
+                        <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 px-2 py-2">
+                    <Checkbox id="acceptTerms" name="acceptTerms" checked={formValues.acceptTerms} onCheckedChange={(c) => setFormValues((s) => ({ ...s, acceptTerms: Boolean(c) }))} />
+                    <label htmlFor="acceptTerms" className={`text-[11px] font-medium leading-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                      I agree to the <Link to="/terms" className="font-bold underline">Terms</Link> & <Link to="/privacy" className="font-bold underline">Privacy</Link>
+                    </label>
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Confirm</Label>
-                  <div className="relative">
-                    <Input type={showConfirmPw ? "text" : "password"} name="confirmPassword" required value={formValues.confirmPassword} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} />
-                    <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 px-2 py-2">
-                <Checkbox id="acceptTerms" name="acceptTerms" checked={formValues.acceptTerms} onCheckedChange={(c) => setFormValues((s) => ({ ...s, acceptTerms: Boolean(c) }))} />
-                <label htmlFor="acceptTerms" className={`text-[11px] font-medium leading-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                  I agree to the <Link to="#" className="font-bold underline">Terms</Link> & <Link to="#" className="font-bold underline">Privacy</Link>
-                </label>
-              </div>
-              <Button type="submit" disabled={isLoading} className={`w-full h-14 rounded-[1.5rem] font-bold shadow-lg transition-transform active:scale-[0.98] ${isDarkMode ? "bg-white text-black hover:bg-slate-100" : "bg-black text-white hover:bg-slate-900"}`}>
-                {isLoading ? "Creating..." : "Get FREE Coins!"}
+              )}
+
+              <Button type="submit" disabled={isLoading} className={`w-full h-14 rounded-[1.5rem] font-bold shadow-lg transition-transform active:scale-[0.98] mt-2 ${isDarkMode ? "bg-white text-black hover:bg-slate-100" : "bg-black text-white hover:bg-slate-900"}`}>
+                {isLoading ? "Creating..." : signupMethod === "phone" ? "Verify & Sign Up" : "Get FREE Coins!"}
               </Button>
+
+              <p className={`text-center text-sm font-medium transition-colors ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                Already have an account?{" "}
+                <Link to="/login" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>Sign in</Link>
+              </p>
             </form>
           </div>
         </div>

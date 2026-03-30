@@ -54,7 +54,7 @@ const SubjectHubPage = lazy(() => import("@/practice/SubjectHub"));
 /* ---------- Lazy Auth & App Pages ---------- */
 const RoleSelectionPage = lazy(() => import("./pages/RoleSelectionPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
-const SignupPage = lazy(() => import("./pages/SignupPage"));
+const SignupPage = lazy(() => import("./pages/SignupPage"));  
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage"));
 const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage"));
@@ -191,7 +191,7 @@ const NotFound = () => (
   </div>
 );
 
-/* ---------- Auth Gates (FIXED to use new AuthProvider) ---------- */
+/* ---------- Auth Gates ---------- */
 
 /** Blocks auth pages (login/signup) if already logged in — redirects to role dashboard */
 function AuthGateForAuthPages({ children }: { children: ReactNode }) {
@@ -300,6 +300,7 @@ const App = () => {
                       <Route path="/auth/callback" element={<AuthCallback />} />
                       <Route path="/select-role" element={<RoleSelectionPage />} />
                       <Route path="/login" element={<AuthGateForAuthPages><LoginPage /></AuthGateForAuthPages>} />
+                      {/* /signup redirects to /login — phone OTP handles both login & signup */}
                       <Route path="/signup" element={<AuthGateForAuthPages><SignupPage /></AuthGateForAuthPages>} />
 
                       {/* ============================================ */}
@@ -400,6 +401,10 @@ const App = () => {
 
 const styleSheet = document.createElement("style");
 styleSheet.textContent = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
   @keyframes spin-reverse {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(-360deg); }

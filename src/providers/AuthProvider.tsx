@@ -1,100 +1,157 @@
 // src/providers/AuthProvider.tsx
-import { createContext, useContext, useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
+// Updated to handle Phone OTP + Google OAuth users
+// Ensures phone users get proper role/metadata
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from "react";
+import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
-type Role = "student" | "teacher" | "institute" | null;
-
-type AuthCtx = {
+interface AuthContextType {
   session: Session | null;
   user: User | null;
-  role: Role;
+  role: string;
+  phone: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  updateRole: (role: NonNullable<Role>) => Promise<void>;
-};
+}
 
-const Ctx = createContext<AuthCtx>({
+const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
-  role: null,
+  role: "teacher",
+  phone: null,
   loading: true,
   signOut: async () => {},
-  updateRole: async () => {},
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export const useAuth = () => useContext(AuthContext);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<Role>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState("teacher");
+  const [phone, setPhone] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Extract role from user metadata
-  const extractRole = (user: User | null | undefined): Role => {
-    if (!user) return null;
-    const r = user.user_metadata?.role;
-    if (r === "student" || r === "teacher" || r === "institute") return r;
-    return null;
+  const extractUserInfo = (currentUser: User | null) => {
+    if (!currentUser) {
+      setRole("teacher");
+      setPhone(null);
+      return;
+    }
+
+    // Role: check user_metadata first, then app_metadata
+    const userRole =
+      currentUser.user_metadata?.role ||
+      currentUser.app_metadata?.role ||
+      "teacher";
+    setRole(userRole);
+
+    // Phone: from user object or metadata
+    const userPhone =
+      currentUser.phone ||
+      currentUser.user_metadata?.phone ||
+      null;
+    setPhone(userPhone);
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    // 1. Get initial session
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setSession(data.session ?? null);
-      setRole(extractRole(data.session?.user));
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      extractUserInfo(currentSession?.user ?? null);
       setLoading(false);
-    })();
+    });
 
-    // 2. Listen for auth changes (login, logout, token refresh, etc.)
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      (_event, sess) => {
-        setSession(sess ?? null);
-        setRole(extractRole(sess?.user));
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      extractUserInfo(currentSession?.user ?? null);
+      setLoading(false);
+
+      // On first sign-in, ensure teacher_profile exists
+      // (backup in case DB trigger didn't fire)
+      if (event === "SIGNED_IN" && currentSession?.user) {
+        ensureProfileExists(currentSession.user);
       }
-    );
+    });
 
-    return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
+
+  // Fallback: ensure profile exists even if DB trigger fails
+  const ensureProfileExists = async (currentUser: User) => {
+    try {
+      const { data: existingProfile } = await supabase
+        .from("teacher_profiles")
+        .select("id")
+        .eq("id", currentUser.id)
+        .single();
+
+      if (!existingProfile) {
+        // Get free plan ID
+        const { data: freePlan } = await supabase
+          .from("plans")
+          .select("id")
+          .eq("slug", "free")
+          .single();
+
+        if (freePlan) {
+          // Create profile
+          await supabase.from("teacher_profiles").upsert({
+            id: currentUser.id,
+            phone: currentUser.phone || null,
+            email: currentUser.email || null,
+            full_name:
+              currentUser.user_metadata?.full_name ||
+              currentUser.user_metadata?.name ||
+              "",
+            role: "teacher",
+            plan_id: freePlan.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+          // Create free subscription
+          await supabase.from("subscriptions").upsert({
+            user_id: currentUser.id,
+            plan_id: freePlan.id,
+            status: "active",
+            starts_at: new Date().toISOString(),
+            ends_at: new Date(
+              Date.now() + 365 * 100 * 24 * 60 * 60 * 1000
+            ).toISOString(),
+            created_at: new Date().toISOString(),
+          });
+        }
+      }
+    } catch (err) {
+      // Silent fail — trigger should handle this
+      console.warn("Profile ensure check:", err);
+    }
+  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem("a4ai_pending_role");
     setSession(null);
-    setRole(null);
-  };
-
-  // Update role in Supabase user_metadata + local state
-  const updateRole = async (newRole: NonNullable<Role>) => {
-    const { error } = await supabase.auth.updateUser({
-      data: { role: newRole },
-    });
-    if (error) throw error;
-    setRole(newRole);
-    localStorage.removeItem("a4ai_pending_role");
+    setUser(null);
+    setRole("teacher");
+    setPhone(null);
   };
 
   return (
-    <Ctx.Provider
-      value={{
-        session,
-        user: session?.user ?? null,
-        role,
-        loading,
-        signOut,
-        updateRole,
-      }}
-    >
+    <AuthContext.Provider value={{ session, user, role, phone, loading, signOut }}>
       {children}
-    </Ctx.Provider>
+    </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  return useContext(Ctx);
 }

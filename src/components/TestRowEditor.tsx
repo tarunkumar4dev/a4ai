@@ -38,28 +38,28 @@ interface FormValues {
   simpleData: SimpleRowData[];
 }
 
-interface ChapterAPIResponse {
-  chapters: {
-    name: string;
-    subtopics?: string[];
-  }[];
-}
-
 // ==================== API: FETCH CHAPTERS ====================
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 async function fetchChaptersFromAPI(
   classLevel: string,
   subject: string
-): Promise<ChapterAPIResponse> {
+): Promise<string[]> {
   // Extract class number: "Class 10" → "10"
   const classNum = classLevel.replace(/\D/g, "") || "10";
-  
+
   const res = await fetch(
     `${API_BASE}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`
   );
   if (!res.ok) throw new Error(`Failed to fetch chapters: ${res.status}`);
-  return res.json();
+
+  const data = await res.json();
+
+  // Backend returns: { ok: true, chapters: ["ch1", "ch2", ...] }
+  if (data.chapters && Array.isArray(data.chapters)) {
+    return data.chapters;
+  }
+  return [];
 }
 
 // ==================== HOOK: useChapters ====================
@@ -81,25 +81,25 @@ function useChapters(classLevel: string, subject: string) {
     setError(null);
 
     fetchChaptersFromAPI(classLevel, subject)
-      .then((data) => {
+      .then((chapterNames) => {
         if (cancelled) return;
+        setChapters(chapterNames);
 
-        const chapterNames = data.chapters.map((ch) => ch.name);
+        // Load subtopics from fallback for matching chapters
         const sMap: Record<string, string[]> = {};
-        data.chapters.forEach((ch) => {
-          if (ch.subtopics && ch.subtopics.length > 0) {
-            sMap[ch.name] = ch.subtopics;
+        chapterNames.forEach((ch) => {
+          if (COMMON_SUBTOPICS_FALLBACK[ch]) {
+            sMap[ch] = COMMON_SUBTOPICS_FALLBACK[ch];
           }
         });
-
-        setChapters(chapterNames);
-        setSubtopicsMap((prev) => ({ ...prev, ...sMap }));
+        setSubtopicsMap(sMap);
       })
       .catch((err) => {
         if (cancelled) return;
         console.error("Chapter fetch failed, using fallback:", err);
         setError(err.message);
 
+        // Fallback to hardcoded chapters
         const fallback = SUBJECT_TOPICS_FALLBACK[subject] || [];
         setChapters(fallback);
         setSubtopicsMap(COMMON_SUBTOPICS_FALLBACK);
@@ -148,6 +148,14 @@ const SUBJECT_TOPICS_FALLBACK: Record<string, string[]> = {
     "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES",
     "STATISTICS", "PROBABILITY"
   ],
+  "Maths": [
+    "SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS",
+    "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES",
+    "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM",
+    "SEQUENCES AND SERIES", "STRAIGHT LINES",
+    "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES",
+    "STATISTICS", "PROBABILITY"
+  ],
   "Social Science": [
     "The Rise of Nationalism in Europe", "Nationalism in India", "The Making of a Global World",
     "The Age of Industrialisation", "Print Culture & Modern World", "Resources & Development",
@@ -156,6 +164,13 @@ const SUBJECT_TOPICS_FALLBACK: Record<string, string[]> = {
     "Democracy & Diversity", "Gender, Religion & Caste", "Popular Struggles & Movements",
     "Political Parties", "Outcomes of Democracy", "Development", "Sectors of Indian Economy",
     "Money & Credit", "Globalisation & Indian Economy", "Consumer Rights"
+  ],
+  "English": [
+    "A Letter to God", "Nelson Mandela", "Two Stories about Flying",
+    "From the Diary of Anne Frank", "The Hundred Dresses", "Glimpses of India",
+    "Mijbil the Otter", "Madam Rides the Bus", "The Sermon at Benares",
+    "The Proposal", "Footprints without Feet", "The Making of a Scientist",
+    "The Necklace", "The Hack Driver", "Bholi", "The Book That Saved the Earth"
   ],
   "Political Science": [
     "Power Sharing", "Federalism", "Gender, Religion and Caste",
@@ -177,13 +192,19 @@ const SUBJECT_TOPICS_FALLBACK: Record<string, string[]> = {
     "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements",
     "Cash Flow Statement"
   ],
-  "Accounting": [
-    "Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions",
-    "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation",
-    "Provisions and Reserves", "Bill of Exchange", "Financial Statements",
-    "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership",
-    "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements",
-    "Cash Flow Statement"
+  "Economics": [
+    "Development", "Sectors of Indian Economy", "Money and Credit",
+    "Globalisation and the Indian Economy", "Consumer Rights"
+  ],
+  "History": [
+    "The Rise of Nationalism in Europe", "Nationalism in India",
+    "The Making of a Global World", "The Age of Industrialisation",
+    "Print Culture and the Modern World"
+  ],
+  "Geography": [
+    "Resources and Development", "Forest and Wildlife Resources",
+    "Water Resources", "Agriculture", "Minerals and Energy Resources",
+    "Manufacturing Industries", "Lifelines of National Economy"
   ],
 };
 
@@ -322,7 +343,7 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
 
 RefUploadButton.displayName = 'RefUploadButton';
 
-// ==================== QUESTION TYPE SELECTOR (FIXED) ====================
+// ==================== QUESTION TYPE SELECTOR ====================
 const FormatSelector = memo(({ index, subject }: { index: number; subject: string }) => {
   const { watch, setValue } = useFormContext();
   const currentFormat = watch(`simpleData.${index}.format`) || "MCQ";
@@ -332,7 +353,6 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
     ? [...QUESTION_FORMATS, ...ACCOUNTANCY_FORMATS]
     : QUESTION_FORMATS;
 
-  // Reset to MCQ if switching away from Accountancy but accountancy format is selected
   React.useEffect(() => {
     const accValues = ACCOUNTANCY_FORMATS.map(f => f.value);
     if (!isAccountancy && accValues.includes(currentFormat)) {
@@ -377,7 +397,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
 }, ref) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
-  const subject = watch("subject") || ""; // ← ADDED: Get subject from form context
+  const subject = watch("subject") || "";
 
   const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS_FALLBACK[currentTopic] || [];
 
@@ -461,7 +481,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </select>
       </td>
 
-      {/* MARKS */}
+      {/* MARKS — FIX: values 7-10 were all value={6} */}
       <td className="py-3 px-4 text-center">
         <select
           {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
@@ -473,10 +493,10 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
           <option value={4}>4m</option>
           <option value={5}>5m</option>
           <option value={6}>6m</option>
-          <option value={6}>7m</option>
-          <option value={6}>8m</option>
-          <option value={6}>9m</option>
-          <option value={6}>10m</option>
+          <option value={7}>7m</option>
+          <option value={8}>8m</option>
+          <option value={9}>9m</option>
+          <option value={10}>10m</option>
         </select>
       </td>
 
@@ -533,19 +553,29 @@ const SimpleModeView: React.FC = () => {
 
   const classLevel = watch("classGrade") || "";
   const currentSubject = watch("subject") || "";
-  const useNCERT = watch("useNCERT");
-  const ncertChapters = watch("ncertChapters") || [];
 
+  // ═══════════════════════════════════════════════════════════
+  // FIX: Actually USE the useChapters hook to fetch from API!
+  // BUG WAS: chaptersLoading = false (hardcoded)
+  //          availableTopics = fallback only (API never called)
+  // ═══════════════════════════════════════════════════════════
+  const {
+    chapters: apiChapters,
+    subtopicsMap,
+    loading: chaptersLoading,
+    error: chaptersError,
+  } = useChapters(classLevel, currentSubject);
+
+  // Use API chapters if available, else fallback
   const availableTopics = React.useMemo(() => {
-    if (ncertChapters.length > 0) {
-      return ncertChapters;
+    if (apiChapters.length > 0) {
+      return apiChapters;
     }
+    // Fallback when API fails or no data
     return SUBJECT_TOPICS_FALLBACK[currentSubject] || [];
-  }, [ncertChapters, currentSubject]);
+  }, [apiChapters, currentSubject]);
 
-  const chaptersLoading = false;
-  const subtopicsMap: Record<string, string[]> = {};
-
+  // Reset topics when class/subject changes
   const prevKeyRef = useRef(`${classLevel}-${currentSubject}`);
   useEffect(() => {
     const newKey = `${classLevel}-${currentSubject}`;
@@ -588,10 +618,14 @@ const SimpleModeView: React.FC = () => {
             <span>
               <span className="font-semibold">Subject:</span> {currentSubject || "Not selected"}
             </span>
-            {ncertChapters.length > 0 && (
-              <span>
-                <span className="font-semibold">NCERT Chapters:</span> {ncertChapters.slice(0, 3).join(", ")}
-                {ncertChapters.length > 3 && ` +${ncertChapters.length - 3} more`}
+            {apiChapters.length > 0 && (
+              <span className="text-xs text-blue-600">
+                ({apiChapters.length} chapters loaded)
+              </span>
+            )}
+            {chaptersError && (
+              <span className="text-xs text-amber-600">
+                (using fallback chapters)
               </span>
             )}
           </div>
@@ -602,7 +636,7 @@ const SimpleModeView: React.FC = () => {
         <div className="py-12 text-center text-gray-400">
           <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
           <p className="font-semibold">Select a Class and Subject above</p>
-          <p className="text-xs mt-1">Chapters will load automatically</p>
+          <p className="text-xs mt-1">Chapters will load automatically from database</p>
         </div>
       )}
 

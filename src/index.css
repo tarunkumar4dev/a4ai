@@ -130,3 +130,7 @@
 .animate-confetti {
   animation: confetti 3s linear forwards;
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
