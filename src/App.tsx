@@ -58,6 +58,7 @@ const SignupPage = lazy(() => import("./pages/SignupPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage"));
 const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage"));
+const InstituteDashboardPage = lazy(() => import("./pages/institute/InstituteDashboardPage"));
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
@@ -323,6 +324,7 @@ const App = () => {
                       {/*  page when ready)                            */}
                       {/* ============================================ */}
                       {/* <Route path="/institute/dashboard" element={<RoleAuthGate allowedRoles={["institute"]}><InstituteDashboardPage /></RoleAuthGate>} /> */}
+                      <Route path="/institute/dashboard" element={<RoleAuthGate allowedRoles={["institute"]}><InstituteDashboardPage /></RoleAuthGate>} />
 
                       {/* ============================================ */}
                       {/*  SHARED PROTECTED ROUTES (any logged-in user) */}
