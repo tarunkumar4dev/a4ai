@@ -6,7 +6,8 @@ const LandingFeatures = lazy(() => import(/* webpackPrefetch: true */ "@/compone
 import FAQ from "@/components/FAQ";
 import Footer from "@/components/Footer";
 import { LazyMotion, domAnimation } from "framer-motion";
-import { Link } from "react-router-dom";
+// import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Check, Sparkles, FileText, Download, Settings, User, Crown } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/context/ThemeContext";
@@ -394,6 +395,8 @@ const HowItWorks = memo(function HowItWorks({ isDark }: { isDark: boolean }) {
 const UpgradedCTA = memo(function UpgradedCTA({ isDark }: { isDark: boolean }) {
   const { session } = useAuth();
   const ref = useReveal();
+  const navigate = useNavigate();
+  
   return (
     <div ref={ref} className="rv mx-auto mt-14 sm:mt-16 md:mt-20 max-w-4xl">
       <div className="p-px rounded-2xl sm:rounded-3xl" style={{ background: "linear-gradient(135deg,rgba(74,222,128,0.35),rgba(129,140,248,0.35))" }}>
@@ -457,13 +460,24 @@ const UpgradedCTA = memo(function UpgradedCTA({ isDark }: { isDark: boolean }) {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              {/* NEW: Try Free — No Login Needed Button */}
+              <button 
+                onClick={() => navigate("/dashboard/test-generator")} 
+                className="btn-blk w-full sm:w-auto px-6 sm:px-8 py-3 text-sm sm:text-base"
+              >
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  🚀 Try Free — No Login Needed <ArrowRight className="h-4 w-4" />
+                </span>
+              </button>
+              
               <Link to={session ? "/dashboard/test-generator" : "/signup"}>
-                <button className="btn-blk w-full sm:w-auto px-6 sm:px-8 py-3 text-sm sm:text-base">
+                <button className="btn-glass-light w-full sm:w-auto px-6 sm:px-8 py-3 text-sm sm:text-base" style={{ color: "#202124" }}>
                   <span className="relative z-10 flex items-center justify-center gap-2">
-                    Try for FREE <ArrowRight className="h-4 w-4" />
+                    Sign Up Free <ArrowRight className="h-4 w-4" />
                   </span>
                 </button>
               </Link>
+              
               <Link to="/pricing">
                 <button
                   className={`w-full sm:w-auto px-6 sm:px-8 py-3 text-sm sm:text-base ${isDark ? "btn-glass-dark" : "btn-glass-light"}`}
@@ -665,6 +679,8 @@ const TestimonialContent = memo(function TestimonialContent({
    ══════════════════════════════════════════════ */
 const FinalCTA = memo(function FinalCTA({ isDark }: { isDark: boolean }) {
   const ref = useReveal();
+  const navigate = useNavigate();
+  
   return (
     <section className="relative overflow-hidden py-20 sm:py-24 md:py-28" style={{ background: isDark ? "#07090f" : "#ffffff" }}>
       <div className="hidden sm:block sorb" style={{ width: 600, height: 350, left: "50%", top: "50%", transform: "translate(-50%,-50%)", background: isDark ? "rgba(74,222,128,0.06)" : "rgba(74,222,128,0.04)" }} />
@@ -686,13 +702,24 @@ const FinalCTA = memo(function FinalCTA({ isDark }: { isDark: boolean }) {
           </p>
 
           <div className="mt-8 sm:mt-10 flex flex-col items-center gap-3 sm:gap-4 sm:flex-row sm:justify-center">
+            {/* NEW: Try Free — No Login Needed Button */}
+            <button 
+              onClick={() => navigate("/dashboard/test-generator")} 
+              className="btn-blk w-full sm:w-auto px-8 sm:px-10 py-3.5 sm:py-4 text-sm sm:text-base"
+            >
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                🚀 Try Free — No Login Needed <ArrowRight className="h-4 w-4" />
+              </span>
+            </button>
+            
             <Link to="/signup" className="w-full sm:w-auto">
-              <button className="btn-blk w-full sm:w-auto px-8 sm:px-10 py-3.5 sm:py-4 text-sm sm:text-base">
+              <button className="btn-glass-light w-full sm:w-auto px-8 sm:px-10 py-3.5 sm:py-4 text-sm sm:text-base" style={{ color: "#202124" }}>
                 <span className="relative z-10 flex items-center justify-center gap-2">
-                  Try for FREE <ArrowRight className="h-4 w-4" />
+                  Sign Up Free <ArrowRight className="h-4 w-4" />
                 </span>
               </button>
             </Link>
+            
             <Link to="/pricing" className="w-full sm:w-auto">
               <button
                 className={`w-full sm:w-auto px-8 sm:px-10 py-3.5 sm:py-4 text-sm sm:text-base ${isDark ? "btn-glass-dark" : "btn-glass-light"}`}

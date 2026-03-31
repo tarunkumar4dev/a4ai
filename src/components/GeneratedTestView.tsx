@@ -21,7 +21,9 @@ import MathText from "./MathText";
 import { api } from "@/lib/api";
 import type { GenerateTestResponse, GeneratedQuestion } from "@/lib/api";
 import { CreateContestModal } from "./contest/CreateContestModal";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabaseClient";
+import { useGuestAccess } from "@/hooks/useGuestAccess";
+import LoginModal from "@/components/LoginModal";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -448,6 +450,7 @@ interface GeneratedTestViewProps {
 
 const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewProps) => {
   const navigate = useNavigate();
+  const { isGuest, gateAction, showLoginModal, setShowLoginModal, saveTestDataForRestore } = useGuestAccess();
 
   const [showAnswers, setShowAnswers] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -463,8 +466,37 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     result.questions.map((q) => ({ ...q, status: "pending" as QuestionStatus }))
   );
 
-  // ── Save & Finish ────────────────────────────────────────────────
+  // ── Download handler with guest check ─────────────────────────────────
+  const handleDownload = (format: "pdf" | "docx", mode: "student" | "answers" | "teacher") => {
+    if (!gateAction("download")) {
+      // Save current test data so it persists after login
+      saveTestDataForRestore({ 
+        testId: result.testId,
+        examTitle: result.examTitle,
+        questions: activeQuestions,
+        meta: result.meta,
+        logoBase64: logoBase64
+      });
+      return; // blocked — login modal will show
+    }
+    // Proceed with download
+    handleExport(format, mode);
+  };
+
+  // ── Share handler with guest check ───────────────────────────────────
+  const handleShare = () => {
+    if (!gateAction("share")) return;
+    setShowContestModal(true);
+  };
+
+  // ── Save handler with guest check ────────────────────────────────────
   const handleSave = async () => {
+    if (!gateAction("save")) return;
+    await performSave();
+  };
+
+  // ── Actual save logic (extracted) ────────────────────────────────────
+  const performSave = async () => {
     setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -596,212 +628,225 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   const pendingCount = questions.filter((q) => q.status === "pending").length;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6"
-    >
-      {/* ── Header Bar ──────────────────────────────────────────────── */}
+    <>
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.3 }}
-        className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4 }}
+        className="space-y-6"
       >
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Zap size={20} className="text-yellow-500" />
-              {result.examTitle}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {activeQuestions.length} questions · {activeQuestions.reduce((s, q) => s + q.marks, 0)} marks · Generated in {result.generationTime}s
-            </p>
-            <div className="flex gap-3 mt-2 text-xs">
-              <span className="text-emerald-600 font-bold">{approvedCount} approved</span>
-              <span className="text-gray-400 font-bold">{pendingCount} pending</span>
-              <span className="text-red-500 font-bold">{rejectedCount} rejected</span>
+        {/* ── Header Bar ──────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.3 }}
+          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+        >
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Zap size={20} className="text-yellow-500" />
+                {result.examTitle}
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {activeQuestions.length} questions · {activeQuestions.reduce((s, q) => s + q.marks, 0)} marks · Generated in {result.generationTime}s
+              </p>
+              <div className="flex gap-3 mt-2 text-xs">
+                <span className="text-emerald-600 font-bold">{approvedCount} approved</span>
+                <span className="text-gray-400 font-bold">{pendingCount} pending</span>
+                <span className="text-red-500 font-bold">{rejectedCount} rejected</span>
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => setShowAnswers(!showAnswers)} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
-              {showAnswers ? <EyeOff size={14} /> : <Eye size={14} />}
-              {showAnswers ? "Hide" : "Show"} Answers
-            </button>
-
-            <button onClick={handleCopyAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
-              <Copy size={14} /> Copy
-            </button>
-
-            {/* Share as Contest Button */}
-            <button
-              onClick={() => setShowContestModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-            >
-              <Share2 size={14} /> Share as Contest
-            </button>
-
-            {/* Download Menu */}
-            <div className="relative">
-              <button
-                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                disabled={isExporting}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gray-800 text-white hover:bg-gray-900 transition-colors disabled:opacity-50"
-              >
-                {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                Download
-                <ChevronDown size={12} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => setShowAnswers(!showAnswers)} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
+                {showAnswers ? <EyeOff size={14} /> : <Eye size={14} />}
+                {showAnswers ? "Hide" : "Show"} Answers
               </button>
-              <AnimatePresence>
-                {showDownloadMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -5, scale: 0.95 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 w-60"
-                  >
-                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">PDF</div>
-                    <button onClick={() => handleExport("pdf", "student")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                      <FileText size={14} className="text-red-500" /> Student Copy
-                    </button>
-                    <button onClick={() => handleExport("pdf", "answers")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                      <FileText size={14} className="text-orange-500" /> With Answer Key
-                    </button>
-                    <button onClick={() => handleExport("pdf", "teacher")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                      <FileText size={14} className="text-emerald-500" /> Teacher Copy (+ explanations)
-                    </button>
-                    <div className="border-t border-gray-100 my-1" />
-                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">DOCX</div>
-                    <button onClick={() => handleExport("docx", "student")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                      <FileDown size={14} className="text-blue-500" /> Student Copy
-                    </button>
-                    <button onClick={() => handleExport("docx", "answers")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                      <FileDown size={14} className="text-orange-500" /> With Answer Key
-                    </button>
-                    <button onClick={() => handleExport("docx", "teacher")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                      <FileDown size={14} className="text-emerald-500" /> Teacher Copy (+ explanations)
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+
+              <button onClick={handleCopyAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
+                <Copy size={14} /> Copy
+              </button>
+
+              {/* Share as Contest Button */}
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+              >
+                <Share2 size={14} /> Share as Contest
+              </button>
+
+              {/* Download Menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  disabled={isExporting}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gray-800 text-white hover:bg-gray-900 transition-colors disabled:opacity-50"
+                >
+                  {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  Download
+                  <ChevronDown size={12} />
+                </button>
+                <AnimatePresence>
+                  {showDownloadMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 w-60"
+                    >
+                      <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">PDF</div>
+                      <button onClick={() => handleDownload("pdf", "student")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
+                        <FileText size={14} className="text-red-500" /> Student Copy
+                      </button>
+                      <button onClick={() => handleDownload("pdf", "answers")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
+                        <FileText size={14} className="text-orange-500" /> With Answer Key
+                      </button>
+                      <button onClick={() => handleDownload("pdf", "teacher")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
+                        <FileText size={14} className="text-emerald-500" /> Teacher Copy (+ explanations)
+                      </button>
+                      <div className="border-t border-gray-100 my-1" />
+                      <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">DOCX</div>
+                      <button onClick={() => handleDownload("docx", "student")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
+                        <FileDown size={14} className="text-blue-500" /> Student Copy
+                      </button>
+                      <button onClick={() => handleDownload("docx", "answers")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
+                        <FileDown size={14} className="text-orange-500" /> With Answer Key
+                      </button>
+                      <button onClick={() => handleDownload("docx", "teacher")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
+                        <FileDown size={14} className="text-emerald-500" /> Teacher Copy (+ explanations)
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
 
-      {/* ── Bulk Actions ────────────────────────────────────────────── */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="flex items-center gap-3 flex-wrap"
-      >
-        <button onClick={approveAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
-          <CheckCircle2 size={14} /> Approve All
-        </button>
-        <button onClick={resetAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
-          <RotateCcw size={14} /> Reset All
-        </button>
-        {rejectedCount > 0 && (
-          <button
-            onClick={handleRegenerate}
-            disabled={isRegenerating}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
-          >
-            {isRegenerating ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
-            Regenerate {rejectedCount} Rejected
+        {/* ── Bulk Actions ────────────────────────────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="flex items-center gap-3 flex-wrap"
+        >
+          <button onClick={approveAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
+            <CheckCircle2 size={14} /> Approve All
           </button>
-        )}
-      </motion.div>
-
-      {/* ── Questions ───────────────────────────────────────────────── */}
-      <div className="space-y-4 pb-32">
-        {questions.map((q, idx) => (
-          <QuestionCard
-            key={q.id}
-            question={q}
-            index={idx}
-            showAnswer={showAnswers}
-            onStatusChange={handleStatusChange}
-            onEdit={handleEdit}
-            onSaveEdit={handleSaveEdit}
-          />
-        ))}
-      </div>
-
-      {/* ── Contest Modal ───────────────────────────────────────────── */}
-      <AnimatePresence>
-        {showContestModal && (
-          <CreateContestModal
-            isOpen={showContestModal}
-            onClose={() => setShowContestModal(false)}
-            questions={activeQuestions}
-            testTitle={result.examTitle || "Test Paper"}
-            subject={result.meta?.subject || "Science"}
-            classGrade={result.meta?.classGrade || "Class 10"}
-            board={result.meta?.board || "CBSE"}
-            logoBase64={logoBase64}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── Sticky Bottom Bar ───────────────────────────────────────── */}
-      <motion.div
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 80, damping: 15, delay: 0.5 }}
-        className="fixed bottom-8 left-0 w-full px-4 md:px-6 pointer-events-none z-50"
-      >
-        <div className="max-w-4xl mx-auto flex items-center justify-between bg-[#111827] text-white p-3 pl-6 rounded-[24px] shadow-[0_20px_40px_rgba(0,0,0,0.3)] pointer-events-auto border border-white/10">
-
-          {/* Left — status info */}
-          <div className="flex items-center gap-2 text-gray-400">
-            <CheckCircle2 size={16} className={approvedCount > 0 ? "text-emerald-400" : "text-gray-500"} />
-            <span className="text-xs font-bold uppercase tracking-wider hidden sm:block">
-              <span className="text-white">{activeQuestions.length}</span> questions
-              {approvedCount > 0 && (
-                <span className="text-emerald-400 ml-2">· {approvedCount} approved</span>
-              )}
-            </span>
-          </div>
-
-          {/* Right — actions */}
-          <div className="flex items-center gap-3">
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              type="button"
-              onClick={handleNewTest}
-              className="px-6 py-3.5 rounded-xl text-sm font-bold bg-gray-700 text-gray-200 hover:bg-gray-600 transition-all"
+          <button onClick={resetAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+            <RotateCcw size={14} /> Reset All
+          </button>
+          {rejectedCount > 0 && (
+            <button
+              onClick={handleRegenerate}
+              disabled={isRegenerating}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
             >
-              New Test
-            </motion.button>
+              {isRegenerating ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+              Regenerate {rejectedCount} Rejected
+            </button>
+          )}
+        </motion.div>
 
-            <motion.button
-              whileHover={!isSaving ? { scale: 1.03, boxShadow: "0 0 20px rgba(52,211,153,0.3)" } : {}}
-              whileTap={!isSaving ? { scale: 0.97 } : {}}
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving || saveStatus === "saved"}
-              className="px-8 py-3.5 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl font-bold text-sm text-white shadow-[0_4px_14px_rgba(0,0,0,0.4)] flex items-center gap-2 transition-all border border-white/10 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <><Loader2 size={18} className="animate-spin" /> Saving...</>
-              ) : saveStatus === "saved" ? (
-                <><Check size={18} /> Saved!</>
-              ) : (
-                <><Save size={18} /> Save & Finish</>
-              )}
-            </motion.button>
-          </div>
-
+        {/* ── Questions ───────────────────────────────────────────────── */}
+        <div className="space-y-4 pb-32">
+          {questions.map((q, idx) => (
+            <QuestionCard
+              key={q.id}
+              question={q}
+              index={idx}
+              showAnswer={showAnswers}
+              onStatusChange={handleStatusChange}
+              onEdit={handleEdit}
+              onSaveEdit={handleSaveEdit}
+            />
+          ))}
         </div>
+
+        {/* ── Contest Modal ───────────────────────────────────────────── */}
+        <AnimatePresence>
+          {showContestModal && (
+            <CreateContestModal
+              isOpen={showContestModal}
+              onClose={() => setShowContestModal(false)}
+              questions={activeQuestions}
+              testTitle={result.examTitle || "Test Paper"}
+              subject={result.meta?.subject || "Science"}
+              classGrade={result.meta?.classGrade || "Class 10"}
+              board={result.meta?.board || "CBSE"}
+              logoBase64={logoBase64}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* ── Sticky Bottom Bar ───────────────────────────────────────── */}
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 80, damping: 15, delay: 0.5 }}
+          className="fixed bottom-8 left-0 w-full px-4 md:px-6 pointer-events-none z-50"
+        >
+          <div className="max-w-4xl mx-auto flex items-center justify-between bg-[#111827] text-white p-3 pl-6 rounded-[24px] shadow-[0_20px_40px_rgba(0,0,0,0.3)] pointer-events-auto border border-white/10">
+
+            {/* Left — status info */}
+            <div className="flex items-center gap-2 text-gray-400">
+              <CheckCircle2 size={16} className={approvedCount > 0 ? "text-emerald-400" : "text-gray-500"} />
+              <span className="text-xs font-bold uppercase tracking-wider hidden sm:block">
+                <span className="text-white">{activeQuestions.length}</span> questions
+                {approvedCount > 0 && (
+                  <span className="text-emerald-400 ml-2">· {approvedCount} approved</span>
+                )}
+              </span>
+            </div>
+
+            {/* Right — actions */}
+            <div className="flex items-center gap-3">
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                type="button"
+                onClick={handleNewTest}
+                className="px-6 py-3.5 rounded-xl text-sm font-bold bg-gray-700 text-gray-200 hover:bg-gray-600 transition-all"
+              >
+                New Test
+              </motion.button>
+
+              <motion.button
+                whileHover={!isSaving ? { scale: 1.03, boxShadow: "0 0 20px rgba(52,211,153,0.3)" } : {}}
+                whileTap={!isSaving ? { scale: 0.97 } : {}}
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving || saveStatus === "saved"}
+                className="px-8 py-3.5 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl font-bold text-sm text-white shadow-[0_4px_14px_rgba(0,0,0,0.4)] flex items-center gap-2 transition-all border border-white/10 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <><Loader2 size={18} className="animate-spin" /> Saving...</>
+                ) : saveStatus === "saved" ? (
+                  <><Check size={18} /> Saved!</>
+                ) : (
+                  <><Save size={18} /> Save & Finish</>
+                )}
+              </motion.button>
+            </div>
+
+          </div>
+        </motion.div>
+
       </motion.div>
 
-    </motion.div>
+      {/* Login Modal */}
+      <LoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+        action="download"
+        onLoginSuccess={() => {
+          setShowLoginModal(false);
+          // After login, user can now click download again
+        }}
+      />
+    </>
   );
 };
 

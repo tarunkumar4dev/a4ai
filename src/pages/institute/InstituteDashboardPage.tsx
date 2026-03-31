@@ -121,7 +121,8 @@ interface Teacher {
   status: "pending" | "active" | "inactive";
   joined_at: string;
   avatar_url?: string;
-}
+}chrome
+
 
 interface Batch {
   id: string;

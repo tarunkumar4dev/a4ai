@@ -257,7 +257,8 @@ export default function LandingHero() {
               style={{ x: isTouch ? 0 : magX, y: isTouch ? 0 : magY }}
               className="isolate w-full sm:w-auto"
             >
-              <Link to="/signup" className="w-full block">
+              {/* <Link to="/signup" className="w-full block"> */}
+              <Link to="/dashboard/test-generator" className="w-full block">
                 <button
                   className="group w-full sm:w-auto relative overflow-hidden transition-transform duration-200 active:scale-[0.97] hover:-translate-y-[2px] flex items-center justify-center gap-2.5 font-semibold text-white"
                   style={{

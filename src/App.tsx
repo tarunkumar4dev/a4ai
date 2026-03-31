@@ -329,7 +329,8 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  SHARED PROTECTED ROUTES (any logged-in user) */}
                       {/* ============================================ */}
-                      <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} />
+                      {/* <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} /> */}
+                      <Route path="/dashboard/test-generator" element={<TestGeneratorPage />} />
                       <Route path="/dashboard/analytics" element={<PrivateRoute><AnalyticsPage /></PrivateRoute>} />
                       <Route path="/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} />
 

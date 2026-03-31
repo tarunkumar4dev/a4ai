@@ -4,9 +4,13 @@ import { ChevronLeft, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import TestGeneratorForm from "@/components/TestGeneratorForm";
 import { useAuth } from "@/providers/AuthProvider";
+import { useGuestAccess } from "@/hooks/useGuestAccess";
+import LoginModal from "@/components/LoginModal";
 
 export default function TestGeneratorPage() {
   const { user } = useAuth();
+  const { isGuest, canGenerate, remainingTests, incrementGuestCount, showLoginModal, setShowLoginModal, gateAction, saveTestDataForRestore } = useGuestAccess();
+  
   const displayName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
   const initials = displayName
@@ -15,6 +19,31 @@ export default function TestGeneratorPage() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  // This function would be passed to TestGeneratorForm or handled here
+  // You'll need to integrate this with your actual generate handler
+  const handleGenerate = async (testData: any) => {
+    // Add this check at the start of your generate function
+    if (isGuest && !canGenerate) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    try {
+      // Your existing API call here
+      const response = await yourApiCall(testData);
+      
+      // After successful generation (after API returns data):
+      if (isGuest) {
+        incrementGuestCount();
+      }
+      
+      return response;
+    } catch (error) {
+      console.error("Generation failed:", error);
+      throw error;
+    }
+  };
 
   return (
     <div className="fixed inset-0 w-full h-full bg-[#F9FAFB] overflow-y-auto font-sans text-[#111827] selection:bg-gray-300">
@@ -87,8 +116,42 @@ export default function TestGeneratorPage() {
 
       {/* MAIN CONTENT — extra bottom padding for sticky bar */}
       <main className="relative z-10 w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-6 md:py-10 pb-28 sm:pb-36 md:pb-40">
-        <TestGeneratorForm />
+        {/* Guest Banner */}
+        {isGuest && (
+          <div className="mb-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-between">
+            <div>
+              <p className="font-bold text-indigo-900 text-sm">🎯 Demo Mode</p>
+              <p className="text-xs text-indigo-600 mt-0.5">
+                {remainingTests > 0 
+                  ? `${remainingTests} free test${remainingTests > 1 ? 's' : ''} remaining — no login needed!`
+                  : 'Login to generate more tests'
+                }
+              </p>
+            </div>
+            {remainingTests === 0 && (
+              <button 
+                onClick={() => setShowLoginModal(true)}
+                className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700"
+              >
+                Login
+              </button>
+            )}
+          </div>
+        )}
+        
+        <TestGeneratorForm onGenerate={handleGenerate} />
       </main>
+
+      {/* Login Modal */}
+      <LoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+        action="generate"
+        onLoginSuccess={() => {
+          setShowLoginModal(false);
+          // User is now logged in, they can continue
+        }}
+      />
 
     </div>
   );

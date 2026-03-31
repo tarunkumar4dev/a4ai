@@ -72,7 +72,15 @@ export default function AuthCallback() {
         // 6. Clean URL
         window.history.replaceState({}, "", `${window.location.origin}/auth/callback`);
 
-        // 7. Redirect based on role
+        // 7. Check for redirect URL after successful auth
+        const redirectUrl = localStorage.getItem("a4ai_redirect_after_login");
+        if (redirectUrl) {
+          localStorage.removeItem("a4ai_redirect_after_login");
+          navigate(redirectUrl, { replace: true });
+          return;
+        }
+
+        // 8. Redirect based on role (only if no redirect URL was present)
         if (finalRole && ["student", "teacher", "institute"].includes(finalRole)) {
           navigate(`/${finalRole}/dashboard`, { replace: true });
         } else {
