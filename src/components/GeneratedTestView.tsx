@@ -8,15 +8,17 @@
 //   - Supports journal_entry, ledger, trial_balance formats
 //   - All v6 features retained (Save & Finish, Contest, Download)
 //   - Editable paper date in header
+//   - Manual question addition support
 // ──────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from "react";
+import AddManualQuestionModal, { ManualQuestion } from "./AddManualQuestionModal";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown, ChevronUp, CheckCircle2, XCircle, Copy, FileDown,
   Eye, EyeOff, BookOpen, Brain, Zap, Edit3, RotateCcw, Check,
-  X, Download, FileText, Loader2, Save, Share2, Calendar,  // ← ADDED Calendar
+  X, Download, FileText, Loader2, Save, Share2, Calendar, Plus, Image as ImageIcon,
 } from "lucide-react";
 import MathText from "./MathText";
 import { api } from "@/lib/api";
@@ -271,6 +273,12 @@ const QuestionCard = ({
             <FormatBadge format={questionFormat} />
             {question.status === "approved" && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Approved</span>}
             {question.status === "rejected" && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Rejected</span>}
+            {/* Manual badge */}
+            {(question as any).isManual && (
+              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                MANUAL
+              </span>
+            )}
           </div>
 
           {/* Actions */}
@@ -308,6 +316,17 @@ const QuestionCard = ({
           </p>
         )}
       </div>
+
+      {/* Manual question image */}
+      {(question as any).imageUrl && (
+        <div className="px-5 pb-3">
+          <img
+            src={(question as any).imageUrl}
+            alt="Question reference"
+            className="max-w-full max-h-[300px] rounded-xl border border-gray-200 object-contain bg-gray-50"
+          />
+        </div>
+      )}
 
       {/* Options (MCQ / Assertion-Reason) */}
       {question.options && question.options.length > 0 && (
@@ -404,14 +423,14 @@ const QuestionCard = ({
 
 async function downloadFile(
   questions: GeneratedQuestion[],
-  meta: { examTitle: string; board: string; classGrade: string; subject: string; paperDate?: string },  // ← ADDED paperDate
+  meta: { examTitle: string; board: string; classGrade: string; subject: string; paperDate?: string },
   format: "pdf" | "docx",
   mode: "student" | "answers" | "teacher",
   logoBase64?: string | null,
 ) {
   const payload = {
     examTitle: meta.examTitle,
-    paperDate: meta.paperDate,  // ← ADDED paperDate to payload
+    paperDate: meta.paperDate,
     board: meta.board,
     classGrade: meta.classGrade,
     subject: meta.subject,
@@ -461,13 +480,14 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
 
-  // ═══════════════════════════════════════════════════════════════════
-  // SPOT 1: Paper Date State (ADDED)
-  // ═══════════════════════════════════════════════════════════════════
+  // Paper Date State
   const [paperDate, setPaperDate] = useState<string>(
     result.meta?.paperDate || new Date().toISOString().split("T")[0]
   );
   const [isEditingDate, setIsEditingDate] = useState(false);
+
+  // Manual question modal state
+  const [showManualModal, setShowManualModal] = useState(false);
 
   // Contest modal state
   const [showContestModal, setShowContestModal] = useState(false);
@@ -476,10 +496,34 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     result.questions.map((q) => ({ ...q, status: "pending" as QuestionStatus }))
   );
 
+  // ── Handler: add manual question to local state ──────────────────────
+  const handleAddManualQuestion = useCallback((q: ManualQuestion) => {
+    const newQuestion: QuestionWithStatus = {
+      id: q.id,
+      text: q.text,
+      options: q.options || [],
+      correctAnswer: q.correctAnswer,
+      explanation: q.explanation || "",
+      marks: q.marks,
+      difficulty: q.difficulty,
+      bloomLevel: null,
+      chapter: q.chapter || "Manual Addition",
+      topic: null,
+      format: q.type,
+      validationStatus: "manual",
+      section: q.section || null,
+      status: q.status,
+      // Custom fields for manual questions:
+      ...(q.imageUrl ? { imageUrl: q.imageUrl } : {}),
+      isManual: true,
+    } as any;
+
+    setQuestions((prev) => [...prev, newQuestion]);
+  }, []);
+
   // ── Download handler with guest check ─────────────────────────────────
   const handleDownload = (format: "pdf" | "docx", mode: "student" | "answers" | "teacher") => {
     if (!gateAction("download")) {
-      // Save current test data so it persists after login
       saveTestDataForRestore({ 
         testId: result.testId,
         examTitle: result.examTitle,
@@ -487,9 +531,8 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
         meta: result.meta,
         logoBase64: logoBase64
       });
-      return; // blocked — login modal will show
+      return;
     }
-    // Proceed with download
     handleExport(format, mode);
   };
 
@@ -583,7 +626,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
 
       const regenResult = await api.generateTest({
         examTitle: result.examTitle,
-        paperDate: paperDate,  // ← ADDED: pass paperDate
+        paperDate: paperDate,
         board: result.meta?.board || "CBSE",
         classGrade: result.meta?.classGrade || "Class 10",
         subject: result.meta?.subject || "Science",
@@ -615,13 +658,12 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     setIsExporting(true);
     setShowDownloadMenu(false);
     try {
-      // SPOT 4: Pass paperDate to downloadFile
       await downloadFile(activeQuestions, {
         examTitle: result.examTitle,
         board: result.meta?.board || "CBSE",
         classGrade: result.meta?.classGrade || "Class 10",
         subject: result.meta?.subject || "Science",
-        paperDate: paperDate,  // ← ADDED: pass paperDate
+        paperDate: paperDate,
       }, format, mode, logoBase64);
     } catch (err) {
       console.error("Export failed:", err);
@@ -656,7 +698,6 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
           className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
         >
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            {/* SPOT 2: Editable Date in Header (REPLACED) */}
             <div>
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Zap size={20} className="text-yellow-500" />
@@ -708,6 +749,14 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
 
               <button onClick={handleCopyAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
                 <Copy size={14} /> Copy
+              </button>
+
+              {/* Add Manual Question button */}
+              <button
+                onClick={() => setShowManualModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              >
+                <Plus size={14} /> Add Question
               </button>
 
               {/* Share as Contest Button */}
@@ -885,9 +934,21 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
         action="download"
         onLoginSuccess={() => {
           setShowLoginModal(false);
-          // After login, user can now click download again
         }}
       />
+
+      {/* Add Manual Question Modal */}
+      <AnimatePresence>
+        {showManualModal && (
+          <AddManualQuestionModal
+            isOpen={showManualModal}
+            onClose={() => setShowManualModal(false)}
+            onSave={handleAddManualQuestion}
+            cbsePattern={result.meta?.cbsePattern || false}
+            testId={result.testId}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 };

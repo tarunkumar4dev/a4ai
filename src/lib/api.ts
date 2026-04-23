@@ -17,7 +17,11 @@ export interface GeneratedQuestion {
   topic: string | null;
   format: string;
   validationStatus: string;
-  section: string | null;  // ← ADDED: CBSE section tag (A/B/C/D/E)
+  section: string | null;
+  // Manual question fields
+  isManual?: boolean;
+  imageUrl?: string | null;
+  answerTable?: any;
 }
 
 export interface GenerateTestResponse {
@@ -51,6 +55,23 @@ export interface HealthResponse {
   version: string;
 }
 
+// Manual question payload type (used when sending to add-manual-question endpoint)
+export interface ManualQuestionApiPayload {
+  id: string;
+  text: string;
+  options?: string[];
+  correctAnswer: string;
+  explanation?: string;
+  marks: number;
+  difficulty: "easy" | "medium" | "hard";
+  chapter?: string;
+  format: string; // "mcq" | "short_answer" | "long_answer" | "image" | "manual"
+  type?: string;
+  imageUrl?: string;
+  section?: string;
+  isManual: true;
+}
+
 // ── Error Class ────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -77,7 +98,6 @@ async function apiFetch<T>(
     "Content-Type": "application/json",
   };
 
-  // Add auth token if available
   try {
     const { supabase } = await import("@/integrations/supabase/client");
     const { data: { session } } = await supabase.auth.getSession();
@@ -116,7 +136,7 @@ export const api = {
    */
   async generateTest(payload: {
     examTitle: string;
-    paperDate?: string;  // ← ADDED: paper date for the test
+    paperDate?: string;
     board: string;
     classGrade: string;
     subject: string;
@@ -134,7 +154,7 @@ export const api = {
     useNCERT?: boolean;
     ncertChapters?: string[];
     userId?: string;
-    cbsePattern?: boolean;  // ← ADDED
+    cbsePattern?: boolean;
   }): Promise<GenerateTestResponse> {
     return apiFetch<GenerateTestResponse>(
       "/api/v1/test-generator/generate-frontend",
@@ -186,20 +206,53 @@ export const api = {
   },
 
   /**
-   * Save a test.
+   * Save a test with the final question list (includes manual questions).
+   * POST /api/v1/test-generator/save
    */
-  async saveTest(testId: string, teacherId: string): Promise<any> {
+  async saveTest(
+    testId: string,
+    teacherId: string,
+    questions?: any[]
+  ): Promise<any> {
     return apiFetch("/api/v1/test-generator/save", {
       method: "POST",
-      body: JSON.stringify({ test_id: testId, teacher_id: teacherId }),
+      body: JSON.stringify({
+        test_id: testId,
+        teacher_id: teacherId,
+        questions: questions,  // include final list (manual + AI questions)
+      }),
     });
   },
 
   /**
+   * Add a single manual question to an existing test (immediate persist).
+   * POST /api/v1/test-generator/tests/{test_id}/add-manual-question
+   * This is optional — /save also handles manual questions in bulk.
+   */
+  async addManualQuestion(
+    testId: string,
+    teacherId: string,
+    question: ManualQuestionApiPayload
+  ): Promise<{ ok: boolean; question: any }> {
+    return apiFetch(
+      `/api/v1/test-generator/tests/${encodeURIComponent(testId)}/add-manual-question`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          teacher_id: teacherId,
+          question: question,
+        }),
+      }
+    );
+  },
+
+  /**
    * Export test as PDF or DOCX.
+   * Now supports paperDate and manual questions.
    */
   async exportTest(payload: {
     examTitle: string;
+    paperDate?: string;
     board: string;
     classGrade: string;
     subject: string;
@@ -207,6 +260,7 @@ export const api = {
     includeAnswers: boolean;
     includeExplanations: boolean;
     format: "pdf" | "docx";
+    logoBase64?: string | null;
   }): Promise<Blob> {
     const url = `${API_BASE}/api/v1/test-generator/export`;
     const res = await fetch(url, {
@@ -214,7 +268,14 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new ApiError(res.status, "Export failed");
+    if (!res.ok) {
+      let detail = "Export failed";
+      try {
+        const errBody = await res.json();
+        detail = errBody.detail || detail;
+      } catch {}
+      throw new ApiError(res.status, detail);
+    }
     return res.blob();
   },
 
