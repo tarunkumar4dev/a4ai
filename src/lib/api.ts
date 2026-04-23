@@ -116,6 +116,7 @@ export const api = {
    */
   async generateTest(payload: {
     examTitle: string;
+    paperDate?: string;  // ← ADDED: paper date for the test
     board: string;
     classGrade: string;
     subject: string;

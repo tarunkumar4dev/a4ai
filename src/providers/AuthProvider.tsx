@@ -19,6 +19,7 @@ interface AuthContextType {
   phone: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  updateRole: (newRole: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   phone: null,
   loading: true,
   signOut: async () => {},
+  updateRole: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -46,14 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Role: check user_metadata first, then app_metadata
     const userRole =
       currentUser.user_metadata?.role ||
       currentUser.app_metadata?.role ||
       "teacher";
     setRole(userRole);
 
-    // Phone: from user object or metadata
     const userPhone =
       currentUser.phone ||
       currentUser.user_metadata?.phone ||
@@ -62,7 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
@@ -70,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
@@ -79,8 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       extractUserInfo(currentSession?.user ?? null);
       setLoading(false);
 
-      // On first sign-in, ensure teacher_profile exists
-      // (backup in case DB trigger didn't fire)
       if (event === "SIGNED_IN" && currentSession?.user) {
         ensureProfileExists(currentSession.user);
       }
@@ -89,7 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fallback: ensure profile exists even if DB trigger fails
   const ensureProfileExists = async (currentUser: User) => {
     try {
       const { data: existingProfile } = await supabase
@@ -99,7 +94,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (!existingProfile) {
-        // Get free plan ID
         const { data: freePlan } = await supabase
           .from("plans")
           .select("id")
@@ -107,7 +101,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .single();
 
         if (freePlan) {
-          // Create profile
           await supabase.from("teacher_profiles").upsert({
             id: currentUser.id,
             phone: currentUser.phone || null,
@@ -122,7 +115,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             updated_at: new Date().toISOString(),
           });
 
-          // Create free subscription
           await supabase.from("subscriptions").upsert({
             user_id: currentUser.id,
             plan_id: freePlan.id,
@@ -136,9 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (err) {
-      // Silent fail — trigger should handle this
       console.warn("Profile ensure check:", err);
     }
+  };
+
+  const updateRole = async (newRole: string) => {
+    const { error } = await supabase.auth.updateUser({
+      data: { role: newRole },
+    });
+    if (error) throw error;
+    setRole(newRole);
   };
 
   const signOut = async () => {
@@ -150,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, role, phone, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user, role, phone, loading, signOut, updateRole }}>
       {children}
     </AuthContext.Provider>
   );

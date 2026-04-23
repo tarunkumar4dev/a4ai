@@ -1,897 +1,253 @@
-// src/pages/institute/InstituteDashboard.tsx
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/lib/supabaseClient";
-import { useUserProfile } from "@/hooks/useUserProfile";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Building2,
-  Users,
-  BookOpen,
-  BarChart3,
-  Calendar,
-  Mail,
-  Phone,
-  MapPin,
-  Plus,
-  UserPlus,
-  GraduationCap,
-  TrendingUp,
-  Award,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Download,
-  Filter,
-  Search,
-  Settings,
-  Bell,
-  Menu,
-  ChevronRight,
-  ChevronDown,
-  MoreVertical,
-  Edit,
-  Trash2,
-  Eye,
-  Share2,
-  Link as LinkIcon,
-  Copy,
-  Check,
-  UserCheck,
-  UserX,
-  Upload,
-  FileText,
-  PieChart,
-  LineChart,
-  Users as UsersIcon,
-  School,
-  Target,
-  AlertCircle,
-  Star,
-  ThumbsUp,
-  ThumbsDown,
-  RefreshCw,
-  ExternalLink,
-} from "lucide-react";
+// src/pages/institute/InstituteDashboardPage.tsx
+// Institute Admin Dashboard — Professional, Linear-inspired design
+// v3 — Clean, mature aesthetic with SF Pro font
 
-// Color Palette
-const INSTITUTE_COLORS = {
-  primary: "#4f46e5",
-  secondary: "#6366f1",
-  accent: "#818cf8",
-  success: "#10b981",
-  warning: "#f59e0b",
-  danger: "#ef4444",
-  info: "#3b82f6",
-  background: "#f9fafb",
-  card: "#ffffff",
-  text: "#111827",
-  muted: "#6b7280",
-  border: "#e5e7eb",
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/providers/AuthProvider";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
+import AssignTeacherModal from "@/components/institute/AssignTeacherModal";
+
+const styles = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  .inst-root {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes scaleIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+  .anim-in { animation: fadeIn 0.4s ease-out forwards; opacity: 0; }
+  .anim-pop { animation: scaleIn 0.25s ease-out forwards; }
+  .sidebar-item { transition: all 0.15s ease; }
+  .sidebar-item:hover { background: rgba(0,0,0,0.04); }
+  .sidebar-item.active { background: rgba(0,0,0,0.06); font-weight: 600; }
+  .dark .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .dark .sidebar-item.active { background: rgba(255,255,255,0.08); }
+  .card { background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 12px; transition: box-shadow 0.2s; }
+  .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .dark .card { background: rgb(24,24,27); border-color: rgba(255,255,255,0.08); }
+  .dark .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  .input-field { background: white; border: 1px solid rgba(0,0,0,0.12); border-radius: 10px; font-size: 14px; padding: 10px 14px; width: 100%; outline: none; transition: border-color 0.15s, box-shadow 0.15s; font-weight: 500; color: #111; }
+  .input-field:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+  .input-field::placeholder { color: #9ca3af; font-weight: 400; }
+  .dark .input-field { background: rgb(30,30,35); border-color: rgba(255,255,255,0.1); color: #f0f0f0; }
+  .dark .input-field:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,0.15); }
+  .btn-primary { background: #111; color: white; font-weight: 600; font-size: 13px; padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary:hover { background: #333; }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .dark .btn-primary { background: #f0f0f0; color: #111; }
+  .dark .btn-primary:hover { background: #ddd; }
+  .btn-secondary { background: transparent; color: #555; font-weight: 500; font-size: 13px; padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12); cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-secondary:hover { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.2); }
+  .dark .btn-secondary { color: #aaa; border-color: rgba(255,255,255,0.12); }
+  .dark .btn-secondary:hover { background: rgba(255,255,255,0.05); }
+  .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
+  .badge-blue { background: #eff6ff; color: #2563eb; }
+  .badge-green { background: #f0fdf4; color: #16a34a; }
+  .badge-amber { background: #fffbeb; color: #d97706; }
+  .dark .badge-blue { background: rgba(37,99,235,0.15); color: #60a5fa; }
+  .dark .badge-green { background: rgba(22,163,106,0.15); color: #4ade80; }
+  .dark .badge-amber { background: rgba(217,119,6,0.15); color: #fbbf24; }
+  .row-item { padding: 12px 16px; border-radius: 10px; display: flex; align-items: center; gap: 12px; transition: background 0.12s; }
+  .row-item:hover { background: rgba(0,0,0,0.02); }
+  .dark .row-item:hover { background: rgba(255,255,255,0.03); }
+  .overlay-bg { background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); }
+  .modal-card { background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-width: 480px; width: 100%; }
+  .dark .modal-card { background: rgb(24,24,27); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+  .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+  .stat-number { font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+  .join-code { font-family: 'SF Mono', 'Fira Code', monospace; letter-spacing: 0.25em; }
+`;
+
+const I = {
+  Grid: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>,
+  Users: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  UserPlus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>,
+  User: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  FileText: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>,
+  Chart: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>,
+  Layers: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+  Settings: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+  Plus: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>,
+  Copy: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>,
+  Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  X: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  Menu: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>,
+  Moon: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>,
+  Sun: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>,
+  LogOut: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
+  Building: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></svg>,
+  Zap: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  Trash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
+  Search: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+  ChevronDown: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
+  ArrowRight: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
+  Key: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
 };
 
-// Types
-interface Institute {
-  id: string;
-  name: string;
-  city: string;
-  subjects: string[];
-  created_at: string;
-  admin_id: string;
-}
+interface Institute { id: string; name: string; join_code: string; max_teachers: number; max_students: number; monthly_test_limit: number; }
+interface Teacher { id: string; user_id: string; role: string; status: string; joined_at: string; user_email?: string; user_name?: string; }
+interface Batch { id: string; name: string; class_level: string; subject: string; description: string; is_active: boolean; }
+interface Student { id: string; name: string; roll_no: string; class_level: string; parent_name: string; parent_phone: string; batch_id: string; batch_name?: string; is_active: boolean; }
 
-interface Teacher {
-  id: string;
-  user_id: string;
-  full_name: string;
-  email: string;
-  phone?: string;
-  subjects: string[];
-  status: "pending" | "active" | "inactive";
-  joined_at: string;
-  avatar_url?: string;
-}chrome
-
-
-interface Batch {
-  id: string;
-  name: string;
-  class: string;
-  subjects: string[];
-  teacher_id: string;
-  teacher_name: string;
-  student_count: number;
-  created_at: string;
-  status: "active" | "archived";
-}
-
-interface Test {
-  id: string;
-  title: string;
-  batch_id: string;
-  batch_name: string;
-  teacher_id: string;
-  teacher_name: string;
-  total_questions: number;
-  average_score: number;
-  students_taken: number;
-  total_students: number;
-  created_at: string;
-  status: "draft" | "published" | "completed";
-}
-
-interface Attendance {
-  id: string;
-  student_id: string;
-  student_name: string;
-  batch_id: string;
-  date: string;
-  status: "present" | "absent";
-  marked_by: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  batch_id: string;
-  batch_name: string;
-  file_url: string;
-  file_type: string;
-  uploaded_by: string;
-  uploaded_at: string;
-}
-
-// Mock Data
-const mockTeachers: Teacher[] = [
-  { id: "1", user_id: "1", full_name: "Dr. Sarah Johnson", email: "sarah@institute.com", phone: "+1234567890", subjects: ["Physics", "Mathematics"], status: "active", joined_at: "2024-01-15" },
-  { id: "2", user_id: "2", full_name: "Prof. Michael Chen", email: "michael@institute.com", phone: "+1234567891", subjects: ["Chemistry", "Biology"], status: "active", joined_at: "2024-02-01" },
-  { id: "3", user_id: "3", full_name: "Ms. Emily Davis", email: "emily@institute.com", phone: "+1234567892", subjects: ["English", "History"], status: "pending", joined_at: "2024-03-10" },
-];
-
-const mockBatches: Batch[] = [
-  { id: "1", name: "Class 9A", class: "9", subjects: ["Mathematics", "Science", "English"], teacher_id: "1", teacher_name: "Dr. Sarah Johnson", student_count: 35, created_at: "2024-01-20", status: "active" },
-  { id: "2", name: "Class 10B", class: "10", subjects: ["Mathematics", "Science", "Social Studies"], teacher_id: "2", teacher_name: "Prof. Michael Chen", student_count: 42, created_at: "2024-01-20", status: "active" },
-  { id: "3", name: "JEE Advanced Batch", class: "12", subjects: ["Physics", "Chemistry", "Mathematics"], teacher_id: "1", teacher_name: "Dr. Sarah Johnson", student_count: 28, created_at: "2024-02-15", status: "active" },
-  { id: "4", name: "NEET Prep Batch", class: "12", subjects: ["Physics", "Chemistry", "Biology"], teacher_id: "2", teacher_name: "Prof. Michael Chen", student_count: 31, created_at: "2024-02-15", status: "active" },
-];
-
-const mockTests: Test[] = [
-  { id: "1", title: "Physics Midterm Exam", batch_id: "1", batch_name: "Class 9A", teacher_id: "1", teacher_name: "Dr. Sarah Johnson", total_questions: 50, average_score: 78, students_taken: 32, total_students: 35, created_at: "2024-03-01", status: "completed" },
-  { id: "2", title: "Chemistry Weekly Test", batch_id: "2", batch_name: "Class 10B", teacher_id: "2", teacher_name: "Prof. Michael Chen", total_questions: 30, average_score: 82, students_taken: 40, total_students: 42, created_at: "2024-03-05", status: "completed" },
-  { id: "3", title: "JEE Practice Test", batch_id: "3", batch_name: "JEE Advanced Batch", teacher_id: "1", teacher_name: "Dr. Sarah Johnson", total_questions: 90, average_score: 71, students_taken: 26, total_students: 28, created_at: "2024-03-08", status: "published" },
-];
-
-const mockAttendance: Attendance[] = [
-  { id: "1", student_id: "s1", student_name: "Alice Brown", batch_id: "1", date: "2024-03-15", status: "present", marked_by: "Dr. Sarah Johnson" },
-  { id: "2", student_id: "s2", student_name: "Bob Wilson", batch_id: "1", date: "2024-03-15", status: "present", marked_by: "Dr. Sarah Johnson" },
-  { id: "3", student_id: "s3", student_name: "Charlie Davis", batch_id: "1", date: "2024-03-15", status: "absent", marked_by: "Dr. Sarah Johnson" },
-];
-
-const mockNotes: Note[] = [
-  { id: "1", title: "Physics Chapter 1 - Motion", batch_id: "1", batch_name: "Class 9A", file_url: "#", file_type: "pdf", uploaded_by: "Dr. Sarah Johnson", uploaded_at: "2024-03-10" },
-  { id: "2", title: "Chemistry Periodic Table", batch_id: "2", batch_name: "Class 10B", file_url: "#", file_type: "pdf", uploaded_by: "Prof. Michael Chen", uploaded_at: "2024-03-12" },
-];
-
-const InstituteDashboard = () => {
+export default function InstituteDashboardPage() {
   const navigate = useNavigate();
-  const { profile, loading } = useUserProfile();
+  const [assignBatch, setAssignBatch] = useState<{id: string, name: string} | null>(null);
+  const { user, signOut } = useAuth();
+  const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Admin";
   const [activeTab, setActiveTab] = useState("overview");
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
   const [institute, setInstitute] = useState<Institute | null>(null);
-  const [teachers, setTeachers] = useState<Teacher[]>(mockTeachers);
-  const [batches, setBatches] = useState<Batch[]>(mockBatches);
-  const [tests, setTests] = useState<Test[]>(mockTests);
-  const [attendance, setAttendance] = useState<Attendance[]>(mockAttendance);
-  const [notes, setNotes] = useState<Note[]>(mockNotes);
-  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
-  const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
-  const [isNoteDialogOpen, setIsNoteDialogOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteSubject, setInviteSubject] = useState("");
-  const [newBatch, setNewBatch] = useState({ name: "", class: "", subjects: "", teacher_id: "" });
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddBatch, setShowAddBatch] = useState(false);
+  const [showAddStudent, setShowAddStudent] = useState(false);
+  const [joinCodeCopied, setJoinCodeCopied] = useState(false);
+  const [newBatch, setNewBatch] = useState({ name: "", class_level: "", subject: "", description: "" });
+  const [newStudent, setNewStudent] = useState({ name: "", roll_no: "", class_level: "", parent_name: "", parent_phone: "", batch_id: "" });
+  const [studentSearch, setStudentSearch] = useState("");
+  const [newInstituteName, setNewInstituteName] = useState("");
+  const [creatingInstitute, setCreatingInstitute] = useState(false);
 
-  // Stats calculations
-  const stats = useMemo(() => ({
-    totalTeachers: teachers.filter(t => t.status === "active").length,
-    pendingTeachers: teachers.filter(t => t.status === "pending").length,
-    totalBatches: batches.length,
-    totalStudents: batches.reduce((sum, b) => sum + b.student_count, 0),
-    totalTests: tests.length,
-    avgScore: tests.reduce((sum, t) => sum + t.average_score, 0) / tests.length || 0,
-    attendanceRate: (attendance.filter(a => a.status === "present").length / attendance.length) * 100 || 0,
-  }), [teachers, batches, tests, attendance]);
+  useEffect(() => { isDarkMode ? document.documentElement.classList.add("dark") : document.documentElement.classList.remove("dark"); }, [isDarkMode]);
+  useEffect(() => { const h = (e: MouseEvent) => { if (profileRef.current && !profileRef.current.contains(e.target as Node)) setIsProfileOpen(false); }; document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h); }, []);
+  useEffect(() => { if (user) fetchData(); }, [user]);
 
-  const handleInviteTeacher = () => {
-    // Send invite logic here
-    console.log("Invite sent to:", inviteEmail);
-    setIsInviteDialogOpen(false);
-    setInviteEmail("");
-    setInviteSubject("");
+  const fetchData = async () => {
+    if (!user) return; setLoading(true);
+    try {
+      const { data: m } = await supabase.from("institute_members").select("institute_id,role").eq("user_id", user.id).eq("role", "admin").eq("status", "active").single();
+      if (!m) { setLoading(false); return; }
+      const id = m.institute_id;
+      const [a, b, c, d] = await Promise.all([
+        supabase.from("institutes").select("*").eq("id", id).single(),
+        supabase.from("institute_members").select("*").eq("institute_id", id).eq("role", "teacher").order("joined_at", { ascending: false }),
+        supabase.from("batches").select("*").eq("institute_id", id).eq("is_active", true).order("created_at", { ascending: false }),
+        supabase.from("students").select("*, batches(name)").eq("institute_id", id).eq("is_active", true).order("name", { ascending: true }),
+      ]);
+      if (a.data) setInstitute(a.data as Institute);
+      if (b.data) setTeachers(b.data as Teacher[]);
+      if (c.data) setBatches(c.data as Batch[]);
+      if (d.data) setStudents(d.data.map((s: any) => ({ ...s, batch_name: s.batches?.name || "Unassigned" })));
+    } catch { toast.error("Failed to load data"); }
+    setLoading(false);
   };
 
-  const handleCreateBatch = () => {
-    // Create batch logic here
-    console.log("New batch:", newBatch);
-    setIsBatchDialogOpen(false);
-    setNewBatch({ name: "", class: "", subjects: "", teacher_id: "" });
-  };
+  const handleCreateInstitute = async () => { if (!newInstituteName.trim() || !user) return; setCreatingInstitute(true); try { const { error } = await supabase.rpc("create_institute", { p_name: newInstituteName.trim() }); if (error) throw error; toast.success("Institute created!"); fetchData(); } catch (e: any) { toast.error(e.message || "Failed"); } setCreatingInstitute(false); };
+  const handleAddBatch = async () => { if (!newBatch.name.trim() || !institute) return; try { const { error } = await supabase.from("batches").insert({ institute_id: institute.id, name: newBatch.name.trim(), class_level: newBatch.class_level || null, subject: newBatch.subject || null, description: newBatch.description || null }); if (error) throw error; toast.success("Batch created!"); setShowAddBatch(false); setNewBatch({ name: "", class_level: "", subject: "", description: "" }); fetchData(); } catch (e: any) { toast.error(e.message); } };
+  const handleAddStudent = async () => { if (!newStudent.name.trim() || !institute) return; try { const { error } = await supabase.from("students").insert({ institute_id: institute.id, name: newStudent.name.trim(), roll_no: newStudent.roll_no || null, class_level: newStudent.class_level || null, parent_name: newStudent.parent_name || null, parent_phone: newStudent.parent_phone || null, batch_id: newStudent.batch_id || null }); if (error) throw error; toast.success("Student added!"); setShowAddStudent(false); setNewStudent({ name: "", roll_no: "", class_level: "", parent_name: "", parent_phone: "", batch_id: "" }); fetchData(); } catch (e: any) { toast.error(e.message); } };
+  const removeTeacher = async (id: string) => { if (!confirm("Remove teacher?")) return; await supabase.from("institute_members").update({ status: "inactive" }).eq("id", id); fetchData(); };
+  const removeStudent = async (id: string) => { if (!confirm("Remove student?")) return; await supabase.from("students").update({ is_active: false }).eq("id", id); fetchData(); };
+  const deleteBatch = async (id: string) => { if (!confirm("Delete batch?")) return; await supabase.from("batches").update({ is_active: false }).eq("id", id); fetchData(); };
+  const copyCode = () => { if (!institute) return; navigator.clipboard.writeText(institute.join_code); setJoinCodeCopied(true); toast.success("Copied!"); setTimeout(() => setJoinCodeCopied(false), 2000); };
 
-  const handleUploadNote = () => {
-    // Upload note logic here
-    console.log("Upload note");
-    setIsNoteDialogOpen(false);
-  };
+  const filteredStudents = students.filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase()) || (s.roll_no && s.roll_no.toLowerCase().includes(studentSearch.toLowerCase())));
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const navItems = [
+    { id: "overview", icon: I.Grid, label: "Overview" },
+    { id: "teachers", icon: I.Users, label: "Teachers", count: teachers.length },
+    { id: "batches", icon: I.Layers, label: "Batches", count: batches.length },
+    { id: "students", icon: I.UserPlus, label: "Students", count: students.length },
+    { id: "analytics", icon: I.Chart, label: "Analytics" },
+    { id: "settings", icon: I.Settings, label: "Settings" },
+  ];
 
-  const handleMarkAttendance = (studentId: string, status: "present" | "absent") => {
-    setAttendance(prev => [...prev, {
-      id: Date.now().toString(),
-      student_id: studentId,
-      student_name: "Student Name", // Would get from actual data
-      batch_id: "1",
-      date: selectedDate,
-      status,
-      marked_by: profile?.full_name || "Admin"
-    }]);
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active": return "bg-green-100 text-green-800";
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      case "inactive": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getTestStatusColor = (status: string) => {
-    switch (status) {
-      case "completed": return "bg-green-100 text-green-800";
-      case "published": return "bg-blue-100 text-blue-800";
-      case "draft": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading institute dashboard...</p>
+  if (!loading && !institute) return (
+    <div className="inst-root"><style>{styles}</style>
+      <div className={`min-h-screen flex items-center justify-center px-4 ${isDarkMode ? "dark bg-zinc-950" : "bg-zinc-50"}`}>
+        <div className="card p-10 sm:p-14 max-w-md w-full text-center anim-pop">
+          <div className="w-12 h-12 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-5"><I.Building /></div>
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-1">Create your institute</h2>
+          <p className="text-sm text-zinc-500 mb-8">Set up your school or coaching center on a4ai.</p>
+          <input className="input-field mb-4 text-center" placeholder="Institute name" value={newInstituteName} onChange={e => setNewInstituteName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCreateInstitute()} />
+          <button className="btn-primary w-full justify-center" onClick={handleCreateInstitute} disabled={creatingInstitute || !newInstituteName.trim()}>{creatingInstitute ? "Creating..." : "Create Institute"}</button>
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-2 rounded-lg">
-                <Building2 className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Institute Dashboard</h1>
-                <p className="text-sm text-gray-500">Manage teachers, batches, and track performance</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={() => navigate("/institute/settings")}>
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </Button>
-              <Button variant="ghost" size="icon">
-                <Bell className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Total Teachers</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalTeachers}</p>
-                  {stats.pendingTeachers > 0 && (
-                    <p className="text-xs text-yellow-600 mt-1">{stats.pendingTeachers} pending approval</p>
-                  )}
-                </div>
-                <div className="p-3 bg-indigo-100 rounded-full">
-                  <Users className="h-6 w-6 text-indigo-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Total Students</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalStudents}</p>
-                  <p className="text-xs text-gray-500 mt-1">Across {stats.totalBatches} batches</p>
-                </div>
-                <div className="p-3 bg-green-100 rounded-full">
-                  <GraduationCap className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Average Test Score</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.avgScore.toFixed(1)}%</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    <span className="text-xs text-green-600">+5% this month</span>
-                  </div>
-                </div>
-                <div className="p-3 bg-purple-100 rounded-full">
-                  <BarChart3 className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Attendance Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.attendanceRate.toFixed(1)}%</p>
-                  <div className="w-full mt-2">
-                    <Progress value={stats.attendanceRate} className="h-2" />
-                  </div>
-                </div>
-                <div className="p-3 bg-orange-100 rounded-full">
-                  <Calendar className="h-6 w-6 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-white border border-gray-200 p-1">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="teachers">Teachers</TabsTrigger>
-            <TabsTrigger value="batches">Batches</TabsTrigger>
-            <TabsTrigger value="tests">Tests</TabsTrigger>
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
-            <TabsTrigger value="notes">Notes</TabsTrigger>
-          </TabsList>
-
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Tests */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Recent Tests</CardTitle>
-                  <CardDescription>Latest test results across batches</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {tests.slice(0, 3).map((test) => (
-                      <div key={test.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-gray-900">{test.title}</p>
-                          <p className="text-sm text-gray-500">{test.batch_name} • {test.teacher_name}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-lg">{test.average_score}%</p>
-                          <p className="text-xs text-gray-500">{test.students_taken}/{test.total_students} taken</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Teacher Performance */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Teacher Performance</CardTitle>
-                  <CardDescription>Activity and test scores by teacher</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {teachers.filter(t => t.status === "active").map((teacher) => {
-                      const teacherTests = tests.filter(t => t.teacher_id === teacher.id);
-                      const avgScore = teacherTests.reduce((sum, t) => sum + t.average_score, 0) / teacherTests.length || 0;
-                      return (
-                        <div key={teacher.id} className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-gray-900">{teacher.full_name}</p>
-                            <p className="text-sm text-gray-500">{teacher.subjects.join(", ")}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-green-600">{avgScore.toFixed(1)}%</p>
-                            <p className="text-xs text-gray-500">{teacherTests.length} tests</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Weakest Students */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Weakest Students</CardTitle>
-                  <CardDescription>Students needing additional support</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-2 bg-red-50 rounded-lg">
-                      <AlertCircle className="h-5 w-5 text-red-500" />
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">Alice Brown</p>
-                        <p className="text-sm text-gray-500">Class 9A • Avg Score: 45%</p>
-                      </div>
-                      <Button variant="ghost" size="sm">View Details</Button>
-                    </div>
-                    <div className="flex items-center gap-3 p-2 bg-red-50 rounded-lg">
-                      <AlertCircle className="h-5 w-5 text-red-500" />
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">Bob Wilson</p>
-                        <p className="text-sm text-gray-500">Class 10B • Avg Score: 52%</p>
-                      </div>
-                      <Button variant="ghost" size="sm">View Details</Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Quick Actions */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Quick Actions</CardTitle>
-                  <CardDescription>Common institute management tasks</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start">
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Invite New Teacher
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Invite Teacher</DialogTitle>
-                        <DialogDescription>Send an invitation email to a teacher to join your institute</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div>
-                          <Label>Email Address</Label>
-                          <Input
-                            placeholder="teacher@example.com"
-                            value={inviteEmail}
-                            onChange={(e) => setInviteEmail(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <Label>Subject (Optional)</Label>
-                          <Input
-                            placeholder="Join our institute as a teacher"
-                            value={inviteSubject}
-                            onChange={(e) => setInviteSubject(e.target.value)}
-                          />
-                        </div>
-                        <Button onClick={handleInviteTeacher} className="w-full">Send Invitation</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-
-                  <Dialog open={isBatchDialogOpen} onOpenChange={setIsBatchDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create New Batch
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Create New Batch</DialogTitle>
-                        <DialogDescription>Add a new batch/class to your institute</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div>
-                          <Label>Batch Name</Label>
-                          <Input
-                            placeholder="Class 9A, JEE Batch, etc."
-                            value={newBatch.name}
-                            onChange={(e) => setNewBatch({ ...newBatch, name: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Class/Grade</Label>
-                          <Select value={newBatch.class} onValueChange={(v) => setNewBatch({ ...newBatch, class: v })}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select class" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="9">Class 9</SelectItem>
-                              <SelectItem value="10">Class 10</SelectItem>
-                              <SelectItem value="11">Class 11</SelectItem>
-                              <SelectItem value="12">Class 12</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Subjects (comma separated)</Label>
-                          <Input
-                            placeholder="Mathematics, Science, English"
-                            value={newBatch.subjects}
-                            onChange={(e) => setNewBatch({ ...newBatch, subjects: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Assign Teacher</Label>
-                          <Select value={newBatch.teacher_id} onValueChange={(v) => setNewBatch({ ...newBatch, teacher_id: v })}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select teacher" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {teachers.filter(t => t.status === "active").map(teacher => (
-                                <SelectItem key={teacher.id} value={teacher.id}>{teacher.full_name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button onClick={handleCreateBatch} className="w-full">Create Batch</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-
-                  <Dialog open={isNoteDialogOpen} onOpenChange={setIsNoteDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload Notes
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Upload Notes</DialogTitle>
-                        <DialogDescription>Share study materials with a batch</DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div>
-                          <Label>Select Batch</Label>
-                          <Select>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Choose batch" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {batches.map(batch => (
-                                <SelectItem key={batch.id} value={batch.id}>{batch.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>File</Label>
-                          <Input type="file" accept=".pdf,.jpg,.png,.docx" />
-                        </div>
-                        <Button onClick={handleUploadNote} className="w-full">Upload</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Teachers Tab */}
-          <TabsContent value="teachers" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search teachers..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Invite Teacher
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  {/* Dialog content same as above */}
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Teacher</TableHead>
-                      <TableHead>Subjects</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Joined</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {teachers.filter(t => t.full_name.toLowerCase().includes(searchTerm.toLowerCase())).map((teacher) => (
-                      <TableRow key={teacher.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-gray-900">{teacher.full_name}</p>
-                            <p className="text-sm text-gray-500">{teacher.email}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>{teacher.subjects.join(", ")}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(teacher.status)}>
-                            {teacher.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{new Date(teacher.joined_at).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Batches Tab */}
-          <TabsContent value="batches" className="space-y-6">
-            <div className="flex justify-between">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input placeholder="Search batches..." className="pl-10" />
-              </div>
-              <Button onClick={() => setIsBatchDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                New Batch
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {batches.map((batch) => (
-                <Card key={batch.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{batch.name}</CardTitle>
-                      <Badge variant="outline">Class {batch.class}</Badge>
-                    </div>
-                    <CardDescription>Teacher: {batch.teacher_name}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm text-gray-500 mb-1">Subjects</p>
-                        <div className="flex flex-wrap gap-1">
-                          {batch.subjects.map((subject) => (
-                            <Badge key={subject} variant="secondary" className="text-xs">
-                              {subject}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-center pt-2 border-t">
-                        <div>
-                          <p className="text-2xl font-bold">{batch.student_count}</p>
-                          <p className="text-xs text-gray-500">Students</p>
-                        </div>
-                        <Button variant="outline" size="sm">Manage</Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* Tests Tab */}
-          <TabsContent value="tests" className="space-y-6">
-            <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Test Title</TableHead>
-                      <TableHead>Batch</TableHead>
-                      <TableHead>Teacher</TableHead>
-                      <TableHead>Avg Score</TableHead>
-                      <TableHead>Participation</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tests.map((test) => (
-                      <TableRow key={test.id}>
-                        <TableCell className="font-medium">{test.title}</TableCell>
-                        <TableCell>{test.batch_name}</TableCell>
-                        <TableCell>{test.teacher_name}</TableCell>
-                        <TableCell>
-                          <span className="font-bold">{test.average_score}%</span>
-                        </TableCell>
-                        <TableCell>
-                          {test.students_taken}/{test.total_students}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getTestStatusColor(test.status)}>
-                            {test.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Attendance Tab */}
-          <TabsContent value="attendance" className="space-y-6">
-            <div className="flex gap-4 items-center">
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-48"
-              />
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Download Report
-              </Button>
-            </div>
-
-            <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student Name</TableHead>
-                      <TableHead>Batch</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Marked By</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {attendance.filter(a => a.date === selectedDate).map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell className="font-medium">{record.student_name}</TableCell>
-                        <TableCell>{batches.find(b => b.id === record.batch_id)?.name}</TableCell>
-                        <TableCell>
-                          <Badge className={record.status === "present" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
-                            {record.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{record.marked_by}</TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Notes Tab */}
-          <TabsContent value="notes" className="space-y-6">
-            <div className="flex justify-between">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input placeholder="Search notes..." className="pl-10" />
-              </div>
-              <Button onClick={() => setIsNoteDialogOpen(true)}>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Notes
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {notes.map((note) => (
-                <Card key={note.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-indigo-100 rounded-lg">
-                        <FileText className="h-5 w-5 text-indigo-600" />
-                      </div>
-                      <div className="flex-1">
-                        <CardTitle className="text-base">{note.title}</CardTitle>
-                        <CardDescription>{note.batch_name}</CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-500">Uploaded by: {note.uploaded_by}</p>
-                      <p className="text-xs text-gray-400">{new Date(note.uploaded_at).toLocaleDateString()}</p>
-                      <div className="flex gap-2 pt-2">
-                        <Button variant="outline" size="sm" className="flex-1">
-                          <Eye className="h-4 w-4 mr-2" />
-                          View
-                        </Button>
-                        <Button variant="outline" size="sm" className="flex-1">
-                          <Download className="h-4 w-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </main>
     </div>
   );
-};
 
-export default InstituteDashboard;
+  if (loading) return (<div className="inst-root min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950"><style>{styles}</style><div className="text-center"><div className="w-8 h-8 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin mx-auto mb-4" /><p className="text-sm text-zinc-500 font-medium">Loading...</p></div></div>);
+
+  return (
+    <div className={`inst-root ${isDarkMode ? "dark" : ""}`}><style>{styles}</style>
+      <div className="flex h-[100dvh] w-full bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 overflow-hidden">
+        {mobileMenuOpen && <div className="fixed inset-0 overlay-bg z-[90] lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
+
+        <aside className={`fixed lg:relative top-0 left-0 w-[240px] h-full flex flex-col bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 z-[100] lg:z-10 shrink-0 transition-transform duration-200 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
+          <div className="p-5 pb-3">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2.5"><img src="/ICON.ico" alt="" className="w-6 h-6 object-contain" onError={(e: any) => { e.currentTarget.style.display = "none"; }} /><span className="font-bold text-[15px] tracking-tight">a4ai</span></div>
+              <button className="lg:hidden p-1.5 text-zinc-400 hover:text-zinc-600 rounded-md" onClick={() => setMobileMenuOpen(false)}><I.X /></button>
+            </div>
+            {institute && (<div className="mb-5 px-3 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800"><div className="flex items-center gap-2"><div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">{institute.name.charAt(0).toUpperCase()}</div><span className="text-[13px] font-semibold truncate">{institute.name}</span></div></div>)}
+            <nav className="space-y-0.5">
+              {navItems.map(item => (<button key={item.id} onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }} className={`sidebar-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] ${activeTab === item.id ? "active text-zinc-900 dark:text-white" : "text-zinc-500 dark:text-zinc-400 font-normal"}`}><item.icon /><span className="flex-1 text-left">{item.label}</span>{item.count !== undefined && item.count > 0 && <span className="text-[11px] font-medium text-zinc-400 tabular-nums">{item.count}</span>}</button>))}
+            </nav>
+          </div>
+          {institute && (<div className="mt-auto p-5 pt-3 border-t border-zinc-100 dark:border-zinc-800"><div className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider mb-2">Join Code</div><div className="flex items-center gap-2"><code className="join-code text-[15px] font-bold text-zinc-900 dark:text-white flex-1">{institute.join_code}</code><button onClick={copyCode} className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 transition-colors">{joinCodeCopied ? <I.Check /> : <I.Copy />}</button></div><p className="text-[11px] text-zinc-400 mt-1.5">Share with teachers to invite</p></div>)}
+        </aside>
+
+        <main className="flex-1 h-full overflow-y-auto">
+          <div className="max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            <header className="flex items-center justify-between mb-8 anim-in">
+              <div className="flex items-center gap-3">
+                <button className="lg:hidden p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500" onClick={() => setMobileMenuOpen(true)}><I.Menu /></button>
+                <div><h1 className="text-[20px] sm:text-[22px] font-bold tracking-tight">{activeTab === "overview" ? `Welcome back, ${displayName?.split(" ")[0]}` : navItems.find(n => n.id === activeTab)?.label}</h1><p className="text-[13px] text-zinc-500 mt-0.5">{activeTab === "overview" && "Here's your institute at a glance."}{activeTab === "teachers" && `${teachers.length} teacher${teachers.length !== 1 ? "s" : ""}`}{activeTab === "batches" && `${batches.length} active batch${batches.length !== 1 ? "es" : ""}`}{activeTab === "students" && `${students.length} student${students.length !== 1 ? "s" : ""} enrolled`}{activeTab === "analytics" && "Performance insights"}{activeTab === "settings" && "Configuration"}</p></div>
+              </div>
+              <div className="flex items-center gap-2" ref={profileRef}>
+                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400">{isDarkMode ? <I.Sun /> : <I.Moon />}</button>
+                <div className="relative">
+                  <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"><div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[11px] font-bold">{displayName.charAt(0).toUpperCase()}</div><span className="text-[13px] font-medium hidden sm:block">{displayName.split(" ")[0]}</span><I.ChevronDown /></button>
+                  {isProfileOpen && (<div className="absolute right-0 top-full mt-1.5 w-56 card p-1.5 anim-pop z-50"><div className="px-3 py-2.5 border-b border-zinc-100 dark:border-zinc-800 mb-1"><p className="text-[13px] font-semibold truncate">{displayName}</p><p className="text-[11px] text-zinc-400 truncate">{user?.email}</p></div><button onClick={() => { signOut(); navigate("/login"); }} className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg font-medium"><I.LogOut /> Sign out</button></div>)}
+                </div>
+              </div>
+            </header>
+
+            {activeTab === "overview" && (<div className="space-y-6 anim-in">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">{[{ l: "Teachers", v: teachers.length, s: "Active" }, { l: "Students", v: students.length, s: "Enrolled" }, { l: "Batches", v: batches.length, s: "Running" }, { l: "Tests", v: "—", s: "This month" }].map((s, i) => (<div key={i} className="card p-4 sm:p-5"><p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">{s.l}</p><p className="stat-number text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white">{s.v}</p><p className="text-[11px] text-zinc-400 mt-1">{s.s}</p></div>))}</div>
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                <div className="lg:col-span-3 card p-5 sm:p-6"><div className="flex items-center gap-2 mb-3"><I.Key /><h3 className="text-[15px] font-semibold">Invite Teachers</h3></div><p className="text-[13px] text-zinc-500 mb-4">Share this code with teachers. They sign up and enter it to join.</p><div className="flex items-center gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800"><code className="join-code text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white flex-1 text-center">{institute?.join_code}</code><button onClick={copyCode} className="btn-primary text-[12px] px-3 py-2">{joinCodeCopied ? <><I.Check /> Copied</> : <><I.Copy /> Copy</>}</button></div></div>
+                <div className="lg:col-span-2 card p-5 sm:p-6"><h3 className="text-[15px] font-semibold mb-4">Quick Actions</h3><div className="space-y-2">{[{ label: "New Batch", icon: I.Layers, fn: () => setShowAddBatch(true) }, { label: "Add Student", icon: I.UserPlus, fn: () => setShowAddStudent(true) }, { label: "Generate Test", icon: I.Zap, fn: () => navigate("/dashboard/test-generator") }].map((a, i) => (<button key={i} onClick={a.fn} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors text-[13px] font-medium text-zinc-700 dark:text-zinc-300"><a.icon /> {a.label} <span className="ml-auto text-zinc-300 dark:text-zinc-600"><I.ArrowRight /></span></button>))}</div></div>
+              </div>
+              <div className="card p-5 sm:p-6"><div className="flex items-center justify-between mb-4"><h3 className="text-[15px] font-semibold">Recent Students</h3>{students.length > 5 && <button onClick={() => setActiveTab("students")} className="text-[12px] font-medium text-blue-600">View all</button>}</div>{students.length === 0 ? <div className="text-center py-10"><p className="text-[13px] text-zinc-400 mb-3">No students yet</p><button className="btn-primary text-[12px]" onClick={() => setShowAddStudent(true)}><I.Plus /> Add Student</button></div> : <div className="space-y-0.5">{students.slice(0, 5).map(s => (<div key={s.id} className="row-item"><div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[12px] font-semibold text-zinc-600 dark:text-zinc-300 shrink-0">{s.name.charAt(0)}</div><div className="flex-1 min-w-0"><p className="text-[13px] font-medium truncate">{s.name}</p><p className="text-[11px] text-zinc-400 truncate">{s.batch_name} · Roll {s.roll_no || "—"}</p></div><span className="badge badge-blue">{s.class_level || "—"}</span></div>))}</div>}</div>
+            </div>)}
+
+            {activeTab === "teachers" && (<div className="anim-in"><div className="card p-5 sm:p-6"><div className="flex items-center justify-between mb-4"><h3 className="text-[15px] font-semibold">All Teachers</h3><button onClick={copyCode} className="btn-secondary text-[12px]">{joinCodeCopied ? <><I.Check /> Copied</> : <><I.Copy /> Copy Join Code</>}</button></div><div className="mb-4 px-3 py-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/20"><p className="text-[12px] text-blue-700 dark:text-blue-300">Share code <code className="font-bold join-code bg-white dark:bg-zinc-900 px-1.5 py-0.5 rounded text-blue-600">{institute?.join_code}</code> with teachers to invite them.</p></div>{teachers.length === 0 ? <div className="text-center py-12"><p className="text-[13px] text-zinc-400">No teachers yet. Share the join code.</p></div> : <div className="space-y-0.5">{teachers.map(t => (<div key={t.id} className="row-item group"><div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0"><I.User /></div><div className="flex-1 min-w-0"><p className="text-[13px] font-medium truncate">{t.user_name || t.user_email || `Teacher ${t.user_id.slice(0, 8)}`}</p><p className="text-[11px] text-zinc-400">{t.joined_at ? `Joined ${fmtDate(t.joined_at)}` : "Pending"}</p></div><span className={`badge ${t.status === "active" ? "badge-green" : "badge-amber"}`}>{t.status}</span><button onClick={() => removeTeacher(t.id)} className="p-1.5 rounded-md text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 opacity-0 group-hover:opacity-100 transition-all"><I.Trash /></button></div>))}</div>}</div></div>)}
+
+            {activeTab === "batches" && (<div className="anim-in"><div className="flex items-center justify-between mb-4"><div /><button className="btn-primary text-[12px]" onClick={() => setShowAddBatch(true)}><I.Plus /> New Batch</button></div>{batches.length === 0 ? <div className="card p-5 text-center py-16"><p className="text-[13px] text-zinc-400 mb-3">No batches yet</p><button className="btn-primary text-[12px]" onClick={() => setShowAddBatch(true)}><I.Plus /> Create Batch</button></div> : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{batches.map(b => { const c = students.filter(s => s.batch_id === b.id).length; return (<div key={b.id} className="card p-5 group relative"><button onClick={() => deleteBatch(b.id)} className="absolute top-3 right-3 p-1.5 rounded-md text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 opacity-0 group-hover:opacity-100 transition-all"><I.Trash /></button><button onClick={(e) => { e.stopPropagation(); setAssignBatch({ id: b.id, name: b.name }); }} className="absolute top-3 right-12 p-1.5 rounded-md text-zinc-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/10 opacity-0 group-hover:opacity-100 transition-all"><I.UserPlus /></button><div className="w-9 h-9 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-3 text-zinc-500"><I.Layers /></div><h4 className="text-[14px] font-semibold mb-0.5">{b.name}</h4><p className="text-[12px] text-zinc-400 mb-3">{b.class_level ? `Class ${b.class_level}` : ""} {b.subject ? `· ${b.subject}` : ""}</p><span className="badge badge-blue">{c} student{c !== 1 ? "s" : ""}</span></div>); })}</div>}</div>)}
+
+            {activeTab === "students" && (<div className="anim-in"><div className="card p-5 sm:p-6"><div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4"><div className="relative flex-1 w-full sm:max-w-xs"><div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"><I.Search /></div><input className="input-field pl-9 text-[13px]" placeholder="Search name or roll..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} /></div><button className="btn-primary text-[12px]" onClick={() => setShowAddStudent(true)}><I.Plus /> Add Student</button></div>{filteredStudents.length === 0 ? <div className="text-center py-12"><p className="text-[13px] text-zinc-400">{students.length === 0 ? "No students yet" : "No matches"}</p></div> : <div className="space-y-0.5">{filteredStudents.map(s => (<div key={s.id} className="row-item group"><div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[12px] font-semibold text-zinc-600 dark:text-zinc-300 shrink-0">{s.name.charAt(0)}</div><div className="flex-1 min-w-0"><p className="text-[13px] font-medium truncate">{s.name}</p><p className="text-[11px] text-zinc-400 truncate">{s.batch_name} · Roll {s.roll_no || "—"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}</p></div><span className="badge badge-blue">{s.class_level || "—"}</span><button onClick={() => removeStudent(s.id)} className="p-1.5 rounded-md text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 opacity-0 group-hover:opacity-100 transition-all"><I.Trash /></button></div>))}</div>}</div></div>)}
+
+            {activeTab === "analytics" && (<div className="space-y-4 anim-in"><div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[{ l: "Teachers", v: teachers.length }, { l: "Students", v: students.length }, { l: "Batches", v: batches.length }, { l: "Avg Batch", v: batches.length > 0 ? Math.round(students.length / batches.length) : 0 }].map((s, i) => (<div key={i} className="card p-4"><p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">{s.l}</p><p className="stat-number text-2xl font-bold">{s.v}</p></div>))}</div><div className="card p-8 sm:p-12 text-center"><div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-400"><I.Chart /></div><h3 className="text-[15px] font-semibold mb-1">Detailed Analytics</h3><p className="text-[13px] text-zinc-400">Charts appear once tests are generated.</p></div></div>)}
+
+            {activeTab === "settings" && institute && (<div className="anim-in space-y-4"><div className="card p-5 sm:p-6"><h3 className="text-[15px] font-semibold mb-5">Institute Details</h3><div className="space-y-4"><div><label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Name</label><p className="text-[15px] font-semibold mt-0.5">{institute.name}</p></div><div><label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Join Code</label><div className="flex items-center gap-2 mt-0.5"><code className="join-code text-[18px] font-bold">{institute.join_code}</code><button onClick={copyCode} className="p-1 rounded text-zinc-400 hover:text-zinc-600"><I.Copy /></button></div></div><div className="grid grid-cols-3 gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">{[{ l: "Max Teachers", v: institute.max_teachers }, { l: "Max Students", v: institute.max_students }, { l: "Monthly Tests", v: institute.monthly_test_limit }].map((s, i) => (<div key={i}><label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">{s.l}</label><p className="stat-number text-xl font-bold mt-0.5">{s.v}</p></div>))}</div></div></div></div>)}
+          </div>
+        </main>
+
+        {showAddBatch && (<div className="fixed inset-0 z-[200] flex items-center justify-center px-4 anim-pop"><div className="absolute inset-0 overlay-bg" onClick={() => setShowAddBatch(false)} /><div className="modal-card p-6 sm:p-8 relative z-10"><div className="flex items-center justify-between mb-5"><h3 className="text-[16px] font-semibold">Create Batch</h3><button onClick={() => setShowAddBatch(false)} className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400"><I.X /></button></div><div className="space-y-3"><input className="input-field" placeholder="Batch name (e.g., Class 10 - Batch A)" value={newBatch.name} onChange={e => setNewBatch({ ...newBatch, name: e.target.value })} /><div className="grid grid-cols-2 gap-3"><input className="input-field" placeholder="Class (e.g., 10)" value={newBatch.class_level} onChange={e => setNewBatch({ ...newBatch, class_level: e.target.value })} /><input className="input-field" placeholder="Subject (optional)" value={newBatch.subject} onChange={e => setNewBatch({ ...newBatch, subject: e.target.value })} /></div><div className="flex justify-end gap-2 pt-2"><button className="btn-secondary text-[12px]" onClick={() => setShowAddBatch(false)}>Cancel</button><button className="btn-primary text-[12px]" onClick={handleAddBatch} disabled={!newBatch.name.trim()}>Create Batch</button></div></div></div></div>)}
+
+        {showAddStudent && (<div className="fixed inset-0 z-[200] flex items-center justify-center px-4 anim-pop"><div className="absolute inset-0 overlay-bg" onClick={() => setShowAddStudent(false)} /><div className="modal-card p-6 sm:p-8 relative z-10"><div className="flex items-center justify-between mb-5"><h3 className="text-[16px] font-semibold">Add Student</h3><button onClick={() => setShowAddStudent(false)} className="p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400"><I.X /></button></div><div className="space-y-3"><input className="input-field" placeholder="Student name *" value={newStudent.name} onChange={e => setNewStudent({ ...newStudent, name: e.target.value })} /><div className="grid grid-cols-2 gap-3"><input className="input-field" placeholder="Roll no." value={newStudent.roll_no} onChange={e => setNewStudent({ ...newStudent, roll_no: e.target.value })} /><input className="input-field" placeholder="Class (e.g., 10)" value={newStudent.class_level} onChange={e => setNewStudent({ ...newStudent, class_level: e.target.value })} /></div><input className="input-field" placeholder="Parent name" value={newStudent.parent_name} onChange={e => setNewStudent({ ...newStudent, parent_name: e.target.value })} /><input className="input-field" placeholder="Parent phone" value={newStudent.parent_phone} onChange={e => setNewStudent({ ...newStudent, parent_phone: e.target.value })} /><select className="input-field text-[13px] appearance-none cursor-pointer" value={newStudent.batch_id} onChange={e => setNewStudent({ ...newStudent, batch_id: e.target.value })}><option value="">Select batch (optional)</option>{batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select><div className="flex justify-end gap-2 pt-2"><button className="btn-secondary text-[12px]" onClick={() => setShowAddStudent(false)}>Cancel</button><button className="btn-primary text-[12px]" onClick={handleAddStudent} disabled={!newStudent.name.trim()}>Add Student</button></div></div></div></div>)}
+
+        {assignBatch && (
+          <AssignTeacherModal
+            batchId={assignBatch.id}
+            batchName={assignBatch.name}
+            teachers={teachers}
+            onClose={() => setAssignBatch(null)}
+            onAssigned={fetchData}
+          />
+        )}
+      </div>
+    </div>
+  );
+}

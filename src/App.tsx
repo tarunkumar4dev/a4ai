@@ -2,7 +2,6 @@ import { useEffect, Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import "./styles/globals.css";
 
-import ChankyaInstitutePublic from "@/pages/institute/chanakya";
 /* -------- Core Imports -------- */
 import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
 import Rules from "@/pages/Rules";
@@ -44,6 +43,7 @@ const LandingPage = lazy(() =>
 );
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const JoinInstitutePage = lazy(() => import("./pages/institute/JoinInstitutePage"));
 const PricingPage = lazy(() => import("./pages/product/PricingPage"));
 const ApiPage = lazy(() => import("./pages/product/ApiPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
@@ -271,6 +271,7 @@ const App = () => {
                       {/*  PUBLIC ROUTES (no auth needed)               */}
                       {/* ============================================ */}
                       <Route path="/" element={<LandingPage />} />
+                      <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/pricing" element={<PricingPage />} />
                       <Route path="/api" element={<ApiPage />} />
@@ -386,7 +387,6 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  CATCH-ALL                                   */}
                       {/* ============================================ */}
-                      <Route path="/*" element={<ChankyaInstitutePublic />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <Analytics />

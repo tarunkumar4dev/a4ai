@@ -7,6 +7,7 @@
 //   - Table renders in question card when "Show Answers" is on
 //   - Supports journal_entry, ledger, trial_balance formats
 //   - All v6 features retained (Save & Finish, Contest, Download)
+//   - Editable paper date in header
 // ──────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from "react";
@@ -15,7 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown, ChevronUp, CheckCircle2, XCircle, Copy, FileDown,
   Eye, EyeOff, BookOpen, Brain, Zap, Edit3, RotateCcw, Check,
-  X, Download, FileText, Loader2, Save, Share2,
+  X, Download, FileText, Loader2, Save, Share2, Calendar,  // ← ADDED Calendar
 } from "lucide-react";
 import MathText from "./MathText";
 import { api } from "@/lib/api";
@@ -403,13 +404,14 @@ const QuestionCard = ({
 
 async function downloadFile(
   questions: GeneratedQuestion[],
-  meta: { examTitle: string; board: string; classGrade: string; subject: string },
+  meta: { examTitle: string; board: string; classGrade: string; subject: string; paperDate?: string },  // ← ADDED paperDate
   format: "pdf" | "docx",
   mode: "student" | "answers" | "teacher",
   logoBase64?: string | null,
 ) {
   const payload = {
     examTitle: meta.examTitle,
+    paperDate: meta.paperDate,  // ← ADDED paperDate to payload
     board: meta.board,
     classGrade: meta.classGrade,
     subject: meta.subject,
@@ -458,6 +460,14 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
+
+  // ═══════════════════════════════════════════════════════════════════
+  // SPOT 1: Paper Date State (ADDED)
+  // ═══════════════════════════════════════════════════════════════════
+  const [paperDate, setPaperDate] = useState<string>(
+    result.meta?.paperDate || new Date().toISOString().split("T")[0]
+  );
+  const [isEditingDate, setIsEditingDate] = useState(false);
 
   // Contest modal state
   const [showContestModal, setShowContestModal] = useState(false);
@@ -573,6 +583,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
 
       const regenResult = await api.generateTest({
         examTitle: result.examTitle,
+        paperDate: paperDate,  // ← ADDED: pass paperDate
         board: result.meta?.board || "CBSE",
         classGrade: result.meta?.classGrade || "Class 10",
         subject: result.meta?.subject || "Science",
@@ -604,11 +615,13 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     setIsExporting(true);
     setShowDownloadMenu(false);
     try {
+      // SPOT 4: Pass paperDate to downloadFile
       await downloadFile(activeQuestions, {
         examTitle: result.examTitle,
         board: result.meta?.board || "CBSE",
         classGrade: result.meta?.classGrade || "Class 10",
         subject: result.meta?.subject || "Science",
+        paperDate: paperDate,  // ← ADDED: pass paperDate
       }, format, mode, logoBase64);
     } catch (err) {
       console.error("Export failed:", err);
@@ -643,11 +656,40 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
           className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
         >
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            {/* SPOT 2: Editable Date in Header (REPLACED) */}
             <div>
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <Zap size={20} className="text-yellow-500" />
                 {result.examTitle}
               </h2>
+              
+              {/* Editable Date */}
+              <div className="flex items-center gap-2 mt-1.5">
+                {isEditingDate ? (
+                  <input
+                    type="date"
+                    value={paperDate}
+                    onChange={(e) => setPaperDate(e.target.value)}
+                    onBlur={() => setIsEditingDate(false)}
+                    autoFocus
+                    className="text-xs font-semibold border border-blue-300 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingDate(true)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-md transition-colors group"
+                    title="Click to edit date"
+                  >
+                    <Calendar size={12} />
+                    {new Date(paperDate).toLocaleDateString("en-IN", { 
+                      day: "numeric", month: "short", year: "numeric" 
+                    })}
+                    <Edit3 size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                )}
+              </div>
+              
               <p className="text-sm text-gray-500 mt-1">
                 {activeQuestions.length} questions · {activeQuestions.reduce((s, q) => s + q.marks, 0)} marks · Generated in {result.generationTime}s
               </p>

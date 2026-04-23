@@ -317,6 +317,7 @@ export default function TestGeneratorForm() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       examTitle: "",
+      paperDate: new Date().toISOString().split("T")[0],  // ← ADDED: paperDate default
       board: "CBSE",
       classGrade: "Class 10",
       subject: "Science",
@@ -376,7 +377,7 @@ export default function TestGeneratorForm() {
       })),
     };
 
-    const payload = { ...mappedData, cbsePattern, userId };
+    const payload = { ...mappedData, cbsePattern, paperDate: data.paperDate, userId };  // ← ADDED: paperDate included
     console.log("📝 Submitting with userId:", userId ? userId.slice(0, 8) + "..." : "none");
     await generate(payload);
   };
@@ -417,12 +418,31 @@ export default function TestGeneratorForm() {
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 md:gap-8">
             <div className="lg:col-span-9 space-y-4 sm:space-y-6">
-              <PremiumInput
-                label="Exam Title"
-                name="examTitle"
-                placeholder="e.g. Annual Final Assessment 2025"
-                register={methods.register}
-              />
+              {/* ── REPLACED: Exam Title + Paper Date in 2-col layout ── */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="sm:col-span-2">
+                  <PremiumInput
+                    label="Exam Title"
+                    name="examTitle"
+                    placeholder="e.g. Annual Final Assessment 2025"
+                    register={methods.register}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1 block mb-1.5 sm:mb-2">
+                    Paper Date
+                  </label>
+                  <input
+                    type="date"
+                    {...methods.register("paperDate")}
+                    className="w-full bg-white text-[#111827] text-sm font-semibold
+                      rounded-xl sm:rounded-2xl border border-[#E5E7EB] px-4 py-3 sm:px-5 sm:py-4 outline-none transition-all duration-200
+                      shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)]
+                      focus:shadow-[0_0_0_3px_rgba(107,114,128,0.1)] focus:border-gray-400
+                      hover:border-gray-300"
+                  />
+                </div>
+              </div>
 
               {/* Board / Class / Subject — 1 col on mobile, 3 on md+ */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-5">

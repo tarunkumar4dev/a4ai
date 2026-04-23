@@ -1,6 +1,21 @@
+// src/components/TestRowEditor.tsx
+// ──────────────────────────────────────────────────────────────────────
+// V2 — Mobile-first redesign
+//
+// Changes from V1:
+//   - Mobile (< sm): Card layout per row, NO horizontal scroll
+//   - Desktop (>= sm): Original table layout retained
+//   - All fields full-width on mobile, stacked cleanly
+//   - Touch-friendly: 44px+ targets on all interactive elements
+//   - Removed min-w-[1000px] that was forcing horizontal scroll on mobile
+// ──────────────────────────────────────────────────────────────────────
+
 import React, { useRef, memo, useCallback, forwardRef, useState, useEffect } from "react";
 import { useFieldArray, useFormContext, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
-import { GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen, AlignLeft, ListChecks, ArrowLeftRight, Loader2 } from "lucide-react";
+import {
+  GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen,
+  AlignLeft, ListChecks, ArrowLeftRight, Loader2,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ==================== TYPES ====================
@@ -21,7 +36,7 @@ interface RefUploadButtonProps {
   watch: UseFormWatch<FieldValues>;
 }
 
-interface TableRowProps {
+interface RowProps {
   index: number;
   field: { id: string };
   availableTopics: string[];
@@ -41,24 +56,14 @@ interface FormValues {
 // ==================== API: FETCH CHAPTERS ====================
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-async function fetchChaptersFromAPI(
-  classLevel: string,
-  subject: string
-): Promise<string[]> {
-  // Extract class number: "Class 10" → "10"
+async function fetchChaptersFromAPI(classLevel: string, subject: string): Promise<string[]> {
   const classNum = classLevel.replace(/\D/g, "") || "10";
-
   const res = await fetch(
     `${API_BASE}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`
   );
   if (!res.ok) throw new Error(`Failed to fetch chapters: ${res.status}`);
-
   const data = await res.json();
-
-  // Backend returns: { ok: true, chapters: ["ch1", "ch2", ...] }
-  if (data.chapters && Array.isArray(data.chapters)) {
-    return data.chapters;
-  }
+  if (data.chapters && Array.isArray(data.chapters)) return data.chapters;
   return [];
 }
 
@@ -84,13 +89,9 @@ function useChapters(classLevel: string, subject: string) {
       .then((chapterNames) => {
         if (cancelled) return;
         setChapters(chapterNames);
-
-        // Load subtopics from fallback for matching chapters
         const sMap: Record<string, string[]> = {};
         chapterNames.forEach((ch) => {
-          if (COMMON_SUBTOPICS_FALLBACK[ch]) {
-            sMap[ch] = COMMON_SUBTOPICS_FALLBACK[ch];
-          }
+          if (COMMON_SUBTOPICS_FALLBACK[ch]) sMap[ch] = COMMON_SUBTOPICS_FALLBACK[ch];
         });
         setSubtopicsMap(sMap);
       })
@@ -98,8 +99,6 @@ function useChapters(classLevel: string, subject: string) {
         if (cancelled) return;
         console.error("Chapter fetch failed, using fallback:", err);
         setError(err.message);
-
-        // Fallback to hardcoded chapters
         const fallback = SUBJECT_TOPICS_FALLBACK[subject] || [];
         setChapters(fallback);
         setSubtopicsMap(COMMON_SUBTOPICS_FALLBACK);
@@ -108,9 +107,7 @@ function useChapters(classLevel: string, subject: string) {
         if (!cancelled) setLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [classLevel, subject]);
 
   return { chapters, subtopicsMap, loading, error };
@@ -122,90 +119,21 @@ const SUBJECT_TOPICS_FALLBACK: Record<string, string[]> = {
     "Chemical Reactions & Equations", "Acids, Bases & Salts", "Metals & Non-metals",
     "Carbon & Its Compounds", "Periodic Classification", "Life Processes",
     "Control & Coordination", "How do Organisms Reproduce", "Heredity & Evolution",
-    "Light - Reflection & Refraction", "Human Eye & Colorful World", "Electricity",
+    "Light Reflection & Refraction", "Human Eye & Colorful World", "Electricity",
     "Magnetic Effects of Electric Current", "Our Environment"
   ],
-  "Physics": [
-    "Electricity", "Magnetic Effects of Electric Current", "Light - Reflection & Refraction",
-    "Human Eye & Colorful World", "Sources of Energy", "Motion", "Force & Laws of Motion",
-    "Gravitation", "Work & Energy", "Sound", "Thermal Properties"
-  ],
-  "Chemistry": [
-    "Chemical Reactions & Equations", "Acids, Bases & Salts", "Metals & Non-metals",
-    "Carbon & Its Compounds", "Periodic Classification", "Matter in Our Surroundings",
-    "Is Matter Around Us Pure", "Atoms & Molecules", "Structure of Atom"
-  ],
-  "Biology": [
-    "Life Processes", "Control & Coordination", "How do Organisms Reproduce",
-    "Heredity & Evolution", "Our Environment", "Management of Natural Resources",
-    "Diversity in Living Organisms", "Tissues", "Why do We Fall Ill"
-  ],
-  "Mathematics": [
-    "SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS",
-    "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES",
-    "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM",
-    "SEQUENCES AND SERIES", "STRAIGHT LINES",
-    "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES",
-    "STATISTICS", "PROBABILITY"
-  ],
-  "Maths": [
-    "SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS",
-    "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES",
-    "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM",
-    "SEQUENCES AND SERIES", "STRAIGHT LINES",
-    "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES",
-    "STATISTICS", "PROBABILITY"
-  ],
-  "Social Science": [
-    "The Rise of Nationalism in Europe", "Nationalism in India", "The Making of a Global World",
-    "The Age of Industrialisation", "Print Culture & Modern World", "Resources & Development",
-    "Forest & Wildlife Resources", "Water Resources", "Agriculture", "Minerals & Energy Resources",
-    "Manufacturing Industries", "Lifelines of National Economy", "Power Sharing", "Federalism",
-    "Democracy & Diversity", "Gender, Religion & Caste", "Popular Struggles & Movements",
-    "Political Parties", "Outcomes of Democracy", "Development", "Sectors of Indian Economy",
-    "Money & Credit", "Globalisation & Indian Economy", "Consumer Rights"
-  ],
-  "English": [
-    "A Letter to God", "Nelson Mandela", "Two Stories about Flying",
-    "From the Diary of Anne Frank", "The Hundred Dresses", "Glimpses of India",
-    "Mijbil the Otter", "Madam Rides the Bus", "The Sermon at Benares",
-    "The Proposal", "Footprints without Feet", "The Making of a Scientist",
-    "The Necklace", "The Hack Driver", "Bholi", "The Book That Saved the Earth"
-  ],
-  "Political Science": [
-    "Power Sharing", "Federalism", "Gender, Religion and Caste",
-    "Political Parties", "Outcomes of Democracy"
-  ],
-  "Accountancy": [
-    "Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions",
-    "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation",
-    "Provisions and Reserves", "Bill of Exchange", "Financial Statements",
-    "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership",
-    "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements",
-    "Cash Flow Statement"
-  ],
-  "Accounts": [
-    "Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions",
-    "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation",
-    "Provisions and Reserves", "Bill of Exchange", "Financial Statements",
-    "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership",
-    "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements",
-    "Cash Flow Statement"
-  ],
-  "Economics": [
-    "Development", "Sectors of Indian Economy", "Money and Credit",
-    "Globalisation and the Indian Economy", "Consumer Rights"
-  ],
-  "History": [
-    "The Rise of Nationalism in Europe", "Nationalism in India",
-    "The Making of a Global World", "The Age of Industrialisation",
-    "Print Culture and the Modern World"
-  ],
-  "Geography": [
-    "Resources and Development", "Forest and Wildlife Resources",
-    "Water Resources", "Agriculture", "Minerals and Energy Resources",
-    "Manufacturing Industries", "Lifelines of National Economy"
-  ],
+  "Physics": ["Electricity", "Magnetic Effects of Electric Current", "Light - Reflection & Refraction", "Human Eye & Colorful World", "Sources of Energy", "Motion", "Force & Laws of Motion", "Gravitation", "Work & Energy", "Sound", "Thermal Properties"],
+  "Chemistry": ["Chemical Reactions & Equations", "Acids, Bases & Salts", "Metals & Non-metals", "Carbon & Its Compounds", "Periodic Classification", "Matter in Our Surroundings", "Is Matter Around Us Pure", "Atoms & Molecules", "Structure of Atom"],
+  "Biology": ["Life Processes", "Control & Coordination", "How do Organisms Reproduce", "Heredity & Evolution", "Our Environment", "Management of Natural Resources", "Diversity in Living Organisms", "Tissues", "Why do We Fall Ill"],
+  "Mathematics": ["SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS", "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES", "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM", "SEQUENCES AND SERIES", "STRAIGHT LINES", "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES", "STATISTICS", "PROBABILITY"],
+  "Maths": ["SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS", "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES", "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM", "SEQUENCES AND SERIES", "STRAIGHT LINES", "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES", "STATISTICS", "PROBABILITY"],
+  "English": ["A Letter to God", "Nelson Mandela", "Two Stories about Flying", "From the Diary of Anne Frank", "The Hundred Dresses", "Glimpses of India", "Mijbil the Otter", "Madam Rides the Bus", "The Sermon at Benares", "The Proposal", "Footprints without Feet", "The Making of a Scientist", "The Necklace", "The Hack Driver", "Bholi", "The Book That Saved the Earth"],
+  "Political Science": ["Power Sharing", "Federalism", "Gender, Religion and Caste", "Political Parties", "Outcomes of Democracy"],
+  "Accountancy": ["Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions", "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation", "Provisions and Reserves", "Bill of Exchange", "Financial Statements", "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership", "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements", "Cash Flow Statement"],
+  "Accounts": ["Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions", "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation", "Provisions and Reserves", "Bill of Exchange", "Financial Statements", "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership", "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements", "Cash Flow Statement"],
+  "Economics": ["Development", "Sectors of Indian Economy", "Money and Credit", "Globalisation and the Indian Economy", "Consumer Rights"],
+  "History": ["The Rise of Nationalism in Europe", "Nationalism in India", "The Making of a Global World", "The Age of Industrialisation", "Print Culture and the Modern World"],
+  "Geography": ["Resources and Development", "Forest and Wildlife Resources", "Water Resources", "Agriculture", "Minerals and Energy Resources", "Manufacturing Industries", "Lifelines of National Economy"],
 };
 
 const COMMON_SUBTOPICS_FALLBACK: Record<string, string[]> = {
@@ -247,9 +175,9 @@ const QUESTION_FORMATS = [
 ];
 
 const ACCOUNTANCY_FORMATS = [
-  { value: "JournalEntry", label: "Journal",  icon: FileText,       color: "bg-emerald-600 text-white" },
-  { value: "Ledger",       label: "Ledger",   icon: BookOpen,       color: "bg-teal-600 text-white" },
-  { value: "TrialBalance", label: "Trial Bal",icon: ListChecks,     color: "bg-cyan-600 text-white" },
+  { value: "JournalEntry", label: "Journal",   icon: FileText,   color: "bg-emerald-600 text-white" },
+  { value: "Ledger",       label: "Ledger",    icon: BookOpen,   color: "bg-teal-600 text-white" },
+  { value: "TrialBalance", label: "Trial Bal", icon: ListChecks, color: "bg-cyan-600 text-white" },
 ];
 
 const ACCOUNTANCY_SUBJECTS_FE = ["Accountancy", "Accounts", "Accounting"];
@@ -267,26 +195,19 @@ const generateUUID = (): string => {
 };
 
 // ==================== FILE UPLOAD HANDLER ====================
-const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue, watch }) => {
+const RefUploadButton: React.FC<RefUploadButtonProps & { fullWidth?: boolean }> = memo(({ index, setValue, watch, fullWidth }) => {
   const fileRef = useRef<HTMLInputElement>(null);
   const file = watch(`simpleData.${index}.refFile`);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (fileRef.current) {
-      fileRef.current.value = '';
-    }
-    if (selectedFile) {
-      setValue(`simpleData.${index}.refFile`, selectedFile);
-    } else {
-      setValue(`simpleData.${index}.refFile`, undefined);
-    }
+    if (fileRef.current) fileRef.current.value = '';
+    if (selectedFile) setValue(`simpleData.${index}.refFile`, selectedFile);
+    else setValue(`simpleData.${index}.refFile`, undefined);
   }, [index, setValue]);
 
   const handleButtonClick = useCallback(() => {
-    if (fileRef.current) {
-      fileRef.current.click();
-    }
+    if (fileRef.current) fileRef.current.click();
   }, []);
 
   const handleClearFile = useCallback((e: React.MouseEvent) => {
@@ -295,7 +216,7 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
   }, [index, setValue]);
 
   return (
-    <div className="relative">
+    <div className={`relative ${fullWidth ? "w-full" : ""}`}>
       <input
         type="file"
         ref={fileRef}
@@ -305,26 +226,23 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
         aria-label={`Upload reference file for row ${index + 1}`}
       />
       <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
+        whileTap={{ scale: 0.97 }}
         type="button"
         onClick={handleButtonClick}
-        className={`p-2.5 rounded-xl transition-all border shadow-sm ${
+        className={`${fullWidth ? "w-full justify-center" : ""} min-h-[44px] px-3 py-2.5 rounded-xl transition-all border shadow-sm flex items-center gap-2 ${
           file
-            ? 'bg-gray-800 text-white border-gray-800 hover:bg-gray-900'
-            : 'bg-white text-gray-400 border-[#E5E7EB] hover:border-gray-400 hover:text-gray-600'
+            ? 'bg-gray-800 text-white border-gray-800 active:bg-gray-900'
+            : 'bg-white text-gray-500 border-[#E5E7EB] active:border-gray-400'
         }`}
+        style={{ WebkitTapHighlightColor: "transparent" }}
         title={file ? `Reference: ${file.name}` : "Upload Reference"}
-        aria-label={file ? `Change reference file ${file.name}` : "Add reference file"}
       >
-        <div className="flex items-center gap-2">
-          {file ? <Check size={16} /> : <Paperclip size={16} />}
-          {file && (
-            <span className="text-xs max-w-[80px] truncate">
-              {file.name.length > 10 ? `${file.name.substring(0, 8)}...` : file.name}
-            </span>
-          )}
-        </div>
+        {file ? <Check size={16} /> : <Paperclip size={16} />}
+        <span className="text-xs font-semibold">
+          {file
+            ? (file.name.length > 16 ? `${file.name.substring(0, 14)}...` : file.name)
+            : "Add Reference"}
+        </span>
       </motion.button>
 
       {file && (
@@ -340,7 +258,6 @@ const RefUploadButton: React.FC<RefUploadButtonProps> = memo(({ index, setValue,
     </div>
   );
 });
-
 RefUploadButton.displayName = 'RefUploadButton';
 
 // ==================== QUESTION TYPE SELECTOR ====================
@@ -361,7 +278,7 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
   }, [isAccountancy, currentFormat, index, setValue]);
 
   return (
-    <div className="flex gap-1 flex-wrap">
+    <div className="flex gap-1.5 flex-wrap">
       {visibleFormats.map((fmt) => {
         const isActive = currentFormat === fmt.value;
         const Icon = fmt.icon;
@@ -370,14 +287,15 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
             key={fmt.value}
             type="button"
             onClick={() => setValue(`simpleData.${index}.format`, fmt.value)}
-            className={`px-2 py-1.5 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all border ${
+            className={`min-h-[36px] px-3 py-2 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all border ${
               isActive
                 ? `${fmt.color} border-transparent shadow-sm`
-                : 'bg-white text-gray-400 border-[#E5E7EB] hover:border-gray-400 hover:text-gray-600'
+                : 'bg-white text-gray-500 border-[#E5E7EB] active:border-gray-400'
             }`}
+            style={{ WebkitTapHighlightColor: "transparent" }}
             title={fmt.value}
           >
-            <Icon size={10} /> {fmt.label}
+            <Icon size={11} /> {fmt.label}
           </button>
         );
       })}
@@ -386,21 +304,150 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
 });
 FormatSelector.displayName = 'FormatSelector';
 
-// ==================== TABLE ROW ====================
-const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
-  index,
-  field,
-  availableTopics,
-  subtopicsMap,
-  chaptersLoading,
-  remove
+// ═══════════════════════════════════════════════════════════════════════
+// MOBILE: Card Row — stacks vertically, no horizontal scroll
+// ═══════════════════════════════════════════════════════════════════════
+const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chaptersLoading, remove }: RowProps) => {
+  const { register, watch, setValue } = useFormContext<FormValues>();
+  const currentTopic = watch(`simpleData.${index}.topic`);
+  const subject = watch("subject") || "";
+  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS_FALLBACK[currentTopic] || [];
+
+  const inputClass = "w-full min-h-[44px] bg-white border border-[#E5E7EB] rounded-xl px-3 py-2.5 text-sm font-semibold text-[#111827] outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-400/10 transition-all appearance-none";
+  const labelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 block";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 200, damping: 24 }}
+      layout
+      className="bg-white rounded-2xl border border-[#E5E7EB] p-4 space-y-3.5 shadow-sm"
+    >
+      {/* Header: index + delete */}
+      <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider bg-gray-100 px-2.5 py-1 rounded-full">
+          Section {index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={() => remove(index)}
+          className="min-w-[36px] min-h-[36px] p-2 rounded-full text-gray-400 active:bg-red-50 active:text-red-500 transition-colors"
+          style={{ WebkitTapHighlightColor: "transparent" }}
+          aria-label={`Remove section ${index + 1}`}
+        >
+          <Trash2 size={16} />
+        </button>
+      </div>
+
+      {/* Chapter */}
+      <div>
+        <label className={labelClass}>Chapter</label>
+        <div className="relative">
+          <select
+            {...register(`simpleData.${index}.topic`)}
+            disabled={chaptersLoading}
+            className={`${inputClass} pr-9 disabled:opacity-60`}
+          >
+            <option value="">{chaptersLoading ? "Loading chapters..." : "Select a chapter..."}</option>
+            {availableTopics.map(topic => (
+              <option key={topic} value={topic}>{topic}</option>
+            ))}
+          </select>
+          {chaptersLoading && (
+            <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />
+          )}
+        </div>
+      </div>
+
+      {/* Subtopic */}
+      <div>
+        <label className={labelClass}>Subtopic (optional)</label>
+        <select
+          {...register(`simpleData.${index}.subtopic`)}
+          disabled={!currentTopic || subOptions.length === 0}
+          className={`${inputClass} disabled:opacity-60 disabled:bg-gray-50`}
+        >
+          <option value="">
+            {!currentTopic
+              ? "Select a chapter first"
+              : subOptions.length === 0
+                ? "No subtopics available"
+                : "Select subtopic..."}
+          </option>
+          {subOptions.map(sub => (
+            <option key={sub} value={sub}>{sub}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Quantity + Marks — 2 column grid */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelClass}>Quantity</label>
+          <select
+            {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
+            className={inputClass}
+          >
+            {[1,2,3,4,5,6,7,8,9,10,15,20].map(num => (
+              <option key={num} value={num}>{num}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Marks each</label>
+          <select
+            {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
+            className={inputClass}
+          >
+            {[1,2,3,4,5,6,7,8,9,10].map(num => (
+              <option key={num} value={num}>{num} marks</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Difficulty */}
+      <div>
+        <label className={labelClass}>Difficulty</label>
+        <select
+          {...register(`simpleData.${index}.difficulty`)}
+          className={inputClass}
+        >
+          <option value="Easy">Easy</option>
+          <option value="Medium">Medium</option>
+          <option value="Hard">Hard</option>
+          <option value="Mixed">Mixed</option>
+        </select>
+      </div>
+
+      {/* Question Type */}
+      <div>
+        <label className={labelClass}>Question Type</label>
+        <FormatSelector index={index} subject={subject} />
+      </div>
+
+      {/* Reference upload */}
+      <div>
+        <label className={labelClass}>Reference (optional)</label>
+        <RefUploadButton index={index} setValue={setValue} watch={watch} fullWidth />
+      </div>
+    </motion.div>
+  );
+});
+MobileCard.displayName = 'MobileCard';
+
+// ═══════════════════════════════════════════════════════════════════════
+// DESKTOP: Table Row (retained from V1)
+// ═══════════════════════════════════════════════════════════════════════
+const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
+  index, field, availableTopics, subtopicsMap, chaptersLoading, remove
 }, ref) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
   const subject = watch("subject") || "";
-
   const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS_FALLBACK[currentTopic] || [];
-
   const rowNumber = index + 1;
 
   return (
@@ -414,34 +461,23 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
       layout
     >
       <td className="py-3 px-6 text-center">
-        <GripVertical
-          size={16}
-          className="text-gray-300 cursor-grab hover:text-gray-600 transition-colors"
-          aria-label={`Drag to reorder row ${rowNumber}`}
-        />
+        <GripVertical size={16} className="text-gray-300 cursor-grab hover:text-gray-600 transition-colors" />
       </td>
 
       <td className="py-3 px-4">
         <div className="flex flex-col gap-2">
           <div className="relative">
             <select
-              {...register(`simpleData.${index}.topic`, {
-                required: "Topic is required"
-              })}
+              {...register(`simpleData.${index}.topic`, { required: "Topic is required" })}
               className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600 disabled:opacity-50"
               disabled={chaptersLoading}
-              aria-label={`Select topic for row ${rowNumber}`}
             >
-              <option value="">
-                {chaptersLoading ? "Loading chapters..." : "Select Chapter/Topic..."}
-              </option>
+              <option value="">{chaptersLoading ? "Loading chapters..." : "Select Chapter/Topic..."}</option>
               {availableTopics.map(topic => (
                 <option key={topic} value={topic}>{topic}</option>
               ))}
             </select>
-            {chaptersLoading && (
-              <Loader2 size={14} className="absolute right-2 top-2 animate-spin text-gray-400" />
-            )}
+            {chaptersLoading && <Loader2 size={14} className="absolute right-2 top-2 animate-spin text-gray-400" />}
           </div>
 
           <div className="flex items-center gap-2">
@@ -450,15 +486,9 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
               {...register(`simpleData.${index}.subtopic`)}
               className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none cursor-pointer disabled:opacity-50 hover:text-gray-700 appearance-none"
               disabled={!currentTopic || subOptions.length === 0}
-              aria-label={`Select subtopic for ${currentTopic || 'topic'} in row ${rowNumber}`}
             >
               <option value="">
-                {!currentTopic
-                  ? "Select Subtopic (Optional)..."
-                  : subOptions.length === 0
-                    ? "No subtopics available"
-                    : "Select Subtopic (Optional)..."
-                }
+                {!currentTopic ? "Select Subtopic (Optional)..." : subOptions.length === 0 ? "No subtopics available" : "Select Subtopic (Optional)..."}
               </option>
               {subOptions.map(subtopic => (
                 <option key={subtopic} value={subtopic}>{subtopic}</option>
@@ -468,20 +498,15 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </div>
       </td>
 
-      {/* QUANTITY */}
       <td className="py-3 px-4 text-center">
         <select
           {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
           className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
-          aria-label={`Select number of questions for row ${rowNumber}`}
         >
-          {[1,2,3,4,5,6,7,8,9,10].map(num => (
-            <option key={num} value={num}>{num}</option>
-          ))}
+          {[1,2,3,4,5,6,7,8,9,10,15,20].map(num => <option key={num} value={num}>{num}</option>)}
         </select>
       </td>
 
-      {/* MARKS — FIX: values 7-10 were all value={6} */}
       <td className="py-3 px-4 text-center">
         <select
           {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
@@ -500,12 +525,10 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </select>
       </td>
 
-      {/* DIFFICULTY */}
       <td className="py-3 px-4">
         <select
           {...register(`simpleData.${index}.difficulty`)}
           className="w-full bg-white border border-[#E5E7EB] text-xs font-bold text-gray-600 rounded-xl py-2 px-3 outline-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm appearance-none"
-          aria-label={`Select difficulty for row ${rowNumber}`}
         >
           <option value="Easy">Easy</option>
           <option value="Medium">Medium</option>
@@ -514,17 +537,14 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
         </select>
       </td>
 
-      {/* QUESTION TYPE */}
       <td className="py-3 px-4">
         <FormatSelector index={index} subject={subject} />
       </td>
 
-      {/* REFERENCE */}
       <td className="py-3 px-4 text-center">
         <RefUploadButton index={index} setValue={setValue} watch={watch} />
       </td>
 
-      {/* DELETE */}
       <td className="py-3 px-4 text-center">
         <motion.button
           whileHover={{ scale: 1.1 }}
@@ -534,13 +554,12 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, TableRowProps>(({
           className="p-2 rounded-full bg-white border border-transparent hover:border-red-100 hover:bg-red-50 text-gray-300 hover:text-red-500 transition-all shadow-sm"
           aria-label={`Remove row ${rowNumber}`}
         >
-          <Trash2 size={16} aria-hidden="true" />
+          <Trash2 size={16} />
         </motion.button>
       </td>
     </motion.tr>
   );
 }));
-
 TableRow.displayName = 'TableRow';
 
 // ==================== SIMPLE MODE VIEW ====================
@@ -554,11 +573,6 @@ const SimpleModeView: React.FC = () => {
   const classLevel = watch("classGrade") || "";
   const currentSubject = watch("subject") || "";
 
-  // ═══════════════════════════════════════════════════════════
-  // FIX: Actually USE the useChapters hook to fetch from API!
-  // BUG WAS: chaptersLoading = false (hardcoded)
-  //          availableTopics = fallback only (API never called)
-  // ═══════════════════════════════════════════════════════════
   const {
     chapters: apiChapters,
     subtopicsMap,
@@ -566,12 +580,8 @@ const SimpleModeView: React.FC = () => {
     error: chaptersError,
   } = useChapters(classLevel, currentSubject);
 
-  // Use API chapters if available, else fallback
   const availableTopics = React.useMemo(() => {
-    if (apiChapters.length > 0) {
-      return apiChapters;
-    }
-    // Fallback when API fails or no data
+    if (apiChapters.length > 0) return apiChapters;
     return SUBJECT_TOPICS_FALLBACK[currentSubject] || [];
   }, [apiChapters, currentSubject]);
 
@@ -604,57 +614,79 @@ const SimpleModeView: React.FC = () => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="bg-white rounded-[24px] shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50 backdrop-blur-sm p-2"
+      className="bg-white rounded-2xl sm:rounded-[24px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] sm:shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50"
     >
-      <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 rounded-t-[22px]">
-        <div className="flex items-center gap-2 text-sm text-blue-800">
-          <BookOpen size={16} aria-hidden="true" />
-          <div className="flex items-center gap-3 flex-wrap">
+      {/* Context Banner */}
+      <div className="px-4 sm:px-6 py-3 bg-blue-50 border-b border-blue-100 rounded-t-2xl sm:rounded-t-[22px]">
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-blue-800">
+          <BookOpen size={14} className="flex-shrink-0" />
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
             {classLevel && (
-              <span>
+              <span className="truncate">
                 <span className="font-semibold">Class:</span> {classLevel}
               </span>
             )}
-            <span>
+            <span className="truncate">
               <span className="font-semibold">Subject:</span> {currentSubject || "Not selected"}
             </span>
             {apiChapters.length > 0 && (
-              <span className="text-xs text-blue-600">
-                ({apiChapters.length} chapters loaded)
+              <span className="text-[10px] sm:text-xs text-blue-600">
+                ({apiChapters.length} chapters)
               </span>
             )}
             {chaptersError && (
-              <span className="text-xs text-amber-600">
-                (using fallback chapters)
-              </span>
+              <span className="text-[10px] sm:text-xs text-amber-600">(using fallback)</span>
             )}
           </div>
         </div>
       </div>
 
+      {/* Empty state */}
       {(!classLevel || !currentSubject) && (
-        <div className="py-12 text-center text-gray-400">
+        <div className="py-10 sm:py-12 text-center text-gray-400 px-4">
           <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
-          <p className="font-semibold">Select a Class and Subject above</p>
-          <p className="text-xs mt-1">Chapters will load automatically from database</p>
+          <p className="font-semibold text-sm sm:text-base">Select a Class and Subject above</p>
+          <p className="text-xs mt-1">Chapters will load automatically</p>
         </div>
       )}
 
       {classLevel && currentSubject && (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
-              <caption className="sr-only">Test configuration table with chapters and questions</caption>
+          {/* ═════════════════════════════════════════════════════════════ */}
+          {/* MOBILE: Card list (visible < sm breakpoint)                  */}
+          {/* ═════════════════════════════════════════════════════════════ */}
+          <div className="block sm:hidden p-3 space-y-3">
+            <AnimatePresence>
+              {fields.map((field, index) => (
+                <MobileCard
+                  key={field.id}
+                  index={index}
+                  field={field}
+                  availableTopics={availableTopics}
+                  subtopicsMap={subtopicsMap}
+                  chaptersLoading={chaptersLoading}
+                  remove={remove}
+                />
+              ))}
+            </AnimatePresence>
+          </div>
+
+          {/* ═════════════════════════════════════════════════════════════ */}
+          {/* DESKTOP: Table (visible >= sm breakpoint)                     */}
+          {/* ═════════════════════════════════════════════════════════════ */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <caption className="sr-only">Test configuration table</caption>
               <thead>
                 <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
-                  <th scope="col" className="py-4 px-6 w-12 text-center" aria-label="Drag handle"></th>
-                  <th scope="col" className="py-4 px-4">Chapter & Topics</th>
-                  <th scope="col" className="py-4 px-4 w-20 text-center">Quantity</th>
-                  <th scope="col" className="py-4 px-4 w-20 text-center">Marks</th>
-                  <th scope="col" className="py-4 px-4 w-32">Difficulty</th>
-                  <th scope="col" className="py-4 px-4 w-48">Question Type</th>
-                  <th scope="col" className="py-4 px-4 w-20 text-center">Reference</th>
-                  <th scope="col" className="py-4 px-4 w-12 text-center" aria-label="Actions"></th>
+                  <th className="py-4 px-6 w-12 text-center"></th>
+                  <th className="py-4 px-4">Chapter & Topics</th>
+                  <th className="py-4 px-4 w-20 text-center">Quantity</th>
+                  <th className="py-4 px-4 w-20 text-center">Marks</th>
+                  <th className="py-4 px-4 w-32">Difficulty</th>
+                  <th className="py-4 px-4 w-48">Question Type</th>
+                  <th className="py-4 px-4 w-20 text-center">Reference</th>
+                  <th className="py-4 px-4 w-12 text-center"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -675,15 +707,15 @@ const SimpleModeView: React.FC = () => {
             </table>
           </div>
 
+          {/* Add section button — responsive */}
           <motion.button
-            whileHover={{ backgroundColor: "#F3F4F6" }}
             whileTap={{ scale: 0.99 }}
             type="button"
             onClick={handleAddRow}
-            className="w-full py-5 mt-2 bg-[#F9FAFB] text-sm font-bold text-gray-400 hover:text-gray-600 rounded-b-[22px] flex items-center justify-center gap-2 transition-all group"
-            aria-label="Add new chapter section"
+            className="w-full py-4 sm:py-5 mt-2 bg-[#F9FAFB] active:bg-[#F3F4F6] text-sm font-bold text-gray-500 hover:text-gray-700 rounded-b-2xl sm:rounded-b-[22px] flex items-center justify-center gap-2 transition-all group min-h-[48px]"
+            style={{ WebkitTapHighlightColor: "transparent" }}
           >
-            <PlusCircle size={18} className="group-hover:scale-110 transition-transform" aria-hidden="true" />
+            <PlusCircle size={18} className="group-hover:scale-110 transition-transform" />
             Add Chapter Section
           </motion.button>
         </>
@@ -696,15 +728,11 @@ const SimpleModeView: React.FC = () => {
 export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
   if (activeMode !== "Simple") {
     return (
-      <div
-        className="p-16 text-center text-gray-400 font-bold bg-white rounded-[24px] border border-white shadow-sm"
-        aria-live="polite"
-      >
+      <div className="p-10 sm:p-16 text-center text-gray-400 font-bold bg-white rounded-2xl sm:rounded-[24px] border border-white shadow-sm">
         Coming Soon
       </div>
     );
   }
-
   return <SimpleModeView />;
 };
 

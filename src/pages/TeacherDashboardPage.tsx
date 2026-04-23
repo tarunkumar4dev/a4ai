@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel";
 
 /* ------------------- STYLES ------------------- */
 const customStyles = `
@@ -426,14 +427,6 @@ export default function TeacherDashboardPage() {
     }
   };
 
-  const [students, setStudents] = useState([
-    { id: 1, name: "Sarah Johnson", email: "sarah.j@student.edu", class: "10A", score: 94, status: "Excellent" },
-    { id: 2, name: "Michael Chen", email: "m.chen@student.edu", class: "11B", score: 87, status: "Good" },
-    { id: 3, name: "Emma Williams", email: "emma.w@student.edu", class: "10B", score: 72, status: "Needs Help" },
-  ]);
-
-  const filteredStudents = students.filter((s) => s.name.toLowerCase().includes(studentSearch.toLowerCase()));
-  const removeStudent = (id: number) => setStudents(students.filter((s) => s.id !== id));
   const getFirstName = () => displayName?.split(" ")[0] || "Educator";
 
   const handleInvite = (e: React.FormEvent) => {
@@ -597,6 +590,7 @@ export default function TeacherDashboardPage() {
                     <div className="space-y-3 sm:space-y-5">
                       <GlossyButton label="New Test" subLabel="NCERT-based Generator" variant="light" icon={Icons.Plus} fullWidth onClick={() => navigate("/dashboard/test-generator")} />
                       <GlossyButton label="Host Contest" subLabel="Start Live Competition" variant="light" icon={Icons.Trophy} fullWidth onClick={() => navigate("/contests")} />
+                      <GlossyButton label="Join Institute" subLabel="Enter code to join" variant="light" icon={Icons.Users} fullWidth onClick={() => navigate("/join-institute")} />
                       <GlossyButton label="Test History" subLabel="View past papers" variant="light" icon={Icons.History} fullWidth onClick={() => setActiveTab("tests")} />
                     </div>
                   </div>
@@ -618,6 +612,9 @@ export default function TeacherDashboardPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Institute Section */}
+                <InstituteTeacherPanel userId={user?.id} />
 
                 {/* Recent Tests — real data */}
                 <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12">
@@ -657,30 +654,7 @@ export default function TeacherDashboardPage() {
             {/* ===== STUDENTS TAB ===== */}
             {activeTab === "students" && (
               <div className="space-y-6 sm:space-y-8 animate-pop">
-                <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-10">
-                    <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">Students</h2>
-                    <GlossyButton label="Invite" variant="blue" icon={Icons.Plus} small onClick={() => setShowInviteModal(true)} />
-                  </div>
-                  <div className="relative mb-5 sm:mb-8">
-                    <div className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 text-sky-500"><Icons.Search /></div>
-                    <input type="text" placeholder="Search by name..." className="w-full pl-12 sm:pl-16 pr-4 sm:pr-6 py-3.5 sm:py-5 text-sm inset-pill rounded-[24px] sm:rounded-[32px] focus:outline-none focus:ring-2 focus:ring-sky-400/50 text-slate-800 dark:text-white placeholder-slate-400 font-bold" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
-                  </div>
-                  <div className="space-y-3">
-                    {filteredStudents.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between p-4 rounded-[24px] bg-white/40 dark:bg-slate-800/30 border border-white/60 dark:border-white/10">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-[20px] inset-pill border-none flex items-center justify-center font-black text-blue-600 text-lg shrink-0">{s.name.charAt(0)}</div>
-                          <div className="min-w-0">
-                            <p className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{s.name}</p>
-                            <p className="text-xs text-slate-500 truncate">{s.class} · {s.score}%</p>
-                          </div>
-                        </div>
-                        <button onClick={() => removeStudent(s.id)} className="p-2 text-slate-400 hover:text-red-500"><Icons.Trash /></button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <InstituteTeacherPanel userId={user?.id} />
               </div>
             )}
 

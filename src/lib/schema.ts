@@ -6,6 +6,15 @@ export const questionTypeEnum = z.enum(["MCQ", "Short", "Long", "Essay"]);
 export const difficultyEnum = z.enum(["Easy", "Medium", "Hard", "Mixed"]);
 export const bloomEnum = z.enum(["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"]);
 
+// Helper: today's date in YYYY-MM-DD format
+const todayISO = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 // 1. Simple Mode Row (matches TestRowEditor)
 export const simpleRowSchema = z.object({
     id: z.string(),
@@ -36,12 +45,15 @@ export const formSchema = z.object({
   subject: z.string().min(1, "Subject is required"),
   logo: z.any().optional(),
 
+  // Paper Date — ADDED (editable by teacher, defaults to today)
+  paperDate: z.string().default(todayISO()),
+
   // Global Settings
   mode: z.enum(["Simple", "Blueprint", "Matrix", "Buckets"]).default("Simple"),
   enableWatermark: z.boolean().default(true),
   shuffleQuestions: z.boolean().default(false),
 
-  // CBSE Pattern — ADDED
+  // CBSE Pattern
   cbsePattern: z.boolean().default(false),
 
   // Data Arrays
