@@ -1,20 +1,20 @@
 // src/components/TestRowEditor.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V2 — Mobile-first redesign
+// V3 — Select-bug fix + class-safe fallback
 //
-// Changes from V1:
-//   - Mobile (< sm): Card layout per row, NO horizontal scroll
-//   - Desktop (>= sm): Original table layout retained
-//   - All fields full-width on mobile, stacked cleanly
-//   - Touch-friendly: 44px+ targets on all interactive elements
-//   - Removed min-w-[1000px] that was forcing horizontal scroll on mobile
+// Fixes from V2:
+//   - `fields` REMOVED from useEffect dep array (was causing topic reset
+//     on every render, so select didn't stick)
+//   - Subject fallback list disabled — ONLY API chapters used. Fallback
+//     was showing Class 10 chapters for Class 9 subjects (e.g. "Light").
+//   - Added visible "No chapters available" empty state so teacher knows
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useRef, memo, useCallback, forwardRef, useState, useEffect } from "react";
 import { useFieldArray, useFormContext, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
 import {
   GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen,
-  AlignLeft, ListChecks, ArrowLeftRight, Loader2,
+  AlignLeft, ListChecks, ArrowLeftRight, Loader2, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -91,17 +91,17 @@ function useChapters(classLevel: string, subject: string) {
         setChapters(chapterNames);
         const sMap: Record<string, string[]> = {};
         chapterNames.forEach((ch) => {
-          if (COMMON_SUBTOPICS_FALLBACK[ch]) sMap[ch] = COMMON_SUBTOPICS_FALLBACK[ch];
+          if (COMMON_SUBTOPICS[ch]) sMap[ch] = COMMON_SUBTOPICS[ch];
         });
         setSubtopicsMap(sMap);
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error("Chapter fetch failed, using fallback:", err);
+        console.error("Chapter fetch failed:", err);
         setError(err.message);
-        const fallback = SUBJECT_TOPICS_FALLBACK[subject] || [];
-        setChapters(fallback);
-        setSubtopicsMap(COMMON_SUBTOPICS_FALLBACK);
+        // v3: NO fallback chapters — better to show empty state than wrong chapters
+        setChapters([]);
+        setSubtopicsMap({});
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -113,49 +113,43 @@ function useChapters(classLevel: string, subject: string) {
   return { chapters, subtopicsMap, loading, error };
 }
 
-// ==================== FALLBACK DATA ====================
-const SUBJECT_TOPICS_FALLBACK: Record<string, string[]> = {
-  "Science": [
-    "Chemical Reactions & Equations", "Acids, Bases & Salts", "Metals & Non-metals",
-    "Carbon & Its Compounds", "Periodic Classification", "Life Processes",
-    "Control & Coordination", "How do Organisms Reproduce", "Heredity & Evolution",
-    "Light Reflection & Refraction", "Human Eye & Colorful World", "Electricity",
-    "Magnetic Effects of Electric Current", "Our Environment"
-  ],
-  "Physics": ["Electricity", "Magnetic Effects of Electric Current", "Light - Reflection & Refraction", "Human Eye & Colorful World", "Sources of Energy", "Motion", "Force & Laws of Motion", "Gravitation", "Work & Energy", "Sound", "Thermal Properties"],
-  "Chemistry": ["Chemical Reactions & Equations", "Acids, Bases & Salts", "Metals & Non-metals", "Carbon & Its Compounds", "Periodic Classification", "Matter in Our Surroundings", "Is Matter Around Us Pure", "Atoms & Molecules", "Structure of Atom"],
-  "Biology": ["Life Processes", "Control & Coordination", "How do Organisms Reproduce", "Heredity & Evolution", "Our Environment", "Management of Natural Resources", "Diversity in Living Organisms", "Tissues", "Why do We Fall Ill"],
-  "Mathematics": ["SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS", "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES", "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM", "SEQUENCES AND SERIES", "STRAIGHT LINES", "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES", "STATISTICS", "PROBABILITY"],
-  "Maths": ["SETS", "RELATIONS AND FUNCTIONS", "TRIGONOMETRIC FUNCTIONS", "COMPLEX NUMBERS AND QUADRATIC EQUATIONS", "LINEAR INEQUALITIES", "PERMUTATIONS AND COMBINATIONS", "BINOMIAL THEOREM", "SEQUENCES AND SERIES", "STRAIGHT LINES", "CONIC SECTIONS", "THREE DIMENSIONAL GEOMETRY", "LIMITS AND DERIVATIVES", "STATISTICS", "PROBABILITY"],
-  "English": ["A Letter to God", "Nelson Mandela", "Two Stories about Flying", "From the Diary of Anne Frank", "The Hundred Dresses", "Glimpses of India", "Mijbil the Otter", "Madam Rides the Bus", "The Sermon at Benares", "The Proposal", "Footprints without Feet", "The Making of a Scientist", "The Necklace", "The Hack Driver", "Bholi", "The Book That Saved the Earth"],
-  "Political Science": ["Power Sharing", "Federalism", "Gender, Religion and Caste", "Political Parties", "Outcomes of Democracy"],
-  "Accountancy": ["Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions", "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation", "Provisions and Reserves", "Bill of Exchange", "Financial Statements", "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership", "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements", "Cash Flow Statement"],
-  "Accounts": ["Introduction to Accounting", "Theory Base of Accounting", "Recording of Transactions", "Ledger", "Trial Balance", "Bank Reconciliation Statement", "Depreciation", "Provisions and Reserves", "Bill of Exchange", "Financial Statements", "Accounts from Incomplete Records", "Accounting for Partnership", "Reconstitution of Partnership", "Dissolution of Partnership", "Accounting for Companies", "Analysis of Financial Statements", "Cash Flow Statement"],
-  "Economics": ["Development", "Sectors of Indian Economy", "Money and Credit", "Globalisation and the Indian Economy", "Consumer Rights"],
-  "History": ["The Rise of Nationalism in Europe", "Nationalism in India", "The Making of a Global World", "The Age of Industrialisation", "Print Culture and the Modern World"],
-  "Geography": ["Resources and Development", "Forest and Wildlife Resources", "Water Resources", "Agriculture", "Minerals and Energy Resources", "Manufacturing Industries", "Lifelines of National Economy"],
-};
-
-const COMMON_SUBTOPICS_FALLBACK: Record<string, string[]> = {
-  "Chemical Reactions & Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
-  "Acids, Bases & Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
-  "Metals & Non-metals": ["Physical and chemical properties", "Reactivity series", "Extraction of metals", "Corrosion and prevention"],
-  "Carbon & Its Compounds": ["Covalent bonding", "Homologous series", "Functional groups", "Ethanol and ethanoic acid", "Soaps and detergents"],
+// ==================== COMMON SUBTOPICS (helper map only) ====================
+// These are used ONLY if a DB chapter name matches one of these keys.
+// NOT used as a full chapter list.
+const COMMON_SUBTOPICS: Record<string, string[]> = {
+  "Chemical Reactions and Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
+  "Acids Bases and Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
+  "Metals and Non-metals": ["Physical and chemical properties", "Reactivity series", "Extraction of metals", "Corrosion and prevention"],
+  "Carbon and Its Compounds": ["Covalent bonding", "Homologous series", "Functional groups", "Ethanol and ethanoic acid", "Soaps and detergents"],
   "Periodic Classification": ["Mendeleev's table", "Modern periodic table", "Trends in periodic table"],
-  "Light - Reflection & Refraction": ["Reflection by mirrors", "Refraction", "Lenses", "Power of lens"],
-  "Human Eye & Colorful World": ["Structure of eye", "Defects of vision", "Dispersion and scattering of light"],
+  "Light Reflection and Refraction": ["Reflection by mirrors", "Refraction", "Lenses", "Power of lens"],
+  "Human Eye and Colorful World": ["Structure of eye", "Defects of vision", "Dispersion and scattering of light"],
   "Electricity": ["Electric current", "Ohm's law", "Resistance", "Electric power"],
   "Magnetic Effects of Electric Current": ["Magnetic field", "Electric motor", "Electromagnetic induction", "Generator"],
   "Life Processes": ["Nutrition", "Respiration", "Transportation", "Excretion"],
-  "Control & Coordination": ["Nervous system", "Hormonal coordination", "Endocrine glands"],
+  "Control and Coordination": ["Nervous system", "Hormonal coordination", "Endocrine glands"],
   "How do Organisms Reproduce": ["Asexual reproduction", "Sexual reproduction", "Reproductive health"],
-  "Heredity & Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
+  "Heredity and Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
   "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution"],
+  // Class 9 Science
+  "Matter in Our Surroundings": ["States of matter", "Physical and chemical changes", "Latent heat", "Evaporation"],
+  "Is Matter Around Us Pure": ["Mixtures", "Solutions", "Separation techniques", "Compounds and elements"],
+  "Atoms and Molecules": ["Laws of chemical combination", "Atomic mass", "Mole concept", "Molecular mass"],
+  "Structure of the Atom": ["Atomic models", "Isotopes and isobars", "Electronic configuration", "Valency"],
+  "The Fundamental Unit of Life": ["Cell structure", "Organelles", "Prokaryotic vs Eukaryotic", "Cell division"],
+  "Tissues": ["Plant tissues", "Animal tissues", "Meristems", "Connective tissue"],
+  "Motion": ["Distance and displacement", "Velocity and acceleration", "Equations of motion", "Graphs of motion"],
+  "Force and Laws of Motion": ["Newton's laws", "Inertia", "Momentum", "Conservation of momentum"],
+  "Gravitation": ["Universal law", "Free fall", "Buoyancy", "Archimedes principle"],
+  "Work and Energy": ["Work", "Kinetic energy", "Potential energy", "Power"],
+  "Sound": ["Production of sound", "Sound propagation", "Reflection of sound", "SONAR"],
+  // Political Science
   "Power Sharing": ["Belgium model", "Sri Lanka model", "Forms of power sharing"],
   "Federalism": ["Union list", "State list", "Concurrent list", "Decentralisation", "Panchayati Raj"],
-  "Gender, Religion and Caste": ["Gender division", "Religion and politics", "Caste and politics"],
+  "Gender Religion and Caste": ["Gender division", "Religion and politics", "Caste and politics"],
   "Political Parties": ["Functions of parties", "National parties", "State parties"],
   "Outcomes of Democracy": ["Accountability", "Economic growth", "Inequality", "Social diversity"],
+  // Accountancy
   "Introduction to Accounting": ["Meaning and objectives", "Accounting as information system", "Users of accounting", "Accounting terms"],
   "Recording of Transactions": ["Accounting equation", "Rules of debit and credit", "Journal", "Ledger posting"],
   "Ledger": ["Format of ledger", "Posting from journal", "Balancing accounts", "T-account"],
@@ -311,7 +305,7 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
   const subject = watch("subject") || "";
-  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS_FALLBACK[currentTopic] || [];
+  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
 
   const inputClass = "w-full min-h-[44px] bg-white border border-[#E5E7EB] rounded-xl px-3 py-2.5 text-sm font-semibold text-[#111827] outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-400/10 transition-all appearance-none";
   const labelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 block";
@@ -347,10 +341,16 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
         <div className="relative">
           <select
             {...register(`simpleData.${index}.topic`)}
-            disabled={chaptersLoading}
+            disabled={chaptersLoading || availableTopics.length === 0}
             className={`${inputClass} pr-9 disabled:opacity-60`}
           >
-            <option value="">{chaptersLoading ? "Loading chapters..." : "Select a chapter..."}</option>
+            <option value="">
+              {chaptersLoading
+                ? "Loading chapters..."
+                : availableTopics.length === 0
+                  ? "No chapters available"
+                  : "Select a chapter..."}
+            </option>
             {availableTopics.map(topic => (
               <option key={topic} value={topic}>{topic}</option>
             ))}
@@ -382,7 +382,7 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
         </select>
       </div>
 
-      {/* Quantity + Marks — 2 column grid */}
+      {/* Quantity + Marks */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelClass}>Quantity</label>
@@ -439,7 +439,7 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
 MobileCard.displayName = 'MobileCard';
 
 // ═══════════════════════════════════════════════════════════════════════
-// DESKTOP: Table Row (retained from V1)
+// DESKTOP: Table Row
 // ═══════════════════════════════════════════════════════════════════════
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
   index, field, availableTopics, subtopicsMap, chaptersLoading, remove
@@ -447,7 +447,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
   const subject = watch("subject") || "";
-  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS_FALLBACK[currentTopic] || [];
+  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
   const rowNumber = index + 1;
 
   return (
@@ -468,11 +468,17 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
         <div className="flex flex-col gap-2">
           <div className="relative">
             <select
-              {...register(`simpleData.${index}.topic`, { required: "Topic is required" })}
+              {...register(`simpleData.${index}.topic`)}
               className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600 disabled:opacity-50"
-              disabled={chaptersLoading}
+              disabled={chaptersLoading || availableTopics.length === 0}
             >
-              <option value="">{chaptersLoading ? "Loading chapters..." : "Select Chapter/Topic..."}</option>
+              <option value="">
+                {chaptersLoading
+                  ? "Loading chapters..."
+                  : availableTopics.length === 0
+                    ? "No chapters available"
+                    : "Select Chapter/Topic..."}
+              </option>
               {availableTopics.map(topic => (
                 <option key={topic} value={topic}>{topic}</option>
               ))}
@@ -580,23 +586,31 @@ const SimpleModeView: React.FC = () => {
     error: chaptersError,
   } = useChapters(classLevel, currentSubject);
 
-  const availableTopics = React.useMemo(() => {
-    if (apiChapters.length > 0) return apiChapters;
-    return SUBJECT_TOPICS_FALLBACK[currentSubject] || [];
-  }, [apiChapters, currentSubject]);
+  // v3: Only use API chapters. No fallback to static list.
+  const availableTopics = apiChapters;
 
-  // Reset topics when class/subject changes
+  // ═════════════════════════════════════════════════════════════════════
+  // v3 FIX: `fields` removed from dep array (was causing infinite reset
+  //         on every render, breaking select behavior).
+  // ═════════════════════════════════════════════════════════════════════
   const prevKeyRef = useRef(`${classLevel}-${currentSubject}`);
+  const fieldsLengthRef = useRef(fields.length);
+
+  useEffect(() => {
+    fieldsLengthRef.current = fields.length;
+  }, [fields.length]);
+
   useEffect(() => {
     const newKey = `${classLevel}-${currentSubject}`;
     if (prevKeyRef.current !== newKey && prevKeyRef.current !== "-") {
-      fields.forEach((_, idx) => {
+      const len = fieldsLengthRef.current;
+      for (let idx = 0; idx < len; idx++) {
         setFormValue(`simpleData.${idx}.topic` as any, "");
         setFormValue(`simpleData.${idx}.subtopic` as any, "");
-      });
+      }
     }
     prevKeyRef.current = newKey;
-  }, [classLevel, currentSubject, fields, setFormValue]);
+  }, [classLevel, currentSubject, setFormValue]);
 
   const handleAddRow = useCallback(() => {
     append({
@@ -635,13 +649,13 @@ const SimpleModeView: React.FC = () => {
               </span>
             )}
             {chaptersError && (
-              <span className="text-[10px] sm:text-xs text-amber-600">(using fallback)</span>
+              <span className="text-[10px] sm:text-xs text-red-600">(failed to load)</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Empty state */}
+      {/* Empty state — no class/subject selected */}
       {(!classLevel || !currentSubject) && (
         <div className="py-10 sm:py-12 text-center text-gray-400 px-4">
           <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
@@ -650,11 +664,23 @@ const SimpleModeView: React.FC = () => {
         </div>
       )}
 
+      {/* v3: Empty state when API returned no chapters */}
+      {classLevel && currentSubject && !chaptersLoading && apiChapters.length === 0 && (
+        <div className="py-8 sm:py-10 text-center px-4 bg-amber-50/50 border-b border-amber-100">
+          <AlertCircle size={28} className="mx-auto mb-3 text-amber-500" />
+          <p className="font-bold text-sm text-amber-900">
+            No chapters available for {currentSubject} · {classLevel}
+          </p>
+          <p className="text-xs mt-1.5 text-amber-700 max-w-md mx-auto">
+            Either this subject is not yet ingested for this class, or the request failed.
+            Try another subject or class, or contact support.
+          </p>
+        </div>
+      )}
+
       {classLevel && currentSubject && (
         <>
-          {/* ═════════════════════════════════════════════════════════════ */}
-          {/* MOBILE: Card list (visible < sm breakpoint)                  */}
-          {/* ═════════════════════════════════════════════════════════════ */}
+          {/* MOBILE: Card list */}
           <div className="block sm:hidden p-3 space-y-3">
             <AnimatePresence>
               {fields.map((field, index) => (
@@ -671,9 +697,7 @@ const SimpleModeView: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          {/* ═════════════════════════════════════════════════════════════ */}
-          {/* DESKTOP: Table (visible >= sm breakpoint)                     */}
-          {/* ═════════════════════════════════════════════════════════════ */}
+          {/* DESKTOP: Table */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <caption className="sr-only">Test configuration table</caption>
@@ -707,7 +731,6 @@ const SimpleModeView: React.FC = () => {
             </table>
           </div>
 
-          {/* Add section button — responsive */}
           <motion.button
             whileTap={{ scale: 0.99 }}
             type="button"

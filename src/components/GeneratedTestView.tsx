@@ -1,12 +1,17 @@
 // src/components/GeneratedTestView.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V7 — Accountancy Table Support (Journal Entry, Ledger, Trial Balance)
-// 
-// v7 changes:
-//   - AnswerTableView component for structured table answers
-//   - Table renders in question card when "Show Answers" is on
-//   - Supports journal_entry, ledger, trial_balance formats
-//   - All v6 features retained (Save & Finish, Contest, Download)
+// V8 — Question Table Support (Statistics: Frequency Distribution etc.)
+//
+// v8 changes (additive only):
+//   - QuestionTable interface for Statistics structured data
+//   - QuestionTableView component — blue-toned table rendered as PART of question
+//   - stripMarkdownTable() helper avoids double rendering when both structured
+//     and inline markdown tables are present
+//   - QuestionTable always visible (it's the question data, not the answer)
+//
+// v7 features retained:
+//   - AnswerTableView (Accountancy — Journal Entry / Ledger / Trial Balance)
+//   - Save & Finish, Contest, Download menu
 //   - Editable paper date in header
 //   - Manual question addition support
 // ──────────────────────────────────────────────────────────────────────
@@ -39,11 +44,62 @@ interface AnswerTable {
   total_row?: string[] | null;
 }
 
+// v8: Structured table embedded in the QUESTION (Statistics, Data-handling)
+interface QuestionTable {
+  type: string;  // "frequency_distribution" | "cumulative_frequency" | "data_table"
+  headers: string[];
+  rows: string[][];
+  caption?: string | null;
+}
+
 interface QuestionWithStatus extends GeneratedQuestion {
   status: QuestionStatus;
   editData?: Partial<GeneratedQuestion>;
   answer_table?: AnswerTable | null;
   answerTable?: AnswerTable | null;
+  // v8: Statistics question table
+  question_table?: QuestionTable | null;
+  questionTable?: QuestionTable | null;
+}
+
+// ── v8: Markdown table stripper ───────────────────────────────────────
+// Mirrors backend _strip_markdown_table_from_text — removes inline pipe
+// tables when a structured questionTable is present (avoids double render).
+
+function stripMarkdownTable(text: string): string {
+  if (!text || !text.includes("\n")) return text;
+
+  const lines = text.split("\n");
+  const output: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const stripped = line.trim();
+    const hasPipes =
+      stripped.startsWith("|") &&
+      (stripped.match(/\|/g) || []).length >= 2;
+    const nextIsSep =
+      i + 1 < lines.length &&
+      /^\|?[\s\-:]+\|[\s\-:|]*$/.test(lines[i + 1].trim());
+
+    if (hasPipes && nextIsSep) {
+      // Skip entire table block
+      while (i < lines.length) {
+        const tl = lines[i].trim();
+        if (tl.startsWith("|") || /^\|?[\s\-:]+\|/.test(tl)) {
+          i++;
+        } else {
+          break;
+        }
+      }
+    } else {
+      output.push(line);
+      i++;
+    }
+  }
+
+  return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 // ── Badges ─────────────────────────────────────────────────────────────
@@ -80,7 +136,7 @@ const BloomBadge = ({ level }: { level: string | null }) => {
   );
 };
 
-// ── Format Badge (NEW v7 — shows table format type) ────────────────────
+// ── Format Badge (v7 — table format type) ──────────────────────────────
 
 const formatBadgeConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
   journal_entry:  { bg: "bg-indigo-50",  text: "text-indigo-700",  border: "border-indigo-200", label: "Journal Entry" },
@@ -100,7 +156,7 @@ const FormatBadge = ({ format }: { format: string }) => {
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// NEW v7: AnswerTableView — Renders Accountancy tables
+// v7: AnswerTableView — Renders Accountancy answer tables (emerald)
 // ═══════════════════════════════════════════════════════════════════════
 
 const TABLE_TITLES: Record<string, string> = {
@@ -229,6 +285,86 @@ const AnswerTableView = ({ table }: { table: AnswerTable }) => {
 
 
 // ═══════════════════════════════════════════════════════════════════════
+// v8: QuestionTableView — Renders Statistics question tables (blue)
+// Always visible (it's the question data, not the answer)
+// ═══════════════════════════════════════════════════════════════════════
+
+const QUESTION_TABLE_TITLES: Record<string, string> = {
+  frequency_distribution: "Frequency Distribution",
+  cumulative_frequency: "Cumulative Frequency",
+  data_table: "Data",
+};
+
+const QuestionTableView = ({ table }: { table: QuestionTable }) => {
+  if (!table || !table.headers || !table.rows || table.rows.length === 0) {
+    return null;
+  }
+
+  const tableType = table.type || "frequency_distribution";
+  const title = QUESTION_TABLE_TITLES[tableType] || "Data";
+
+  return (
+    <div className="mt-3 mb-3 mx-5">
+      {/* Optional caption above table */}
+      {table.caption && (
+        <p className="text-xs italic text-gray-500 mb-2 text-center">
+          {table.caption}
+        </p>
+      )}
+
+      <div className="overflow-x-auto rounded-xl border border-blue-200 bg-white">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr>
+              {table.headers.map((h: string, i: number) => (
+                <th
+                  key={i}
+                  className={`
+                    bg-blue-50 text-blue-900 font-bold py-2.5 px-4
+                    border-b-2 border-blue-200
+                    text-[11px] uppercase tracking-wider
+                    ${i === 0 ? "text-left" : "text-right"}
+                  `}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {table.rows.map((row: string[], rowIdx: number) => (
+              <tr
+                key={rowIdx}
+                className="border-b border-blue-100/60 hover:bg-blue-50/30 transition-colors"
+              >
+                {row.map((cell: string, cellIdx: number) => (
+                  <td
+                    key={cellIdx}
+                    className={`
+                      py-2 px-4 text-gray-800
+                      ${cellIdx === 0 ? "text-left font-medium" : "text-right font-mono"}
+                    `}
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Subtle hint badge */}
+      <div className="flex items-center gap-1.5 mt-1.5 text-[10px] text-blue-600/70 font-medium">
+        <span className="inline-block w-1 h-1 rounded-full bg-blue-400" />
+        {title}
+      </div>
+    </div>
+  );
+};
+
+
+// ═══════════════════════════════════════════════════════════════════════
 // Question Card
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -252,7 +388,19 @@ const QuestionCard = ({
 
   // v7: Get answer table from either key
   const answerTable = (question as any).answerTable || (question as any).answer_table || null;
+  // v8: Get question table from either key
+  const questionTable: QuestionTable | null =
+    (question as any).questionTable || (question as any).question_table || null;
   const questionFormat = (question as any).format || "mcq";
+
+  // v8: When structured questionTable is present, strip inline markdown table
+  // from question text to avoid double rendering
+  const displayText = questionTable
+    ? stripMarkdownTable(question.text)
+    : question.text;
+  const editingDisplayText = questionTable && ed.text
+    ? stripMarkdownTable(ed.text)
+    : (ed.text || question.text);
 
   return (
     <motion.div
@@ -269,7 +417,6 @@ const QuestionCard = ({
             <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg">Q{index + 1}</span>
             <DiffBadge level={question.difficulty} />
             <BloomBadge level={question.bloomLevel} />
-            {/* v7: Format badge for table types */}
             <FormatBadge format={questionFormat} />
             {question.status === "approved" && <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">Approved</span>}
             {question.status === "rejected" && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Rejected</span>}
@@ -307,15 +454,21 @@ const QuestionCard = ({
           <textarea
             className="w-full text-sm font-semibold text-gray-800 bg-white border border-blue-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-300 resize-none"
             rows={3}
-            value={ed.text || question.text}
+            value={editingDisplayText}
             onChange={(e) => onEdit(question.id, "text", e.target.value)}
           />
         ) : (
           <p className={`text-sm font-semibold leading-relaxed ${question.status === "rejected" ? "text-gray-400 line-through" : "text-gray-800"}`}>
-            <MathText text={question.text} />
+            <MathText text={displayText} />
           </p>
         )}
       </div>
+
+      {/* v8: Question Table (Statistics — Frequency Distribution / Data) */}
+      {/* Always visible — it's PART of the question, not the answer */}
+      {questionTable && (
+        <QuestionTableView table={questionTable} />
+      )}
 
       {/* Manual question image */}
       {(question as any).imageUrl && (
