@@ -1,6 +1,6 @@
 // src/pages/TestGeneratorPage.tsx
 import React from "react";
-import { ChevronLeft, Sparkles } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import TestGeneratorForm from "@/components/TestGeneratorForm";
 import { useAuth } from "@/providers/AuthProvider";
@@ -75,23 +75,28 @@ export default function TestGeneratorPage() {
             {/* DIVIDER */}
             <div className="h-5 sm:h-6 md:h-8 w-px bg-gray-200 flex-shrink-0" />
 
-            {/* TITLE SECTION */}
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="p-1.5 sm:p-2 md:p-2.5 rounded-lg sm:rounded-xl bg-gradient-to-br from-[#111827] to-[#1F2937] shadow-lg shadow-gray-900/20 text-white flex-shrink-0">
-                <Sparkles size={14} className="opacity-90 sm:hidden" />
-                <Sparkles size={16} className="opacity-90 hidden sm:block md:hidden" />
-                <Sparkles size={18} className="opacity-90 hidden md:block" />
+            {/* LOGO + TITLE SECTION */}
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0">
+              
+              {/* LOGO IMAGE - BADA VERSION */}
+              <div className="flex-shrink-0">
+                <img 
+                  src="/images/LOGO.png" 
+                  alt="A4AI Logo" 
+                  className="h-10 sm:h-12 md:h-14 w-auto object-contain"  // 👈 BADA KAR DIYA
+                />
               </div>
 
+              {/* TITLE - Agar sirf logo dikhana hai toh yeh section hata do */}
               <div className="min-w-0">
                 <h1 className="text-[13px] sm:text-base md:text-xl font-bold tracking-tight text-[#111827] truncate leading-tight">
-                  Test Engine{" "}
+                  a4ai
                   <span className="text-transparent bg-clip-text bg-gradient-to-br from-[#111827] to-[#374151]">
-                    V4 Pro
+                    Engine V1   
                   </span>
                 </h1>
                 <p className="text-[9px] sm:text-[10px] md:text-[11px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:block">
-                  A4AI Intelligence
+                  Test Generator
                 </p>
               </div>
             </div>

@@ -14,9 +14,12 @@
 //   - Save & Finish, Contest, Download menu
 //   - Editable paper date in header
 //   - Manual question addition support
+//
+// Fix 3: Show answers for Short/Long answer questions
+// Fix 4: Auto-save progress to localStorage (survives page refresh)
 // ──────────────────────────────────────────────────────────────────────
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import AddManualQuestionModal, { ManualQuestion } from "./AddManualQuestionModal";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -537,6 +540,23 @@ const QuestionCard = ({
         </div>
       )}
 
+      {/* Fix 3: Show answer for Short/Long/non-MCQ questions */}
+      {showAnswer 
+        && (!question.options || question.options.length === 0)
+        && !answerTable
+        && question.correctAnswer && (
+        <div className="px-5 pb-3">
+          <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3.5">
+            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5">
+              Answer
+            </p>
+            <p className="text-sm font-medium text-emerald-900 leading-relaxed">
+              <MathText text={question.correctAnswer} />
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* v7: Answer Table (Accountancy — Journal Entry / Ledger / Trial Balance) */}
       {showAnswer && answerTable && (
         <AnswerTableView table={answerTable} />
@@ -649,6 +669,43 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     result.questions.map((q) => ({ ...q, status: "pending" as QuestionStatus }))
   );
 
+  // Fix 4: Auto-save to localStorage
+  const STORAGE_KEY = `test-progress-${result.testId}`;
+
+  // Load saved state on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.questions && Array.isArray(parsed.questions)) {
+          setQuestions(parsed.questions);
+        }
+        if (parsed.paperDate) setPaperDate(parsed.paperDate);
+      } catch (err) {
+        console.error("Failed to restore progress:", err);
+      }
+    }
+  }, []);
+
+  // Save on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        questions,
+        paperDate,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch (err) {
+      console.error("Failed to save progress:", err);
+    }
+  }, [questions, paperDate]);
+
+  // Clear localStorage when user clicks "Save & Finish" or "New Test"
+  const clearStoredProgress = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY);
+  }, [STORAGE_KEY]);
+
   // ── Handler: add manual question to local state ──────────────────────
   const handleAddManualQuestion = useCallback((q: ManualQuestion) => {
     const newQuestion: QuestionWithStatus = {
@@ -709,6 +766,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
       const teacherId = user?.id || "00000000-0000-0000-0000-000000000000";
       await api.saveTest(result.testId, teacherId);
       setSaveStatus("saved");
+      clearStoredProgress();
       setTimeout(() => navigate("/dashboard"), 800);
     } catch (err) {
       console.error("Save failed:", err);
@@ -720,7 +778,8 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
 
   // ── New Test ─────────────────────────────────────────────────────
   const handleNewTest = () => {
-    if (saveStatus === "saved" || window.confirm("Start a new test? Download/save your test first if needed.")) {
+    if (saveStatus === "saved" || window.confirm("Start a new test? Progress will be lost.")) {
+      clearStoredProgress();
       onReset();
     }
   };
