@@ -43,6 +43,7 @@ const LandingPage = lazy(() =>
 );
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const CommunityQuizPlayPage = lazy(() => import("./pages/CommunityQuizPlayPage"));
 const JoinInstitutePage = lazy(() => import("./pages/institute/JoinInstitutePage"));
 const PricingPage = lazy(() => import("./pages/product/PricingPage"));
 const ApiPage = lazy(() => import("./pages/product/ApiPage"));
@@ -276,6 +277,7 @@ const App = () => {
                       {/*  PUBLIC ROUTES (no auth needed)               */}
                       {/* ============================================ */}
                       <Route path="/" element={<LandingPage />} />
+                      <Route path="/q/:slug" element={<CommunityQuizPlayPage />} />
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/pricing" element={<PricingPage />} />

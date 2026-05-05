@@ -78,6 +78,73 @@ export interface QuizListItem {
   created_at: string;
 }
 
+/* ─────────── Public quiz types ─────────── */
+
+export interface PublicQuizInfo {
+  id: string;
+  title: string;
+  description: string | null;
+  subject: string;
+  chapter: string | null;
+  class_level: string | null;
+  duration_minutes: number;
+  ends_at: string;
+  total_questions: number;
+  total_marks: number;
+  status: string;
+  creator_name: string | null;
+  creator_logo_url: string | null;
+  creator_channel_url: string | null;
+  source_metadata: any;
+}
+
+export interface PublicQuizQuestion {
+  id: string;
+  question_text: string;
+  options: string[];
+  marks: number;
+  order_index: number;
+}
+
+export interface StartAttemptResponse {
+  attempt_id: string;
+  quiz: {
+    title: string;
+    duration_minutes: number;
+    total_questions: number;
+    total_marks: number;
+  };
+  questions: PublicQuizQuestion[];
+  started_at: string;
+}
+
+export interface SubmitAnswer {
+  question_id: string;
+  selected_option: number | null;
+  time_taken_ms?: number;
+}
+
+export interface SubmitResponse {
+  total_score: number;
+  total_marks: number;
+  correct_count: number;
+  attempted_count: number;
+  total_questions: number;
+  time_taken_seconds: number;
+  rank: number | null;
+  total_participants: number;
+  show_leaderboard: boolean;
+  answers_review?: Array<{
+    question_id: string;
+    question_text: string;
+    options: string[];
+    selected_option: number | null;
+    correct_option: number;
+    is_correct: boolean;
+    explanation: string;
+  }>;
+}
+
 export interface LeaderboardEntry {
   attempt_id: string;
   participant_name: string;
@@ -145,9 +212,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json();
 }
 
-/* ─────────── Endpoints ─────────── */
+/* ─────────── TEACHER endpoints (auth required) ─────────── */
 
-/** Step 1: Teacher pastes URL → preview video info. ~5-15s. */
 export async function previewVideo(url: string): Promise<VideoPreview> {
   const res = await fetch(`${API_PREFIX}/preview-video`, {
     method: "POST",
@@ -157,7 +223,6 @@ export async function previewVideo(url: string): Promise<VideoPreview> {
   return handleResponse<VideoPreview>(res);
 }
 
-/** Step 2: Create quiz — fetch + Gemini gen + save. 60-90s. */
 export async function createQuiz(payload: CreateQuizPayload): Promise<CreateQuizResponse> {
   const res = await fetch(`${API_PREFIX}`, {
     method: "POST",
@@ -167,7 +232,6 @@ export async function createQuiz(payload: CreateQuizPayload): Promise<CreateQuiz
   return handleResponse<CreateQuizResponse>(res);
 }
 
-/** List teacher's quizzes. */
 export async function listMyQuizzes(): Promise<{ quizzes: QuizListItem[] }> {
   const res = await fetch(`${API_PREFIX}`, {
     method: "GET",
@@ -176,13 +240,46 @@ export async function listMyQuizzes(): Promise<{ quizzes: QuizListItem[] }> {
   return handleResponse<{ quizzes: QuizListItem[] }>(res);
 }
 
-/** Teacher leaderboard. */
 export async function getLeaderboard(quizId: string): Promise<LeaderboardResponse> {
   const res = await fetch(`${API_PREFIX}/${quizId}/leaderboard`, {
     method: "GET",
     headers: await authHeaders(),
   });
   return handleResponse<LeaderboardResponse>(res);
+}
+
+/* ─────────── PUBLIC endpoints (no auth) ─────────── */
+
+export async function getPublicQuiz(slug: string): Promise<PublicQuizInfo> {
+  const res = await fetch(`${API_PREFIX}/q/${slug}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse<PublicQuizInfo>(res);
+}
+
+export async function startAttempt(
+  slug: string,
+  data: { name: string; phone: string; email?: string; class_level?: string }
+): Promise<StartAttemptResponse> {
+  const res = await fetch(`${API_PREFIX}/q/${slug}/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<StartAttemptResponse>(res);
+}
+
+export async function submitAttempt(
+  slug: string,
+  data: { attempt_id: string; answers: SubmitAnswer[]; tab_switch_count?: number }
+): Promise<SubmitResponse> {
+  const res = await fetch(`${API_PREFIX}/q/${slug}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<SubmitResponse>(res);
 }
 
 export { ApiError };
