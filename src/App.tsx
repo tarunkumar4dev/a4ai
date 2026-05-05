@@ -143,6 +143,11 @@ const PracticePage = lazy(() => import("@/practice/index"));
 /* ---------- Auth Callback (SINGLE file — replaces old pages/auth/callback.tsx) ---------- */
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 
+/* ============================================ */
+/*  A) NEW LAZY IMPORT FOR CommunityQuizCreatePage */
+/* ============================================ */
+const CommunityQuizCreatePage = lazy(() => import("./pages/teacher/CommunityQuizCreatePage"));
+
 /* ---------- Scroll Helper ---------- */
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -319,6 +324,12 @@ const App = () => {
                       {/*  TEACHER ROUTES                              */}
                       {/* ============================================ */}
                       <Route path="/teacher/dashboard" element={<RoleAuthGate allowedRoles={["teacher"]}><TeacherDashboardPage /></RoleAuthGate>} />
+                      
+                      {/* B) NEW TEACHER ROUTE FOR COMMUNITY QUIZ CREATE */}
+                      <Route 
+                        path="/teacher/community-quiz/new" 
+                        element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizCreatePage /></RoleAuthGate>} 
+                      />
 
                       {/* ============================================ */}
                       {/*  INSTITUTE ROUTES (add InstituteDashboard     */}

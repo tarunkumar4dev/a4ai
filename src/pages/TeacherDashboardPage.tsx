@@ -1,5 +1,5 @@
 // src/pages/TeacherDashboardPage.tsx
-// v2 — Test History fetches real data from Supabase `tests` table
+// v3 — Added Community Quiz button
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -118,6 +118,7 @@ const Icons = {
   Globe: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>,
   Book: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
   Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+  Youtube: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>,
 };
 
 /* ------------------- REUSABLE COMPONENTS ------------------- */
@@ -590,6 +591,7 @@ export default function TeacherDashboardPage() {
                     <div className="space-y-3 sm:space-y-5">
                       <GlossyButton label="New Test" subLabel="NCERT-based Generator" variant="light" icon={Icons.Plus} fullWidth onClick={() => navigate("/dashboard/test-generator")} />
                       <GlossyButton label="Host Contest" subLabel="Start Live Competition" variant="light" icon={Icons.Trophy} fullWidth onClick={() => navigate("/contests")} />
+                      <GlossyButton label="Community Quiz" subLabel="From YouTube video" variant="light" icon={Icons.Youtube} fullWidth onClick={() => navigate("/teacher/community-quiz/new")} />
                       <GlossyButton label="Join Institute" subLabel="Enter code to join" variant="light" icon={Icons.Users} fullWidth onClick={() => navigate("/join-institute")} />
                       <GlossyButton label="Test History" subLabel="View past papers" variant="light" icon={Icons.History} fullWidth onClick={() => setActiveTab("tests")} />
                     </div>
@@ -600,7 +602,7 @@ export default function TeacherDashboardPage() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-8">
                   {[
                     { t: "Active Students", v: "156", c: "+12%", i: Icons.Users },
-                    { t: "Tests Created", v: String(recentTests.length > 0 ? "—" : "0"), c: "All time", i: Icons.FileText },
+                    { t: "Tests Created", v: String(recentTests.length > 0 ? recentTests.length : "0"), c: "All time", i: Icons.FileText },
                     { t: "Engagement", v: "92%", c: "+3.2%", i: Icons.Chart },
                     { t: "Time Saved", v: "8h", c: "This week", i: Icons.Clock },
                   ].map((stat, i) => (
@@ -684,6 +686,7 @@ export default function TeacherDashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
                   {[
                     { icon: Icons.Brain, title: "Test Generator", desc: "Create CBSE-pattern papers from NCERT.", action: () => navigate("/dashboard/test-generator"), primary: true },
+                    { icon: Icons.Youtube, title: "Community Quiz", desc: "Generate quizzes from any YouTube video.", action: () => navigate("/teacher/community-quiz/new"), primary: false },
                     { icon: Icons.FileText, title: "Auto-Grade", desc: "AI-analyze long-form answers instantly." },
                     { icon: Icons.Book, title: "Study Guides", desc: "Convert notes into smart flashcards." },
                     { icon: Icons.Search, title: "Plagiarism Check", desc: "Scan against web and AI datasets." },
@@ -695,7 +698,7 @@ export default function TeacherDashboardPage() {
                       <div className="w-14 h-14 sm:w-20 sm:h-20 inset-pill border-none text-blue-600 rounded-[20px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shrink-0"><tool.icon /></div>
                       <h3 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3">{tool.title}</h3>
                       <p className="text-xs sm:text-base text-slate-500 mb-4 sm:mb-8 font-medium">{tool.desc}</p>
-                      <GlossyButton label={tool.primary ? "Create Test" : "Launch"} variant={tool.primary ? "blue" : "light"} fullWidth small onClick={tool.action} />
+                      <GlossyButton label={tool.primary ? "Create Test" : tool.title === "Community Quiz" ? "Start" : "Launch"} variant={tool.primary ? "blue" : "light"} fullWidth small onClick={tool.action || (() => {})} />
                     </div>
                   ))}
                 </div>
