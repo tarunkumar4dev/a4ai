@@ -1,7 +1,6 @@
 // src/lib/communityQuizApi.ts
 // ──────────────────────────────────────────────────────────
-// API wrapper for Community Quiz endpoints
-// Backend: app/api/v1/endpoints/community_quiz.py
+// API wrapper for Community Quiz endpoints (v2 — manual support)
 // ──────────────────────────────────────────────────────────
 
 import { supabase } from "@/lib/supabaseClient";
@@ -25,11 +24,12 @@ export interface VideoPreview {
   transcript_preview: string;
 }
 
-export interface GeneratedQuestion {
+export interface ManualQuestion {
   question_text: string;
-  options: string[];
-  correct_option: number;
-  explanation: string;
+  options: string[];  // exactly 4
+  correct_option: number;  // 0-3
+  explanation?: string;
+  marks?: number;
 }
 
 export interface CreateQuizPayload {
@@ -42,9 +42,15 @@ export interface CreateQuizPayload {
   source_url?: string;
   duration_minutes: number;
   duration_window_hours: number;
-  question_count: number;
-  difficulty: "easy" | "medium" | "hard" | "mixed";
-  focus: "conceptual" | "factual" | "mixed";
+
+  // For video
+  question_count?: number;
+  difficulty?: "easy" | "medium" | "hard" | "mixed";
+  focus?: "conceptual" | "factual" | "mixed";
+
+  // For manual
+  manual_questions?: ManualQuestion[];
+
   creator_name?: string;
   creator_logo_url?: string;
   creator_channel_url?: string;
@@ -59,6 +65,7 @@ export interface CreateQuizResponse {
   total_questions: number;
   ends_at: string;
   generation_seconds: number;
+  source_type: string;
 }
 
 export interface QuizListItem {
@@ -77,8 +84,6 @@ export interface QuizListItem {
   source_metadata: any;
   created_at: string;
 }
-
-/* ─────────── Public quiz types ─────────── */
 
 export interface PublicQuizInfo {
   id: string;
@@ -108,12 +113,7 @@ export interface PublicQuizQuestion {
 
 export interface StartAttemptResponse {
   attempt_id: string;
-  quiz: {
-    title: string;
-    duration_minutes: number;
-    total_questions: number;
-    total_marks: number;
-  };
+  quiz: { title: string; duration_minutes: number; total_questions: number; total_marks: number; };
   questions: PublicQuizQuestion[];
   started_at: string;
 }
@@ -160,30 +160,20 @@ export interface LeaderboardEntry {
 }
 
 export interface LeaderboardResponse {
-  quiz: {
-    id: string;
-    title: string;
-    total_questions: number;
-    total_marks: number;
-  };
+  quiz: { id: string; title: string; total_questions: number; total_marks: number; };
   total_participants: number;
   leaderboard: LeaderboardEntry[];
 }
 
-/* ─────────── Auth helper ─────────── */
-
+/* ─────────── Auth ─────────── */
 async function authHeaders(): Promise<HeadersInit> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
-
-/* ─────────── Error helper ─────────── */
 
 class ApiError extends Error {
   code: string;
@@ -198,11 +188,8 @@ class ApiError extends Error {
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail: any;
-    try {
-      detail = await res.json();
-    } catch {
-      throw new ApiError(`Request failed (${res.status})`, "http_error", res.status);
-    }
+    try { detail = await res.json(); }
+    catch { throw new ApiError(`Request failed (${res.status})`, "http_error", res.status); }
     const d = detail?.detail;
     if (typeof d === "object" && d !== null) {
       throw new ApiError(d.message || "Request failed", d.code || "api_error", res.status);
@@ -212,7 +199,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json();
 }
 
-/* ─────────── TEACHER endpoints (auth required) ─────────── */
+/* ─────────── TEACHER endpoints ─────────── */
 
 export async function previewVideo(url: string): Promise<VideoPreview> {
   const res = await fetch(`${API_PREFIX}/preview-video`, {
@@ -248,7 +235,7 @@ export async function getLeaderboard(quizId: string): Promise<LeaderboardRespons
   return handleResponse<LeaderboardResponse>(res);
 }
 
-/* ─────────── PUBLIC endpoints (no auth) ─────────── */
+/* ─────────── PUBLIC endpoints ─────────── */
 
 export async function getPublicQuiz(slug: string): Promise<PublicQuizInfo> {
   const res = await fetch(`${API_PREFIX}/q/${slug}`, {
