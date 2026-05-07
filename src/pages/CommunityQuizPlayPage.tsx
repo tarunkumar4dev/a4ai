@@ -588,7 +588,7 @@ export default function CommunityQuizPlayPage() {
                 {result.correct_count} of {result.total_questions} correct · {formatTime(result.time_taken_seconds)}
               </p>
 
-              {result.rank !== null && (
+              {result.show_leaderboard && result.rank !== null && (
                 <div className="inline-flex items-center gap-1.5 mt-5 px-3 h-8 rounded-full bg-[#007AFF]/10 text-[#007AFF]">
                   <Icons.Trophy size={13} />
                   <span className="text-[13px] font-semibold">
@@ -597,6 +597,25 @@ export default function CommunityQuizPlayPage() {
                 </div>
               )}
             </div>
+
+            {/* Reveal-mode message */}
+            {!result.show_leaderboard && (
+              <div className="ap-panel rounded-[14px] p-5 text-center bg-[#FF9500]/8">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-[#FF9500]/15 flex items-center justify-center text-[#FF9500]">
+                  <Icons.Clock size={16} />
+                </div>
+                <p className="text-[14px] font-semibold text-[#1d1d1f] mb-1">
+                  {result.leaderboard_reveal_mode === "after_end"
+                    ? "Leaderboard reveals when quiz ends"
+                    : "Results will be shared later"}
+                </p>
+                <p className="text-[12px] text-[#86868b]">
+                  {result.leaderboard_reveal_mode === "after_end" && result.quiz_ends_at
+                    ? `Check back after ${new Date(result.quiz_ends_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`
+                    : `${quiz.creator_name || "The creator"} will share results with you`}
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               {result.answers_review && result.answers_review.length > 0 && (
@@ -624,7 +643,7 @@ export default function CommunityQuizPlayPage() {
               </button>
             </div>
 
-            {/* Review */}
+            {/* Review section */}
             {reviewMode && result.answers_review && (
               <div className="space-y-3 anim-pop">
                 {result.answers_review.map((rev, idx) => (

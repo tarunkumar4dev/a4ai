@@ -147,6 +147,7 @@ interface DraftState {
   durationMinutes: number;
   windowDays: number;
   creatorName: string;
+  revealMode: "never" | "after_end" | "immediate";
   savedAt: string;
 }
 
@@ -189,6 +190,7 @@ export default function CommunityQuizCreatePage() {
   const [durationMinutes, setDurationMinutes] = useState(20);
   const [windowDays, setWindowDays] = useState(7);
   const [creatorName, setCreatorName] = useState(displayName);
+  const [revealMode, setRevealMode] = useState<"never" | "after_end" | "immediate">("after_end");
 
   // Gen
   const [generationStartTs, setGenerationStartTs] = useState<number | null>(null);
@@ -229,10 +231,11 @@ export default function CommunityQuizCreatePage() {
     const draft: DraftState = {
       step, source, videoUrl, preview, manualQuestions, title, subject, classLevel,
       questionCount, difficulty, focus, durationMinutes, windowDays, creatorName,
+      revealMode,
       savedAt: new Date().toISOString(),
     };
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
-  }, [step, source, videoUrl, preview, manualQuestions, title, subject, classLevel, questionCount, difficulty, focus, durationMinutes, windowDays, creatorName]);
+  }, [step, source, videoUrl, preview, manualQuestions, title, subject, classLevel, questionCount, difficulty, focus, durationMinutes, windowDays, creatorName, revealMode]);
 
   function restoreDraft() {
     if (!draftAvailable) return;
@@ -250,6 +253,7 @@ export default function CommunityQuizCreatePage() {
     setDurationMinutes(draftAvailable.durationMinutes);
     setWindowDays(draftAvailable.windowDays);
     setCreatorName(draftAvailable.creatorName);
+    setRevealMode(draftAvailable.revealMode || "after_end");
     setShowDraftBanner(false);
     toast.success("Draft restored");
   }
@@ -301,7 +305,6 @@ export default function CommunityQuizCreatePage() {
   function addQuestion() {
     setManualQuestions(prev => [...prev, blankQuestion()]);
     setEditingIdx(manualQuestions.length);
-    // Scroll new question into view
     setTimeout(() => {
       window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
     }, 50);
@@ -359,6 +362,7 @@ export default function CommunityQuizCreatePage() {
           difficulty,
           focus,
           creator_name: creatorName.trim() || undefined,
+          leaderboard_reveal_mode: revealMode,
         });
 
         setCreatedQuiz({
@@ -387,6 +391,7 @@ export default function CommunityQuizCreatePage() {
             marks: q.marks || 1,
           })),
           creator_name: creatorName.trim() || undefined,
+          leaderboard_reveal_mode: revealMode,
         });
 
         setCreatedQuiz({
@@ -402,7 +407,6 @@ export default function CommunityQuizCreatePage() {
       }
     } catch (err: any) {
       toast.error(err?.message || "Couldn't create quiz");
-      // Go back to config (or relevant step)
       if (step === "generating") setStep("config");
     } finally {
       setSubmitting(false);
@@ -437,6 +441,7 @@ export default function CommunityQuizCreatePage() {
     setManualQuestions([blankQuestion()]);
     setEditingIdx(0);
     setTitle("");
+    setRevealMode("after_end");
     setCreatedQuiz(null);
     clearDraft();
   }
@@ -843,6 +848,41 @@ export default function CommunityQuizCreatePage() {
                     <option value={1}>1 day</option><option value={3}>3 days</option><option value={7}>7 days</option><option value={14}>14 days</option><option value={30}>30 days</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Leaderboard reveal mode */}
+              <div>
+                <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">
+                  When participants see leaderboard
+                </label>
+                <div className="ap-segment grid grid-cols-3 gap-0">
+                  <button
+                    type="button"
+                    onClick={() => setRevealMode("never")}
+                    className={`ap-segment-btn ${revealMode === "never" ? "active" : ""}`}
+                  >
+                    Never
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRevealMode("after_end")}
+                    className={`ap-segment-btn ${revealMode === "after_end" ? "active" : ""}`}
+                  >
+                    After end
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRevealMode("immediate")}
+                    className={`ap-segment-btn ${revealMode === "immediate" ? "active" : ""}`}
+                  >
+                    Immediate
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#a1a1a6] mt-1.5 leading-snug">
+                  {revealMode === "never" && "Only you see results. Share with participants manually."}
+                  {revealMode === "after_end" && "Auto-revealed when quiz ends. Builds anticipation."}
+                  {revealMode === "immediate" && "Participants see rank instantly after submitting."}
+                </p>
               </div>
 
               <div>

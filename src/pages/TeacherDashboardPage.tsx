@@ -1,5 +1,5 @@
 // src/pages/TeacherDashboardPage.tsx
-// v3 — Added Community Quiz button
+// v3 — Added Community Quiz button with glossy orange design
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -18,9 +18,26 @@ const customStyles = `
     from { opacity: 0; transform: scale(0.95); }
     to { opacity: 1; transform: scale(1); }
   }
+  @keyframes pulseOrange {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 149, 0, 0.7); }
+    50% { box-shadow: 0 0 0 8px rgba(255, 149, 0, 0); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
   .animate-entrance { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
   .animate-pop { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
   .apple-spring { transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1); }
+  .pulse-orange { animation: pulseOrange 2s infinite; }
+  .shimmer-text {
+    background: linear-gradient(90deg, #FF9500 0%, #FFCC00 50%, #FF9500 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -66,6 +83,34 @@ const customStyles = `
     color: white;
   }
   .btn-glossy-blue:hover { background: linear-gradient(135deg, #0EA5E9 0%, #1D4ED8 100%); }
+  
+  .btn-glossy-orange {
+    background: linear-gradient(135deg, #FF9500 0%, #FF5E00 100%);
+    box-shadow: inset 0px 2px 4px rgba(255,255,255,0.4), inset 0px -2px 4px rgba(0,0,0,0.15), 0px 8px 20px rgba(255, 94, 0, 0.4);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-glossy-orange::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s ease;
+  }
+  .btn-glossy-orange:hover::before {
+    left: 100%;
+  }
+  .btn-glossy-orange:hover { 
+    background: linear-gradient(135deg, #FFA300 0%, #FF6E00 100%);
+    transform: translateY(-2px);
+  }
+  .btn-glossy-orange:active { transform: translateY(0); }
+  
   .btn-glossy-light {
     background: rgba(255, 255, 255, 0.8);
     backdrop-filter: blur(10px);
@@ -81,6 +126,15 @@ const customStyles = `
   }
   .btn-glossy-light:hover { background: rgba(255, 255, 255, 1); color: #2563EB; }
   .dark .btn-glossy-light:hover { background: rgba(51, 65, 85, 0.8); }
+  
+  /* New badge animation */
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  .new-badge {
+    animation: bounce 1s ease infinite;
+  }
 `;
 
 /* ------------------- ICONS ------------------- */
@@ -119,6 +173,7 @@ const Icons = {
   Book: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
   Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
   Youtube: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>,
+  Sparkles: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3L8 5 6 7 4 5 6 3Z"/><path d="M18 13L20 15 18 17 16 15 18 13Z"/><path d="M10 7L13 10 10 13 7 10 10 7Z"/><path d="m13 17 2 3 2-3"/><path d="M18 3v4"/><path d="M20 5h-4"/></svg>,
 };
 
 /* ------------------- REUSABLE COMPONENTS ------------------- */
@@ -137,7 +192,7 @@ const SidebarButton = ({ active, icon: Icon, label, onClick }: any) => (
   </button>
 );
 
-const GlossyButton = ({ icon: Icon, label, subLabel, variant = "blue", onClick, fullWidth = false, small = false }: any) => (
+const GlossyButton = ({ icon: Icon, label, subLabel, variant = "blue", onClick, fullWidth = false, small = false, showNewBadge = false }: any) => (
   <button
     onClick={onClick}
     className={`relative flex items-center justify-center gap-2 sm:gap-3 rounded-[32px] transform transition-all duration-300 ease-out hover:-translate-y-1 active:scale-[0.98] btn-glossy-${variant} ${fullWidth ? "w-full" : "w-auto"} ${small ? "px-4 sm:px-5 py-2.5 sm:py-3 min-h-[44px] sm:min-h-[48px]" : "px-5 sm:px-8 py-4 sm:py-5 min-h-[56px] sm:min-h-[64px] text-base sm:text-lg"} overflow-hidden group`}
@@ -148,7 +203,14 @@ const GlossyButton = ({ icon: Icon, label, subLabel, variant = "blue", onClick, 
       </div>
     )}
     <div className="flex flex-col text-left min-w-0">
-      <span className="font-bold leading-none tracking-tight truncate">{label}</span>
+      <span className="font-bold leading-none tracking-tight truncate flex items-center gap-2">
+        {label}
+        {showNewBadge && (
+          <span className="new-badge bg-white/30 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+            NEW
+          </span>
+        )}
+      </span>
       {subLabel && !small && <span className="mt-1 sm:mt-1.5 text-xs font-medium opacity-80 truncate">{subLabel}</span>}
     </div>
     {!small && <div className="ml-auto pl-2 sm:pl-4 opacity-50 group-hover:translate-x-1 transition-transform shrink-0"><Icons.ChevronRight /></div>}
@@ -528,6 +590,13 @@ export default function TeacherDashboardPage() {
                           <p className="text-xs text-slate-500 font-medium mt-0.5">Start generating CBSE papers.</p>
                         </div>
                       </div>
+                      <div className="flex gap-3 items-start p-3 sm:p-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors cursor-pointer inset-pill border-none">
+                        <div className="text-orange-500 shrink-0 mt-0.5"><Icons.Sparkles /></div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Community Quiz is here! 🎉</p>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">Create quizzes from any YouTube video instantly.</p>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -583,15 +652,28 @@ export default function TeacherDashboardPage() {
                     </div>
                   </div>
 
-                  <div className="xl:col-span-1 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col">
+                  <div className="xl:col-span-1 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col relative overflow-hidden">
+                    {/* Orange glow effect for new feature */}
+                    <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full bg-orange-500/20 blur-3xl pointer-events-none" />
+                    <div className="absolute -bottom-20 -left-20 w-40 h-40 rounded-full bg-orange-500/10 blur-2xl pointer-events-none" />
+                    
                     <div className="flex items-center gap-3 sm:gap-5 mb-6 sm:mb-8">
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 inset-pill border-none flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-inner rounded-[24px] sm:rounded-[32px] shrink-0"><Icons.Trophy /></div>
-                      <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">Quick Actions</h3>
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 inset-pill border-none flex items-center justify-center text-orange-500 dark:text-orange-400 shadow-inner rounded-[24px] sm:rounded-[32px] shrink-0 relative">
+                        <Icons.Sparkles />
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">✨ What's New</h3>
                     </div>
                     <div className="space-y-3 sm:space-y-5">
-                      <GlossyButton label="New Test" subLabel="NCERT-based Generator" variant="light" icon={Icons.Plus} fullWidth onClick={() => navigate("/dashboard/test-generator")} />
+                      <GlossyButton 
+                        label="Community Quiz" 
+                        subLabel="From YouTube video — NEW" 
+                        variant="orange" 
+                        icon={Icons.Youtube} 
+                        fullWidth 
+                        showNewBadge
+                        onClick={() => navigate("/teacher/community-quiz/new")} 
+                      />
                       <GlossyButton label="Host Contest" subLabel="Start Live Competition" variant="light" icon={Icons.Trophy} fullWidth onClick={() => navigate("/contests")} />
-                      <GlossyButton label="Community Quiz" subLabel="From YouTube video" variant="light" icon={Icons.Youtube} fullWidth onClick={() => navigate("/teacher/community-quiz/new")} />
                       <GlossyButton label="Join Institute" subLabel="Enter code to join" variant="light" icon={Icons.Users} fullWidth onClick={() => navigate("/join-institute")} />
                       <GlossyButton label="Test History" subLabel="View past papers" variant="light" icon={Icons.History} fullWidth onClick={() => setActiveTab("tests")} />
                     </div>
@@ -685,8 +767,8 @@ export default function TeacherDashboardPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
                   {[
-                    { icon: Icons.Brain, title: "Test Generator", desc: "Create CBSE-pattern papers from NCERT.", action: () => navigate("/dashboard/test-generator"), primary: true },
-                    { icon: Icons.Youtube, title: "Community Quiz", desc: "Generate quizzes from any YouTube video.", action: () => navigate("/teacher/community-quiz/new"), primary: false },
+                    { icon: Icons.Youtube, title: "Community Quiz", desc: "Generate quizzes from any YouTube video.", action: () => navigate("/teacher/community-quiz/new"), primary: true, isNew: true },
+                    { icon: Icons.Brain, title: "Test Generator", desc: "Create CBSE-pattern papers from NCERT.", action: () => navigate("/dashboard/test-generator"), primary: false },
                     { icon: Icons.FileText, title: "Auto-Grade", desc: "AI-analyze long-form answers instantly." },
                     { icon: Icons.Book, title: "Study Guides", desc: "Convert notes into smart flashcards." },
                     { icon: Icons.Search, title: "Plagiarism Check", desc: "Scan against web and AI datasets." },
@@ -694,11 +776,29 @@ export default function TeacherDashboardPage() {
                     { icon: Icons.Clock, title: "Lesson Planner", desc: "Plan lessons by pacing & standard." },
                   ].map((tool, i) => (
                     <div key={i} className="glass-panel p-6 sm:p-10 rounded-[28px] sm:rounded-[48px] flex flex-col justify-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all relative overflow-hidden group">
-                      {tool.primary && <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent pointer-events-none" />}
-                      <div className="w-14 h-14 sm:w-20 sm:h-20 inset-pill border-none text-blue-600 rounded-[20px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shrink-0"><tool.icon /></div>
-                      <h3 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3">{tool.title}</h3>
+                      {(tool.primary || tool.isNew) && <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent pointer-events-none" />}
+                      {tool.isNew && (
+                        <div className="absolute top-3 right-3">
+                          <span className="new-badge bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-lg">
+                            NEW
+                          </span>
+                        </div>
+                      )}
+                      <div className={`w-14 h-14 sm:w-20 sm:h-20 inset-pill border-none ${tool.isNew ? "text-orange-500" : "text-blue-600"} rounded-[20px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shrink-0`}>
+                        <tool.icon />
+                      </div>
+                      <h3 className={`text-lg sm:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 ${tool.isNew ? "shimmer-text" : ""}`}>
+                        {tool.title}
+                      </h3>
                       <p className="text-xs sm:text-base text-slate-500 mb-4 sm:mb-8 font-medium">{tool.desc}</p>
-                      <GlossyButton label={tool.primary ? "Create Test" : tool.title === "Community Quiz" ? "Start" : "Launch"} variant={tool.primary ? "blue" : "light"} fullWidth small onClick={tool.action || (() => {})} />
+                      <GlossyButton 
+                        label={tool.isNew ? "Try Now" : (tool.primary ? "Create Test" : "Launch")} 
+                        variant={tool.isNew ? "orange" : (tool.primary ? "blue" : "light")} 
+                        fullWidth 
+                        small 
+                        onClick={tool.action || (() => {})} 
+                        showNewBadge={tool.isNew}
+                      />
                     </div>
                   ))}
                 </div>

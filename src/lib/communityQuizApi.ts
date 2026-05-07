@@ -42,6 +42,7 @@ export interface CreateQuizPayload {
   source_url?: string;
   duration_minutes: number;
   duration_window_hours: number;
+  leaderboard_reveal_mode?: "never" | "after_end" | "immediate"; // 1A. Added
 
   // For video
   question_count?: number;
@@ -101,6 +102,7 @@ export interface PublicQuizInfo {
   creator_logo_url: string | null;
   creator_channel_url: string | null;
   source_metadata: any;
+  leaderboard_reveal_mode?: string; // 1B. Added
 }
 
 export interface PublicQuizQuestion {
@@ -143,6 +145,8 @@ export interface SubmitResponse {
     is_correct: boolean;
     explanation: string;
   }>;
+  leaderboard_reveal_mode?: string; // 1C. Added
+  quiz_ends_at?: string; // 1C. Added
 }
 
 export interface LeaderboardEntry {
@@ -163,6 +167,25 @@ export interface LeaderboardResponse {
   quiz: { id: string; title: string; total_questions: number; total_marks: number; };
   total_participants: number;
   leaderboard: LeaderboardEntry[];
+}
+
+// 1D. New interface for public leaderboard response
+export interface PublicLeaderboardEntry {
+  attempt_id: string;
+  participant_name: string;
+  total_score: number;
+  time_taken_seconds: number;
+  rank: number;
+  submitted_at: string;
+}
+
+export interface PublicLeaderboardResponse {
+  quiz: { id: string; title: string; total_questions?: number; total_marks?: number; ends_at: string; };
+  available: boolean;
+  reveal_mode: string;
+  quiz_ended: boolean;
+  leaderboard: PublicLeaderboardEntry[];
+  total_participants: number;
 }
 
 /* ─────────── Auth ─────────── */
@@ -267,6 +290,15 @@ export async function submitAttempt(
     body: JSON.stringify(data),
   });
   return handleResponse<SubmitResponse>(res);
+}
+
+// 1D. New function to get public leaderboard
+export async function getPublicLeaderboard(slug: string): Promise<PublicLeaderboardResponse> {
+  const res = await fetch(`${API_PREFIX}/q/${slug}/leaderboard`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse<PublicLeaderboardResponse>(res);
 }
 
 export { ApiError };

@@ -44,6 +44,7 @@ const LandingPage = lazy(() =>
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
 const CommunityQuizPlayPage = lazy(() => import("./pages/CommunityQuizPlayPage"));
+const CommunityQuizLeaderboardPage = lazy(() => import("./pages/teacher/CommunityQuizLeaderboardPage"));
 const JoinInstitutePage = lazy(() => import("./pages/institute/JoinInstitutePage"));
 const PricingPage = lazy(() => import("./pages/product/PricingPage"));
 const ApiPage = lazy(() => import("./pages/product/ApiPage"));
@@ -331,6 +332,12 @@ const App = () => {
                       <Route 
                         path="/teacher/community-quiz/new" 
                         element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizCreatePage /></RoleAuthGate>} 
+                      />
+                      
+                      {/* C) NEW TEACHER ROUTE FOR COMMUNITY QUIZ LEADERBOARD */}
+                      <Route 
+                        path="/teacher/community-quiz/:quizId/leaderboard" 
+                        element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizLeaderboardPage /></RoleAuthGate>} 
                       />
 
                       {/* ============================================ */}
