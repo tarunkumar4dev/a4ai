@@ -1,14 +1,6 @@
 // src/pages/teacher/CommunityQuizCreatePage.tsx
 // ──────────────────────────────────────────────────────────
-// Community Quiz Create — v3 with MANUAL question flow
-//
-// Steps:
-//   0. Source picker — Video (AI) / Manual / Coming soon
-//   1a. (Video) URL → preview
-//   1b. (Manual) Add questions
-//   2. Configure quiz details
-//   3. (Video only) Generating spinner
-//   4. Success — share link
+// v4 — Added "My quizzes" button in header for quick access
 // ──────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useRef } from "react";
@@ -83,13 +75,11 @@ const customStyles = `
   .ap-segment-btn { padding: 6px 12px; border-radius: 7px; font-size: 13px; font-weight: 500; color: #1d1d1f; transition: all 0.15s ease; text-align: center; }
   .ap-segment-btn.active { background: white; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.04); }
 
-  /* Source picker cards */
   .src-card { transition: all 0.2s cubic-bezier(0.32, 0.72, 0, 1); cursor: pointer; }
   .src-card:hover:not(.disabled) { transform: translateY(-2px); border-color: rgba(0, 122, 255, 0.3); }
   .src-card.disabled { opacity: 0.55; cursor: not-allowed; }
   .src-card.selected { border-color: #007AFF; background: rgba(0, 122, 255, 0.04); }
 
-  /* Option correct toggle */
   .opt-row { transition: all 0.15s ease; }
   .opt-row.correct { background: rgba(52, 199, 89, 0.08); border-color: #34C759; }
 
@@ -117,7 +107,7 @@ const Icons = {
   Plus: ({ size = 14 }: { size?: number }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
   Lock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
   RotateCcw: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>,
-  GripVertical: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>,
+  List: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
 };
 
 /* ------------------- HELPERS ------------------- */
@@ -171,16 +161,13 @@ export default function CommunityQuizCreatePage() {
   const [step, setStep] = useState<Step>("source");
   const [source, setSource] = useState<SourceType | null>(null);
 
-  // Video flow
   const [videoUrl, setVideoUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<VideoPreview | null>(null);
 
-  // Manual flow
   const [manualQuestions, setManualQuestions] = useState<ManualQuestion[]>([blankQuestion()]);
   const [editingIdx, setEditingIdx] = useState<number>(0);
 
-  // Config
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("Other");
   const [classLevel, setClassLevel] = useState("");
@@ -192,17 +179,14 @@ export default function CommunityQuizCreatePage() {
   const [creatorName, setCreatorName] = useState(displayName);
   const [revealMode, setRevealMode] = useState<"never" | "after_end" | "immediate">("after_end");
 
-  // Gen
   const [generationStartTs, setGenerationStartTs] = useState<number | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
 
-  // Result
   const [createdQuiz, setCreatedQuiz] = useState<{
     quiz_id: string; share_slug: string; share_link: string; total_questions: number; generation_seconds: number;
   } | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
-  // Draft
   const [draftAvailable, setDraftAvailable] = useState<DraftState | null>(null);
   const [showDraftBanner, setShowDraftBanner] = useState(false);
 
@@ -230,8 +214,7 @@ export default function CommunityQuizCreatePage() {
     if (!hasContent) return;
     const draft: DraftState = {
       step, source, videoUrl, preview, manualQuestions, title, subject, classLevel,
-      questionCount, difficulty, focus, durationMinutes, windowDays, creatorName,
-      revealMode,
+      questionCount, difficulty, focus, durationMinutes, windowDays, creatorName, revealMode,
       savedAt: new Date().toISOString(),
     };
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
@@ -268,14 +251,12 @@ export default function CommunityQuizCreatePage() {
     return () => clearInterval(interval);
   }, [step, generationStartTs]);
 
-  /* ─── Source picker ─── */
   function pickSource(s: SourceType) {
     setSource(s);
     if (s === "video") setStep("video_url");
     else if (s === "manual") setStep("manual_questions");
   }
 
-  /* ─── Video flow ─── */
   async function handlePreview() {
     if (!videoUrl.trim()) { toast.error("Paste a YouTube URL"); return; }
     if (!isYoutubeUrl(videoUrl)) { toast.error("That doesn't look like a YouTube URL"); return; }
@@ -293,7 +274,6 @@ export default function CommunityQuizCreatePage() {
     }
   }
 
-  /* ─── Manual flow ─── */
   function updateQuestion(idx: number, patch: Partial<ManualQuestion>) {
     setManualQuestions(prev => prev.map((q, i) => i === idx ? { ...q, ...patch } : q));
   }
@@ -337,19 +317,15 @@ export default function CommunityQuizCreatePage() {
     setStep("config");
   }
 
-  /* ─── Generate / Submit ─── */
   async function handleSubmit() {
     if (!title.trim()) { toast.error("Title required"); return; }
-
     setSubmitting(true);
-
     try {
       if (source === "video") {
         if (!preview) { setStep("source"); setSubmitting(false); return; }
         setStep("generating");
         setGenerationStartTs(Date.now());
         setElapsedSec(0);
-
         const resp = await createQuiz({
           title: title.trim(),
           subject,
@@ -364,7 +340,6 @@ export default function CommunityQuizCreatePage() {
           creator_name: creatorName.trim() || undefined,
           leaderboard_reveal_mode: revealMode,
         });
-
         setCreatedQuiz({
           quiz_id: resp.quiz_id,
           share_slug: resp.share_slug,
@@ -393,7 +368,6 @@ export default function CommunityQuizCreatePage() {
           creator_name: creatorName.trim() || undefined,
           leaderboard_reveal_mode: revealMode,
         });
-
         setCreatedQuiz({
           quiz_id: resp.quiz_id,
           share_slug: resp.share_slug,
@@ -413,7 +387,6 @@ export default function CommunityQuizCreatePage() {
     }
   }
 
-  /* ─── Success helpers ─── */
   function copyLink() {
     if (!createdQuiz) return;
     navigator.clipboard.writeText(createdQuiz.share_link);
@@ -441,7 +414,6 @@ export default function CommunityQuizCreatePage() {
     setManualQuestions([blankQuestion()]);
     setEditingIdx(0);
     setTitle("");
-    setRevealMode("after_end");
     setCreatedQuiz(null);
     clearDraft();
   }
@@ -458,7 +430,6 @@ export default function CommunityQuizCreatePage() {
     } catch { return ""; }
   }
 
-  /* ─── Step number for progress bar ─── */
   const stepNum = (() => {
     if (step === "source") return 1;
     if (step === "video_url" || step === "manual_questions") return 2;
@@ -476,20 +447,28 @@ export default function CommunityQuizCreatePage() {
 
       <main className="relative z-10 max-w-[720px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
-        {/* Header */}
+        {/* ═══ Header with My Quizzes button ═══ */}
         <header className="flex items-center gap-3 mb-8 anim-in">
-          <button onClick={() => navigate(-1)} className="ap-btn-secondary w-9 h-9 rounded-full flex items-center justify-center" aria-label="Back">
+          <button onClick={() => navigate(-1)} className="ap-btn-secondary w-9 h-9 rounded-full flex items-center justify-center shrink-0" aria-label="Back">
             <Icons.ArrowLeft size={16} />
           </button>
-          <div className="min-w-0">
-            <h1 className="text-[28px] sm:text-[32px] font-semibold tracking-[-0.02em] leading-tight">Create community quiz</h1>
-            <p className="text-[14px] text-[#86868b] mt-0.5">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[24px] sm:text-[30px] font-semibold tracking-[-0.02em] leading-tight truncate">Create community quiz</h1>
+            <p className="text-[13px] sm:text-[14px] text-[#86868b] mt-0.5 truncate">
               {step === "source" ? "Choose how you want to create your quiz" :
                source === "video" ? "Generate from a YouTube video" :
                source === "manual" ? "Add your own questions" :
                "Generate a shareable quiz"}
             </p>
           </div>
+          <button
+            onClick={() => navigate("/teacher/community-quizzes")}
+            className="ap-btn-secondary px-3 sm:px-4 h-9 rounded-[10px] text-[13px] flex items-center gap-1.5 shrink-0"
+            title="View all your quizzes"
+          >
+            <Icons.List />
+            <span className="hidden sm:inline">My quizzes</span>
+          </button>
         </header>
 
         {/* Resume Draft */}
@@ -529,7 +508,6 @@ export default function CommunityQuizCreatePage() {
           <div className="space-y-3 anim-pop">
             <p className="text-[15px] text-[#3a3a3c] mb-2">How do you want to create the quiz?</p>
 
-            {/* Manual — recommended/available now */}
             <button
               onClick={() => pickSource("manual")}
               className={`src-card w-full ap-panel rounded-[16px] p-5 sm:p-6 text-left ${source === "manual" ? "selected" : ""}`}
@@ -551,7 +529,6 @@ export default function CommunityQuizCreatePage() {
               </div>
             </button>
 
-            {/* Video — coming soon (works locally but Vercel can't yet) */}
             <button
               onClick={() => pickSource("video")}
               className={`src-card w-full ap-panel rounded-[16px] p-5 sm:p-6 text-left ${source === "video" ? "selected" : ""}`}
@@ -573,7 +550,6 @@ export default function CommunityQuizCreatePage() {
               </div>
             </button>
 
-            {/* Question bank — coming soon */}
             <div className="src-card disabled w-full ap-panel rounded-[16px] p-5 sm:p-6 text-left">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-[12px] bg-[rgba(120,120,128,0.15)] text-[#86868b] flex items-center justify-center shrink-0">
@@ -668,7 +644,6 @@ export default function CommunityQuizCreatePage() {
                   )}
                 </div>
 
-                {/* Question text */}
                 <div className="mb-4">
                   <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">Question</label>
                   <textarea
@@ -681,7 +656,6 @@ export default function CommunityQuizCreatePage() {
                   />
                 </div>
 
-                {/* Options */}
                 <div className="mb-4">
                   <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">Options · tap circle to mark correct</label>
                   <div className="space-y-2">
@@ -711,7 +685,6 @@ export default function CommunityQuizCreatePage() {
                   </div>
                 </div>
 
-                {/* Explanation (optional) */}
                 <details className="group">
                   <summary className="cursor-pointer text-[12px] font-medium text-[#007AFF] hover:underline list-none flex items-center gap-1">
                     <span className="group-open:rotate-90 transition-transform">▸</span>
@@ -728,7 +701,6 @@ export default function CommunityQuizCreatePage() {
               </div>
             ))}
 
-            {/* Add question */}
             <button
               onClick={addQuestion}
               disabled={manualQuestions.length >= 50}
@@ -739,7 +711,6 @@ export default function CommunityQuizCreatePage() {
               {manualQuestions.length >= 50 && <span className="text-[11px] text-[#86868b]">(max reached)</span>}
             </button>
 
-            {/* Continue */}
             <div className="flex gap-2 pt-2">
               <button onClick={() => setStep("source")} className="ap-btn-secondary px-4 h-11 rounded-[10px] text-[14px]">Back</button>
               <button onClick={goToConfigFromManual} className="ap-btn-primary flex-1 h-11 rounded-[10px] text-[15px] flex items-center justify-center gap-1.5">
@@ -752,7 +723,6 @@ export default function CommunityQuizCreatePage() {
         {/* ═══════ CONFIG ═══════ */}
         {step === "config" && (
           <div className="space-y-4 anim-pop">
-            {/* Source mini */}
             {source === "video" && preview && (
               <div className="ap-panel rounded-[14px] p-3 flex items-center gap-3">
                 <img src={preview.thumbnail} alt="" className="w-14 h-10 object-cover rounded-[8px] shrink-0" />
@@ -801,7 +771,6 @@ export default function CommunityQuizCreatePage() {
                 </div>
               </div>
 
-              {/* Video-only: count, difficulty, focus */}
               {source === "video" && (
                 <>
                   <div>
@@ -850,33 +819,12 @@ export default function CommunityQuizCreatePage() {
                 </div>
               </div>
 
-              {/* Leaderboard reveal mode */}
               <div>
-                <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">
-                  When participants see leaderboard
-                </label>
+                <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">When participants see leaderboard</label>
                 <div className="ap-segment grid grid-cols-3 gap-0">
-                  <button
-                    type="button"
-                    onClick={() => setRevealMode("never")}
-                    className={`ap-segment-btn ${revealMode === "never" ? "active" : ""}`}
-                  >
-                    Never
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRevealMode("after_end")}
-                    className={`ap-segment-btn ${revealMode === "after_end" ? "active" : ""}`}
-                  >
-                    After end
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRevealMode("immediate")}
-                    className={`ap-segment-btn ${revealMode === "immediate" ? "active" : ""}`}
-                  >
-                    Immediate
-                  </button>
+                  <button type="button" onClick={() => setRevealMode("never")} className={`ap-segment-btn ${revealMode === "never" ? "active" : ""}`}>Never</button>
+                  <button type="button" onClick={() => setRevealMode("after_end")} className={`ap-segment-btn ${revealMode === "after_end" ? "active" : ""}`}>After end</button>
+                  <button type="button" onClick={() => setRevealMode("immediate")} className={`ap-segment-btn ${revealMode === "immediate" ? "active" : ""}`}>Immediate</button>
                 </div>
                 <p className="text-[11px] text-[#a1a1a6] mt-1.5 leading-snug">
                   {revealMode === "never" && "Only you see results. Share with participants manually."}
@@ -904,7 +852,7 @@ export default function CommunityQuizCreatePage() {
           </div>
         )}
 
-        {/* ═══════ GENERATING (video only) ═══════ */}
+        {/* ═══════ GENERATING ═══════ */}
         {step === "generating" && (
           <div className="ap-panel rounded-[16px] p-10 text-center anim-pop">
             <div className="w-12 h-12 mx-auto mb-5 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[#007AFF]">
@@ -961,8 +909,8 @@ export default function CommunityQuizCreatePage() {
               </button>
             </div>
 
-            <button onClick={() => navigate("/teacher/dashboard")} className="w-full text-center text-[13px] text-[#86868b] hover:text-[#007AFF] transition-colors py-2">
-              Back to dashboard
+            <button onClick={() => navigate("/teacher/community-quizzes")} className="w-full text-center text-[13px] text-[#86868b] hover:text-[#007AFF] transition-colors py-2">
+              ← View all my quizzes
             </button>
           </div>
         )}
