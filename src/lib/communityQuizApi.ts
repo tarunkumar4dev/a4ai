@@ -1,6 +1,6 @@
 // src/lib/communityQuizApi.ts
 // ──────────────────────────────────────────────────────────
-// API wrapper for Community Quiz endpoints (v2 — manual support)
+// API wrapper for Community Quiz endpoints (v3 — with delete)
 // ──────────────────────────────────────────────────────────
 
 import { supabase } from "@/lib/supabaseClient";
@@ -26,8 +26,8 @@ export interface VideoPreview {
 
 export interface ManualQuestion {
   question_text: string;
-  options: string[];  // exactly 4
-  correct_option: number;  // 0-3
+  options: string[];
+  correct_option: number;
   explanation?: string;
   marks?: number;
 }
@@ -42,16 +42,11 @@ export interface CreateQuizPayload {
   source_url?: string;
   duration_minutes: number;
   duration_window_hours: number;
-  leaderboard_reveal_mode?: "never" | "after_end" | "immediate"; // 1A. Added
-
-  // For video
+  leaderboard_reveal_mode?: "never" | "after_end" | "immediate";
   question_count?: number;
   difficulty?: "easy" | "medium" | "hard" | "mixed";
   focus?: "conceptual" | "factual" | "mixed";
-
-  // For manual
   manual_questions?: ManualQuestion[];
-
   creator_name?: string;
   creator_logo_url?: string;
   creator_channel_url?: string;
@@ -102,7 +97,7 @@ export interface PublicQuizInfo {
   creator_logo_url: string | null;
   creator_channel_url: string | null;
   source_metadata: any;
-  leaderboard_reveal_mode?: string; // 1B. Added
+  leaderboard_reveal_mode?: string;
 }
 
 export interface PublicQuizQuestion {
@@ -145,8 +140,8 @@ export interface SubmitResponse {
     is_correct: boolean;
     explanation: string;
   }>;
-  leaderboard_reveal_mode?: string; // 1C. Added
-  quiz_ends_at?: string; // 1C. Added
+  leaderboard_reveal_mode?: string;
+  quiz_ends_at?: string;
 }
 
 export interface LeaderboardEntry {
@@ -169,7 +164,6 @@ export interface LeaderboardResponse {
   leaderboard: LeaderboardEntry[];
 }
 
-// 1D. New interface for public leaderboard response
 export interface PublicLeaderboardEntry {
   attempt_id: string;
   participant_name: string;
@@ -258,6 +252,14 @@ export async function getLeaderboard(quizId: string): Promise<LeaderboardRespons
   return handleResponse<LeaderboardResponse>(res);
 }
 
+export async function deleteQuiz(quizId: string): Promise<{ deleted: boolean; quiz_id: string }> {
+  const res = await fetch(`${API_PREFIX}/${quizId}`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  return handleResponse<{ deleted: boolean; quiz_id: string }>(res);
+}
+
 /* ─────────── PUBLIC endpoints ─────────── */
 
 export async function getPublicQuiz(slug: string): Promise<PublicQuizInfo> {
@@ -292,7 +294,6 @@ export async function submitAttempt(
   return handleResponse<SubmitResponse>(res);
 }
 
-// 1D. New function to get public leaderboard
 export async function getPublicLeaderboard(slug: string): Promise<PublicLeaderboardResponse> {
   const res = await fetch(`${API_PREFIX}/q/${slug}/leaderboard`, {
     method: "GET",
