@@ -1,13 +1,14 @@
 // src/components/TestRowEditor.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V3 — Select-bug fix + class-safe fallback
+// V4 — Grouped chapter dropdown (English: First Flight Prose / Poems / FWF)
+//      + Writing Skills & Grammar virtual chapters for English
 //
-// Fixes from V2:
-//   - `fields` REMOVED from useEffect dep array (was causing topic reset
-//     on every render, so select didn't stick)
-//   - Subject fallback list disabled — ONLY API chapters used. Fallback
-//     was showing Class 10 chapters for Class 9 subjects (e.g. "Light").
-//   - Added visible "No chapters available" empty state so teacher knows
+// Changes vs V3:
+//   - fetchChaptersFromAPI now also captures `groups` (book + chapter_type)
+//   - useChapters returns chapterGroups
+//   - MobileCard / TableRow render <optgroup> when groups exist
+//   - Flat list fallback preserved for Science / Maths / etc.
+//   - English subject: injects "Writing Skills" & "Grammar" virtual chapters
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useRef, memo, useCallback, forwardRef, useState, useEffect } from "react";
@@ -36,10 +37,19 @@ interface RefUploadButtonProps {
   watch: UseFormWatch<FieldValues>;
 }
 
+// v4: chapter group structure from backend
+interface ChapterGroup {
+  book: string;
+  chapter_type: string;
+  label: string;
+  chapters: { name: string; order: number | null }[];
+}
+
 interface RowProps {
   index: number;
   field: { id: string };
   availableTopics: string[];
+  chapterGroups: ChapterGroup[] | null; // v4
   subtopicsMap: Record<string, string[]>;
   chaptersLoading: boolean;
   remove: (index: number) => void;
@@ -56,20 +66,31 @@ interface FormValues {
 // ==================== API: FETCH CHAPTERS ====================
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-async function fetchChaptersFromAPI(classLevel: string, subject: string): Promise<string[]> {
+interface ChaptersFetchResult {
+  flat: string[];
+  groups: ChapterGroup[] | null;
+}
+
+async function fetchChaptersFromAPI(classLevel: string, subject: string): Promise<ChaptersFetchResult> {
   const classNum = classLevel.replace(/\D/g, "") || "10";
   const res = await fetch(
     `${API_BASE}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`
   );
   if (!res.ok) throw new Error(`Failed to fetch chapters: ${res.status}`);
   const data = await res.json();
-  if (data.chapters && Array.isArray(data.chapters)) return data.chapters;
-  return [];
+
+  const flat: string[] = (data.chapters && Array.isArray(data.chapters)) ? data.chapters : [];
+  const groups: ChapterGroup[] | null = (data.groups && Array.isArray(data.groups) && data.groups.length > 0)
+    ? data.groups
+    : null;
+
+  return { flat, groups };
 }
 
 // ==================== HOOK: useChapters ====================
 function useChapters(classLevel: string, subject: string) {
   const [chapters, setChapters] = useState<string[]>([]);
+  const [chapterGroups, setChapterGroups] = useState<ChapterGroup[] | null>(null); // v4
   const [subtopicsMap, setSubtopicsMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +98,7 @@ function useChapters(classLevel: string, subject: string) {
   useEffect(() => {
     if (!classLevel || !subject) {
       setChapters([]);
+      setChapterGroups(null);
       setSubtopicsMap({});
       return;
     }
@@ -86,11 +108,12 @@ function useChapters(classLevel: string, subject: string) {
     setError(null);
 
     fetchChaptersFromAPI(classLevel, subject)
-      .then((chapterNames) => {
+      .then(({ flat, groups }) => {
         if (cancelled) return;
-        setChapters(chapterNames);
+        setChapters(flat);
+        setChapterGroups(groups);
         const sMap: Record<string, string[]> = {};
-        chapterNames.forEach((ch) => {
+        flat.forEach((ch) => {
           if (COMMON_SUBTOPICS[ch]) sMap[ch] = COMMON_SUBTOPICS[ch];
         });
         setSubtopicsMap(sMap);
@@ -99,8 +122,8 @@ function useChapters(classLevel: string, subject: string) {
         if (cancelled) return;
         console.error("Chapter fetch failed:", err);
         setError(err.message);
-        // v3: NO fallback chapters — better to show empty state than wrong chapters
         setChapters([]);
+        setChapterGroups(null);
         setSubtopicsMap({});
       })
       .finally(() => {
@@ -110,12 +133,10 @@ function useChapters(classLevel: string, subject: string) {
     return () => { cancelled = true; };
   }, [classLevel, subject]);
 
-  return { chapters, subtopicsMap, loading, error };
+  return { chapters, chapterGroups, subtopicsMap, loading, error };
 }
 
 // ==================== COMMON SUBTOPICS (helper map only) ====================
-// These are used ONLY if a DB chapter name matches one of these keys.
-// NOT used as a full chapter list.
 const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Chemical Reactions and Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
   "Acids Bases and Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
@@ -131,7 +152,6 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "How do Organisms Reproduce": ["Asexual reproduction", "Sexual reproduction", "Reproductive health"],
   "Heredity and Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
   "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution"],
-  // Class 9 Science
   "Matter in Our Surroundings": ["States of matter", "Physical and chemical changes", "Latent heat", "Evaporation"],
   "Is Matter Around Us Pure": ["Mixtures", "Solutions", "Separation techniques", "Compounds and elements"],
   "Atoms and Molecules": ["Laws of chemical combination", "Atomic mass", "Mole concept", "Molecular mass"],
@@ -143,13 +163,11 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Gravitation": ["Universal law", "Free fall", "Buoyancy", "Archimedes principle"],
   "Work and Energy": ["Work", "Kinetic energy", "Potential energy", "Power"],
   "Sound": ["Production of sound", "Sound propagation", "Reflection of sound", "SONAR"],
-  // Political Science
   "Power Sharing": ["Belgium model", "Sri Lanka model", "Forms of power sharing"],
   "Federalism": ["Union list", "State list", "Concurrent list", "Decentralisation", "Panchayati Raj"],
   "Gender Religion and Caste": ["Gender division", "Religion and politics", "Caste and politics"],
   "Political Parties": ["Functions of parties", "National parties", "State parties"],
   "Outcomes of Democracy": ["Accountability", "Economic growth", "Inequality", "Social diversity"],
-  // Accountancy
   "Introduction to Accounting": ["Meaning and objectives", "Accounting as information system", "Users of accounting", "Accounting terms"],
   "Recording of Transactions": ["Accounting equation", "Rules of debit and credit", "Journal", "Ledger posting"],
   "Ledger": ["Format of ledger", "Posting from journal", "Balancing accounts", "T-account"],
@@ -187,6 +205,28 @@ const generateUUID = (): string => {
     return v.toString(16);
   });
 };
+
+// ==================== CHAPTER OPTIONS RENDERER (v4) ====================
+function renderChapterOptions(
+  chapterGroups: ChapterGroup[] | null,
+  flatChapters: string[],
+): React.ReactNode {
+  if (chapterGroups && chapterGroups.length > 0) {
+    return chapterGroups.map((group) => (
+      <optgroup
+        key={`${group.book || 'x'}-${group.chapter_type || 'x'}`}
+        label={group.label}
+      >
+        {group.chapters.map((ch) => (
+          <option key={ch.name} value={ch.name}>{ch.name}</option>
+        ))}
+      </optgroup>
+    ));
+  }
+  return flatChapters.map((topic) => (
+    <option key={topic} value={topic}>{topic}</option>
+  ));
+}
 
 // ==================== FILE UPLOAD HANDLER ====================
 const RefUploadButton: React.FC<RefUploadButtonProps & { fullWidth?: boolean }> = memo(({ index, setValue, watch, fullWidth }) => {
@@ -299,9 +339,9 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
 FormatSelector.displayName = 'FormatSelector';
 
 // ═══════════════════════════════════════════════════════════════════════
-// MOBILE: Card Row — stacks vertically, no horizontal scroll
+// MOBILE: Card Row
 // ═══════════════════════════════════════════════════════════════════════
-const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chaptersLoading, remove }: RowProps) => {
+const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove }: RowProps) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
   const subject = watch("subject") || "";
@@ -319,7 +359,6 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
       layout
       className="bg-white rounded-2xl border border-[#E5E7EB] p-4 space-y-3.5 shadow-sm"
     >
-      {/* Header: index + delete */}
       <div className="flex items-center justify-between pb-2 border-b border-gray-100">
         <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider bg-gray-100 px-2.5 py-1 rounded-full">
           Section {index + 1}
@@ -335,7 +374,6 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
         </button>
       </div>
 
-      {/* Chapter */}
       <div>
         <label className={labelClass}>Chapter</label>
         <div className="relative">
@@ -345,15 +383,9 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
             className={`${inputClass} pr-9 disabled:opacity-60`}
           >
             <option value="">
-              {chaptersLoading
-                ? "Loading chapters..."
-                : availableTopics.length === 0
-                  ? "No chapters available"
-                  : "Select a chapter..."}
+              {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select a chapter..."}
             </option>
-            {availableTopics.map(topic => (
-              <option key={topic} value={topic}>{topic}</option>
-            ))}
+            {renderChapterOptions(chapterGroups, availableTopics)}
           </select>
           {chaptersLoading && (
             <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />
@@ -361,7 +393,6 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
         </div>
       </div>
 
-      {/* Subtopic */}
       <div>
         <label className={labelClass}>Subtopic (optional)</label>
         <select
@@ -370,11 +401,7 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
           className={`${inputClass} disabled:opacity-60 disabled:bg-gray-50`}
         >
           <option value="">
-            {!currentTopic
-              ? "Select a chapter first"
-              : subOptions.length === 0
-                ? "No subtopics available"
-                : "Select subtopic..."}
+            {!currentTopic ? "Select a chapter first" : subOptions.length === 0 ? "No subtopics available" : "Select subtopic..."}
           </option>
           {subOptions.map(sub => (
             <option key={sub} value={sub}>{sub}</option>
@@ -382,7 +409,6 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
         </select>
       </div>
 
-      {/* Quantity + Marks */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelClass}>Quantity</label>
@@ -408,7 +434,6 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
         </div>
       </div>
 
-      {/* Difficulty */}
       <div>
         <label className={labelClass}>Difficulty</label>
         <select
@@ -422,13 +447,11 @@ const MobileCard = memo(({ index, field, availableTopics, subtopicsMap, chapters
         </select>
       </div>
 
-      {/* Question Type */}
       <div>
         <label className={labelClass}>Question Type</label>
         <FormatSelector index={index} subject={subject} />
       </div>
 
-      {/* Reference upload */}
       <div>
         <label className={labelClass}>Reference (optional)</label>
         <RefUploadButton index={index} setValue={setValue} watch={watch} fullWidth />
@@ -442,7 +465,7 @@ MobileCard.displayName = 'MobileCard';
 // DESKTOP: Table Row
 // ═══════════════════════════════════════════════════════════════════════
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
-  index, field, availableTopics, subtopicsMap, chaptersLoading, remove
+  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove
 }, ref) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
@@ -473,15 +496,9 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
               disabled={chaptersLoading || availableTopics.length === 0}
             >
               <option value="">
-                {chaptersLoading
-                  ? "Loading chapters..."
-                  : availableTopics.length === 0
-                    ? "No chapters available"
-                    : "Select Chapter/Topic..."}
+                {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select Chapter/Topic..."}
               </option>
-              {availableTopics.map(topic => (
-                <option key={topic} value={topic}>{topic}</option>
-              ))}
+              {renderChapterOptions(chapterGroups, availableTopics)}
             </select>
             {chaptersLoading && <Loader2 size={14} className="absolute right-2 top-2 animate-spin text-gray-400" />}
           </div>
@@ -581,18 +598,58 @@ const SimpleModeView: React.FC = () => {
 
   const {
     chapters: apiChapters,
+    chapterGroups: apiChapterGroups,
     subtopicsMap,
     loading: chaptersLoading,
     error: chaptersError,
   } = useChapters(classLevel, currentSubject);
 
-  // v3: Only use API chapters. No fallback to static list.
-  const availableTopics = apiChapters;
+  // ═════════════════════════════════════════════════════════════════════
+  // Inject Writing Skills & Grammar for English
+  // ═════════════════════════════════════════════════════════════════════
+  const isEnglish = currentSubject?.toLowerCase() === "english";
 
-  // ═════════════════════════════════════════════════════════════════════
-  // v3 FIX: `fields` removed from dep array (was causing infinite reset
-  //         on every render, breaking select behavior).
-  // ═════════════════════════════════════════════════════════════════════
+  const finalChapters = React.useMemo(() => {
+    if (!isEnglish) return apiChapters;
+    return [...apiChapters, "Writing Skills", "Grammar"];
+  }, [apiChapters, isEnglish]);
+
+  const finalChapterGroups = React.useMemo(() => {
+    if (!isEnglish) return apiChapterGroups;
+
+    const baseGroups: ChapterGroup[] = (apiChapterGroups && apiChapterGroups.length > 0)
+      ? [...apiChapterGroups]
+      : [];
+
+    // FIX: If backend returned flat chapters but no groups, wrap as fallback group
+    if (baseGroups.length === 0 && apiChapters.length > 0) {
+      baseGroups.push({
+        book: "literature",
+        chapter_type: "all",
+        label: "Literature Chapters",
+        chapters: apiChapters.map((name, i) => ({ name, order: i + 1 })),
+      });
+    }
+
+    // Always append Writing & Grammar
+    baseGroups.push({
+      book: "writing_grammar",
+      chapter_type: "skills",
+      label: "Writing & Grammar",
+      chapters: [
+        { name: "Writing Skills", order: 1 },
+        { name: "Grammar", order: 2 },
+      ],
+    });
+
+    return baseGroups;
+  }, [apiChapterGroups, apiChapters, isEnglish]);
+
+  const availableTopics = finalChapters;
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Reset topic/subtopic when class/subject changes
+  // ─────────────────────────────────────────────────────────────────────
   const prevKeyRef = useRef(`${classLevel}-${currentSubject}`);
   const fieldsLengthRef = useRef(fields.length);
 
@@ -643,9 +700,12 @@ const SimpleModeView: React.FC = () => {
             <span className="truncate">
               <span className="font-semibold">Subject:</span> {currentSubject || "Not selected"}
             </span>
-            {apiChapters.length > 0 && (
+            {finalChapters.length > 0 && (
               <span className="text-[10px] sm:text-xs text-blue-600">
-                ({apiChapters.length} chapters)
+                ({finalChapters.length} chapters
+                {finalChapterGroups && finalChapterGroups.length > 0
+                  ? `, ${finalChapterGroups.length} groups`
+                  : ""})
               </span>
             )}
             {chaptersError && (
@@ -664,8 +724,8 @@ const SimpleModeView: React.FC = () => {
         </div>
       )}
 
-      {/* v3: Empty state when API returned no chapters */}
-      {classLevel && currentSubject && !chaptersLoading && apiChapters.length === 0 && (
+      {/* Empty state when API returned no chapters */}
+      {classLevel && currentSubject && !chaptersLoading && finalChapters.length === 0 && (
         <div className="py-8 sm:py-10 text-center px-4 bg-amber-50/50 border-b border-amber-100">
           <AlertCircle size={28} className="mx-auto mb-3 text-amber-500" />
           <p className="font-bold text-sm text-amber-900">
@@ -678,7 +738,7 @@ const SimpleModeView: React.FC = () => {
         </div>
       )}
 
-      {classLevel && currentSubject && (
+      {classLevel && currentSubject && finalChapters.length > 0 && (
         <>
           {/* MOBILE: Card list */}
           <div className="block sm:hidden p-3 space-y-3">
@@ -689,6 +749,7 @@ const SimpleModeView: React.FC = () => {
                   index={index}
                   field={field}
                   availableTopics={availableTopics}
+                  chapterGroups={finalChapterGroups}
                   subtopicsMap={subtopicsMap}
                   chaptersLoading={chaptersLoading}
                   remove={remove}
@@ -721,6 +782,7 @@ const SimpleModeView: React.FC = () => {
                       index={index}
                       field={field}
                       availableTopics={availableTopics}
+                      chapterGroups={finalChapterGroups}
                       subtopicsMap={subtopicsMap}
                       chaptersLoading={chaptersLoading}
                       remove={remove}
