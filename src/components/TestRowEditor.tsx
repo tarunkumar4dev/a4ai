@@ -137,6 +137,7 @@ function useChapters(classLevel: string, subject: string) {
 }
 
 // ==================== COMMON SUBTOPICS (helper map only) ====================
+
 const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Chemical Reactions and Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
   "Acids Bases and Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
@@ -176,7 +177,51 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Depreciation": ["Meaning and causes", "Methods", "Accounting treatment"],
   "Financial Statements": ["Trading account", "Profit and loss account", "Balance sheet", "Adjustments"],
   "Accounting for Partnership": ["Nature", "Partnership deed", "Profit sharing ratio", "Capital accounts"],
+  // --- Physics Class 11 ---
+  "Units and Measurements": ["International system of units", "Significant figures", "Dimensional analysis", "Errors in measurement"],
+  "Motion in a Straight Line": ["Average velocity and speed", "Instantaneous velocity", "Acceleration", "Relative velocity", "Kinematic equations"],
+  "Motion in a Plane": ["Scalars and vectors", "Resolution of vectors", "Projectile motion", "Uniform circular motion"],
+  "Laws of Motion": ["Inertia", "Newton's laws of motion", "Conservation of momentum", "Equilibrium of a particle", "Friction", "Circular motion dynamics"],
+  "Work Energy and Power": ["Work-energy theorem", "Kinetic and potential energy", "Conservation of mechanical energy", "Collisions (Elastic and Inelastic)"],
+  "System of Particles and Rotational Motion": ["Centre of mass", "Moment of force (Torque)", "Angular momentum", "Moment of inertia", "Theorems of perpendicular and parallel axes"],
+  "Gravitation": ["Kepler's laws", "Universal law of gravitation", "Acceleration due to gravity", "Gravitational potential energy", "Escape speed", "Orbital velocity"],
+  "Mechanical Properties of Solids": ["Elastic behavior", "Stress and strain", "Hooke's law", "Young's modulus", "Bulk modulus"],
+  "Mechanical Properties of Fluids": ["Pascal's law", "Viscosity", "Bernoulli's principle", "Surface tension", "Stokes' law"],
+  "Thermal Properties of Matter": ["Temperature and heat", "Thermal expansion", "Specific heat capacity", "Calorimetry", "Latent heat", "Newton's law of cooling"],
+  "Thermodynamics": ["Thermal equilibrium", "First law of thermodynamics", "Isothermal and adiabatic processes", "Second law of thermodynamics", "Reversible and irreversible processes"],
+  "Kinetic Theory": ["Molecular nature of matter", "Behavior of gases", "Law of equipartition of energy", "Mean free path"],
+  "Oscillations": ["Simple harmonic motion", "Energy in SHM", "Simple pendulum", "Damped and forced oscillations"],
+  "Waves": ["Transverse and longitudinal waves", "Displacement relation", "Speed of a travelling wave", "Superposition principle", "Standing waves", "Doppler effect"],
+
+  // --- Chemistry Class 11 ---
+  "Some Basic Concepts of Chemistry": ["Atomic and molecular masses", "Mole concept", "Molar mass", "Percentage composition", "Stoichiometry"],
+  "Structure of Atom": ["Bohr's model", "Quantum mechanical model", "Quantum numbers", "Electronic configuration", "Photoelectric effect"],
+  "Classification of Elements and Periodicity": ["Modern periodic law", "Periodic trends (Atomic radii, Ionization enthalpy, Electronegativity)"],
+  "Chemical Bonding and Molecular Structure": ["Ionic and covalent bond", "VSEPR theory", "Valence bond theory", "Hybridization", "Molecular orbital theory"],
+  "Thermodynamics (Chemistry)": ["Internal energy and enthalpy", "Heat capacity", "Hess's law", "Entropy", "Gibbs energy change"],
+  "Equilibrium": ["Law of mass action", "Le Chatelier's principle", "Ionization of acids and bases", "Solubility product"],
+  "Redox Reactions": ["Oxidation number", "Balancing redox reactions", "Electrode processes"],
+  "Organic Chemistry – Some Basic Principles and Techniques": ["IUPAC nomenclature", "Isomerism", "Inductive and electromeric effects", "Resonance", "Chromatography"],
+  "Hydrocarbons": ["Alkanes (Conformations)", "Alkenes (Geometrical isomerism)", "Alkynes", "Aromatic hydrocarbons (Huckel's rule)"],
+
+  // --- Mathematics Class 11 ---
+  "Sets": ["Representation of sets", "Empty and finite sets", "Subsets", "Power set", "Venn diagrams", "Operations on sets"],
+  "Relations and Functions (Class 11)": ["Cartesian product", "Domain and range", "Identity, constant, and polynomial functions"],
+  "Trigonometric Functions": ["Angles (Radian and Degree)", "Signs of trigonometric functions", "Trigonometric equations", "Compound angle formulas"],
+  "Complex Numbers and Quadratic Equations": ["Imaginary numbers", "Argand plane", "Modulus and conjugate", "Roots of quadratic equations"],
+  "Linear Inequalities": ["Algebraic solutions of linear inequalities", "Graphical representation"],
+  "Permutations and Combinations": ["Fundamental principle of counting", "Factorial notation", "Derivation of formulas for nPr and nCr"],
+  "Binomial Theorem": ["Binomial theorem for positive integral indices", "Pascal's triangle", "General and middle terms"],
+  "Sequences and Series": ["Arithmetic progression (AP)", "Geometric progression (GP)", "Sum to n terms of special series"],
+  "Straight Lines": ["Slope of a line", "Various forms of equations of a line", "Distance of a point from a line"],
+  "Conic Sections": ["Sections of a cone", "Circle", "Parabola", "Ellipse", "Hyperbola"],
+  "Introduction to Three Dimensional Geometry": ["Coordinate axes and planes", "Distance between two points", "Section formula"],
+  "Limits and Derivatives": ["Intuitive idea of limits", "Standard limits", "Derivative as rate of change", "Product and quotient rule"],
+  "Statistics": ["Measures of dispersion", "Range", "Mean deviation", "Variance and standard deviation"],
+  "Probability (Class 11)": ["Random experiments", "Events", "Axiomatic approach to probability"]
+
 };
+
 
 // ==================== QUESTION TYPE CONFIG ====================
 const QUESTION_FORMATS = [
