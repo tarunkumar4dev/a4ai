@@ -178,7 +178,7 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Financial Statements": ["Trading account", "Profit and loss account", "Balance sheet", "Adjustments"],
   "Accounting for Partnership": ["Nature", "Partnership deed", "Profit sharing ratio", "Capital accounts"],
   // --- Physics Class 11 ---
-  "UNITS AND MEASUREMENTS": ["International system of units", "Significant figures", "Dimensional analysis", "Errors in measurement"],
+  "UNITS AND MEASUREMENT": ["International system of units", "Significant figures", "Dimensional analysis", "Errors in measurement"],
   "Motion in a Straight Line": ["Average velocity and speed", "Instantaneous velocity", "Acceleration", "Relative velocity", "Kinematic equations"],
   "Motion in a Plane": ["Scalars and vectors", "Resolution of vectors", "Projectile motion", "Uniform circular motion"],
   "Laws of Motion": ["Inertia", "Newton's laws of motion", "Conservation of momentum", "Equilibrium of a particle", "Friction", "Circular motion dynamics"],
