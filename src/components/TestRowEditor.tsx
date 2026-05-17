@@ -178,7 +178,7 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Financial Statements": ["Trading account", "Profit and loss account", "Balance sheet", "Adjustments"],
   "Accounting for Partnership": ["Nature", "Partnership deed", "Profit sharing ratio", "Capital accounts"],
   // --- Physics Class 11 ---
-  "Units and Measurements": ["International system of units", "Significant figures", "Dimensional analysis", "Errors in measurement"],
+  "UNITS AND MEASUREMENTS": ["International system of units", "Significant figures", "Dimensional analysis", "Errors in measurement"],
   "Motion in a Straight Line": ["Average velocity and speed", "Instantaneous velocity", "Acceleration", "Relative velocity", "Kinematic equations"],
   "Motion in a Plane": ["Scalars and vectors", "Resolution of vectors", "Projectile motion", "Uniform circular motion"],
   "Laws of Motion": ["Inertia", "Newton's laws of motion", "Conservation of momentum", "Equilibrium of a particle", "Friction", "Circular motion dynamics"],
@@ -201,7 +201,7 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Thermodynamics (Chemistry)": ["Internal energy and enthalpy", "Heat capacity", "Hess's law", "Entropy", "Gibbs energy change"],
   "Equilibrium": ["Law of mass action", "Le Chatelier's principle", "Ionization of acids and bases", "Solubility product"],
   "Redox Reactions": ["Oxidation number", "Balancing redox reactions", "Electrode processes"],
-  "Organic Chemistry – Some Basic Principles and Techniques": ["IUPAC nomenclature", "Isomerism", "Inductive and electromeric effects", "Resonance", "Chromatography"],
+  "Organic Chemistry Some Basic Principles and Techniques": ["IUPAC nomenclature", "Isomerism", "Inductive and electromeric effects", "Resonance", "Chromatography"],
   "Hydrocarbons": ["Alkanes (Conformations)", "Alkenes (Geometrical isomerism)", "Alkynes", "Aromatic hydrocarbons (Huckel's rule)"],
 
   // --- Mathematics Class 11 ---
