@@ -216,6 +216,21 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Some Basic Concepts of Chemistry": ["Atomic and molecular masses", "Mole concept", "Stoichiometry"],
   "Structure of Atom": ["Bohr's model", "Quantum numbers", "Electronic configuration", "Photoelectric effect"],
   "Thermodynamics": ["Internal energy", "Enthalpy", "Hess's law", "Entropy", "Gibbs energy"]
+  
+  // --- Mathematics Class 12 (Matched to UI Dropdown) ---
+  "APPLICATION OF DERIVATIVES": ["Rate of change", "Increasing and decreasing functions", "Maxima and minima"],
+  "APPLICATION OF INTEGRALS": ["Area under simple curves", "Area between curves"],
+  "CONTINUITY AND DIFFERENTIABILITY": ["Chain rule", "Implicit differentiation", "Logarithmic differentiation", "Second order derivatives"],
+  "DETERMINANTS": ["Adjoint of matrix", "Inverse of matrix", "Solving linear equations", "Area of triangle"],
+  "DIFFERENTIAL EQUATIONS": ["Order and degree", "Variable separable method", "Homogeneous equations", "Linear differential equations"],
+  "INTEGRALS": ["Integration by substitution", "Integration by parts", "Definite integrals", "Partial fractions"],
+  "INVERSE TRIGONOMETRIC FUNCTIONS": ["Principal value branch", "Domain and range of inverse trig", "Graphs"],
+  "LINEAR PROGRAMMING": ["Feasible region", "Objective function", "Optimization"],
+  "MATRICES": ["Types of matrices", "Matrix operations", "Transpose", "Symmetric and skew-symmetric"],
+  "PROBABILITY": ["Conditional probability", "Bayes' theorem", "Random variables", "Multiplication theorem"],
+  "RELATIONS AND FUNCTIONS": ["Equivalence relations", "One-to-one and onto functions", "Composition of functions"],
+  "THREE DIMENSIONAL GEOMETRY": ["Shortest distance between lines", "Equation of a line", "Direction ratios"],
+  "VECTOR ALGEBRA": ["Dot product", "Cross product", "Direction cosines", "Position vector"]
 
 };
 
