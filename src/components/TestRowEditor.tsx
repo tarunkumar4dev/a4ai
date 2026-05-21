@@ -201,8 +201,8 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "LIMITS AND DERIVATIVES": ["Standard limits", "Derivative as rate of change", "Product and quotient rule"],
   "LINEAR INEQUALITIES": ["Algebraic solutions", "Graphical representation"],
   "PERMUTATIONS AND COMBINATIONS": ["Fundamental principle of counting", "Factorials", "nPr and nCr formulas"],
-  "PROBABILITY": ["Random experiments", "Events", "Axiomatic approach"],
-  "RELATIONS AND FUNCTIONS": ["Cartesian product", "Domain and range", "Types of functions"],
+  "PROBABILITY_CLASS_11": ["Random experiments", "Events", "Axiomatic approach"],
+  "RELATIONS AND FUNCTIONS_CLASS_11": ["Cartesian product", "Domain and range", "Types of functions"],
   "SEQUENCES AND SERIES": ["Arithmetic progression (AP)", "Geometric progression (GP)"],
   "SETS": ["Representation of sets", "Subsets", "Venn diagrams", "Operations on sets"],
   "STATISTICS": ["Measures of dispersion", "Mean deviation", "Variance and standard deviation"],
@@ -215,7 +215,7 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Equilibrium": ["Le Chatelier's principle", "Ionization of acids and bases", "Solubility product"],
   "Some Basic Concepts of Chemistry": ["Atomic and molecular masses", "Mole concept", "Stoichiometry"],
   "Structure of Atom": ["Bohr's model", "Quantum numbers", "Electronic configuration", "Photoelectric effect"],
-  "Thermodynamics": ["Internal energy", "Enthalpy", "Hess's law", "Entropy", "Gibbs energy"]
+  "Thermodynamics": ["Internal energy", "Enthalpy", "Hess's law", "Entropy", "Gibbs energy"],
   
   // --- Mathematics Class 12 (Matched to UI Dropdown) ---
   "APPLICATION OF DERIVATIVES": ["Rate of change", "Increasing and decreasing functions", "Maxima and minima"],
@@ -227,8 +227,8 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "INVERSE TRIGONOMETRIC FUNCTIONS": ["Principal value branch", "Domain and range of inverse trig", "Graphs"],
   "LINEAR PROGRAMMING": ["Feasible region", "Objective function", "Optimization"],
   "MATRICES": ["Types of matrices", "Matrix operations", "Transpose", "Symmetric and skew-symmetric"],
-  "PROBABILITY": ["Conditional probability", "Bayes' theorem", "Random variables", "Multiplication theorem"],
-  "RELATIONS AND FUNCTIONS": ["Equivalence relations", "One-to-one and onto functions", "Composition of functions"],
+  "PROBABILITY_CLASS_12": ["Conditional probability", "Bayes' theorem", "Random variables", "Multiplication theorem"],
+  "RELATIONS AND FUNCTIONS_CLASS_12": ["Equivalence relations", "One-to-one and onto functions", "Composition of functions"],
   "THREE DIMENSIONAL GEOMETRY": ["Shortest distance between lines", "Equation of a line", "Direction ratios"],
   "VECTOR ALGEBRA": ["Dot product", "Cross product", "Direction cosines", "Position vector"]
 
@@ -524,6 +524,7 @@ MobileCard.displayName = 'MobileCard';
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
   index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove
 }, ref) => {
+  
   const { register, watch, setValue } = useFormContext<FormValues>();
   const currentTopic = watch(`simpleData.${index}.topic`);
   const subject = watch("subject") || "";
