@@ -230,8 +230,35 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "PROBABILITY_CLASS_12": ["Conditional probability", "Bayes' theorem", "Random variables", "Multiplication theorem"],
   "RELATIONS AND FUNCTIONS_CLASS_12": ["Equivalence relations", "One-to-one and onto functions", "Composition of functions"],
   "THREE DIMENSIONAL GEOMETRY": ["Shortest distance between lines", "Equation of a line", "Direction ratios"],
-  "VECTOR ALGEBRA": ["Dot product", "Cross product", "Direction cosines", "Position vector"]
+  "VECTOR ALGEBRA": ["Dot product", "Cross product", "Direction cosines", "Position vector"],
+   
+  // --- Physics Class 12 (Matched to UI Dropdown) ---
+  "Alternating Current (AC)": ["AC voltage applied to a resistor", "LC oscillations", "LCR series circuit", "Resonance", "Transformers", "Power in AC circuits"],
+  "Atoms": ["Alpha-particle scattering experiment", "Rutherford's model of atom", "Bohr model of hydrogen atom", "Hydrogen line spectra"],
+  "Current Electricity": ["Ohm's law", "Drift velocity", "Resistivity and conductivity", "Kirchhoff's rules", "Wheatstone bridge", "Cells in series and parallel"],
+  "Dual Nature of Radiation and Matter": ["Electron emission", "Photoelectric effect", "Einstein's photoelectric equation", "Experimental study of photoelectric effect", "de Broglie hypothesis"],
+  "Electric Charges and Fields": ["Coulomb's law", "Electric field lines", "Electric dipole", "Electric flux", "Gauss's law and its applications"],
+  "Electromagnetic Induction (EMI)": ["Magnetic flux", "Faraday's law of induction", "Lenz's law", "Motional electromotive force", "Self-induction and mutual induction"],
+  "Electromagnetic Waves (EM Waves)": ["Displacement current", "Electromagnetic spectrum (Radio, Micro, IR, Visible, UV, X-ray, Gamma)", "Characteristics of EM waves"],
+  "Electrostatic Potential and Capacitance": ["Electrostatic potential", "Potential energy of a dipole", "Capacitors and capacitance", "Dielectrics and polarization", "Energy stored in a capacitor"],
+  "Magnetism and Matter": ["The bar magnet", "Magnetic field lines", "Earth's magnetic field", "Magnetic properties of materials (Dia-, Para-, Ferro-magnetism)"],
+  "Moving Charges and Magnetism": ["Biot-Savart law", "Ampere's circuital law", "Force on a moving charge in a magnetic field", "Cyclotron", "Moving coil galvanometer"],
+  "Nuclei": ["Composition and size of nucleus", "Mass-energy equivalence", "Nuclear binding energy", "Nuclear fission and fusion"],
+  "Ray Optics and Optical Instruments": ["Reflection by spherical mirrors", "Refraction and total internal reflection", "Refraction at spherical surfaces and by lenses", "Power of a lens", "Microscopes and astronomical telescopes"],
+  "Semiconductor Electronics Materials, Devices and Simple Circuits": ["Energy bands in solids", "Intrinsic and extrinsic semiconductors", "p-n junction diode", "Diode as a rectifier", "LED, photodiode, and solar cell"],
+  "Wave Optics": ["Huygens principle", "Refraction and reflection of plane waves", "Coherent and incoherent addition of waves", "Interference of light waves and Young's double slit experiment", "Diffraction"],
 
+  // --- Chemistry Class 12 (Matched to UI Dropdown) ---
+  "Alcohols, Phenols and Ethers": ["Nomenclature and structures", "Mechanism of dehydration of alcohols", "Electrophilic aromatic substitution of phenols", "Preparation and reactions of ethers"],
+  "Aldehydes, Ketones and Carboxylic Acids": ["Nomenclature and carbonyl group structure", "Nucleophilic addition reactions", "Aldol condensation", "Cannizzaro reaction", "Acidity of carboxylic acids"],
+  "Amines": ["Structure and classification", "Basic character of amines", "Gabriel phthalimide synthesis", "Hoffmann bromamide degradation reaction", "Diazonium salts"],
+  "Biomolecules": ["Classification of carbohydrates (Glucose and Fructose)", "Structure of proteins (Amino acids, Peptide bond)", "Denaturation of proteins", "Vitamins", "Nucleic acids (DNA and RNA)"],
+  "Chemical Kinetics": ["Rate of a chemical reaction", "Factors affecting rate of reaction", "Integrated rate equations (Zero and First order)", "Half-life of a reaction", "Arrhenius equation"],
+  "Coordination Compounds": ["Werner's theory", "Nomenclature of coordination compounds", "Isomerism in coordination compounds", "Valence Bond Theory (VBT)", "Crystal Field Theory (CFT)"],
+  "Electrochemistry": ["Galvanic cells", "Nernst equation", "Conductance in electrolytic solutions", "Kohlrausch's law", "Electrolysis", "Batteries and fuel cells", "Corrosion"],
+  "Haloalkanes and Haloarenes": ["Nomenclature and nature of C-X bond", "Mechanisms of substitution reactions (SN1 and SN2)", "Polyhalogen compounds", "Electrophilic substitution in haloarenes"],
+  "Solutions": ["Types of solutions", "Expressing concentration of solutions", "Solubility (Henry's law)", "Raoult's law and ideal/non-ideal solutions", "Colligative properties", "Abnormal molar mass (Van 't Hoff factor)"],
+  "The d- and f-Block Elements": ["Electronic configurations and general trends", "Lanthanoid contraction", "Properties of transition metals (Catalytic, Magnetic, Interstitial)", "Preparation and properties of KMnO4 and K2Cr2O7"]
 };
 
 
