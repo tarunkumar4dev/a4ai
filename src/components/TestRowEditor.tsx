@@ -1,14 +1,13 @@
 // src/components/TestRowEditor.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V4 — Grouped chapter dropdown (English: First Flight Prose / Poems / FWF)
-//      + Writing Skills & Grammar virtual chapters for English
+// V7 — Chapter selection fix
 //
-// Changes vs V3:
-//   - fetchChaptersFromAPI now also captures `groups` (book + chapter_type)
-//   - useChapters returns chapterGroups
-//   - MobileCard / TableRow render <optgroup> when groups exist
-//   - Flat list fallback preserved for Science / Maths / etc.
-//   - English subject: injects "Writing Skills" & "Grammar" virtual chapters
+// v7 changes vs v6:
+//   - prevKeyRef initialized as "" — eliminates false reset on first render
+//   - Chapter select: controlled (value + onChange) instead of register-only
+//     → fixes Android old Chrome selection not persisting
+//   - Subtopic select also controlled for same reason
+//   - All other v6 fixes retained (AbortController, mock fallback, etc.)
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useRef, memo, useCallback, forwardRef, useState, useEffect } from "react";
@@ -37,7 +36,6 @@ interface RefUploadButtonProps {
   watch: UseFormWatch<FieldValues>;
 }
 
-// v4: chapter group structure from backend
 interface ChapterGroup {
   book: string;
   chapter_type: string;
@@ -49,7 +47,7 @@ interface RowProps {
   index: number;
   field: { id: string };
   availableTopics: string[];
-  chapterGroups: ChapterGroup[] | null; // v4
+  chapterGroups: ChapterGroup[] | null;
   subtopicsMap: Record<string, string[]>;
   chaptersLoading: boolean;
   remove: (index: number) => void;
@@ -63,37 +61,92 @@ interface FormValues {
   simpleData: SimpleRowData[];
 }
 
-// ==================== API: FETCH CHAPTERS ====================
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// ==================== API CONFIGURATION ====================
+const getApiBaseUrl = (): string => {
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_API_URL || "";
+  }
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (typeof window !== "undefined") {
+    const { hostname } = window.location;
+    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return `http://${hostname}:8000`;
+    }
+  }
+  return "http://localhost:8000";
+};
 
+// ==================== MOCK FALLBACK ====================
+const MOCK_CHAPTERS: Record<string, string[]> = {
+  Science: [
+    "Chemical Reactions and Equations",
+    "Acids Bases and Salts",
+    "Metals and Non-metals",
+    "Carbon and Its Compounds",
+    "Periodic Classification",
+    "Life Processes",
+    "Control and Coordination",
+    "How do Organisms Reproduce",
+    "Heredity and Evolution",
+    "Light Reflection and Refraction",
+    "Human Eye and Colorful World",
+    "Electricity",
+    "Magnetic Effects of Electric Current",
+    "Our Environment",
+  ],
+  Maths: [
+    "Real Numbers", "Polynomials", "Pair of Linear Equations",
+    "Quadratic Equations", "Arithmetic Progressions", "Triangles",
+    "Coordinate Geometry", "Introduction to Trigonometry",
+    "Some Applications of Trigonometry", "Circles", "Constructions",
+    "Areas Related to Circles", "Surface Areas and Volumes",
+    "Statistics", "Probability",
+  ],
+};
+
+// ==================== API: FETCH CHAPTERS ====================
 interface ChaptersFetchResult {
   flat: string[];
   groups: ChapterGroup[] | null;
 }
 
-async function fetchChaptersFromAPI(classLevel: string, subject: string): Promise<ChaptersFetchResult> {
+async function fetchChaptersFromAPI(
+  classLevel: string,
+  subject: string,
+  signal: AbortSignal,
+): Promise<ChaptersFetchResult> {
   const classNum = classLevel.replace(/\D/g, "") || "10";
-  const res = await fetch(
-    `${API_BASE}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`
-  );
-  if (!res.ok) throw new Error(`Failed to fetch chapters: ${res.status}`);
-  const data = await res.json();
+  const base = getApiBaseUrl();
+  const url = `${base}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`;
 
-  const flat: string[] = (data.chapters && Array.isArray(data.chapters)) ? data.chapters : [];
-  const groups: ChapterGroup[] | null = (data.groups && Array.isArray(data.groups) && data.groups.length > 0)
-    ? data.groups
-    : null;
+  const res = await fetch(url, {
+    signal,
+    headers: { Accept: "application/json" },
+  });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+  const data = await res.json();
+  const flat: string[] = Array.isArray(data.chapters) ? data.chapters : [];
+  const groups: ChapterGroup[] | null =
+    Array.isArray(data.groups) && data.groups.length > 0 ? data.groups : null;
+
+  if (flat.length === 0 && MOCK_CHAPTERS[subject]) {
+    return { flat: MOCK_CHAPTERS[subject], groups: null };
+  }
 
   return { flat, groups };
 }
 
 // ==================== HOOK: useChapters ====================
 function useChapters(classLevel: string, subject: string) {
-  const [chapters, setChapters] = useState<string[]>([]);
-  const [chapterGroups, setChapterGroups] = useState<ChapterGroup[] | null>(null); // v4
-  const [subtopicsMap, setSubtopicsMap] = useState<Record<string, string[]>>({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [chapters, setChapters]          = useState<string[]>([]);
+  const [chapterGroups, setChapterGroups] = useState<ChapterGroup[] | null>(null);
+  const [subtopicsMap, setSubtopicsMap]  = useState<Record<string, string[]>>({});
+  const [loading, setLoading]            = useState(false);
+  const [error, setError]                = useState<string | null>(null);
 
   useEffect(() => {
     if (!classLevel || !subject) {
@@ -103,13 +156,12 @@ function useChapters(classLevel: string, subject: string) {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
-    fetchChaptersFromAPI(classLevel, subject)
+    fetchChaptersFromAPI(classLevel, subject, controller.signal)
       .then(({ flat, groups }) => {
-        if (cancelled) return;
         setChapters(flat);
         setChapterGroups(groups);
         const sMap: Record<string, string[]> = {};
@@ -118,25 +170,30 @@ function useChapters(classLevel: string, subject: string) {
         });
         setSubtopicsMap(sMap);
       })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error("Chapter fetch failed:", err);
+      .catch((err: Error) => {
+        if (err.name === "AbortError") return;
+        console.error("Chapter fetch failed:", err.message);
         setError(err.message);
-        setChapters([]);
-        setChapterGroups(null);
+        if (MOCK_CHAPTERS[subject]) {
+          setChapters(MOCK_CHAPTERS[subject]);
+          setChapterGroups(null);
+        } else {
+          setChapters([]);
+          setChapterGroups(null);
+        }
         setSubtopicsMap({});
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, [classLevel, subject]);
 
   return { chapters, chapterGroups, subtopicsMap, loading, error };
 }
 
-// ==================== COMMON SUBTOPICS (helper map only) ====================
+// ==================== COMMON SUBTOPICS ====================
 const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Chemical Reactions and Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
   "Acids Bases and Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
@@ -152,6 +209,9 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "How do Organisms Reproduce": ["Asexual reproduction", "Sexual reproduction", "Reproductive health"],
   "Heredity and Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
   "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution"],
+  "Real Numbers": ["Euclid's division", "Fundamental theorem", "Irrational numbers", "Decimal expansions"],
+  "Polynomials": ["Zeros of polynomial", "Relationship between zeros", "Division algorithm"],
+  "Quadratic Equations": ["Standard form", "Solution by factorization", "Quadratic formula", "Nature of roots"],
   "Matter in Our Surroundings": ["States of matter", "Physical and chemical changes", "Latent heat", "Evaporation"],
   "Is Matter Around Us Pure": ["Mixtures", "Solutions", "Separation techniques", "Compounds and elements"],
   "Atoms and Molecules": ["Laws of chemical combination", "Atomic mass", "Mole concept", "Molecular mass"],
@@ -180,10 +240,10 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
 
 // ==================== QUESTION TYPE CONFIG ====================
 const QUESTION_FORMATS = [
-  { value: "MCQ",    label: "MCQ",   icon: ListChecks,     color: "bg-gray-800 text-white" },
-  { value: "Short",  label: "Short", icon: AlignLeft,      color: "bg-blue-600 text-white" },
-  { value: "Long",   label: "Long",  icon: FileText,       color: "bg-purple-600 text-white" },
-  { value: "Essay",  label: "Essay", icon: ArrowLeftRight, color: "bg-amber-600 text-white" },
+  { value: "MCQ",   label: "MCQ",   icon: ListChecks,     color: "bg-gray-800 text-white" },
+  { value: "Short", label: "Short", icon: AlignLeft,      color: "bg-blue-600 text-white" },
+  { value: "Long",  label: "Long",  icon: FileText,       color: "bg-purple-600 text-white" },
+  { value: "Essay", label: "Essay", icon: ArrowLeftRight, color: "bg-amber-600 text-white" },
 ];
 
 const ACCOUNTANCY_FORMATS = [
@@ -196,27 +256,21 @@ const ACCOUNTANCY_SUBJECTS_FE = ["Accountancy", "Accounts", "Accounting"];
 
 // ==================== UUID GENERATOR ====================
 const generateUUID = (): string => {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
   });
 };
 
-// ==================== CHAPTER OPTIONS RENDERER (v4) ====================
+// ==================== CHAPTER OPTIONS RENDERER ====================
 function renderChapterOptions(
   chapterGroups: ChapterGroup[] | null,
   flatChapters: string[],
 ): React.ReactNode {
   if (chapterGroups && chapterGroups.length > 0) {
     return chapterGroups.map((group) => (
-      <optgroup
-        key={`${group.book || 'x'}-${group.chapter_type || 'x'}`}
-        label={group.label}
-      >
+      <optgroup key={`${group.book || "x"}-${group.chapter_type || "x"}`} label={group.label}>
         {group.chapters.map((ch) => (
           <option key={ch.name} value={ch.name}>{ch.name}</option>
         ))}
@@ -229,83 +283,69 @@ function renderChapterOptions(
 }
 
 // ==================== FILE UPLOAD HANDLER ====================
-const RefUploadButton: React.FC<RefUploadButtonProps & { fullWidth?: boolean }> = memo(({ index, setValue, watch, fullWidth }) => {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const file = watch(`simpleData.${index}.refFile`);
+const RefUploadButton: React.FC<RefUploadButtonProps & { fullWidth?: boolean }> = memo(
+  ({ index, setValue, watch, fullWidth }) => {
+    const fileRef = useRef<HTMLInputElement>(null);
+    const file = watch(`simpleData.${index}.refFile`);
 
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (fileRef.current) fileRef.current.value = '';
-    if (selectedFile) setValue(`simpleData.${index}.refFile`, selectedFile);
-    else setValue(`simpleData.${index}.refFile`, undefined);
-  }, [index, setValue]);
+    const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      if (fileRef.current) fileRef.current.value = "";
+      setValue(`simpleData.${index}.refFile`, f ?? undefined);
+    }, [index, setValue]);
 
-  const handleButtonClick = useCallback(() => {
-    if (fileRef.current) fileRef.current.click();
-  }, []);
+    const handleClearFile = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      setValue(`simpleData.${index}.refFile`, undefined);
+    }, [index, setValue]);
 
-  const handleClearFile = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setValue(`simpleData.${index}.refFile`, undefined);
-  }, [index, setValue]);
-
-  return (
-    <div className={`relative ${fullWidth ? "w-full" : ""}`}>
-      <input
-        type="file"
-        ref={fileRef}
-        className="hidden"
-        onChange={handleFileChange}
-        accept=".pdf,.doc,.docx,.txt,.md"
-        aria-label={`Upload reference file for row ${index + 1}`}
-      />
-      <motion.button
-        whileTap={{ scale: 0.97 }}
-        type="button"
-        onClick={handleButtonClick}
-        className={`${fullWidth ? "w-full justify-center" : ""} min-h-[44px] px-3 py-2.5 rounded-xl transition-all border shadow-sm flex items-center gap-2 ${
-          file
-            ? 'bg-gray-800 text-white border-gray-800 active:bg-gray-900'
-            : 'bg-white text-gray-500 border-[#E5E7EB] active:border-gray-400'
-        }`}
-        style={{ WebkitTapHighlightColor: "transparent" }}
-        title={file ? `Reference: ${file.name}` : "Upload Reference"}
-      >
-        {file ? <Check size={16} /> : <Paperclip size={16} />}
-        <span className="text-xs font-semibold">
-          {file
-            ? (file.name.length > 16 ? `${file.name.substring(0, 14)}...` : file.name)
-            : "Add Reference"}
-        </span>
-      </motion.button>
-
-      {file && (
-        <button
+    return (
+      <div className={`relative ${fullWidth ? "w-full" : ""}`}>
+        <input
+          type="file"
+          ref={fileRef}
+          className="hidden"
+          onChange={handleFileChange}
+          accept=".pdf,.doc,.docx,.txt,.md"
+        />
+        <motion.button
+          whileTap={{ scale: 0.97 }}
           type="button"
-          onClick={handleClearFile}
-          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
-          aria-label={`Remove reference file ${file.name}`}
+          onClick={() => fileRef.current?.click()}
+          className={`${fullWidth ? "w-full justify-center" : ""} min-h-[44px] px-3 py-2.5 rounded-xl transition-all border shadow-sm flex items-center gap-2 ${
+            file ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-500 border-[#E5E7EB]"
+          }`}
+          style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
         >
-          ×
-        </button>
-      )}
-    </div>
-  );
-});
-RefUploadButton.displayName = 'RefUploadButton';
+          {file ? <Check size={16} /> : <Paperclip size={16} />}
+          <span className="text-xs font-semibold">
+            {file ? (file.name.length > 16 ? `${file.name.substring(0, 14)}...` : file.name) : "Add Reference"}
+          </span>
+        </motion.button>
+        {file && (
+          <button
+            type="button"
+            onClick={handleClearFile}
+            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+          >
+            ×
+          </button>
+        )}
+      </div>
+    );
+  },
+);
+RefUploadButton.displayName = "RefUploadButton";
 
-// ==================== QUESTION TYPE SELECTOR ====================
+// ==================== FORMAT SELECTOR ====================
 const FormatSelector = memo(({ index, subject }: { index: number; subject: string }) => {
   const { watch, setValue } = useFormContext();
   const currentFormat = watch(`simpleData.${index}.format`) || "MCQ";
-  const isAccountancy = ACCOUNTANCY_SUBJECTS_FE.includes(subject);
+  const isAccountancy  = ACCOUNTANCY_SUBJECTS_FE.includes(subject);
+  const visibleFormats = isAccountancy ? [...QUESTION_FORMATS, ...ACCOUNTANCY_FORMATS] : QUESTION_FORMATS;
 
-  const visibleFormats = isAccountancy
-    ? [...QUESTION_FORMATS, ...ACCOUNTANCY_FORMATS]
-    : QUESTION_FORMATS;
-
-  React.useEffect(() => {
-    const accValues = ACCOUNTANCY_FORMATS.map(f => f.value);
+  useEffect(() => {
+    const accValues = ACCOUNTANCY_FORMATS.map((f) => f.value);
     if (!isAccountancy && accValues.includes(currentFormat)) {
       setValue(`simpleData.${index}.format`, "MCQ");
     }
@@ -322,12 +362,9 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
             type="button"
             onClick={() => setValue(`simpleData.${index}.format`, fmt.value)}
             className={`min-h-[36px] px-3 py-2 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all border ${
-              isActive
-                ? `${fmt.color} border-transparent shadow-sm`
-                : 'bg-white text-gray-500 border-[#E5E7EB] active:border-gray-400'
+              isActive ? `${fmt.color} border-transparent shadow-sm` : "bg-white text-gray-500 border-[#E5E7EB]"
             }`}
-            style={{ WebkitTapHighlightColor: "transparent" }}
-            title={fmt.value}
+            style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
             <Icon size={11} /> {fmt.label}
           </button>
@@ -336,16 +373,20 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
     </div>
   );
 });
-FormatSelector.displayName = 'FormatSelector';
+FormatSelector.displayName = "FormatSelector";
 
 // ═══════════════════════════════════════════════════════════════════════
 // MOBILE: Card Row
 // ═══════════════════════════════════════════════════════════════════════
-const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove }: RowProps) => {
+const MobileCard = memo(({
+  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
+}: RowProps) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
-  const currentTopic = watch(`simpleData.${index}.topic`);
-  const subject = watch("subject") || "";
-  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
+
+  // ✅ v7: controlled values — guarantees display matches form state on Android
+  const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
+  const subject      = watch("subject") ?? "";
+  const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
 
   const inputClass = "w-full min-h-[44px] bg-white border border-[#E5E7EB] rounded-xl px-3 py-2.5 text-sm font-semibold text-[#111827] outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-400/10 transition-all appearance-none";
   const labelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 block";
@@ -359,6 +400,7 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
       layout
       className="bg-white rounded-2xl border border-[#E5E7EB] p-4 space-y-3.5 shadow-sm"
     >
+      {/* Header */}
       <div className="flex items-center justify-between pb-2 border-b border-gray-100">
         <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider bg-gray-100 px-2.5 py-1 rounded-full">
           Section {index + 1}
@@ -367,18 +409,19 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
           type="button"
           onClick={() => remove(index)}
           className="min-w-[36px] min-h-[36px] p-2 rounded-full text-gray-400 active:bg-red-50 active:text-red-500 transition-colors"
-          style={{ WebkitTapHighlightColor: "transparent" }}
-          aria-label={`Remove section ${index + 1}`}
+          style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
         >
           <Trash2 size={16} />
         </button>
       </div>
 
+      {/* ✅ v7: Chapter — CONTROLLED select (value + onChange) */}
       <div>
         <label className={labelClass}>Chapter</label>
         <div className="relative">
           <select
-            {...register(`simpleData.${index}.topic`)}
+            value={currentTopic}
+            onChange={(e) => setValue(`simpleData.${index}.topic`, e.target.value, { shouldValidate: true, shouldDirty: true })}
             disabled={chaptersLoading || availableTopics.length === 0}
             className={`${inputClass} pr-9 disabled:opacity-60`}
           >
@@ -393,53 +436,42 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
         </div>
       </div>
 
+      {/* ✅ v7: Subtopic — CONTROLLED select */}
       <div>
         <label className={labelClass}>Subtopic (optional)</label>
         <select
-          {...register(`simpleData.${index}.subtopic`)}
+          value={watch(`simpleData.${index}.subtopic`) ?? ""}
+          onChange={(e) => setValue(`simpleData.${index}.subtopic`, e.target.value, { shouldDirty: true })}
           disabled={!currentTopic || subOptions.length === 0}
           className={`${inputClass} disabled:opacity-60 disabled:bg-gray-50`}
         >
           <option value="">
             {!currentTopic ? "Select a chapter first" : subOptions.length === 0 ? "No subtopics available" : "Select subtopic..."}
           </option>
-          {subOptions.map(sub => (
-            <option key={sub} value={sub}>{sub}</option>
-          ))}
+          {subOptions.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
         </select>
       </div>
 
+      {/* Quantity + Marks */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelClass}>Quantity</label>
-          <select
-            {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
-            className={inputClass}
-          >
-            {[1,2,3,4,5,6,7,8,9,10,15,20].map(num => (
-              <option key={num} value={num}>{num}</option>
-            ))}
+          <select {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })} className={inputClass}>
+            {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
         <div>
           <label className={labelClass}>Marks each</label>
-          <select
-            {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
-            className={inputClass}
-          >
-            {[1,2,3,4,5,6,7,8,9,10].map(num => (
-              <option key={num} value={num}>{num} marks</option>
-            ))}
+          <select {...register(`simpleData.${index}.marks`, { valueAsNumber: true })} className={inputClass}>
+            {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n} marks</option>)}
           </select>
         </div>
       </div>
 
+      {/* Difficulty */}
       <div>
         <label className={labelClass}>Difficulty</label>
-        <select
-          {...register(`simpleData.${index}.difficulty`)}
-          className={inputClass}
-        >
+        <select {...register(`simpleData.${index}.difficulty`)} className={inputClass}>
           <option value="Easy">Easy</option>
           <option value="Medium">Medium</option>
           <option value="Hard">Hard</option>
@@ -447,11 +479,13 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
         </select>
       </div>
 
+      {/* Format */}
       <div>
         <label className={labelClass}>Question Type</label>
         <FormatSelector index={index} subject={subject} />
       </div>
 
+      {/* Reference */}
       <div>
         <label className={labelClass}>Reference (optional)</label>
         <RefUploadButton index={index} setValue={setValue} watch={watch} fullWidth />
@@ -459,19 +493,20 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
     </motion.div>
   );
 });
-MobileCard.displayName = 'MobileCard';
+MobileCard.displayName = "MobileCard";
 
 // ═══════════════════════════════════════════════════════════════════════
 // DESKTOP: Table Row
 // ═══════════════════════════════════════════════════════════════════════
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
-  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove
+  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
 }, ref) => {
   const { register, watch, setValue } = useFormContext<FormValues>();
-  const currentTopic = watch(`simpleData.${index}.topic`);
-  const subject = watch("subject") || "";
-  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
-  const rowNumber = index + 1;
+
+  // ✅ v7: controlled values
+  const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
+  const subject      = watch("subject") ?? "";
+  const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
 
   return (
     <motion.tr
@@ -489,9 +524,12 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
 
       <td className="py-3 px-4">
         <div className="flex flex-col gap-2">
+
+          {/* ✅ v7: Chapter — controlled */}
           <div className="relative">
             <select
-              {...register(`simpleData.${index}.topic`)}
+              value={currentTopic}
+              onChange={(e) => setValue(`simpleData.${index}.topic`, e.target.value, { shouldValidate: true, shouldDirty: true })}
               className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600 disabled:opacity-50"
               disabled={chaptersLoading || availableTopics.length === 0}
             >
@@ -503,19 +541,19 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
             {chaptersLoading && <Loader2 size={14} className="absolute right-2 top-2 animate-spin text-gray-400" />}
           </div>
 
+          {/* ✅ v7: Subtopic — controlled */}
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#E5E7EB] group-hover:bg-gray-400 transition-colors" aria-hidden="true" />
+            <div className="w-1.5 h-1.5 rounded-full bg-[#E5E7EB] group-hover:bg-gray-400 transition-colors" />
             <select
-              {...register(`simpleData.${index}.subtopic`)}
+              value={watch(`simpleData.${index}.subtopic`) ?? ""}
+              onChange={(e) => setValue(`simpleData.${index}.subtopic`, e.target.value, { shouldDirty: true })}
               className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none cursor-pointer disabled:opacity-50 hover:text-gray-700 appearance-none"
               disabled={!currentTopic || subOptions.length === 0}
             >
               <option value="">
                 {!currentTopic ? "Select Subtopic (Optional)..." : subOptions.length === 0 ? "No subtopics available" : "Select Subtopic (Optional)..."}
               </option>
-              {subOptions.map(subtopic => (
-                <option key={subtopic} value={subtopic}>{subtopic}</option>
-              ))}
+              {subOptions.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
         </div>
@@ -526,7 +564,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
           {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
           className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
         >
-          {[1,2,3,4,5,6,7,8,9,10,15,20].map(num => <option key={num} value={num}>{num}</option>)}
+          {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       </td>
 
@@ -535,16 +573,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
           {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
           className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
         >
-          <option value={1}>1m</option>
-          <option value={2}>2m</option>
-          <option value={3}>3m</option>
-          <option value={4}>4m</option>
-          <option value={5}>5m</option>
-          <option value={6}>6m</option>
-          <option value={7}>7m</option>
-          <option value={8}>8m</option>
-          <option value={9}>9m</option>
-          <option value={10}>10m</option>
+          {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n}m</option>)}
         </select>
       </td>
 
@@ -575,7 +604,6 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
           type="button"
           onClick={() => remove(index)}
           className="p-2 rounded-full bg-white border border-transparent hover:border-red-100 hover:bg-red-50 text-gray-300 hover:text-red-500 transition-all shadow-sm"
-          aria-label={`Remove row ${rowNumber}`}
         >
           <Trash2 size={16} />
         </motion.button>
@@ -583,30 +611,19 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
     </motion.tr>
   );
 }));
-TableRow.displayName = 'TableRow';
+TableRow.displayName = "TableRow";
 
 // ==================== SIMPLE MODE VIEW ====================
 const SimpleModeView: React.FC = () => {
   const { control, watch, setValue: setFormValue } = useFormContext<FormValues>();
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "simpleData",
-  });
+  const { fields, append, remove } = useFieldArray({ control, name: "simpleData" });
 
-  const classLevel = watch("classGrade") || "";
-  const currentSubject = watch("subject") || "";
+  const classLevel     = watch("classGrade") ?? "";
+  const currentSubject = watch("subject") ?? "";
 
-  const {
-    chapters: apiChapters,
-    chapterGroups: apiChapterGroups,
-    subtopicsMap,
-    loading: chaptersLoading,
-    error: chaptersError,
-  } = useChapters(classLevel, currentSubject);
+  const { chapters: apiChapters, chapterGroups: apiChapterGroups, subtopicsMap, loading: chaptersLoading, error: chaptersError } =
+    useChapters(classLevel, currentSubject);
 
-  // ═════════════════════════════════════════════════════════════════════
-  // Inject Writing Skills & Grammar for English
-  // ═════════════════════════════════════════════════════════════════════
   const isEnglish = currentSubject?.toLowerCase() === "english";
 
   const finalChapters = React.useMemo(() => {
@@ -616,68 +633,45 @@ const SimpleModeView: React.FC = () => {
 
   const finalChapterGroups = React.useMemo(() => {
     if (!isEnglish) return apiChapterGroups;
-
-    const baseGroups: ChapterGroup[] = (apiChapterGroups && apiChapterGroups.length > 0)
-      ? [...apiChapterGroups]
-      : [];
-
-    // FIX: If backend returned flat chapters but no groups, wrap as fallback group
-    if (baseGroups.length === 0 && apiChapters.length > 0) {
-      baseGroups.push({
-        book: "literature",
-        chapter_type: "all",
-        label: "Literature Chapters",
-        chapters: apiChapters.map((name, i) => ({ name, order: i + 1 })),
+    const base: ChapterGroup[] = apiChapterGroups ? [...apiChapterGroups] : [];
+    if (base.length === 0 && apiChapters.length > 0) {
+      base.push({
+        book: "literature", chapter_type: "all", label: "Literature Chapters",
+        chapters: apiChapters.map((n, i) => ({ name: n, order: i + 1 })),
       });
     }
-
-    // Always append Writing & Grammar
-    baseGroups.push({
-      book: "writing_grammar",
-      chapter_type: "skills",
-      label: "Writing & Grammar",
-      chapters: [
-        { name: "Writing Skills", order: 1 },
-        { name: "Grammar", order: 2 },
-      ],
+    base.push({
+      book: "writing_grammar", chapter_type: "skills", label: "Writing & Grammar",
+      chapters: [{ name: "Writing Skills", order: 1 }, { name: "Grammar", order: 2 }],
     });
-
-    return baseGroups;
+    return base;
   }, [apiChapterGroups, apiChapters, isEnglish]);
 
-  const availableTopics = finalChapters;
-
-  // ─────────────────────────────────────────────────────────────────────
-  // Reset topic/subtopic when class/subject changes
-  // ─────────────────────────────────────────────────────────────────────
-  const prevKeyRef = useRef(`${classLevel}-${currentSubject}`);
-  const fieldsLengthRef = useRef(fields.length);
+  // ✅ v7: prevKeyRef initialized as "" — no false reset on first render
+  const prevKeyRef   = useRef<string>("");
+  const fieldsLenRef = useRef(fields.length);
+  useEffect(() => { fieldsLenRef.current = fields.length; }, [fields.length]);
 
   useEffect(() => {
-    fieldsLengthRef.current = fields.length;
-  }, [fields.length]);
+    // Only act when both values are valid
+    if (!classLevel || !currentSubject) return;
 
-  useEffect(() => {
     const newKey = `${classLevel}-${currentSubject}`;
-    if (prevKeyRef.current !== newKey && prevKeyRef.current !== "-") {
-      const len = fieldsLengthRef.current;
+
+    // ✅ Only reset if: we have a previous valid key AND it actually changed
+    if (prevKeyRef.current && prevKeyRef.current !== newKey) {
+      const len = fieldsLenRef.current;
       for (let idx = 0; idx < len; idx++) {
-        setFormValue(`simpleData.${idx}.topic` as any, "");
+        setFormValue(`simpleData.${idx}.topic`   as any, "");
         setFormValue(`simpleData.${idx}.subtopic` as any, "");
       }
     }
+
     prevKeyRef.current = newKey;
   }, [classLevel, currentSubject, setFormValue]);
 
   const handleAddRow = useCallback(() => {
-    append({
-      id: generateUUID(),
-      topic: "",
-      quantity: 5,
-      marks: 1,
-      difficulty: "Medium",
-      format: "MCQ",
-    });
+    append({ id: generateUUID(), topic: "", quantity: 5, marks: 1, difficulty: "Medium", format: "MCQ" });
   }, [append]);
 
   return (
@@ -692,30 +686,19 @@ const SimpleModeView: React.FC = () => {
         <div className="flex items-center gap-2 text-xs sm:text-sm text-blue-800">
           <BookOpen size={14} className="flex-shrink-0" />
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
-            {classLevel && (
-              <span className="truncate">
-                <span className="font-semibold">Class:</span> {classLevel}
-              </span>
-            )}
-            <span className="truncate">
-              <span className="font-semibold">Subject:</span> {currentSubject || "Not selected"}
-            </span>
+            {classLevel && <span className="truncate"><span className="font-semibold">Class:</span> {classLevel}</span>}
+            <span className="truncate"><span className="font-semibold">Subject:</span> {currentSubject || "Not selected"}</span>
             {finalChapters.length > 0 && (
               <span className="text-[10px] sm:text-xs text-blue-600">
-                ({finalChapters.length} chapters
-                {finalChapterGroups && finalChapterGroups.length > 0
-                  ? `, ${finalChapterGroups.length} groups`
-                  : ""})
+                ({finalChapters.length} chapters{finalChapterGroups && finalChapterGroups.length > 0 ? `, ${finalChapterGroups.length} groups` : ""})
               </span>
             )}
-            {chaptersError && (
-              <span className="text-[10px] sm:text-xs text-red-600">(failed to load)</span>
-            )}
+            {chaptersError && <span className="text-[10px] sm:text-xs text-amber-600">(using fallback)</span>}
           </div>
         </div>
       </div>
 
-      {/* Empty state — no class/subject selected */}
+      {/* Empty — no selection */}
       {(!classLevel || !currentSubject) && (
         <div className="py-10 sm:py-12 text-center text-gray-400 px-4">
           <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
@@ -724,23 +707,27 @@ const SimpleModeView: React.FC = () => {
         </div>
       )}
 
-      {/* Empty state when API returned no chapters */}
-      {classLevel && currentSubject && !chaptersLoading && finalChapters.length === 0 && (
-        <div className="py-8 sm:py-10 text-center px-4 bg-amber-50/50 border-b border-amber-100">
-          <AlertCircle size={28} className="mx-auto mb-3 text-amber-500" />
-          <p className="font-bold text-sm text-amber-900">
-            No chapters available for {currentSubject} · {classLevel}
-          </p>
-          <p className="text-xs mt-1.5 text-amber-700 max-w-md mx-auto">
-            Either this subject is not yet ingested for this class, or the request failed.
-            Try another subject or class, or contact support.
-          </p>
+      {/* Loading */}
+      {classLevel && currentSubject && chaptersLoading && (
+        <div className="py-10 sm:py-12 text-center px-4">
+          <Loader2 size={32} className="mx-auto mb-3 animate-spin text-blue-500" />
+          <p className="font-semibold text-sm">Loading chapters...</p>
         </div>
       )}
 
+      {/* No chapters */}
+      {classLevel && currentSubject && !chaptersLoading && finalChapters.length === 0 && (
+        <div className="py-8 sm:py-10 text-center px-4 bg-amber-50/50 border-b border-amber-100">
+          <AlertCircle size={28} className="mx-auto mb-3 text-amber-500" />
+          <p className="font-bold text-sm text-amber-900">No chapters for {currentSubject} · {classLevel}</p>
+          <p className="text-xs mt-1.5 text-amber-700">Try another subject or class.</p>
+        </div>
+      )}
+
+      {/* Main content */}
       {classLevel && currentSubject && finalChapters.length > 0 && (
         <>
-          {/* MOBILE: Card list */}
+          {/* MOBILE */}
           <div className="block sm:hidden p-3 space-y-3">
             <AnimatePresence>
               {fields.map((field, index) => (
@@ -748,7 +735,7 @@ const SimpleModeView: React.FC = () => {
                   key={field.id}
                   index={index}
                   field={field}
-                  availableTopics={availableTopics}
+                  availableTopics={finalChapters}
                   chapterGroups={finalChapterGroups}
                   subtopicsMap={subtopicsMap}
                   chaptersLoading={chaptersLoading}
@@ -758,20 +745,20 @@ const SimpleModeView: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          {/* DESKTOP: Table */}
+          {/* DESKTOP */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <caption className="sr-only">Test configuration table</caption>
               <thead>
                 <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
-                  <th className="py-4 px-6 w-12 text-center"></th>
+                  <th className="py-4 px-6 w-12 text-center" />
                   <th className="py-4 px-4">Chapter & Topics</th>
                   <th className="py-4 px-4 w-20 text-center">Quantity</th>
                   <th className="py-4 px-4 w-20 text-center">Marks</th>
                   <th className="py-4 px-4 w-32">Difficulty</th>
                   <th className="py-4 px-4 w-48">Question Type</th>
                   <th className="py-4 px-4 w-20 text-center">Reference</th>
-                  <th className="py-4 px-4 w-12 text-center"></th>
+                  <th className="py-4 px-4 w-12 text-center" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -781,7 +768,7 @@ const SimpleModeView: React.FC = () => {
                       key={field.id}
                       index={index}
                       field={field}
-                      availableTopics={availableTopics}
+                      availableTopics={finalChapters}
                       chapterGroups={finalChapterGroups}
                       subtopicsMap={subtopicsMap}
                       chaptersLoading={chaptersLoading}
@@ -798,7 +785,7 @@ const SimpleModeView: React.FC = () => {
             type="button"
             onClick={handleAddRow}
             className="w-full py-4 sm:py-5 mt-2 bg-[#F9FAFB] active:bg-[#F3F4F6] text-sm font-bold text-gray-500 hover:text-gray-700 rounded-b-2xl sm:rounded-b-[22px] flex items-center justify-center gap-2 transition-all group min-h-[48px]"
-            style={{ WebkitTapHighlightColor: "transparent" }}
+            style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
             <PlusCircle size={18} className="group-hover:scale-110 transition-transform" />
             Add Chapter Section
@@ -809,7 +796,7 @@ const SimpleModeView: React.FC = () => {
   );
 };
 
-// ==================== MAIN COMPONENT ====================
+// ==================== MAIN EXPORT ====================
 export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
   if (activeMode !== "Simple") {
     return (
@@ -821,7 +808,6 @@ export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
   return <SimpleModeView />;
 };
 
-// ==================== FORMAT MAP FOR API CALL ====================
 export const FORMAT_MAP: Record<string, string> = {
   MCQ:          "mcq",
   Short:        "short_answer",

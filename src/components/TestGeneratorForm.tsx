@@ -1,18 +1,5 @@
-// src/components/TestGeneratorForm.tsx
-// ──────────────────────────────────────────────────────────────────────
-// V8 — Full mobile responsiveness + performance
-//
-// v8 changes:
-//   - All cards, inputs, buttons responsive at every breakpoint
-//   - CBSE pattern grid: 3+2 layout on mobile, 5 cols on md+
-//   - Sticky bottom bar: stacks cleanly on mobile
-//   - Paper summary: wraps on small screens
-//   - Reduced backdrop-blur on mobile for GPU perf
-//   - Touch-friendly: 44px min targets, active:scale feedback
-//   - prefers-reduced-motion support
-// ──────────────────────────────────────────────────────────────────────
-
-import React, { useState, useEffect, useRef, useCallback } from "react";
+// src/components/TestGeneratorForm.tsx — V9
+import React, { useState, useEffect, useRef } from "react";
 import { useForm, FormProvider, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
@@ -31,8 +18,6 @@ import { SummaryStats } from "./SummaryStats";
 import GeneratedTestView from "./GeneratedTestView";
 import { useTestGenerator } from "@/hooks/useTestGenerator";
 import { useAuth } from "@/providers/AuthProvider";
-import { api } from "@/lib/api";
-
 
 // ═══════════════════════════════════════════════════════════════════════
 // SUBJECT CONFIG
@@ -54,9 +39,8 @@ const ALL_BOARDS = [
 
 const CLASS_OPTIONS = ["Class 9", "Class 10", "Class 11", "Class 12"];
 
-
 // ═══════════════════════════════════════════════════════════════════════
-// STYLED COMPONENTS — responsive
+// STYLED COMPONENTS
 // ═══════════════════════════════════════════════════════════════════════
 
 const PremiumInput = ({ label, name, placeholder, register }: any) => (
@@ -125,20 +109,15 @@ const ClassSelect = ({ register }: { register: any }) => (
 );
 
 const SubjectSelect = ({
-  register, subjects, isLoadingChapters,
+  register,
+  subjects,
 }: {
   register: any;
   subjects: string[];
-  isLoadingChapters: boolean;
 }) => (
   <div className="space-y-1.5 sm:space-y-2 group">
     <label className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1 flex items-center gap-1.5 group-focus-within:text-gray-800 transition-colors">
       <Book size={11} /> Subject
-      {isLoadingChapters && (
-        <span className="text-blue-400 flex items-center gap-1">
-          <Loader2 size={9} className="animate-spin" /> loading...
-        </span>
-      )}
     </label>
     <div className="relative">
       <select
@@ -166,106 +145,66 @@ const GenerationTimer = ({ isRunning }: { isRunning: boolean }) => {
   useEffect(() => {
     if (isRunning) {
       setElapsed(0);
-      intervalRef.current = setInterval(() => {
-        setElapsed((prev) => prev + 1);
-      }, 1000);
+      intervalRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [isRunning]);
 
   if (!isRunning) return null;
 
   const minutes = Math.floor(elapsed / 60);
   const seconds = elapsed % 60;
-  const timeStr = minutes > 0
-    ? `${minutes}:${seconds.toString().padStart(2, "0")}`
-    : `${seconds}s`;
-
-  const color =
-    elapsed < 30 ? "text-emerald-400" :
-    elapsed < 60 ? "text-yellow-400" :
-    elapsed < 90 ? "text-orange-400" :
-    "text-red-400";
+  const timeStr = minutes > 0 ? `${minutes}:${seconds.toString().padStart(2, "0")}` : `${seconds}s`;
+  const color = elapsed < 30 ? "text-emerald-400" : elapsed < 60 ? "text-yellow-400" : elapsed < 90 ? "text-orange-400" : "text-red-400";
 
   return (
     <div className={`flex items-center gap-1.5 sm:gap-2 ${color}`}>
-      <Timer size={14} className="animate-pulse flex-shrink-0 sm:w-4 sm:h-4" />
-      <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider tabular-nums">
-        {timeStr}
-      </span>
-      <span className="text-[9px] sm:text-[10px] text-gray-500 font-medium hidden xs:inline sm:inline">
-        {elapsed < 15 ? "Connecting..." :
-         elapsed < 30 ? "Retrieving content..." :
-         elapsed < 50 ? "Generating questions..." :
-         elapsed < 70 ? "Quality checking..." :
-         elapsed < 90 ? "Almost done..." :
-         "Taking longer..."}
+      <Timer size={14} className="animate-pulse flex-shrink-0" />
+      <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider tabular-nums">{timeStr}</span>
+      <span className="text-[9px] sm:text-[10px] text-gray-500 font-medium hidden sm:inline">
+        {elapsed < 15 ? "Connecting..." : elapsed < 30 ? "Retrieving content..." : elapsed < 50 ? "Generating questions..." : elapsed < 70 ? "Quality checking..." : elapsed < 90 ? "Almost done..." : "Taking longer..."}
       </span>
     </div>
   );
 };
 
-
 // ═══════════════════════════════════════════════════════════════════════
-// CBSE PATTERN TOGGLE — responsive grid
+// CBSE PATTERN TOGGLE
 // ═══════════════════════════════════════════════════════════════════════
 
 const CBSE_SECTIONS = [
   { sec: "A", q: 20, m: 1, type: "MCQ + A&R", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { sec: "B", q: 5, m: 2, type: "Very Short", color: "bg-purple-50 text-purple-700 border-purple-200" },
-  { sec: "C", q: 6, m: 3, type: "Short Ans", color: "bg-amber-50 text-amber-700 border-amber-200" },
-  { sec: "D", q: 4, m: 5, type: "Long Ans", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  { sec: "E", q: 3, m: 4, type: "Case Study", color: "bg-rose-50 text-rose-700 border-rose-200" },
+  { sec: "B", q: 5,  m: 2, type: "Very Short", color: "bg-purple-50 text-purple-700 border-purple-200" },
+  { sec: "C", q: 6,  m: 3, type: "Short Ans",  color: "bg-amber-50 text-amber-700 border-amber-200" },
+  { sec: "D", q: 4,  m: 5, type: "Long Ans",   color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { sec: "E", q: 3,  m: 4, type: "Case Study", color: "bg-rose-50 text-rose-700 border-rose-200" },
 ];
 
-const CBSEPatternToggle = ({
-  enabled,
-  onToggle,
-}: {
-  enabled: boolean;
-  onToggle: (val: boolean) => void;
-}) => (
-  <div className={`rounded-xl sm:rounded-2xl border transition-all duration-200 ${
-    enabled
-      ? "bg-gradient-to-r from-[#111827]/5 to-[#1F2937]/5 border-[#111827]/20"
-      : "bg-white border-[#E5E7EB]"
-  }`}>
+const CBSEPatternToggle = ({ enabled, onToggle }: { enabled: boolean; onToggle: (v: boolean) => void }) => (
+  <div className={`rounded-xl sm:rounded-2xl border transition-all duration-200 ${enabled ? "bg-gradient-to-r from-[#111827]/5 to-[#1F2937]/5 border-[#111827]/20" : "bg-white border-[#E5E7EB]"}`}>
     <div className="p-4 sm:p-5">
-      {/* Toggle header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition-all flex-shrink-0 ${
-            enabled ? "bg-[#111827] text-white" : "bg-gray-100 text-gray-400"
-          }`}>
-            <FileText size={14} className="sm:w-4 sm:h-4" />
+          <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition-all flex-shrink-0 ${enabled ? "bg-[#111827] text-white" : "bg-gray-100 text-gray-400"}`}>
+            <FileText size={14} />
           </div>
           <div className="min-w-0">
             <p className="text-[13px] sm:text-sm font-bold text-[#111827] truncate">CBSE Pattern Paper</p>
-            <p className="text-[9px] sm:text-[10px] text-gray-400 font-medium">
-              Sections A–E · 38 Q · 80 marks
-            </p>
+            <p className="text-[9px] sm:text-[10px] text-gray-400 font-medium">Sections A–E · 38 Q · 80 marks</p>
           </div>
         </div>
-
         <button
           type="button"
           onClick={() => onToggle(!enabled)}
-          className={`relative w-11 h-[26px] sm:w-12 sm:h-7 rounded-full transition-all duration-200 flex-shrink-0 ${
-            enabled ? "bg-[#111827]" : "bg-gray-200"
-          }`}
-          style={{ WebkitTapHighlightColor: "transparent" }}
+          className={`relative w-11 h-[26px] sm:w-12 sm:h-7 rounded-full transition-all duration-200 flex-shrink-0 ${enabled ? "bg-[#111827]" : "bg-gray-200"}`}
+          style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
         >
-          <div className={`absolute top-[3px] w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full shadow-md transition-all duration-200 ${
-            enabled ? "left-[21px] sm:left-[22px]" : "left-[3px] sm:left-0.5"
-          }`} />
+          <div className={`absolute top-[3px] w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full shadow-md transition-all duration-200 ${enabled ? "left-[21px] sm:left-[22px]" : "left-[3px] sm:left-0.5"}`} />
         </button>
       </div>
 
-      {/* Section breakdown */}
       <AnimatePresence>
         {enabled && (
           <motion.div
@@ -276,7 +215,6 @@ const CBSEPatternToggle = ({
             className="overflow-hidden"
           >
             <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
-              {/* Mobile: 3+2 grid | Desktop: 5 cols */}
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-2">
                 {CBSE_SECTIONS.map((s) => (
                   <div key={s.sec} className={`rounded-lg sm:rounded-xl border p-2 sm:p-2.5 text-center ${s.color}`}>
@@ -297,7 +235,6 @@ const CBSEPatternToggle = ({
   </div>
 );
 
-
 // ═══════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
@@ -305,19 +242,17 @@ const CBSEPatternToggle = ({
 export default function TestGeneratorForm() {
   const [activeTab, setActiveTab] = useState<"Simple" | "Blueprint" | "Matrix" | "Buckets">("Simple");
   const [showPreview, setShowPreview] = useState(false);
-  const [availableChapters, setAvailableChapters] = useState<string[]>([]);
-  const [isLoadingChapters, setIsLoadingChapters] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [cbsePattern, setCbsePattern] = useState(true);
 
-  const { generate, isLoading, result, error, reset, progress } = useTestGenerator();
+  const { generate, isLoading, result, error, reset } = useTestGenerator();
   const { user } = useAuth();
 
   const methods = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       examTitle: "",
-      paperDate: new Date().toISOString().split("T")[0],  // ← ADDED: paperDate default
+      paperDate: new Date().toISOString().split("T")[0],
       board: "CBSE",
       classGrade: "Class 10",
       subject: "Science",
@@ -329,9 +264,8 @@ export default function TestGeneratorForm() {
   });
 
   const classGrade = useWatch({ control: methods.control, name: "classGrade" });
-  const subject = useWatch({ control: methods.control, name: "subject" });
-  const board = useWatch({ control: methods.control, name: "board" });
-
+  const subject    = useWatch({ control: methods.control, name: "subject" });
+  const board      = useWatch({ control: methods.control, name: "board" });
   const availableSubjects = SUBJECTS_BY_CLASS[classGrade] || SUBJECTS_BY_CLASS["Class 10"];
 
   useEffect(() => {
@@ -341,43 +275,16 @@ export default function TestGeneratorForm() {
     }
   }, [classGrade, subject, methods]);
 
-  const loadChapters = useCallback(async () => {
-    if (!subject || !classGrade) return;
-
-    setIsLoadingChapters(true);
-    try {
-      const result = await api.getChapters(subject, classGrade);
-      if (result.ok && result.chapters.length > 0) {
-        setAvailableChapters(result.chapters);
-        methods.setValue("ncertChapters", result.chapters);
-      } else {
-        setAvailableChapters([]);
-      }
-    } catch (err) {
-      console.error("Failed to load chapters:", err);
-      setAvailableChapters([]);
-    } finally {
-      setIsLoadingChapters(false);
-    }
-  }, [subject, classGrade, methods]);
-
-  useEffect(() => {
-    loadChapters();
-  }, [loadChapters]);
-
-  // ── Submit handler ──
   const onSubmit = async (data: FormSchema) => {
-    const userId = user?.id || data.userId;
-
+    const userId = user?.id || (data as any).userId;
     const mappedData = {
       ...data,
-      simpleData: data.simpleData.map(row => ({
+      simpleData: data.simpleData.map((row) => ({
         ...row,
         format: FORMAT_MAP[row.format] ?? "mcq",
       })),
     };
-
-    const payload = { ...mappedData, cbsePattern, paperDate: data.paperDate, userId };  // ← ADDED: paperDate included
+    const payload = { ...mappedData, cbsePattern, paperDate: data.paperDate, userId };
     console.log("📝 Submitting with userId:", userId ? userId.slice(0, 8) + "..." : "none");
     await generate(payload);
   };
@@ -390,11 +297,11 @@ export default function TestGeneratorForm() {
     );
   }
 
-  // Lighter animations for mobile
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
   } satisfies Variants;
+
   const itemVariants = {
     hidden: { y: 14, opacity: 0 },
     visible: { y: 0, opacity: 1, transition: { type: "spring" as const, stiffness: 120, damping: 20 } },
@@ -409,24 +316,16 @@ export default function TestGeneratorForm() {
         initial="hidden"
         animate="visible"
       >
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 1. HERO CONFIGURATION CARD                                    */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 1. HERO CONFIGURATION CARD */}
         <motion.div
           variants={itemVariants}
           className="bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)] sm:shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50"
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 md:gap-8">
             <div className="lg:col-span-9 space-y-4 sm:space-y-6">
-              {/* ── REPLACED: Exam Title + Paper Date in 2-col layout ── */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div className="sm:col-span-2">
-                  <PremiumInput
-                    label="Exam Title"
-                    name="examTitle"
-                    placeholder="e.g. Annual Final Assessment 2025"
-                    register={methods.register}
-                  />
+                  <PremiumInput label="Exam Title" name="examTitle" placeholder="e.g. Annual Final Assessment 2025" register={methods.register} />
                 </div>
                 <div>
                   <label className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1 block mb-1.5 sm:mb-2">
@@ -444,48 +343,24 @@ export default function TestGeneratorForm() {
                 </div>
               </div>
 
-              {/* Board / Class / Subject — 1 col on mobile, 3 on md+ */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-5">
                 <BoardSelect register={methods.register} value={board} />
                 <ClassSelect register={methods.register} />
-                <SubjectSelect
-                  register={methods.register}
-                  subjects={availableSubjects}
-                  isLoadingChapters={isLoadingChapters}
-                />
+                <SubjectSelect register={methods.register} subjects={availableSubjects} />
               </div>
-
-              {availableChapters.length > 0 && (
-                <div className="flex items-center gap-2 ml-1 flex-wrap">
-                  <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 sm:px-3 py-1 rounded-full border border-emerald-200">
-                    {availableChapters.length} NCERT chapters loaded
-                  </span>
-                  <span className="text-[9px] sm:text-[10px] text-gray-400">
-                    for {subject} {classGrade}
-                  </span>
-                </div>
-              )}
             </div>
-
-            {/* Logo upload — full width on mobile, side column on lg */}
             <div className="lg:col-span-3">
               <LogoUpload onLogoChange={setLogoBase64} />
             </div>
           </div>
         </motion.div>
 
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 1.5. CBSE PATTERN TOGGLE                                      */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 1.5. CBSE PATTERN TOGGLE */}
         <motion.div variants={itemVariants}>
           <CBSEPatternToggle enabled={cbsePattern} onToggle={setCbsePattern} />
         </motion.div>
 
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 2. TABBED EDITOR SECTION                                      */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 2. TABBED EDITOR SECTION */}
         <motion.div variants={itemVariants}>
           {!cbsePattern && (
             <>
@@ -519,18 +394,13 @@ export default function TestGeneratorForm() {
           )}
         </motion.div>
 
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 3. DIFFICULTY MIX & STATS                                     */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 3. DIFFICULTY MIX & STATS */}
         {!cbsePattern && (
           <motion.div
             variants={itemVariants}
             className="bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)] sm:shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50 flex flex-col lg:flex-row gap-5 sm:gap-8 items-center justify-between"
           >
-            <div className="w-full lg:w-2/3">
-              <DifficultyMix />
-            </div>
+            <div className="w-full lg:w-2/3"><DifficultyMix /></div>
             <SummaryStats />
           </motion.div>
         )}
@@ -540,14 +410,11 @@ export default function TestGeneratorForm() {
             variants={itemVariants}
             className="bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] sm:shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50"
           >
-            {/* Mobile: stack | Desktop: row */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               <div>
                 <p className="text-[13px] sm:text-sm font-bold text-[#111827]">Paper Summary</p>
                 <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">CBSE Standard Pattern</p>
               </div>
-
-              {/* Stats row — evenly spaced on mobile */}
               <div className="flex items-center justify-between sm:justify-end sm:gap-6 bg-gray-50 sm:bg-transparent rounded-xl sm:rounded-none p-3 sm:p-0">
                 <div className="text-center">
                   <p className="text-xl sm:text-2xl font-black text-[#111827]">38</p>
@@ -568,10 +435,7 @@ export default function TestGeneratorForm() {
           </motion.div>
         )}
 
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* ERROR DISPLAY                                                 */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* ERROR DISPLAY */}
         <AnimatePresence>
           {error && (
             <motion.div
@@ -589,17 +453,13 @@ export default function TestGeneratorForm() {
           )}
         </AnimatePresence>
 
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 4. STICKY BOTTOM ACTION BAR                                   */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 4. STICKY BOTTOM ACTION BAR */}
         <motion.div
           initial={{ y: 80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 100, damping: 18, delay: 0.6 }}
           className="fixed bottom-0 sm:bottom-6 md:bottom-8 left-0 w-full px-0 sm:px-4 md:px-6 pointer-events-none z-50"
         >
-          {/* Mobile: edge-to-edge with safe area | Desktop: floating rounded */}
           <div className="max-w-4xl mx-auto
             flex flex-col sm:flex-row items-stretch sm:items-center justify-between
             bg-[#111827] text-white
@@ -610,27 +470,22 @@ export default function TestGeneratorForm() {
             gap-2.5 sm:gap-4
             pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3"
           >
-
-            {/* Top row: timer / status */}
             <div className="flex items-center justify-center sm:justify-start px-1 sm:px-0">
               {isLoading ? (
                 <GenerationTimer isRunning={isLoading} />
               ) : (
                 <div className="flex items-center gap-1.5 sm:gap-2 text-gray-400">
-                  <Clock size={14} className="flex-shrink-0 sm:w-[18px] sm:h-[18px]" />
+                  <Clock size={14} className="flex-shrink-0" />
                   <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">
                     Est: <span className="text-white">{cbsePattern ? "60-120s" : "30-90s"}</span>
                   </span>
                   {cbsePattern && (
-                    <span className="text-[9px] sm:text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold hidden xs:inline">
-                      CBSE
-                    </span>
+                    <span className="text-[9px] sm:text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold hidden xs:inline">CBSE</span>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Bottom row: buttons — full width on mobile */}
             <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <motion.button
                 whileTap={{ scale: 0.96 }}
@@ -640,7 +495,7 @@ export default function TestGeneratorForm() {
                 className="px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl text-[13px] sm:text-sm font-bold
                   bg-gray-100 text-gray-700 active:bg-gray-200 transition-colors
                   flex-1 sm:flex-none disabled:opacity-50 min-h-[44px]"
-                style={{ WebkitTapHighlightColor: "transparent" }}
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               >
                 Preview
               </motion.button>
@@ -649,6 +504,7 @@ export default function TestGeneratorForm() {
                 whileTap={!isLoading ? { scale: 0.96 } : {}}
                 type="submit"
                 disabled={isLoading}
+                onClick={() => { methods.handleSubmit(onSubmit)(); }}
                 className="px-5 sm:px-8 py-3 sm:py-3.5
                   bg-gradient-to-br from-gray-700 to-gray-900
                   rounded-xl font-bold text-[13px] sm:text-sm text-white
@@ -657,7 +513,7 @@ export default function TestGeneratorForm() {
                   flex items-center justify-center gap-2 transition-all
                   border border-white/10 flex-[1.3] sm:flex-none
                   disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
-                style={{ WebkitTapHighlightColor: "transparent" }}
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               >
                 {isLoading ? (
                   <>
@@ -677,17 +533,10 @@ export default function TestGeneratorForm() {
           </div>
         </motion.div>
 
-
-        {/* ═══════════════════════════════════════════════════════════════ */}
-        {/* 5. PREVIEW MODAL                                              */}
-        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* 5. PREVIEW MODAL */}
         <AnimatePresence>
           {showPreview && (
-            <PreviewModal
-              isOpen={showPreview}
-              onClose={() => setShowPreview(false)}
-              data={methods.getValues()}
-            />
+            <PreviewModal isOpen={showPreview} onClose={() => setShowPreview(false)} data={methods.getValues()} />
           )}
         </AnimatePresence>
       </motion.form>

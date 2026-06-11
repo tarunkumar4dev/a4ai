@@ -108,17 +108,17 @@ function stripMarkdownTable(text: string): string {
 // ── Badges ─────────────────────────────────────────────────────────────
 
 const difficultyConfig: Record<string, { bg: string; text: string; border: string }> = {
-  easy:      { bg: "bg-emerald-50",  text: "text-emerald-700", border: "border-emerald-200" },
-  medium:    { bg: "bg-amber-50",    text: "text-amber-700",   border: "border-amber-200" },
-  hard:      { bg: "bg-rose-50",     text: "text-rose-700",    border: "border-rose-200" },
-  very_hard: { bg: "bg-purple-50",   text: "text-purple-700",  border: "border-purple-200" },
+  easy: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  medium: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
+  hard: { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
+  very_hard: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
 };
 
 const statusBorder: Record<QuestionStatus, string> = {
-  pending:  "border-gray-200",
+  pending: "border-gray-200",
   approved: "border-emerald-300 bg-emerald-50/20",
   rejected: "border-red-300 bg-red-50/20 opacity-50",
-  editing:  "border-blue-300 bg-blue-50/20",
+  editing: "border-blue-300 bg-blue-50/20",
 };
 
 const DiffBadge = ({ level }: { level: string }) => {
@@ -142,9 +142,9 @@ const BloomBadge = ({ level }: { level: string | null }) => {
 // ── Format Badge (v7 — table format type) ──────────────────────────────
 
 const formatBadgeConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  journal_entry:  { bg: "bg-indigo-50",  text: "text-indigo-700",  border: "border-indigo-200", label: "Journal Entry" },
-  ledger:         { bg: "bg-violet-50",  text: "text-violet-700",  border: "border-violet-200", label: "Ledger" },
-  trial_balance:  { bg: "bg-fuchsia-50", text: "text-fuchsia-700", border: "border-fuchsia-200", label: "Trial Balance" },
+  journal_entry: { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200", label: "Journal Entry" },
+  ledger: { bg: "bg-violet-50", text: "text-violet-700", border: "border-violet-200", label: "Ledger" },
+  trial_balance: { bg: "bg-fuchsia-50", text: "text-fuchsia-700", border: "border-fuchsia-200", label: "Trial Balance" },
 };
 
 const FormatBadge = ({ format }: { format: string }) => {
@@ -529,10 +529,9 @@ const QuestionCard = ({
                       onEdit(question.id, "correctAnswer", opts[idx]);
                     }
                   }}
-                  className={`w-7 h-7 rounded-full text-xs font-bold transition-all ${
-                    (ed.correctAnswer || question.correctAnswer)?.startsWith(letter)
+                  className={`w-7 h-7 rounded-full text-xs font-bold transition-all ${(ed.correctAnswer || question.correctAnswer)?.startsWith(letter)
                       ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-emerald-100"
-                  }`}
+                    }`}
                 >{letter}</button>
               ))}
             </div>
@@ -541,21 +540,21 @@ const QuestionCard = ({
       )}
 
       {/* Fix 3: Show answer for Short/Long/non-MCQ questions */}
-      {showAnswer 
+      {showAnswer
         && (!question.options || question.options.length === 0)
         && !answerTable
         && question.correctAnswer && (
-        <div className="px-5 pb-3">
-          <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3.5">
-            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5">
-              Answer
-            </p>
-            <p className="text-sm font-medium text-emerald-900 leading-relaxed">
-              <MathText text={question.correctAnswer} />
-            </p>
+          <div className="px-5 pb-3">
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3.5">
+              <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1.5">
+                Answer
+              </p>
+              <p className="text-sm font-medium text-emerald-900 leading-relaxed">
+                <MathText text={question.correctAnswer} />
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* v7: Answer Table (Accountancy — Journal Entry / Ledger / Trial Balance) */}
       {showAnswer && answerTable && (
@@ -665,29 +664,33 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   // Contest modal state
   const [showContestModal, setShowContestModal] = useState(false);
 
-  const [questions, setQuestions] = useState<QuestionWithStatus[]>(
-    result.questions.map((q) => ({ ...q, status: "pending" as QuestionStatus }))
-  );
+  const [questions, setQuestions] = useState<QuestionWithStatus[]>(() => {
+    // 🚩 FIX: Strict testId match — prevents old test data overwriting new generation
+    const fresh = result.questions.map((q) => ({ ...q, status: "pending" as QuestionStatus }));
+
+    if (!result.testId) return fresh;
+
+    const saved = localStorage.getItem(`test-progress-${result.testId}`);
+    if (!saved) return fresh;
+
+    try {
+      const parsed = JSON.parse(saved);
+      if (
+        parsed.testId === result.testId &&
+        Array.isArray(parsed.questions) &&
+        parsed.questions.length === result.questions.length
+      ) {
+        return parsed.questions;
+      }
+    } catch { }
+
+    return fresh;
+  });
 
   // Fix 4: Auto-save to localStorage
   const STORAGE_KEY = `test-progress-${result.testId}`;
 
   // Load saved state on mount
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.questions && Array.isArray(parsed.questions)) {
-          setQuestions(parsed.questions);
-        }
-        if (parsed.paperDate) setPaperDate(parsed.paperDate);
-      } catch (err) {
-        console.error("Failed to restore progress:", err);
-      }
-    }
-  }, []);
-
   // Save on every change
   useEffect(() => {
     try {
@@ -700,6 +703,22 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
       console.error("Failed to save progress:", err);
     }
   }, [questions, paperDate]);
+
+  // Save on every change
+  // Save on every change
+  useEffect(() => {
+    if (!result.testId) return;  // 🚩 FIX: guard against undefined testId
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        testId: result.testId,  // 🚩 FIX: persist testId for strict match on reload
+        questions,
+        paperDate,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch (err) {
+      console.error("Failed to save progress:", err);
+    }
+  }, [questions, paperDate, result.testId]);
 
   // Clear localStorage when user clicks "Save & Finish" or "New Test"
   const clearStoredProgress = useCallback(() => {
@@ -733,8 +752,14 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
 
   // ── Download handler with guest check ─────────────────────────────────
   const handleDownload = (format: "pdf" | "docx", mode: "student" | "answers" | "teacher") => {
+    // 🚩 FIX: Block download if nothing approved
+    if (activeQuestions.length === 0) {
+      alert("Kam se kam ek question approve karo, ya 'Approve All' dabao");
+      setShowDownloadMenu(false);
+      return;
+    }
     if (!gateAction("download")) {
-      saveTestDataForRestore({ 
+      saveTestDataForRestore({
         testId: result.testId,
         examTitle: result.examTitle,
         questions: activeQuestions,
@@ -864,7 +889,8 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   };
 
   // ── Export ────────────────────────────────────────────────────────
-  const activeQuestions = questions.filter((q) => q.status !== "rejected");
+  // 🚩 FIX: Only approved questions go to PDF/Contest/Copy 
+  const activeQuestions = questions.filter((q) => q.status === "approved");
 
   const handleExport = async (format: "pdf" | "docx", mode: "student" | "answers" | "teacher") => {
     setIsExporting(true);
@@ -915,7 +941,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                 <Zap size={20} className="text-yellow-500" />
                 {result.examTitle}
               </h2>
-              
+
               {/* Editable Date */}
               <div className="flex items-center gap-2 mt-1.5">
                 {isEditingDate ? (
@@ -935,14 +961,14 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                     title="Click to edit date"
                   >
                     <Calendar size={12} />
-                    {new Date(paperDate).toLocaleDateString("en-IN", { 
-                      day: "numeric", month: "short", year: "numeric" 
+                    {new Date(paperDate).toLocaleDateString("en-IN", {
+                      day: "numeric", month: "short", year: "numeric"
                     })}
                     <Edit3 size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 )}
               </div>
-              
+
               <p className="text-sm text-gray-500 mt-1">
                 {activeQuestions.length} questions · {activeQuestions.reduce((s, q) => s + q.marks, 0)} marks · Generated in {result.generationTime}s
               </p>
@@ -1097,9 +1123,9 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
             <div className="flex items-center gap-2 text-gray-400">
               <CheckCircle2 size={16} className={approvedCount > 0 ? "text-emerald-400" : "text-gray-500"} />
               <span className="text-xs font-bold uppercase tracking-wider hidden sm:block">
-                <span className="text-white">{activeQuestions.length}</span> questions
-                {approvedCount > 0 && (
-                  <span className="text-emerald-400 ml-2">· {approvedCount} approved</span>
+                <span className="text-white">{approvedCount}</span> approved
+                {pendingCount > 0 && (
+                  <span className="text-amber-400 ml-2">· {pendingCount} pending</span>
                 )}
               </span>
             </div>
@@ -1140,9 +1166,9 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
       </motion.div>
 
       {/* Login Modal */}
-      <LoginModal 
-        isOpen={showLoginModal} 
-        onClose={() => setShowLoginModal(false)} 
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
         action="download"
         onLoginSuccess={() => {
           setShowLoginModal(false);
