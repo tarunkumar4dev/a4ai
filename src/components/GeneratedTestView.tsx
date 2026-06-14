@@ -1,22 +1,21 @@
 // src/components/GeneratedTestView.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V8 — Question Table Support (Statistics: Frequency Distribution etc.)
+// V9 — Mobile UI fixes (presentational only, no logic changes)
 //
-// v8 changes (additive only):
-//   - QuestionTable interface for Statistics structured data
-//   - QuestionTableView component — blue-toned table rendered as PART of question
-//   - stripMarkdownTable() helper avoids double rendering when both structured
-//     and inline markdown tables are present
-//   - QuestionTable always visible (it's the question data, not the answer)
+// v9 changes vs v8:
+//   - Header action buttons (Show Answers / Copy / Add Question / Share /
+//     Download): on mobile now a clean 2-col grid with full-width buttons +
+//     44px tap targets; desktop unchanged (flex-wrap).
+//   - Download dropdown: on mobile spans full button width (left-0 right-0) so
+//     it no longer clips off-screen; desktop keeps w-60 right-aligned.
+//   - Sticky bottom bar: adopts TestGeneratorForm mobile pattern — edge-to-edge
+//     on phone, safe-area inset, flex-1 buttons, min-h-44px, touch-action.
+//   - No handler / state / data changes.
 //
-// v7 features retained:
-//   - AnswerTableView (Accountancy — Journal Entry / Ledger / Trial Balance)
-//   - Save & Finish, Contest, Download menu
-//   - Editable paper date in header
-//   - Manual question addition support
-//
-// Fix 3: Show answers for Short/Long answer questions
-// Fix 4: Auto-save progress to localStorage (survives page refresh)
+// v8 features retained:
+//   - QuestionTable (Statistics) + AnswerTable (Accountancy) rendering
+//   - Save & Finish, Contest, Download menu, editable date, manual questions
+//   - Show answers for Short/Long, localStorage auto-save
 // ──────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useEffect } from "react";
@@ -920,6 +919,10 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   const approvedCount = questions.filter((q) => q.status === "approved").length;
   const pendingCount = questions.filter((q) => q.status === "pending").length;
 
+  // v9: shared classes for header action buttons (mobile-first)
+  const actionBtnBase =
+    "flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-bold rounded-xl transition-colors w-full lg:w-auto min-h-[44px]";
+
   return (
     <>
       <motion.div
@@ -933,13 +936,13 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.3 }}
-          className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100"
+          className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-gray-100"
         >
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Zap size={20} className="text-yellow-500" />
-                {result.examTitle}
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Zap size={20} className="text-yellow-500 flex-shrink-0" />
+                <span className="truncate">{result.examTitle}</span>
               </h2>
 
               {/* Editable Date */}
@@ -979,20 +982,30 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <button onClick={() => setShowAnswers(!showAnswers)} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
+            {/* v9: Actions — 2-col grid on mobile, flex-wrap on desktop */}
+            <div className="grid grid-cols-2 gap-2 w-full lg:flex lg:flex-wrap lg:items-center lg:w-auto">
+              <button
+                onClick={() => setShowAnswers(!showAnswers)}
+                className={`${actionBtnBase} border border-gray-200 hover:bg-gray-50 active:bg-gray-100`}
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+              >
                 {showAnswers ? <EyeOff size={14} /> : <Eye size={14} />}
                 {showAnswers ? "Hide" : "Show"} Answers
               </button>
 
-              <button onClick={handleCopyAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
+              <button
+                onClick={handleCopyAll}
+                className={`${actionBtnBase} border border-gray-200 hover:bg-gray-50 active:bg-gray-100`}
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+              >
                 <Copy size={14} /> Copy
               </button>
 
               {/* Add Manual Question button */}
               <button
                 onClick={() => setShowManualModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                className={`${actionBtnBase} bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800`}
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               >
                 <Plus size={14} /> Add Question
               </button>
@@ -1000,17 +1013,19 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
               {/* Share as Contest Button */}
               <button
                 onClick={handleShare}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                className={`${actionBtnBase} bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800`}
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               >
                 <Share2 size={14} /> Share as Contest
               </button>
 
-              {/* Download Menu */}
-              <div className="relative">
+              {/* Download Menu — spans full width on mobile */}
+              <div className="relative col-span-2 lg:col-span-1">
                 <button
                   onClick={() => setShowDownloadMenu(!showDownloadMenu)}
                   disabled={isExporting}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gray-800 text-white hover:bg-gray-900 transition-colors disabled:opacity-50"
+                  className={`${actionBtnBase} bg-gray-800 text-white hover:bg-gray-900 active:bg-black disabled:opacity-50`}
+                  style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
                 >
                   {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                   Download
@@ -1023,28 +1038,28 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -5, scale: 0.95 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 w-60"
+                      className="absolute left-0 right-0 sm:left-auto sm:right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 sm:w-60 max-w-[calc(100vw-2rem)]"
                     >
                       <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">PDF</div>
-                      <button onClick={() => handleDownload("pdf", "student")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                        <FileText size={14} className="text-red-500" /> Student Copy
+                      <button onClick={() => handleDownload("pdf", "student")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                        <FileText size={14} className="text-red-500 flex-shrink-0" /> Student Copy
                       </button>
-                      <button onClick={() => handleDownload("pdf", "answers")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                        <FileText size={14} className="text-orange-500" /> With Answer Key
+                      <button onClick={() => handleDownload("pdf", "answers")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                        <FileText size={14} className="text-orange-500 flex-shrink-0" /> With Answer Key
                       </button>
-                      <button onClick={() => handleDownload("pdf", "teacher")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                        <FileText size={14} className="text-emerald-500" /> Teacher Copy (+ explanations)
+                      <button onClick={() => handleDownload("pdf", "teacher")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                        <FileText size={14} className="text-emerald-500 flex-shrink-0" /> Teacher Copy (+ explanations)
                       </button>
                       <div className="border-t border-gray-100 my-1" />
                       <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">DOCX</div>
-                      <button onClick={() => handleDownload("docx", "student")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                        <FileDown size={14} className="text-blue-500" /> Student Copy
+                      <button onClick={() => handleDownload("docx", "student")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                        <FileDown size={14} className="text-blue-500 flex-shrink-0" /> Student Copy
                       </button>
-                      <button onClick={() => handleDownload("docx", "answers")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                        <FileDown size={14} className="text-orange-500" /> With Answer Key
+                      <button onClick={() => handleDownload("docx", "answers")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                        <FileDown size={14} className="text-orange-500 flex-shrink-0" /> With Answer Key
                       </button>
-                      <button onClick={() => handleDownload("docx", "teacher")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                        <FileDown size={14} className="text-emerald-500" /> Teacher Copy (+ explanations)
+                      <button onClick={() => handleDownload("docx", "teacher")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                        <FileDown size={14} className="text-emerald-500 flex-shrink-0" /> Teacher Copy (+ explanations)
                       </button>
                     </motion.div>
                   )}
@@ -1059,19 +1074,20 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="flex items-center gap-3 flex-wrap"
+          className="flex items-center gap-2 sm:gap-3 flex-wrap"
         >
-          <button onClick={approveAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
+          <button onClick={approveAll} className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-bold rounded-xl bg-emerald-100 text-emerald-700 hover:bg-emerald-200 active:bg-emerald-300 transition-colors min-h-[44px]" style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}>
             <CheckCircle2 size={14} /> Approve All
           </button>
-          <button onClick={resetAll} className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+          <button onClick={resetAll} className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-bold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-300 transition-colors min-h-[44px]" style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}>
             <RotateCcw size={14} /> Reset All
           </button>
           {rejectedCount > 0 && (
             <button
               onClick={handleRegenerate}
               disabled={isRegenerating}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-bold rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 active:bg-blue-300 transition-colors disabled:opacity-50 min-h-[44px]"
+              style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
             >
               {isRegenerating ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
               Regenerate {rejectedCount} Rejected
@@ -1110,34 +1126,44 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
           )}
         </AnimatePresence>
 
-        {/* ── Sticky Bottom Bar ───────────────────────────────────────── */}
+        {/* ── Sticky Bottom Bar (v9: mobile edge-to-edge + safe-area) ──── */}
         <motion.div
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 80, damping: 15, delay: 0.5 }}
-          className="fixed bottom-8 left-0 w-full px-4 md:px-6 pointer-events-none z-50"
+          className="fixed bottom-0 sm:bottom-8 left-0 w-full px-0 sm:px-4 md:px-6 pointer-events-none z-50"
         >
-          <div className="max-w-4xl mx-auto flex items-center justify-between bg-[#111827] text-white p-3 pl-6 rounded-[24px] shadow-[0_20px_40px_rgba(0,0,0,0.3)] pointer-events-auto border border-white/10">
+          <div className="max-w-4xl mx-auto
+            flex items-center justify-between
+            bg-[#111827] text-white
+            p-3 sm:pl-6
+            rounded-none sm:rounded-[24px]
+            shadow-[0_-4px_20px_rgba(0,0,0,0.15)] sm:shadow-[0_20px_40px_rgba(0,0,0,0.3)]
+            pointer-events-auto border-t sm:border border-white/10
+            gap-2 sm:gap-3
+            pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3">
 
             {/* Left — status info */}
-            <div className="flex items-center gap-2 text-gray-400">
+            <div className="flex items-center gap-2 text-gray-400 flex-shrink-0">
               <CheckCircle2 size={16} className={approvedCount > 0 ? "text-emerald-400" : "text-gray-500"} />
-              <span className="text-xs font-bold uppercase tracking-wider hidden sm:block">
-                <span className="text-white">{approvedCount}</span> approved
+              <span className="text-xs font-bold uppercase tracking-wider">
+                <span className="text-white">{approvedCount}</span>
+                <span className="hidden xs:inline"> approved</span>
                 {pendingCount > 0 && (
-                  <span className="text-amber-400 ml-2">· {pendingCount} pending</span>
+                  <span className="text-amber-400 ml-2 hidden sm:inline">· {pendingCount} pending</span>
                 )}
               </span>
             </div>
 
             {/* Right — actions */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 type="button"
                 onClick={handleNewTest}
-                className="px-6 py-3.5 rounded-xl text-sm font-bold bg-gray-700 text-gray-200 hover:bg-gray-600 transition-all"
+                className="px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl text-[13px] sm:text-sm font-bold bg-gray-700 text-gray-200 hover:bg-gray-600 active:bg-gray-500 transition-all min-h-[44px] whitespace-nowrap"
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               >
                 New Test
               </motion.button>
@@ -1148,14 +1174,15 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving || saveStatus === "saved"}
-                className="px-8 py-3.5 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl font-bold text-sm text-white shadow-[0_4px_14px_rgba(0,0,0,0.4)] flex items-center gap-2 transition-all border border-white/10 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="px-5 sm:px-8 py-3 sm:py-3.5 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl font-bold text-[13px] sm:text-sm text-white shadow-[0_4px_14px_rgba(0,0,0,0.4)] flex items-center gap-2 transition-all border border-white/10 disabled:opacity-70 disabled:cursor-not-allowed min-h-[44px] whitespace-nowrap"
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               >
                 {isSaving ? (
                   <><Loader2 size={18} className="animate-spin" /> Saving...</>
                 ) : saveStatus === "saved" ? (
                   <><Check size={18} /> Saved!</>
                 ) : (
-                  <><Save size={18} /> Save & Finish</>
+                  <><Save size={18} /> <span className="hidden xs:inline">Save & Finish</span><span className="xs:hidden">Save</span></>
                 )}
               </motion.button>
             </div>
