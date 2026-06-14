@@ -1,20 +1,30 @@
 // src/components/TestRowEditor.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V7 — Chapter selection fix
+// V8 — Mobile selection persistence fix (Controller)
 //
-// v7 changes vs v6:
-//   - prevKeyRef initialized as "" — eliminates false reset on first render
-//   - Chapter select: controlled (value + onChange) instead of register-only
-//     → fixes Android old Chrome selection not persisting
-//   - Subtopic select also controlled for same reason
-//   - All other v6 fixes retained (AbortController, mock fallback, etc.)
+// v8 changes vs v7.1:
+//   - Topic & Subtopic selects migrated from `value={watch} + onChange={setValue}`
+//     to react-hook-form <Controller>.
+//     WHY: on mobile (native picker close + in-app browsers), the watch->setValue
+//     propagation lagged one render tick, so React snapped the <select> back to
+//     the placeholder right after a user picked an option ("select karne ke baad gayab").
+//     Controller binds field.value/field.onChange through RHF's own subscription,
+//     guaranteeing the rendered value matches form state in the same render — no snap-back.
+//   - Chapter change now auto-clears that row's subtopic (avoids stale subtopic).
+//   - Mobile chapter select: added a visible ChevronDown affordance.
+//   - register-based selects (quantity/marks/difficulty) left untouched.
+//
+// Retained from v7.1:
+//   - Complete Class XII Maths subtopics (all 13 NCERT chapters)
+//   - prevKeyRef = "" (no false reset on first render)
+//   - AbortController fetch, mock fallback, English pseudo-chapters
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useRef, memo, useCallback, forwardRef, useState, useEffect } from "react";
-import { useFieldArray, useFormContext, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
+import { useFieldArray, useFormContext, Controller, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
 import {
   GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen,
-  AlignLeft, ListChecks, ArrowLeftRight, Loader2, AlertCircle,
+  AlignLeft, ListChecks, ArrowLeftRight, Loader2, AlertCircle, ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -195,6 +205,7 @@ function useChapters(classLevel: string, subject: string) {
 
 // ==================== COMMON SUBTOPICS ====================
 const COMMON_SUBTOPICS: Record<string, string[]> = {
+  // ─────────── Class X Science ───────────
   "Chemical Reactions and Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
   "Acids Bases and Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
   "Metals and Non-metals": ["Physical and chemical properties", "Reactivity series", "Extraction of metals", "Corrosion and prevention"],
@@ -209,9 +220,13 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "How do Organisms Reproduce": ["Asexual reproduction", "Sexual reproduction", "Reproductive health"],
   "Heredity and Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
   "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution"],
+
+  // ─────────── Class X Maths ───────────
   "Real Numbers": ["Euclid's division", "Fundamental theorem", "Irrational numbers", "Decimal expansions"],
   "Polynomials": ["Zeros of polynomial", "Relationship between zeros", "Division algorithm"],
   "Quadratic Equations": ["Standard form", "Solution by factorization", "Quadratic formula", "Nature of roots"],
+
+  // ─────────── Class IX Science ───────────
   "Matter in Our Surroundings": ["States of matter", "Physical and chemical changes", "Latent heat", "Evaporation"],
   "Is Matter Around Us Pure": ["Mixtures", "Solutions", "Separation techniques", "Compounds and elements"],
   "Atoms and Molecules": ["Laws of chemical combination", "Atomic mass", "Mole concept", "Molecular mass"],
@@ -223,11 +238,15 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Gravitation": ["Universal law", "Free fall", "Buoyancy", "Archimedes principle"],
   "Work and Energy": ["Work", "Kinetic energy", "Potential energy", "Power"],
   "Sound": ["Production of sound", "Sound propagation", "Reflection of sound", "SONAR"],
+
+  // ─────────── Class X Civics ───────────
   "Power Sharing": ["Belgium model", "Sri Lanka model", "Forms of power sharing"],
   "Federalism": ["Union list", "State list", "Concurrent list", "Decentralisation", "Panchayati Raj"],
   "Gender Religion and Caste": ["Gender division", "Religion and politics", "Caste and politics"],
   "Political Parties": ["Functions of parties", "National parties", "State parties"],
   "Outcomes of Democracy": ["Accountability", "Economic growth", "Inequality", "Social diversity"],
+
+  // ─────────── Accountancy ───────────
   "Introduction to Accounting": ["Meaning and objectives", "Accounting as information system", "Users of accounting", "Accounting terms"],
   "Recording of Transactions": ["Accounting equation", "Rules of debit and credit", "Journal", "Ledger posting"],
   "Ledger": ["Format of ledger", "Posting from journal", "Balancing accounts", "T-account"],
@@ -236,6 +255,129 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Depreciation": ["Meaning and causes", "Methods", "Accounting treatment"],
   "Financial Statements": ["Trading account", "Profit and loss account", "Balance sheet", "Adjustments"],
   "Accounting for Partnership": ["Nature", "Partnership deed", "Profit sharing ratio", "Capital accounts"],
+
+  // ─────────── Class XII Maths (NCERT 2025-26) ───────────
+  "Relations and Functions": [
+    "Types of relations",
+    "Equivalence relations",
+    "Types of functions",
+    "Composition of functions",
+    "Invertible functions",
+    "Binary operations",
+  ],
+  "Inverse Trigonometric Functions": [
+    "Basic concepts and definitions",
+    "Domain and range of inverse trig functions",
+    "Principal value branches",
+    "Properties of inverse trig functions",
+    "Graphs of inverse trig functions",
+  ],
+  "Matrices": [
+    "Types of matrices",
+    "Operations on matrices",
+    "Transpose of a matrix",
+    "Symmetric and skew-symmetric matrices",
+    "Elementary row and column operations",
+    "Invertible matrices",
+  ],
+  "Determinants": [
+    "Determinant of a matrix",
+    "Properties of determinants",
+    "Area of a triangle",
+    "Minors and cofactors",
+    "Adjoint and inverse of a matrix",
+    "Applications: System of linear equations",
+    "Cramer's rule",
+  ],
+  "Continuity and Differentiability": [
+    "Continuity at a point",
+    "Algebra of continuous functions",
+    "Differentiability",
+    "Derivatives of composite functions (Chain rule)",
+    "Derivatives of implicit functions",
+    "Derivatives of inverse trig functions",
+    "Exponential and logarithmic functions",
+    "Logarithmic differentiation",
+    "Derivatives in parametric form",
+    "Second order derivatives",
+    "Mean Value Theorem (Rolle's and Lagrange's)",
+  ],
+  "Application of Derivatives": [
+    "Rate of change of quantities",
+    "Increasing and decreasing functions",
+    "Tangents and normals",
+    "Approximations",
+    "Maxima and minima",
+    "First and second derivative test",
+    "Absolute maximum and minimum",
+  ],
+  "Integrals": [
+    "Indefinite integrals",
+    "Integration by substitution",
+    "Integration using trigonometric identities",
+    "Integration by partial fractions",
+    "Integration by parts",
+    "Integrals of special functions",
+    "Definite integrals",
+    "Fundamental theorem of calculus",
+    "Properties of definite integrals",
+  ],
+  "Application of Integrals": [
+    "Area under simple curves",
+    "Area between two curves",
+    "Area bounded by a curve and a line",
+    "Area using definite integrals",
+  ],
+  "Differential Equations": [
+    "Basic concepts and definitions",
+    "Order and degree of differential equations",
+    "General and particular solutions",
+    "Formation of differential equations",
+    "Variable separable method",
+    "Homogeneous differential equations",
+    "Linear differential equations",
+  ],
+  "Vector Algebra": [
+    "Types of vectors",
+    "Addition of vectors",
+    "Multiplication of vector by a scalar",
+    "Components of a vector",
+    "Position vector",
+    "Direction cosines and direction ratios",
+    "Section formula",
+    "Scalar (dot) product",
+    "Vector (cross) product",
+    "Projection of vector on a line",
+  ],
+  "Three Dimensional Geometry": [
+    "Direction cosines and direction ratios of a line",
+    "Equation of a line in space",
+    "Angle between two lines",
+    "Shortest distance between two lines",
+    "Coplanar and skew lines",
+    "Equation of a plane",
+    "Angle between two planes",
+    "Distance of a point from a plane",
+    "Angle between a line and a plane",
+  ],
+  "Linear Programming": [
+    "Introduction and definitions",
+    "Mathematical formulation of LPP",
+    "Graphical method of solution",
+    "Feasible and infeasible regions",
+    "Optimal solutions",
+    "Different types of LPP (manufacturing, diet, transportation problems)",
+  ],
+  "Probability": [
+    "Conditional probability",
+    "Multiplication theorem on probability",
+    "Independent events",
+    "Bayes' theorem",
+    "Total probability theorem",
+    "Random variables and probability distribution",
+    "Mean and variance of random variable",
+    "Bernoulli trials and binomial distribution",
+  ],
 };
 
 // ==================== QUESTION TYPE CONFIG ====================
@@ -381,9 +523,11 @@ FormatSelector.displayName = "FormatSelector";
 const MobileCard = memo(({
   index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
 }: RowProps) => {
-  const { register, watch, setValue } = useFormContext<FormValues>();
+  const { control, register, watch, setValue } = useFormContext<FormValues>();
 
-  // ✅ v7: controlled values — guarantees display matches form state on Android
+  // Read-only derivations (for subtopic options + disabled logic).
+  // NOTE: the <select> binding itself is via <Controller> below — NOT this watch —
+  // which is what stops the mobile snap-back.
   const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
   const subject      = watch("subject") ?? "";
   const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
@@ -415,41 +559,61 @@ const MobileCard = memo(({
         </button>
       </div>
 
-      {/* ✅ v7: Chapter — CONTROLLED select (value + onChange) */}
+      {/* ✅ v8: Chapter — Controller (no snap-back on mobile) */}
       <div>
         <label className={labelClass}>Chapter</label>
         <div className="relative">
-          <select
-            value={currentTopic}
-            onChange={(e) => setValue(`simpleData.${index}.topic`, e.target.value, { shouldValidate: true, shouldDirty: true })}
-            disabled={chaptersLoading || availableTopics.length === 0}
-            className={`${inputClass} pr-9 disabled:opacity-60`}
-          >
-            <option value="">
-              {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select a chapter..."}
-            </option>
-            {renderChapterOptions(chapterGroups, availableTopics)}
-          </select>
-          {chaptersLoading && (
+          <Controller
+            name={`simpleData.${index}.topic`}
+            control={control}
+            render={({ field: f }) => (
+              <select
+                value={f.value ?? ""}
+                onChange={(e) => {
+                  f.onChange(e.target.value);
+                  // chapter badla → us row ka subtopic clear
+                  setValue(`simpleData.${index}.subtopic`, "", { shouldDirty: true });
+                }}
+                onBlur={f.onBlur}
+                disabled={chaptersLoading || availableTopics.length === 0}
+                className={`${inputClass} pr-9 disabled:opacity-60`}
+              >
+                <option value="">
+                  {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select a chapter..."}
+                </option>
+                {renderChapterOptions(chapterGroups, availableTopics)}
+              </select>
+            )}
+          />
+          {chaptersLoading ? (
             <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />
+          ) : (
+            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           )}
         </div>
       </div>
 
-      {/* ✅ v7: Subtopic — CONTROLLED select */}
+      {/* ✅ v8: Subtopic — Controller */}
       <div>
         <label className={labelClass}>Subtopic (optional)</label>
-        <select
-          value={watch(`simpleData.${index}.subtopic`) ?? ""}
-          onChange={(e) => setValue(`simpleData.${index}.subtopic`, e.target.value, { shouldDirty: true })}
-          disabled={!currentTopic || subOptions.length === 0}
-          className={`${inputClass} disabled:opacity-60 disabled:bg-gray-50`}
-        >
-          <option value="">
-            {!currentTopic ? "Select a chapter first" : subOptions.length === 0 ? "No subtopics available" : "Select subtopic..."}
-          </option>
-          {subOptions.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
-        </select>
+        <Controller
+          name={`simpleData.${index}.subtopic`}
+          control={control}
+          render={({ field: f }) => (
+            <select
+              value={f.value ?? ""}
+              onChange={(e) => f.onChange(e.target.value)}
+              onBlur={f.onBlur}
+              disabled={!currentTopic || subOptions.length === 0}
+              className={`${inputClass} disabled:opacity-60 disabled:bg-gray-50`}
+            >
+              <option value="">
+                {!currentTopic ? "Select a chapter first" : subOptions.length === 0 ? "No subtopics available" : "Select subtopic..."}
+              </option>
+              {subOptions.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
+            </select>
+          )}
+        />
       </div>
 
       {/* Quantity + Marks */}
@@ -501,9 +665,8 @@ MobileCard.displayName = "MobileCard";
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
   index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
 }, ref) => {
-  const { register, watch, setValue } = useFormContext<FormValues>();
+  const { control, register, watch, setValue } = useFormContext<FormValues>();
 
-  // ✅ v7: controlled values
   const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
   const subject      = watch("subject") ?? "";
   const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
@@ -525,36 +688,53 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
       <td className="py-3 px-4">
         <div className="flex flex-col gap-2">
 
-          {/* ✅ v7: Chapter — controlled */}
+          {/* ✅ v8: Chapter — Controller */}
           <div className="relative">
-            <select
-              value={currentTopic}
-              onChange={(e) => setValue(`simpleData.${index}.topic`, e.target.value, { shouldValidate: true, shouldDirty: true })}
-              className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600 disabled:opacity-50"
-              disabled={chaptersLoading || availableTopics.length === 0}
-            >
-              <option value="">
-                {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select Chapter/Topic..."}
-              </option>
-              {renderChapterOptions(chapterGroups, availableTopics)}
-            </select>
+            <Controller
+              name={`simpleData.${index}.topic`}
+              control={control}
+              render={({ field: f }) => (
+                <select
+                  value={f.value ?? ""}
+                  onChange={(e) => {
+                    f.onChange(e.target.value);
+                    setValue(`simpleData.${index}.subtopic`, "", { shouldDirty: true });
+                  }}
+                  onBlur={f.onBlur}
+                  className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600 disabled:opacity-50"
+                  disabled={chaptersLoading || availableTopics.length === 0}
+                >
+                  <option value="">
+                    {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select Chapter/Topic..."}
+                  </option>
+                  {renderChapterOptions(chapterGroups, availableTopics)}
+                </select>
+              )}
+            />
             {chaptersLoading && <Loader2 size={14} className="absolute right-2 top-2 animate-spin text-gray-400" />}
           </div>
 
-          {/* ✅ v7: Subtopic — controlled */}
+          {/* ✅ v8: Subtopic — Controller */}
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-[#E5E7EB] group-hover:bg-gray-400 transition-colors" />
-            <select
-              value={watch(`simpleData.${index}.subtopic`) ?? ""}
-              onChange={(e) => setValue(`simpleData.${index}.subtopic`, e.target.value, { shouldDirty: true })}
-              className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none cursor-pointer disabled:opacity-50 hover:text-gray-700 appearance-none"
-              disabled={!currentTopic || subOptions.length === 0}
-            >
-              <option value="">
-                {!currentTopic ? "Select Subtopic (Optional)..." : subOptions.length === 0 ? "No subtopics available" : "Select Subtopic (Optional)..."}
-              </option>
-              {subOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <Controller
+              name={`simpleData.${index}.subtopic`}
+              control={control}
+              render={({ field: f }) => (
+                <select
+                  value={f.value ?? ""}
+                  onChange={(e) => f.onChange(e.target.value)}
+                  onBlur={f.onBlur}
+                  className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none cursor-pointer disabled:opacity-50 hover:text-gray-700 appearance-none"
+                  disabled={!currentTopic || subOptions.length === 0}
+                >
+                  <option value="">
+                    {!currentTopic ? "Select Subtopic (Optional)..." : subOptions.length === 0 ? "No subtopics available" : "Select Subtopic (Optional)..."}
+                  </option>
+                  {subOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              )}
+            />
           </div>
         </div>
       </td>
@@ -647,18 +827,15 @@ const SimpleModeView: React.FC = () => {
     return base;
   }, [apiChapterGroups, apiChapters, isEnglish]);
 
-  // ✅ v7: prevKeyRef initialized as "" — no false reset on first render
   const prevKeyRef   = useRef<string>("");
   const fieldsLenRef = useRef(fields.length);
   useEffect(() => { fieldsLenRef.current = fields.length; }, [fields.length]);
 
   useEffect(() => {
-    // Only act when both values are valid
     if (!classLevel || !currentSubject) return;
 
     const newKey = `${classLevel}-${currentSubject}`;
 
-    // ✅ Only reset if: we have a previous valid key AND it actually changed
     if (prevKeyRef.current && prevKeyRef.current !== newKey) {
       const len = fieldsLenRef.current;
       for (let idx = 0; idx < len; idx++) {
