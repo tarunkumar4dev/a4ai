@@ -205,6 +205,55 @@ function useChapters(classLevel: string, subject: string) {
 
 // ==================== COMMON SUBTOPICS (helper map only) ====================
 const COMMON_SUBTOPICS: Record<string, string[]> = {
+
+  // ═══════════════════════════════════════════════════════════════════
+  // BIOLOGY — Class XI (NCERT) | UPPERCASE keys (Phy/Chem convention)
+  // Covers full + rationalised. Chapters marked "(removed 2025-26)" are
+  // not in the latest textbook but kept here harmlessly for older ingest.
+  // ═══════════════════════════════════════════════════════════════════
+  "THE LIVING WORLD": ["What is living", "Diversity in the living world", "Taxonomic categories", "Nomenclature and classification", "Taxonomical aids"],
+  "BIOLOGICAL CLASSIFICATION": ["Five kingdom classification", "Kingdom Monera", "Kingdom Protista", "Kingdom Fungi", "Viruses, viroids and lichens"],
+  "PLANT KINGDOM": ["Algae", "Bryophytes", "Pteridophytes", "Gymnosperms", "Angiosperms", "Alternation of generations"],
+  "ANIMAL KINGDOM": ["Basis of classification", "Levels of organisation", "Symmetry and body plan", "Non-chordate phyla", "Phylum Chordata and vertebrate classes"],
+  "MORPHOLOGY OF FLOWERING PLANTS": ["The root", "The stem and modifications", "The leaf", "Inflorescence", "The flower", "Fruit and seed", "Floral formula and families"],
+  "ANATOMY OF FLOWERING PLANTS": ["The tissues", "Tissue systems", "Anatomy of dicot and monocot root", "Anatomy of stem and leaf", "Secondary growth"],
+  "STRUCTURAL ORGANISATION IN ANIMALS": ["Animal tissues", "Epithelial and connective tissue", "Muscular and neural tissue", "Earthworm", "Cockroach", "Frog"],
+  "CELL: THE UNIT OF LIFE": ["Cell theory", "Prokaryotic and eukaryotic cells", "Cell membrane and cell wall", "Cell organelles", "The nucleus", "Cytoskeleton, cilia and flagella"],
+  "BIOMOLECULES": ["Carbohydrates", "Proteins and amino acids", "Lipids", "Nucleic acids", "Enzymes and enzyme action", "Metabolic basis of living"],
+  "CELL CYCLE AND CELL DIVISION": ["Cell cycle phases", "Mitosis", "Meiosis", "Significance of meiosis"],
+  "TRANSPORT IN PLANTS": ["Means of transport", "Water potential", "Absorption of water and minerals", "Transpiration", "Phloem transport"], // (removed 2025-26)
+  "MINERAL NUTRITION": ["Essential mineral elements", "Macro and micronutrients", "Mechanism of absorption", "Nitrogen metabolism"], // (removed 2025-26)
+  "PHOTOSYNTHESIS IN HIGHER PLANTS": ["Site of photosynthesis", "Photosynthetic pigments", "Light reaction", "Electron transport", "C3 and C4 pathways", "Photorespiration", "Factors affecting photosynthesis"],
+  "RESPIRATION IN PLANTS": ["Glycolysis", "Fermentation", "Aerobic respiration (Krebs cycle)", "Electron transport system", "Respiratory quotient", "Amphibolic pathway"],
+  "PLANT GROWTH AND DEVELOPMENT": ["Phases and rate of growth", "Plant growth regulators", "Photoperiodism", "Vernalisation", "Seed dormancy"],
+  "DIGESTION AND ABSORPTION": ["Digestive system and glands", "Digestion of food", "Absorption and assimilation", "Disorders of digestive system"], // (moved/removed in 2025-26)
+  "BREATHING AND EXCHANGE OF GASES": ["Respiratory organs", "Mechanism of breathing", "Exchange of gases", "Transport of gases", "Regulation of respiration", "Respiratory disorders"],
+  "BODY FLUIDS AND CIRCULATION": ["Blood and its composition", "Blood groups", "Lymph", "Human circulatory system", "Cardiac cycle and ECG", "Double circulation", "Disorders of circulatory system"],
+  "EXCRETORY PRODUCTS AND THEIR ELIMINATION": ["Modes of excretion", "Human excretory system", "Urine formation", "Regulation of kidney function", "Role of other organs", "Disorders"],
+  "LOCOMOTION AND MOVEMENT": ["Types of movement", "Muscle structure and contraction", "Skeletal system", "Joints", "Disorders of muscular and skeletal system"],
+  "NEURAL CONTROL AND COORDINATION": ["Neuron and nerve impulse", "Central nervous system", "Peripheral nervous system", "Reflex action", "Sensory reception (eye and ear)"],
+  "CHEMICAL COORDINATION AND INTEGRATION": ["Endocrine glands and hormones", "Hypothalamus and pituitary", "Thyroid, parathyroid and adrenal", "Pancreas and other glands", "Mechanism of hormone action"],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // BIOLOGY — Class XII (NCERT) | UPPERCASE keys
+  // ═══════════════════════════════════════════════════════════════════
+  "REPRODUCTION IN ORGANISMS": ["Asexual reproduction", "Sexual reproduction", "Life span and reproductive events"], // (removed 2025-26)
+  "SEXUAL REPRODUCTION IN FLOWERING PLANTS": ["Structure of flower", "Pre-fertilisation events", "Pollination", "Double fertilisation", "Post-fertilisation events", "Apomixis and polyembryony"],
+  "HUMAN REPRODUCTION": ["Male reproductive system", "Female reproductive system", "Gametogenesis", "Menstrual cycle", "Fertilisation and implantation", "Pregnancy and parturition", "Lactation"],
+  "REPRODUCTIVE HEALTH": ["Reproductive health and strategies", "Population and birth control", "Contraception", "Medical termination of pregnancy", "STDs", "Infertility and ART"],
+  "PRINCIPLES OF INHERITANCE AND VARIATION": ["Mendel's laws of inheritance", "Inheritance of one and two genes", "Deviations from Mendelism", "Chromosomal theory of inheritance", "Sex determination", "Mutation", "Genetic disorders"],
+  "MOLECULAR BASIS OF INHERITANCE": ["The DNA", "Search for genetic material", "DNA replication", "Transcription", "Genetic code", "Translation", "Regulation of gene expression (lac operon)", "Human Genome Project", "DNA fingerprinting"],
+  "EVOLUTION": ["Origin of life", "Evidences for evolution", "Theories of evolution", "Mechanism of evolution", "Hardy-Weinberg principle", "Adaptive radiation", "Human evolution"],
+  "HUMAN HEALTH AND DISEASE": ["Common diseases in humans", "Immunity", "AIDS", "Cancer", "Drugs and alcohol abuse"],
+  "STRATEGIES FOR ENHANCEMENT IN FOOD PRODUCTION": ["Animal husbandry", "Plant breeding", "Single cell protein", "Tissue culture"], // (removed 2025-26)
+  "MICROBES IN HUMAN WELFARE": ["Microbes in household products", "Microbes in industrial products", "Microbes in sewage treatment", "Microbes in biogas production", "Microbes as biocontrol agents", "Microbes as biofertilisers"],
+  "BIOTECHNOLOGY: PRINCIPLES AND PROCESSES": ["Principles of biotechnology", "Tools of recombinant DNA technology", "Restriction enzymes and vectors", "Processes of recombinant DNA technology"],
+  "BIOTECHNOLOGY AND ITS APPLICATIONS": ["Biotechnological applications in agriculture", "Applications in medicine", "Genetically modified organisms", "Gene therapy", "Molecular diagnosis", "Transgenic animals and ethical issues"],
+  "ORGANISMS AND POPULATIONS": ["Organism and its environment", "Population attributes", "Population growth", "Life history variation", "Population interactions"],
+  "ECOSYSTEM": ["Ecosystem structure and function", "Productivity", "Decomposition", "Energy flow", "Ecological pyramids", "Nutrient cycling", "Ecological succession"],
+  "BIODIVERSITY AND CONSERVATION": ["Biodiversity and its patterns", "Importance of biodiversity", "Loss of biodiversity", "Biodiversity conservation (in-situ and ex-situ)"],
+  "ENVIRONMENTAL ISSUES": ["Air pollution and control", "Water pollution and control", "Solid waste management", "Agrochemicals", "Global warming and ozone depletion", "Deforestation"], // (removed 2025-26)
+  
   // ─────────── Class X Science ───────────
   "Chemical Reactions and Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
   "Acids Bases and Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
