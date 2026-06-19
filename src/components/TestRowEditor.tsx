@@ -1,21 +1,30 @@
 // src/components/TestRowEditor.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V4 — Grouped chapter dropdown (English: First Flight Prose / Poems / FWF)
-//      + Writing Skills & Grammar virtual chapters for English
+// V8 — Mobile selection persistence fix (Controller)
 //
-// Changes vs V3:
-//   - fetchChaptersFromAPI now also captures `groups` (book + chapter_type)
-//   - useChapters returns chapterGroups
-//   - MobileCard / TableRow render <optgroup> when groups exist
-//   - Flat list fallback preserved for Science / Maths / etc.
-//   - English subject: injects "Writing Skills" & "Grammar" virtual chapters
+// v8 changes vs v7.1:
+//   - Topic & Subtopic selects migrated from `value={watch} + onChange={setValue}`
+//     to react-hook-form <Controller>.
+//     WHY: on mobile (native picker close + in-app browsers), the watch->setValue
+//     propagation lagged one render tick, so React snapped the <select> back to
+//     the placeholder right after a user picked an option ("select karne ke baad gayab").
+//     Controller binds field.value/field.onChange through RHF's own subscription,
+//     guaranteeing the rendered value matches form state in the same render — no snap-back.
+//   - Chapter change now auto-clears that row's subtopic (avoids stale subtopic).
+//   - Mobile chapter select: added a visible ChevronDown affordance.
+//   - register-based selects (quantity/marks/difficulty) left untouched.
+//
+// Retained from v7.1:
+//   - Complete Class XII Maths subtopics (all 13 NCERT chapters)
+//   - prevKeyRef = "" (no false reset on first render)
+//   - AbortController fetch, mock fallback, English pseudo-chapters
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useRef, memo, useCallback, forwardRef, useState, useEffect } from "react";
-import { useFieldArray, useFormContext, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
+import { useFieldArray, useFormContext, Controller, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
 import {
   GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen,
-  AlignLeft, ListChecks, ArrowLeftRight, Loader2, AlertCircle,
+  AlignLeft, ListChecks, ArrowLeftRight, Loader2, AlertCircle, ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -37,7 +46,6 @@ interface RefUploadButtonProps {
   watch: UseFormWatch<FieldValues>;
 }
 
-// v4: chapter group structure from backend
 interface ChapterGroup {
   book: string;
   chapter_type: string;
@@ -49,7 +57,7 @@ interface RowProps {
   index: number;
   field: { id: string };
   availableTopics: string[];
-  chapterGroups: ChapterGroup[] | null; // v4
+  chapterGroups: ChapterGroup[] | null;
   subtopicsMap: Record<string, string[]>;
   chaptersLoading: boolean;
   remove: (index: number) => void;
@@ -63,37 +71,92 @@ interface FormValues {
   simpleData: SimpleRowData[];
 }
 
-// ==================== API: FETCH CHAPTERS ====================
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+// ==================== API CONFIGURATION ====================
+const getApiBaseUrl = (): string => {
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_API_URL || "";
+  }
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (typeof window !== "undefined") {
+    const { hostname } = window.location;
+    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return `http://${hostname}:8000`;
+    }
+  }
+  return "http://localhost:8000";
+};
 
+// ==================== MOCK FALLBACK ====================
+const MOCK_CHAPTERS: Record<string, string[]> = {
+  Science: [
+    "Chemical Reactions and Equations",
+    "Acids Bases and Salts",
+    "Metals and Non-metals",
+    "Carbon and Its Compounds",
+    "Periodic Classification",
+    "Life Processes",
+    "Control and Coordination",
+    "How do Organisms Reproduce",
+    "Heredity and Evolution",
+    "Light Reflection and Refraction",
+    "Human Eye and Colorful World",
+    "Electricity",
+    "Magnetic Effects of Electric Current",
+    "Our Environment",
+  ],
+  Maths: [
+    "Real Numbers", "Polynomials", "Pair of Linear Equations",
+    "Quadratic Equations", "Arithmetic Progressions", "Triangles",
+    "Coordinate Geometry", "Introduction to Trigonometry",
+    "Some Applications of Trigonometry", "Circles", "Constructions",
+    "Areas Related to Circles", "Surface Areas and Volumes",
+    "Statistics", "Probability",
+  ],
+};
+
+// ==================== API: FETCH CHAPTERS ====================
 interface ChaptersFetchResult {
   flat: string[];
   groups: ChapterGroup[] | null;
 }
 
-async function fetchChaptersFromAPI(classLevel: string, subject: string): Promise<ChaptersFetchResult> {
+async function fetchChaptersFromAPI(
+  classLevel: string,
+  subject: string,
+  signal: AbortSignal,
+): Promise<ChaptersFetchResult> {
   const classNum = classLevel.replace(/\D/g, "") || "10";
-  const res = await fetch(
-    `${API_BASE}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`
-  );
-  if (!res.ok) throw new Error(`Failed to fetch chapters: ${res.status}`);
-  const data = await res.json();
+  const base = getApiBaseUrl();
+  const url = `${base}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`;
 
-  const flat: string[] = (data.chapters && Array.isArray(data.chapters)) ? data.chapters : [];
-  const groups: ChapterGroup[] | null = (data.groups && Array.isArray(data.groups) && data.groups.length > 0)
-    ? data.groups
-    : null;
+  const res = await fetch(url, {
+    signal,
+    headers: { Accept: "application/json" },
+  });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+  const data = await res.json();
+  const flat: string[] = Array.isArray(data.chapters) ? data.chapters : [];
+  const groups: ChapterGroup[] | null =
+    Array.isArray(data.groups) && data.groups.length > 0 ? data.groups : null;
+
+  if (flat.length === 0 && MOCK_CHAPTERS[subject]) {
+    return { flat: MOCK_CHAPTERS[subject], groups: null };
+  }
 
   return { flat, groups };
 }
 
 // ==================== HOOK: useChapters ====================
 function useChapters(classLevel: string, subject: string) {
-  const [chapters, setChapters] = useState<string[]>([]);
-  const [chapterGroups, setChapterGroups] = useState<ChapterGroup[] | null>(null); // v4
-  const [subtopicsMap, setSubtopicsMap] = useState<Record<string, string[]>>({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [chapters, setChapters]          = useState<string[]>([]);
+  const [chapterGroups, setChapterGroups] = useState<ChapterGroup[] | null>(null);
+  const [subtopicsMap, setSubtopicsMap]  = useState<Record<string, string[]>>({});
+  const [loading, setLoading]            = useState(false);
+  const [error, setError]                = useState<string | null>(null);
 
   useEffect(() => {
     if (!classLevel || !subject) {
@@ -103,13 +166,12 @@ function useChapters(classLevel: string, subject: string) {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
 
-    fetchChaptersFromAPI(classLevel, subject)
+    fetchChaptersFromAPI(classLevel, subject, controller.signal)
       .then(({ flat, groups }) => {
-        if (cancelled) return;
         setChapters(flat);
         setChapterGroups(groups);
         const sMap: Record<string, string[]> = {};
@@ -118,27 +180,81 @@ function useChapters(classLevel: string, subject: string) {
         });
         setSubtopicsMap(sMap);
       })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error("Chapter fetch failed:", err);
+      .catch((err: Error) => {
+        if (err.name === "AbortError") return;
+        console.error("Chapter fetch failed:", err.message);
         setError(err.message);
-        setChapters([]);
-        setChapterGroups(null);
+        if (MOCK_CHAPTERS[subject]) {
+          setChapters(MOCK_CHAPTERS[subject]);
+          setChapterGroups(null);
+        } else {
+          setChapters([]);
+          setChapterGroups(null);
+        }
         setSubtopicsMap({});
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, [classLevel, subject]);
 
   return { chapters, chapterGroups, subtopicsMap, loading, error };
 }
 
 // ==================== COMMON SUBTOPICS (helper map only) ====================
-
 const COMMON_SUBTOPICS: Record<string, string[]> = {
+
+  // ═══════════════════════════════════════════════════════════════════
+  // BIOLOGY — Class XI (NCERT) | UPPERCASE keys (Phy/Chem convention)
+  // Covers full + rationalised. Chapters marked "(removed 2025-26)" are
+  // not in the latest textbook but kept here harmlessly for older ingest.
+  // ═══════════════════════════════════════════════════════════════════
+  "THE LIVING WORLD": ["What is living", "Diversity in the living world", "Taxonomic categories", "Nomenclature and classification", "Taxonomical aids"],
+  "BIOLOGICAL CLASSIFICATION": ["Five kingdom classification", "Kingdom Monera", "Kingdom Protista", "Kingdom Fungi", "Viruses, viroids and lichens"],
+  "PLANT KINGDOM": ["Algae", "Bryophytes", "Pteridophytes", "Gymnosperms", "Angiosperms", "Alternation of generations"],
+  "ANIMAL KINGDOM": ["Basis of classification", "Levels of organisation", "Symmetry and body plan", "Non-chordate phyla", "Phylum Chordata and vertebrate classes"],
+  "MORPHOLOGY OF FLOWERING PLANTS": ["The root", "The stem and modifications", "The leaf", "Inflorescence", "The flower", "Fruit and seed", "Floral formula and families"],
+  "ANATOMY OF FLOWERING PLANTS": ["The tissues", "Tissue systems", "Anatomy of dicot and monocot root", "Anatomy of stem and leaf", "Secondary growth"],
+  "STRUCTURAL ORGANISATION IN ANIMALS": ["Animal tissues", "Epithelial and connective tissue", "Muscular and neural tissue", "Earthworm", "Cockroach", "Frog"],
+  "CELL: THE UNIT OF LIFE": ["Cell theory", "Prokaryotic and eukaryotic cells", "Cell membrane and cell wall", "Cell organelles", "The nucleus", "Cytoskeleton, cilia and flagella"],
+  "BIOMOLECULES": ["Carbohydrates", "Proteins and amino acids", "Lipids", "Nucleic acids", "Enzymes and enzyme action", "Metabolic basis of living"],
+  "CELL CYCLE AND CELL DIVISION": ["Cell cycle phases", "Mitosis", "Meiosis", "Significance of meiosis"],
+  "TRANSPORT IN PLANTS": ["Means of transport", "Water potential", "Absorption of water and minerals", "Transpiration", "Phloem transport"], // (removed 2025-26)
+  "MINERAL NUTRITION": ["Essential mineral elements", "Macro and micronutrients", "Mechanism of absorption", "Nitrogen metabolism"], // (removed 2025-26)
+  "PHOTOSYNTHESIS IN HIGHER PLANTS": ["Site of photosynthesis", "Photosynthetic pigments", "Light reaction", "Electron transport", "C3 and C4 pathways", "Photorespiration", "Factors affecting photosynthesis"],
+  "RESPIRATION IN PLANTS": ["Glycolysis", "Fermentation", "Aerobic respiration (Krebs cycle)", "Electron transport system", "Respiratory quotient", "Amphibolic pathway"],
+  "PLANT GROWTH AND DEVELOPMENT": ["Phases and rate of growth", "Plant growth regulators", "Photoperiodism", "Vernalisation", "Seed dormancy"],
+  "DIGESTION AND ABSORPTION": ["Digestive system and glands", "Digestion of food", "Absorption and assimilation", "Disorders of digestive system"], // (moved/removed in 2025-26)
+  "BREATHING AND EXCHANGE OF GASES": ["Respiratory organs", "Mechanism of breathing", "Exchange of gases", "Transport of gases", "Regulation of respiration", "Respiratory disorders"],
+  "BODY FLUIDS AND CIRCULATION": ["Blood and its composition", "Blood groups", "Lymph", "Human circulatory system", "Cardiac cycle and ECG", "Double circulation", "Disorders of circulatory system"],
+  "EXCRETORY PRODUCTS AND THEIR ELIMINATION": ["Modes of excretion", "Human excretory system", "Urine formation", "Regulation of kidney function", "Role of other organs", "Disorders"],
+  "LOCOMOTION AND MOVEMENT": ["Types of movement", "Muscle structure and contraction", "Skeletal system", "Joints", "Disorders of muscular and skeletal system"],
+  "NEURAL CONTROL AND COORDINATION": ["Neuron and nerve impulse", "Central nervous system", "Peripheral nervous system", "Reflex action", "Sensory reception (eye and ear)"],
+  "CHEMICAL COORDINATION AND INTEGRATION": ["Endocrine glands and hormones", "Hypothalamus and pituitary", "Thyroid, parathyroid and adrenal", "Pancreas and other glands", "Mechanism of hormone action"],
+
+  // ═══════════════════════════════════════════════════════════════════
+  // BIOLOGY — Class XII (NCERT) | UPPERCASE keys
+  // ═══════════════════════════════════════════════════════════════════
+  "REPRODUCTION IN ORGANISMS": ["Asexual reproduction", "Sexual reproduction", "Life span and reproductive events"], // (removed 2025-26)
+  "SEXUAL REPRODUCTION IN FLOWERING PLANTS": ["Structure of flower", "Pre-fertilisation events", "Pollination", "Double fertilisation", "Post-fertilisation events", "Apomixis and polyembryony"],
+  "HUMAN REPRODUCTION": ["Male reproductive system", "Female reproductive system", "Gametogenesis", "Menstrual cycle", "Fertilisation and implantation", "Pregnancy and parturition", "Lactation"],
+  "REPRODUCTIVE HEALTH": ["Reproductive health and strategies", "Population and birth control", "Contraception", "Medical termination of pregnancy", "STDs", "Infertility and ART"],
+  "PRINCIPLES OF INHERITANCE AND VARIATION": ["Mendel's laws of inheritance", "Inheritance of one and two genes", "Deviations from Mendelism", "Chromosomal theory of inheritance", "Sex determination", "Mutation", "Genetic disorders"],
+  "MOLECULAR BASIS OF INHERITANCE": ["The DNA", "Search for genetic material", "DNA replication", "Transcription", "Genetic code", "Translation", "Regulation of gene expression (lac operon)", "Human Genome Project", "DNA fingerprinting"],
+  "EVOLUTION": ["Origin of life", "Evidences for evolution", "Theories of evolution", "Mechanism of evolution", "Hardy-Weinberg principle", "Adaptive radiation", "Human evolution"],
+  "HUMAN HEALTH AND DISEASE": ["Common diseases in humans", "Immunity", "AIDS", "Cancer", "Drugs and alcohol abuse"],
+  "STRATEGIES FOR ENHANCEMENT IN FOOD PRODUCTION": ["Animal husbandry", "Plant breeding", "Single cell protein", "Tissue culture"], // (removed 2025-26)
+  "MICROBES IN HUMAN WELFARE": ["Microbes in household products", "Microbes in industrial products", "Microbes in sewage treatment", "Microbes in biogas production", "Microbes as biocontrol agents", "Microbes as biofertilisers"],
+  "BIOTECHNOLOGY: PRINCIPLES AND PROCESSES": ["Principles of biotechnology", "Tools of recombinant DNA technology", "Restriction enzymes and vectors", "Processes of recombinant DNA technology"],
+  "BIOTECHNOLOGY AND ITS APPLICATIONS": ["Biotechnological applications in agriculture", "Applications in medicine", "Genetically modified organisms", "Gene therapy", "Molecular diagnosis", "Transgenic animals and ethical issues"],
+  "ORGANISMS AND POPULATIONS": ["Organism and its environment", "Population attributes", "Population growth", "Life history variation", "Population interactions"],
+  "ECOSYSTEM": ["Ecosystem structure and function", "Productivity", "Decomposition", "Energy flow", "Ecological pyramids", "Nutrient cycling", "Ecological succession"],
+  "BIODIVERSITY AND CONSERVATION": ["Biodiversity and its patterns", "Importance of biodiversity", "Loss of biodiversity", "Biodiversity conservation (in-situ and ex-situ)"],
+  "ENVIRONMENTAL ISSUES": ["Air pollution and control", "Water pollution and control", "Solid waste management", "Agrochemicals", "Global warming and ozone depletion", "Deforestation"], // (removed 2025-26)
+  
+  // ─────────── Class X Science ───────────
   "Chemical Reactions and Equations": ["Chemical reactions", "Balanced chemical equations", "Types of reactions", "Oxidation and reduction", "Corrosion and rancidity"],
   "Acids Bases and Salts": ["Properties of acids and bases", "pH scale", "Common salts", "Uses of acids, bases and salts"],
   "Metals and Non-metals": ["Physical and chemical properties", "Reactivity series", "Extraction of metals", "Corrosion and prevention"],
@@ -153,6 +269,13 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "How do Organisms Reproduce": ["Asexual reproduction", "Sexual reproduction", "Reproductive health"],
   "Heredity and Evolution": ["Mendel's experiments", "Inheritance of traits", "Evolution and speciation"],
   "Our Environment": ["Ecosystem", "Food chains", "Energy flow", "Pollution"],
+
+  // ─────────── Class X Maths ───────────
+  "Real Numbers": ["Euclid's division", "Fundamental theorem", "Irrational numbers", "Decimal expansions"],
+  "Polynomials": ["Zeros of polynomial", "Relationship between zeros", "Division algorithm"],
+  "Quadratic Equations": ["Standard form", "Solution by factorization", "Quadratic formula", "Nature of roots"],
+
+  // ─────────── Class IX Science ───────────
   "Matter in Our Surroundings": ["States of matter", "Physical and chemical changes", "Latent heat", "Evaporation"],
   "Is Matter Around Us Pure": ["Mixtures", "Solutions", "Separation techniques", "Compounds and elements"],
   "Atoms and Molecules": ["Laws of chemical combination", "Atomic mass", "Mole concept", "Molecular mass"],
@@ -164,11 +287,15 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Gravitation": ["Universal law", "Free fall", "Buoyancy", "Archimedes principle"],
   "Work and Energy": ["Work", "Kinetic energy", "Potential energy", "Power"],
   "Sound": ["Production of sound", "Sound propagation", "Reflection of sound", "SONAR"],
+
+  // ─────────── Class X Civics ───────────
   "Power Sharing": ["Belgium model", "Sri Lanka model", "Forms of power sharing"],
   "Federalism": ["Union list", "State list", "Concurrent list", "Decentralisation", "Panchayati Raj"],
   "Gender Religion and Caste": ["Gender division", "Religion and politics", "Caste and politics"],
   "Political Parties": ["Functions of parties", "National parties", "State parties"],
   "Outcomes of Democracy": ["Accountability", "Economic growth", "Inequality", "Social diversity"],
+
+  // ─────────── Accountancy ───────────
   "Introduction to Accounting": ["Meaning and objectives", "Accounting as information system", "Users of accounting", "Accounting terms"],
   "Recording of Transactions": ["Accounting equation", "Rules of debit and credit", "Journal", "Ledger posting"],
   "Ledger": ["Format of ledger", "Posting from journal", "Balancing accounts", "T-account"],
@@ -177,6 +304,130 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Depreciation": ["Meaning and causes", "Methods", "Accounting treatment"],
   "Financial Statements": ["Trading account", "Profit and loss account", "Balance sheet", "Adjustments"],
   "Accounting for Partnership": ["Nature", "Partnership deed", "Profit sharing ratio", "Capital accounts"],
+
+  // ─────────── Class XII Maths (NCERT 2025-26) ───────────
+  "Relations and Functions": [
+    "Types of relations",
+    "Equivalence relations",
+    "Types of functions",
+    "Composition of functions",
+    "Invertible functions",
+    "Binary operations",
+  ],
+  "Inverse Trigonometric Functions": [
+    "Basic concepts and definitions",
+    "Domain and range of inverse trig functions",
+    "Principal value branches",
+    "Properties of inverse trig functions",
+    "Graphs of inverse trig functions",
+  ],
+  "Matrices": [
+    "Types of matrices",
+    "Operations on matrices",
+    "Transpose of a matrix",
+    "Symmetric and skew-symmetric matrices",
+    "Elementary row and column operations",
+    "Invertible matrices",
+  ],
+  "Determinants": [
+    "Determinant of a matrix",
+    "Properties of determinants",
+    "Area of a triangle",
+    "Minors and cofactors",
+    "Adjoint and inverse of a matrix",
+    "Applications: System of linear equations",
+    "Cramer's rule",
+  ],
+  "Continuity and Differentiability": [
+    "Continuity at a point",
+    "Algebra of continuous functions",
+    "Differentiability",
+    "Derivatives of composite functions (Chain rule)",
+    "Derivatives of implicit functions",
+    "Derivatives of inverse trig functions",
+    "Exponential and logarithmic functions",
+    "Logarithmic differentiation",
+    "Derivatives in parametric form",
+    "Second order derivatives",
+    "Mean Value Theorem (Rolle's and Lagrange's)",
+  ],
+  "Application of Derivatives": [
+    "Rate of change of quantities",
+    "Increasing and decreasing functions",
+    "Tangents and normals",
+    "Approximations",
+    "Maxima and minima",
+    "First and second derivative test",
+    "Absolute maximum and minimum",
+  ],
+  "Integrals": [
+    "Indefinite integrals",
+    "Integration by substitution",
+    "Integration using trigonometric identities",
+    "Integration by partial fractions",
+    "Integration by parts",
+    "Integrals of special functions",
+    "Definite integrals",
+    "Fundamental theorem of calculus",
+    "Properties of definite integrals",
+  ],
+  "Application of Integrals": [
+    "Area under simple curves",
+    "Area between two curves",
+    "Area bounded by a curve and a line",
+    "Area using definite integrals",
+  ],
+  "Differential Equations": [
+    "Basic concepts and definitions",
+    "Order and degree of differential equations",
+    "General and particular solutions",
+    "Formation of differential equations",
+    "Variable separable method",
+    "Homogeneous differential equations",
+    "Linear differential equations",
+  ],
+  "Vector Algebra": [
+    "Types of vectors",
+    "Addition of vectors",
+    "Multiplication of vector by a scalar",
+    "Components of a vector",
+    "Position vector",
+    "Direction cosines and direction ratios",
+    "Section formula",
+    "Scalar (dot) product",
+    "Vector (cross) product",
+    "Projection of vector on a line",
+  ],
+  "Three Dimensional Geometry": [
+    "Direction cosines and direction ratios of a line",
+    "Equation of a line in space",
+    "Angle between two lines",
+    "Shortest distance between two lines",
+    "Coplanar and skew lines",
+    "Equation of a plane",
+    "Angle between two planes",
+    "Distance of a point from a plane",
+    "Angle between a line and a plane",
+  ],
+  "Linear Programming": [
+    "Introduction and definitions",
+    "Mathematical formulation of LPP",
+    "Graphical method of solution",
+    "Feasible and infeasible regions",
+    "Optimal solutions",
+    "Different types of LPP (manufacturing, diet, transportation problems)",
+  ],
+  "Probability": [
+    "Conditional probability",
+    "Multiplication theorem on probability",
+    "Independent events",
+    "Bayes' theorem",
+    "Total probability theorem",
+    "Random variables and probability distribution",
+    "Mean and variance of random variable",
+    "Bernoulli trials and binomial distribution",
+  ],
+
   // --- Physics Class 11 ---
   "GRAVITATION": ["Kepler's laws", "Universal law of gravitation", "Acceleration due to gravity", "Escape speed", "Orbital velocity"],
   "KINETIC THEORY": ["Behavior of gases", "Law of equipartition of energy", "Mean free path"],
@@ -259,6 +510,7 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Haloalkanes and Haloarenes": ["Nomenclature and nature of C-X bond", "Mechanisms of substitution reactions (SN1 and SN2)", "Polyhalogen compounds", "Electrophilic substitution in haloarenes"],
   "Solutions": ["Types of solutions", "Expressing concentration of solutions", "Solubility (Henry's law)", "Raoult's law and ideal/non-ideal solutions", "Colligative properties", "Abnormal molar mass (Van 't Hoff factor)"],
   "The d- and f-Block Elements": ["Electronic configurations and general trends", "Lanthanoid contraction", "Properties of transition metals (Catalytic, Magnetic, Interstitial)", "Preparation and properties of KMnO4 and K2Cr2O7"],
+<<<<<<< HEAD
 
   // --- Biology Class 11 (Matched to UI Dropdown) ---
   "Anatomy of Flowering Plants": ["Tissues", "Tissue system", "Anatomy of dicotyledonous and monocotyledonous plants", "Secondary growth"],
@@ -296,15 +548,17 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Principles of Inheritance and Variation": ["Mendel's laws of inheritance", "Inheritance of one gene", "Inheritance of two genes", "Sex determination", "Mutation", "Genetic disorders"],
   "Reproductive Health": ["Reproductive health - problems and strategies", "Population explosion and birth control", "Medical termination of pregnancy (MTP)", "Sexually transmitted diseases (STDs)", "Infertility"],
   "Sexual Reproduction in Flowering Plants": ["Flower - a fascinating organ of angiosperms", "Pre-fertilization: structures and events", "Double fertilization", "Post-fertilization: structures and events", "Apomixis and polyembryony"]
+=======
+>>>>>>> ed47552475d98314ea9593f48aa429a6fa609a64
 };
 
 
 // ==================== QUESTION TYPE CONFIG ====================
 const QUESTION_FORMATS = [
-  { value: "MCQ",    label: "MCQ",   icon: ListChecks,     color: "bg-gray-800 text-white" },
-  { value: "Short",  label: "Short", icon: AlignLeft,      color: "bg-blue-600 text-white" },
-  { value: "Long",   label: "Long",  icon: FileText,       color: "bg-purple-600 text-white" },
-  { value: "Essay",  label: "Essay", icon: ArrowLeftRight, color: "bg-amber-600 text-white" },
+  { value: "MCQ",   label: "MCQ",   icon: ListChecks,     color: "bg-gray-800 text-white" },
+  { value: "Short", label: "Short", icon: AlignLeft,      color: "bg-blue-600 text-white" },
+  { value: "Long",  label: "Long",  icon: FileText,       color: "bg-purple-600 text-white" },
+  { value: "Essay", label: "Essay", icon: ArrowLeftRight, color: "bg-amber-600 text-white" },
 ];
 
 const ACCOUNTANCY_FORMATS = [
@@ -317,27 +571,21 @@ const ACCOUNTANCY_SUBJECTS_FE = ["Accountancy", "Accounts", "Accounting"];
 
 // ==================== UUID GENERATOR ====================
 const generateUUID = (): string => {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
   });
 };
 
-// ==================== CHAPTER OPTIONS RENDERER (v4) ====================
+// ==================== CHAPTER OPTIONS RENDERER ====================
 function renderChapterOptions(
   chapterGroups: ChapterGroup[] | null,
   flatChapters: string[],
 ): React.ReactNode {
   if (chapterGroups && chapterGroups.length > 0) {
     return chapterGroups.map((group) => (
-      <optgroup
-        key={`${group.book || 'x'}-${group.chapter_type || 'x'}`}
-        label={group.label}
-      >
+      <optgroup key={`${group.book || "x"}-${group.chapter_type || "x"}`} label={group.label}>
         {group.chapters.map((ch) => (
           <option key={ch.name} value={ch.name}>{ch.name}</option>
         ))}
@@ -350,83 +598,69 @@ function renderChapterOptions(
 }
 
 // ==================== FILE UPLOAD HANDLER ====================
-const RefUploadButton: React.FC<RefUploadButtonProps & { fullWidth?: boolean }> = memo(({ index, setValue, watch, fullWidth }) => {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const file = watch(`simpleData.${index}.refFile`);
+const RefUploadButton: React.FC<RefUploadButtonProps & { fullWidth?: boolean }> = memo(
+  ({ index, setValue, watch, fullWidth }) => {
+    const fileRef = useRef<HTMLInputElement>(null);
+    const file = watch(`simpleData.${index}.refFile`);
 
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (fileRef.current) fileRef.current.value = '';
-    if (selectedFile) setValue(`simpleData.${index}.refFile`, selectedFile);
-    else setValue(`simpleData.${index}.refFile`, undefined);
-  }, [index, setValue]);
+    const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      if (fileRef.current) fileRef.current.value = "";
+      setValue(`simpleData.${index}.refFile`, f ?? undefined);
+    }, [index, setValue]);
 
-  const handleButtonClick = useCallback(() => {
-    if (fileRef.current) fileRef.current.click();
-  }, []);
+    const handleClearFile = useCallback((e: React.MouseEvent) => {
+      e.stopPropagation();
+      setValue(`simpleData.${index}.refFile`, undefined);
+    }, [index, setValue]);
 
-  const handleClearFile = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setValue(`simpleData.${index}.refFile`, undefined);
-  }, [index, setValue]);
-
-  return (
-    <div className={`relative ${fullWidth ? "w-full" : ""}`}>
-      <input
-        type="file"
-        ref={fileRef}
-        className="hidden"
-        onChange={handleFileChange}
-        accept=".pdf,.doc,.docx,.txt,.md"
-        aria-label={`Upload reference file for row ${index + 1}`}
-      />
-      <motion.button
-        whileTap={{ scale: 0.97 }}
-        type="button"
-        onClick={handleButtonClick}
-        className={`${fullWidth ? "w-full justify-center" : ""} min-h-[44px] px-3 py-2.5 rounded-xl transition-all border shadow-sm flex items-center gap-2 ${
-          file
-            ? 'bg-gray-800 text-white border-gray-800 active:bg-gray-900'
-            : 'bg-white text-gray-500 border-[#E5E7EB] active:border-gray-400'
-        }`}
-        style={{ WebkitTapHighlightColor: "transparent" }}
-        title={file ? `Reference: ${file.name}` : "Upload Reference"}
-      >
-        {file ? <Check size={16} /> : <Paperclip size={16} />}
-        <span className="text-xs font-semibold">
-          {file
-            ? (file.name.length > 16 ? `${file.name.substring(0, 14)}...` : file.name)
-            : "Add Reference"}
-        </span>
-      </motion.button>
-
-      {file && (
-        <button
+    return (
+      <div className={`relative ${fullWidth ? "w-full" : ""}`}>
+        <input
+          type="file"
+          ref={fileRef}
+          className="hidden"
+          onChange={handleFileChange}
+          accept=".pdf,.doc,.docx,.txt,.md"
+        />
+        <motion.button
+          whileTap={{ scale: 0.97 }}
           type="button"
-          onClick={handleClearFile}
-          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
-          aria-label={`Remove reference file ${file.name}`}
+          onClick={() => fileRef.current?.click()}
+          className={`${fullWidth ? "w-full justify-center" : ""} min-h-[44px] px-3 py-2.5 rounded-xl transition-all border shadow-sm flex items-center gap-2 ${
+            file ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-500 border-[#E5E7EB]"
+          }`}
+          style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
         >
-          ×
-        </button>
-      )}
-    </div>
-  );
-});
-RefUploadButton.displayName = 'RefUploadButton';
+          {file ? <Check size={16} /> : <Paperclip size={16} />}
+          <span className="text-xs font-semibold">
+            {file ? (file.name.length > 16 ? `${file.name.substring(0, 14)}...` : file.name) : "Add Reference"}
+          </span>
+        </motion.button>
+        {file && (
+          <button
+            type="button"
+            onClick={handleClearFile}
+            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+          >
+            ×
+          </button>
+        )}
+      </div>
+    );
+  },
+);
+RefUploadButton.displayName = "RefUploadButton";
 
-// ==================== QUESTION TYPE SELECTOR ====================
+// ==================== FORMAT SELECTOR ====================
 const FormatSelector = memo(({ index, subject }: { index: number; subject: string }) => {
   const { watch, setValue } = useFormContext();
   const currentFormat = watch(`simpleData.${index}.format`) || "MCQ";
-  const isAccountancy = ACCOUNTANCY_SUBJECTS_FE.includes(subject);
+  const isAccountancy  = ACCOUNTANCY_SUBJECTS_FE.includes(subject);
+  const visibleFormats = isAccountancy ? [...QUESTION_FORMATS, ...ACCOUNTANCY_FORMATS] : QUESTION_FORMATS;
 
-  const visibleFormats = isAccountancy
-    ? [...QUESTION_FORMATS, ...ACCOUNTANCY_FORMATS]
-    : QUESTION_FORMATS;
-
-  React.useEffect(() => {
-    const accValues = ACCOUNTANCY_FORMATS.map(f => f.value);
+  useEffect(() => {
+    const accValues = ACCOUNTANCY_FORMATS.map((f) => f.value);
     if (!isAccountancy && accValues.includes(currentFormat)) {
       setValue(`simpleData.${index}.format`, "MCQ");
     }
@@ -443,12 +677,9 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
             type="button"
             onClick={() => setValue(`simpleData.${index}.format`, fmt.value)}
             className={`min-h-[36px] px-3 py-2 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all border ${
-              isActive
-                ? `${fmt.color} border-transparent shadow-sm`
-                : 'bg-white text-gray-500 border-[#E5E7EB] active:border-gray-400'
+              isActive ? `${fmt.color} border-transparent shadow-sm` : "bg-white text-gray-500 border-[#E5E7EB]"
             }`}
-            style={{ WebkitTapHighlightColor: "transparent" }}
-            title={fmt.value}
+            style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
             <Icon size={11} /> {fmt.label}
           </button>
@@ -457,16 +688,22 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
     </div>
   );
 });
-FormatSelector.displayName = 'FormatSelector';
+FormatSelector.displayName = "FormatSelector";
 
 // ═══════════════════════════════════════════════════════════════════════
 // MOBILE: Card Row
 // ═══════════════════════════════════════════════════════════════════════
-const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove }: RowProps) => {
-  const { register, watch, setValue } = useFormContext<FormValues>();
-  const currentTopic = watch(`simpleData.${index}.topic`);
-  const subject = watch("subject") || "";
-  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
+const MobileCard = memo(({
+  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
+}: RowProps) => {
+  const { control, register, watch, setValue } = useFormContext<FormValues>();
+
+  // Read-only derivations (for subtopic options + disabled logic).
+  // NOTE: the <select> binding itself is via <Controller> below — NOT this watch —
+  // which is what stops the mobile snap-back.
+  const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
+  const subject      = watch("subject") ?? "";
+  const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
 
   const inputClass = "w-full min-h-[44px] bg-white border border-[#E5E7EB] rounded-xl px-3 py-2.5 text-sm font-semibold text-[#111827] outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-400/10 transition-all appearance-none";
   const labelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 block";
@@ -480,6 +717,7 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
       layout
       className="bg-white rounded-2xl border border-[#E5E7EB] p-4 space-y-3.5 shadow-sm"
     >
+      {/* Header */}
       <div className="flex items-center justify-between pb-2 border-b border-gray-100">
         <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider bg-gray-100 px-2.5 py-1 rounded-full">
           Section {index + 1}
@@ -488,79 +726,89 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
           type="button"
           onClick={() => remove(index)}
           className="min-w-[36px] min-h-[36px] p-2 rounded-full text-gray-400 active:bg-red-50 active:text-red-500 transition-colors"
-          style={{ WebkitTapHighlightColor: "transparent" }}
-          aria-label={`Remove section ${index + 1}`}
+          style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
         >
           <Trash2 size={16} />
         </button>
       </div>
 
+      {/* ✅ v8: Chapter — Controller (no snap-back on mobile) */}
       <div>
         <label className={labelClass}>Chapter</label>
         <div className="relative">
-          <select
-            {...register(`simpleData.${index}.topic`)}
-            disabled={chaptersLoading || availableTopics.length === 0}
-            className={`${inputClass} pr-9 disabled:opacity-60`}
-          >
-            <option value="">
-              {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select a chapter..."}
-            </option>
-            {renderChapterOptions(chapterGroups, availableTopics)}
-          </select>
-          {chaptersLoading && (
+          <Controller
+            name={`simpleData.${index}.topic`}
+            control={control}
+            render={({ field: f }) => (
+              <select
+                value={f.value ?? ""}
+                onChange={(e) => {
+                  f.onChange(e.target.value);
+                  // chapter badla → us row ka subtopic clear
+                  setValue(`simpleData.${index}.subtopic`, "", { shouldDirty: true });
+                }}
+                onBlur={f.onBlur}
+                disabled={chaptersLoading || availableTopics.length === 0}
+                className={`${inputClass} pr-9 disabled:opacity-60`}
+              >
+                <option value="">
+                  {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select a chapter..."}
+                </option>
+                {renderChapterOptions(chapterGroups, availableTopics)}
+              </select>
+            )}
+          />
+          {chaptersLoading ? (
             <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />
+          ) : (
+            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           )}
         </div>
       </div>
 
+      {/* ✅ v8: Subtopic — Controller */}
       <div>
         <label className={labelClass}>Subtopic (optional)</label>
-        <select
-          {...register(`simpleData.${index}.subtopic`)}
-          disabled={!currentTopic || subOptions.length === 0}
-          className={`${inputClass} disabled:opacity-60 disabled:bg-gray-50`}
-        >
-          <option value="">
-            {!currentTopic ? "Select a chapter first" : subOptions.length === 0 ? "No subtopics available" : "Select subtopic..."}
-          </option>
-          {subOptions.map(sub => (
-            <option key={sub} value={sub}>{sub}</option>
-          ))}
-        </select>
+        <Controller
+          name={`simpleData.${index}.subtopic`}
+          control={control}
+          render={({ field: f }) => (
+            <select
+              value={f.value ?? ""}
+              onChange={(e) => f.onChange(e.target.value)}
+              onBlur={f.onBlur}
+              disabled={!currentTopic || subOptions.length === 0}
+              className={`${inputClass} disabled:opacity-60 disabled:bg-gray-50`}
+            >
+              <option value="">
+                {!currentTopic ? "Select a chapter first" : subOptions.length === 0 ? "No subtopics available" : "Select subtopic..."}
+              </option>
+              {subOptions.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
+            </select>
+          )}
+        />
       </div>
 
+      {/* Quantity + Marks */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelClass}>Quantity</label>
-          <select
-            {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
-            className={inputClass}
-          >
-            {[1,2,3,4,5,6,7,8,9,10,15,20].map(num => (
-              <option key={num} value={num}>{num}</option>
-            ))}
+          <select {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })} className={inputClass}>
+            {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
         <div>
           <label className={labelClass}>Marks each</label>
-          <select
-            {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
-            className={inputClass}
-          >
-            {[1,2,3,4,5,6,7,8,9,10].map(num => (
-              <option key={num} value={num}>{num} marks</option>
-            ))}
+          <select {...register(`simpleData.${index}.marks`, { valueAsNumber: true })} className={inputClass}>
+            {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n} marks</option>)}
           </select>
         </div>
       </div>
 
+      {/* Difficulty */}
       <div>
         <label className={labelClass}>Difficulty</label>
-        <select
-          {...register(`simpleData.${index}.difficulty`)}
-          className={inputClass}
-        >
+        <select {...register(`simpleData.${index}.difficulty`)} className={inputClass}>
           <option value="Easy">Easy</option>
           <option value="Medium">Medium</option>
           <option value="Hard">Hard</option>
@@ -568,11 +816,13 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
         </select>
       </div>
 
+      {/* Format */}
       <div>
         <label className={labelClass}>Question Type</label>
         <FormatSelector index={index} subject={subject} />
       </div>
 
+      {/* Reference */}
       <div>
         <label className={labelClass}>Reference (optional)</label>
         <RefUploadButton index={index} setValue={setValue} watch={watch} fullWidth />
@@ -580,20 +830,19 @@ const MobileCard = memo(({ index, field, availableTopics, chapterGroups, subtopi
     </motion.div>
   );
 });
-MobileCard.displayName = 'MobileCard';
+MobileCard.displayName = "MobileCard";
 
 // ═══════════════════════════════════════════════════════════════════════
 // DESKTOP: Table Row
 // ═══════════════════════════════════════════════════════════════════════
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
-  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove
+  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
 }, ref) => {
-  
-  const { register, watch, setValue } = useFormContext<FormValues>();
-  const currentTopic = watch(`simpleData.${index}.topic`);
-  const subject = watch("subject") || "";
-  const subOptions = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
-  const rowNumber = index + 1;
+  const { control, register, watch, setValue } = useFormContext<FormValues>();
+
+  const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
+  const subject      = watch("subject") ?? "";
+  const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
 
   return (
     <motion.tr
@@ -611,34 +860,54 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
 
       <td className="py-3 px-4">
         <div className="flex flex-col gap-2">
+
+          {/* ✅ v8: Chapter — Controller */}
           <div className="relative">
-            <select
-              {...register(`simpleData.${index}.topic`)}
-              className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600 disabled:opacity-50"
-              disabled={chaptersLoading || availableTopics.length === 0}
-            >
-              <option value="">
-                {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select Chapter/Topic..."}
-              </option>
-              {renderChapterOptions(chapterGroups, availableTopics)}
-            </select>
+            <Controller
+              name={`simpleData.${index}.topic`}
+              control={control}
+              render={({ field: f }) => (
+                <select
+                  value={f.value ?? ""}
+                  onChange={(e) => {
+                    f.onChange(e.target.value);
+                    setValue(`simpleData.${index}.subtopic`, "", { shouldDirty: true });
+                  }}
+                  onBlur={f.onBlur}
+                  className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none border-b border-dashed border-gray-300 focus:border-gray-500 py-1 cursor-pointer appearance-none hover:text-gray-600 disabled:opacity-50"
+                  disabled={chaptersLoading || availableTopics.length === 0}
+                >
+                  <option value="">
+                    {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select Chapter/Topic..."}
+                  </option>
+                  {renderChapterOptions(chapterGroups, availableTopics)}
+                </select>
+              )}
+            />
             {chaptersLoading && <Loader2 size={14} className="absolute right-2 top-2 animate-spin text-gray-400" />}
           </div>
 
+          {/* ✅ v8: Subtopic — Controller */}
           <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#E5E7EB] group-hover:bg-gray-400 transition-colors" aria-hidden="true" />
-            <select
-              {...register(`simpleData.${index}.subtopic`)}
-              className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none cursor-pointer disabled:opacity-50 hover:text-gray-700 appearance-none"
-              disabled={!currentTopic || subOptions.length === 0}
-            >
-              <option value="">
-                {!currentTopic ? "Select Subtopic (Optional)..." : subOptions.length === 0 ? "No subtopics available" : "Select Subtopic (Optional)..."}
-              </option>
-              {subOptions.map(subtopic => (
-                <option key={subtopic} value={subtopic}>{subtopic}</option>
-              ))}
-            </select>
+            <div className="w-1.5 h-1.5 rounded-full bg-[#E5E7EB] group-hover:bg-gray-400 transition-colors" />
+            <Controller
+              name={`simpleData.${index}.subtopic`}
+              control={control}
+              render={({ field: f }) => (
+                <select
+                  value={f.value ?? ""}
+                  onChange={(e) => f.onChange(e.target.value)}
+                  onBlur={f.onBlur}
+                  className="w-full bg-transparent text-xs font-semibold text-gray-500 outline-none cursor-pointer disabled:opacity-50 hover:text-gray-700 appearance-none"
+                  disabled={!currentTopic || subOptions.length === 0}
+                >
+                  <option value="">
+                    {!currentTopic ? "Select Subtopic (Optional)..." : subOptions.length === 0 ? "No subtopics available" : "Select Subtopic (Optional)..."}
+                  </option>
+                  {subOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              )}
+            />
           </div>
         </div>
       </td>
@@ -648,7 +917,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
           {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
           className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
         >
-          {[1,2,3,4,5,6,7,8,9,10,15,20].map(num => <option key={num} value={num}>{num}</option>)}
+          {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
       </td>
 
@@ -657,16 +926,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
           {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
           className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
         >
-          <option value={1}>1m</option>
-          <option value={2}>2m</option>
-          <option value={3}>3m</option>
-          <option value={4}>4m</option>
-          <option value={5}>5m</option>
-          <option value={6}>6m</option>
-          <option value={7}>7m</option>
-          <option value={8}>8m</option>
-          <option value={9}>9m</option>
-          <option value={10}>10m</option>
+          {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n}m</option>)}
         </select>
       </td>
 
@@ -697,7 +957,6 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
           type="button"
           onClick={() => remove(index)}
           className="p-2 rounded-full bg-white border border-transparent hover:border-red-100 hover:bg-red-50 text-gray-300 hover:text-red-500 transition-all shadow-sm"
-          aria-label={`Remove row ${rowNumber}`}
         >
           <Trash2 size={16} />
         </motion.button>
@@ -705,30 +964,19 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
     </motion.tr>
   );
 }));
-TableRow.displayName = 'TableRow';
+TableRow.displayName = "TableRow";
 
 // ==================== SIMPLE MODE VIEW ====================
 const SimpleModeView: React.FC = () => {
   const { control, watch, setValue: setFormValue } = useFormContext<FormValues>();
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "simpleData",
-  });
+  const { fields, append, remove } = useFieldArray({ control, name: "simpleData" });
 
-  const classLevel = watch("classGrade") || "";
-  const currentSubject = watch("subject") || "";
+  const classLevel     = watch("classGrade") ?? "";
+  const currentSubject = watch("subject") ?? "";
 
-  const {
-    chapters: apiChapters,
-    chapterGroups: apiChapterGroups,
-    subtopicsMap,
-    loading: chaptersLoading,
-    error: chaptersError,
-  } = useChapters(classLevel, currentSubject);
+  const { chapters: apiChapters, chapterGroups: apiChapterGroups, subtopicsMap, loading: chaptersLoading, error: chaptersError } =
+    useChapters(classLevel, currentSubject);
 
-  // ═════════════════════════════════════════════════════════════════════
-  // Inject Writing Skills & Grammar for English
-  // ═════════════════════════════════════════════════════════════════════
   const isEnglish = currentSubject?.toLowerCase() === "english";
 
   const finalChapters = React.useMemo(() => {
@@ -738,68 +986,42 @@ const SimpleModeView: React.FC = () => {
 
   const finalChapterGroups = React.useMemo(() => {
     if (!isEnglish) return apiChapterGroups;
-
-    const baseGroups: ChapterGroup[] = (apiChapterGroups && apiChapterGroups.length > 0)
-      ? [...apiChapterGroups]
-      : [];
-
-    // FIX: If backend returned flat chapters but no groups, wrap as fallback group
-    if (baseGroups.length === 0 && apiChapters.length > 0) {
-      baseGroups.push({
-        book: "literature",
-        chapter_type: "all",
-        label: "Literature Chapters",
-        chapters: apiChapters.map((name, i) => ({ name, order: i + 1 })),
+    const base: ChapterGroup[] = apiChapterGroups ? [...apiChapterGroups] : [];
+    if (base.length === 0 && apiChapters.length > 0) {
+      base.push({
+        book: "literature", chapter_type: "all", label: "Literature Chapters",
+        chapters: apiChapters.map((n, i) => ({ name: n, order: i + 1 })),
       });
     }
-
-    // Always append Writing & Grammar
-    baseGroups.push({
-      book: "writing_grammar",
-      chapter_type: "skills",
-      label: "Writing & Grammar",
-      chapters: [
-        { name: "Writing Skills", order: 1 },
-        { name: "Grammar", order: 2 },
-      ],
+    base.push({
+      book: "writing_grammar", chapter_type: "skills", label: "Writing & Grammar",
+      chapters: [{ name: "Writing Skills", order: 1 }, { name: "Grammar", order: 2 }],
     });
-
-    return baseGroups;
+    return base;
   }, [apiChapterGroups, apiChapters, isEnglish]);
 
-  const availableTopics = finalChapters;
-
-  // ─────────────────────────────────────────────────────────────────────
-  // Reset topic/subtopic when class/subject changes
-  // ─────────────────────────────────────────────────────────────────────
-  const prevKeyRef = useRef(`${classLevel}-${currentSubject}`);
-  const fieldsLengthRef = useRef(fields.length);
+  const prevKeyRef   = useRef<string>("");
+  const fieldsLenRef = useRef(fields.length);
+  useEffect(() => { fieldsLenRef.current = fields.length; }, [fields.length]);
 
   useEffect(() => {
-    fieldsLengthRef.current = fields.length;
-  }, [fields.length]);
+    if (!classLevel || !currentSubject) return;
 
-  useEffect(() => {
     const newKey = `${classLevel}-${currentSubject}`;
-    if (prevKeyRef.current !== newKey && prevKeyRef.current !== "-") {
-      const len = fieldsLengthRef.current;
+
+    if (prevKeyRef.current && prevKeyRef.current !== newKey) {
+      const len = fieldsLenRef.current;
       for (let idx = 0; idx < len; idx++) {
-        setFormValue(`simpleData.${idx}.topic` as any, "");
+        setFormValue(`simpleData.${idx}.topic`   as any, "");
         setFormValue(`simpleData.${idx}.subtopic` as any, "");
       }
     }
+
     prevKeyRef.current = newKey;
   }, [classLevel, currentSubject, setFormValue]);
 
   const handleAddRow = useCallback(() => {
-    append({
-      id: generateUUID(),
-      topic: "",
-      quantity: 5,
-      marks: 1,
-      difficulty: "Medium",
-      format: "MCQ",
-    });
+    append({ id: generateUUID(), topic: "", quantity: 5, marks: 1, difficulty: "Medium", format: "MCQ" });
   }, [append]);
 
   return (
@@ -814,30 +1036,19 @@ const SimpleModeView: React.FC = () => {
         <div className="flex items-center gap-2 text-xs sm:text-sm text-blue-800">
           <BookOpen size={14} className="flex-shrink-0" />
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
-            {classLevel && (
-              <span className="truncate">
-                <span className="font-semibold">Class:</span> {classLevel}
-              </span>
-            )}
-            <span className="truncate">
-              <span className="font-semibold">Subject:</span> {currentSubject || "Not selected"}
-            </span>
+            {classLevel && <span className="truncate"><span className="font-semibold">Class:</span> {classLevel}</span>}
+            <span className="truncate"><span className="font-semibold">Subject:</span> {currentSubject || "Not selected"}</span>
             {finalChapters.length > 0 && (
               <span className="text-[10px] sm:text-xs text-blue-600">
-                ({finalChapters.length} chapters
-                {finalChapterGroups && finalChapterGroups.length > 0
-                  ? `, ${finalChapterGroups.length} groups`
-                  : ""})
+                ({finalChapters.length} chapters{finalChapterGroups && finalChapterGroups.length > 0 ? `, ${finalChapterGroups.length} groups` : ""})
               </span>
             )}
-            {chaptersError && (
-              <span className="text-[10px] sm:text-xs text-red-600">(failed to load)</span>
-            )}
+            {chaptersError && <span className="text-[10px] sm:text-xs text-amber-600">(using fallback)</span>}
           </div>
         </div>
       </div>
 
-      {/* Empty state — no class/subject selected */}
+      {/* Empty — no selection */}
       {(!classLevel || !currentSubject) && (
         <div className="py-10 sm:py-12 text-center text-gray-400 px-4">
           <BookOpen size={32} className="mx-auto mb-3 opacity-50" />
@@ -846,23 +1057,27 @@ const SimpleModeView: React.FC = () => {
         </div>
       )}
 
-      {/* Empty state when API returned no chapters */}
-      {classLevel && currentSubject && !chaptersLoading && finalChapters.length === 0 && (
-        <div className="py-8 sm:py-10 text-center px-4 bg-amber-50/50 border-b border-amber-100">
-          <AlertCircle size={28} className="mx-auto mb-3 text-amber-500" />
-          <p className="font-bold text-sm text-amber-900">
-            No chapters available for {currentSubject} · {classLevel}
-          </p>
-          <p className="text-xs mt-1.5 text-amber-700 max-w-md mx-auto">
-            Either this subject is not yet ingested for this class, or the request failed.
-            Try another subject or class, or contact support.
-          </p>
+      {/* Loading */}
+      {classLevel && currentSubject && chaptersLoading && (
+        <div className="py-10 sm:py-12 text-center px-4">
+          <Loader2 size={32} className="mx-auto mb-3 animate-spin text-blue-500" />
+          <p className="font-semibold text-sm">Loading chapters...</p>
         </div>
       )}
 
+      {/* No chapters */}
+      {classLevel && currentSubject && !chaptersLoading && finalChapters.length === 0 && (
+        <div className="py-8 sm:py-10 text-center px-4 bg-amber-50/50 border-b border-amber-100">
+          <AlertCircle size={28} className="mx-auto mb-3 text-amber-500" />
+          <p className="font-bold text-sm text-amber-900">No chapters for {currentSubject} · {classLevel}</p>
+          <p className="text-xs mt-1.5 text-amber-700">Try another subject or class.</p>
+        </div>
+      )}
+
+      {/* Main content */}
       {classLevel && currentSubject && finalChapters.length > 0 && (
         <>
-          {/* MOBILE: Card list */}
+          {/* MOBILE */}
           <div className="block sm:hidden p-3 space-y-3">
             <AnimatePresence>
               {fields.map((field, index) => (
@@ -870,7 +1085,7 @@ const SimpleModeView: React.FC = () => {
                   key={field.id}
                   index={index}
                   field={field}
-                  availableTopics={availableTopics}
+                  availableTopics={finalChapters}
                   chapterGroups={finalChapterGroups}
                   subtopicsMap={subtopicsMap}
                   chaptersLoading={chaptersLoading}
@@ -880,20 +1095,20 @@ const SimpleModeView: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          {/* DESKTOP: Table */}
+          {/* DESKTOP */}
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <caption className="sr-only">Test configuration table</caption>
               <thead>
                 <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
-                  <th className="py-4 px-6 w-12 text-center"></th>
+                  <th className="py-4 px-6 w-12 text-center" />
                   <th className="py-4 px-4">Chapter & Topics</th>
                   <th className="py-4 px-4 w-20 text-center">Quantity</th>
                   <th className="py-4 px-4 w-20 text-center">Marks</th>
                   <th className="py-4 px-4 w-32">Difficulty</th>
                   <th className="py-4 px-4 w-48">Question Type</th>
                   <th className="py-4 px-4 w-20 text-center">Reference</th>
-                  <th className="py-4 px-4 w-12 text-center"></th>
+                  <th className="py-4 px-4 w-12 text-center" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -903,7 +1118,7 @@ const SimpleModeView: React.FC = () => {
                       key={field.id}
                       index={index}
                       field={field}
-                      availableTopics={availableTopics}
+                      availableTopics={finalChapters}
                       chapterGroups={finalChapterGroups}
                       subtopicsMap={subtopicsMap}
                       chaptersLoading={chaptersLoading}
@@ -920,7 +1135,7 @@ const SimpleModeView: React.FC = () => {
             type="button"
             onClick={handleAddRow}
             className="w-full py-4 sm:py-5 mt-2 bg-[#F9FAFB] active:bg-[#F3F4F6] text-sm font-bold text-gray-500 hover:text-gray-700 rounded-b-2xl sm:rounded-b-[22px] flex items-center justify-center gap-2 transition-all group min-h-[48px]"
-            style={{ WebkitTapHighlightColor: "transparent" }}
+            style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
             <PlusCircle size={18} className="group-hover:scale-110 transition-transform" />
             Add Chapter Section
@@ -931,7 +1146,7 @@ const SimpleModeView: React.FC = () => {
   );
 };
 
-// ==================== MAIN COMPONENT ====================
+// ==================== MAIN EXPORT ====================
 export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
   if (activeMode !== "Simple") {
     return (
@@ -943,7 +1158,6 @@ export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
   return <SimpleModeView />;
 };
 
-// ==================== FORMAT MAP FOR API CALL ====================
 export const FORMAT_MAP: Record<string, string> = {
   MCQ:          "mcq",
   Short:        "short_answer",
