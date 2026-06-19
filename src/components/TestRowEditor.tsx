@@ -510,13 +510,12 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Haloalkanes and Haloarenes": ["Nomenclature and nature of C-X bond", "Mechanisms of substitution reactions (SN1 and SN2)", "Polyhalogen compounds", "Electrophilic substitution in haloarenes"],
   "Solutions": ["Types of solutions", "Expressing concentration of solutions", "Solubility (Henry's law)", "Raoult's law and ideal/non-ideal solutions", "Colligative properties", "Abnormal molar mass (Van 't Hoff factor)"],
   "The d- and f-Block Elements": ["Electronic configurations and general trends", "Lanthanoid contraction", "Properties of transition metals (Catalytic, Magnetic, Interstitial)", "Preparation and properties of KMnO4 and K2Cr2O7"],
-<<<<<<< HEAD
 
   // --- Biology Class 11 (Matched to UI Dropdown) ---
   "Anatomy of Flowering Plants": ["Tissues", "Tissue system", "Anatomy of dicotyledonous and monocotyledonous plants", "Secondary growth"],
   "Animal Kingdom": ["Basis of classification", "Classification of animals (Non-chordates to Chordates)"],
   "Biological Classification": ["Kingdom Monera", "Kingdom Protista", "Kingdom Fungi", "Kingdom Plantae", "Kingdom Animalia", "Viruses, Viroids and Lichens"],
-  "Biomolecules": ["How to analyze chemical composition?", "Primary and secondary metabolites", "Biomacromolecules", "Proteins", "Polysaccharides", "Nucleic acids", "Structure of proteins", "Nature of bond linking monomers in a polymer", "Dynamic state of body constituents", "Metabolic basis for living", "The living state", "Enzymes"],
+  "Biomolecule": ["How to analyze chemical composition?", "Primary and secondary metabolites", "Biomacromolecules", "Proteins", "Polysaccharides", "Nucleic acids", "Structure of proteins", "Nature of bond linking monomers in a polymer", "Dynamic state of body constituents", "Metabolic basis for living", "The living state", "Enzymes"],
   "Breathing and Exchange of Gases": ["Respiratory organs", "Mechanism of breathing", "Exchange of gases", "Transport of gases", "Regulation of respiration", "Disorders of respiratory system"],
   "Cell Cycle and Cell Division": ["Cell cycle", "Mitosis", "Meiosis", "Significance of mitosis and meiosis"],
   "Cell The Unit of Life": ["What is a cell?", "Cell theory", "An overview of cell", "Prokaryotic cells", "Eukaryotic cells"],
@@ -547,9 +546,8 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Organisms and Populations": ["Organism and its environment", "Populations (Attributes, Growth, Growth models)", "Population interactions (Predation, Competition, Parasitism, Mutualism)"],
   "Principles of Inheritance and Variation": ["Mendel's laws of inheritance", "Inheritance of one gene", "Inheritance of two genes", "Sex determination", "Mutation", "Genetic disorders"],
   "Reproductive Health": ["Reproductive health - problems and strategies", "Population explosion and birth control", "Medical termination of pregnancy (MTP)", "Sexually transmitted diseases (STDs)", "Infertility"],
-  "Sexual Reproduction in Flowering Plants": ["Flower - a fascinating organ of angiosperms", "Pre-fertilization: structures and events", "Double fertilization", "Post-fertilization: structures and events", "Apomixis and polyembryony"]
-=======
->>>>>>> ed47552475d98314ea9593f48aa429a6fa609a64
+  "Sexual Reproduction in Flowering Plants": ["Flower - a fascinating organ of angiosperms", "Pre-fertilization: structures and events", "Double fertilization", "Post-fertilization: structures and events", "Apomixis and polyembryony"],
+  
 };
 
 
