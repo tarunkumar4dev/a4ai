@@ -258,7 +258,44 @@ const COMMON_SUBTOPICS: Record<string, string[]> = {
   "Electrochemistry": ["Galvanic cells", "Nernst equation", "Conductance in electrolytic solutions", "Kohlrausch's law", "Electrolysis", "Batteries and fuel cells", "Corrosion"],
   "Haloalkanes and Haloarenes": ["Nomenclature and nature of C-X bond", "Mechanisms of substitution reactions (SN1 and SN2)", "Polyhalogen compounds", "Electrophilic substitution in haloarenes"],
   "Solutions": ["Types of solutions", "Expressing concentration of solutions", "Solubility (Henry's law)", "Raoult's law and ideal/non-ideal solutions", "Colligative properties", "Abnormal molar mass (Van 't Hoff factor)"],
-  "The d- and f-Block Elements": ["Electronic configurations and general trends", "Lanthanoid contraction", "Properties of transition metals (Catalytic, Magnetic, Interstitial)", "Preparation and properties of KMnO4 and K2Cr2O7"]
+  "The d- and f-Block Elements": ["Electronic configurations and general trends", "Lanthanoid contraction", "Properties of transition metals (Catalytic, Magnetic, Interstitial)", "Preparation and properties of KMnO4 and K2Cr2O7"],
+
+  // --- Biology Class 11 (Matched to UI Dropdown) ---
+  "Anatomy of Flowering Plants": ["Tissues", "Tissue system", "Anatomy of dicotyledonous and monocotyledonous plants", "Secondary growth"],
+  "Animal Kingdom": ["Basis of classification", "Classification of animals (Non-chordates to Chordates)"],
+  "Biological Classification": ["Kingdom Monera", "Kingdom Protista", "Kingdom Fungi", "Kingdom Plantae", "Kingdom Animalia", "Viruses, Viroids and Lichens"],
+  "Biomolecules": ["How to analyze chemical composition?", "Primary and secondary metabolites", "Biomacromolecules", "Proteins", "Polysaccharides", "Nucleic acids", "Structure of proteins", "Nature of bond linking monomers in a polymer", "Dynamic state of body constituents", "Metabolic basis for living", "The living state", "Enzymes"],
+  "Breathing and Exchange of Gases": ["Respiratory organs", "Mechanism of breathing", "Exchange of gases", "Transport of gases", "Regulation of respiration", "Disorders of respiratory system"],
+  "Cell Cycle and Cell Division": ["Cell cycle", "Mitosis", "Meiosis", "Significance of mitosis and meiosis"],
+  "Cell The Unit of Life": ["What is a cell?", "Cell theory", "An overview of cell", "Prokaryotic cells", "Eukaryotic cells"],
+  "Chemical Coordination and Integration": ["Endocrine glands and hormones", "Human endocrine system", "Hormones of heart, kidney and gastrointestinal tract", "Mechanism of hormone action"],
+  "Excretory Products and their Elimination": ["Human excretory system", "Urine formation", "Function of the tubules", "Mechanism of concentration of the filtrate", "Regulation of kidney function", "Micturition", "Role of other organs in excretion", "Disorders of the excretory system"],
+  "Morphology of Flowering Plants": ["The root", "The stem", "The leaf", "The inflorescence", "The flower", "The fruit", "The seed", "Semi-technical description of a typical flowering plant", "Description of some important families"],
+  "Neural Control and Coordination": ["Neural system", "Human neural system", "Neuron as structural and functional unit of neural system", "Central neural system", "Reflex action and reflex arc", "Sensory reception and processing"],
+  "Photosynthesis in Higher Plants": ["What do we know?", "Early experiments", "Where does photosynthesis take place?", "How many pigments are involved in photosynthesis?", "What is light reaction?", "The electron transport", "Where are the ATP and NADPH used?", "The C4 pathway", "Photorespiration", "Factors affecting photosynthesis"],
+  "Plant Growth and Development": ["Growth", "Differentiation, dedifferentiation and redifferentiation", "Development", "Plant growth regulators", "Photoperiodism", "Vernalization"],
+  "Plant Kingdom": ["Algae", "Bryophytes", "Pteridophytes", "Gymnosperms", "Angiosperms", "Plant life cycles and alternation of generations"],
+  "Respiration in Plants": ["Do plants breathe?", "Glycolysis", "Fermentation", "Aerobic respiration", "The respiratory balance sheet", "Amphibolic pathway", "Respiratory quotient"],
+  "Structural Organisation in Animals": ["Animal tissues", "Organ and organ system", "Earthworm", "Cockroach", "Frogs"],
+  "The Living World": ["What is 'living'?", "Diversity in the living world", "Taxonomic categories", "Taxonomical aids"],
+
+  // --- Chemistry Class 12 / Duplicates (Matched to UI Dropdown Variations) ---
+  "Chemical Coordination": ["Coordination entity", "Central atom/ion", "Ligands", "Coordination number", "Coordination polyhedron", "Homoleptic and heteroleptic complexes"],
+  "The d and f block elements": ["General properties of d-block elements", "Lanthanoids", "Actinoids"],
+  "Aldehydes, Ketones and Carboxylic acids": ["Nomenclature and carbonyl group structure", "Nucleophilic addition reactions", "Aldol condensation", "Cannizzaro reaction", "Acidity of carboxylic acids"],
+
+  // --- Biology Class 12 (Matched to UI Dropdown) ---
+  "Biodiversity and Conservation": ["Biodiversity", "Patterns of biodiversity", "Loss of biodiversity", "Biodiversity conservation"],
+  "Biotechnology Principles and Processes": ["Principles of biotechnology", "Tools of recombinant DNA technology", "Processes of recombinant DNA technology"],
+  "Biotechnology and its Applications": ["Biotechnological applications in agriculture", "Biotechnological applications in medicine", "Transgenic animals", "Ethical issues"],
+  "Evolution": ["Origin of life", "Evolution of life forms - a theory", "What are the evidences for evolution?", "What is adaptive radiation?", "Biological evolution", "Mechanism of evolution", "Hardy-Weinberg principle", "A brief account of evolution", "Origin and evolution of man"],
+  "Human Health and Disease": ["Common diseases in humans", "Immunity", "AIDS", "Cancer", "Drugs and alcohol abuse"],
+  "Microbes in Human Welfare": ["Microbes in household products", "Microbes in industrial products", "Microbes in sewage treatment", "Microbes in production of biogas", "Microbes as biocontrol agents", "Microbes as biofertilizers"],
+  "Molecular Basis of Inheritance": ["The DNA", "The search for genetic material", "RNA world", "Replication", "Transcription", "Genetic code", "Translation", "Regulation of gene expression", "Human genome project", "DNA fingerprinting"],
+  "Organisms and Populations": ["Organism and its environment", "Populations (Attributes, Growth, Growth models)", "Population interactions (Predation, Competition, Parasitism, Mutualism)"],
+  "Principles of Inheritance and Variation": ["Mendel's laws of inheritance", "Inheritance of one gene", "Inheritance of two genes", "Sex determination", "Mutation", "Genetic disorders"],
+  "Reproductive Health": ["Reproductive health - problems and strategies", "Population explosion and birth control", "Medical termination of pregnancy (MTP)", "Sexually transmitted diseases (STDs)", "Infertility"],
+  "Sexual Reproduction in Flowering Plants": ["Flower - a fascinating organ of angiosperms", "Pre-fertilization: structures and events", "Double fertilization", "Post-fertilization: structures and events", "Apomixis and polyembryony"]
 };
 
 
