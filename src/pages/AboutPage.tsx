@@ -1,16 +1,15 @@
-import { useRef } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import {
   motion,
   useInView,
   useMotionValue,
   useTransform,
   useMotionTemplate,
+  useReducedMotion,
 } from "framer-motion";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Helmet } from "react-helmet";
+import { useTheme } from "@/context/ThemeContext";
 import {
   Sparkles,
   Target,
@@ -25,38 +24,120 @@ import {
   BookOpen,
 } from "lucide-react";
 
-/* ================== Cluely Theme Tokens (Monochrome) ================== */
-const EASE: [number, number, number, number] = [0.25, 0.1, 0.25, 1];
-const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
+/* ──────────────────────────────────────────────────────────────
+   BRAND STYLES & GLOBAL INJECTION (From Features Page)
+   ────────────────────────────────────────────────────────────── */
+const BRAND_GRADIENT =
+  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
+const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
 
-// Monochrome palette (Cluely-style inky greys, no blues/purples)
-const TOKENS = {
-  INK: {
-    50: "#EEF2F6",
-    100: "#E3E9F1",
-    200: "#CED7E3",
-    300: "#AEBBCD",
-    400: "#8C9AAF",
-    500: "#6B7C93",
-    600: "#566679",
-    700: "#435260",
-    800: "#2F3A44",
-    900: "#1F2830",
-  },
-  SURFACE: {
-    light: "#F5F6F8",
-    mid: "#E9EDF3",
-    dark: "#0F141A",
-  },
-  BRAND: {
-    // Deep neutral gradient instead of indigo/purple
-    from: "from-[#0B0C0E]",
-    via: "via-[#161A1F]",
-    to: "to-[#2A2F37]",
-  },
+const GlobalStyles = () => {
+  useEffect(() => {
+    const s = document.createElement("style");
+    s.textContent = `
+      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+      .ag-card {
+        border-radius: 18px;
+        transition: transform 0.2s cubic-bezier(.16,1,.3,1), box-shadow 0.2s cubic-bezier(.16,1,.3,1);
+        position: relative;
+        overflow: hidden;
+      }
+      @media (min-width: 640px) { .ag-card { border-radius: 20px; } }
+      .ag-card-light {
+        background: rgba(255,255,255,0.78);
+        border: 1px solid rgba(0,0,0,0.08);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(59,130,246,0.07), 0 2px 6px rgba(0,0,0,0.05);
+      }
+      .ag-card-dark {
+        background: rgba(20,25,40,0.65);
+        border: 1px solid rgba(255,255,255,0.09);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 6px 24px rgba(0,0,0,0.45);
+      }
+      @keyframes fast-gradient {
+        0% { background-position: 0% center; }
+        100% { background-position: -200% center; }
+      }
+      .nlm-text {
+        background: ${BRAND_GRADIENT};
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: fast-gradient 4s linear infinite;
+      }
+      .btn-blk {
+        position:relative; overflow:hidden;
+        background: linear-gradient(180deg,#202124 0%,#111111 100%);
+        border: 1px solid rgba(255,255,255,0.14);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
+        color: white; font-weight:600;
+        border-radius: 14px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .btn-glass-light {
+        position:relative; overflow:hidden;
+        background: rgba(235, 235, 240, 0.85);
+        border: 1px solid rgba(0,0,0,0.12);
+        backdrop-filter: blur(20px) saturate(160%);
+        border-radius: 14px; font-weight:600;
+        transition: transform 0.2s;
+      }
+      .btn-glass-dark {
+        position:relative; overflow:hidden;
+        background: rgba(60, 60, 65, 0.7);
+        border: 1px solid rgba(255,255,255,0.15);
+        backdrop-filter: blur(20px) saturate(160%);
+        border-radius: 14px; font-weight:600;
+        transition: transform 0.2s;
+      }
+      .nlm-pill {
+        display:inline-flex; align-items:center; gap:5px;
+        padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500;
+      }
+      .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(50px); }
+      .stat-n {
+        background: ${BRAND_GRADIENT};
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: fast-gradient 4s linear infinite;
+      }
+    `;
+    document.head.appendChild(s);
+    return () => {
+      if (document.head.contains(s)) document.head.removeChild(s);
+    };
+  }, []);
+  return null;
 };
 
-const primaryGrad = `bg-gradient-to-r ${TOKENS.BRAND.from} ${TOKENS.BRAND.via} ${TOKENS.BRAND.to} text-white hover:opacity-95`;
+const card = (isDark: boolean) => `ag-card ${isDark ? "ag-card-dark" : "ag-card-light"}`;
+const pillProps = (isDark: boolean) => ({
+  className: "nlm-pill inline-flex items-center gap-1.5",
+  style: {
+    background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)",
+    color: isDark ? "#60a5fa" : "#1d4ed8",
+    border: isDark ? "1px solid rgba(59,130,246,0.22)" : "1px solid rgba(59,130,246,0.16)",
+  },
+});
+const muted = (isDark: boolean) => (isDark ? "#8a9bb0" : "#5f6368");
+const head = (isDark: boolean) => (isDark ? "#f1f5f9" : "#111111");
+const accent = (isDark: boolean) => (isDark ? "#60a5fa" : "#3b82f6");
+
+/* ================== Anim Helpers ================== */
+const EASE: [number, number, number, number] = [0.25, 0.1, 0.25, 1];
+const fadeUp = {
+  initial: { opacity: 0, y: 18 },
+  whileInView: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+} as const;
+
+const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
 
 /* ================== Data ================== */
 const team = [
@@ -100,27 +181,25 @@ const partners = [
   { name: "EduLabs", logo: "/images/partner-edulabs.svg" },
 ];
 
-/* ================== Variants ================== */
-const fadeUp = {
-  initial: { opacity: 0, y: 24 },
-  whileInView: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
-};
-
 /* ================== Page ================== */
 export default function AboutPage() {
-  // Cursor reactive hero glow (neutral tints)
-  const mx = useMotionValue(320);
-  const my = useMotionValue(160);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const prefersReducedMotion = useReducedMotion();
 
-  const onMouseMove = (e: React.MouseEvent<HTMLElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    mx.set(e.clientX - rect.left);
-    my.set(e.clientY - rect.top);
+  // Ambient glow follows cursor
+  const mx = useMotionValue(360);
+  const my = useMotionValue(180);
+  const onMove = (e: React.MouseEvent<HTMLElement>) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    mx.set(e.clientX - r.left);
+    my.set(e.clientY - r.top);
   };
 
-  const heroGlow = useMotionTemplate`
-    radial-gradient(1000px 520px at ${mx}px ${my}px, rgba(0,0,0,0.12), transparent 70%),
-    radial-gradient(780px 420px at calc(${mx}px + 240px) calc(${my}px + 160px), rgba(0,0,0,0.08), transparent 70%)
+  const bgGlow = useMotionTemplate`
+    radial-gradient(1000px 520px at ${mx}px ${my}px, ${isDark ? "rgba(59,130,246,0.06)" : "rgba(59,130,246,0.04)"}, transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), ${isDark ? "rgba(96,165,250,0.06)" : "rgba(96,165,250,0.04)"}, transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px - 260px) calc(${my}px + 220px), ${isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)"}, transparent 70%)
   `;
 
   const sectionRef = useRef<HTMLDivElement | null>(null);
@@ -146,54 +225,63 @@ export default function AboutPage() {
         <meta property="og:type" content="website" />
       </Helmet>
 
-      <div className="min-h-screen font-['Halenoir_Expanded',Inter,system-ui,sans-serif] bg-[radial-gradient(1000px_800px_at_10%_-10%,#EFF2F6_0%,transparent_60%),radial-gradient(1000px_800px_at_90%_-20%,#ECEEF2_0%,transparent_55%)] dark:bg-[radial-gradient(1000px_800px_at_10%_-10%,#0D1116_0%,transparent_60%),radial-gradient(1000px_800px_at_90%_-20%,#0B0E12_0%,transparent_55%)]">
-        {/* Grid overlay */}
-        <div className="pointer-events-none fixed inset-0 -z-20 bg-[url('/images/grid.svg')] bg-center opacity-[0.06] dark:opacity-[0.03]" />
+      <div onMouseMove={onMove} className="lp min-h-screen relative overflow-hidden transition-colors duration-300" style={{ background: isDark ? "#07090f" : "#ffffff" }}>
+        <GlobalStyles />
+
+        {/* Background Orbs */}
+        <div className="hidden sm:block">
+          <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: isDark ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)" }} />
+          <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)" }} />
+        </div>
+
+        {/* Grid Overlay */}
+        <div
+          className="absolute inset-0 -z-20 pointer-events-none"
+          style={{
+            opacity: isDark ? 0.02 : 0.035,
+            backgroundImage: `linear-gradient(to right, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px), linear-gradient(to bottom, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px)`,
+            backgroundSize: "48px 48px",
+          }}
+        />
+        
+        {!prefersReducedMotion && (
+          <motion.div
+            aria-hidden
+            className="pointer-events-none fixed inset-0 -z-10 opacity-100"
+            style={{ backgroundImage: bgGlow as any }}
+          />
+        )}
 
         {/* HERO */}
-        <section onMouseMove={onMouseMove} className="relative overflow-hidden py-24 md:py-28">
-          <motion.div aria-hidden className="absolute inset-0 -z-10" style={{ backgroundImage: heroGlow }} />
-          {/* floating orbs (neutral) */}
-          <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-gradient-to-br from-neutral-300/30 to-zinc-200/30 blur-3xl" />
-          <div className="absolute -right-16 top-1/3 h-60 w-60 rounded-full bg-gradient-to-br from-zinc-400/30 to-stone-300/30 blur-3xl" />
-
+        <section className="relative z-10 py-24 md:py-28">
           <div className={sectionX}>
-            <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
-              <Badge variant="secondary" className="gap-1 border border-white/30 bg-white/70 backdrop-blur dark:bg-white/10 dark:border-white/10 text-[13px]">
-                <Sparkles className="h-3.5 w-3.5"/> Founded 2025
-              </Badge>
-              <Badge variant="secondary" className="gap-1 border border-white/30 bg-white/70 backdrop-blur dark:bg-white/10 dark:border-white/10 text-[13px]">
-                <Rocket className="h-3.5 w-3.5"/> Contest engine live
-              </Badge>
-              <Badge variant="secondary" className="gap-1 border border-white/30 bg-white/70 backdrop-blur dark:bg-white/10 dark:border-white/10 text-[13px]">
-                <ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first
-              </Badge>
+            <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
+              <span {...pillProps(isDark)}><Sparkles className="h-3.5 w-3.5"/> Founded 2025</span>
+              <span {...pillProps(isDark)}><Rocket className="h-3.5 w-3.5"/> Contest engine live</span>
+              <span {...pillProps(isDark)}><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</span>
             </div>
 
             <motion.h1
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, ease: EASE }}
-              className="text-center text-4xl md:text-6xl font-extrabold tracking-tight text-[--ink-900] dark:text-white"
-              style={{
-                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                // @ts-ignore
-                ['--ink-900']: TOKENS.INK[900],
-              }}
+              className="text-center text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight"
+              style={{ color: head(isDark) }}
             >
-              About a4ai
+              About <span className="nlm-text">a4ai</span>
             </motion.h1>
 
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
-              className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl text-[rgb(67,82,96)]/80 dark:text-gray-300"
+              className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl"
+              style={{ color: muted(isDark) }}
             >
               Building the assessment stack for Indian classrooms—fast, fair, and aligned to how teachers actually teach.
             </motion.p>
 
-            {/* Stats (neumorphic cards) */}
+            {/* Stats */}
             <div className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-4 sm:grid-cols-4">
               {[
                 { k: "Papers", v: "3.5K+" },
@@ -203,14 +291,14 @@ export default function AboutPage() {
               ].map((s, i) => (
                 <motion.div
                   key={s.k}
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 18 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ delay: 0.05 * i, duration: 0.4 }}
-                  className="rounded-2xl border border-white/40 bg-white/70 p-4 text-center shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60"
+                  transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
+                  className={`p-6 text-center ${card(isDark)}`}
                 >
-                  <div className="text-2xl font-bold text-gray-900 dark:text-white">{s.v}</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">{s.k}</div>
+                  <div className="text-2xl md:text-3xl font-extrabold tracking-tight stat-n">{s.v}</div>
+                  <div className="mt-1 text-sm font-medium" style={{ color: muted(isDark) }}>{s.k}</div>
                 </motion.div>
               ))}
             </div>
@@ -218,7 +306,7 @@ export default function AboutPage() {
         </section>
 
         {/* MISSION */}
-        <section ref={sectionRef} className="relative py-20">
+        <section ref={sectionRef} className="relative z-10 py-20">
           <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
             <motion.div
               initial={{ opacity: 0, x: -40 }}
@@ -226,23 +314,23 @@ export default function AboutPage() {
               transition={{ duration: 0.6 }}
               className="[&_h2]:tracking-tight"
             >
-              <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white">Our mission</h2>
-              <p className="mt-6 text-lg leading-relaxed text-gray-700/90 dark:text-gray-300">
+              <h2 className="text-3xl md:text-4xl font-extrabold" style={{ color: head(isDark) }}>Our mission</h2>
+              <p className="mt-6 text-lg leading-relaxed" style={{ color: muted(isDark) }}>
                 Give teachers superpowers with AI that respects context and curriculum. Save hours weekly and return that time to students.
               </p>
-              <p className="mt-4 text-lg leading-relaxed text-gray-700/90 dark:text-gray-300">
+              <p className="mt-4 text-lg leading-relaxed" style={{ color: muted(isDark) }}>
                 We combine multi‑LLM generation with rubric checks, plagiarism guards,
                 and contest‑grade proctoring to ensure quality from day one.
               </p>
 
               {/* Buttons */}
               <div className="mt-8 flex flex-wrap gap-4">
-                <Button size="lg" className={`rounded-xl px-6 shadow-lg ${primaryGrad}`}>
-                  See how it works
-                </Button>
-                <Button size="lg" variant="outline" className="rounded-xl px-6 border-white/30 bg-white/60 backdrop-blur hover:bg-white/80 dark:bg-white/10 dark:hover:bg-white/15 dark:border-white/10">
-                  Talk to us
-                </Button>
+                <button className="btn-blk px-8 py-3.5 text-base sm:text-lg">
+                  <span className="relative z-10 flex items-center justify-center gap-2">See how it works</span>
+                </button>
+                <button className={`px-8 py-3.5 text-base sm:text-lg ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                  <span className="relative z-10 flex items-center justify-center gap-2">Talk to us</span>
+                </button>
               </div>
 
               {/* Feature chips */}
@@ -252,57 +340,57 @@ export default function AboutPage() {
                   { icon: Shield, title: "Safer data", copy: "Privacy-first storage, clear consent, audit trails." },
                   { icon: BookOpen, title: "Better pedagogy", copy: "Curriculum mapping + rubric checks by default." },
                 ].map((item) => (
-                  <div
-                    key={item.title}
-                    className="rounded-xl border border-white/40 bg-white/70 p-4 shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60"
-                  >
-                    <div className="flex items-center gap-2 font-medium text-gray-900 dark:text-white">
-                      <item.icon className="h-4 w-4 text-gray-800 dark:text-gray-200" />
+                  <div key={item.title} className={`p-5 ${card(isDark)}`}>
+                    <div className="flex items-center gap-2 font-semibold" style={{ color: head(isDark) }}>
+                      <item.icon className="h-4 w-4" style={{ color: accent(isDark) }} />
                       {item.title}
                     </div>
-                    <p className="mt-2 text-sm text-gray-700/90 dark:text-gray-300">{item.copy}</p>
+                    <p className="mt-2 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{item.copy}</p>
                   </div>
                 ))}
               </div>
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 40 }} animate={inView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
-              <Card className="overflow-hidden border-0 shadow-xl rounded-3xl">
-                <CardContent className="p-0">
-                  <img
-                    src="/images/bg.jpg"
-                    alt="Educators using a4ai"
-                    className="aspect-video w-full object-cover"
-                    loading="lazy"
-                  />
-                </CardContent>
-              </Card>
+              <div className={`overflow-hidden p-0 ${card(isDark)}`}>
+                <img
+                  src="/images/bg.jpg"
+                  alt="Educators using a4ai"
+                  className="aspect-video w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
             </motion.div>
           </div>
         </section>
 
         {/* VALUES */}
-        <section className="py-20">
+        <section className="relative z-10 py-20">
           <div className={sectionX}>
             <div className="mb-12 text-center">
-              <h3 className="text-3xl font-extrabold text-gray-900 dark:text-white">What we value</h3>
-              <p className="mt-3 text-gray-700/80 dark:text-gray-300">Principles that steer product and policy.</p>
+              <h3 className="text-3xl font-extrabold" style={{ color: head(isDark) }}>What we value</h3>
+              <p className="mt-3" style={{ color: muted(isDark) }}>Principles that steer product and policy.</p>
             </div>
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {values.map((x, i) => (
                 <motion.div
                   key={x.k}
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 18 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ delay: 0.05 * i, duration: 0.4 }}
-                  className="rounded-2xl border border-white/40 bg-white/70 p-6 shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60"
+                  transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
+                  className={`p-6 ${card(isDark)}`}
                 >
-                  <div className="flex items-center gap-2 text-gray-900 dark:text-white font-semibold">
-                    <x.icon className="h-5 w-5 text-gray-800 dark:text-gray-200" />
-                    {x.k}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div 
+                      className="relative flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
+                      style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", border: isDark ? "1px solid rgba(59,130,246,0.18)" : "1px solid rgba(59,130,246,0.12)" }}
+                    >
+                      <x.icon className="h-5 w-5" style={{ color: accent(isDark) }} />
+                    </div>
+                    <div className="font-semibold" style={{ color: head(isDark) }}>{x.k}</div>
                   </div>
-                  <p className="mt-3 text-gray-700/90 dark:text-gray-300">{x.v}</p>
+                  <p className="text-sm leading-relaxed" style={{ color: muted(isDark) }}>{x.v}</p>
                 </motion.div>
               ))}
             </div>
@@ -310,23 +398,23 @@ export default function AboutPage() {
         </section>
 
         {/* TIMELINE */}
-        <section className="py-20">
+        <section className="relative z-10 py-20">
           <div className="mx-auto max-w-5xl px-4">
-            <h3 className="text-3xl font-extrabold text-center text-gray-900 dark:text-white">Milestones</h3>
-            <div className="mt-12 space-y-8">
+            <h3 className="text-3xl font-extrabold text-center" style={{ color: head(isDark) }}>Milestones</h3>
+            <div className="mt-12 space-y-6">
               {milestones.map((m, i) => (
                 <motion.div
                   key={m.title}
                   initial={{ opacity: 0, x: i % 2 ? 40 : -40 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.45 }}
-                  className="grid grid-cols-1 gap-4 rounded-2xl border border-white/40 bg-white/70 p-6 shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60 md:grid-cols-[140px_1fr]"
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  className={`grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] ${card(isDark)}`}
                 >
-                  <div className="text-sm font-semibold text-gray-700 dark:text-gray-300">{m.date}</div>
+                  <div className="text-sm font-semibold mt-1" style={{ color: accent(isDark) }}>{m.date}</div>
                   <div>
-                    <div className="font-bold text-gray-900 dark:text-white">{m.title}</div>
-                    <div className="mt-2 text-gray-700/90 dark:text-gray-300">{m.detail}</div>
+                    <div className="text-lg font-bold" style={{ color: head(isDark) }}>{m.title}</div>
+                    <div className="mt-2 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{m.detail}</div>
                   </div>
                 </motion.div>
               ))}
@@ -335,19 +423,19 @@ export default function AboutPage() {
         </section>
 
         {/* TEAM */}
-        <section className="relative py-20">
-          <div className="absolute inset-0 bg-[url('/images/grid-dark.svg')] bg-center opacity-[0.03] pointer-events-none" />
+        <section className="relative z-10 py-20">
           <div className={sectionX}>
             <div className="text-center">
-              <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-6">
-              Team Behind a4ai
+              <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold mb-6" style={{ color: head(isDark) }}>
+                Team Behind a4ai
               </motion.h2>
               <motion.p
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
                 transition={{ delay: 0.15, duration: 0.5 }}
-                className="mx-auto max-w-3xl text-lg text-gray-700/85 dark:text-gray-300"
+                className="mx-auto max-w-3xl text-lg"
+                style={{ color: muted(isDark) }}
               >
                A small team building a4ai — step by step, every day.
               </motion.p>
@@ -355,33 +443,30 @@ export default function AboutPage() {
 
             <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
               {team.map((m, i) => (
-                <TeamCard key={m.name} index={i} member={m} />
+                <TeamCard key={m.name} index={i} member={m} isDark={isDark} />
               ))}
             </div>
 
-            <p className="mt-12 text-center text-gray-600 dark:text-gray-400">
+            <p className="mt-12 text-center text-sm font-medium" style={{ color: muted(isDark) }}>
             …and many more people who quietly help shape a4ai every moment.
             </p>
           </div>
         </section>
 
         {/* PARTNERS */}
-        <section className="py-20">
+        <section className="relative z-10 py-20">
           <div className="mx-auto max-w-6xl px-4">
             <div className="text-center">
-              <h3 className="text-3xl font-extrabold text-gray-900 dark:text-white">Schools & partners</h3>
-              <p className="mt-3 text-gray-700/80 dark:text-gray-300">Pilots and early adopters we're grateful for.</p>
+              <h3 className="text-3xl font-extrabold" style={{ color: head(isDark) }}>Schools & partners</h3>
+              <p className="mt-3" style={{ color: muted(isDark) }}>Pilots and early adopters we're grateful for.</p>
             </div>
-            <div className="mt-12 grid grid-cols-2 items-center gap-8 sm:grid-cols-4">
+            <div className="mt-12 grid grid-cols-2 items-center gap-6 sm:grid-cols-4">
               {partners.map((p) => (
-                <div
-                  key={p.name}
-                  className="flex items-center justify-center p-6 rounded-xl border border-white/40 bg-white/70 backdrop-blur shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] dark:border-white/10 dark:bg-[#0F141A]/60"
-                >
+                <div key={p.name} className={`flex items-center justify-center p-8 ${card(isDark)}`}>
                   <img
                     src={p.logo}
                     alt={p.name}
-                    className="h-8 opacity-80 grayscale hover:grayscale-0 transition-all duration-300"
+                    className={`h-8 transition-all duration-300 ${isDark ? "opacity-70 hover:opacity-100 invert" : "opacity-70 hover:opacity-100 grayscale hover:grayscale-0"}`}
                     loading="lazy"
                   />
                 </div>
@@ -391,22 +476,23 @@ export default function AboutPage() {
         </section>
 
         {/* TESTIMONIALS */}
-        <section className="py-20">
+        <section className="relative z-10 py-20">
           <div className="mx-auto max-w-5xl px-4">
-            <div className="grid gap-8 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2">
               {testimonials.map((t, i) => (
                 <motion.blockquote
                   key={t.name}
-                  initial={{ opacity: 0, y: 16 }}
+                  initial={{ opacity: 0, y: 18 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
-                  transition={{ duration: 0.45, delay: 0.05 * i }}
-                  className="relative rounded-2xl border border-white/40 bg-white/70 p-8 shadow-[0_8px_30px_rgb(31_40_48_/_0.06)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60"
+                  transition={{ duration: 0.5, delay: 0.05 * i, ease: "easeOut" }}
+                  className={`relative p-8 ${card(isDark)}`}
                 >
-                  <Quote className="absolute -top-3 -left-3 h-6 w-6 text-gray-500" />
-                  <p className="text-lg text-gray-800 dark:text-gray-300 italic">"{t.quote}"</p>
-                  <footer className="mt-6 font-semibold text-gray-900 dark:text-white">
-                    {t.name}, <span className="text-gray-600 dark:text-gray-400 font-normal">{t.title}</span>
+                  <Quote className="absolute -top-3 -left-3 h-8 w-8" style={{ color: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }} />
+                  <p className="text-base leading-relaxed italic" style={{ color: head(isDark) }}>"{t.quote}"</p>
+                  <footer className="mt-6 text-sm">
+                    <span className="font-semibold" style={{ color: head(isDark) }}>{t.name}</span>,{" "}
+                    <span style={{ color: muted(isDark) }}>{t.title}</span>
                   </footer>
                 </motion.blockquote>
               ))}
@@ -414,43 +500,52 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* CTA (Neutral gradient) */}
-        <section className="bg-gradient-to-br from-[#0B0C0E] via-[#161A1F] to-[#2A2F37] py-20 text-white">
-          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            <motion.h2
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className="text-3xl md:text-4xl font-extrabold tracking-tight"
-            >
-              Ready to transform your assessments?
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.15, duration: 0.5 }}
-              className="mx-auto mt-4 max-w-3xl text-lg text-zinc-200"
-            >
-              Join educators using a4ai to save time and improve outcomes.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.25, duration: 0.5 }}
-              className="mt-8 flex flex-col sm:flex-row justify-center gap-4"
-            >
-              <Button size="lg" className="rounded-xl bg-white px-8 py-6 text-lg font-semibold text-gray-900 shadow-lg hover:bg-gray-100">
-                Get started for free
-              </Button>
-              <Button size="lg" variant="outline" className="rounded-xl border-white bg-transparent px-8 py-6 text-lg font-semibold text-white hover:bg-white hover:text-gray-900">
-                Book a demo <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+        {/* CTA Banner */}
+        <section className="relative z-10 pb-24 pt-10">
+          <div className={sectionX}>
+            <motion.div {...fadeUp} viewport={{ once: true }} className="rounded-2xl p-[1px] shadow-lg overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+              <div className="rounded-2xl px-6 py-16 text-center relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
+                <motion.h2
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.5 }}
+                  className="text-3xl md:text-4xl font-extrabold tracking-tight"
+                  style={{ color: head(isDark) }}
+                >
+                  Ready to transform your assessments?
+                </motion.h2>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.15, duration: 0.5 }}
+                  className="mx-auto mt-4 max-w-2xl text-lg"
+                  style={{ color: muted(isDark) }}
+                >
+                  Join educators using a4ai to save time and improve outcomes.
+                </motion.p>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.25, duration: 0.5 }}
+                  className="mt-8 flex flex-col sm:flex-row justify-center gap-4"
+                >
+                  <button className="btn-blk px-8 py-3.5 text-base sm:text-lg">
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      Get started for free
+                    </span>
+                  </button>
+                  <button className={`px-8 py-3.5 text-base sm:text-lg flex items-center justify-center gap-2 ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                    <span className="relative z-10 flex items-center gap-2">Book a demo <ArrowRight className="h-5 w-5" /></span>
+                  </button>
+                </motion.div>
+              </div>
             </motion.div>
           </div>
         </section>
+
       </div>
     </>
   );
@@ -460,9 +555,11 @@ export default function AboutPage() {
 function TeamCard({
   member,
   index,
+  isDark,
 }: {
   member: { name: string; role: string; description: string; image: string };
   index: number;
+  isDark: boolean;
 }) {
   const mx = useMotionValue(160);
   const my = useMotionValue(120);
@@ -488,31 +585,27 @@ function TeamCard({
       transition={{ duration: 0.45, delay: 0.08 * index, ease: EASE }}
       className="relative"
     >
-      <div onMouseMove={onMove} onMouseLeave={onLeave} style={{ perspective: 1000 }} className="group cursor-pointer">
+      <div onMouseMove={onMove} onMouseLeave={onLeave} style={{ perspective: 1000 }} className="group cursor-pointer h-full">
         <motion.div
           style={{ rotateX, rotateY }}
-          className="relative rounded-2xl border border-white/40 bg-white/70 p-6 shadow-[0_12px_40px_rgb(31_40_48_/_0.10)] transition-all duration-300 hover:shadow-[0_20px_60px_rgb(31_40_48_/_0.18)] backdrop-blur dark:border-white/10 dark:bg-[#0F141A]/60"
+          className={`relative h-full p-6 transition-all duration-300 ${card(isDark)}`}
         >
           <motion.span
             aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-2xl"
-            style={{
-              background: useMotionTemplate`
-                radial-gradient(160px 110px at ${mx}px ${my}px, rgba(0,0,0,0.12), transparent 70%)
-              `,
-            }}
+            className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, ${isDark ? "rgba(96,165,250,0.12)" : "rgba(59,130,246,0.08)"}, transparent 80%)` }}
           />
-          <div className="relative z-10 text-center">
-            <Avatar className="mx-auto mb-4 h-28 w-28 ring-2 ring-white/60 dark:ring-white/10">
+          <div className="relative za-10 text-center">
+            <Avatar className="mx-auto mb-4 h-28 w-28 ring-2" style={{ borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }}>
               <AvatarImage src={member.image} alt={member.name} className="object-cover" />
-              <AvatarFallback className="bg-gray-100 text-gray-700 dark:bg-[#1A222B] dark:text-gray-200 text-xl font-bold">
+              <AvatarFallback className="text-xl font-bold" style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)", color: head(isDark) }}>
                 {member.name.substring(0, 2)}
               </AvatarFallback>
             </Avatar>
 
-            <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">{member.name}</h3>
-            <p className="mt-1 text-sm font-medium text-gray-700 dark:text-gray-300">{member.role}</p>
-            <p className="mt-3 text-gray-700/90 dark:text-gray-300">{member.description}</p>
+            <h3 className="text-xl font-extrabold" style={{ color: head(isDark) }}>{member.name}</h3>
+            <p className="mt-1 text-sm font-semibold" style={{ color: accent(isDark) }}>{member.role}</p>
+            <p className="mt-3 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{member.description}</p>
           </div>
         </motion.div>
       </div>

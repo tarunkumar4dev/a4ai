@@ -1,15 +1,21 @@
 // src/pages/PaymentPage.tsx
 // Reads ?plan=starter&cycle=yearly from URL (set by PricingPage)
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   CreditCard, Smartphone, QrCode, Wallet, Shield,
   CheckCircle, Check, ArrowLeft, Zap, Crown,
   Building2, Users, BarChart3,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { 
+  motion, 
+  useMotionValue, 
+  useMotionTemplate, 
+  useReducedMotion 
+} from "framer-motion";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
+import { useTheme } from "@/context/ThemeContext";
 
 declare global {
   interface Window { Razorpay: any; }
@@ -25,6 +31,76 @@ type MethodId = "upi" | "card" | "wallet" | "netbanking";
 type BillingCycle = "monthly" | "yearly";
 
 const YEARLY_DISCOUNT = 0.20;
+
+/* ──────────────────────────────────────────────────────────────
+   BRAND STYLES & GLOBAL INJECTION
+   ────────────────────────────────────────────────────────────── */
+const BRAND_GRADIENT =
+  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
+
+const GlobalStyles = () => {
+  useEffect(() => {
+    const s = document.createElement("style");
+    s.textContent = `
+      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+      .ag-card {
+        border-radius: 18px;
+        transition: transform 0.2s cubic-bezier(.16,1,.3,1), box-shadow 0.2s cubic-bezier(.16,1,.3,1);
+        position: relative;
+        overflow: hidden;
+      }
+      @media (min-width: 640px) { .ag-card { border-radius: 20px; } }
+      .ag-card-light {
+        background: rgba(255,255,255,0.78);
+        border: 1px solid rgba(0,0,0,0.08);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(59,130,246,0.07), 0 2px 6px rgba(0,0,0,0.05);
+      }
+      .ag-card-dark {
+        background: rgba(20,25,40,0.65);
+        border: 1px solid rgba(255,255,255,0.09);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 6px 24px rgba(0,0,0,0.45);
+      }
+      @keyframes fast-gradient {
+        0% { background-position: 0% center; }
+        100% { background-position: -200% center; }
+      }
+      .nlm-text {
+        background: ${BRAND_GRADIENT};
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: fast-gradient 4s linear infinite;
+      }
+      .btn-blk {
+        position:relative; overflow:hidden;
+        background: linear-gradient(180deg,#202124 0%,#111111 100%);
+        border: 1px solid rgba(255,255,255,0.14);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
+        color: white; font-weight:600;
+        border-radius: 14px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .btn-blk:active { transform: scale(0.98); }
+      .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(50px); }
+    `;
+    document.head.appendChild(s);
+    return () => {
+      if (document.head.contains(s)) document.head.removeChild(s);
+    };
+  }, []);
+  return null;
+};
+
+const card = (isDark: boolean) => `ag-card ${isDark ? "ag-card-dark" : "ag-card-light"}`;
+const muted = (isDark: boolean) => (isDark ? "#8a9bb0" : "#5f6368");
+const head = (isDark: boolean) => (isDark ? "#f1f5f9" : "#111111");
+const accent = (isDark: boolean) => (isDark ? "#60a5fa" : "#3b82f6");
 
 // ═══════════════════════════════════════════════════════════
 // PLAN CONFIG (must match PricingPage + DB)
@@ -89,6 +165,25 @@ export default function PaymentPage() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { refreshStatus } = useSubscription();
+  const { theme } = useTheme();
+  
+  const isDark = theme === "dark";
+  const prefersReducedMotion = useReducedMotion();
+
+  // Ambient glow follows cursor
+  const mx = useMotionValue(360);
+  const my = useMotionValue(180);
+  const onMove = (e: React.MouseEvent<HTMLElement>) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    mx.set(e.clientX - r.left);
+    my.set(e.clientY - r.top);
+  };
+
+  const bgGlow = useMotionTemplate`
+    radial-gradient(1000px 520px at ${mx}px ${my}px, ${isDark ? "rgba(59,130,246,0.06)" : "rgba(59,130,246,0.04)"}, transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), ${isDark ? "rgba(96,165,250,0.06)" : "rgba(96,165,250,0.04)"}, transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px - 260px) calc(${my}px + 220px), ${isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)"}, transparent 70%)
+  `;
 
   const planSlug = searchParams.get("plan") || "starter";
   const cycleParm = searchParams.get("cycle") as BillingCycle | null;
@@ -202,30 +297,40 @@ export default function PaymentPage() {
   if (paymentSuccess) {
     const cycleLabel = billingCycle === "yearly" ? "Yearly" : "Monthly";
     return (
-      <div className="min-h-screen bg-[#FAFBFC] flex items-center justify-center p-4">
+      <div 
+        onMouseMove={onMove} 
+        className="lp min-h-screen relative overflow-hidden transition-colors duration-300 flex items-center justify-center p-4" 
+        style={{ background: isDark ? "#07090f" : "#ffffff" }}
+      >
+        <GlobalStyles />
+        {!prefersReducedMotion && (
+          <motion.div aria-hidden className="pointer-events-none fixed inset-0 -z-10 opacity-100" style={{ backgroundImage: bgGlow as any }} />
+        )}
+        
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white rounded-2xl shadow-xl ring-1 ring-gray-100 p-8 max-w-md w-full text-center"
+          className={`p-8 max-w-md w-full text-center ${card(isDark)}`}
         >
           <motion.div
             initial={{ scale: 0 }} animate={{ scale: 1 }}
             transition={{ type: "spring", delay: 0.2 }}
-            className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-6"
+            className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
+            style={{ background: isDark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.1)" }}
           >
             <CheckCircle className="h-9 w-9 text-green-500" />
           </motion.div>
-          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">You're all set!</h1>
-          <p className="text-gray-500 mb-1">
-            <strong>{plan.name} ({cycleLabel})</strong> is now active.
+          <h1 className="text-2xl font-extrabold mb-2" style={{ color: head(isDark) }}>You're all set!</h1>
+          <p className="mb-1" style={{ color: muted(isDark) }}>
+            <strong style={{ color: head(isDark) }}>{plan.name} ({cycleLabel})</strong> is now active.
           </p>
-          <p className="text-sm text-gray-400 mb-6">
+          <p className="text-sm mb-6" style={{ color: muted(isDark) }}>
             {plan.testLimit >= 200 ? "Unlimited" : plan.testLimit} test papers unlocked.
             {billingCycle === "yearly" && " You saved 20% with annual billing."}
           </p>
           <button
             onClick={() => navigate("/dashboard")}
-            className="w-full py-3.5 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors"
+            className="btn-blk w-full py-3.5"
           >
             Go to Dashboard
           </button>
@@ -243,58 +348,95 @@ export default function PaymentPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAFBFC]">
-      {/* Top bar */}
-      <div className="bg-white border-b border-gray-100">
+    <div 
+      onMouseMove={onMove} 
+      className="lp min-h-screen relative overflow-hidden transition-colors duration-300" 
+      style={{ background: isDark ? "#07090f" : "#ffffff" }}
+    >
+      <GlobalStyles />
+
+      {/* Background Orbs */}
+      <div className="hidden sm:block">
+        <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: isDark ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)" }} />
+        <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)" }} />
+      </div>
+
+      {/* Grid Overlay */}
+      <div
+        className="absolute inset-0 -z-20 pointer-events-none"
+        style={{
+          opacity: isDark ? 0.02 : 0.035,
+          backgroundImage: `linear-gradient(to right, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px), linear-gradient(to bottom, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px)`,
+          backgroundSize: "48px 48px",
+        }}
+      />
+      
+      {!prefersReducedMotion && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 -z-10 opacity-100"
+          style={{ backgroundImage: bgGlow as any }}
+        />
+      )}
+
+      {/* Top bar (Glassy) */}
+      <div className="relative z-10 border-b" style={{ borderColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)", background: isDark ? "rgba(10,14,24,0.4)" : "rgba(255,255,255,0.4)", backdropFilter: "blur(12px)" }}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-          <button onClick={() => navigate("/pricing")} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+          <button 
+            onClick={() => navigate("/pricing")} 
+            className="p-2 rounded-lg transition-colors"
+            style={{ color: muted(isDark), background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)" }}
+          >
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div>
-            <h1 className="text-lg font-bold text-gray-900">Checkout</h1>
-            <p className="text-xs text-gray-400">{plan.name} Plan · Secure payment via Razorpay</p>
+            <h1 className="text-lg font-bold" style={{ color: head(isDark) }}>Checkout</h1>
+            <p className="text-xs" style={{ color: muted(isDark) }}>{plan.name} Plan · Secure payment via Razorpay</p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
           {/* ── Left: Payment Method ── */}
           <div className="lg:col-span-3 space-y-5">
             {/* Billing toggle */}
-            <div className="bg-white rounded-2xl ring-1 ring-gray-100 p-5">
-              <h2 className="text-sm font-bold text-gray-900 mb-3">Billing Cycle</h2>
+            <div className={`p-5 ${card(isDark)}`}>
+              <h2 className="text-sm font-bold mb-3" style={{ color: head(isDark) }}>Billing Cycle</h2>
               <div className="grid grid-cols-2 gap-3">
-                {(["monthly", "yearly"] as const).map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setBillingCycle(c)}
-                    className={`relative p-4 rounded-xl border-2 text-left transition-all ${
-                      billingCycle === c
-                        ? "border-gray-900 bg-gray-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <p className="text-sm font-bold text-gray-900 capitalize">{c}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {c === "monthly"
-                        ? `${fmt(plan.monthlyPaise)}/month`
-                        : `${fmt(getPrice(plan.monthlyPaise, "yearly"))}/year`}
-                    </p>
-                    {c === "yearly" && (
-                      <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                        -20%
-                      </span>
-                    )}
-                  </button>
-                ))}
+                {(["monthly", "yearly"] as const).map((c) => {
+                  const active = billingCycle === c;
+                  return (
+                    <button
+                      key={c}
+                      onClick={() => setBillingCycle(c)}
+                      className="relative p-4 rounded-xl border text-left transition-all"
+                      style={{
+                        borderColor: active ? accent(isDark) : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"),
+                        background: active ? (isDark ? "rgba(59,130,246,0.1)" : "rgba(59,130,246,0.05)") : "transparent"
+                      }}
+                    >
+                      <p className="text-sm font-bold capitalize" style={{ color: head(isDark) }}>{c}</p>
+                      <p className="text-xs mt-0.5" style={{ color: muted(isDark) }}>
+                        {c === "monthly"
+                          ? `${fmt(plan.monthlyPaise)}/month`
+                          : `${fmt(getPrice(plan.monthlyPaise, "yearly"))}/year`}
+                      </p>
+                      {c === "yearly" && (
+                        <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: isDark ? "rgba(34,197,94,0.2)" : "rgba(34,197,94,0.1)", color: isDark ? "#4ade80" : "#166534" }}>
+                          -20%
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Payment methods */}
-            <div className="bg-white rounded-2xl ring-1 ring-gray-100 p-5">
-              <h2 className="text-sm font-bold text-gray-900 mb-3">Payment Method</h2>
+            <div className={`p-5 ${card(isDark)}`}>
+              <h2 className="text-sm font-bold mb-3" style={{ color: head(isDark) }}>Payment Method</h2>
               <div className="space-y-2">
                 {methods.map((m) => {
                   const Icon = m.icon;
@@ -303,20 +445,23 @@ export default function PaymentPage() {
                     <button
                       key={m.id}
                       onClick={() => setSelectedMethod(m.id)}
-                      className={`w-full flex items-center gap-4 p-3.5 rounded-xl border-2 transition-all text-left ${
-                        active ? "border-gray-900 bg-gray-50" : "border-gray-100 hover:border-gray-200"
-                      }`}
+                      className="w-full flex items-center gap-4 p-3.5 rounded-xl border transition-all text-left"
+                      style={{
+                        borderColor: active ? accent(isDark) : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"),
+                        background: active ? (isDark ? "rgba(59,130,246,0.1)" : "rgba(59,130,246,0.05)") : "transparent"
+                      }}
                     >
-                      <div className={`p-2 rounded-lg ${active ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-400"}`}>
+                      <div className="p-2 rounded-lg" style={{ background: active ? accent(isDark) : (isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"), color: active ? "#fff" : muted(isDark) }}>
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900">{m.name}</p>
-                        <p className="text-[11px] text-gray-400">{m.sub}</p>
+                        <p className="text-sm font-semibold" style={{ color: head(isDark) }}>{m.name}</p>
+                        <p className="text-[11px]" style={{ color: muted(isDark) }}>{m.sub}</p>
                       </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                        active ? "border-gray-900 bg-gray-900" : "border-gray-300"
-                      }`}>
+                      <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors" style={{ 
+                        borderColor: active ? accent(isDark) : (isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"),
+                        background: active ? accent(isDark) : "transparent"
+                      }}>
                         {active && <Check className="h-3 w-3 text-white" />}
                       </div>
                     </button>
@@ -326,9 +471,9 @@ export default function PaymentPage() {
             </div>
 
             {/* Security */}
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-100">
-              <Shield className="h-4 w-4 text-blue-500 flex-shrink-0" />
-              <p className="text-xs text-blue-600">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.05)", borderColor: isDark ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.1)" }}>
+              <Shield className="h-4 w-4 flex-shrink-0" style={{ color: accent(isDark) }} />
+              <p className="text-xs" style={{ color: isDark ? "#93c5fd" : "#2563eb" }}>
                 <strong>256-bit encrypted</strong> · Powered by Razorpay · We never store card details
               </p>
             </div>
@@ -336,61 +481,61 @@ export default function PaymentPage() {
 
           {/* ── Right: Order Summary ── */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl ring-1 ring-gray-100 p-5 lg:sticky lg:top-6">
-              <h2 className="text-sm font-bold text-gray-900 mb-4">Order Summary</h2>
+            <div className={`p-5 lg:sticky lg:top-6 ${card(isDark)}`}>
+              <h2 className="text-sm font-bold mb-4" style={{ color: head(isDark) }}>Order Summary</h2>
 
               {/* Plan card */}
-              <div className="flex items-center gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-100 mb-4">
-                <div className="p-2 rounded-lg bg-gray-900 text-white">
+              <div className="flex items-center gap-3 p-3.5 rounded-xl border mb-4" style={{ background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }}>
+                <div className="p-2 rounded-lg" style={{ background: isDark ? "rgba(255,255,255,0.1)" : "#111", color: isDark ? head(isDark) : "#fff" }}>
                   {plan.icon}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold text-gray-900">{plan.name}</p>
-                  <p className="text-xs text-gray-400 capitalize">{billingCycle} billing</p>
+                  <p className="text-sm font-bold" style={{ color: head(isDark) }}>{plan.name}</p>
+                  <p className="text-xs capitalize" style={{ color: muted(isDark) }}>{billingCycle} billing</p>
                 </div>
               </div>
 
               {/* Breakdown */}
               <div className="space-y-2.5 text-sm mb-4">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{plan.name} plan</span>
-                  <span className="font-medium text-gray-900">
+                  <span style={{ color: muted(isDark) }}>{plan.name} plan</span>
+                  <span className="font-medium" style={{ color: head(isDark) }}>
                     {billingCycle === "yearly"
                       ? `${fmt(plan.monthlyPaise)} × 12`
                       : fmt(plan.monthlyPaise)}
                   </span>
                 </div>
                 {billingCycle === "yearly" && (
-                  <div className="flex justify-between text-green-600">
+                  <div className="flex justify-between" style={{ color: isDark ? "#4ade80" : "#16a34a" }}>
                     <span>Annual discount (20%)</span>
                     <span className="font-medium">-{fmt(savings)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-gray-500">
-                  <span>Test papers</span>
-                  <span className="font-medium text-gray-900">
+                <div className="flex justify-between">
+                  <span style={{ color: muted(isDark) }}>Test papers</span>
+                  <span className="font-medium" style={{ color: head(isDark) }}>
                     {plan.testLimit >= 200 ? "Unlimited" : `${plan.testLimit}/mo`}
                   </span>
                 </div>
                 {plan.studentLimit && (
-                  <div className="flex justify-between text-gray-500">
-                    <span>Students</span>
-                    <span className="font-medium text-gray-900">Up to {plan.studentLimit}</span>
+                  <div className="flex justify-between">
+                    <span style={{ color: muted(isDark) }}>Students</span>
+                    <span className="font-medium" style={{ color: head(isDark) }}>Up to {plan.studentLimit}</span>
                   </div>
                 )}
               </div>
 
-              <div className="border-t border-gray-100 pt-3 mb-5">
+              <div className="border-t pt-3 mb-5" style={{ borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }}>
                 <div className="flex justify-between items-baseline">
-                  <span className="text-base font-bold text-gray-900">Total</span>
+                  <span className="text-base font-bold" style={{ color: head(isDark) }}>Total</span>
                   <div className="text-right">
-                    <span className="text-2xl font-extrabold text-gray-900">{fmt(actualPrice)}</span>
+                    <span className="text-2xl font-extrabold" style={{ color: head(isDark) }}>{fmt(actualPrice)}</span>
                     {billingCycle === "yearly" && (
-                      <p className="text-[11px] text-gray-400">{fmt(monthlyEquiv)}/mo effective</p>
+                      <p className="text-[11px]" style={{ color: muted(isDark) }}>{fmt(monthlyEquiv)}/mo effective</p>
                     )}
                   </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-1 text-right">
+                <p className="text-xs mt-1 text-right" style={{ color: muted(isDark) }}>
                   That's just {fmtPerDay(plan.monthlyPaise, billingCycle)}/day
                 </p>
               </div>
@@ -399,7 +544,7 @@ export default function PaymentPage() {
               <button
                 onClick={handlePay}
                 disabled={isProcessing}
-                className="w-full py-4 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg hover:shadow-xl"
+                className="btn-blk w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isProcessing ? (
                   <>
@@ -414,17 +559,17 @@ export default function PaymentPage() {
                 )}
               </button>
 
-              <p className="text-center text-[11px] text-gray-400 mt-3">
+              <p className="text-center text-[11px] mt-3" style={{ color: muted(isDark) }}>
                 Cancel anytime · No hidden charges
               </p>
 
               {/* Features list */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">What you get</p>
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }}>
+                <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: muted(isDark) }}>What you get</p>
                 <ul className="space-y-1.5">
                   {plan.features.map((f, i) => (
-                    <li key={i} className="flex items-center gap-2 text-xs text-gray-500">
-                      <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" /> {f}
+                    <li key={i} className="flex items-center gap-2 text-xs" style={{ color: head(isDark) }}>
+                      <Check className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isDark ? "#4ade80" : "#22c55e" }} /> {f}
                     </li>
                   ))}
                 </ul>

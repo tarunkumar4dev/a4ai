@@ -13,8 +13,8 @@ const getInitialTheme = (): Theme => {
   if (typeof window === "undefined") return "light";
   const saved = localStorage.getItem("theme");
   if (saved === "light" || saved === "dark") return saved;
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  return prefersDark ? "dark" : "light";
+  // ALWAYS start light — never follow OS prefers-color-scheme.
+  return "light";
 };
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -23,13 +23,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const isDark = theme === "dark";
     document.documentElement.classList.toggle("dark", isDark);
+    // Lock native UI (scrollbars, inputs) to OUR theme so OS dark can't bleed in.
+    document.documentElement.style.colorScheme = isDark ? "dark" : "light";
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  const value = useMemo<ThemeContextValue>(() => ({
-    theme,
-    toggleTheme: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
-  }), [theme]);
+  const value = useMemo<ThemeContextValue>(
+    () => ({
+      theme,
+      toggleTheme: () => setTheme((t) => (t === "dark" ? "light" : "dark")),
+    }),
+    [theme]
+  );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
