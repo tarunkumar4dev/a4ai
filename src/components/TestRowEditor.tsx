@@ -1,18 +1,24 @@
 // src/components/TestRowEditor.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V8 — Mobile selection persistence fix (Controller)
+// V9 — Quantity / Marks / Difficulty selection persistence fix (Controller)
 //
-// v8 changes vs v7.1:
-//   - Topic & Subtopic selects migrated from `value={watch} + onChange={setValue}`
-//     to react-hook-form <Controller>.
-//     WHY: on mobile (native picker close + in-app browsers), the watch->setValue
-//     propagation lagged one render tick, so React snapped the <select> back to
-//     the placeholder right after a user picked an option ("select karne ke baad gayab").
-//     Controller binds field.value/field.onChange through RHF's own subscription,
-//     guaranteeing the rendered value matches form state in the same render — no snap-back.
-//   - Chapter change now auto-clears that row's subtopic (avoids stale subtopic).
-//   - Mobile chapter select: added a visible ChevronDown affordance.
-//   - register-based selects (quantity/marks/difficulty) left untouched.
+// v9 changes vs v8:
+//   - Quantity, Marks, and Difficulty selects migrated from `register`
+//     to react-hook-form <Controller> in BOTH MobileCard and TableRow.
+//     WHY: same mobile snap-back that hit Topic/Subtopic in v8. The rows are
+//     memo()'d and the native mobile picker fires its change a render tick
+//     late, so an uncontrolled register-select re-paints from its default
+//     (quantity → 5, difficulty → "Medium") right after the user picks.
+//     Controller binds field.value/field.onChange through RHF's own
+//     subscription, so the rendered value matches form state in the same
+//     render — no snap-back.
+//   - `register` removed from useFormContext destructure in MobileCard and
+//     TableRow (no longer used after the migration).
+//
+// Retained from v8:
+//   - Topic & Subtopic via <Controller> (mobile selection persistence).
+//   - Chapter change auto-clears that row's subtopic.
+//   - Mobile chapter select ChevronDown affordance.
 //
 // Retained from v7.1:
 //   - Complete Class XII Maths subtopics (all 13 NCERT chapters)
@@ -694,10 +700,10 @@ FormatSelector.displayName = "FormatSelector";
 const MobileCard = memo(({
   index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
 }: RowProps) => {
-  const { control, register, watch, setValue } = useFormContext<FormValues>();
+  const { control, watch, setValue } = useFormContext<FormValues>();
 
   // Read-only derivations (for subtopic options + disabled logic).
-  // NOTE: the <select> binding itself is via <Controller> below — NOT this watch —
+  // NOTE: every <select> binding is via <Controller> below — NOT this watch —
   // which is what stops the mobile snap-back.
   const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
   const subject      = watch("subject") ?? "";
@@ -787,31 +793,64 @@ const MobileCard = memo(({
         />
       </div>
 
-      {/* Quantity + Marks */}
+      {/* ✅ v9: Quantity + Marks — Controller (no snap-back on mobile) */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelClass}>Quantity</label>
-          <select {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })} className={inputClass}>
-            {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          <Controller
+            name={`simpleData.${index}.quantity`}
+            control={control}
+            render={({ field: f }) => (
+              <select
+                value={f.value ?? 5}
+                onChange={(e) => f.onChange(Number(e.target.value))}
+                onBlur={f.onBlur}
+                className={inputClass}
+              >
+                {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            )}
+          />
         </div>
         <div>
           <label className={labelClass}>Marks each</label>
-          <select {...register(`simpleData.${index}.marks`, { valueAsNumber: true })} className={inputClass}>
-            {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n} marks</option>)}
-          </select>
+          <Controller
+            name={`simpleData.${index}.marks`}
+            control={control}
+            render={({ field: f }) => (
+              <select
+                value={f.value ?? 1}
+                onChange={(e) => f.onChange(Number(e.target.value))}
+                onBlur={f.onBlur}
+                className={inputClass}
+              >
+                {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n} marks</option>)}
+              </select>
+            )}
+          />
         </div>
       </div>
 
-      {/* Difficulty */}
+      {/* ✅ v9: Difficulty — Controller */}
       <div>
         <label className={labelClass}>Difficulty</label>
-        <select {...register(`simpleData.${index}.difficulty`)} className={inputClass}>
-          <option value="Easy">Easy</option>
-          <option value="Medium">Medium</option>
-          <option value="Hard">Hard</option>
-          <option value="Mixed">Mixed</option>
-        </select>
+        <Controller
+          name={`simpleData.${index}.difficulty`}
+          control={control}
+          render={({ field: f }) => (
+            <select
+              value={f.value ?? "Medium"}
+              onChange={(e) => f.onChange(e.target.value)}
+              onBlur={f.onBlur}
+              className={inputClass}
+            >
+              <option value="Easy">Easy</option>
+              <option value="Medium">Medium</option>
+              <option value="Hard">Hard</option>
+              <option value="Mixed">Mixed</option>
+            </select>
+          )}
+        />
       </div>
 
       {/* Format */}
@@ -836,7 +875,7 @@ MobileCard.displayName = "MobileCard";
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
   index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
 }, ref) => {
-  const { control, register, watch, setValue } = useFormContext<FormValues>();
+  const { control, watch, setValue } = useFormContext<FormValues>();
 
   const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
   const subject      = watch("subject") ?? "";
@@ -910,34 +949,61 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
         </div>
       </td>
 
+      {/* ✅ v9: Quantity — Controller */}
       <td className="py-3 px-4 text-center">
-        <select
-          {...register(`simpleData.${index}.quantity`, { valueAsNumber: true })}
-          className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
-        >
-          {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
+        <Controller
+          name={`simpleData.${index}.quantity`}
+          control={control}
+          render={({ field: f }) => (
+            <select
+              value={f.value ?? 5}
+              onChange={(e) => f.onChange(Number(e.target.value))}
+              onBlur={f.onBlur}
+              className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
+            >
+              {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          )}
+        />
       </td>
 
+      {/* ✅ v9: Marks — Controller */}
       <td className="py-3 px-4 text-center">
-        <select
-          {...register(`simpleData.${index}.marks`, { valueAsNumber: true })}
-          className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
-        >
-          {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n}m</option>)}
-        </select>
+        <Controller
+          name={`simpleData.${index}.marks`}
+          control={control}
+          render={({ field: f }) => (
+            <select
+              value={f.value ?? 1}
+              onChange={(e) => f.onChange(Number(e.target.value))}
+              onBlur={f.onBlur}
+              className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
+            >
+              {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n}m</option>)}
+            </select>
+          )}
+        />
       </td>
 
+      {/* ✅ v9: Difficulty — Controller */}
       <td className="py-3 px-4">
-        <select
-          {...register(`simpleData.${index}.difficulty`)}
-          className="w-full bg-white border border-[#E5E7EB] text-xs font-bold text-gray-600 rounded-xl py-2 px-3 outline-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm appearance-none"
-        >
-          <option value="Easy">Easy</option>
-          <option value="Medium">Medium</option>
-          <option value="Hard">Hard</option>
-          <option value="Mixed">Mixed</option>
-        </select>
+        <Controller
+          name={`simpleData.${index}.difficulty`}
+          control={control}
+          render={({ field: f }) => (
+            <select
+              value={f.value ?? "Medium"}
+              onChange={(e) => f.onChange(e.target.value)}
+              onBlur={f.onBlur}
+              className="w-full bg-white border border-[#E5E7EB] text-xs font-bold text-gray-600 rounded-xl py-2 px-3 outline-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm appearance-none"
+            >
+              <option value="Easy">Easy</option>
+              <option value="Medium">Medium</option>
+              <option value="Hard">Hard</option>
+              <option value="Mixed">Mixed</option>
+            </select>
+          )}
+        />
       </td>
 
       <td className="py-3 px-4">
