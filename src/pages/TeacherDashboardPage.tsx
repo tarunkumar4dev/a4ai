@@ -46,6 +46,10 @@ const customStyles = `
     from { opacity: 0; transform: translateY(-10px) scale(0.97); }
     to   { opacity: 1; transform: translateY(0)  scale(1); }
   }
+  @keyframes pulseRed {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  }
 
   /* ── Auto-Moving Background Blobs ── */
   @keyframes blobBounce {
@@ -62,6 +66,7 @@ const customStyles = `
 
   .animate-entrance { animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
   .animate-pop      { animation: scaleIn  0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .animate-mic-pulse { animation: pulseRed 1.5s infinite; }
 
   /* ── Scroll-reveal ── */
   .scroll-reveal {
@@ -201,6 +206,7 @@ const Icons = {
   Clock:         () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   GradCap:       () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>,
   MessageCircle: () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
+  MessageSmall:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
   Mail:          () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>,
   Check:         () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
   X:             () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
@@ -216,6 +222,7 @@ const Icons = {
   Sparkles:      () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3L8 5 6 7 4 5 6 3Z"/><path d="M18 13L20 15 18 17 16 15 18 13Z"/><path d="M10 7L13 10 13 10 7 10 10 7Z"/><path d="m13 17 2 3 2-3"/><path d="M18 3v4"/><path d="M20 5h-4"/></svg>,
   Star:          () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
   Book:          () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
+  Microphone:    () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" x2="12" y1="19" y2="22"/></svg>,
 };
 
 /* ------------------- THEME COLORS ------------------- */
@@ -353,12 +360,12 @@ function SearchBar({
 
   const staticSuggestions: Suggestion[] = [
     { type: "nav",  label: "Dashboard",       sub: "Overview & stats",    Icon: Icons.Grid,     action: () => { navigate("/dashboard"); onNavChange("dashboard"); } },
-    { type: "nav",  label: "Students",         sub: "Manage your class",   Icon: Icons.Users,    action: () => onNavChange("students") },
+    { type: "nav",  label: "Students",         sub: "Manage your class",   Icon: Icons.Users,     action: () => onNavChange("students") },
     { type: "nav",  label: "Test History",     sub: "All your tests",      Icon: Icons.History,  action: () => onNavChange("tests") },
-    { type: "nav",  label: "Analytics",        sub: "Performance graphs",  Icon: Icons.Chart,    action: () => onNavChange("analytics") },
-    { type: "nav",  label: "AI Tools",         sub: "Teaching utilities",  Icon: Icons.Brain,    action: () => onNavChange("ai-tools") },
+    { type: "nav",  label: "Analytics",        sub: "Performance graphs",  Icon: Icons.Chart,     action: () => onNavChange("analytics") },
+    { type: "nav",  label: "AI Tools",         sub: "Teaching utilities",  Icon: Icons.Brain,     action: () => onNavChange("ai-tools") },
     { type: "tool", label: "Community Quiz",   sub: "From YouTube video",  Icon: Icons.Youtube,  action: () => navigate("/teacher/community-quiz/new") },
-    { type: "tool", label: "Create Test",      sub: "CBSE test generator", Icon: Icons.Zap,      action: () => navigate("/dashboard/test-generator") },
+    { type: "tool", label: "Create Test",      sub: "CBSE test generator", Icon: Icons.Zap,       action: () => navigate("/dashboard/test-generator") },
     { type: "tool", label: "Host Contest",     sub: "Live competition",    Icon: Icons.Trophy,   action: () => navigate("/contests") },
     { type: "tool", label: "Pricing / Plans",  sub: "Buy Premium",         Icon: Icons.Star,     action: () => navigate("/pricing") },
   ];
@@ -466,7 +473,6 @@ function SearchBar({
 function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
   const { status } = useSubscription();
 
-  const isFree = !status || status.plan_slug === "free";
   const isPro = status?.plan_slug === "pro";
   const used = status?.tests_used || 0;
   const limit = status?.test_limit || 10;
@@ -633,7 +639,11 @@ function TestHistory({
 }
 
 /* ------------------- CHATBOT TYPE ------------------- */
-type Message = { role: "user" | "assistant" | "system"; content: string };
+interface Message { 
+  role: "user" | "assistant" | "system"; 
+  content: string; 
+  suggestions?: string[]; 
+}
 
 /* ------------------- MAIN PAGE ------------------- */
 export default function TeacherDashboardPage() {
@@ -656,14 +666,6 @@ export default function TeacherDashboardPage() {
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  // Chat
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<Message[]>([]);
-  const [inputMessage, setInputMessage] = useState("");
-  const [isChatLoading, setIsChatLoading] = useState(false);
-  const [showChatTooltip, setShowChatTooltip] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
   // Predefined Chat Options
   const chatOptions = [
     "Explain me a4ai",
@@ -672,6 +674,25 @@ export default function TeacherDashboardPage() {
     "Learn any topic",
     "Solve Any doubt 24x7"
   ];
+
+  // Chat Setup 
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Message[]>([
+    {
+      role: "assistant",
+      content: "Hi, I am your a4ai assistant, how can I help you with?",
+      suggestions: chatOptions
+    }
+  ]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false); 
+  const [showChatTooltip, setShowChatTooltip] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Sound detection reference state parameters
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Theme configuration
   const [activeTheme, setActiveTheme] = useState<keyof typeof COLOR_SCHEMES>("black");
@@ -732,6 +753,86 @@ export default function TeacherDashboardPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Cleanup active audio threads on unmount
+  useEffect(() => {
+    return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    };
+  }, []);
+
+  // Real-Time Speech Recognition Engine with Silence Warning Systems
+  const startListening = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported on this browser. Please use Chrome, Safari or Edge.");
+      return;
+    }
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    
+    // Crucial configurations: interim results enabled prints words instantly one-by-one
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-IN";
+
+    // Setup reset timer tracking audio sound signals
+    const resetSilenceTimeout = () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        alert("Warning: No sound detected. Please check your mic connection or speak louder.");
+      }, 5000);
+    };
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      resetSilenceTimeout();
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    };
+
+    // Tracks audio processing fragment matrices array indexes natively
+    let baseText = inputMessage;
+
+    recognition.onresult = (event: any) => {
+      resetSilenceTimeout(); // Sound verified -> reset internal alarm counter
+      
+      let interimTranscript = "";
+      let finalTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        baseText = baseText ? baseText + " " + finalTranscript : finalTranscript;
+        setInputMessage(baseText);
+      } else if (interimTranscript) {
+        // Appends working partial streams onto input timeline dynamically
+        setInputMessage(baseText ? baseText + " " + interimTranscript : interimTranscript);
+      }
+    };
+
+    recognition.start();
+  };
+
   const handleSendMessage = async (overrideMsg?: string) => {
     const textToSend = overrideMsg || inputMessage;
     if (!textToSend.trim()) return;
@@ -751,9 +852,14 @@ export default function TeacherDashboardPage() {
     };
 
     if (exactMatchResponses[textToSend]) {
+      setIsChatLoading(true);
       setTimeout(() => {
-        setChatMessages((prev) => [...prev, { role: "assistant", content: exactMatchResponses[textToSend] }]);
-      }, 300); // slight delay for a natural feel
+        setChatMessages((prev) => [
+          ...prev, 
+          { role: "assistant", content: exactMatchResponses[textToSend], suggestions: chatOptions }
+        ]);
+        setIsChatLoading(false);
+      }, 400);
       return;
     }
 
@@ -761,7 +867,7 @@ export default function TeacherDashboardPage() {
     let apiKey = "";
     try { apiKey = import.meta.env.VITE_GROQ_API_KEY || ""; } catch (e) {}
     if (!apiKey) {
-      setChatMessages((prev) => [...prev, { role: "assistant", content: "Error: Missing VITE_GROQ_API_KEY" }]);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "Error: Missing VITE_GROQ_API_KEY", suggestions: chatOptions }]);
       return;
     }
     
@@ -793,9 +899,12 @@ export default function TeacherDashboardPage() {
       const data = await res.json();
       if (data.error) throw new Error(data.error.message);
       if (data.choices?.[0])
-        setChatMessages((prev) => [...prev, { role: "assistant", content: data.choices[0].message.content }]);
+        setChatMessages((prev) => [
+          ...prev, 
+          { role: "assistant", content: data.choices[0].message.content, suggestions: chatOptions }
+        ]);
     } catch (error: any) {
-      setChatMessages((prev) => [...prev, { role: "assistant", content: `Error: ${error.message || "Failed"}` }]);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: `Error: ${error.message || "Failed"}`, suggestions: chatOptions }]);
     } finally {
       setIsChatLoading(false);
     }
@@ -825,10 +934,10 @@ export default function TeacherDashboardPage() {
 
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid,   label: "Dashboard",   color: "text-blue-500" },
-    { id: "students",  Icon: Icons.Users,   label: "Students",     color: "text-orange-500" },
+    { id: "students",  Icon: Icons.Users,  label: "Students",     color: "text-orange-500" },
     { id: "tests",     Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart,   label: "Analytics",    color: "text-emerald-500" },
-    { id: "ai-tools",  Icon: Icons.Brain,   label: "AI Tools",     color: "text-cyan-500" },
+    { id: "ai-tools",  Icon: Icons.Brain,  label: "AI Tools",     color: "text-cyan-500" },
   ];
 
   return (
@@ -1144,7 +1253,7 @@ export default function TeacherDashboardPage() {
                                   </button>
                                 </div>
 
-                                {/* Color Scheme Picker - Circles 3x smaller */}
+                                {/* Color Scheme Picker */}
                                 <div>
                                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2 block">Color Scheme</span>
                                   <div className="flex flex-wrap gap-3 place-items-center">
@@ -1274,7 +1383,7 @@ export default function TeacherDashboardPage() {
                       { t: "Active Students", v: "156",                          c: "+12%",      Icon: Icons.Users   },
                       { t: "Tests Created",   v: String(allTests.length || "0"), c: "All time",  Icon: Icons.FileText },
                       { t: "Engagement",      v: "92%",                          c: "+3.2%",     Icon: Icons.Chart   },
-                      { t: "Time Saved",      v: "8h",                           c: "This week", Icon: Icons.Clock   },
+                      { t: "Time Saved",      v: "8h",                            c: "This week", Icon: Icons.Clock   },
                     ].map((stat, i) => {
                       const StatIcon = stat.Icon;
                       return (
@@ -1424,10 +1533,10 @@ export default function TeacherDashboardPage() {
                       { Icon: Icons.Youtube,  title: "Community Quiz",  desc: "Generate quizzes from any YouTube video.", action: () => navigate("/teacher/community-quiz/new"), isNew: true, primary: true },
                       { Icon: Icons.Brain,    title: "Test Generator",  desc: "Create CBSE-pattern papers from NCERT.",   action: () => navigate("/dashboard/test-generator"), isNew: false, primary: false },
                       { Icon: Icons.FileText, title: "Auto-Grade",      desc: "AI-analyze long-form answers instantly.",  isNew: false, primary: false },
-                      { Icon: Icons.Book,     title: "Study Guides",    desc: "Convert notes into smart flashcards.",     isNew: false, primary: false },
-                      { Icon: Icons.Search,   title: "Plagiarism Check",desc: "Scan against web and AI datasets.",        isNew: false, primary: false },
+                      { Icon: Icons.Book,     title: "Study Guides",     desc: "Convert notes into smart flashcards.",      isNew: false, primary: false },
+                      { Icon: Icons.Search,   title: "Plagiarism Check",desc: "Scan against web and AI datasets.",         isNew: false, primary: false },
                       { Icon: Icons.Grid,     title: "Smart Rubrics",   desc: "Generate standard-aligned rubrics.",       isNew: false, primary: false },
-                      { Icon: Icons.Clock,    title: "Lesson Planner",  desc: "Plan lessons by pacing & standard.",       isNew: false, primary: false },
+                      { Icon: Icons.Clock,    title: "Lesson Planner",  desc: "Plan lessons by pacing & standard.",        isNew: false, primary: false },
                     ].map((tool, i) => {
                       const ToolIcon = tool.Icon;
                       return (
@@ -1479,7 +1588,6 @@ export default function TeacherDashboardPage() {
 
           {/* ===== CHATBOT FAB & HOVER TOOLTIP ===== */}
           <div className="fixed bottom-4 sm:bottom-8 right-4 sm:right-8 z-[110] flex flex-col items-end gap-4 sm:gap-5">
-            {/* Pop-up tooltip implementation */}
             {showChatTooltip && !isChatOpen && (
               <div className="absolute bottom-full right-0 mb-4 mr-2 px-5 py-3 bg-white dark:bg-slate-800 text-slate-800 dark:text-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] font-black tracking-wide text-sm border border-slate-100 dark:border-slate-700 whitespace-nowrap animate-dropIn z-[120]">
                 Need any help...?
@@ -1494,7 +1602,7 @@ export default function TeacherDashboardPage() {
                   style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
                 >
                   <span className="font-extrabold text-sm sm:text-base flex items-center gap-2 sm:gap-3">
-                    <Icons.Brain /> a4ai Assistant
+                    <Icons.MessageSmall /> AI Sarthi
                   </span>
                   <button
                     className="hover:bg-white/20 p-1.5 sm:p-2 rounded-full transition-all"
@@ -1504,28 +1612,10 @@ export default function TeacherDashboardPage() {
                   </button>
                 </div>
                 <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3 sm:space-y-4 bg-black/5 dark:bg-white/5">
-                  {/* Default State - Shows Greeting and Options */}
-                  {chatMessages.length === 0 ? (
-                    <div className="flex flex-col gap-3">
-                      <div className="p-3 sm:p-4 rounded-[24px] sm:rounded-[28px] rounded-tl-none max-w-[90%] text-xs sm:text-sm font-bold bg-white/80 dark:bg-black/60 backdrop-blur-md text-slate-800 dark:text-white border border-black/5 dark:border-white/10 whitespace-pre-wrap">
-                        Hi, I am your a4ai assistant, how can I help you with?
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {chatOptions.map((opt, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleSendMessage(opt)}
-                            className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-black/80 border border-black/5 dark:border-white/10 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[16px] transition-all shadow-sm text-left"
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    // Regular Chat History
-                    chatMessages.map((msg, idx) => (
-                      <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {/* Tracking Chat History Timeline */}
+                  {chatMessages.map((msg, idx) => (
+                    <div key={idx} className="flex flex-col gap-2">
+                      <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                         <div
                           className={`p-3 sm:p-4 rounded-[24px] sm:rounded-[28px] max-w-[85%] text-xs sm:text-sm font-bold whitespace-pre-wrap ${
                             msg.role === "user"
@@ -1537,8 +1627,23 @@ export default function TeacherDashboardPage() {
                           {msg.content}
                         </div>
                       </div>
-                    ))
-                  )}
+
+                      {/* Render Persistent Dynamic Chips bound to this stage of history */}
+                      {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pl-2 mt-1">
+                          {msg.suggestions.map((opt, i) => (
+                            <button
+                              key={i}
+                              onClick={() => handleSendMessage(opt)}
+                              className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-black/80 border border-black/5 dark:border-white/10 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[16px] transition-all shadow-sm text-left"
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
 
                   {isChatLoading && (
                     <div className="flex justify-start">
@@ -1550,20 +1655,36 @@ export default function TeacherDashboardPage() {
                   )}
                   <div ref={chatEndRef} />
                 </div>
+                
+                {/* Chat Input Container Bar */}
                 <div className="p-3 sm:p-4 shrink-0 glass-panel border-t-0 bg-white/40 dark:bg-black/40">
-                  <div className="relative flex items-center">
-                    <input
-                      type="text"
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleSendMessage(); }}
-                      placeholder="Type a message..."
-                      className="w-full text-xs sm:text-sm font-bold p-3 sm:p-4 pr-12 sm:pr-14 rounded-[24px] sm:rounded-[32px] inset-pill border-none focus:outline-none focus:ring-2 focus:ring-slate-400/50 text-slate-800 dark:text-white placeholder-slate-500 bg-white/80 dark:bg-black/60"
-                    />
+                  <div className="relative flex items-center gap-2">
+                    <div className="relative flex-1 flex items-center">
+                      <input
+                        type="text"
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleSendMessage(); }}
+                        placeholder={isListening ? "Listening..." : "Type a message..."}
+                        className="w-full text-xs sm:text-sm font-bold p-3 sm:p-4 pr-12 sm:pr-14 rounded-[24px] sm:rounded-[32px] inset-pill border-none focus:outline-none focus:ring-2 focus:ring-slate-400/50 text-slate-800 dark:text-white placeholder-slate-500 bg-white/80 dark:bg-black/60"
+                      />
+                      
+                      {/* Integrated Audio Input Button */}
+                      <button
+                        onClick={startListening}
+                        className={`absolute right-3 p-1.5 rounded-full transition-all text-slate-400 hover:text-slate-600 dark:hover:text-white ${
+                          isListening ? "text-red-500 bg-red-500/15 animate-mic-pulse hover:text-red-600" : ""
+                        }`}
+                        title="Voice typing"
+                      >
+                        <Icons.Microphone />
+                      </button>
+                    </div>
+                    
                     <button
                       onClick={() => handleSendMessage()}
                       disabled={isChatLoading || !inputMessage.trim()}
-                      className="absolute right-1.5 sm:right-2 p-2 sm:p-2.5 text-white rounded-[20px] sm:rounded-[24px] hover:scale-105 disabled:opacity-50 transition-all"
+                      className="p-3 sm:p-4 text-white rounded-[24px] sm:rounded-[32px] hover:scale-105 disabled:opacity-50 transition-all shrink-0 flex items-center justify-center"
                       style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
                     >
                       <Icons.Send />
