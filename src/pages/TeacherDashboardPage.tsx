@@ -664,6 +664,15 @@ export default function TeacherDashboardPage() {
   const [showChatTooltip, setShowChatTooltip] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Predefined Chat Options
+  const chatOptions = [
+    "Explain me a4ai",
+    "How to Generate Test Paper",
+    "What are the pricing",
+    "Learn any topic",
+    "Solve Any doubt 24x7"
+  ];
+
   // Theme configuration
   const [activeTheme, setActiveTheme] = useState<keyof typeof COLOR_SCHEMES>("black");
   const currentThemeConfig = COLOR_SCHEMES[activeTheme];
@@ -723,18 +732,49 @@ export default function TeacherDashboardPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
+  const handleSendMessage = async (overrideMsg?: string) => {
+    const textToSend = overrideMsg || inputMessage;
+    if (!textToSend.trim()) return;
+
+    const userMsg: Message = { role: "user", content: textToSend };
+    setChatMessages((prev) => [...prev, userMsg]);
+    
+    if (!overrideMsg) setInputMessage("");
+
+    // ── EXACT MATCH INTERCEPTION FOR PREDEFINED OPTIONS ──
+    const exactMatchResponses: Record<string, string> = {
+      "Explain me a4ai": "Here is what a4ai is all about:\n• a4ai is a platform designed for teachers to create and manage tests efficiently.\n• It generates CBSE-pattern papers in 30 seconds using actual NCERT content, saving teachers 2+ hours daily.\n• The platform supports various question types and exports tests to PDF & DOCX formats.\n• a4ai offers a free plan and two paid plans (Starter and Pro) with features like mobile proctoring and custom logos.",
+      "What are the pricing": "Here are our pricing plans:\n• Free Plan: ₹0 (forever) – 2 tests/month, MCQ + Short + Long formats.\n• Starter Plan: **₹149/month** (Just ₹5/day) – 10 tests/month, 2 free contests, no watermark.\n• Pro Plan: **₹299/month** (Just ₹10/day) – Unlimited tests, unlimited proctored contests, custom school logo.\n\n*Note: Upgrades are instant and we accept UPI, Cards, and Net Banking.*",
+      "How to Generate Test Paper": "Follow these simple steps to create a test:\n• Step 1: Go to the Dashboard page.\n• Step 2: Click on the Create Test button.\n• Step 3: Select fields like Exam Title, Class, Subject, Board, etc.\n• Step 4: Upload your institute logo (optional).\n• Step 5: Select Custom or CBSE pattern.\n• Step 6: Click on the Generate CBSE paper button.",
+      "Learn any topic": "I'm here to help. Which Topic you want to Understand?",
+      "Solve Any doubt 24x7": "I'm available 24/7! Please type your doubt below, and I'll help you solve it step-by-step."
+    };
+
+    if (exactMatchResponses[textToSend]) {
+      setTimeout(() => {
+        setChatMessages((prev) => [...prev, { role: "assistant", content: exactMatchResponses[textToSend] }]);
+      }, 300); // slight delay for a natural feel
+      return;
+    }
+
+    // ── API CALL FOR CUSTOM QUESTIONS ──
     let apiKey = "";
     try { apiKey = import.meta.env.VITE_GROQ_API_KEY || ""; } catch (e) {}
     if (!apiKey) {
       setChatMessages((prev) => [...prev, { role: "assistant", content: "Error: Missing VITE_GROQ_API_KEY" }]);
       return;
     }
-    const userMsg: Message = { role: "user", content: inputMessage };
-    setChatMessages((prev) => [...prev, userMsg]);
-    setInputMessage("");
+    
     setIsChatLoading(true);
+
+    const systemPromptText = `You are the a4ai Assistant for Teachers. Always use lowercase "a4ai" when referring to the platform. 
+    Context:
+    - a4ai: A platform designed for teachers to create and manage tests efficiently. Generates CBSE-pattern papers in 30 seconds from NCERT textbooks, saving 2+ hours daily. Supports MCQ, Short, Long, A&R, Cloze. Exports to PDF & DOCX.
+    - Pricing: Free Plan (₹0, 2 tests/mo, watermark), Starter Plan (₹149/mo or ₹5/day, 10 tests/mo, 2 proctored contests, WhatsApp sharing), Pro Plan (₹299/mo or ₹10/day, unlimited tests & contests, custom logo).
+    - FAQ: Free plan is forever. Upgrades take effect instantly. Accepts UPI/Cards/Net Banking. Discounts for govt schools. Accuracy is high as it uses actual NCERT content. Mobile proctoring is supported.
+    - Creating a Test: Step 1 - Go to Dashboard. Step 2 - Click Create Test. Step 3 - Select Exam Title, Class, Subject, Board. Step 4 - Upload logo (optional). Step 5 - Select custom or CBSE pattern. Step 6 - Click Generate.
+    Keep answers concise, helpful, and use bullet points when explaining features, pricing, or steps.`;
+
     try {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -742,7 +782,7 @@ export default function TeacherDashboardPage() {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [
-            { role: "system", content: "You are a4ai Assistant for Teachers. Help them create tests and manage classes. Keep answers concise." },
+            { role: "system", content: systemPromptText },
             ...chatMessages.filter((m) => m.role !== "system"),
             userMsg,
           ],
@@ -774,7 +814,6 @@ export default function TeacherDashboardPage() {
     return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  // NEW LOGOUT FUNCTIONALITY
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -794,7 +833,6 @@ export default function TeacherDashboardPage() {
 
   return (
     <>
-      {/* Wrapper to handle theming variables */}
       <div 
         className={isDarkMode ? "dark" : ""} 
         style={{
@@ -836,7 +874,6 @@ export default function TeacherDashboardPage() {
             }`}
           >
             <div className="p-5 pb-2">
-              {/* ── LOGO (Reverted to Original Size) ── */}
               <div className="flex items-center justify-between mb-8 animate-entrance px-2 border-b border-slate-100 dark:border-white/5 pb-6" style={{ animationDelay: "100ms" }}>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-[20px] sm:rounded-[24px] inset-pill border-none flex items-center justify-center shrink-0 overflow-hidden bg-white dark:bg-slate-800">
@@ -878,7 +915,6 @@ export default function TeacherDashboardPage() {
                         label={item.label}
                         colorClass={item.color}
                         onClick={() => {
-                          // NAVIGATION FIX
                           if (item.id === "dashboard") {
                             navigate("/dashboard");
                           }
@@ -1131,7 +1167,7 @@ export default function TeacherDashboardPage() {
 
                           <div className="h-px bg-slate-200/50 dark:bg-slate-700/50 my-1 mx-4" />
 
-                          {/* LOGOUT BUTTON FIX */}
+                          {/* LOGOUT BUTTON */}
                           <button
                             onClick={handleLogout}
                             className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-red-500 hover:bg-red-500/10 rounded-[24px] sm:rounded-[28px] transition-colors"
@@ -1145,7 +1181,7 @@ export default function TeacherDashboardPage() {
                 </div>
               </header>
 
-              {/* MOBILE GREETING (Scrolls naturally beneath the header) */}
+              {/* MOBILE GREETING */}
               <div className="lg:hidden mb-6 sm:mb-8 px-1 animate-entrance" style={{ animationDelay: "150ms" }}>
                 <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">
                   Welcome, {getFirstName()}
@@ -1158,10 +1194,8 @@ export default function TeacherDashboardPage() {
               {/* ===== DASHBOARD TAB ===== */}
               {activeTab === "dashboard" && (
                 <div className="space-y-6 sm:space-y-8">
-
                   {/* Hero cards */}
                   <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
-
                     {/* NCERT generator card */}
                     <div className="xl:col-span-2 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 lg:p-14 relative overflow-hidden flex flex-col justify-center group">
                       <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-[48px]" />
@@ -1187,7 +1221,7 @@ export default function TeacherDashboardPage() {
                       </div>
                     </div>
 
-                    {/* What's New card - Reverted to vertically stacked glossy buttons */}
+                    {/* What's New card */}
                     <div className="xl:col-span-1 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col relative overflow-hidden">
                       <div className="flex items-center gap-3 sm:gap-5 mb-6 sm:mb-8">
                         <div className="w-12 h-12 sm:w-14 sm:h-14 inset-pill border-none flex items-center justify-center shadow-inner rounded-[24px] sm:rounded-[28px] shrink-0" style={{ color: "var(--theme-start)" }}>
@@ -1237,10 +1271,10 @@ export default function TeacherDashboardPage() {
                     style={{ transitionDelay: "80ms" }}
                   >
                     {[
-                      { t: "Active Students", v: "156",                          c: "+12%",      Icon: Icons.Users    },
-                      { t: "Tests Created",   v: String(allTests.length || "0"), c: "All time", Icon: Icons.FileText },
-                      { t: "Engagement",      v: "92%",                          c: "+3.2%",    Icon: Icons.Chart    },
-                      { t: "Time Saved",      v: "8h",                           c: "This week",Icon: Icons.Clock    },
+                      { t: "Active Students", v: "156",                          c: "+12%",      Icon: Icons.Users   },
+                      { t: "Tests Created",   v: String(allTests.length || "0"), c: "All time",  Icon: Icons.FileText },
+                      { t: "Engagement",      v: "92%",                          c: "+3.2%",     Icon: Icons.Chart   },
+                      { t: "Time Saved",      v: "8h",                           c: "This week", Icon: Icons.Clock   },
                     ].map((stat, i) => {
                       const StatIcon = stat.Icon;
                       return (
@@ -1454,7 +1488,7 @@ export default function TeacherDashboardPage() {
             )}
 
             {isChatOpen && (
-              <div className="w-[calc(100vw-2rem)] sm:w-96 h-[400px] sm:h-[450px] rounded-[32px] sm:rounded-[48px] shadow-2xl overflow-hidden flex flex-col animate-pop glass-overlay border border-black/5 dark:border-white/10">
+              <div className="w-[calc(100vw-2rem)] sm:w-96 h-[450px] sm:h-[500px] rounded-[32px] sm:rounded-[48px] shadow-2xl overflow-hidden flex flex-col animate-pop glass-overlay border border-black/5 dark:border-white/10">
                 <div 
                   className="p-4 sm:p-5 flex justify-between items-center text-white shrink-0"
                   style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
@@ -1470,23 +1504,42 @@ export default function TeacherDashboardPage() {
                   </button>
                 </div>
                 <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3 sm:space-y-4 bg-black/5 dark:bg-white/5">
-                  <div className="p-3 sm:p-4 rounded-[24px] sm:rounded-[28px] rounded-tl-none max-w-[85%] text-xs sm:text-sm font-bold bg-white/80 dark:bg-black/60 backdrop-blur-md text-slate-800 dark:text-white border border-black/5 dark:border-white/10">
-                    Hello! I'm your a4ai teaching assistant. How can I help?
-                  </div>
-                  {chatMessages.map((msg, idx) => (
-                    <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`p-3 sm:p-4 rounded-[24px] sm:rounded-[28px] max-w-[85%] text-xs sm:text-sm font-bold ${
-                          msg.role === "user"
-                            ? "text-white rounded-tr-none"
-                            : "bg-white/80 dark:bg-black/60 text-slate-800 dark:text-white rounded-tl-none border border-black/5 dark:border-white/10"
-                        }`}
-                        style={msg.role === "user" ? { background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` } : {}}
-                      >
-                        {msg.content}
+                  {/* Default State - Shows Greeting and Options */}
+                  {chatMessages.length === 0 ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="p-3 sm:p-4 rounded-[24px] sm:rounded-[28px] rounded-tl-none max-w-[90%] text-xs sm:text-sm font-bold bg-white/80 dark:bg-black/60 backdrop-blur-md text-slate-800 dark:text-white border border-black/5 dark:border-white/10 whitespace-pre-wrap">
+                        Hi, I am your a4ai assistant, how can I help you with?
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {chatOptions.map((opt, i) => (
+                          <button
+                            key={i}
+                            onClick={() => handleSendMessage(opt)}
+                            className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-black/80 border border-black/5 dark:border-white/10 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[16px] transition-all shadow-sm text-left"
+                          >
+                            {opt}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  ))}
+                  ) : (
+                    // Regular Chat History
+                    chatMessages.map((msg, idx) => (
+                      <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`p-3 sm:p-4 rounded-[24px] sm:rounded-[28px] max-w-[85%] text-xs sm:text-sm font-bold whitespace-pre-wrap ${
+                            msg.role === "user"
+                              ? "text-white rounded-tr-none"
+                              : "bg-white/80 dark:bg-black/60 text-slate-800 dark:text-white rounded-tl-none border border-black/5 dark:border-white/10"
+                          }`}
+                          style={msg.role === "user" ? { background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` } : {}}
+                        >
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))
+                  )}
+
                   {isChatLoading && (
                     <div className="flex justify-start">
                       <div className="p-3 sm:p-4 rounded-[24px] rounded-tl-none bg-white/80 dark:bg-black/60 border border-black/5 dark:border-white/10 flex items-center gap-2 text-slate-800 dark:text-slate-200">
@@ -1508,7 +1561,7 @@ export default function TeacherDashboardPage() {
                       className="w-full text-xs sm:text-sm font-bold p-3 sm:p-4 pr-12 sm:pr-14 rounded-[24px] sm:rounded-[32px] inset-pill border-none focus:outline-none focus:ring-2 focus:ring-slate-400/50 text-slate-800 dark:text-white placeholder-slate-500 bg-white/80 dark:bg-black/60"
                     />
                     <button
-                      onClick={handleSendMessage}
+                      onClick={() => handleSendMessage()}
                       disabled={isChatLoading || !inputMessage.trim()}
                       className="absolute right-1.5 sm:right-2 p-2 sm:p-2.5 text-white rounded-[20px] sm:rounded-[24px] hover:scale-105 disabled:opacity-50 transition-all"
                       style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
