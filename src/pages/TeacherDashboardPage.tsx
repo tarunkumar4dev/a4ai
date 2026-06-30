@@ -776,7 +776,7 @@ export default function TeacherDashboardPage() {
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
     
-    // Crucial configurations: interim results enabled prints words instantly one-by-one
+    // Configurations
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-IN";
@@ -804,30 +804,25 @@ export default function TeacherDashboardPage() {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     };
 
-    // Tracks audio processing fragment matrices array indexes natively
-    let baseText = inputMessage;
-
+    // FIXED: Build the transcript iteratively from the fresh array map stack to prevent loops
     recognition.onresult = (event: any) => {
       resetSilenceTimeout(); // Sound verified -> reset internal alarm counter
       
-      let interimTranscript = "";
       let finalTranscript = "";
+      let interimTranscript = "";
 
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+      for (let i = 0; i < event.results.length; ++i) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
         } else {
-          interimTranscript += event.results[i][0].transcript;
+          interimTranscript += result[0].transcript;
         }
       }
 
-      if (finalTranscript) {
-        baseText = baseText ? baseText + " " + finalTranscript : finalTranscript;
-        setInputMessage(baseText);
-      } else if (interimTranscript) {
-        // Appends working partial streams onto input timeline dynamically
-        setInputMessage(baseText ? baseText + " " + interimTranscript : interimTranscript);
-      }
+      // Populate input bar accurately without multiplying past entries
+      const combinedText = finalTranscript || interimTranscript;
+      setInputMessage(combinedText);
     };
 
     recognition.start();
@@ -934,10 +929,10 @@ export default function TeacherDashboardPage() {
 
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid,   label: "Dashboard",   color: "text-blue-500" },
-    { id: "students",  Icon: Icons.Users,  label: "Students",     color: "text-orange-500" },
+    { id: "students",  Icon: Icons.Users,  label: "Students",    color: "text-orange-500" },
     { id: "tests",     Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart,   label: "Analytics",    color: "text-emerald-500" },
-    { id: "ai-tools",  Icon: Icons.Brain,  label: "AI Tools",     color: "text-cyan-500" },
+    { id: "ai-tools",  Icon: Icons.Brain,  label: "AI Tools",    color: "text-cyan-500" },
   ];
 
   return (
@@ -1207,7 +1202,7 @@ export default function TeacherDashboardPage() {
                             </div>
                           </button>
 
-                          {/* Language Selector (Simplified) */}
+                          {/* Language Selector */}
                           <button
                             className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors group"
                           >
@@ -1534,7 +1529,7 @@ export default function TeacherDashboardPage() {
                       { Icon: Icons.Brain,    title: "Test Generator",  desc: "Create CBSE-pattern papers from NCERT.",   action: () => navigate("/dashboard/test-generator"), isNew: false, primary: false },
                       { Icon: Icons.FileText, title: "Auto-Grade",      desc: "AI-analyze long-form answers instantly.",  isNew: false, primary: false },
                       { Icon: Icons.Book,     title: "Study Guides",     desc: "Convert notes into smart flashcards.",      isNew: false, primary: false },
-                      { Icon: Icons.Search,   title: "Plagiarism Check",desc: "Scan against web and AI datasets.",         isNew: false, primary: false },
+                      { Icon: Icons.Search,   title: "Plagiarism Check", desc: "Scan against web and AI datasets.",         isNew: false, primary: false },
                       { Icon: Icons.Grid,     title: "Smart Rubrics",   desc: "Generate standard-aligned rubrics.",       isNew: false, primary: false },
                       { Icon: Icons.Clock,    title: "Lesson Planner",  desc: "Plan lessons by pacing & standard.",        isNew: false, primary: false },
                     ].map((tool, i) => {
