@@ -1,6 +1,13 @@
 // src/components/GeneratedTestView.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V9 — Mobile UI fixes (presentational only, no logic changes)
+// V10 — Export template picker
+//
+// v10 changes vs v9:
+//   - New `selectedTemplate` state ("modern" | "classic" | "compact" | "colorful")
+//   - downloadFile() now accepts and sends `template` in the export payload
+//   - Download dropdown: new "Template" picker row at the top (4 buttons),
+//     selection persists across PDF/DOCX and Student/Answers/Teacher choices
+//   - No other logic changes
 //
 // v9 changes vs v8:
 //   - Header action buttons (Show Answers / Copy / Add Question / Share /
@@ -38,6 +45,16 @@ import LoginModal from "@/components/LoginModal";
 // ── Types ──────────────────────────────────────────────────────────────
 
 type QuestionStatus = "pending" | "approved" | "rejected" | "editing";
+
+// v10: Export template options (must match backend TEMPLATE_PRESETS keys)
+type ExportTemplate = "modern" | "classic" | "compact" | "colorful";
+
+const TEMPLATE_OPTIONS: { id: ExportTemplate; label: string }[] = [
+  { id: "modern", label: "Modern" },
+  { id: "classic", label: "Classic" },
+  { id: "compact", label: "Compact" },
+  { id: "colorful", label: "Colorful" },
+];
 
 interface AnswerTable {
   type: string;  // "journal_entry" | "ledger" | "trial_balance"
@@ -597,6 +614,7 @@ async function downloadFile(
   meta: { examTitle: string; board: string; classGrade: string; subject: string; paperDate?: string },
   format: "pdf" | "docx",
   mode: "student" | "answers" | "teacher",
+  template: ExportTemplate,   // v10: which visual template to render
   logoBase64?: string | null,
 ) {
   const payload = {
@@ -609,6 +627,7 @@ async function downloadFile(
     includeAnswers: mode !== "student",
     includeExplanations: mode === "teacher",
     format,
+    template,   // v10: sent through to backend ExportRequest.template
     logoBase64: logoBase64 || null,
   };
 
@@ -650,6 +669,9 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved">("idle");
+
+  // v10: Selected export template — persists across format/mode choices
+  const [selectedTemplate, setSelectedTemplate] = useState<ExportTemplate>("modern");
 
   // Paper Date State
   const [paperDate, setPaperDate] = useState<string>(
@@ -901,7 +923,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
         classGrade: result.meta?.classGrade || "Class 10",
         subject: result.meta?.subject || "Science",
         paperDate: paperDate,
-      }, format, mode, logoBase64);
+      }, format, mode, selectedTemplate, logoBase64);   // v10: pass selectedTemplate
     } catch (err) {
       console.error("Export failed:", err);
     } finally {
@@ -1038,8 +1060,31 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -5, scale: 0.95 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute left-0 right-0 sm:left-auto sm:right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 sm:w-60 max-w-[calc(100vw-2rem)]"
+                      className="absolute left-0 right-0 sm:left-auto sm:right-0 top-full mt-2 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 sm:w-64 max-w-[calc(100vw-2rem)]"
                     >
+                      {/* v10: Template picker — persists across format/mode choices below */}
+                      <div className="px-3 pb-2.5 mb-1 border-b border-gray-100">
+                        <div className="text-[10px] font-bold text-gray-400 uppercase mb-1.5 pt-1">
+                          Template
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {TEMPLATE_OPTIONS.map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => setSelectedTemplate(t.id)}
+                              className={`text-[11px] font-bold px-2.5 py-2 rounded-lg border transition-colors min-h-[32px] ${
+                                selectedTemplate === t.id
+                                  ? "bg-indigo-600 text-white border-indigo-600"
+                                  : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                              }`}
+                            >
+                              {t.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">PDF</div>
                       <button onClick={() => handleDownload("pdf", "student")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
                         <FileText size={14} className="text-red-500 flex-shrink-0" /> Student Copy
