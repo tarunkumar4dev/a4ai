@@ -23,6 +23,7 @@ import {
   Shield,
   BookOpen,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 /* ──────────────────────────────────────────────────────────────
    BRAND STYLES & GLOBAL INJECTION (From Features Page)
@@ -187,6 +188,8 @@ export default function AboutPage() {
   const isDark = theme === "dark";
   const prefersReducedMotion = useReducedMotion();
 
+  const navigate = useNavigate();
+
   // Ambient glow follows cursor
   const mx = useMotionValue(360);
   const my = useMotionValue(180);
@@ -325,10 +328,10 @@ export default function AboutPage() {
 
               {/* Buttons */}
               <div className="mt-8 flex flex-wrap gap-4">
-                <button className="btn-blk px-8 py-3.5 text-base sm:text-lg">
+                <button onClick={() => navigate("/features")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
                   <span className="relative z-10 flex items-center justify-center gap-2">See how it works</span>
                 </button>
-                <button className={`px-8 py-3.5 text-base sm:text-lg ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
                   <span className="relative z-10 flex items-center justify-center gap-2">Talk to us</span>
                 </button>
               </div>
@@ -532,12 +535,12 @@ export default function AboutPage() {
                   transition={{ delay: 0.25, duration: 0.5 }}
                   className="mt-8 flex flex-col sm:flex-row justify-center gap-4"
                 >
-                  <button className="btn-blk px-8 py-3.5 text-base sm:text-lg">
+                  <button onClick={() => navigate("/")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
                     <span className="relative z-10 flex items-center justify-center gap-2">
                       Get started for free
                     </span>
                   </button>
-                  <button className={`px-8 py-3.5 text-base sm:text-lg flex items-center justify-center gap-2 ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                  <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg flex items-center justify-center gap-2 ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
                     <span className="relative z-10 flex items-center gap-2">Book a demo <ArrowRight className="h-5 w-5" /></span>
                   </button>
                 </motion.div>
