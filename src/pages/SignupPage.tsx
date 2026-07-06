@@ -27,6 +27,22 @@ const formatPhoneForIndia = (phone: string): string => {
   return phone;
 };
 
+/* ──────────────────────────────────────────────────────────────
+   ROBUST VECTOR FALLBACK LOGO
+   ────────────────────────────────────────────────────────────── */
+const InlineVectorLogo = () => (
+  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2L2 22H22L12 2Z" fill="url(#signup-logo-grad)" />
+    <path d="M12 6L5 19H19L12 6Z" fill="#ffffff" opacity="0.2" />
+    <defs>
+      <linearGradient id="signup-logo-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#10b981" />
+        <stop offset="100%" stopColor="#0ea5e9" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
 export default function SignupPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,6 +56,7 @@ export default function SignupPage() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
+  const [logoFailed, setLogoFailed] = useState(false);
 
   // Phone OTP states
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -85,7 +102,7 @@ export default function SignupPage() {
     setFormValues((p) => ({ ...p, [name]: type === "checkbox" ? checked : value }));
   };
 
-  const handleOtpChange = (value: string, index: number) => {
+  const handleOtpChangeRaw = (value: string, index: number) => {
     if (isNaN(Number(value))) return;
     const next = [...otp];
     next[index] = value.substring(value.length - 1);
@@ -258,10 +275,44 @@ export default function SignupPage() {
   ];
 
   return (
-    <div className={`h-screen w-full flex items-center justify-center p-6 font-sans transition-colors duration-500 overflow-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
+    <div className={`min-h-screen w-full flex flex-col items-center justify-center p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
       {coinsScratched && <Confetti />}
 
-      <button onClick={() => setIsDarkMode(!isDarkMode)} className={`fixed top-8 right-8 p-3 rounded-2xl backdrop-blur-md border transition-all z-50 shadow-lg ${isDarkMode ? "bg-white/10 border-white/20 text-yellow-400" : "bg-black/5 border-black/10 text-slate-700"}`}>
+      {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
+      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
+        <nav 
+          className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-colors duration-500 ${
+            isDarkMode ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"
+          }`}
+          style={{ 
+            boxShadow: isDarkMode 
+              ? "0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)" 
+              : "0 8px 32px rgba(0,0,0,0.02), inset 0 1px 0 rgba(255,255,255,0.4)"
+          }}
+        >
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+            <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight transition-opacity active:opacity-90">
+              <div className="h-6 w-6 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20 overflow-hidden">
+                {!logoFailed ? (
+                  <img 
+                    src="/ICON.ico" 
+                    alt="Logo" 
+                    className="h-full w-full object-contain"
+                    onError={() => setLogoFailed(true)}
+                  />
+                ) : (
+                  <InlineVectorLogo />
+                )}
+              </div>
+              <span className={`transition-colors duration-500 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
+                a4ai <span className="text-xs font-normal opacity-60 ml-1">Account</span>
+              </span>
+            </Link>
+          </div>
+        </nav>
+      </div>
+
+      <button onClick={() => setIsDarkMode(!isDarkMode)} className={`fixed top-24 right-8 p-3 rounded-2xl backdrop-blur-md border transition-all z-40 shadow-lg ${isDarkMode ? "bg-white/10 border-white/20 text-yellow-400" : "bg-black/5 border-black/10 text-slate-700"}`}>
         {isDarkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
       </button>
 
@@ -289,8 +340,8 @@ export default function SignupPage() {
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 items-center relative z-10">
-        <div className={`backdrop-blur-[30px] saturate-[180%] border rounded-[3rem] shadow-2xl p-10 flex flex-col transition-all duration-500 max-h-[90vh] overflow-y-auto ${isDarkMode ? "bg-slate-900/60 border-white/10" : "bg-white/40 border-white/50 shadow-slate-300/50"}`}>
+      <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 items-center relative z-10 pt-24 pb-6">
+        <div className={`backdrop-blur-[30px] saturate-[180%] border rounded-[3rem] shadow-2xl p-10 flex flex-col transition-all duration-500 max-h-[85vh] overflow-y-auto ${isDarkMode ? "bg-slate-900/60 border-white/10" : "bg-white/40 border-white/50 shadow-slate-300/50"}`}>
           <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className={`mb-6 -ml-2 rounded-full w-fit ${isDarkMode ? "text-slate-400 hover:bg-white/10" : "text-slate-600 hover:bg-white/20"}`}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
@@ -408,7 +459,7 @@ export default function SignupPage() {
                             inputMode="numeric"
                             maxLength={1}
                             value={digit}
-                            onChange={(e) => handleOtpChange(e.target.value, idx)}
+                            onChange={(e) => handleOtpChangeRaw(e.target.value, idx)}
                             onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                             className={`w-10 h-12 text-center text-lg font-bold rounded-xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`}
                           />

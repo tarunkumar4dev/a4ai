@@ -1,18 +1,12 @@
-import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
+// src/pages/Documentation.tsx
+import React, { useEffect, useState } from "react";
+import { motion, useMotionValue, useMotionTemplate } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { 
-  BookOpen, 
-  Search, 
-  Server, 
-  Rocket, 
-  ArrowRight, 
-  FileText,
-  TerminalSquare
-} from "lucide-react";
+import { BookOpen, Search, Server, Rocket, FileText, TerminalSquare } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
+
+const BRAND_GRADIENT =
+  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
 
 const SECTIONS = [
   {
@@ -48,13 +42,32 @@ const SECTIONS = [
 ];
 
 export default function Documentation() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [query, setQuery] = useState("");
 
-  const headerGradient = useMemo(
-    () =>
-      "bg-[radial-gradient(1200px_600px_at_50%_-10%,hsl(var(--primary)/0.18),transparent_60%),radial-gradient(900px_500px_at_80%_0%,hsl(var(--primary)/0.12),transparent_60%)]",
-    []
-  );
+  useEffect(() => {
+    const s = document.createElement("style");
+    s.textContent = `
+      @keyframes fast-gradient {
+        0% { background-position: 0% center; }
+        100% { background-position: -200% center; }
+      }
+      .running-gradient-text {
+        background: ${BRAND_GRADIENT};
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: fast-gradient 4s linear infinite;
+        display: inline-block;
+      }
+    `;
+    document.head.appendChild(s);
+    return () => {
+      if (document.head.contains(s)) document.head.removeChild(s);
+    };
+  }, []);
 
   const filteredSections = SECTIONS.map(section => ({
     ...section,
@@ -64,108 +77,80 @@ export default function Documentation() {
     )
   })).filter(section => section.items.length > 0);
 
-  return (
-    <div className="relative min-h-screen pb-20">
-      {/* Animated background */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1, y: [0, -10, 0] }}
-        transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 14, ease: "easeInOut" }}
-      >
-        <div className={`absolute inset-0 ${headerGradient}`} />
-      </motion.div>
+  const headColor = isDark ? "#f1f5f9" : "#111111";
+  const mutedColor = isDark ? "#8a9bb0" : "#5f6368";
 
-      {/* Hero Section */}
-      <section className="mx-auto max-w-6xl px-4 py-14 sm:py-18">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-          <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm backdrop-blur mb-6">
-            <BookOpen className="h-4 w-4 text-primary" />
-            <span className="font-medium">a4ai Documentation</span>
-            <Badge variant="secondary" className="ml-1">v2.0</Badge>
+  return (
+    <div className="lp min-h-screen relative overflow-hidden pt-24 pb-20" style={{ background: isDark ? "#07090f" : "#ffffff" }}>
+      <div className="hidden sm:block pointer-events-none">
+        <div className="absolute" style={{ width: 600, height: 600, right: -100, top: -50, background: isDark ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)", filter: "blur(50px)", borderRadius: "50%" }} />
+      </div>
+
+      {/* FLOATING NAVBAR */}
+      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
+        <nav className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl ${isDark ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"}`}
+          style={{ boxShadow: isDark ? "0 4px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)" : "0 8px 32px rgba(0,0,0,0.04)" }}>
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+            <Link to="/" className="group flex items-center gap-2.5 text-lg font-semibold tracking-tight">
+              <img src="/ICON.ico" alt="Logo" className="h-6 w-6 object-contain" />
+              <span style={{ color: headColor }}>a4ai <span className="text-xs font-normal opacity-60 ml-1">Docs</span></span>
+            </Link>
+            <Link to="/resources" className="text-sm font-semibold" style={{ color: mutedColor }}>Back to Hub</Link>
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-            Build with confidence
+        </nav>
+      </div>
+
+      <section className="mx-auto max-w-6xl px-6 pt-14 pb-10">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur mb-6"
+            style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", color: isDark ? "#60a5fa" : "#1d4ed8", borderColor: isDark ? "rgba(59,130,246,0.22)" : "rgba(59,130,246,0.16)" }}>
+            <BookOpen className="h-3.5 w-3.5" /> a4ai Documentation v2.0
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight" style={{ color: headColor }}>
+            <span className="running-gradient-text">Build with confidence</span>
           </h1>
-          <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
+          <p className="mt-4 max-w-2xl text-lg leading-relaxed" style={{ color: mutedColor }}>
             Official guides, API notes, and architectural patterns for integrating a4ai into your platform.
           </p>
 
-          {/* Search */}
           <div className="mt-8 relative max-w-xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+            <input
               type="search"
               placeholder="Search docs, guides, or keywords…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="h-12 pl-10 bg-background/50 backdrop-blur-sm border-muted-foreground/20 text-base"
+              className="h-12 w-full pl-11 pr-4 bg-transparent border rounded-xl outline-none text-base transition-all duration-200"
+              style={{ borderColor: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)", color: isDark ? "#ffffff" : "#111111" }}
             />
           </div>
         </motion.div>
       </section>
 
-      {/* Content Grid */}
-      <section className="mx-auto max-w-6xl px-4">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 items-start">
+      <section className="mx-auto max-w-6xl px-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredSections.map((s, idx) => (
-            <motion.div
-              key={s.title}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, delay: 0.05 * idx, ease: "easeOut" }}
-            >
-              <Card className="h-full bg-background/60 backdrop-blur border-muted-foreground/10 hover:border-primary/30 transition-colors">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                      <s.icon className="h-5 w-5" />
-                    </div>
-                    <h3 className="text-lg font-semibold tracking-tight">{s.title}</h3>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{s.description}</p>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-3">
-                    {s.items.map((i) => (
-                      <li key={i.t} className="group">
-                        <Link 
-                          to={i.to} 
-                          className="flex items-center text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
-                        >
-                          <FileText className="mr-2 h-4 w-4 opacity-50 group-hover:opacity-100 transition-opacity" />
-                          {i.t}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+            <motion.div key={s.title} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} className={`ag-card ${isDark ? "ag-card-dark" : "ag-card-light"} p-6`}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 rounded-lg" style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)" }}>
+                  <s.icon className="h-5 w-5" style={{ color: isDark ? "#60a5fa" : "#3b82f6" }} />
+                </div>
+                <h3 className="text-lg font-bold" style={{ color: headColor }}>{s.title}</h3>
+              </div>
+              <p className="text-sm mb-4 leading-relaxed" style={{ color: mutedColor }}>{s.description}</p>
+              <ul className="space-y-3.5">
+                {s.items.map((i) => (
+                  <li key={i.t} className="group">
+                    <Link to={i.to} className="flex items-center text-sm font-semibold transition-colors duration-150 hover:opacity-80" style={{ color: isDark ? "#60a5fa" : "#3b82f6" }}>
+                      <FileText className="mr-2 h-4 w-4 opacity-60" />
+                      {i.t}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </motion.div>
           ))}
-          
-          {filteredSections.length === 0 && (
-            <div className="col-span-full py-12 text-center text-muted-foreground">
-              No documentation found for "{query}". Try another search term.
-            </div>
-          )}
         </div>
-
-        <motion.div 
-          initial={{ opacity: 0 }} 
-          animate={{ opacity: 1 }} 
-          transition={{ delay: 0.4 }}
-          className="mt-16 flex items-center justify-between rounded-xl border bg-muted/40 p-6"
-        >
-          <div>
-            <h3 className="font-semibold tracking-tight">Need immediate help?</h3>
-            <p className="text-sm text-muted-foreground mt-1">Check out our troubleshooting guides.</p>
-          </div>
-          <Link to="/help" className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 gap-2">
-            Visit Help Center <ArrowRight className="h-4 w-4" />
-          </Link>
-        </motion.div>
       </section>
     </div>
   );

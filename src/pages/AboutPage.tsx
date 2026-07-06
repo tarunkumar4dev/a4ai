@@ -23,7 +23,11 @@ import {
   Shield,
   BookOpen,
 } from "lucide-react";
+<<<<<<< Updated upstream
 import { useNavigate } from "react-router-dom";
+=======
+import { useNavigate, Link } from "react-router-dom";
+>>>>>>> Stashed changes
 
 /* ──────────────────────────────────────────────────────────────
    BRAND STYLES & GLOBAL INJECTION (From Features Page)
@@ -140,6 +144,68 @@ const fadeUp = {
 
 const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
 
+/* ──────────────────────────────────────────────────────────────
+   ROBUST VECTOR FALLBACK LOGO
+   ────────────────────────────────────────────────────────────── */
+const InlineVectorLogo = () => (
+  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2L2 22H22L12 2Z" fill="url(#about-logo-grad)" />
+    <path d="M12 6L5 19H19L12 6Z" fill="#ffffff" opacity="0.2" />
+    <defs>
+      <linearGradient id="about-logo-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#10b981" />
+        <stop offset="100%" stopColor="#0ea5e9" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+/* ──────────────────────────────────────────────────────────────
+   SUB-TAB NAVIGATION FOR FLOATING BAR (THEME AWARE)
+   ────────────────────────────────────────────────────────────── */
+type AboutTabKey = "mission" | "values" | "team";
+
+function AboutSubTabNav({ value, onChange, isDark }: { value: AboutTabKey; onChange: (v: AboutTabKey) => void; isDark: boolean }) {
+  const tabs = [
+    { id: "mission", label: "Mission" },
+    { id: "values", label: "Values" },
+    { id: "team", label: "Team" },
+  ];
+
+  return (
+    <div 
+      className="inline-flex rounded-xl p-1 shadow-sm backdrop-blur"
+      style={{ 
+        background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+        border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.06)" 
+      }}
+    >
+      {tabs.map((t) => {
+        const active = value === t.id;
+        return (
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id as AboutTabKey)}
+            className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-colors duration-200 ${
+              active 
+                ? (isDark ? "text-white" : "text-slate-900") 
+                : (isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
+            }`}
+          >
+            {active && (
+              <span
+                className="absolute inset-0 rounded-lg"
+                style={{ background: isDark ? "rgba(59,130,246,0.15)" : "rgba(59,130,246,0.11)" }}
+              />
+            )}
+            <span className="relative z-10">{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ================== Data ================== */
 const team = [
   { name: "Tarun Pathak", role: "Co-Founder", description: "Product · Marketing", image: "/images/tarun_a4ai.jpeg" },
@@ -164,7 +230,7 @@ const milestones = [
 
 const testimonials = [
   {
-    quote: "We cut paper‑setting time by 80% and finally standardised difficulty across sections.",
+    quote: "We cut paper‑setting time by 80% and standardised difficulty across sections.",
     name: "Ritika Sharma",
     title: "HOD Science, Delhi",
   },
@@ -187,6 +253,27 @@ export default function AboutPage() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const prefersReducedMotion = useReducedMotion();
+  const [activeTab, setActiveTab] = useState<AboutTabKey>("mission");
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  const navigate = useNavigate();
+
+  // Element section references for contextual nav clicking
+  const missionRef = useRef<HTMLDivElement | null>(null);
+  const valuesRef = useRef<HTMLDivElement | null>(null);
+  const teamRef = useRef<HTMLDivElement | null>(null);
+
+  const handleTabChange = (tabId: AboutTabKey) => {
+    setActiveTab(tabId);
+    const targetRef = 
+      tabId === "mission" ? missionRef : 
+      tabId === "values" ? valuesRef : teamRef;
+      
+    if (targetRef.current) {
+      const offsetPosition = targetRef.current.getBoundingClientRect().top + window.pageYOffset - 110;
+      window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+    }
+  };
 
   const navigate = useNavigate();
 
@@ -205,8 +292,7 @@ export default function AboutPage() {
     radial-gradient(1000px 520px at calc(${mx}px - 260px) calc(${my}px + 220px), ${isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)"}, transparent 70%)
   `;
 
-  const sectionRef = useRef<HTMLDivElement | null>(null);
-  const inView = useInView(sectionRef, { once: true, margin: "-12% 0px" });
+  const missionInView = useInView(missionRef, { once: true, margin: "-12% 0px" });
 
   const orgJsonLd = {
     "@context": "https://schema.org",
@@ -255,25 +341,45 @@ export default function AboutPage() {
           />
         )}
 
-        {/* HERO */}
-        <section className="relative z-10 py-24 md:py-28">
-          <div className={sectionX}>
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-              <span {...pillProps(isDark)}><Sparkles className="h-3.5 w-3.5"/> Founded 2025</span>
-              <span {...pillProps(isDark)}><Rocket className="h-3.5 w-3.5"/> Contest engine live</span>
-              <span {...pillProps(isDark)}><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</span>
+        {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
+        <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
+          <nav 
+            className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-colors duration-300 ${
+              isDark ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"
+            }`}
+            style={{ 
+              boxShadow: isDark 
+                ? "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)" 
+                : "0 8px 32px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.4)"
+            }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+              <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight transition-opacity active:opacity-90">
+                <div className="h-6 w-6 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20 overflow-hidden">
+                  {!logoFailed ? (
+                    <img 
+                      src="/ICON.ico" 
+                      alt="Logo" 
+                      className="h-full w-full object-contain"
+                      onError={() => setLogoFailed(true)}
+                    />
+                  ) : (
+                    <InlineVectorLogo />
+                  )}
+                </div>
+                <span style={{ color: head(isDark) }}>
+                  a4ai <span className="text-xs font-normal opacity-60 ml-1">About</span>
+                </span>
+              </Link>
+              <AboutSubTabNav value={activeTab} onChange={handleTabChange} isDark={isDark} />
             </div>
+          </nav>
+        </div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: EASE }}
-              className="text-center text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight"
-              style={{ color: head(isDark) }}
-            >
-              About <span className="nlm-text">a4ai</span>
-            </motion.h1>
+        {/* CONTENT OUTER CONTAINER — Spaced layout handling to prevent overlapping under nav */}
+        <div className="pt-24 relative z-10">
 
+<<<<<<< Updated upstream
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -334,200 +440,196 @@ export default function AboutPage() {
                 <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
                   <span className="relative z-10 flex items-center justify-center gap-2">Talk to us</span>
                 </button>
+=======
+          {/* HERO */}
+          <section className="relative z-10 py-16 md:py-20">
+            <div className={sectionX}>
+              <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
+                <span {...pillProps(isDark)}><Sparkles className="h-3.5 w-3.5"/> Founded 2025</span>
+                <span {...pillProps(isDark)}><Rocket className="h-3.5 w-3.5"/> Contest engine live</span>
+                <span {...pillProps(isDark)}><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</span>
+>>>>>>> Stashed changes
               </div>
 
-              {/* Feature chips */}
-              <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {[
-                  { icon: Gauge, title: "Faster prep", copy: "Create aligned tests in minutes, not evenings." },
-                  { icon: Shield, title: "Safer data", copy: "Privacy-first storage, clear consent, audit trails." },
-                  { icon: BookOpen, title: "Better pedagogy", copy: "Curriculum mapping + rubric checks by default." },
-                ].map((item) => (
-                  <div key={item.title} className={`p-5 ${card(isDark)}`}>
-                    <div className="flex items-center gap-2 font-semibold" style={{ color: head(isDark) }}>
-                      <item.icon className="h-4 w-4" style={{ color: accent(isDark) }} />
-                      {item.title}
-                    </div>
-                    <p className="mt-2 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{item.copy}</p>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
+              <motion.h1
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.7, ease: EASE }}
+                className="text-center text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight"
+                style={{ color: head(isDark) }}
+              >
+                About <span className="nlm-text">a4ai</span>
+              </motion.h1>
 
-            <motion.div initial={{ opacity: 0, x: 40 }} animate={inView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
-              <div className={`overflow-hidden p-0 ${card(isDark)}`}>
-                <img
-                  src="/images/bg.jpg"
-                  alt="Educators using a4ai"
-                  className="aspect-video w-full object-cover"
-                  loading="lazy"
-                />
-              </div>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* VALUES */}
-        <section className="relative z-10 py-20">
-          <div className={sectionX}>
-            <div className="mb-12 text-center">
-              <h3 className="text-3xl font-extrabold" style={{ color: head(isDark) }}>What we value</h3>
-              <p className="mt-3" style={{ color: muted(isDark) }}>Principles that steer product and policy.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-              {values.map((x, i) => (
-                <motion.div
-                  key={x.k}
-                  initial={{ opacity: 0, y: 18 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
-                  className={`p-6 ${card(isDark)}`}
-                >
-                  <div className="flex items-center gap-3 mb-4">
-                    <div 
-                      className="relative flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
-                      style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", border: isDark ? "1px solid rgba(59,130,246,0.18)" : "1px solid rgba(59,130,246,0.12)" }}
-                    >
-                      <x.icon className="h-5 w-5" style={{ color: accent(isDark) }} />
-                    </div>
-                    <div className="font-semibold" style={{ color: head(isDark) }}>{x.k}</div>
-                  </div>
-                  <p className="text-sm leading-relaxed" style={{ color: muted(isDark) }}>{x.v}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* TIMELINE */}
-        <section className="relative z-10 py-20">
-          <div className="mx-auto max-w-5xl px-4">
-            <h3 className="text-3xl font-extrabold text-center" style={{ color: head(isDark) }}>Milestones</h3>
-            <div className="mt-12 space-y-6">
-              {milestones.map((m, i) => (
-                <motion.div
-                  key={m.title}
-                  initial={{ opacity: 0, x: i % 2 ? 40 : -40 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                  className={`grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] ${card(isDark)}`}
-                >
-                  <div className="text-sm font-semibold mt-1" style={{ color: accent(isDark) }}>{m.date}</div>
-                  <div>
-                    <div className="text-lg font-bold" style={{ color: head(isDark) }}>{m.title}</div>
-                    <div className="mt-2 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{m.detail}</div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* TEAM */}
-        <section className="relative z-10 py-20">
-          <div className={sectionX}>
-            <div className="text-center">
-              <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold mb-6" style={{ color: head(isDark) }}>
-                Team Behind a4ai
-              </motion.h2>
               <motion.p
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.15, duration: 0.5 }}
-                className="mx-auto max-w-3xl text-lg"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
+                className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl"
                 style={{ color: muted(isDark) }}
               >
-               A small team building a4ai — step by step, every day.
+                Building the assessment stack for Indian classrooms—fast, fair, and aligned to how teachers actually teach.
               </motion.p>
-            </div>
 
-            <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-              {team.map((m, i) => (
-                <TeamCard key={m.name} index={i} member={m} isDark={isDark} />
-              ))}
+              {/* Stats */}
+              <div className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-4 sm:grid-cols-4">
+                {[
+                  { k: "Papers", v: "3.5K+" },
+                  { k: "Schools", v: "25+" },
+                  { k: "Uptime", v: "99.9%" },
+                  { k: "Avg. Gen Time", v: "< 2 min" },
+                ].map((s, i) => (
+                  <motion.div
+                    key={s.k}
+                    initial={{ opacity: 0, y: 18 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
+                    className={`p-6 text-center ${card(isDark)}`}
+                  >
+                    <div className="text-2xl md:text-3xl font-extrabold tracking-tight stat-n">{s.v}</div>
+                    <div className="mt-1 text-sm font-medium" style={{ color: muted(isDark) }}>{s.k}</div>
+                  </motion.div>
+                ))}
+              </div>
             </div>
+          </section>
 
-            <p className="mt-12 text-center text-sm font-medium" style={{ color: muted(isDark) }}>
-            …and many more people who quietly help shape a4ai every moment.
-            </p>
-          </div>
-        </section>
+          {/* MISSION */}
+          <section ref={missionRef} className="relative z-10 py-16 scroll-mt-28">
+            <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+              <motion.div
+                initial={{ opacity: 0, x: -40 }}
+                animate={missionInView ? { opacity: 1, x: 0 } : {}}
+                transition={{ duration: 0.6 }}
+                className="[&_h2]:tracking-tight"
+              >
+                <h2 className="text-3xl md:text-4xl font-extrabold" style={{ color: head(isDark) }}>Our mission</h2>
+                <p className="mt-6 text-lg leading-relaxed" style={{ color: muted(isDark) }}>
+                  Give teachers superpowers with AI that respects context and curriculum. Save hours weekly and return that time to students.
+                </p>
+                <p className="mt-4 text-lg leading-relaxed" style={{ color: muted(isDark) }}>
+                  We combine multi‑LLM generation with rubric checks, plagiarism guards,
+                  and contest‑grade proctoring to ensure quality from day one.
+                </p>
 
-        {/* PARTNERS */}
-        <section className="relative z-10 py-20">
-          <div className="mx-auto max-w-6xl px-4">
-            <div className="text-center">
-              <h3 className="text-3xl font-extrabold" style={{ color: head(isDark) }}>Schools & partners</h3>
-              <p className="mt-3" style={{ color: muted(isDark) }}>Pilots and early adopters we're grateful for.</p>
-            </div>
-            <div className="mt-12 grid grid-cols-2 items-center gap-6 sm:grid-cols-4">
-              {partners.map((p) => (
-                <div key={p.name} className={`flex items-center justify-center p-8 ${card(isDark)}`}>
+                {/* Buttons */}
+                <div className="mt-8 flex flex-wrap gap-4">
+                  <button onClick={() => navigate("/features")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
+                    <span className="relative z-10 flex items-center justify-center gap-2">See how it works</span>
+                  </button>
+                  <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                    <span className="relative z-10 flex items-center justify-center gap-2">Talk to us</span>
+                  </button>
+                </div>
+
+                {/* Feature chips */}
+                <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {[
+                    { icon: Gauge, title: "Faster prep", copy: "Create aligned tests in minutes, not evenings." },
+                    { icon: Shield, title: "Safer data", copy: "Privacy-first storage, clear consent, audit trails." },
+                    { icon: BookOpen, title: "Better pedagogy", copy: "Curriculum mapping + rubric checks by default." },
+                  ].map((item) => (
+                    <div key={item.title} className={`p-5 ${card(isDark)}`}>
+                      <div className="flex items-center gap-2 font-semibold" style={{ color: head(isDark) }}>
+                        <item.icon className="h-4 w-4" style={{ color: accent(isDark) }} />
+                        {item.title}
+                      </div>
+                      <p className="mt-2 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{item.copy}</p>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+
+              <motion.div initial={{ opacity: 0, x: 40 }} animate={missionInView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
+                <div className={`overflow-hidden p-0 ${card(isDark)}`}>
                   <img
-                    src={p.logo}
-                    alt={p.name}
-                    className={`h-8 transition-all duration-300 ${isDark ? "opacity-70 hover:opacity-100 invert" : "opacity-70 hover:opacity-100 grayscale hover:grayscale-0"}`}
+                    src="/images/bg.jpg"
+                    alt="Educators using a4ai"
+                    className="aspect-video w-full object-cover"
                     loading="lazy"
                   />
                 </div>
-              ))}
+              </motion.div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* TESTIMONIALS */}
-        <section className="relative z-10 py-20">
-          <div className="mx-auto max-w-5xl px-4">
-            <div className="grid gap-6 md:grid-cols-2">
-              {testimonials.map((t, i) => (
-                <motion.blockquote
-                  key={t.name}
-                  initial={{ opacity: 0, y: 18 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: 0.05 * i, ease: "easeOut" }}
-                  className={`relative p-8 ${card(isDark)}`}
-                >
-                  <Quote className="absolute -top-3 -left-3 h-8 w-8" style={{ color: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }} />
-                  <p className="text-base leading-relaxed italic" style={{ color: head(isDark) }}>"{t.quote}"</p>
-                  <footer className="mt-6 text-sm">
-                    <span className="font-semibold" style={{ color: head(isDark) }}>{t.name}</span>,{" "}
-                    <span style={{ color: muted(isDark) }}>{t.title}</span>
-                  </footer>
-                </motion.blockquote>
-              ))}
+          {/* VALUES */}
+          <section ref={valuesRef} className="relative z-10 py-16 scroll-mt-28">
+            <div className={sectionX}>
+              <div className="mb-12 text-center">
+                <h3 className="text-3xl font-extrabold" style={{ color: head(isDark) }}>What we value</h3>
+                <p className="mt-3" style={{ color: muted(isDark) }}>Principles that steer product and policy.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {values.map((x, i) => (
+                  <motion.div
+                    key={x.k}
+                    initial={{ opacity: 0, y: 18 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
+                    className={`p-6 ${card(isDark)}`}
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div 
+                        className="relative flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
+                        style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", border: isDark ? "1px solid rgba(59,130,246,0.18)" : "1px solid rgba(59,130,246,0.12)" }}
+                      >
+                        <x.icon className="h-5 w-5" style={{ color: accent(isDark) }} />
+                      </div>
+                      <div className="font-semibold" style={{ color: head(isDark) }}>{x.k}</div>
+                    </div>
+                    <p className="text-sm leading-relaxed" style={{ color: muted(isDark) }}>{x.v}</p>
+                  </motion.div>
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* CTA Banner */}
-        <section className="relative z-10 pb-24 pt-10">
-          <div className={sectionX}>
-            <motion.div {...fadeUp} viewport={{ once: true }} className="rounded-2xl p-[1px] shadow-lg overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
-              <div className="rounded-2xl px-6 py-16 text-center relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
-                <motion.h2
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5 }}
-                  className="text-3xl md:text-4xl font-extrabold tracking-tight"
-                  style={{ color: head(isDark) }}
-                >
-                  Ready to transform your assessments?
+          {/* TIMELINE */}
+          <section className="relative z-10 py-16">
+            <div className="mx-auto max-w-5xl px-4">
+              <h3 className="text-3xl font-extrabold text-center" style={{ color: head(isDark) }}>Milestones</h3>
+              <div className="mt-12 space-y-6">
+                {milestones.map((m, i) => (
+                  <motion.div
+                    key={m.title}
+                    initial={{ opacity: 0, x: i % 2 ? 40 : -40 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className={`grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] ${card(isDark)}`}
+                  >
+                    <div className="text-sm font-semibold mt-1" style={{ color: accent(isDark) }}>{m.date}</div>
+                    <div>
+                      <div className="text-lg font-bold" style={{ color: head(isDark) }}>{m.title}</div>
+                      <div className="mt-2 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{m.detail}</div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* TEAM */}
+          <section ref={teamRef} className="relative z-10 py-16 scroll-mt-28">
+            <div className={sectionX}>
+              <div className="text-center">
+                <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold mb-6" style={{ color: head(isDark) }}>
+                  Team Behind a4ai
                 </motion.h2>
                 <motion.p
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.15, duration: 0.5 }}
-                  className="mx-auto mt-4 max-w-2xl text-lg"
+                  className="mx-auto max-w-3xl text-lg"
                   style={{ color: muted(isDark) }}
                 >
-                  Join educators using a4ai to save time and improve outcomes.
+                 A small team building a4ai — step by step, every day.
                 </motion.p>
+<<<<<<< Updated upstream
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   whileInView={{ opacity: 1, scale: 1 }}
@@ -544,11 +646,116 @@ export default function AboutPage() {
                     <span className="relative z-10 flex items-center gap-2">Book a demo <ArrowRight className="h-5 w-5" /></span>
                   </button>
                 </motion.div>
+=======
+>>>>>>> Stashed changes
               </div>
-            </motion.div>
-          </div>
-        </section>
 
+              <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+                {team.map((m, i) => (
+                  <TeamCard key={m.name} index={i} member={m} isDark={isDark} />
+                ))}
+              </div>
+
+              <p className="mt-12 text-center text-sm font-medium" style={{ color: muted(isDark) }}>
+              …and many more people who quietly help shape a4ai every moment.
+              </p>
+            </div>
+          </section>
+
+          {/* PARTNERS */}
+          <section className="relative z-10 py-16">
+            <div className="mx-auto max-w-6xl px-4">
+              <div className="text-center">
+                <h3 className="text-3xl font-extrabold" style={{ color: head(isDark) }}>Schools & partners</h3>
+                <p className="mt-3" style={{ color: muted(isDark) }}>Pilots and early adopters we're grateful for.</p>
+              </div>
+              <div className="mt-12 grid grid-cols-2 items-center gap-6 sm:grid-cols-4">
+                {partners.map((p) => (
+                  <div key={p.name} className={`flex items-center justify-center p-8 ${card(isDark)}`}>
+                    <img
+                      src={p.logo}
+                      alt={p.name}
+                      className={`h-8 transition-all duration-300 ${isDark ? "opacity-70 hover:opacity-100 invert" : "opacity-70 hover:opacity-100 grayscale hover:grayscale-0"}`}
+                      loading="lazy"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* TESTIMONIALS */}
+          <section className="relative z-10 py-16">
+            <div className="mx-auto max-w-5xl px-4">
+              <div className="grid gap-6 md:grid-cols-2">
+                {testimonials.map((t, i) => (
+                  <motion.blockquote
+                    key={t.name}
+                    initial={{ opacity: 0, y: 18 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5, delay: 0.05 * i, ease: "easeOut" }}
+                    className={`relative p-8 ${card(isDark)}`}
+                  >
+                    <Quote className="absolute -top-3 -left-3 h-8 w-8" style={{ color: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }} />
+                    <p className="text-base leading-relaxed italic" style={{ color: head(isDark) }}>"{t.quote}"</p>
+                    <footer className="mt-6 text-sm">
+                      <span className="font-semibold" style={{ color: head(isDark) }}>{t.name}</span>,{" "}
+                      <span style={{ color: muted(isDark) }}>{t.title}</span>
+                    </footer>
+                  </motion.blockquote>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* CTA Banner */}
+          <section className="relative z-10 pb-24 pt-10">
+            <div className={sectionX}>
+              <motion.div {...fadeUp} viewport={{ once: true }} className="rounded-2xl p-[1px] shadow-lg overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+                <div className="rounded-2xl px-6 py-16 text-center relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
+                  <motion.h2
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5 }}
+                    className="text-3xl md:text-4xl font-extrabold tracking-tight"
+                    style={{ color: head(isDark) }}
+                  >
+                    Ready to transform your assessments?
+                  </motion.h2>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.15, duration: 0.5 }}
+                    className="mx-auto mt-4 max-w-2xl text-lg"
+                    style={{ color: muted(isDark) }}
+                  >
+                    Join educators using a4ai to save time and improve outcomes.
+                  </motion.p>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.25, duration: 0.5 }}
+                    className="mt-8 flex flex-col sm:flex-row justify-center gap-4"
+                  >
+                    <button onClick={() => navigate("/")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
+                      <span className="relative z-10 flex items-center justify-center gap-2">
+                        Get started for free
+                      </span>
+                    </button>
+                    <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg flex items-center justify-center gap-2 ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                      <span className="relative z-10 flex items-center gap-2">Book a demo <ArrowRight className="h-5 w-5" /></span>
+                    </button>
+                  </motion.div>
+                </div>
+              </motion.div>
+            </div>
+          </section>
+
+        </div>
       </div>
     </>
   );

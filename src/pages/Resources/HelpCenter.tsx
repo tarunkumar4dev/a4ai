@@ -1,149 +1,119 @@
-import { useMemo, useState } from "react";
+// src/pages/HelpCenter.tsx
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { 
-  LifeBuoy, 
-  Search, 
-  MessageCircleQuestion, 
-  ChevronDown,
-  Wrench
-} from "lucide-react";
+import { Link } from "react-router-dom";
+import { LifeBuoy, Search, MessageCircleQuestion, ChevronDown } from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
+
+const BRAND_GRADIENT =
+  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
 
 const FAQS = [
-  { 
-    q: "I signed in with Google but the dashboard is blank.", 
-    a: "Ensure a profile row exists in `profiles`. Our auth callback and `onAuthStateChange` upsert will auto-create it—refresh once after first login.",
-    tag: "Auth"
-  },
-  { 
-    q: "Edge Function returns 'No test content returned'.", 
-    a: "Check API keys, model responses, and that the function returns a non-empty string before ranking. Log errors in the function and view Vercel/Supabase logs.",
-    tag: "API"
-  },
-  { 
-    q: "Why does PrivateRoute block me after OAuth?", 
-    a: "Your `useUserProfile` must wait for session + profile. Add a loading state; redirect only after the profile fetch resolves (even if empty, handle insert).",
-    tag: "Routing"
-  },
+  { q: "I signed in with Google but the dashboard is blank.", a: "Ensure a profile row exists in `profiles`. Our auth callback and `onAuthStateChange` upsert will auto-create it—refresh once after first login.", tag: "Auth" },
+  { q: "Edge Function returns 'No test content returned'.", a: "Check API keys, model responses, and that the function returns a non-empty string before ranking. Log errors in the function and view Vercel/Supabase logs.", tag: "API" },
+  { q: "Why does PrivateRoute block me after OAuth?", a: "Your `useUserProfile` must wait for session + profile. Add a loading state; redirect only after the profile fetch resolves (even if empty, handle insert).", tag: "Routing" },
 ];
 
 export default function HelpCenter() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [query, setQuery] = useState("");
-  const [openIndex, setOpenIndex] = useState<number | null>(0); // First item open by default
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
 
-  const headerGradient = useMemo(
-    () =>
-      "bg-[radial-gradient(1200px_600px_at_50%_-10%,hsl(var(--primary)/0.18),transparent_60%),radial-gradient(900px_500px_at_80%_0%,hsl(var(--primary)/0.12),transparent_60%)]",
-    []
-  );
+  useEffect(() => {
+    const s = document.createElement("style");
+    s.textContent = `
+      @keyframes fast-gradient {
+        0% { background-position: 0% center; }
+        100% { background-position: -200% center; }
+      }
+      .running-gradient-text {
+        background: ${BRAND_GRADIENT};
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: fast-gradient 4s linear infinite;
+        display: inline-block;
+      }
+    `;
+    document.head.appendChild(s);
+    return () => {
+      if (document.head.contains(s)) document.head.removeChild(s);
+    };
+  }, []);
 
   const filteredFaqs = FAQS.filter(f => 
-    f.q.toLowerCase().includes(query.toLowerCase()) || 
-    f.a.toLowerCase().includes(query.toLowerCase())
+    f.q.toLowerCase().includes(query.toLowerCase()) || f.a.toLowerCase().includes(query.toLowerCase())
   );
 
+  const headColor = isDark ? "#f1f5f9" : "#111111";
+  const mutedColor = isDark ? "#8a9bb0" : "#5f6368";
+
   return (
-    <div className="relative min-h-screen pb-20">
-      {/* Animated background */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1, y: [0, -10, 0] }}
-        transition={{ duration: 0.8, repeat: Infinity, repeatDelay: 14, ease: "easeInOut" }}
-      >
-        <div className={`absolute inset-0 ${headerGradient}`} />
-      </motion.div>
-
-      {/* Hero Section */}
-      <section className="mx-auto max-w-4xl px-4 py-14 sm:py-18 text-center flex flex-col items-center">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="w-full">
-          <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm backdrop-blur mb-6">
-            <LifeBuoy className="h-4 w-4 text-primary" />
-            <span className="font-medium">Support & Troubleshooting</span>
+    <div className="lp min-h-screen relative overflow-hidden pt-24 pb-20" style={{ background: isDark ? "#07090f" : "#ffffff" }}>
+      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
+        <nav className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl ${isDark ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"}`}
+          style={{ boxShadow: isDark ? "0 4px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)" : "0 8px 32px rgba(0,0,0,0.04)" }}>
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+            <Link to="/" className="group flex items-center gap-2.5 text-lg font-semibold tracking-tight">
+              <img src="/ICON.ico" alt="Logo" className="h-6 w-6 object-contain" />
+              <span style={{ color: headColor }}>a4ai <span className="text-xs font-normal opacity-60 ml-1">Help</span></span>
+            </Link>
+            <Link to="/resources" className="text-sm font-semibold" style={{ color: mutedColor }}>Resources</Link>
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
-            How can we help?
-          </h1>
-          <p className="mt-4 mx-auto max-w-xl text-lg text-muted-foreground">
-            Search our knowledge base for quick fixes, common errors, and best practices.
-          </p>
+        </nav>
+      </div>
 
-          {/* Search */}
-          <div className="mt-8 relative max-w-2xl mx-auto">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search for answers..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="h-14 pl-12 rounded-full bg-background/80 backdrop-blur border-muted-foreground/20 text-base shadow-sm focus-visible:ring-primary/20"
-            />
-          </div>
-        </motion.div>
+      <section className="mx-auto max-w-4xl px-6 pt-14 pb-12 text-center flex flex-col items-center">
+        <div className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur mb-6"
+          style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", color: isDark ? "#60a5fa" : "#3b82f6", borderColor: isDark ? "rgba(59,130,246,0.22)" : "rgba(59,130,246,0.16)" }}>
+          <LifeBuoy className="h-3.5 w-3.5" /> Support & Troubleshooting
+        </div>
+        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
+          <span className="running-gradient-text">How can we help?</span>
+        </h1>
+        
+        <div className="mt-8 relative w-full max-w-xl mx-auto">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="search"
+            placeholder="Search for answers..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="h-12 w-full pl-11 pr-4 bg-transparent border rounded-full outline-none text-sm transition-all duration-200"
+            style={{ borderColor: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)", color: isDark ? "#ffffff" : "#111111" }}
+          />
+        </div>
       </section>
 
-      {/* FAQs List */}
-      <section className="mx-auto max-w-3xl px-4">
-        <motion.div 
-          className="space-y-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-        >
+      <section className="mx-auto max-w-3xl px-6">
+        <div className="space-y-4">
           {filteredFaqs.map((faq, idx) => {
             const isOpen = openIndex === idx;
             return (
-              <motion.div 
-                key={idx}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.05 }}
-                className={`overflow-hidden rounded-xl border transition-colors ${isOpen ? "bg-muted/30 border-primary/20 shadow-sm" : "bg-background/50 border-muted-foreground/10 hover:border-muted-foreground/30 backdrop-blur-sm"}`}
-              >
-                <button
-                  onClick={() => setOpenIndex(isOpen ? null : idx)}
-                  className="w-full flex items-center justify-between p-5 text-left focus:outline-none"
-                >
-                  <div className="flex items-center gap-3">
-                    <MessageCircleQuestion className={`h-5 w-5 flex-shrink-0 transition-colors ${isOpen ? "text-primary" : "text-muted-foreground"}`} />
-                    <span className="font-medium text-[15px] pr-4">{faq.q}</span>
+              <div key={idx} className={`ag-card ${isDark ? "ag-card-dark" : "ag-card-light"} overflow-hidden transition-all duration-200`}
+                style={{ borderColor: isOpen ? "rgba(59,130,246,0.3)" : "" }}>
+                <button onClick={() => setOpenIndex(isOpen ? null : idx)} className="w-full flex items-center justify-between p-5 text-left outline-none">
+                  <div className="flex items-center gap-3.5">
+                    <MessageCircleQuestion className="h-5 w-5 flex-shrink-0" style={{ color: isOpen ? (isDark ? "#60a5fa" : "#3b82f6") : mutedColor }} />
+                    <span className="font-semibold text-sm sm:text-base" style={{ color: headColor }}>{faq.q}</span>
                   </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <Badge variant="secondary" className="hidden sm:inline-flex bg-background/50">{faq.tag}</Badge>
-                    <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                    </motion.div>
-                  </div>
+                  <ChevronDown className="h-4 w-4 transition-transform duration-200" style={{ transform: isOpen ? "rotate(180deg)" : "none", color: mutedColor }} />
                 </button>
-                
                 <AnimatePresence initial={false}>
                   {isOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: "easeInOut" }}
-                    >
-                      <div className="px-5 pb-5 pt-1 pl-13 ml-8 text-muted-foreground leading-relaxed text-sm border-t border-transparent">
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}>
+                      <div className="px-5 pb-5 pl-14 text-sm leading-relaxed border-t border-transparent" style={{ color: mutedColor }}>
                         {faq.a}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </motion.div>
+              </div>
             );
           })}
-          
-          {filteredFaqs.length === 0 && (
-            <div className="py-16 flex flex-col items-center justify-center text-center">
-              <Wrench className="h-12 w-12 text-muted-foreground/30 mb-4" />
-              <h3 className="text-lg font-medium">No answers found</h3>
-              <p className="text-muted-foreground mt-1 max-w-sm">We couldn't find anything matching "{query}". Try adjusting your search.</p>
-            </div>
-          )}
-        </motion.div>
+        </div>
       </section>
     </div>
   );

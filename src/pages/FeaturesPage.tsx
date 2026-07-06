@@ -1,14 +1,13 @@
 import React, { useRef, useState, useEffect } from "react";
 import {
   motion,
-  useInView,
   useMotionTemplate,
   useMotionValue,
   useTransform,
   useReducedMotion,
   AnimatePresence,
 } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Brain,
   BookOpen,
@@ -32,12 +31,10 @@ import { useTheme } from "@/context/ThemeContext";
 /* ──────────────────────────────────────────────────────────────
    BRAND STYLES & GLOBAL INJECTION
    ────────────────────────────────────────────────────────────── */
-// Updated to a mix of Violet, Green, Sky Blue, and Indigo to match the screenshot
 const BRAND_GRADIENT =
   "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
 const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
 
-// Inject the custom CSS required for the UI if it isn't already loaded by the landing page
 const GlobalStyles = () => {
   useEffect(() => {
     const s = document.createElement("style");
@@ -219,9 +216,6 @@ export default function FeaturesPage() {
   const [tab, setTab] = useState<TabKey>("core");
   const current = TABS.find((t) => t.key === tab)!;
 
-  const stickyRef = useRef<HTMLDivElement>(null);
-  useInView(stickyRef, { margin: "-80px 0px 0px 0px" });
-
   const Papers = useCountUp(3500);
 
   return (
@@ -250,110 +244,126 @@ export default function FeaturesPage() {
         />
       )}
 
-      {/* Sticky tabs bar */}
-      <div ref={stickyRef} className="sticky top-0 z-40 supports-[backdrop-filter]:bg-transparent">
-        <div 
-          className="absolute inset-0 border-b backdrop-blur-xl" 
+      {/* DETACHED FLOATING NAV BAR WRAPPER — TRANSPARENT BACKGROUND */}
+      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
+        <nav 
+          className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl transition-colors duration-300 relative overflow-hidden ${
+            isDark ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"
+          }`}
           style={{ 
-            background: isDark ? "rgba(7,9,15,0.75)" : "rgba(255,255,255,0.75)",
-            borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" 
-          }} 
-        />
-        <div className="relative mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2 text-lg font-semibold" style={{ color: head(isDark) }}>
-            <Sparkles className="h-5 w-5" style={{ color: accent(isDark) }} />
-            <span>Features</span>
+            boxShadow: isDark 
+              ? "0 4px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)" 
+              : "0 8px 32px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.4)"
+          }}
+        >
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+            {/* Brand Logo Link pointing directly back to Landing Page "/" */}
+            <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight transition-opacity active:opacity-90">
+              <img 
+                src="/ICON.ico" 
+                alt="a4ai Logo" 
+                className="h-6 w-6 object-contain rounded transition-transform duration-200 group-hover:scale-105"
+                onError={(e) => {
+                  console.warn("Logo path recovery active.");
+                }}
+              />
+              <span style={{ color: head(isDark) }}>
+                a4ai <span className="text-xs font-normal opacity-60 ml-1">Features</span>
+              </span>
+            </Link>
+            <TabNav value={tab} onChange={setTab} isDark={isDark} />
           </div>
-          <TabNav value={tab} onChange={setTab} isDark={isDark} />
-        </div>
+        </nav>
       </div>
 
-      {/* Hero */}
-      <section className="relative z-10 pt-12 pb-4 md:pt-16 md:pb-6">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <motion.div className="text-center" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <div className="mx-auto mb-8 inline-flex justify-center">
-              <span {...pillProps(isDark)}>
-                <Sparkles className="h-4 w-4" />
-                What’s included
-              </span>
-            </div>
-
-            <h1 className="text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight" style={{ color: head(isDark) }}>
-              Powerful features,{" "}
-              <br className="hidden sm:block" />
-              real <span className="nlm-text">classroom impact</span>
-            </h1>
-
-            <p className="mx-auto mt-5 max-w-2xl text-lg" style={{ color: muted(isDark) }}>
-              Everything you need to create curriculum-perfect assessments in half the time.
-            </p>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Feature cards */}
-      <section className="relative z-10">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          {/* Prevent gap shrink by giving grid area a stable min-height for the layout */}
-          <div className="min-h-[28rem] lg:min-h-[32rem]">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={tab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-                className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 items-start"
-              >
-                {current.items.map((f, i) => (
-                  <motion.div 
-                    key={f.title} 
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.08, duration: 0.5, ease: "easeOut" }}
-                  >
-                    <FeatureCard feature={f} isDark={isDark} />
-                  </motion.div>
-                ))}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-
-          {/* Stats band */}
-          <motion.div {...fadeUp} viewport={{ once: true }} className="mt-12 rounded-2xl p-[1px] shadow-lg overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
-            <div className="rounded-2xl px-6 py-8 relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center relative z-10">
-                <Stat k={`${Papers.toLocaleString()}+`} v="Papers generated" isDark={isDark} />
-                <Stat k="99%" v="Syllabus alignment" isDark={isDark} />
-                <Stat k="< 2 min" v="Prompt → Paper" isDark={isDark} />
-                <Stat k="99.9%" v="Uptime" isDark={isDark} />
+      {/* Main Body Content — Offset padding updated to cleanly hold layout underneath the detached bar */}
+      <div className="pt-24 relative z-10">
+        {/* Hero */}
+        <section className="pt-12 pb-4 md:pt-16 md:pb-6">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <motion.div className="text-center" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+              <div className="mx-auto mb-8 inline-flex justify-center">
+                <span {...pillProps(isDark)}>
+                  <Sparkles className="h-4 w-4" />
+                  What’s included
+                </span>
               </div>
-            </div>
-          </motion.div>
 
-          {/* Comparison */}
-          <motion.div {...fadeUp} viewport={{ once: true }} className={`mt-10 p-6 shadow-sm ${card(isDark)}`}>
-            <div className="grid gap-4 md:grid-cols-3 text-sm">
-              <Compare good="Outcome-aware generation" bad="Generic question dumps" isDark={isDark} />
-              <Compare good="Deterministic blueprints" bad="Unstable lengths & marks" isDark={isDark} />
-              <Compare good="Rubrics + rationales" bad="Answer-only keys" isDark={isDark} />
-            </div>
-          </motion.div>
+              <h1 className="text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight" style={{ color: head(isDark) }}>
+                Powerful features,{" "}
+                <br className="hidden sm:block" />
+                real <span className="nlm-text">classroom impact</span>
+              </h1>
 
-          {/* Video row */}
-          <VideoRow isDark={isDark} />
-
-          {/* CTA */}
-          <div className="relative z-10 text-center mt-20 mb-24">
-            <button onClick={() => navigate("/dashboard/test-generator")} className="btn-blk px-8 py-4 text-base sm:text-lg">
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                🚀 Start creating tests <ArrowRight className="h-5 w-5" />
-              </span>
-            </button>
+              <p className="mx-auto mt-5 max-w-2xl text-lg" style={{ color: muted(isDark) }}>
+                Everything you need to create curriculum-perfect assessments in half the time.
+              </p>
+            </motion.div>
           </div>
-        </div>
-      </section>
+        </section>
+
+        {/* Feature cards */}
+        <section className="relative z-10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="min-h-[28rem] lg:min-h-[32rem]">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                  className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 items-start"
+                >
+                  {current.items.map((f, i) => (
+                    <motion.div 
+                      key={f.title} 
+                      initial={{ opacity: 0, y: 18 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.08, duration: 0.5, ease: "easeOut" }}
+                    >
+                      <FeatureCard feature={f} isDark={isDark} />
+                    </motion.div>
+                  ))}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Stats band */}
+            <motion.div {...fadeUp} viewport={{ once: true }} className="mt-12 rounded-2xl p-[1px] shadow-lg overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+              <div className="rounded-2xl px-6 py-8 relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center relative z-10">
+                  <Stat k={`${Papers.toLocaleString()}+`} v="Papers generated" isDark={isDark} />
+                  <Stat k="99%" v="Syllabus alignment" isDark={isDark} />
+                  <Stat k="< 2 min" v="Prompt → Paper" isDark={isDark} />
+                  <Stat k="99.9%" v="Uptime" isDark={isDark} />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Comparison */}
+            <motion.div {...fadeUp} viewport={{ once: true }} className={`mt-10 p-6 shadow-sm ${card(isDark)}`}>
+              <div className="grid gap-4 md:grid-cols-3 text-sm">
+                <Compare good="Outcome-aware generation" bad="Generic question dumps" isDark={isDark} />
+                <Compare good="Deterministic blueprints" bad="Unstable lengths & marks" isDark={isDark} />
+                <Compare good="Rubrics + rationales" bad="Answer-only keys" isDark={isDark} />
+              </div>
+            </motion.div>
+
+            {/* Video row */}
+            <VideoRow isDark={isDark} />
+
+            {/* CTA */}
+            <div className="relative z-10 text-center mt-20 mb-24">
+              <button onClick={() => navigate("/dashboard/test-generator")} className="btn-blk px-8 py-4 text-base sm:text-lg">
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  🚀 Start creating tests <ArrowRight className="h-5 w-5" />
+                </span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -374,7 +384,7 @@ function TabNav({ value, onChange, isDark }: { value: TabKey; onChange: (v: TabK
           <button
             key={t.key}
             onClick={() => onChange(t.key)}
-            className={`relative rounded-lg px-4 py-2 text-sm sm:text-base font-semibold transition-colors duration-200 ${
+            className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm md:text-base font-semibold transition-colors duration-200 ${
               active ? (isDark ? "text-white" : "text-slate-900") : (isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
             }`}
           >

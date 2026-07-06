@@ -1,509 +1,553 @@
-// src/pages/product/PricingPage.tsx
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Check, Users, Building, School, Clock, Sparkles, ArrowRight, Gift, MessageCircle } from "lucide-react";
-import { useSubscription } from "@/hooks/useSubscription";
-import { useAuth } from "@/providers/AuthProvider";
+import React, { useRef, useState, useEffect } from "react";
+import {
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+  useTransform,
+  useReducedMotion,
+  AnimatePresence,
+} from "framer-motion";
+import { useNavigate, Link } from "react-router-dom";
+import {
+  Brain,
+  BookOpen,
+  ListChecks,
+  SlidersHorizontal,
+  KeyRound,
+  Users2,
+  Check,
+  ShieldCheck,
+  Sparkles,
+  Video,
+  Download,
+  BarChart3,
+  Workflow,
+  GaugeCircle,
+  Play,
+  ArrowRight
+} from "lucide-react";
+import { useTheme } from "@/context/ThemeContext";
 
-type AudienceKey = "individual" | "institute" | "school";
-type PeriodKey = "monthly" | "yearly";
+/* ──────────────────────────────────────────────────────────────
+   BRAND STYLES & GLOBAL INJECTION
+   ────────────────────────────────────────────────────────────── */
+const BRAND_GRADIENT =
+  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
+const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
 
-const hx = {
-  fontFamily:
-    "'Halenoir Expanded DemiBold','Halenoir Expanded','Halenoir','Inter',system-ui,sans-serif",
-  fontWeight: 600,
+const GlobalStyles = () => {
+  useEffect(() => {
+    const s = document.createElement("style");
+    s.textContent = `
+      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+      .ag-card {
+        border-radius: 18px;
+        transition: transform 0.2s cubic-bezier(.16,1,.3,1), box-shadow 0.2s cubic-bezier(.16,1,.3,1);
+        position: relative;
+        overflow: hidden;
+      }
+      @media (min-width: 640px) { .ag-card { border-radius: 20px; } }
+      .ag-card-light {
+        background: rgba(255,255,255,0.78);
+        border: 1px solid rgba(0,0,0,0.08);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(59,130,246,0.07), 0 2px 6px rgba(0,0,0,0.05);
+      }
+      .ag-card-dark {
+        background: rgba(20,25,40,0.65);
+        border: 1px solid rgba(255,255,255,0.09);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 6px 24px rgba(0,0,0,0.45);
+      }
+      @keyframes fast-gradient {
+        0% { background-position: 0% center; }
+        100% { background-position: -200% center; }
+      }
+      .nlm-text {
+        background: ${BRAND_GRADIENT};
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: fast-gradient 4s linear infinite;
+      }
+      .btn-blk {
+        position:relative; overflow:hidden;
+        background: linear-gradient(180deg,#202124 0%,#111111 100%);
+        border: 1px solid rgba(255,255,255,0.14);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
+        color: white; font-weight:600;
+        border-radius: 14px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .btn-glass-light {
+        position:relative; overflow:hidden;
+        background: rgba(235, 235, 240, 0.85);
+        border: 1px solid rgba(0,0,0,0.12);
+        backdrop-filter: blur(20px) saturate(160%);
+        border-radius: 14px; font-weight:600;
+        transition: transform 0.2s;
+      }
+      .btn-glass-dark {
+        position:relative; overflow:hidden;
+        background: rgba(60, 60, 65, 0.7);
+        border: 1px solid rgba(255,255,255,0.15);
+        backdrop-filter: blur(20px) saturate(160%);
+        border-radius: 14px; font-weight:600;
+        transition: transform 0.2s;
+      }
+      .nlm-pill {
+        display:inline-flex; align-items:center; gap:5px;
+        padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500;
+      }
+      .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(50px); }
+      .stat-n {
+        background: ${BRAND_GRADIENT};
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: fast-gradient 4s linear infinite;
+      }
+    `;
+    document.head.appendChild(s);
+    return () => {
+      if (document.head.contains(s)) document.head.removeChild(s);
+    };
+  }, []);
+  return null;
+};
+
+const card = (isDark: boolean) => `ag-card ${isDark ? "ag-card-dark" : "ag-card-light"}`;
+const pillProps = (isDark: boolean) => ({
+  className: "nlm-pill inline-flex items-center gap-1.5",
+  style: {
+    background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)",
+    color: isDark ? "#60a5fa" : "#1d4ed8",
+    border: isDark ? "1px solid rgba(59,130,246,0.22)" : "1px solid rgba(59,130,246,0.16)",
+  },
+});
+const muted = (isDark: boolean) => (isDark ? "#8a9bb0" : "#5f6368");
+const head = (isDark: boolean) => (isDark ? "#f1f5f9" : "#111111");
+const accent = (isDark: boolean) => (isDark ? "#60a5fa" : "#3b82f6");
+
+/* ---------------- Anim helpers ---------------- */
+const fadeUp = {
+  initial: { opacity: 0, y: 18 },
+  whileInView: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 } as const;
 
-export default function PricingPage() {
-  const [audience, setAudience] = useState<AudienceKey>("individual");
-  const [billingPeriod, setBillingPeriod] = useState<PeriodKey>("monthly");
+function useCountUp(target: number, duration = 1200) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / duration);
+      setVal(Math.round(target * p));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return val;
+}
+
+/* ---------------- Data ---------------- */
+export type Feature = {
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  bullets: string[];
+  tag?: "New" | "Pro" | "Beta";
+};
+
+const CORE: Feature[] = [
+  { title: "AI-Powered Test Generation", description: "Create full papers from a prompt—sections, marks, formatting.", icon: Brain, bullets: ["Topic + outcome aware", "Deterministic blueprints", "One-click export (PDF/DOCX)"], tag: "Pro" },
+  { title: "Curriculum-Aligned Content", description: "Questions mapped to standards with coverage scoring.", icon: BookOpen, bullets: ["Syllabus import (PDF/CSV)", "Outcome heatmap", "Gap warnings before export"] },
+  { title: "Multiple Question Types", description: "MCQ, short/long answer, cloze, match, passages, diagrams.", icon: ListChecks, bullets: ["Auto-shuffle", "Parallel A/B sets", "LaTeX & figures"], tag: "New" },
+  { title: "Difficulty Customization", description: "Set difficulty per section/outcome with cognitive checks.", icon: SlidersHorizontal, bullets: ["Bloom mapping", "Grade bands", "Readability guardrails"] },
+  { title: "Instant Answer Keys", description: "Stepwise rationales & marking hints auto-generated.", icon: KeyRound, bullets: ["Rubric templates", "Point-wise hints", "Misconception flags"] },
+  { title: "Collaborative Workflows", description: "Invite colleagues, co-edit, reuse banks with versioning.", icon: Users2, bullets: ["Shareable links", "Approval flow", "Reusable item banks"], tag: "Beta" },
+];
+
+const PROCTORING: Feature[] = [
+  { title: "AI Proctoring", description: "Camera presence, face match, gaze & multi-person detection.", icon: ShieldCheck, bullets: ["Screen-lock (desktop)", "Anomaly scoring", "Privacy controls"] },
+  { title: "Live Contest Host", description: "Schedule, invite, run—rankings & exports in one place.", icon: Workflow, bullets: ["Bulk import students", "Auto grading (MCQ)", "CSV/JSON results"] },
+];
+
+const ANALYTICS: Feature[] = [
+  { title: "Student Analytics", description: "Progress by chapter/outcome with trends.", icon: BarChart3, bullets: ["Percentile bands", "Section-wise accuracy", "Time on task"] },
+  { title: "Quality Dashboard", description: "Difficulty, discrimination index & item health.", icon: GaugeCircle, bullets: ["Flag low-signal items", "Auto-retire duplicates", "Bank freshness"] },
+];
+
+const TABS = [
+  { key: "core", label: "Core", items: CORE },
+  { key: "proctor", label: "Proctoring", items: PROCTORING },
+  { key: "analytics", label: "Analytics", items: ANALYTICS },
+] as const;
+type TabKey = (typeof TABS)[number]["key"];
+
+/* ---------------- Page ---------------- */
+export default function FeaturesPage() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const prefersReducedMotion = useReducedMotion();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { status } = useSubscription();
 
-  // ═══════════════════════════════════════════════════════════
-  // PLAN DATA — matches database exactly
-  // slug is used for navigation to /payment?plan=slug&cycle=...
-  // ═══════════════════════════════════════════════════════════
-  const plans: Record<
-    AudienceKey,
-    Array<{
-      slug: string;
-      name: string;
-      price: { monthly: string; yearly: string };
-      priceNote?: { monthly: string; yearly: string };
-      perDay?: { monthly: string; yearly: string };
-      description: string;
-      features: string[];
-      popular?: boolean;
-      free?: boolean;
-      comingSoon?: boolean;
-    }>
-  > = {
-    individual: [
-      {
-        slug: "free",
-        name: "Free",
-        price: { monthly: "₹0", yearly: "₹0" },
-        priceNote: { monthly: "forever", yearly: "forever" },
-        description: "Try before you buy. No card needed.",
-        features: [
-          "2 test papers per month",
-          "MCQ + Short + Long formats",
-          "PDF & DOCX export with watermark",
-          "NCERT-aligned content",
-          "Email support",
-        ],
-        free: true,
-      },
-      {
-        slug: "starter",
-        name: "Starter",
-        price: { monthly: "₹149", yearly: "₹1,430" },
-        priceNote: { monthly: "/ month", yearly: "/ year" },
-        perDay: { monthly: "₹5/day", yearly: "₹4/day" },
-        description: "Save 2+ hours daily. Everything you need.",
-        features: [
-          "10 test papers/month (8+2 bonus)",
-          "All question types (MCQ, Short, Long)",
-          "Clean PDF & DOCX — no watermark",
-          "NCERT RAG powered generation",
-          "2 free contests with proctoring",
-          "Quiz sharing via WhatsApp link",
-          "Chapter-wise question bank",
-        ],
-        popular: true,
-      },
-      {
-        slug: "pro",
-        name: "Pro",
-        price: { monthly: "₹299", yearly: "₹2,870" },
-        priceNote: { monthly: "/ month", yearly: "/ year" },
-        perDay: { monthly: "₹10/day", yearly: "₹8/day" },
-        description: "Unlimited tests. Full proctored contests.",
-        features: [
-          "Unlimited test papers",
-          "All Starter features",
-          "Unlimited proctored contests",
-          "Camera + tab-switch detection",
-          "Advanced analytics & tracking",
-          "Custom school logo on papers",
-          "Answer key with explanations",
-          "Priority support",
-        ],
-      },
-    ],
-    institute: [
-      {
-        slug: "institute_start",
-        name: "Start",
-        price: { monthly: "₹999", yearly: "₹9,590" },
-        priceNote: { monthly: "/ month", yearly: "/ year" },
-        perDay: { monthly: "₹33/day", yearly: "₹26/day" },
-        description: "For small coaching centers. Up to 100 students.",
-        features: [
-          "Up to 100 students",
-          "75 test papers per month",
-          "Attendance tracking",
-          "Contest mode with proctoring",
-          "PDF & DOCX export",
-          "Institute branding on papers",
-          "Basic analytics",
-          "Email + chat support",
-        ],
-      },
-      {
-        slug: "institute_scale",
-        name: "Scale",
-        price: { monthly: "₹1,499", yearly: "₹14,390" },
-        priceNote: { monthly: "/ month", yearly: "/ year" },
-        perDay: { monthly: "₹50/day", yearly: "₹39/day" },
-        description: "Grow with confidence. Up to 250 students.",
-        features: [
-          "All Start features",
-          "Up to 250 students",
-          "120 test papers per month",
-          "Analytics dashboard",
-          "Batch-wise performance tracking",
-          "Contest hosting for batches",
-          "Priority support",
-          "Dedicated account manager",
-        ],
-        popular: true,
-      },
-      {
-        slug: "institute_enterprise",
-        name: "Enterprise",
-        price: { monthly: "₹1,999", yearly: "₹19,190" },
-        priceNote: { monthly: "/ month", yearly: "/ year" },
-        perDay: { monthly: "₹67/day", yearly: "₹53/day" },
-        description: "Full power for large institutes. Up to 500 students.",
-        features: [
-          "All Scale features",
-          "Up to 500 students",
-          "Unlimited test papers",
-          "Advanced analytics & reports",
-          "Contest mode with full proctoring",
-          "Custom branding",
-          "Dedicated support",
-          "API access for integration",
-        ],
-      },
-    ],
-    school: [
-      {
-        slug: "school_standard",
-        name: "Standard",
-        price: { monthly: "Coming Soon", yearly: "Coming Soon" },
-        description: "Complete school package. Up to 30 teachers.",
-        features: [
-          "Up to 30 teacher accounts",
-          "2,000 student capacity",
-          "School admin dashboard",
-          "Parent & teacher portals",
-          "Custom report cards",
-          "School-wide analytics",
-          "Attendance management",
-          "Print-ready with school letterhead",
-        ],
-        comingSoon: true,
-      },
-      {
-        slug: "school_premium",
-        name: "Premium",
-        price: { monthly: "Coming Soon", yearly: "Coming Soon" },
-        description: "Full-featured school management. Up to 75 teachers.",
-        features: [
-          "All Standard features",
-          "Up to 75 teacher accounts",
-          "5,000 student capacity",
-          "Advanced analytics suite",
-          "Custom integrations (ERP/SIS)",
-          "Training & onboarding included",
-          "99.9% uptime SLA",
-          "Priority phone support",
-        ],
-        popular: true,
-        comingSoon: true,
-      },
-      {
-        slug: "school_enterprise",
-        name: "Enterprise",
-        price: { monthly: "Custom", yearly: "Custom" },
-        description: "For school chains. Fully customized.",
-        features: [
-          "Unlimited everything",
-          "Multi-school dashboard",
-          "Dedicated infrastructure",
-          "Custom feature development",
-          "White-label solution",
-          "On-site deployment option",
-          "24/7 premium support",
-          "Dedicated success manager",
-        ],
-        comingSoon: true,
-      },
-    ],
+  // live ambient glow follows cursor
+  const mx = useMotionValue(360);
+  const my = useMotionValue(180);
+  const onMove = (e: React.MouseEvent<HTMLElement>) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    mx.set(e.clientX - r.left);
+    my.set(e.clientY - r.top);
   };
+  
+  const bgGlow = useMotionTemplate`
+    radial-gradient(1000px 520px at ${mx}px ${my}px, ${isDark ? "rgba(59,130,246,0.06)" : "rgba(59,130,246,0.04)"}, transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), ${isDark ? "rgba(96,165,250,0.06)" : "rgba(96,165,250,0.04)"}, transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px - 260px) calc(${my}px + 220px), ${isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)"}, transparent 70%)
+  `;
 
-  const cards = plans[audience];
+  const [tab, setTab] = useState<TabKey>("core");
+  const current = TABS.find((t) => t.key === tab)!;
 
-  // ═══════════════════════════════════════════════════════════
-  // NAVIGATION — sends user to /payment with plan + cycle
-  // ═══════════════════════════════════════════════════════════
-  const handlePlanClick = (plan: typeof cards[0]) => {
-    if (plan.free) {
-      navigate("/signup");
-      return;
-    }
-    if (plan.comingSoon) {
-      window.open("https://wa.me/919876543210?text=Hi%20I'm%20interested%20in%20the%20School%20plan%20for%20a4ai", "_blank");
-      return;
-    }
-    if (plan.slug.includes("enterprise") && plan.price.monthly === "Custom") {
-      navigate("/contact");
-      return;
-    }
-    // Check if current plan
-    if (status?.plan_slug === plan.slug) return;
+  const Papers = useCountUp(3500);
 
-    if (!user) {
-      navigate("/login?redirect=/pricing");
-      return;
-    }
-    navigate(`/payment?plan=${plan.slug}&cycle=${billingPeriod}`);
-  };
+  return (
+    <div onMouseMove={onMove} className="lp min-h-screen relative overflow-hidden transition-colors duration-300" style={{ background: isDark ? "#07090f" : "#ffffff" }}>
+      <GlobalStyles />
+      
+      {/* Background Orbs */}
+      <div className="hidden sm:block">
+        <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: isDark ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)" }} />
+        <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)" }} />
+      </div>
 
-  const blueBtn =
-    "bg-[linear-gradient(180deg,#93c5fd,#3b82f6_85%)] text-white border border-blue-300 shadow-[0_8px_20px_rgba(59,130,246,0.25)] hover:brightness-[1.06] active:brightness-[1.03] transition";
+      <div
+        className="absolute inset-0 -z-20 pointer-events-none"
+        style={{
+          opacity: isDark ? 0.02 : 0.035,
+          backgroundImage: `linear-gradient(to right, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px), linear-gradient(to bottom, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px)`,
+          backgroundSize: "48px 48px",
+        }}
+      />
+      {!prefersReducedMotion && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 -z-10 opacity-100"
+          style={{ backgroundImage: bgGlow as any }}
+        />
+      )}
+
+      {/* DETACHED FLOATING NAV BAR WRAPPER — TRANSPARENT BACKGROUND */}
+      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
+        <nav 
+          className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl transition-colors duration-300 relative overflow-hidden ${
+            isDark ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"
+          }`}
+          style={{ 
+            boxShadow: isDark 
+              ? "0 4px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)" 
+              : "0 8px 32px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.4)"
+          }}
+        >
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+            {/* Brand Logo Link pointing directly back to Landing Page "/" */}
+            <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight transition-opacity active:opacity-90">
+              <img 
+                src="/ICON.ico" 
+                alt="a4ai Logo" 
+                className="h-6 w-6 object-contain rounded transition-transform duration-200 group-hover:scale-105"
+                onError={(e) => {
+                  console.warn("Logo path recovery active.");
+                }}
+              />
+              <span style={{ color: head(isDark) }}>
+                a4ai <span className="text-xs font-normal opacity-60 ml-1">Features</span>
+              </span>
+            </Link>
+            <TabNav value={tab} onChange={setTab} isDark={isDark} />
+          </div>
+        </nav>
+      </div>
+
+      {/* Main Body Content — Offset padding updated to cleanly hold layout underneath the detached bar */}
+      <div className="pt-24 relative z-10">
+        {/* Hero */}
+        <section className="pt-12 pb-4 md:pt-16 md:pb-6">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <motion.div className="text-center" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+              <div className="mx-auto mb-8 inline-flex justify-center">
+                <span {...pillProps(isDark)}>
+                  <Sparkles className="h-4 w-4" />
+                  What’s included
+                </span>
+              </div>
+
+              <h1 className="text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight" style={{ color: head(isDark) }}>
+                Powerful features,{" "}
+                <br className="hidden sm:block" />
+                real <span className="nlm-text">classroom impact</span>
+              </h1>
+
+              <p className="mx-auto mt-5 max-w-2xl text-lg" style={{ color: muted(isDark) }}>
+                Everything you need to create curriculum-perfect assessments in half the time.
+              </p>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Feature cards */}
+        <section className="relative z-10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="min-h-[28rem] lg:min-h-[32rem]">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                  className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 items-start"
+                >
+                  {current.items.map((f, i) => (
+                    <motion.div 
+                      key={f.title} 
+                      initial={{ opacity: 0, y: 18 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.08, duration: 0.5, ease: "easeOut" }}
+                    >
+                      <FeatureCard feature={f} isDark={isDark} />
+                    </motion.div>
+                  ))}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Stats band */}
+            <motion.div {...fadeUp} viewport={{ once: true }} className="mt-12 rounded-2xl p-[1px] shadow-lg overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+              <div className="rounded-2xl px-6 py-8 relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center relative z-10">
+                  <Stat k={`${Papers.toLocaleString()}+`} v="Papers generated" isDark={isDark} />
+                  <Stat k="99%" v="Syllabus alignment" isDark={isDark} />
+                  <Stat k="< 2 min" v="Prompt → Paper" isDark={isDark} />
+                  <Stat k="99.9%" v="Uptime" isDark={isDark} />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Comparison */}
+            <motion.div {...fadeUp} viewport={{ once: true }} className={`mt-10 p-6 shadow-sm ${card(isDark)}`}>
+              <div className="grid gap-4 md:grid-cols-3 text-sm">
+                <Compare good="Outcome-aware generation" bad="Generic question dumps" isDark={isDark} />
+                <Compare good="Deterministic blueprints" bad="Unstable lengths & marks" isDark={isDark} />
+                <Compare good="Rubrics + rationales" bad="Answer-only keys" isDark={isDark} />
+              </div>
+            </motion.div>
+
+            {/* Video row */}
+            <VideoRow isDark={isDark} />
+
+            {/* CTA */}
+            <div className="relative z-10 text-center mt-20 mb-24">
+              <button onClick={() => navigate("/dashboard/test-generator")} className="btn-blk px-8 py-4 text-base sm:text-lg">
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  🚀 Start creating tests <ArrowRight className="h-5 w-5" />
+                </span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Components ---------------- */
+function TabNav({ value, onChange, isDark }: { value: TabKey; onChange: (v: TabKey) => void; isDark: boolean }) {
+  return (
+    <div 
+      className="inline-flex rounded-xl p-1 shadow-sm backdrop-blur"
+      style={{ 
+        background: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.6)",
+        border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.06)" 
+      }}
+    >
+      {TABS.map((t) => {
+        const active = value === t.key;
+        return (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm md:text-base font-semibold transition-colors duration-200 ${
+              active ? (isDark ? "text-white" : "text-slate-900") : (isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
+            }`}
+          >
+            {active && (
+              <motion.span
+                layoutId="tab-underline"
+                className="absolute inset-0 rounded-lg"
+                style={{ background: isDark ? "rgba(59,130,246,0.15)" : "rgba(59,130,246,0.1)" }}
+                transition={{ type: "spring", stiffness: 350, damping: 30 }}
+              />
+            )}
+            <span className="relative z-10">{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FeatureCard({ feature, isDark }: { feature: Feature; isDark: boolean }) {
+  const mx = useMotionValue(120);
+  const my = useMotionValue(90);
+  const rotateX = useTransform(my, [0, 180], [8, -8]);
+  const rotateY = useTransform(mx, [0, 260], [-10, 10]);
+  const Icon = feature.icon;
 
   return (
     <div
-      className="
-        min-h-screen w-full relative
-        bg-[radial-gradient(900px_560px_at_15%_-10%,#EDF1F7_0%,transparent_60%),radial-gradient(900px_560px_at_85%_110%,#F7FAFF_0%,transparent_60%)]
-        dark:bg-[radial-gradient(1000px_600px_at_12%_-10%,rgba(255,255,255,0.08),transparent_60%),radial-gradient(1000px_600px_at_88%_110%,rgba(59,130,246,0.12),transparent_60%)]
-        dark:bg-slate-950
-      "
+      onMouseMove={(e) => {
+        const r = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+        mx.set(e.clientX - r.left);
+        my.set(e.clientY - r.top);
+      }}
+      onMouseLeave={() => { mx.set(120); my.set(90); }}
+      style={{ perspective: 1000 }}
+      className="group h-full"
     >
-      <div className="pointer-events-none absolute inset-0 opacity-[0.025] [background-image:linear-gradient(to_right,#000_1px,transparent_1px),linear-gradient(to_bottom,#000_1px,transparent_1px)] [background-size:48px_48px] dark:[background-image:linear-gradient(to_right,rgba(255,255,255,0.25)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.25)_1px,transparent_1px)]" />
+      <motion.div style={{ rotateX, rotateY }} className={`relative h-full p-6 transition-all duration-300 ${card(isDark)}`}>
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, ${isDark ? "rgba(96,165,250,0.12)" : "rgba(59,130,246,0.08)"}, transparent 80%)` }}
+        />
 
-      <div className="relative mx-auto max-w-6xl px-4 pt-12 pb-16">
-        {/* Header */}
-        <div className="mx-auto max-w-2xl text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium px-3.5 py-1.5 rounded-full mb-5 dark:bg-blue-400/10 dark:border-blue-400/30 dark:text-blue-300">
-            <Sparkles size={12} />
-            14-day free trial on all paid plans
+        <div className="relative z-10 flex flex-col h-full">
+          <div className="flex items-center gap-3 mb-4">
+            <div 
+              className="relative flex h-12 w-12 items-center justify-center rounded-xl"
+              style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", border: isDark ? "1px solid rgba(59,130,246,0.18)" : "1px solid rgba(59,130,246,0.12)" }}
+            >
+              <Icon className="h-6 w-6" style={{ color: accent(isDark) }} />
+              {feature.tag && (
+                <span className="absolute -right-2 -top-2 rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow-sm" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+                  {feature.tag}
+                </span>
+              )}
+            </div>
+            <h3 className="text-lg font-semibold" style={{ color: head(isDark) }}>{feature.title}</h3>
           </div>
 
-          <h1 className="text-3xl md:text-4xl tracking-tight" style={hx}>
-            <span className="bg-clip-text text-transparent bg-[linear-gradient(90deg,#0f172a_0%,#334155_50%,#0f172a_100%)] bg-[length:200%_100%] animate-[bg-pan_12s_linear_infinite] dark:bg-[linear-gradient(90deg,#ffffff_0%,#e5e7eb_50%,#ffffff_100%)]">
-              Save 2+ hours daily. Starting at ₹5/day.
-            </span>
-          </h1>
-          <p className="mt-2 text-[15px] text-slate-600 dark:text-slate-300">
-            AI-powered test papers in 30 seconds. Choose the perfect plan for your needs.
-          </p>
+          <div className="flex-grow">
+            <p className="text-sm leading-relaxed mb-4" style={{ color: muted(isDark) }}>{feature.description}</p>
+            <ul className="space-y-2.5">
+              {feature.bullets.map((b, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <span className="mt-[3px] rounded flex-shrink-0 p-[2px]" style={{ background: isDark ? "rgba(96,165,250,0.15)" : "rgba(59,130,246,0.1)" }}>
+                    <Check className="h-3.5 w-3.5" style={{ color: accent(isDark) }} />
+                  </span>
+                  <span style={{ color: head(isDark) }}>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
 
-          {/* Current plan indicator */}
-          {status && (
-            <p className="mt-2 text-xs text-slate-400">
-              You're on <strong className="text-slate-600 dark:text-slate-200">{status.plan_name}</strong> ({status.tests_used}/{status.test_limit === -1 ? "∞" : status.test_limit} tests used)
-            </p>
-          )}
+function Stat({ k, v, isDark }: { k: string; v: string; isDark: boolean }) {
+  return (
+    <div>
+      <div className="text-3xl font-extrabold tracking-tight stat-n">{k}</div>
+      <div className="mt-1 text-sm font-medium" style={{ color: muted(isDark) }}>{v}</div>
+    </div>
+  );
+}
 
-          {/* Audience toggle */}
-          <div
-            className="mt-6 inline-flex items-center gap-1 rounded-2xl border px-1 py-1 shadow-sm backdrop-blur bg-white/80 border-slate-200 dark:bg-slate-300/35 dark:border-white/15"
-            role="tablist"
+function Compare({ good, bad, isDark }: { good: string; bad: string; isDark: boolean }) {
+  return (
+    <div 
+      className="rounded-xl p-4 text-left shadow-sm relative overflow-hidden"
+      style={{ background: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", border: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,0,0,0.04)" }}
+    >
+      <div className="text-sm flex items-center mb-1">
+        <span className="mr-2 rounded px-1.5 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+          a4ai
+        </span>
+        <span className="font-semibold" style={{ color: head(isDark) }}>{good}</span>
+      </div>
+      <div className="mt-1 text-sm" style={{ color: muted(isDark) }}>vs “{bad}”</div>
+    </div>
+  );
+}
+
+function VideoRow({ isDark }: { isDark: boolean }) {
+  const demoRef = useRef<HTMLVideoElement>(null);
+  
+  return (
+    <motion.div {...fadeUp} viewport={{ once: true }} className="mt-16 md:mt-24 grid items-start gap-6 md:grid-cols-[1.2fr_1fr]">
+      <div className={`overflow-hidden flex flex-col ${card(isDark)}`}>
+        <div 
+          className="px-6 py-4 text-sm font-semibold flex items-center gap-2 border-b"
+          style={{ color: head(isDark), borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)" }}
+        >
+          <Video className="h-4 w-4" style={{ color: accent(isDark) }} /> See it in action
+        </div>
+        <div className="p-0">
+          <motion.div
+            initial={{ opacity: 0.98 }} whileHover={{ scale: 1.01 }} transition={{ duration: 0.3 }}
+            className="relative group p-[1px] bg-gradient-to-br"
+            style={{ backgroundImage: isDark ? "linear-gradient(to bottom right, rgba(59,130,246,0.3), rgba(129,140,248,0.1))" : "linear-gradient(to bottom right, rgba(59,130,246,0.4), rgba(129,140,248,0.2))" }}
           >
-            {[
-              { id: "individual", label: "Teachers", icon: <Users size={16} /> },
-              { id: "institute", label: "Institutes", icon: <Building size={16} /> },
-              { id: "school", label: "Schools", icon: <School size={16} /> },
-            ].map((t) => {
-              const active = audience === (t.id as AudienceKey);
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setAudience(t.id as AudienceKey)}
-                  role="tab"
-                  aria-selected={active}
-                  className={
-                    "mx-0.5 flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm transition " +
-                    (active
-                      ? "bg-slate-900 text-white shadow-sm ring-1 ring-black/5 dark:ring-white/10"
-                      : "text-slate-700 hover:bg-white/70 ring-1 ring-transparent dark:text-slate-800 dark:hover:bg-slate-300/70")
-                  }
-                  style={hx}
-                >
-                  {t.icon}
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Billing toggle */}
-          <div className="mt-4 flex items-center justify-center gap-3">
-            <span className={`text-sm ${billingPeriod === "monthly" ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"}`} style={hx}>
-              Monthly
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={billingPeriod === "yearly"}
-              onClick={() => setBillingPeriod(billingPeriod === "monthly" ? "yearly" : "monthly")}
-              className="relative h-6 w-12 rounded-full bg-[linear-gradient(90deg,#93c5fd,#3b82f6)] p-0 appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0 shadow-inner"
-            >
-              <span className={`absolute top-[4px] left-[4px] h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${billingPeriod === "yearly" ? "translate-x-[24px]" : ""}`} />
-            </button>
-            <span className={`text-sm ${billingPeriod === "yearly" ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400"}`} style={hx}>
-              Yearly
-            </span>
-            <span className="ml-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700 dark:bg-emerald-400/15 dark:text-emerald-300">
-              Save 20%
-            </span>
-          </div>
-        </div>
-
-        {/* School coming soon banner */}
-        {audience === "school" && (
-          <div className="mt-8 mb-2 mx-auto max-w-2xl text-center">
-            <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium px-4 py-2.5 rounded-xl dark:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300">
-              <School size={16} />
-              School plans are coming soon! Contact us for early access pricing.
+            <div className="bg-black overflow-hidden relative">
+              <video ref={demoRef} className="aspect-video w-full object-cover" src="/demo.mp4" playsInline controls preload="metadata" />
             </div>
-          </div>
-        )}
-
-        {/* Cards */}
-        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {cards.map((plan, i) => {
-            const price = plan.price[billingPeriod];
-            const note = plan.priceNote?.[billingPeriod] || "";
-            const isFree = plan.free;
-            const isComingSoon = plan.comingSoon;
-            const isCustom = price === "Custom" || price === "Coming Soon";
-            const isCurrent = status?.plan_slug === plan.slug;
-            const perDayLabel = plan.perDay?.[billingPeriod];
-
-            return (
-              <div
-                key={i}
-                className={`group relative rounded-[22px] bg-white/90 backdrop-blur p-6
-                ring-1 ring-slate-200 shadow-[0_14px_36px_-12px_rgba(2,6,23,0.12)] transition
-                hover:shadow-[0_18px_44px_-10px_rgba(2,6,23,0.16)] hover:translate-y-[-2px]
-                ${plan.popular ? "outline outline-2 outline-blue-300/60" : ""}
-                ${isComingSoon ? "opacity-75" : ""}
-                dark:bg-white/[0.06] dark:ring-white/10`}
-              >
-                {plan.popular && !isComingSoon && (
-                  <div className="absolute -top-3 right-4 rounded-full bg-blue-600/90 px-3 py-1 text-xs text-white shadow" style={hx}>
-                    Popular
-                  </div>
-                )}
-                {isFree && (
-                  <div className="absolute -top-3 right-4 rounded-full bg-emerald-600/90 px-3 py-1 text-xs text-white shadow flex items-center gap-1" style={hx}>
-                    <Gift size={11} /> Free Forever
-                  </div>
-                )}
-                {isCurrent && !isFree && (
-                  <div className="absolute -top-3 left-4 rounded-full bg-green-600/90 px-3 py-1 text-xs text-white shadow" style={hx}>
-                    Current Plan
-                  </div>
-                )}
-                {isComingSoon && (
-                  <div className="absolute -top-3 right-4 rounded-full bg-slate-600/90 px-3 py-1 text-xs text-white shadow flex items-center gap-1" style={hx}>
-                    <Clock size={11} /> Coming Soon
-                  </div>
-                )}
-
-                <div className="text-slate-800/80 text-[13px] dark:text-slate-200/90" style={hx}>
-                  {plan.name}
-                </div>
-
-                <div className="mt-2 mb-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl tracking-tight text-slate-900 dark:text-white" style={hx}>{price}</span>
-                    <span className="text-slate-500 text-base dark:text-slate-400">
-                      {isCustom ? "" : note}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Per-day badge */}
-                {perDayLabel && !isFree && !isCustom && (
-                  <div className="mb-3 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-medium px-2.5 py-1 rounded-full dark:bg-amber-400/10 dark:border-amber-400/30 dark:text-amber-300">
-                    <Clock size={10} />
-                    Just {perDayLabel}
-                  </div>
-                )}
-
-                <button
-                  onClick={() => handlePlanClick(plan)}
-                  disabled={isCurrent}
-                  className={`inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-[14px] ${
-                    isCurrent
-                      ? "bg-green-50 text-green-600 border border-green-200 cursor-not-allowed"
-                      : isFree
-                      ? "bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition"
-                      : isComingSoon
-                      ? "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200 transition"
-                      : blueBtn
-                  }`}
-                  style={hx}
-                >
-                  {isCurrent
-                    ? "Current Plan"
-                    : isFree
-                    ? "Start Free"
-                    : isComingSoon
-                    ? "Contact for Early Access"
-                    : plan.popular
-                    ? "Subscribe"
-                    : "Get Started"}
-                </button>
-
-                <div className="my-5 h-px w-full bg-gradient-to-r from-transparent via-slate-200 to-transparent dark:via-white/10" />
-
-                <p className="mb-3 text-[13px] text-slate-600 dark:text-slate-300">{plan.description}</p>
-
-                <ul className="space-y-2.5">
-                  {plan.features.map((f, idx) => (
-                    <li key={idx} className="flex items-start gap-3">
-                      <span className="mt-[2px] rounded-full bg-sky-50 p-1 ring-1 ring-sky-100 dark:bg-sky-400/10 dark:ring-sky-400/30">
-                        <Check className="h-3.5 w-3.5 text-sky-600" />
-                      </span>
-                      <span className="text-[14px] text-slate-700 dark:text-slate-200">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className="pointer-events-none absolute inset-x-0 -bottom-5 h-5 rounded-b-[22px] bg-black/5 blur-xl dark:bg-white/5" />
-              </div>
-            );
-          })}
+          </motion.div>
         </div>
-
-        {/* Comparison banner */}
-        <div className="mt-14 bg-slate-900 rounded-2xl p-6 sm:p-8 text-white dark:ring-1 dark:ring-white/10">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div>
-              <h3 className="text-xl sm:text-2xl tracking-tight" style={hx}>Still making test papers manually?</h3>
-              <p className="mt-2 text-slate-300 text-sm sm:text-[15px] leading-relaxed">
-                Teachers spend 3-4 hours creating one test. With a4ai, it takes 30 seconds.
-                That's <span className="text-amber-400 font-semibold">2+ hours saved every day</span>.
-              </p>
-            </div>
-            <button
-              onClick={() => navigate("/signup")}
-              className="flex-shrink-0 bg-white text-slate-900 text-sm px-6 py-3.5 rounded-xl hover:bg-slate-100 transition-colors flex items-center gap-2 shadow-lg"
-              style={hx}
-            >
-              Try Free — No card needed
-              <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
-
-        {/* FAQ */}
-        <div className="mt-14 max-w-4xl mx-auto">
-          <h2 className="text-center text-xl md:text-2xl text-slate-900 dark:text-white" style={hx}>
-            Frequently Asked Questions
-          </h2>
-          <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
-            {[
-              { q: "Is the free plan really free?", a: "Yes, forever. 2 tests/month with NCERT content. No credit card needed." },
-              { q: "Can I change plans anytime?", a: "Yes. Upgrade instantly, downgrade applies next billing cycle." },
-              { q: "What payment methods do you accept?", a: "UPI, all major cards, net banking, and wallets via Razorpay." },
-              { q: "Do you offer discounts for schools?", a: "Yes, special pricing for government schools and non-profits. Contact us." },
-              { q: "How accurate are the questions?", a: "Generated from actual NCERT textbooks using RAG. Review & edit before sharing." },
-              { q: "Can students take tests on mobile?", a: "Yes! Full proctoring works on mobile, tablet, and laptop." },
-            ].map((f, i) => (
-              <div key={i} className="rounded-xl bg-white/90 p-4 shadow-sm ring-1 ring-slate-200 dark:bg-white/[0.06] dark:ring-white/10">
-                <div className="text-slate-900 dark:text-white" style={hx}>{f.q}</div>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{f.a}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Final CTA */}
-        <div className="mt-14 text-center">
-          <p className="text-slate-500 text-sm mb-4 dark:text-slate-400">Join 500+ teachers who save 2+ hours every day</p>
+        <div className="justify-between gap-3 flex-wrap flex px-6 py-4" style={{ background: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)" }}>
           <button
-            onClick={() => navigate("/signup")}
-            className={`inline-flex items-center gap-2 rounded-xl px-8 py-3.5 text-[15px] ${blueBtn}`}
-            style={hx}
+            className="btn-blk px-5 py-2.5 text-sm font-semibold"
+            onClick={() => {
+              const v = demoRef.current;
+              if (v) { v.scrollIntoView({ behavior: "smooth", block: "center" }); v.play(); }
+            }}
           >
-            <Sparkles size={16} />
-            Start Creating Tests for Free
-            <ArrowRight size={14} />
+            <span className="relative z-10 flex items-center gap-2"><Play className="h-4 w-4" /> Watch demo</span>
           </button>
-          <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">No credit card required · 2 free tests every month · Cancel anytime</p>
+
+          <button className={`px-5 py-2.5 text-sm flex items-center gap-2 ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+            <span className="relative z-10 flex items-center gap-2"><Download className="h-4 w-4" /> Download sample paper</span>
+          </button>
         </div>
       </div>
+
+      <div className={`p-6 ${card(isDark)}`}>
+        <div className="mb-4 text-sm font-semibold uppercase tracking-wider" style={{ color: accent(isDark) }}>Why it feels different</div>
+        <div className="grid gap-4 text-sm">
+          <Bullet isDark={isDark}>Blueprint-first generation matches your marking scheme exactly.</Bullet>
+          <Bullet isDark={isDark}>Outcome coverage heatmaps catch blind-spots before export.</Bullet>
+          <Bullet isDark={isDark}>Item analytics prune weak questions over time.</Bullet>
+          <Bullet isDark={isDark}>Privacy-first proctoring: humane alerts, no invasive captures.</Bullet>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function Bullet({ children, isDark }: { children: React.ReactNode; isDark: boolean }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="mt-[6px] h-2 w-2 flex-shrink-0 rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }} />
+      <span className="leading-relaxed" style={{ color: head(isDark) }}>{children}</span>
     </div>
   );
 }
