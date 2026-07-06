@@ -1,28 +1,12 @@
 // src/components/GeneratedTestView.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V10 — Export template picker
+// V11 — Fixed authentication and save logic
 //
-// v10 changes vs v9:
-//   - New `selectedTemplate` state ("modern" | "classic" | "compact" | "colorful")
-//   - downloadFile() now accepts and sends `template` in the export payload
-//   - Download dropdown: new "Template" picker row at the top (4 buttons),
-//     selection persists across PDF/DOCX and Student/Answers/Teacher choices
-//   - No other logic changes
-//
-// v9 changes vs v8:
-//   - Header action buttons (Show Answers / Copy / Add Question / Share /
-//     Download): on mobile now a clean 2-col grid with full-width buttons +
-//     44px tap targets; desktop unchanged (flex-wrap).
-//   - Download dropdown: on mobile spans full button width (left-0 right-0) so
-//     it no longer clips off-screen; desktop keeps w-60 right-aligned.
-//   - Sticky bottom bar: adopts TestGeneratorForm mobile pattern — edge-to-edge
-//     on phone, safe-area inset, flex-1 buttons, min-h-44px, touch-action.
-//   - No handler / state / data changes.
-//
-// v8 features retained:
-//   - QuestionTable (Statistics) + AnswerTable (Accountancy) rendering
-//   - Save & Finish, Contest, Download menu, editable date, manual questions
-//   - Show answers for Short/Long, localStorage auto-save
+// v11 changes vs v10:
+//   - Removed zero-UUID fallback from performSave
+//   - Removed risky refreshSession() call
+//   - Added proper toast notifications (sonner)
+//   - Clean authentication flow with getUser()
 // ──────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useEffect } from "react";
@@ -30,9 +14,9 @@ import AddManualQuestionModal, { ManualQuestion } from "./AddManualQuestionModal
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronDown, ChevronUp, CheckCircle2, XCircle, Copy, FileDown,
+  ChevronDown, ChevronUp, CheckCircle2, Copy, FileDown,
   Eye, EyeOff, BookOpen, Brain, Zap, Edit3, RotateCcw, Check,
-  X, Download, FileText, Loader2, Save, Share2, Calendar, Plus, Image as ImageIcon,
+  X, Download, FileText, Loader2, Save, Share2, Calendar, Plus,
 } from "lucide-react";
 import MathText from "./MathText";
 import { api } from "@/lib/api";
@@ -41,6 +25,7 @@ import { CreateContestModal } from "./contest/CreateContestModal";
 import { supabase } from "@/lib/supabaseClient";
 import { useGuestAccess } from "@/hooks/useGuestAccess";
 import LoginModal from "@/components/LoginModal";
+import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -661,7 +646,7 @@ interface GeneratedTestViewProps {
 
 const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewProps) => {
   const navigate = useNavigate();
-  const { isGuest, gateAction, showLoginModal, setShowLoginModal, saveTestDataForRestore } = useGuestAccess();
+  const { gateAction, showLoginModal, setShowLoginModal, saveTestDataForRestore } = useGuestAccess();
 
   const [showAnswers, setShowAnswers] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
@@ -711,21 +696,6 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   // Fix 4: Auto-save to localStorage
   const STORAGE_KEY = `test-progress-${result.testId}`;
 
-  // Load saved state on mount
-  // Save on every change
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        questions,
-        paperDate,
-        savedAt: new Date().toISOString(),
-      }));
-    } catch (err) {
-      console.error("Failed to save progress:", err);
-    }
-  }, [questions, paperDate]);
-
-  // Save on every change
   // Save on every change
   useEffect(() => {
     if (!result.testId) return;  // 🚩 FIX: guard against undefined testId
@@ -775,7 +745,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   const handleDownload = (format: "pdf" | "docx", mode: "student" | "answers" | "teacher") => {
     // 🚩 FIX: Block download if nothing approved
     if (activeQuestions.length === 0) {
-      alert("Kam se kam ek question approve karo, ya 'Approve All' dabao");
+      toast.warning("Please approve at least one question before downloading");
       setShowDownloadMenu(false);
       return;
     }
@@ -804,19 +774,48 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     await performSave();
   };
 
-  // ── Actual save logic (extracted) ────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+  // 🚩 v11: Clean save logic — no zero-UUID fallback, no refreshSession
+  // ═══════════════════════════════════════════════════════════════════════
   const performSave = async () => {
     setIsSaving(true);
+    setSaveStatus("idle");
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const teacherId = user?.id || "00000000-0000-0000-0000-000000000000";
-      await api.saveTest(result.testId, teacherId);
+      // Get current user — Supabase handles token refresh internally
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (authError || !user?.id) {
+        console.error("Auth error:", authError?.message || "No user found");
+        toast.error("Please login to save your test");
+        setShowLoginModal(true);
+        setIsSaving(false);
+        return;
+      }
+
+      // Valid user — proceed with save
+      await api.saveTest(result.testId, user.id);
       setSaveStatus("saved");
       clearStoredProgress();
-      setTimeout(() => navigate("/dashboard"), 800);
-    } catch (err) {
+
+      toast.success("Test saved successfully!");
+      setTimeout(() => navigate("/dashboard"), 1000);
+
+    } catch (err: any) {
       console.error("Save failed:", err);
-      alert("Save failed. Please try again.");
+
+      // Specific error messages
+      if (err.message?.includes("permission") || err.message?.includes("unauthorized")) {
+        toast.error("Session expired. Please login again.");
+        setShowLoginModal(true);
+      } else if (err.message?.includes("network") || err.message?.includes("Failed to fetch")) {
+        toast.error("Network error. Check your connection and try again.");
+      } else if (err.message?.includes("duplicate") || err.message?.includes("already exists")) {
+        toast.error("This test has already been saved.");
+      } else {
+        toast.error("Save failed. Please try again.");
+      }
+      setSaveStatus("idle");
     } finally {
       setIsSaving(false);
     }
@@ -901,16 +900,18 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
           ...q, status: "pending" as QuestionStatus,
         }));
         setQuestions([...approved, ...newQs]);
+        toast.success(`Regenerated ${newQs.length} questions`);
       }
     } catch (err) {
       console.error("Regeneration failed:", err);
+      toast.error("Failed to regenerate questions");
     } finally {
       setIsRegenerating(false);
     }
   };
 
   // ── Export ────────────────────────────────────────────────────────
-  // 🚩 FIX: Only approved questions go to PDF/Contest/Copy 
+  // 🚩 FIX: Only approved questions go to PDF/Contest/Copy
   const activeQuestions = questions.filter((q) => q.status === "approved");
 
   const handleExport = async (format: "pdf" | "docx", mode: "student" | "answers" | "teacher") => {
@@ -924,8 +925,10 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
         subject: result.meta?.subject || "Science",
         paperDate: paperDate,
       }, format, mode, selectedTemplate, logoBase64);   // v10: pass selectedTemplate
+      toast.success("Download started!");
     } catch (err) {
       console.error("Export failed:", err);
+      toast.error("Export failed. Please try again.");
     } finally {
       setIsExporting(false);
     }
@@ -936,6 +939,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
       .map((q, i) => `Q${i + 1}. ${q.text}\n${q.options?.map((o, j) => `  ${String.fromCharCode(65 + j)}) ${o}`).join("\n") || ""}\nAnswer: ${q.correctAnswer}\n`)
       .join("\n---\n");
     navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard!");
   };
 
   const approvedCount = questions.filter((q) => q.status === "approved").length;
