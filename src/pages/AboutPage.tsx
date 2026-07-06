@@ -23,11 +23,7 @@ import {
   Shield,
   BookOpen,
 } from "lucide-react";
-<<<<<<< Updated upstream
-import { useNavigate } from "react-router-dom";
-=======
 import { useNavigate, Link } from "react-router-dom";
->>>>>>> Stashed changes
 
 /* ──────────────────────────────────────────────────────────────
    BRAND STYLES & GLOBAL INJECTION (From Features Page)
@@ -275,8 +271,6 @@ export default function AboutPage() {
     }
   };
 
-  const navigate = useNavigate();
-
   // Ambient glow follows cursor
   const mx = useMotionValue(360);
   const my = useMotionValue(180);
@@ -379,68 +373,6 @@ export default function AboutPage() {
         {/* CONTENT OUTER CONTAINER — Spaced layout handling to prevent overlapping under nav */}
         <div className="pt-24 relative z-10">
 
-<<<<<<< Updated upstream
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
-              className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl"
-              style={{ color: muted(isDark) }}
-            >
-              Building the assessment stack for Indian classrooms—fast, fair, and aligned to how teachers actually teach.
-            </motion.p>
-
-            {/* Stats */}
-            <div className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-4 sm:grid-cols-4">
-              {[
-                { k: "Papers", v: "3.5K+" },
-                { k: "Schools", v: "25+" },
-                { k: "Uptime", v: "99.9%" },
-                { k: "Avg. Gen Time", v: "< 2 min" },
-              ].map((s, i) => (
-                <motion.div
-                  key={s.k}
-                  initial={{ opacity: 0, y: 18 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
-                  className={`p-6 text-center ${card(isDark)}`}
-                >
-                  <div className="text-2xl md:text-3xl font-extrabold tracking-tight stat-n">{s.v}</div>
-                  <div className="mt-1 text-sm font-medium" style={{ color: muted(isDark) }}>{s.k}</div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* MISSION */}
-        <section ref={sectionRef} className="relative z-10 py-20">
-          <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-            <motion.div
-              initial={{ opacity: 0, x: -40 }}
-              animate={inView ? { opacity: 1, x: 0 } : {}}
-              transition={{ duration: 0.6 }}
-              className="[&_h2]:tracking-tight"
-            >
-              <h2 className="text-3xl md:text-4xl font-extrabold" style={{ color: head(isDark) }}>Our mission</h2>
-              <p className="mt-6 text-lg leading-relaxed" style={{ color: muted(isDark) }}>
-                Give teachers superpowers with AI that respects context and curriculum. Save hours weekly and return that time to students.
-              </p>
-              <p className="mt-4 text-lg leading-relaxed" style={{ color: muted(isDark) }}>
-                We combine multi‑LLM generation with rubric checks, plagiarism guards,
-                and contest‑grade proctoring to ensure quality from day one.
-              </p>
-
-              {/* Buttons */}
-              <div className="mt-8 flex flex-wrap gap-4">
-                <button onClick={() => navigate("/features")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
-                  <span className="relative z-10 flex items-center justify-center gap-2">See how it works</span>
-                </button>
-                <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
-                  <span className="relative z-10 flex items-center justify-center gap-2">Talk to us</span>
-                </button>
-=======
           {/* HERO */}
           <section className="relative z-10 py-16 md:py-20">
             <div className={sectionX}>
@@ -448,7 +380,6 @@ export default function AboutPage() {
                 <span {...pillProps(isDark)}><Sparkles className="h-3.5 w-3.5"/> Founded 2025</span>
                 <span {...pillProps(isDark)}><Rocket className="h-3.5 w-3.5"/> Contest engine live</span>
                 <span {...pillProps(isDark)}><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</span>
->>>>>>> Stashed changes
               </div>
 
               <motion.h1
@@ -627,27 +558,8 @@ export default function AboutPage() {
                   className="mx-auto max-w-3xl text-lg"
                   style={{ color: muted(isDark) }}
                 >
-                 A small team building a4ai — step by step, every day.
+                  A small team building a4ai — step by step, every day.
                 </motion.p>
-<<<<<<< Updated upstream
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.25, duration: 0.5 }}
-                  className="mt-8 flex flex-col sm:flex-row justify-center gap-4"
-                >
-                  <button onClick={() => navigate("/")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
-                    <span className="relative z-10 flex items-center justify-center gap-2">
-                      Get started for free
-                    </span>
-                  </button>
-                  <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg flex items-center justify-center gap-2 ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
-                    <span className="relative z-10 flex items-center gap-2">Book a demo <ArrowRight className="h-5 w-5" /></span>
-                  </button>
-                </motion.div>
-=======
->>>>>>> Stashed changes
               </div>
 
               <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
@@ -657,7 +569,7 @@ export default function AboutPage() {
               </div>
 
               <p className="mt-12 text-center text-sm font-medium" style={{ color: muted(isDark) }}>
-              …and many more people who quietly help shape a4ai every moment.
+                …and many more people who quietly help shape a4ai every moment.
               </p>
             </div>
           </section>
@@ -805,7 +717,7 @@ function TeamCard({
             className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
             style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, ${isDark ? "rgba(96,165,250,0.12)" : "rgba(59,130,246,0.08)"}, transparent 80%)` }}
           />
-          <div className="relative za-10 text-center">
+          <div className="relative z-10 text-center">
             <Avatar className="mx-auto mb-4 h-28 w-28 ring-2" style={{ borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }}>
               <AvatarImage src={member.image} alt={member.name} className="object-cover" />
               <AvatarFallback className="text-xl font-bold" style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)", color: head(isDark) }}>
