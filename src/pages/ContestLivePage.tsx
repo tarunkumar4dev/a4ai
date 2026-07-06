@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { motion, AnimatePresence, useMotionTemplate, useMotionValue } from "framer-motion";
 import {
   CheckCircle2,
-  Lock,
+  Lock, 
   Video,
   AlertTriangle,
   Eye,
@@ -42,16 +42,33 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// hook comes from your codebase
-import { useContestQuestions } from "@/hooks/useContestQuestions";
-
 /**
- * ContestLivePage — Optimized + resilient submission UX
- * - Instant optimistic submit with background retry & idempotency
- * - beforeunload guard only while not fully done
- * - Lighter DB write (single JSON upsert)
- * - Minor render perf tweaks
+ * ContestLivePage — BACKEND-WIRED
+ *
+ * WHY THIS VERSION EXISTS:
+ * The previous file only fixed Supabase column names but still wrote directly
+ * to `contest_attempts` with NO score. That meant contest_service._calculate_score
+ * never ran → score stayed NULL → leaderboard empty. This version routes through
+ * the backend so the server computes the score.
+ *
+ * CHANGES vs previous:
+ * 1. Questions no longer come from useContestQuestions (which leaked correct
+ *    answers and used the wrong table). They now come from POST /contests/{code}/start,
+ *    which returns questions WITHOUT correct answers + an attempt_id.
+ * 2. submitAttempt() now calls POST /contests/{contest_id}/submit with X-Attempt-Id.
+ *    Backend calculates score/total_marks/percentage and fills the leaderboard.
+ * 3. Real time_taken_seconds is tracked from start.
+ * 4. Gate check still reads contest status (no answers, so no leak) to show
+ *    the locked screen before the student starts.
+ *
+ * ⚠️ ADJUST IF NEEDED:
+ * - API_BASE assumes VITE_API_URL is the server root (e.g. https://api.a4ai.in).
+ *   If your VITE_API_URL already includes /api/v1, remove it from API_BASE below.
+ * - QuestionPanel must accept the question shape produced by mapApiQuestion().
+ *   If questions don't render, send me QuestionPanel.tsx and I'll match the shape.
  */
+
+const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api/v1`;
 
 type PermissionCardProps = {
   icon: ReactNode;
@@ -61,26 +78,59 @@ type PermissionCardProps = {
   children: ReactNode;
 };
 
-type SubmitState = "idle" | "optimistic" | "sync" | "retry" | "done";
+type SubmitState = "idle" | "sync" | "retry" | "done";
+
+// Normalize a backend ContestQuestionOut into the shape QuestionPanel expects.
+// Keeps both snake_case and camelCase so it works whichever your panel reads.
+function mapApiQuestion(q: any) {
+  return {
+    ...q,
+    id: String(q.id),
+    questionNumber: q.question_number,
+    questionText: q.question_text,
+    type: q.question_type,
+    question_type: q.question_type,
+    options: q.options || [],
+    marks: q.marks,
+    difficulty: q.difficulty,
+    chapter: q.chapter,
+  };
+}
 
 export default function ContestLivePage() {
   const { contestId } = useParams();
-  const contestCode = contestId;
+  const contestCode = contestId; // this is the short_code from URL
   const navigate = useNavigate();
 
-  const { questions, loading, meta } = useContestQuestions(contestCode);
+  // Questions now come from the backend /start call (not a hook)
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [cameraGranted, setCameraGranted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [idx, setIdx] = useState(0);
-  const [submitting, setSubmitting] = useState(false); // kept for compatibility in other child components
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
   const [submitMsg, setSubmitMsg] = useState("");
   const [isTabActive, setIsTabActive] = useState(true);
   const [permissionsOpen, setPermissionsOpen] = useState(true);
+  const [starting, setStarting] = useState(false);
   const [violations, setViolations] = useState(0);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
+
+  // Attempt state from backend /start
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [contestDbId, setContestDbId] = useState<string | null>(null);
+  const startedAtRef = useRef<number | null>(null);
+
+  // Cached contest metadata from gate check (for the locked screen + duration)
+  const [contestMeta, setContestMeta] = useState<{
+    dbId: string;
+    title: string;
+    durationMinutes: number;
+    answerMode: string;
+    maxWarnings: number;
+  } | null>(null);
 
   // compute
   const answeredCount = useMemo(
@@ -161,26 +211,33 @@ export default function ContestLivePage() {
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  // Prevent accidental close while not fully submitted
+  // Prevent accidental close while a live attempt isn't submitted
   useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (cameraGranted && submitState !== "done") {
+      if (attemptId && submitState !== "done") {
         e.preventDefault();
         e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", beforeUnload);
     return () => window.removeEventListener("beforeunload", beforeUnload);
-  }, [cameraGranted, submitState]);
+  }, [attemptId, submitState]);
 
-  // Gate check (is_live + time window)
+  // Helper: current Supabase access token (for backend auth), if logged in
+  const getAccessToken = async (): Promise<string | null> => {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  };
+
+  // Gate check — reads contest status only (NO answers → no leak)
   useEffect(() => {
     const gate = async () => {
       if (!contestCode) return;
+
       const { data, error } = await supabase
         .from("contests")
-        .select("title,is_live,start_at,end_at")
-        .eq("code", contestCode)
+        .select("id, title, status, scheduled_at, expires_at, duration_minutes, answer_mode, max_warnings")
+        .eq("short_code", contestCode)
         .maybeSingle();
 
       if (error) {
@@ -193,16 +250,28 @@ export default function ContestLivePage() {
         return;
       }
 
-      const now = new Date();
-      const start = data.start_at ? new Date(data.start_at) : undefined;
-      const end = data.end_at ? new Date(data.end_at) : undefined;
-      const within = (!start || now >= start) && (!end || now <= end);
+      setContestMeta({
+        dbId: data.id,
+        title: data.title,
+        durationMinutes: data.duration_minutes || 30,
+        answerMode: data.answer_mode || "after_test",
+        maxWarnings: data.max_warnings || 3,
+      });
 
-      if (!data.is_live || !within) {
+      const now = new Date();
+      const scheduled = data.scheduled_at ? new Date(data.scheduled_at) : undefined;
+      const expires = data.expires_at ? new Date(data.expires_at) : undefined;
+
+      const isActive = data.status === "active";
+      const withinWindow = (!scheduled || now >= scheduled) && (!expires || now <= expires);
+
+      if (!isActive || !withinWindow) {
         setContestGate({
           allowed: false,
           title: data.title || "Contest Locked",
-          reason: !data.is_live ? "Contest is not live." : "Outside contest window.",
+          reason: !isActive
+            ? "Contest is not currently active."
+            : "Contest is outside the scheduled window.",
         });
       } else {
         setContestGate({ allowed: true, title: data.title || "Contest" });
@@ -236,89 +305,139 @@ export default function ContestLivePage() {
   const selectAnswer = (qId: string, value: string) =>
     setAnswers((prev) => ({ ...prev, [qId]: value }));
 
-  // ----------------- Optimistic Submit -----------------
-  const submitAttempt = async () => {
-    if (submitState === "optimistic" || submitState === "sync") return;
-
-    setSubmitState("optimistic");
-    setSubmitting(true); // legacy flag (if any UI depends on it)
-    setSubmitMsg("✅ Submission received. Processing in background…");
-
+  // ----------------- START ATTEMPT (backend) -----------------
+  // Called when the student clicks "Start Contest". Creates the attempt on the
+  // server and pulls questions WITHOUT correct answers.
+  const startContest = async () => {
+    if (!contestCode) return;
+    setStarting(true);
+    setLoading(true);
     try {
       const {
         data: { user },
-        error: userErr,
       } = await supabase.auth.getUser();
-      if (userErr) throw userErr;
+      // NOTE: contests here require login (proctored). If you want anonymous
+      // link-based attempts, drop this block and collect name/email via a form.
       if (!user) {
         toast.info("Please login first.");
         navigate("/dashboard");
         return;
       }
 
-      const idKey = crypto.randomUUID();
-      const payloadAnswers = {
-        ...answers,
-        _meta: { email: user.email, violations, idKey, submittedAt: new Date().toISOString() },
-      } as any;
+      const token = await getAccessToken();
 
-      // Local backup to survive refresh/offline
-      const lsKey = `submission:${contestCode}:${user.id}`;
-      localStorage.setItem(
-        lsKey,
-        JSON.stringify({ userId: user.id, contestCode, answers: payloadAnswers })
-      );
+      const res = await fetch(`${API_BASE}/contests/${contestCode}/start`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          student_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Student",
+          student_email: user.email,
+        }),
+      });
 
-      const writeOnce = async () => {
-        const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Could not start the contest.");
+      }
 
-        const upsert = supabase
-          .from("contest_attempts")
-          .upsert(
-            {
-              user_id: user.id,
-              contest_code: contestCode!,
-              answers: payloadAnswers,
-              score: null,
-              submitted_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id,contest_code" }
-          );
+      const data = await res.json(); // ContestDataResponse
 
-        await Promise.race([upsert, timeout]);
-      };
+      setAttemptId(String(data.attempt_id));
+      setContestDbId(String(data.contest_id));
+      setQuestions((data.questions || []).map(mapApiQuestion));
+      startedAtRef.current = Date.now();
+      setPermissionsOpen(false);
+    } catch (e: any) {
+      console.error("start error:", e);
+      toast.error(e?.message || "Could not start the contest.");
+    } finally {
+      setStarting(false);
+      setLoading(false);
+    }
+  };
 
-      const run = async (delayMs = 0) => {
-        if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
-        try {
-          setSubmitState((s) => (s === "optimistic" ? "sync" : s));
-          await writeOnce();
+  // ----------------- SUBMIT ATTEMPT (backend — server scores) -----------------
+  const submitAttempt = async () => {
+    if (submitState === "sync" || submitState === "done") return;
+    if (!attemptId || !contestDbId) {
+      toast.error("Attempt not initialized. Please refresh and start again.");
+      return;
+    }
 
-          // success
-          localStorage.removeItem(lsKey);
-          stopStreams();
-          setSubmitState("done");
-          setSubmitMsg("✅ Submitted. You can close the window.");
-          toast.success("Submitted! You’ll receive results by email.");
-          navigate("/dashboard");
-        } catch (err) {
-          // keep optimistic UI; schedule retry
-          console.warn("Submit retry due to:", err);
-          setSubmitState("retry");
-          setSubmitMsg("✅ Received. Syncing to server… retrying in background.");
-          const nextDelay = 10000; // 10s, can backoff if you like
-          run(nextDelay);
-        }
-      };
+    setSubmitState("sync");
+    setSubmitMsg("Submitting your answers…");
 
-      // fire-and-forget; avoid blocking the UI
-      run();
-    } catch (e) {
-      console.error(e);
-      setSubmitState("idle");
-      setSubmitting(false);
-      setSubmitMsg("");
-      toast.error("Submission failed. Please try again.");
+    const formattedAnswers = Object.entries(answers).map(([questionId, selected]) => ({
+      questionId,
+      selected,
+    }));
+
+    const warningLog = violations > 0 ? [`Tab switches detected: ${violations}`] : [];
+    const timeTaken = startedAtRef.current
+      ? Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000))
+      : 0;
+
+    const doSubmit = async (): Promise<boolean> => {
+      const token = await getAccessToken();
+      const res = await fetch(`${API_BASE}/contests/${contestDbId}/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Attempt-Id": attemptId,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          answers: formattedAnswers,
+          warning_count: violations,
+          warning_log: warningLog,
+          time_taken_seconds: timeTaken,
+        }),
+      });
+
+      if (res.ok) {
+        const result = await res.json(); // { score, total_marks, percentage, ... }
+        stopStreams();
+        setSubmitState("done");
+        setSubmitMsg("✅ Submitted. You can close the window.");
+        toast.success(`Submitted! Score: ${result.score}/${result.total_marks}`);
+        setTimeout(() => {
+          navigate(`/contest/${contestCode}/results`, { state: { result } });
+        }, 1200);
+        return true;
+      }
+
+      // If the attempt was already submitted on a prior try, treat as success.
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 400 && String(err.detail || "").toLowerCase().includes("already submitted")) {
+        stopStreams();
+        setSubmitState("done");
+        setSubmitMsg("✅ Already submitted.");
+        setTimeout(() => navigate(`/contest/${contestCode}/results`), 1200);
+        return true;
+      }
+
+      throw new Error(err.detail || `Submit failed (${res.status})`);
+    };
+
+    try {
+      await doSubmit();
+    } catch (e1) {
+      // one background retry (attempt is still in_progress on the server, so safe)
+      console.warn("Submit retry due to:", e1);
+      setSubmitState("retry");
+      setSubmitMsg("Syncing to server… retrying.");
+      try {
+        await new Promise((r) => setTimeout(r, 4000));
+        await doSubmit();
+      } catch (e2) {
+        console.error("Submit failed after retry:", e2);
+        setSubmitState("idle");
+        setSubmitMsg("");
+        toast.error("Submission failed. Please check your connection and try again.");
+      }
     }
   };
 
@@ -331,7 +450,7 @@ export default function ContestLivePage() {
   const goNext = () => setIdx((i) => Math.min(questions.length - 1, i + 1));
   const goTo = (i: number) => setIdx(Math.min(Math.max(i, 0), questions.length - 1));
 
-  // keyboard shortcuts (←/→, Ctrl/Cmd+S or Enter to submit)
+  // keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (permissionsOpen) return;
@@ -394,7 +513,7 @@ export default function ContestLivePage() {
             </div>
             <div className="flex items-center gap-2 text-sm">
               <TimerIcon className="h-4 w-4" />
-              <Timer initialMinutes={meta?.durationMinutes ?? 30} onTimeUp={handleTimeUp} />
+              <Timer initialMinutes={contestMeta?.durationMinutes ?? 30} onTimeUp={handleTimeUp} />
               <Button variant="outline" size="sm" className="ml-2" onClick={requestFullscreen}>
                 <Maximize2 className="h-4 w-4 mr-1" /> {isFullscreen ? "Fullscreen on" : "Go fullscreen"}
               </Button>
@@ -425,7 +544,6 @@ export default function ContestLivePage() {
               </CardHeader>
 
               <CardContent className="p-6 space-y-6">
-                {/* progress */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Setup Progress</span>
@@ -461,8 +579,12 @@ export default function ContestLivePage() {
               </CardContent>
               <CardFooter className="bg-slate-50 dark:bg-slate-900/30 px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <Button variant="outline" onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
-                <Button onClick={() => setPermissionsOpen(false)} disabled={!cameraGranted} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-                  Start Contest
+                <Button
+                  onClick={startContest}
+                  disabled={!cameraGranted || starting}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+                >
+                  {starting ? "Starting…" : "Start Contest"}
                 </Button>
               </CardFooter>
             </Card>
@@ -482,7 +604,6 @@ export default function ContestLivePage() {
 
               <CardContent className="p-6">
                 <div className="grid lg:grid-cols-[1fr_1.4fr] gap-8 py-2">
-                  {/* Left Column: camera + quick stats + navigator */}
                   <div className="space-y-4">
                     <div className={`rounded-xl overflow-hidden border ${isTabActive ? "border-emerald-200 dark:border-emerald-800/60" : "border-amber-300 dark:border-amber-700/60"}`}>
                       <video ref={videoRef} className="w-full aspect-video bg-black" playsInline />
@@ -495,7 +616,6 @@ export default function ContestLivePage() {
                       <StatTile label="Connectivity" value={isOnline ? "Online" : "Offline"} subtle />
                     </div>
 
-                    {/* Question Navigator */}
                     <Navigator
                       total={questions.length}
                       currentIndex={idx}
@@ -504,7 +624,6 @@ export default function ContestLivePage() {
                     />
                   </div>
 
-                  {/* Right Column: questions */}
                   <div>
                     {loading ? (
                       <div className="text-sm text-muted-foreground">Loading questions…</div>
@@ -519,7 +638,6 @@ export default function ContestLivePage() {
                       />
                     )}
 
-                    {/* Action Bar */}
                     <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                       <div className="flex-1 hidden sm:block">
                         <Progress value={questions.length ? (answeredCount / questions.length) * 100 : 0} className="h-2" />
@@ -535,8 +653,8 @@ export default function ContestLivePage() {
                               className="bg-slate-900 hover:bg-slate-800 text-white"
                               disabled={!allAnswered || submitState === "done"}
                             >
-                              {submitState === "optimistic" || submitState === "sync" || submitState === "retry"
-                                ? "Submitting in background…"
+                              {submitState === "sync" || submitState === "retry"
+                                ? "Submitting…"
                                 : allAnswered
                                   ? "Submit Answers"
                                   : "Answer all to submit"}
@@ -602,7 +720,6 @@ function PermissionCard({ icon, title, description, granted, children }: Permiss
   );
 }
 
-/* ---------- Helper UI ---------- */
 function FeatureCallout({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return (
     <div className="rounded-xl border bg-white/60 dark:bg-gray-900/40 backdrop-blur p-4 flex items-start gap-3">
