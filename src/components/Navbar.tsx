@@ -1,4 +1,4 @@
-// Navbar.tsx — Clean White Frosted Glass Floating Dock (Transparent Style)
+// Navbar.tsx — Clean White Frosted Glass Floating Dock with Reinforced Mobile Tap Interactivity
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import LanguagePicker from "@/components/LanguagePicker";
@@ -115,6 +115,15 @@ export default function Navbar() {
   const activeColor = "#047857";
   const textColor = "#202124";
 
+  const dockGlass: React.CSSProperties = {
+    background: "rgba(255, 255, 255, 0.45) !important",
+    backgroundColor: "rgba(255, 255, 255, 0.45)",
+    border: "1px solid rgba(255, 255, 255, 0.45)",
+    backdropFilter: "blur(24px) saturate(180%)",
+    WebkitBackdropFilter: "blur(24px) saturate(180%)",
+    boxShadow: "0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 32px rgba(0, 0, 0, 0.03)",
+  };
+
   return (
     <>
       <style>{`
@@ -123,7 +132,6 @@ export default function Navbar() {
           100% { background-position: -200% center; }
         }
         
-        /* Anti-Inversion Engine Override for Dock and Dark Buttons */
         .force-light-dock {
           background-color: rgba(255, 255, 255, 0.45) !important;
           background: rgba(255, 255, 255, 0.45) !important;
@@ -149,6 +157,15 @@ export default function Navbar() {
         .immutable-dark-btn * {
           color: #ffffff !important;
           stroke: #ffffff !important;
+        }
+
+        /* Reinforced Interactivity Token for Mobile Touch Handlers */
+        .mobile-toggle-trigger {
+          position: relative !important;
+          z-index: 9999 !important;
+          pointer-events: auto !important;
+          touch-action: manipulation !important;
+          -webkit-tap-highlight-color: transparent !important;
         }
       `}</style>
 
@@ -304,13 +321,99 @@ export default function Navbar() {
                 )}
               </div>
 
-              <button className="ml-0.5 md:hidden h-8 w-8 flex items-center justify-center rounded-full" style={{ color: mutedColor }} onClick={() => setMobileMenuOpen(m => !m)}>
-                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {/* Enhanced Interactive Mobile Toggle Button */}
+              <button 
+                className="ml-1 md:hidden h-10 w-10 flex items-center justify-center rounded-full mobile-toggle-trigger" 
+                style={{ color: mutedColor }} 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMobileMenuOpen(m => !m);
+                }}
+                aria-label="Toggle Navigation Menu"
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" style={{ color: textColor }} /> : <Menu className="h-5 w-5" style={{ color: textColor }} />}
               </button>
             </motion.div>
           </motion.div>
         </div>
       </nav>
+
+      {/* ── Mobile menu drawer layer panels ── */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="fixed left-3 right-3 top-16 z-40 overflow-hidden rounded-2xl p-3 shadow-xl md:hidden force-light-dock"
+            style={{ marginTop: "12px" }}
+          >
+            <div className="space-y-1 py-1">
+              {navItems.map((item) => {
+                const active = activeName === item.name;
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block rounded-xl px-3 py-2.5 text-base font-medium transition-colors"
+                    style={{
+                      color: active ? activeColor : mutedColor,
+                      background: active ? "rgba(16,185,129,0.06)" : "transparent",
+                    }}
+                  >
+                    {item.name}
+                  </Link>
+                );
+              })}
+              <div className="pt-2 space-y-2">
+                <LanguagePicker />
+                {!loggedIn ? (
+                  <>
+                    <button
+                      className="w-full h-10 rounded-xl text-sm font-medium border border-neutral-200 text-neutral-800 bg-white shadow-sm"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        gotoSignIn();
+                      }}
+                    >
+                      Sign in
+                    </button>
+                    <button
+                      className="w-full h-10 rounded-xl text-sm font-semibold text-white immutable-dark-btn"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        gotoSignUp();
+                      }}
+                    >
+                      Get Started
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="w-full h-10 rounded-xl text-sm font-medium bg-white border border-neutral-200 text-neutral-800 shadow-sm"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        gotoDashboard();
+                      }}
+                    >
+                      Dashboard
+                    </button>
+                    <button
+                      className="w-full h-10 rounded-xl text-sm text-neutral-500 hover:bg-black/5"
+                      onClick={handleSignOut}
+                    >
+                      Sign out
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
