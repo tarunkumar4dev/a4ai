@@ -1,8 +1,7 @@
 // src/pages/resources/CaseStudiesPage.tsx
 import React from "react";
-import { motion, useMotionValue, useMotionTemplate } from "framer-motion";
+import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { useTheme } from "@/context/ThemeContext";
 import ResourcesLayout from "./ResourcesLayout";
 
 const cases = [
@@ -10,14 +9,9 @@ const cases = [
   { org: "STEM Hub Coaching", result: "3× faster iterating question banks", blurb: "Leveraged our outcome coverage layers to keep lesson objectives aligned and balanced." },
 ];
 
-function CaseCard({ c, isDark }: { c: typeof cases[0]; isDark: boolean }) {
+function CaseCard({ c }: { c: typeof cases[0] }) {
   const mx = useMotionValue(160);
   const my = useMotionValue(120);
-
-  const headColor = isDark ? "#f1f5f9" : "#111111";
-  const mutedColor = isDark ? "#8a9bb0" : "#5f6368";
-  const accentColor = isDark ? "#60a5fa" : "#3b82f6";
-  const cardStyles = `ag-card ${isDark ? "ag-card-dark" : "ag-card-light"}`;
 
   return (
     <div
@@ -29,19 +23,20 @@ function CaseCard({ c, isDark }: { c: typeof cases[0]; isDark: boolean }) {
       }}
       onMouseLeave={() => { mx.set(160); my.set(120); }}
     >
-      <div className={`${cardStyles} h-full flex flex-col p-6 transition-all duration-300`}>
+      {/* Structural ag-card configurations read entirely from the core light engine rules */}
+      <div className="ag-card h-full flex flex-col p-6 transition-all duration-300 bg-white">
         <motion.span
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, ${isDark ? "rgba(96,165,250,0.12)" : "rgba(59,130,246,0.08)"}, transparent 80%)` }}
+          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
         />
 
-        <div className="relative z-10 flex flex-col h-full">
-          <h3 className="text-lg font-bold mb-1" style={{ color: headColor }}>{c.org}</h3>
-          <p className="text-sm font-bold mb-3 text-emerald-600 dark:text-emerald-400">{c.result}</p>
-          <p className="text-sm leading-relaxed mb-6 flex-grow" style={{ color: mutedColor }}>{c.blurb}</p>
+        <div className="relative z-10 flex flex-col h-full bg-transparent">
+          <h3 className="text-lg font-bold mb-1 text-neutral-900">{c.org}</h3>
+          <p className="text-sm font-bold mb-3 text-emerald-600">{c.result}</p>
+          <p className="text-sm leading-relaxed mb-6 flex-grow text-neutral-500">{c.blurb}</p>
           
-          <button className="flex items-center gap-1.5 text-sm font-semibold hover:opacity-80 transition-opacity mt-auto w-fit" style={{ color: accentColor }}>
+          <button className="flex items-center gap-1.5 text-sm font-semibold transition-colors mt-auto w-fit text-blue-600 hover:text-blue-700 bg-transparent">
             View case study <ArrowRight className="h-4 w-4" />
           </button>
         </div>
@@ -51,12 +46,11 @@ function CaseCard({ c, isDark }: { c: typeof cases[0]; isDark: boolean }) {
 }
 
 export default function CaseStudiesPage() {
-  const { theme } = useTheme();
   return (
     <ResourcesLayout title="Case Studies" subtitle="Real, data-backed assessment improvements inside live classrooms.">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white">
         {cases.map((c) => (
-          <CaseCard key={c.org} c={c} isDark={theme === "dark"} />
+          <CaseCard key={c.org} c={c} />
         ))}
       </div>
     </ResourcesLayout>

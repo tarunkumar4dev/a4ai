@@ -1,8 +1,7 @@
 // src/pages/resources/ResourcesLayout.tsx
-import React, { useEffect, useState, type ReactNode } from "react";
+import React, { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, useMotionTemplate, useMotionValue, useReducedMotion } from "framer-motion";
-import { useTheme } from "@/context/ThemeContext";
 
 const BRAND_GRADIENT =
   "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
@@ -16,13 +15,16 @@ export default function ResourcesLayout({
   subtitle?: string;
   children: ReactNode;
 }) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
   const { pathname } = useLocation();
   const prefersReducedMotion = useReducedMotion();
 
-  // CSS Injection to ensure the running gradient keyframes work universally
+  // CSS Injection to completely force clean light mode execution layers universally
   useEffect(() => {
+    document.documentElement.style.background = "#ffffff !important";
+    document.documentElement.style.backgroundColor = "#ffffff !important";
+    document.documentElement.style.colorScheme = "light only !important";
+    document.documentElement.classList.remove("dark");
+
     const s = document.createElement("style");
     s.textContent = `
       @keyframes fast-gradient {
@@ -37,6 +39,30 @@ export default function ResourcesLayout({
         background-clip: text;
         animation: fast-gradient 4s linear infinite;
         display: inline-block;
+        forced-color-adjust: none !important;
+      }
+      
+      /* Immutable Global Light Background Enforcements */
+      .layout-forced-light-bg, .layout-forced-light-bg * {
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
+      }
+
+      /* Clean White Frosted Nav Dock Bar Element */
+      .force-light-layout-dock {
+        background-color: rgba(255, 255, 255, 0.45) !important;
+        background: rgba(255, 255, 255, 0.45) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.5) !important;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 32px rgba(0, 0, 0, 0.03) !important;
+      }
+
+      /* Active Link Navigation Pill State */
+      .active-pill-forced {
+        background: rgba(59, 130, 246, 0.1) !important;
+        border-color: rgba(59, 130, 246, 0.25) !important;
+        color: #1d4ed8 !important;
       }
     `;
     document.head.appendChild(s);
@@ -54,8 +80,8 @@ export default function ResourcesLayout({
   };
 
   const bgGlow = useMotionTemplate`
-    radial-gradient(1000px 520px at ${mx}px ${my}px, ${isDark ? "rgba(59,130,246,0.06)" : "rgba(59,130,246,0.04)"}, transparent 70%),
-    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), ${isDark ? "rgba(96,165,250,0.06)" : "rgba(96,165,250,0.04)"}, transparent 70%)
+    radial-gradient(1000px 520px at ${mx}px ${my}px, rgba(59,130,246,0.04), transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), rgba(96,165,250,0.04), transparent 70%)
   `;
 
   const nav = [
@@ -69,26 +95,25 @@ export default function ResourcesLayout({
   const isActive = (to: string) =>
     pathname === to || (to !== "/resources" && pathname.startsWith(to));
 
-  const headColor = isDark ? "#f1f5f9" : "#111111";
-  const mutedColor = isDark ? "#8a9bb0" : "#5f6368";
+  const headColor = "#111111";
+  const mutedColor = "#5f6368";
 
   return (
     <div 
       onMouseMove={onMove} 
-      className="lp min-h-screen relative overflow-hidden transition-colors duration-300 pb-20"
-      style={{ background: isDark ? "#07090f" : "#ffffff" }}
+      className="layout-forced-light-bg min-h-screen relative overflow-hidden pb-20 bg-white"
     >
       {/* Background Glow Elements */}
       <div className="hidden sm:block pointer-events-none">
-        <div className="absolute" style={{ width: 600, height: 600, right: -150, top: -100, background: isDark ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)", filter: "blur(50px)", borderRadius: "50%" }} />
-        <div className="absolute" style={{ width: 500, height: 500, left: -100, bottom: "10%", background: isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)", filter: "blur(50px)", borderRadius: "50%" }} />
+        <div className="absolute" style={{ width: 600, height: 600, right: -150, top: -100, background: "rgba(59,130,246,0.03)", filter: "blur(50px)", borderRadius: "50%" }} />
+        <div className="absolute" style={{ width: 500, height: 500, left: -100, bottom: "10%", background: "rgba(129,140,248,0.03)", filter: "blur(50px)", borderRadius: "50%" }} />
       </div>
 
       <div
         className="absolute inset-0 -z-20 pointer-events-none"
         style={{
-          opacity: isDark ? 0.02 : 0.035,
-          backgroundImage: `linear-gradient(to right, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px), linear-gradient(to bottom, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px)`,
+          opacity: 0.015,
+          backgroundImage: `linear-gradient(to right, #000000 1px, transparent 1px), linear-gradient(to bottom, #000000 1px, transparent 1px)`,
           backgroundSize: "48px 48px",
         }}
       />
@@ -101,17 +126,10 @@ export default function ResourcesLayout({
         />
       )}
 
-      {/* DETACHED FLOATING TOP BAR */}
+      {/* DETACHED FLOATING TOP BAR DOCK */}
       <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
         <nav 
-          className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl transition-colors duration-300 relative overflow-hidden ${
-            isDark ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"
-          }`}
-          style={{ 
-            boxShadow: isDark 
-              ? "0 4px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)" 
-              : "0 8px 32px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.4)"
-          }}
+          className="mx-auto max-w-7xl rounded-2xl border transition-all duration-300 relative overflow-hidden force-light-layout-dock"
         >
           <div className="flex items-center justify-between px-4 py-3 sm:px-6">
             <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight active:opacity-90">
@@ -129,14 +147,14 @@ export default function ResourcesLayout({
         </nav>
       </div>
 
-      {/* Header Container */}
-      <header className="relative z-10 border-b pt-24" style={{ borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}>
-        <div className="max-w-6xl mx-auto px-6 py-10">
+      {/* Header Container Banner */}
+      <header className="relative z-10 border-b pt-24 border-neutral-100 bg-white">
+        <div className="max-w-6xl mx-auto px-6 py-10 bg-transparent">
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
             <span className="running-gradient-text">{title}</span>
           </h1>
           {subtitle && (
-            <p className="text-base mt-2 max-w-3xl leading-relaxed" style={{ color: mutedColor }}>
+            <p className="text-base mt-2 max-w-3xl leading-relaxed text-neutral-500">
               {subtitle}
             </p>
           )}
@@ -149,12 +167,9 @@ export default function ResourcesLayout({
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 border"
-                  style={{
-                    background: active ? (isDark ? "rgba(59,130,246,0.15)" : "rgba(59,130,246,0.1)") : "transparent",
-                    borderColor: active ? "rgba(59,130,246,0.3)" : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"),
-                    color: active ? (isDark ? "#60a5fa" : "#1d4ed8") : mutedColor,
-                  }}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 border ${
+                    active ? "active-pill-forced" : "border-neutral-200/70 bg-transparent text-neutral-500"
+                  }`}
                 >
                   {item.label}
                 </Link>
@@ -164,7 +179,7 @@ export default function ResourcesLayout({
         </div>
       </header>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-6 py-10">{children}</main>
+      <main className="relative z-10 max-w-6xl mx-auto px-6 py-10 bg-white">{children}</main>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+// src/pages/AboutPage.tsx
 import React, { useRef, useEffect, useState } from "react";
 import {
   motion,
@@ -5,11 +6,9 @@ import {
   useMotionValue,
   useTransform,
   useMotionTemplate,
-  useReducedMotion,
 } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Helmet } from "react-helmet";
-import { useTheme } from "@/context/ThemeContext";
 import {
   Sparkles,
   Target,
@@ -26,7 +25,7 @@ import {
 import { useNavigate, Link } from "react-router-dom";
 
 /* ──────────────────────────────────────────────────────────────
-   BRAND STYLES & GLOBAL INJECTION (From Features Page)
+   BRAND STYLES & GLOBAL INJECTION (Forced Light Only)
    ────────────────────────────────────────────────────────────── */
 const BRAND_GRADIENT =
   "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
@@ -34,30 +33,32 @@ const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradie
 
 const GlobalStyles = () => {
   useEffect(() => {
+    // Explicitly lock down the global window document context to clean light space
+    document.documentElement.style.background = "#ffffff !important";
+    document.documentElement.style.backgroundColor = "#ffffff !important";
+    document.documentElement.style.colorScheme = "light only !important";
+    document.documentElement.classList.remove("dark");
+
     const s = document.createElement("style");
     s.textContent = `
-      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; background-color: #ffffff !important; }
+      html, body, #root, main, section { background: #ffffff !important; background-color: #ffffff !important; }
+      
       .ag-card {
         border-radius: 18px;
-        transition: transform 0.2s cubic-bezier(.16,1,.3,1), box-shadow 0.2s cubic-bezier(.16,1,.3,1);
+        transition: transform 0.22s cubic-bezier(.16,1,.3,1), box-shadow 0.22s cubic-bezier(.16,1,.3,1);
         position: relative;
         overflow: hidden;
+        background: rgba(255, 255, 255, 0.85) !important;
+        border: 1px solid rgba(0, 0, 0, 0.07) !important;
+        backdrop-filter: blur(30px) saturate(170%) !important;
+        -webkit-backdrop-filter: blur(30px) saturate(170%) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(59,130,246,0.03), 0 2px 6px rgba(0,0,0,0.02) !important;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
       }
       @media (min-width: 640px) { .ag-card { border-radius: 20px; } }
-      .ag-card-light {
-        background: rgba(255,255,255,0.78);
-        border: 1px solid rgba(0,0,0,0.08);
-        backdrop-filter: blur(24px) saturate(160%);
-        -webkit-backdrop-filter: blur(24px) saturate(160%);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(59,130,246,0.07), 0 2px 6px rgba(0,0,0,0.05);
-      }
-      .ag-card-dark {
-        background: rgba(20,25,40,0.65);
-        border: 1px solid rgba(255,255,255,0.09);
-        backdrop-filter: blur(24px) saturate(160%);
-        -webkit-backdrop-filter: blur(24px) saturate(160%);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 6px 24px rgba(0,0,0,0.45);
-      }
+      
       @keyframes fast-gradient {
         0% { background-position: 0% center; }
         100% { background-position: -200% center; }
@@ -70,44 +71,73 @@ const GlobalStyles = () => {
         background-clip: text;
         animation: fast-gradient 4s linear infinite;
       }
+
+      /* Immutable Protected Black Glossy Button Engine */
       .btn-blk {
         position:relative; overflow:hidden;
-        background: linear-gradient(180deg,#202124 0%,#111111 100%);
-        border: 1px solid rgba(255,255,255,0.14);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
-        color: white; font-weight:600;
+        background: linear-gradient(180deg, #252629 0%, #0d0d0e 100%) !important;
+        background-color: #0d0d0e !important;
+        border: 1px solid rgba(255, 255, 255, 0.16) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 14px rgba(0,0,0,0.3) !important;
+        color: #ffffff !important; font-weight:600;
         border-radius: 14px;
         transition: transform 0.2s, box-shadow 0.2s;
         -webkit-tap-highlight-color: transparent;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
       }
+      .btn-blk * {
+        color: #ffffff !important;
+        stroke: #ffffff !important;
+      }
+      @media (hover: hover) {
+        .btn-blk:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 20px rgba(0,0,0,0.4) !important; }
+      }
+      .btn-blk:active { transform: scale(0.96); }
+
+      /* Immutable White Frosted Secondary Button */
       .btn-glass-light {
         position:relative; overflow:hidden;
-        background: rgba(235, 235, 240, 0.85);
-        border: 1px solid rgba(0,0,0,0.12);
-        backdrop-filter: blur(20px) saturate(160%);
+        background: rgba(255, 255, 255, 0.75) !important;
+        background-color: rgba(255, 255, 255, 0.75) !important;
+        border: 1px solid #e5e7eb !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
         border-radius: 14px; font-weight:600;
         transition: transform 0.2s;
+        color: #202124 !important;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
+        box-shadow: inset 0 1px 0 #ffffff, 0 2px 8px rgba(0,0,0,0.04) !important;
       }
-      .btn-glass-dark {
-        position:relative; overflow:hidden;
-        background: rgba(60, 60, 65, 0.7);
-        border: 1px solid rgba(255,255,255,0.15);
-        backdrop-filter: blur(20px) saturate(160%);
-        border-radius: 14px; font-weight:600;
-        transition: transform 0.2s;
+      @media (hover: hover) {
+        .btn-glass-light:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 #ffffff, 0 4px 14px rgba(0,0,0,0.08) !important; }
       }
+
+      /* Clean Frosted Transparent Custom Tab Navigation Bar Dock */
+      .force-light-dock {
+        background-color: rgba(255, 255, 255, 0.45) !important;
+        background: rgba(255, 255, 255, 0.45) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.5) !important;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 32px rgba(0, 0, 0, 0.03) !important;
+      }
+
       .nlm-pill {
         display:inline-flex; align-items:center; gap:5px;
-        padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500;
+        padding:5px 14px; border-radius:999px; font-size:13px; font-weight:500;
+        background: rgba(59,130,246,0.06); color: #1d4ed8; border: 1px solid rgba(59,130,246,0.14);
       }
-      .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(50px); }
-      .stat-n {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: fast-gradient 4s linear infinite;
+      .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(70px); }
+      @media (min-width: 640px) { .sorb { filter: blur(100px); } }
+
+      /* Hardcoded Metric Font Colors (Forces Deep Obsidian Black Counter Text) */
+      .stat-n-forced {
+        color: #111111 !important;
+        font-weight: 800 !important;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
       }
     `;
     document.head.appendChild(s);
@@ -118,27 +148,10 @@ const GlobalStyles = () => {
   return null;
 };
 
-const card = (isDark: boolean) => `ag-card ${isDark ? "ag-card-dark" : "ag-card-light"}`;
-const pillProps = (isDark: boolean) => ({
-  className: "nlm-pill inline-flex items-center gap-1.5",
-  style: {
-    background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)",
-    color: isDark ? "#60a5fa" : "#1d4ed8",
-    border: isDark ? "1px solid rgba(59,130,246,0.22)" : "1px solid rgba(59,130,246,0.16)",
-  },
-});
-const muted = (isDark: boolean) => (isDark ? "#8a9bb0" : "#5f6368");
-const head = (isDark: boolean) => (isDark ? "#f1f5f9" : "#111111");
-const accent = (isDark: boolean) => (isDark ? "#60a5fa" : "#3b82f6");
-
-/* ================== Anim Helpers ================== */
-const EASE: [number, number, number, number] = [0.25, 0.1, 0.25, 1];
-const fadeUp = {
-  initial: { opacity: 0, y: 18 },
-  whileInView: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
-} as const;
-
-const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
+/* --- Light Visual Design Tokens --- */
+const txtMuted = "#5f6368";
+const txtHead = "#111111";
+const accentColor = "#3b82f6";
 
 /* ──────────────────────────────────────────────────────────────
    ROBUST VECTOR FALLBACK LOGO
@@ -157,11 +170,11 @@ const InlineVectorLogo = () => (
 );
 
 /* ──────────────────────────────────────────────────────────────
-   SUB-TAB NAVIGATION FOR FLOATING BAR (THEME AWARE)
+   SUB-TAB NAVIGATION FOR FLOATING BAR (LIGHT ENFORCED)
    ────────────────────────────────────────────────────────────── */
 type AboutTabKey = "mission" | "values" | "team";
 
-function AboutSubTabNav({ value, onChange, isDark }: { value: AboutTabKey; onChange: (v: AboutTabKey) => void; isDark: boolean }) {
+function AboutSubTabNav({ value, onChange }: { value: AboutTabKey; onChange: (v: AboutTabKey) => void }) {
   const tabs = [
     { id: "mission", label: "Mission" },
     { id: "values", label: "Values" },
@@ -169,13 +182,7 @@ function AboutSubTabNav({ value, onChange, isDark }: { value: AboutTabKey; onCha
   ];
 
   return (
-    <div 
-      className="inline-flex rounded-xl p-1 shadow-sm backdrop-blur"
-      style={{ 
-        background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
-        border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.06)" 
-      }}
-    >
+    <div className="inline-flex rounded-xl p-1 bg-white/60 border border-neutral-200 shadow-sm backdrop-blur">
       {tabs.map((t) => {
         const active = value === t.id;
         return (
@@ -183,16 +190,11 @@ function AboutSubTabNav({ value, onChange, isDark }: { value: AboutTabKey; onCha
             key={t.id}
             onClick={() => onChange(t.id as AboutTabKey)}
             className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-colors duration-200 ${
-              active 
-                ? (isDark ? "text-white" : "text-slate-900") 
-                : (isDark ? "text-slate-400 hover:text-white" : "text-slate-500 hover:text-slate-900")
+              active ? "text-slate-900" : "text-slate-500 hover:text-slate-900"
             }`}
           >
             {active && (
-              <span
-                className="absolute inset-0 rounded-lg"
-                style={{ background: isDark ? "rgba(59,130,246,0.15)" : "rgba(59,130,246,0.11)" }}
-              />
+              <span className="absolute inset-0 rounded-lg bg-blue-500/10" />
             )}
             <span className="relative z-10">{t.label}</span>
           </button>
@@ -202,12 +204,11 @@ function AboutSubTabNav({ value, onChange, isDark }: { value: AboutTabKey; onCha
   );
 }
 
-/* ================== Data ================== */
+/* ================== Data Restored (Krishna Removed) ================== */
 const team = [
   { name: "Tarun Pathak", role: "Co-Founder", description: "Product · Marketing", image: "/images/tarun_a4ai.jpeg" },
   { name: "Yash Dubey", role: "Co-Founder", description: "Full Stack Developer", image: "/images/yash_a4ai.jpg" },
   { name: "Aakash Singh", role: "Co-Founder", description: "Cloud · Infra · Frontend", image: "/images/aakash_a4ai.jpg" },
-  { name: "Krishna Gupta", role: "Co-Founder", description: "Operations", image: "/images/krishna_a4ai.jpg" },
 ];
 
 const values = [
@@ -237,24 +238,28 @@ const testimonials = [
   },
 ];
 
+/* Updated Partner Content Array */
 const partners = [
-  { name: "Chanakya", logo: "/images/partner-msit.svg" },
-  { name: "CBSE schools", logo: "/images/partner-cbse.svg" },
-  { name: "SkillED", logo: "/images/partner-skilled.svg" },
-  { name: "EduLabs", logo: "/images/partner-edulabs.svg" },
+  { name: "Chanakya Institute", logo: "/images/partner-msit.svg" },
+  { name: "Education Beast", logo: "/images/partner-cbse.svg" },
+  { name: "CBSE", logo: "/images/partner-skilled.svg" },
+  { name: "SkillED", logo: "/images/partner-edulabs.svg" },
 ];
 
-/* ================== Page ================== */
+const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
+const EASE: [number, number, number, number] = [0.25, 0.1, 0.25, 1];
+const fadeUp = {
+  initial: { opacity: 0, y: 18 },
+  whileInView: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+} as const;
+
+/* ================== Page Component ================== */
 export default function AboutPage() {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-  const prefersReducedMotion = useReducedMotion();
   const [activeTab, setActiveTab] = useState<AboutTabKey>("mission");
   const [logoFailed, setLogoFailed] = useState(false);
 
   const navigate = useNavigate();
 
-  // Element section references for contextual nav clicking
   const missionRef = useRef<HTMLDivElement | null>(null);
   const valuesRef = useRef<HTMLDivElement | null>(null);
   const teamRef = useRef<HTMLDivElement | null>(null);
@@ -271,7 +276,6 @@ export default function AboutPage() {
     }
   };
 
-  // Ambient glow follows cursor
   const mx = useMotionValue(360);
   const my = useMotionValue(180);
   const onMove = (e: React.MouseEvent<HTMLElement>) => {
@@ -281,9 +285,9 @@ export default function AboutPage() {
   };
 
   const bgGlow = useMotionTemplate`
-    radial-gradient(1000px 520px at ${mx}px ${my}px, ${isDark ? "rgba(59,130,246,0.06)" : "rgba(59,130,246,0.04)"}, transparent 70%),
-    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), ${isDark ? "rgba(96,165,250,0.06)" : "rgba(96,165,250,0.04)"}, transparent 70%),
-    radial-gradient(1000px 520px at calc(${mx}px - 260px) calc(${my}px + 220px), ${isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)"}, transparent 70%)
+    radial-gradient(1000px 520px at ${mx}px ${my}px, rgba(59,130,246,0.04), transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), rgba(96,165,250,0.04), transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px - 260px) calc(${my}px + 220px), rgba(129,140,248,0.03), transparent 70%)
   `;
 
   const missionInView = useInView(missionRef, { once: true, margin: "-12% 0px" });
@@ -308,46 +312,35 @@ export default function AboutPage() {
         <meta property="og:type" content="website" />
       </Helmet>
 
-      <div onMouseMove={onMove} className="lp min-h-screen relative overflow-hidden transition-colors duration-300" style={{ background: isDark ? "#07090f" : "#ffffff" }}>
+      <div onMouseMove={onMove} className="lp min-h-screen relative overflow-hidden bg-white">
         <GlobalStyles />
 
         {/* Background Orbs */}
         <div className="hidden sm:block">
-          <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: isDark ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)" }} />
-          <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)" }} />
+          <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: "rgba(59,130,246,0.03)" }} />
+          <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: "rgba(129,140,248,0.03)" }} />
         </div>
 
         {/* Grid Overlay */}
         <div
           className="absolute inset-0 -z-20 pointer-events-none"
           style={{
-            opacity: isDark ? 0.02 : 0.035,
-            backgroundImage: `linear-gradient(to right, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px), linear-gradient(to bottom, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px)`,
+            opacity: 0.015,
+            backgroundImage: "linear-gradient(to right, #000000 1px, transparent 1px), linear-gradient(to bottom, #000000 1px, transparent 1px)",
             backgroundSize: "48px 48px",
           }}
         />
         
-        {!prefersReducedMotion && (
-          <motion.div
-            aria-hidden
-            className="pointer-events-none fixed inset-0 -z-10 opacity-100"
-            style={{ backgroundImage: bgGlow as any }}
-          />
-        )}
+        <motion.div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 -z-10 opacity-100"
+          style={{ backgroundImage: bgGlow as any }}
+        />
 
-        {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
+        {/* FLOATING TOP NAVIGATION HEADER */}
         <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
-          <nav 
-            className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-colors duration-300 ${
-              isDark ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"
-            }`}
-            style={{ 
-              boxShadow: isDark 
-                ? "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)" 
-                : "0 8px 32px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.4)"
-            }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+          <nav className="mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-all duration-300 force-light-dock">
+            <div className="flex items-center justify-between px-4 py-3 sm:px-6 bg-transparent">
               <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight transition-opacity active:opacity-90">
                 <div className="h-6 w-6 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20 overflow-hidden">
                   {!logoFailed ? (
@@ -361,33 +354,31 @@ export default function AboutPage() {
                     <InlineVectorLogo />
                   )}
                 </div>
-                <span style={{ color: head(isDark) }}>
+                <span style={{ color: txtHead }}>
                   a4ai <span className="text-xs font-normal opacity-60 ml-1">About</span>
                 </span>
               </Link>
-              <AboutSubTabNav value={activeTab} onChange={handleTabChange} isDark={isDark} />
+              <AboutSubTabNav value={activeTab} onChange={handleTabChange} />
             </div>
           </nav>
         </div>
 
-        {/* CONTENT OUTER CONTAINER — Spaced layout handling to prevent overlapping under nav */}
-        <div className="pt-24 relative z-10">
+        <div className="pt-24 relative z-10 bg-white">
 
-          {/* HERO */}
-          <section className="relative z-10 py-16 md:py-20">
+          {/* HERO BANNER SECTION */}
+          <section className="relative z-10 py-16 md:py-20 bg-white">
             <div className={sectionX}>
               <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-                <span {...pillProps(isDark)}><Sparkles className="h-3.5 w-3.5"/> Founded 2025</span>
-                <span {...pillProps(isDark)}><Rocket className="h-3.5 w-3.5"/> Contest engine live</span>
-                <span {...pillProps(isDark)}><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</span>
+                <span className="nlm-pill"><Sparkles className="h-3.5 w-3.5"/> Founded 2025</span>
+                <span className="nlm-pill"><Rocket className="h-3.5 w-3.5"/> Contest engine live</span>
+                <span className="nlm-pill"><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</span>
               </div>
 
               <motion.h1
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, ease: EASE }}
-                className="text-center text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight"
-                style={{ color: head(isDark) }}
+                className="text-center text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight text-neutral-900"
               >
                 About <span className="nlm-text">a4ai</span>
               </motion.h1>
@@ -397,83 +388,81 @@ export default function AboutPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
                 className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl"
-                style={{ color: muted(isDark) }}
+                style={{ color: txtMuted }}
               >
                 Building the assessment stack for Indian classrooms—fast, fair, and aligned to how teachers actually teach.
               </motion.p>
 
-              {/* Stats */}
+              {/* Counter Statistics Metrics (Fonts locked to Black) */}
               <div className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-4 sm:grid-cols-4">
                 {[
                   { k: "Papers", v: "3.5K+" },
                   { k: "Schools", v: "25+" },
                   { k: "Uptime", v: "99.9%" },
                   { k: "Avg. Gen Time", v: "< 2 min" },
-                ].map((s, i) => (
+                ].map((s) => (
                   <motion.div
                     key={s.k}
                     initial={{ opacity: 0, y: 18 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
-                    className={`p-6 text-center ${card(isDark)}`}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className="p-6 text-center ag-card bg-white"
                   >
-                    <div className="text-2xl md:text-3xl font-extrabold tracking-tight stat-n">{s.v}</div>
-                    <div className="mt-1 text-sm font-medium" style={{ color: muted(isDark) }}>{s.k}</div>
+                    <div className="text-2xl md:text-3xl font-extrabold tracking-tight stat-n-forced">{s.v}</div>
+                    <div className="mt-1 text-sm font-medium" style={{ color: txtMuted }}>{s.k}</div>
                   </motion.div>
                 ))}
               </div>
             </div>
           </section>
 
-          {/* MISSION */}
-          <section ref={missionRef} className="relative z-10 py-16 scroll-mt-28">
-            <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
+          {/* MISSION STRUC BLOCK */}
+          <section ref={missionRef} className="relative z-10 py-16 scroll-mt-28 bg-white">
+            <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
               <motion.div
                 initial={{ opacity: 0, x: -40 }}
                 animate={missionInView ? { opacity: 1, x: 0 } : {}}
                 transition={{ duration: 0.6 }}
-                className="[&_h2]:tracking-tight"
+                className="[&_h2]:tracking-tight bg-transparent"
               >
-                <h2 className="text-3xl md:text-4xl font-extrabold" style={{ color: head(isDark) }}>Our mission</h2>
-                <p className="mt-6 text-lg leading-relaxed" style={{ color: muted(isDark) }}>
+                <h2 className="text-3xl md:text-4xl font-extrabold text-neutral-900">Our mission</h2>
+                <p className="mt-6 text-lg leading-relaxed" style={{ color: txtMuted }}>
                   Give teachers superpowers with AI that respects context and curriculum. Save hours weekly and return that time to students.
                 </p>
-                <p className="mt-4 text-lg leading-relaxed" style={{ color: muted(isDark) }}>
+                <p className="mt-4 text-lg leading-relaxed" style={{ color: txtMuted }}>
                   We combine multi‑LLM generation with rubric checks, plagiarism guards,
                   and contest‑grade proctoring to ensure quality from day one.
                 </p>
 
-                {/* Buttons */}
                 <div className="mt-8 flex flex-wrap gap-4">
                   <button onClick={() => navigate("/features")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
                     <span className="relative z-10 flex items-center justify-center gap-2">See how it works</span>
                   </button>
-                  <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                  <button onClick={() => navigate("/contact")} className="btn-glass-light px-8 py-3.5 text-base sm:text-lg">
                     <span className="relative z-10 flex items-center justify-center gap-2">Talk to us</span>
                   </button>
                 </div>
 
-                {/* Feature chips */}
                 <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3">
                   {[
                     { icon: Gauge, title: "Faster prep", copy: "Create aligned tests in minutes, not evenings." },
                     { icon: Shield, title: "Safer data", copy: "Privacy-first storage, clear consent, audit trails." },
                     { icon: BookOpen, title: "Better pedagogy", copy: "Curriculum mapping + rubric checks by default." },
                   ].map((item) => (
-                    <div key={item.title} className={`p-5 ${card(isDark)}`}>
-                      <div className="flex items-center gap-2 font-semibold" style={{ color: head(isDark) }}>
-                        <item.icon className="h-4 w-4" style={{ color: accent(isDark) }} />
+                    <div key={item.title} className="p-5 ag-card bg-white">
+                      <div className="flex items-center gap-2 font-semibold text-neutral-800">
+                        <item.icon className="h-4 w-4" style={{ color: accentColor }} />
                         {item.title}
                       </div>
-                      <p className="mt-2 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{item.copy}</p>
+                      <p className="mt-2 text-sm leading-relaxed" style={{ color: txtMuted }}>{item.copy}</p>
                     </div>
                   ))}
                 </div>
               </motion.div>
 
               <motion.div initial={{ opacity: 0, x: 40 }} animate={missionInView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
-                <div className={`overflow-hidden p-0 ${card(isDark)}`}>
+                <div className="overflow-hidden p-0 ag-card bg-white shadow-sm border border-neutral-200/60">
                   <img
                     src="/images/bg.jpg"
                     alt="Educators using a4ai"
@@ -485,14 +474,14 @@ export default function AboutPage() {
             </div>
           </section>
 
-          {/* VALUES */}
-          <section ref={valuesRef} className="relative z-10 py-16 scroll-mt-28">
+          {/* VALUES SYSTEM GRID */}
+          <section ref={valuesRef} className="relative z-10 py-16 scroll-mt-28 bg-white">
             <div className={sectionX}>
-              <div className="mb-12 text-center">
-                <h3 className="text-3xl font-extrabold" style={{ color: head(isDark) }}>What we value</h3>
-                <p className="mt-3" style={{ color: muted(isDark) }}>Principles that steer product and policy.</p>
+              <div className="mb-12 text-center bg-transparent">
+                <h3 className="text-3xl font-extrabold text-neutral-900">What we value</h3>
+                <p className="mt-3 text-neutral-500">Principles that steer product and policy.</p>
               </div>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
                 {values.map((x, i) => (
                   <motion.div
                     key={x.k}
@@ -500,29 +489,26 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
-                    className={`p-6 ${card(isDark)}`}
+                    className="p-6 ag-card bg-white"
                   >
-                    <div className="flex items-center gap-3 mb-4">
-                      <div 
-                        className="relative flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
-                        style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", border: isDark ? "1px solid rgba(59,130,246,0.18)" : "1px solid rgba(59,130,246,0.12)" }}
-                      >
-                        <x.icon className="h-5 w-5" style={{ color: accent(isDark) }} />
+                    <div className="flex items-center gap-3 mb-4 bg-transparent">
+                      <div className="relative flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 bg-blue-50 border border-blue-100">
+                        <x.icon className="h-5 w-5" style={{ color: accentColor }} />
                       </div>
-                      <div className="font-semibold" style={{ color: head(isDark) }}>{x.k}</div>
+                      <div className="font-semibold text-neutral-800">{x.k}</div>
                     </div>
-                    <p className="text-sm leading-relaxed" style={{ color: muted(isDark) }}>{x.v}</p>
+                    <p className="text-sm leading-relaxed text-neutral-500">{x.v}</p>
                   </motion.div>
                 ))}
               </div>
             </div>
           </section>
 
-          {/* TIMELINE */}
-          <section className="relative z-10 py-16">
-            <div className="mx-auto max-w-5xl px-4">
-              <h3 className="text-3xl font-extrabold text-center" style={{ color: head(isDark) }}>Milestones</h3>
-              <div className="mt-12 space-y-6">
+          {/* MILESTONES TIMELINE BLOCK */}
+          <section className="relative z-10 py-16 bg-white">
+            <div className="mx-auto max-w-5xl px-4 bg-transparent">
+              <h3 className="text-3xl font-extrabold text-center text-neutral-900">Milestones</h3>
+              <div className="mt-12 space-y-6 bg-transparent">
                 {milestones.map((m, i) => (
                   <motion.div
                     key={m.title}
@@ -530,12 +516,12 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, ease: "easeOut" }}
-                    className={`grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] ${card(isDark)}`}
+                    className="grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] ag-card bg-white"
                   >
-                    <div className="text-sm font-semibold mt-1" style={{ color: accent(isDark) }}>{m.date}</div>
+                    <div className="text-sm font-semibold mt-1 text-blue-600">{m.date}</div>
                     <div>
-                      <div className="text-lg font-bold" style={{ color: head(isDark) }}>{m.title}</div>
-                      <div className="mt-2 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{m.detail}</div>
+                      <div className="text-lg font-bold text-neutral-900">{m.title}</div>
+                      <div className="mt-2 text-sm leading-relaxed text-neutral-500">{m.detail}</div>
                     </div>
                   </motion.div>
                 ))}
@@ -543,11 +529,11 @@ export default function AboutPage() {
             </div>
           </section>
 
-          {/* TEAM */}
-          <section ref={teamRef} className="relative z-10 py-16 scroll-mt-28">
+          {/* TEAM PROFILE LINKS SECTION */}
+          <section ref={teamRef} className="relative z-10 py-16 scroll-mt-28 bg-white">
             <div className={sectionX}>
-              <div className="text-center">
-                <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold mb-6" style={{ color: head(isDark) }}>
+              <div className="text-center bg-transparent">
+                <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold mb-6 text-neutral-900">
                   Team Behind a4ai
                 </motion.h2>
                 <motion.p
@@ -555,51 +541,47 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.15, duration: 0.5 }}
-                  className="mx-auto max-w-3xl text-lg"
-                  style={{ color: muted(isDark) }}
+                  className="mx-auto max-w-3xl text-lg text-neutral-500"
                 >
                   A small team building a4ai — step by step, every day.
                 </motion.p>
               </div>
 
-              <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto bg-transparent">
                 {team.map((m, i) => (
-                  <TeamCard key={m.name} index={i} member={m} isDark={isDark} />
+                  <TeamCard key={m.name} index={i} member={m} />
                 ))}
               </div>
 
-              <p className="mt-12 text-center text-sm font-medium" style={{ color: muted(isDark) }}>
+              <p className="mt-12 text-center text-sm font-medium text-neutral-400">
                 …and many more people who quietly help shape a4ai every moment.
               </p>
             </div>
           </section>
 
-          {/* PARTNERS */}
-          <section className="relative z-10 py-16">
-            <div className="mx-auto max-w-6xl px-4">
-              <div className="text-center">
-                <h3 className="text-3xl font-extrabold" style={{ color: head(isDark) }}>Schools & partners</h3>
-                <p className="mt-3" style={{ color: muted(isDark) }}>Pilots and early adopters we're grateful for.</p>
+          {/* PARTNERS ROW LAYOUT */}
+          <section className="relative z-10 py-16 bg-white">
+            <div className="mx-auto max-w-6xl px-4 bg-transparent">
+              <div className="text-center bg-transparent">
+                <h3 className="text-3xl font-extrabold text-neutral-900">Schools & partners</h3>
+                <p className="mt-3 text-neutral-500">Pilots and early adopters we're grateful for.</p>
               </div>
-              <div className="mt-12 grid grid-cols-2 items-center gap-6 sm:grid-cols-4">
+              <div className="mt-12 grid grid-cols-2 items-center gap-6 sm:grid-cols-4 bg-transparent">
                 {partners.map((p) => (
-                  <div key={p.name} className={`flex items-center justify-center p-8 ${card(isDark)}`}>
-                    <img
-                      src={p.logo}
-                      alt={p.name}
-                      className={`h-8 transition-all duration-300 ${isDark ? "opacity-70 hover:opacity-100 invert" : "opacity-70 hover:opacity-100 grayscale hover:grayscale-0"}`}
-                      loading="lazy"
-                    />
+                  <div key={p.name} className="flex items-center justify-center p-8 ag-card bg-white border border-neutral-100 shadow-sm">
+                    <span className="text-sm font-semibold tracking-wide text-neutral-700 hover:text-neutral-900 transition-colors">
+                      {p.name}
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
           </section>
 
-          {/* TESTIMONIALS */}
-          <section className="relative z-10 py-16">
-            <div className="mx-auto max-w-5xl px-4">
-              <div className="grid gap-6 md:grid-cols-2">
+          {/* TESTIMONIAL BLOCKQUOTES */}
+          <section className="relative z-10 py-16 bg-white">
+            <div className="mx-auto max-w-5xl px-4 bg-transparent">
+              <div className="grid gap-6 md:grid-cols-2 bg-transparent">
                 {testimonials.map((t, i) => (
                   <motion.blockquote
                     key={t.name}
@@ -607,13 +589,13 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, delay: 0.05 * i, ease: "easeOut" }}
-                    className={`relative p-8 ${card(isDark)}`}
+                    className="relative p-8 ag-card bg-white border border-neutral-100 shadow-sm flex flex-col"
                   >
-                    <Quote className="absolute -top-3 -left-3 h-8 w-8" style={{ color: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }} />
-                    <p className="text-base leading-relaxed italic" style={{ color: head(isDark) }}>"{t.quote}"</p>
-                    <footer className="mt-6 text-sm">
-                      <span className="font-semibold" style={{ color: head(isDark) }}>{t.name}</span>,{" "}
-                      <span style={{ color: muted(isDark) }}>{t.title}</span>
+                    <Quote className="absolute -top-3 -left-3 h-8 w-8 text-neutral-200/50" />
+                    <p className="text-base leading-relaxed italic text-neutral-800">"{t.quote}"</p>
+                    <footer className="mt-6 text-sm bg-transparent">
+                      <span className="font-semibold text-neutral-800">{t.name}</span>,{" "}
+                      <span style={{ color: txtMuted }}>{t.title}</span>
                     </footer>
                   </motion.blockquote>
                 ))}
@@ -621,18 +603,17 @@ export default function AboutPage() {
             </div>
           </section>
 
-          {/* CTA Banner */}
-          <section className="relative z-10 pb-24 pt-10">
+          {/* CTA BOTTOM BANNER BLOCK */}
+          <section className="relative z-10 pb-24 pt-10 bg-white">
             <div className={sectionX}>
-              <motion.div {...fadeUp} viewport={{ once: true }} className="rounded-2xl p-[1px] shadow-lg overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
-                <div className="rounded-2xl px-6 py-16 text-center relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
+              <motion.div {...fadeUp} viewport={{ once: true }} className="rounded-2xl p-[1px] shadow-sm overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+                <div className="rounded-2xl px-6 py-16 text-center relative bg-white/95 backdrop-blur-md">
                   <motion.h2
                     initial={{ opacity: 0, y: 16 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5 }}
-                    className="text-3xl md:text-4xl font-extrabold tracking-tight"
-                    style={{ color: head(isDark) }}
+                    className="text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-900"
                   >
                     Ready to transform your assessments?
                   </motion.h2>
@@ -641,8 +622,7 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.15, duration: 0.5 }}
-                    className="mx-auto mt-4 max-w-2xl text-lg"
-                    style={{ color: muted(isDark) }}
+                    className="mx-auto mt-4 max-w-2xl text-lg text-neutral-500"
                   >
                     Join educators using a4ai to save time and improve outcomes.
                   </motion.p>
@@ -651,14 +631,14 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.25, duration: 0.5 }}
-                    className="mt-8 flex flex-col sm:flex-row justify-center gap-4"
+                    className="mt-8 flex flex-col sm:flex-row justify-center gap-4 bg-transparent"
                   >
                     <button onClick={() => navigate("/")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
                       <span className="relative z-10 flex items-center justify-center gap-2">
                         Get started for free
                       </span>
                     </button>
-                    <button onClick={() => navigate("/contact")} className={`px-8 py-3.5 text-base sm:text-lg flex items-center justify-center gap-2 ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                    <button onClick={() => navigate("/contact")} className="btn-glass-light px-8 py-3.5 text-base sm:text-lg flex items-center justify-center gap-2">
                       <span className="relative z-10 flex items-center gap-2">Book a demo <ArrowRight className="h-5 w-5" /></span>
                     </button>
                   </motion.div>
@@ -673,31 +653,18 @@ export default function AboutPage() {
   );
 }
 
-/* ================== Team Card ================== */
+/* ================== Team Card Profile Renderer ================== */
 function TeamCard({
   member,
   index,
-  isDark,
 }: {
   member: { name: string; role: string; description: string; image: string };
   index: number;
-  isDark: boolean;
 }) {
   const mx = useMotionValue(160);
   const my = useMotionValue(120);
   const rotateX = useTransform(my, [0, 260], [8, -8]);
   const rotateY = useTransform(mx, [0, 300], [-10, 10]);
-
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    mx.set(e.clientX - rect.left);
-    my.set(e.clientY - rect.top);
-  };
-
-  const onLeave = () => {
-    mx.set(160);
-    my.set(120);
-  };
 
   return (
     <motion.div
@@ -705,29 +672,38 @@ function TeamCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.45, delay: 0.08 * index, ease: EASE }}
-      className="relative"
+      className="relative bg-white"
     >
-      <div onMouseMove={onMove} onMouseLeave={onLeave} style={{ perspective: 1000 }} className="group cursor-pointer h-full">
+      <div 
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          mx.set(e.clientX - rect.left);
+          my.set(e.clientY - rect.top);
+        }} 
+        onMouseLeave={() => { mx.set(160); my.set(120); }} 
+        style={{ perspective: 1000 }} 
+        className="group cursor-pointer h-full"
+      >
         <motion.div
           style={{ rotateX, rotateY }}
-          className={`relative h-full p-6 transition-all duration-300 ${card(isDark)}`}
+          className="relative h-full p-6 transition-all duration-300 ag-card bg-white"
         >
           <motion.span
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, ${isDark ? "rgba(96,165,250,0.12)" : "rgba(59,130,246,0.08)"}, transparent 80%)` }}
+            style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
           />
-          <div className="relative z-10 text-center">
-            <Avatar className="mx-auto mb-4 h-28 w-28 ring-2" style={{ borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)" }}>
+          <div className="relative z-10 text-center bg-transparent">
+            <Avatar className="mx-auto mb-4 h-28 w-28 ring-2 ring-neutral-100 border border-neutral-200/50">
               <AvatarImage src={member.image} alt={member.name} className="object-cover" />
-              <AvatarFallback className="text-xl font-bold" style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)", color: head(isDark) }}>
+              <AvatarFallback className="text-xl font-bold bg-neutral-50 text-neutral-800">
                 {member.name.substring(0, 2)}
               </AvatarFallback>
             </Avatar>
 
-            <h3 className="text-xl font-extrabold" style={{ color: head(isDark) }}>{member.name}</h3>
-            <p className="mt-1 text-sm font-semibold" style={{ color: accent(isDark) }}>{member.role}</p>
-            <p className="mt-3 text-sm leading-relaxed" style={{ color: muted(isDark) }}>{member.description}</p>
+            <h3 className="text-xl font-extrabold text-neutral-900">{member.name}</h3>
+            <p className="mt-1 text-sm font-semibold text-blue-600">{member.role}</p>
+            <p className="mt-3 text-sm leading-relaxed text-neutral-500">{member.description}</p>
           </div>
         </motion.div>
       </div>

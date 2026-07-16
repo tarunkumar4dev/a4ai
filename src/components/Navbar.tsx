@@ -1,11 +1,11 @@
-// Navbar.tsx — Clean White Frosted Glass Floating Dock with Reinforced Mobile Tap Interactivity
+// Navbar.tsx — Clean White Frosted Glass Floating Dock with Embedded Search & Interactivity
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import LanguagePicker from "@/components/LanguagePicker";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { motion, AnimatePresence, useMotionValue, useMotionTemplate, type Variants } from "framer-motion";
-import { Search, Menu, X, ArrowRight, User } from "lucide-react";
+import { Search, Menu, X, ArrowRight, User, Settings, LayoutDashboard, LogOut, ChevronRight } from "lucide-react";
 
 const navItems = [
   { name: "Home", path: "/" },
@@ -19,15 +19,11 @@ const BRAND_GRADIENT =
   "linear-gradient(90deg, #34d399, #22d3ee, #818cf8, #c084fc, #34d399, #22d3ee, #818cf8, #c084fc)";
 const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
 
-const SEARCH_SUGGESTIONS = [
-  { label: "Test Generator", desc: "Create CBSE papers", path: "/dashboard/test-generator" },
-  { label: "Dashboard", desc: "Your papers & history", path: "/dashboard" },
-  { label: "Features", desc: "What a4ai offers", path: "/features" },
-  { label: "Pricing", desc: "Plans & free tier", path: "/pricing" },
-  { label: "Resources", desc: "Guides & templates", path: "/resources" },
-  { label: "About", desc: "Our mission", path: "/about" },
-  { label: "Sign Up", desc: "Create free account", path: "/signup" },
-];
+interface SuggestionItem {
+  name: string;
+  path: string;
+  subOptions?: { name: string; path: string; icon: any }[];
+}
 
 const dockContainer: Variants = {
   hidden: {},
@@ -58,19 +54,44 @@ export default function Navbar() {
   const activeName =
     navItems.find((n) => (n.path === "/" ? pathname === "/" : pathname.startsWith(n.path)))?.name ?? "Home";
 
+  // Defined custom search schema with explicit structural profile sub-options
+  const searchSuggestions: SuggestionItem[] = useMemo(() => [
+    { name: "Dashboard", path: "/dashboard" },
+    { 
+      name: "Profile", 
+      path: "/profile",
+      subOptions: [
+        { name: "Settings", path: "/dashboard/settings", icon: Settings },
+        { name: "My Dashboard", path: "/dashboard", icon: LayoutDashboard },
+        { name: "Sign out", path: "/logout", icon: LogOut }
+      ]
+    },
+    { name: "Pricing", path: "/pricing" },
+    { name: "Features", path: "/features" },
+    { name: "Resources", path: "/resources" },
+    { name: "About", path: "/about" },
+  ], []);
+
   const filteredSuggestions = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return SEARCH_SUGGESTIONS.slice(0, 6);
-    return SEARCH_SUGGESTIONS.filter(
-      (s) => s.label.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q)
+    if (!q) return searchSuggestions;
+    return searchSuggestions.filter(
+      (s) => 
+        s.name.toLowerCase().includes(q) || 
+        (s.subOptions && s.subOptions.some(sub => sub.name.toLowerCase().includes(q)))
     );
-  }, [searchQuery]);
+  }, [searchQuery, searchSuggestions]);
 
   const handleSearchSelect = useCallback(
     (path: string) => {
       setSearchOpen(false);
       setSearchQuery("");
-      navigate(path);
+      setMobileMenuOpen(false);
+      if (path === "/logout") {
+        handleSignOut();
+      } else {
+        navigate(path);
+      }
     },
     [navigate]
   );
@@ -115,15 +136,6 @@ export default function Navbar() {
   const activeColor = "#047857";
   const textColor = "#202124";
 
-  const dockGlass: React.CSSProperties = {
-    background: "rgba(255, 255, 255, 0.45) !important",
-    backgroundColor: "rgba(255, 255, 255, 0.45)",
-    border: "1px solid rgba(255, 255, 255, 0.45)",
-    backdropFilter: "blur(24px) saturate(180%)",
-    WebkitBackdropFilter: "blur(24px) saturate(180%)",
-    boxShadow: "0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 32px rgba(0, 0, 0, 0.03)",
-  };
-
   return (
     <>
       <style>{`
@@ -159,7 +171,6 @@ export default function Navbar() {
           stroke: #ffffff !important;
         }
 
-        /* Reinforced Interactivity Token for Mobile Touch Handlers */
         .mobile-toggle-trigger {
           position: relative !important;
           z-index: 9999 !important;
@@ -232,14 +243,16 @@ export default function Navbar() {
             </motion.div>
 
             {/* Actions Panel */}
-            <motion.div variants={dockItem} className="flex items-center gap-2">
-              <div className="hidden sm:flex items-center relative" ref={searchRef}>
+            <motion.div variants={dockItem} className="flex items-center gap-2 justify-end flex-1 md:flex-none">
+              
+              {/* Contextual Search Dropdown module (Always visible on mobile & desktop) */}
+              <div className="relative flex items-center" ref={searchRef}>
                 <AnimatePresence mode="wait">
                   {searchOpen ? (
                     <motion.div
                       key="open"
                       initial={{ opacity: 0, width: 36 }}
-                      animate={{ opacity: 1, width: 240 }}
+                      animate={{ opacity: 1, width: window.innerWidth < 640 ? 160 : 240 }}
                       exit={{ opacity: 0, width: 36 }}
                       className="flex items-center rounded-full h-9 overflow-visible bg-white border border-neutral-300 shadow-sm backdrop-blur-md"
                     >
@@ -249,7 +262,7 @@ export default function Navbar() {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search a4ai…"
+                        placeholder="Search..."
                         className="flex-1 h-full bg-transparent px-2 text-sm outline-none min-w-0"
                         style={{ color: textColor }}
                       />
@@ -258,11 +271,51 @@ export default function Navbar() {
                       </button>
                     </motion.div>
                   ) : (
-                    <motion.button onClick={() => setSearchOpen(true)} className="h-9 w-9 flex items-center justify-center rounded-full" style={{ color: mutedColor }}>
+                    <motion.button onClick={() => setSearchOpen(true)} className="h-9 w-9 flex items-center justify-center rounded-full border border-neutral-200 bg-white/80 shadow-sm md:border-transparent md:bg-transparent" style={{ color: mutedColor }}>
                       <Search className="h-4 w-4" />
                     </motion.button>
                   )}
                 </AnimatePresence>
+
+                {/* Inline Suggestions dropdown underneath without full-cover blocks */}
+                {searchOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-neutral-200 bg-white p-2 shadow-xl ring-1 ring-black ring-opacity-5 z-[9999]">
+                    <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-neutral-400">
+                      Suggestions
+                    </div>
+                    <div className="mt-1 space-y-0.5 max-h-[280px] overflow-y-auto">
+                      {filteredSuggestions.map((item) => (
+                        <div key={item.name} className="block">
+                          <button
+                            onClick={() => handleSearchSelect(item.path)}
+                            className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-emerald-600 transition-colors"
+                          >
+                            <span>{item.name}</span>
+                            {!item.subOptions && <ChevronRight className="h-3.5 w-3.5 opacity-40" />}
+                          </button>
+                          
+                          {item.subOptions && (
+                            <div className="ml-3 mt-0.5 border-l border-neutral-100 pl-2 space-y-0.5">
+                              {item.subOptions.map((sub) => {
+                                const SubIcon = sub.icon;
+                                return (
+                                  <button
+                                    key={sub.name}
+                                    onClick={() => handleSearchSelect(sub.path)}
+                                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-left text-xs font-medium text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"
+                                  >
+                                    <SubIcon className="h-3.5 w-3.5 opacity-60" />
+                                    <span>{sub.name}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="hidden sm:block">
@@ -321,7 +374,7 @@ export default function Navbar() {
                 )}
               </div>
 
-              {/* Enhanced Interactive Mobile Toggle Button */}
+              {/* Enhanced Interactive Mobile Toggle Menu Trigger Button (Directly to the right of search) */}
               <button 
                 className="ml-1 md:hidden h-10 w-10 flex items-center justify-center rounded-full mobile-toggle-trigger" 
                 style={{ color: mutedColor }} 

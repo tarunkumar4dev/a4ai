@@ -5,7 +5,20 @@ const OptimizedDemo = lazy(() => import(/* webpackPrefetch: true */ "@/component
 import Footer from "@/components/Footer";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Check, Sparkles, FileText, Download, Settings, User, Crown } from "lucide-react";
+import { 
+  ArrowRight, 
+  Check, 
+  Sparkles, 
+  FileText, 
+  Download, 
+  Settings, 
+  User, 
+  Crown, 
+  ShieldCheck, 
+  Zap, 
+  Lock, 
+  SlidersHorizontal 
+} from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 
 /* ──────────────────────────────────────────────────────────────
@@ -14,7 +27,6 @@ import { useAuth } from "@/providers/AuthProvider";
 const BRAND_GRADIENT =
   "linear-gradient(90deg, #34d399, #22d3ee, #818cf8, #c084fc, #34d399, #22d3ee, #818cf8, #c084fc)";
 const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
-const BTN_GRADIENT = "linear-gradient(135deg, #10b981 0%, #0ea5e9 40%, #8b5cf6 100%)";
 
 /* ── Motion presets ── */
 const stackContainer = {
@@ -43,10 +55,10 @@ const HOW_STEPS = Object.freeze([
   { title: "Download & Print", desc: "Get a CBSE-pattern PDF or DOCX with sections, marks, and answer key.", Icon: Download },
 ]);
 const TRUST_FEATURES = Object.freeze([
-  { title: "Encryption", desc: "Data encrypted in transit and at rest with modern standards.", icon: "🔒" },
-  { title: "Privacy-First", desc: "No ads, no selling data. You control retention and export.", icon: "🛡️" },
-  { title: "Reliability", desc: "Monitored uptime and graceful fallbacks during peak load.", icon: "⚡" },
-  { title: "Controls", desc: "Role-based access, per-class sharing, and one-click export.", icon: "⚙️" },
+  { title: "Encryption", desc: "Data encrypted in transit and at rest with modern standards.", Icon: Lock },
+  { title: "Privacy-First", desc: "No ads, no selling data. You control retention and export.", Icon: ShieldCheck },
+  { title: "Reliability", desc: "Monitored uptime and graceful fallbacks during peak load.", Icon: Zap },
+  { title: "Controls", desc: "Role-based access, per-class sharing, and one-click export.", Icon: SlidersHorizontal },
 ]);
 const OUTCOME_STATS = Object.freeze([
   { value: "6+", label: "Question Formats", description: "MCQ, Short, Long, A&R, Cloze…" },
@@ -89,7 +101,7 @@ const GlobalStyles = () => {
   useEffect(() => {
     document.documentElement.style.background = "#ffffff";
     document.documentElement.style.backgroundColor = "#ffffff";
-    document.documentElement.style.colorScheme = "light";
+    document.documentElement.style.colorScheme = "light only";
     document.documentElement.classList.remove("dark");
 
     const s = document.createElement("style");
@@ -103,7 +115,7 @@ const GlobalStyles = () => {
         border-radius: 18px;
         transition: transform 0.22s cubic-bezier(.16,1,.3,1), box-shadow 0.22s cubic-bezier(.16,1,.3,1);
         position: relative; overflow: hidden;
-        background: rgba(255, 255, 255, 0.8) !important;
+        background: rgba(255, 255, 255, 0.85) !important;
         border: 1px solid rgba(0, 0, 0, 0.07) !important;
         backdrop-filter: blur(30px) saturate(170%);
         -webkit-backdrop-filter: blur(30px) saturate(170%);
@@ -114,10 +126,6 @@ const GlobalStyles = () => {
           border-radius: 20px; 
           box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 6px 24px rgba(16,185,129,0.04), 0 2px 8px rgba(0,0,0,0.03);
         } 
-      }
-      .ag-card::before {
-        content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-        background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 40%);
       }
       @media (hover: hover) {
         .ag-card:hover { 
@@ -139,33 +147,34 @@ const GlobalStyles = () => {
       }
 
       .btn-grad {
-        position:relative; overflow:hidden;
-        background: ${BTN_GRADIENT};
-        border: 1px solid rgba(255,255,255,0.25);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 8px rgba(16,185,129,0.2), 0 8px 24px rgba(139,92,246,0.12);
-        color: white !important; font-weight:600; border-radius: 14px;
+        position:relative !important; overflow:hidden !important;
+        background: linear-gradient(180deg, #252629 0%, #0d0d0e 100%) !important;
+        background-color: #0d0d0e !important;
+        border: 1px solid rgba(255, 255, 255, 0.16) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 14px rgba(0,0,0,0.3) !important;
+        color: #ffffff !important; font-weight:600 !important; border-radius: 14px !important;
         transition: transform 0.2s, box-shadow 0.2s; -webkit-tap-highlight-color: transparent;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
       }
-      .btn-grad::before {
-        content:''; position:absolute; inset-inline:0; top:0; height:50%;
-        background: linear-gradient(180deg,rgba(255,255,255,0.3) 0%,transparent 100%); pointer-events:none;
-      }
+      .btn-grad * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) {
-        .btn-grad:hover { transform:translateY(-2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 4px 14px rgba(16,185,129,0.35), 0 16px 40px rgba(139,92,246,0.2); }
+        .btn-grad:hover { transform:translateY(-2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 20px rgba(0,0,0,0.45) !important; }
       }
-      .btn-grad:active { transform: scale(0.97); }
 
       .btn-glass-light {
         position:relative; overflow:hidden;
-        background: rgba(240, 240, 245, 0.8);
-        border: 1px solid rgba(0,0,0,0.08);
-        backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 2px 8px rgba(0,0,0,0.04);
-        border-radius: 14px; font-weight:600; transition: transform 0.2s; color: #1f2937 !important;
+        background: rgba(255, 255, 255, 0.75) !important;
+        background-color: rgba(255, 255, 255, 0.75) !important;
+        border: 1px solid #e5e7eb !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-radius: 14px; font-weight:600; transition: transform 0.2s; color: #202124 !important;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
+        box-shadow: inset 0 1px 0 #ffffff, 0 2px 8px rgba(0,0,0,0.04) !important;
       }
-      @media (hover: hover) {
-        .btn-glass-light:hover { transform:translateY(-2px); box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 6px 20px rgba(0,0,0,0.08); }
-      }
+      .btn-glass-light * { color: #202124 !important; stroke: #202124 !important; }
 
       .nlm-pill {
         display:inline-flex; align-items:center; gap:5px;
@@ -221,9 +230,7 @@ const LazySection = memo(({ children }: { children: React.ReactNode }) => {
   return <div ref={setRef} className="bg-white">{inView ? children : <div className="h-48 bg-white" />}</div>;
 });
 
-/* ══════════════════════════════════════════════
-   SCROLL-SHRINK HERO
-   ══════════════════════════════════════════════ */
+/* ── SCROLL-SHRINK HERO ── */
 const ScrollShrinkHero = memo(function ScrollShrinkHero() {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -317,9 +324,7 @@ export default function LandingPage() {
   );
 }
 
-/* ══════════════════════════════════════════════
-   HOW IT WORKS
-   ══════════════════════════════════════════════ */
+/* ── HOW IT WORKS ── */
 const HowItWorks = memo(function HowItWorks() {
   const trackRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
@@ -371,11 +376,6 @@ const HowItWorks = memo(function HowItWorks() {
   return (
     <section ref={trackRef} className="relative bg-white" style={{ height: "240vh" }}>
       <div className="sticky top-0 flex min-h-screen flex-col justify-center overflow-hidden py-16 bg-white">
-        <div className="hidden sm:block">
-          <div className="sorb" style={{ width: 400, height: 400, right: -80, top: -80, background: "rgba(16,185,129,0.04)" }} />
-          <div className="sorb" style={{ width: 300, height: 300, left: -60, bottom: -40, background: "rgba(129,140,248,0.03)" }} />
-        </div>
-
         <div className="relative mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
           <div ref={headRef} className="hiw-head mb-10 text-center" style={{ opacity: 0, transform: "translate3d(0,40px,0)" }}>
             <span className="nlm-pill"><Sparkles className="h-3.5 w-3.5" />3 Steps, 2 Minutes</span>
@@ -396,7 +396,7 @@ const HowItWorks = memo(function HowItWorks() {
                 style={{ opacity: 0, transform: "translate3d(0,90px,0) scale(0.9)" }}
               >
                 <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: BTN_GRADIENT }}>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "linear-gradient(135deg, #2c2c2c 0%, #000000 100%)" }}>
                     {i + 1}
                   </div>
                   <div className="h-px flex-1" style={{ background: "linear-gradient(90deg,rgba(16,185,129,0.2),transparent)" }} />
@@ -415,9 +415,7 @@ const HowItWorks = memo(function HowItWorks() {
   );
 });
 
-/* ══════════════════════════════════════════════
-   UPGRADED CTA SECTION
-   ══════════════════════════════════════════════ */
+/* ── UPGRADED CTA SECTION ── */
 const UpgradedCTA = memo(function UpgradedCTA() {
   const { session } = useAuth();
   const navigate = useNavigate();
@@ -443,7 +441,7 @@ const UpgradedCTA = memo(function UpgradedCTA() {
                   <div className="mb-8 flex flex-wrap justify-center gap-4">
                     {["NCERT content only", "Section-wise layout", "Answer key included"].map((f) => (
                       <div key={f} className="flex items-center gap-2 text-sm text-neutral-600">
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white shadow-sm">
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-white shadow-sm">
                           <Check className="h-3 w-3" />
                         </div>
                         {f}
@@ -452,7 +450,7 @@ const UpgradedCTA = memo(function UpgradedCTA() {
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
                     <button onClick={() => navigate("/dashboard/test-generator")} className="btn-grad px-8 py-3.5 text-sm sm:text-base w-full sm:w-auto">
-                      🚀 Try Free — No Login Needed <ArrowRight className="ml-2 h-4 w-4 inline" />
+                       Try Free — No Login Needed <ArrowRight className="ml-2 h-4 w-4 inline" />
                     </button>
                     <Link to={session ? "/dashboard/test-generator" : "/signup"} className="w-full sm:w-auto">
                       <button className="btn-glass-light px-8 py-3.5 text-sm sm:text-base w-full">Sign Up Free</button>
@@ -473,9 +471,7 @@ const UpgradedCTA = memo(function UpgradedCTA() {
   );
 });
 
-/* ══════════════════════════════════════════════
-   TRUST & SECURITY
-   ══════════════════════════════════════════════ */
+/* ── TRUST & SECURITY ── */
 const TrustSecurity = memo(function TrustSecurity() {
   return (
     <section className="relative py-20 bg-white">
@@ -492,7 +488,9 @@ const TrustSecurity = memo(function TrustSecurity() {
         <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {TRUST_FEATURES.map((f) => (
             <motion.div key={f.title} variants={stackItem} className="ag-card p-6 text-center bg-white border border-neutral-100 shadow-sm">
-              <div className="mb-3 text-3xl relative z-10">{f.icon}</div>
+              <div className="mb-4 flex h-10 w-10 mx-auto items-center justify-center rounded-xl bg-emerald-50 border border-emerald-100 relative z-10">
+                <f.Icon className="h-5 w-5 text-emerald-600" />
+              </div>
               <h3 className="mb-2 text-base font-semibold text-neutral-900 relative z-10">{f.title}</h3>
               <p className="text-xs sm:text-sm text-neutral-500 relative z-10 leading-relaxed">{f.desc}</p>
             </motion.div>
@@ -503,9 +501,7 @@ const TrustSecurity = memo(function TrustSecurity() {
   );
 });
 
-/* ══════════════════════════════════════════════
-   OUTCOMES STATS SECTION
-   ══════════════════════════════════════════════ */
+/* ── OUTCOMES STATS SECTION ── */
 const Outcomes = memo(function Outcomes() {
   return (
     <section className="relative py-20 bg-white">
@@ -533,9 +529,7 @@ const Outcomes = memo(function Outcomes() {
   );
 });
 
-/* ══════════════════════════════════════════════
-   TESTIMONIALS
-   ══════════════════════════════════════════════ */
+/* ── TESTIMONIALS ── */
 const Testimonials = memo(function Testimonials() {
   const loop = [...TESTIMONIALS, ...TESTIMONIALS, ...TESTIMONIALS, ...TESTIMONIALS];
   return (
@@ -585,11 +579,10 @@ const TestimonialContent = memo(function TestimonialContent({ t }: { t: (typeof 
   );
 });
 
-/* ══════════════════════════════════════════════
-   FINAL CTA
-   ══════════════════════════════════════════════ */
+/* ── FINAL CTA (Email Field Blocks Fully Removed) ── */
 const FinalCTA = memo(function FinalCTA() {
   const navigate = useNavigate();
+
   return (
     <section className="relative overflow-hidden py-24 bg-white">
       <div className="relative mx-auto max-w-4xl px-5 text-center">
@@ -602,9 +595,10 @@ const FinalCTA = memo(function FinalCTA() {
           <motion.p variants={stackItem} className="mx-auto mt-6 max-w-xl text-base sm:text-lg text-neutral-500 leading-relaxed">
             Join teachers across India who create better test papers in minutes, not hours.
           </motion.p>
+
           <motion.div variants={stackItem} className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <button onClick={() => navigate("/dashboard/test-generator")} className="btn-grad px-10 py-4 text-sm sm:text-base w-full sm:w-auto">
-              🚀 Try Free — No Login Needed <ArrowRight className="ml-2 h-4 w-4 inline" />
+               Try Free — No Login Needed <ArrowRight className="ml-2 h-4 w-4 inline" />
             </button>
             <Link to="/signup" className="w-full sm:w-auto">
               <button className="btn-glass-light px-10 py-4 text-sm sm:text-base w-full">Sign Up Free</button>
