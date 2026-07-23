@@ -9,8 +9,15 @@ import LoginModal from "@/components/LoginModal";
 
 export default function TestGeneratorPage() {
   const { user } = useAuth();
-  const { isGuest, canGenerate, remainingTests, incrementGuestCount, showLoginModal, setShowLoginModal, gateAction, saveTestDataForRestore } = useGuestAccess();
-  
+  const {
+    isGuest,
+    canGenerate,
+    remainingTests,
+    incrementGuestCount,
+    showLoginModal,
+    setShowLoginModal,
+  } = useGuestAccess();
+
   const displayName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
   const initials = displayName
@@ -19,31 +26,6 @@ export default function TestGeneratorPage() {
     .join("")
     .slice(0, 2)
     .toUpperCase();
-
-  // This function would be passed to TestGeneratorForm or handled here
-  // You'll need to integrate this with your actual generate handler
-  const handleGenerate = async (testData: any) => {
-    // Add this check at the start of your generate function
-    if (isGuest && !canGenerate) {
-      setShowLoginModal(true);
-      return;
-    }
-
-    try {
-      // Your existing API call here
-      const response = await yourApiCall(testData);
-      
-      // After successful generation (after API returns data):
-      if (isGuest) {
-        incrementGuestCount();
-      }
-      
-      return response;
-    } catch (error) {
-      console.error("Generation failed:", error);
-      throw error;
-    }
-  };
 
   return (
     <div className="fixed inset-0 w-full h-full bg-[#F9FAFB] overflow-y-auto font-sans text-[#111827] selection:bg-gray-300">
@@ -77,22 +59,20 @@ export default function TestGeneratorPage() {
 
             {/* LOGO + TITLE SECTION */}
             <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0">
-              
-              {/* LOGO IMAGE - BADA VERSION */}
+
               <div className="flex-shrink-0">
-                <img 
-                  src="/images/LOGO.png" 
-                  alt="A4AI Logo" 
-                  className="h-10 sm:h-12 md:h-14 w-auto object-contain"  // 👈 BADA KAR DIYA
+                <img
+                  src="/images/LOGO.png"
+                  alt="A4AI Logo"
+                  className="h-10 sm:h-12 md:h-14 w-auto object-contain"
                 />
               </div>
 
-              {/* TITLE - Agar sirf logo dikhana hai toh yeh section hata do */}
               <div className="min-w-0">
                 <h1 className="text-[13px] sm:text-base md:text-xl font-bold tracking-tight text-[#111827] truncate leading-tight">
                   a4ai
                   <span className="text-transparent bg-clip-text bg-gradient-to-br from-[#111827] to-[#374151]">
-                    Engine V1   
+                    Engine V1
                   </span>
                 </h1>
                 <p className="text-[9px] sm:text-[10px] md:text-[11px] font-semibold text-gray-400 uppercase tracking-wider hidden sm:block">
@@ -127,14 +107,13 @@ export default function TestGeneratorPage() {
             <div>
               <p className="font-bold text-indigo-900 text-sm">🎯 Demo Mode</p>
               <p className="text-xs text-indigo-600 mt-0.5">
-                {remainingTests > 0 
-                  ? `${remainingTests} free test${remainingTests > 1 ? 's' : ''} remaining — no login needed!`
-                  : 'Login to generate more tests'
-                }
+                {remainingTests > 0
+                  ? `${remainingTests} free test${remainingTests > 1 ? "s" : ""} remaining — no login needed!`
+                  : "Login to generate more tests"}
               </p>
             </div>
             {remainingTests === 0 && (
-              <button 
+              <button
                 onClick={() => setShowLoginModal(true)}
                 className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700"
               >
@@ -143,19 +122,20 @@ export default function TestGeneratorPage() {
             )}
           </div>
         )}
-        
-        <TestGeneratorForm onGenerate={handleGenerate} />
+
+        <TestGeneratorForm
+          canGenerate={!isGuest || canGenerate}
+          onBlocked={() => setShowLoginModal(true)}
+          onGenerated={() => { if (isGuest) incrementGuestCount(); }}
+        />
       </main>
 
       {/* Login Modal */}
-      <LoginModal 
-        isOpen={showLoginModal} 
-        onClose={() => setShowLoginModal(false)} 
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
         action="generate"
-        onLoginSuccess={() => {
-          setShowLoginModal(false);
-          // User is now logged in, they can continue
-        }}
+        onLoginSuccess={() => setShowLoginModal(false)}
       />
 
     </div>

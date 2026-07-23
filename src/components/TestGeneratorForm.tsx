@@ -1,11 +1,11 @@
-// src/components/TestGeneratorForm.tsx — V9
+// src/components/TestGeneratorForm.tsx — V10 (milestone progress bar)
 import React, { useState, useEffect, useRef } from "react";
 import { useForm, FormProvider, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 import {
   Library, GraduationCap, Book, ChevronDown, Clock, Zap,
-  Loader2, AlertCircle, Timer, FileText,
+  Loader2, AlertCircle, FileText,
 } from "lucide-react";
 
 import { formSchema, FormSchema } from "@/lib/schema";
@@ -38,6 +38,162 @@ const ALL_BOARDS = [
 ];
 
 const CLASS_OPTIONS = ["Class 9", "Class 10", "Class 11", "Class 12"];
+
+// ═══════════════════════════════════════════════════════════════════════
+// PROGRESS ENGINE
+// 5s → 5%  |  25s → 17%  |  40s → 37%  |  60s → 75%
+// 60s ke baad 75% pe hold, API response aate hi seedha 100%.
+// ═══════════════════════════════════════════════════════════════════════
+
+const PROGRESS_STEPS: { t: number; p: number }[] = [
+  { t: 0,  p: 0 },
+  { t: 5,  p: 5 },
+  { t: 25, p: 17 },
+  { t: 40, p: 37 },
+  { t: 60, p: 75 },
+];
+
+function progressForElapsed(seconds: number): number {
+  const last = PROGRESS_STEPS[PROGRESS_STEPS.length - 1];
+  if (seconds >= last.t) return last.p;
+
+  for (let i = 1; i < PROGRESS_STEPS.length; i++) {
+    const prev = PROGRESS_STEPS[i - 1];
+    const next = PROGRESS_STEPS[i];
+    if (seconds <= next.t) {
+      const ratio = (seconds - prev.t) / (next.t - prev.t);
+      return prev.p + (next.p - prev.p) * ratio;
+    }
+  }
+  return 0;
+}
+
+function statusForProgress(p: number): string {
+  if (p >= 100) return "Paper ready";
+  if (p >= 75)  return "Formatting the paper";
+  if (p >= 37)  return "Writing questions and answers";
+  if (p >= 17)  return "Reading NCERT chapters";
+  return "Setting up the blueprint";
+}
+
+function useGenerationProgress(isRunning: boolean, hasError: boolean) {
+  const [progress, setProgress] = useState(0);
+  const [visible, setVisible] = useState(false);
+  const tickRef = useRef<number | null>(null);
+  const hideRef = useRef<number | null>(null);
+  const wasRunning = useRef(false);
+  const errorRef = useRef(hasError);
+  errorRef.current = hasError;
+
+  useEffect(() => {
+    const stopTick = () => {
+      if (tickRef.current !== null) {
+        window.clearInterval(tickRef.current);
+        tickRef.current = null;
+      }
+    };
+
+    if (isRunning) {
+      if (hideRef.current !== null) {
+        window.clearTimeout(hideRef.current);
+        hideRef.current = null;
+      }
+      wasRunning.current = true;
+      setVisible(true);
+      setProgress(0);
+
+      const startedAt = Date.now();
+      tickRef.current = window.setInterval(() => {
+        setProgress(progressForElapsed((Date.now() - startedAt) / 1000));
+      }, 100);
+    } else {
+      stopTick();
+      if (wasRunning.current) {
+        wasRunning.current = false;
+        if (errorRef.current) {
+          // fail hua toh 100% dikhane ka koi matlab nahi
+          setVisible(false);
+          setProgress(0);
+        } else {
+          setProgress(100);
+          hideRef.current = window.setTimeout(() => {
+            setVisible(false);
+            setProgress(0);
+          }, 900);
+        }
+      }
+    }
+
+    return stopTick;
+  }, [isRunning]);
+
+  useEffect(() => () => {
+    if (hideRef.current !== null) window.clearTimeout(hideRef.current);
+  }, []);
+
+  return { progress, visible };
+}
+
+const GenerationProgress = ({ progress, visible }: { progress: number; visible: boolean }) => (
+  <AnimatePresence>
+    {visible && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-[100] flex items-center justify-center px-5 bg-[#F9FAFB]/80 backdrop-blur-md"
+        role="status"
+        aria-live="polite"
+      >
+        <style>{`
+          @keyframes a4aiSheen { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
+          @media (prefers-reduced-motion: reduce) { .a4ai-sheen { animation: none !important; } }
+        `}</style>
+
+        <motion.div
+          initial={{ y: 12, scale: 0.98 }}
+          animate={{ y: 0, scale: 1 }}
+          transition={{ type: "spring", stiffness: 140, damping: 20 }}
+          className="w-full max-w-md bg-white rounded-2xl sm:rounded-[24px] border border-white/60
+            shadow-[0_20px_60px_rgba(0,0,0,0.10)] px-5 py-6 sm:px-8 sm:py-8"
+        >
+          <div className="flex items-end justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                Generating
+              </p>
+              <p className="text-[13px] sm:text-sm font-bold text-[#111827] mt-1 truncate">
+                {statusForProgress(progress)}
+              </p>
+            </div>
+            <p className="text-3xl sm:text-4xl font-black tabular-nums leading-none text-[#1E5BD6] flex-shrink-0">
+              {Math.round(progress)}
+              <span className="text-lg sm:text-xl font-bold">%</span>
+            </p>
+          </div>
+
+          <div className="relative h-3.5 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className="relative h-full rounded-full bg-gradient-to-r from-[#1E5BD6] to-[#4F86F7]
+                transition-[width] duration-300 ease-out"
+              style={{ width: `${Math.max(progress, 3)}%` }}
+            >
+              <div
+                className="a4ai-sheen absolute inset-0 bg-gradient-to-r from-transparent via-white/45 to-transparent"
+                style={{ animation: "a4aiSheen 1.6s linear infinite" }}
+              />
+            </div>
+          </div>
+
+          <p className="mt-4 text-[11px] sm:text-xs text-gray-400 text-center">
+            Keep this tab open — a full paper usually takes 60–120 seconds.
+          </p>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
 
 // ═══════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS
@@ -138,38 +294,6 @@ const SubjectSelect = ({
   </div>
 );
 
-const GenerationTimer = ({ isRunning }: { isRunning: boolean }) => {
-  const [elapsed, setElapsed] = useState(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (isRunning) {
-      setElapsed(0);
-      intervalRef.current = setInterval(() => setElapsed((p) => p + 1), 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isRunning]);
-
-  if (!isRunning) return null;
-
-  const minutes = Math.floor(elapsed / 60);
-  const seconds = elapsed % 60;
-  const timeStr = minutes > 0 ? `${minutes}:${seconds.toString().padStart(2, "0")}` : `${seconds}s`;
-  const color = elapsed < 30 ? "text-emerald-400" : elapsed < 60 ? "text-yellow-400" : elapsed < 90 ? "text-orange-400" : "text-red-400";
-
-  return (
-    <div className={`flex items-center gap-1.5 sm:gap-2 ${color}`}>
-      <Timer size={14} className="animate-pulse flex-shrink-0" />
-      <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider tabular-nums">{timeStr}</span>
-      <span className="text-[9px] sm:text-[10px] text-gray-500 font-medium hidden sm:inline">
-        {elapsed < 15 ? "Connecting..." : elapsed < 30 ? "Retrieving content..." : elapsed < 50 ? "Generating questions..." : elapsed < 70 ? "Quality checking..." : elapsed < 90 ? "Almost done..." : "Taking longer..."}
-      </span>
-    </div>
-  );
-};
-
 // ═══════════════════════════════════════════════════════════════════════
 // CBSE PATTERN TOGGLE
 // ═══════════════════════════════════════════════════════════════════════
@@ -239,7 +363,19 @@ const CBSEPatternToggle = ({ enabled, onToggle }: { enabled: boolean; onToggle: 
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
 
-export default function TestGeneratorForm() {
+type TestGeneratorFormProps = {
+  /** false ho toh generate block ho jayega aur onBlocked chalega (guest limit) */
+  canGenerate?: boolean;
+  onBlocked?: () => void;
+  /** paper successfully ban jaane par ek baar chalega (guest count badhane ke liye) */
+  onGenerated?: () => void;
+};
+
+export default function TestGeneratorForm({
+  canGenerate = true,
+  onBlocked,
+  onGenerated,
+}: TestGeneratorFormProps) {
   const [activeTab, setActiveTab] = useState<"Simple" | "Blueprint" | "Matrix" | "Buckets">("Simple");
   const [showPreview, setShowPreview] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
@@ -247,6 +383,19 @@ export default function TestGeneratorForm() {
 
   const { generate, isLoading, result, error, reset } = useTestGenerator();
   const { user } = useAuth();
+
+  // progress bar state
+  const { progress, visible: progressVisible } = useGenerationProgress(isLoading, !!error);
+
+  // success hone par ek hi baar parent ko batao
+  const notifiedRef = useRef(false);
+  useEffect(() => {
+    if (result && !notifiedRef.current) {
+      notifiedRef.current = true;
+      onGenerated?.();
+    }
+    if (!result) notifiedRef.current = false;
+  }, [result, onGenerated]);
 
   const methods = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
@@ -276,6 +425,11 @@ export default function TestGeneratorForm() {
   }, [classGrade, subject, methods]);
 
   const onSubmit = async (data: FormSchema) => {
+    if (!canGenerate) {
+      onBlocked?.();
+      return;
+    }
+
     const userId = user?.id || (data as any).userId;
     const mappedData = {
       ...data,
@@ -291,9 +445,12 @@ export default function TestGeneratorForm() {
 
   if (result) {
     return (
-      <div className="space-y-4 sm:space-y-6 pb-28 sm:pb-32">
-        <GeneratedTestView result={result} onReset={reset} logoBase64={logoBase64} />
-      </div>
+      <>
+        <GenerationProgress progress={progress} visible={progressVisible} />
+        <div className="space-y-4 sm:space-y-6 pb-28 sm:pb-32">
+          <GeneratedTestView result={result} onReset={reset} logoBase64={logoBase64} />
+        </div>
+      </>
     );
   }
 
@@ -309,6 +466,9 @@ export default function TestGeneratorForm() {
 
   return (
     <FormProvider {...methods}>
+      {/* PROGRESS OVERLAY — purana timer/loader iske neeche chhup jata hai */}
+      <GenerationProgress progress={progress} visible={progressVisible} />
+
       <motion.form
         onSubmit={methods.handleSubmit(onSubmit)}
         className="space-y-5 sm:space-y-8 md:space-y-10 pb-28 sm:pb-32"
@@ -471,19 +631,15 @@ export default function TestGeneratorForm() {
             pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:pb-3"
           >
             <div className="flex items-center justify-center sm:justify-start px-1 sm:px-0">
-              {isLoading ? (
-                <GenerationTimer isRunning={isLoading} />
-              ) : (
-                <div className="flex items-center gap-1.5 sm:gap-2 text-gray-400">
-                  <Clock size={14} className="flex-shrink-0" />
-                  <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">
-                    Est: <span className="text-white">{cbsePattern ? "60-120s" : "30-90s"}</span>
-                  </span>
-                  {cbsePattern && (
-                    <span className="text-[9px] sm:text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold hidden xs:inline">CBSE</span>
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-1.5 sm:gap-2 text-gray-400">
+                <Clock size={14} className="flex-shrink-0" />
+                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">
+                  Est: <span className="text-white">{cbsePattern ? "60-120s" : "30-90s"}</span>
+                </span>
+                {cbsePattern && (
+                  <span className="text-[9px] sm:text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold hidden xs:inline">CBSE</span>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -504,7 +660,6 @@ export default function TestGeneratorForm() {
                 whileTap={!isLoading ? { scale: 0.96 } : {}}
                 type="submit"
                 disabled={isLoading}
-                onClick={() => { methods.handleSubmit(onSubmit)(); }}
                 className="px-5 sm:px-8 py-3 sm:py-3.5
                   bg-gradient-to-br from-gray-700 to-gray-900
                   rounded-xl font-bold text-[13px] sm:text-sm text-white
