@@ -112,10 +112,18 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
+      // Detect if user is on Android / Mobile browser or App WebView
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      
+      // Select deep link redirect for Android mobile app, or standard origin for Web
+      const redirectTarget = isMobileDevice
+        ? "io.supabase.a4ai://login-callback"
+        : `${window.location.origin}/auth/callback`;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectTarget,
           queryParams: { access_type: "offline", prompt: "consent" },
         },
       });
@@ -332,7 +340,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Right side illustration — keep your existing RubberHoseShapes */}
+        {/* Right side illustration */}
         <div className={`hidden lg:flex items-center justify-center p-10 h-[600px] rounded-[3.5rem] relative overflow-hidden transition-all duration-500 ${isDarkMode ? "bg-slate-800/40" : "bg-white/40 shadow-inner"}`}>
           <RubberHoseShapes pointer={pointer} isDarkMode={isDarkMode} />
         </div>
@@ -341,7 +349,7 @@ export default function LoginPage() {
   );
 }
 
-// ---- Keeping your existing RubberHoseShapes as-is ----
+// ---- RubberHoseShapes Component ----
 function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: number }; isDarkMode: boolean }) {
   const ref = useRef<SVGSVGElement>(null);
   const getMove = (baseX: number, baseY: number, max = 5) => {

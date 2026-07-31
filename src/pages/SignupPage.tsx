@@ -172,10 +172,19 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       localStorage.setItem("a4ai_pending_role", selectedRole);
+
+      // Detect if user is on Android / Mobile device
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      
+      // Select deep link redirect for Android mobile app, or standard origin for Web
+      const redirectTarget = isMobileDevice
+        ? "io.supabase.a4ai://login-callback"
+        : `${window.location.origin}/auth/callback`;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectTarget,
           queryParams: { access_type: "offline", prompt: "consent" },
         },
       });
@@ -203,6 +212,11 @@ export default function SignupPage() {
 
     setIsLoading(true);
     try {
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const redirectTarget = isMobileDevice
+        ? "io.supabase.a4ai://login-callback"
+        : `${window.location.origin}/auth/callback`;
+
       if (signupMethod === "email") {
         if (formValues.password !== formValues.confirmPassword) {
           toast({ title: "Passwords don't match", variant: "destructive" });
@@ -219,7 +233,7 @@ export default function SignupPage() {
           password: formValues.password,
           options: {
             data: { full_name: formValues.name, role: selectedRole },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: redirectTarget,
           },
         });
         if (error) throw error;
@@ -490,14 +504,14 @@ export default function SignupPage() {
                       <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Password</Label>
                       <div className="relative">
                         <Input type={showPw ? "text" : "password"} name="password" required value={formValues.password} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} />
-                        <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+                        <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" /></button>
                       </div>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Confirm</Label>
                       <div className="relative">
                         <Input type={showConfirmPw ? "text" : "password"} name="confirmPassword" required value={formValues.confirmPassword} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} />
-                        <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+                        <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" /></button>
                       </div>
                     </div>
                   </div>
@@ -530,7 +544,7 @@ export default function SignupPage() {
   );
 }
 
-// ---- Keep existing RubberHoseShapes ----
+// ---- RubberHoseShapes ----
 function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: number }; isDarkMode: boolean }) {
   const ref = useRef<SVGSVGElement>(null);
   const getMove = (baseX: number, baseY: number, max = 5) => {
