@@ -503,15 +503,41 @@ export default function SignupPage() {
                     <div className="space-y-1">
                       <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Password</Label>
                       <div className="relative">
-                        <Input type={showPw ? "text" : "password"} name="password" required value={formValues.password} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} />
-                        <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" /></button>
+                        <Input 
+                          type={showPw ? "text" : "password"} 
+                          name="password" 
+                          required 
+                          value={formValues.password} 
+                          onChange={onChange} 
+                          className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} 
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setShowPw(!showPw)} 
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        >
+                          {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
                     <div className="space-y-1">
                       <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Confirm</Label>
                       <div className="relative">
-                        <Input type={showConfirmPw ? "text" : "password"} name="confirmPassword" required value={formValues.confirmPassword} onChange={onChange} className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} />
-                        <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" /></button>
+                        <Input 
+                          type={showConfirmPw ? "text" : "password"} 
+                          name="confirmPassword" 
+                          required 
+                          value={formValues.confirmPassword} 
+                          onChange={onChange} 
+                          className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} 
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setShowConfirmPw(!showConfirmPw)} 
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        >
+                          {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
                   </div>
