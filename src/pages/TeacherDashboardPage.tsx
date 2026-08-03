@@ -1,11 +1,26 @@
 // src/pages/TeacherDashboardPage.tsx
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel";
+
+/* ------------------- SAFE STORAGE ------------------- */
+const safeStorage = {
+  get(key: string) {
+    try {
+      return typeof window !== "undefined" ? window.localStorage.getItem(key) : null;
+    } catch { return null; }
+  },
+  set(key: string, value: string) {
+    try {
+      if (typeof window !== "undefined") window.localStorage.setItem(key, value);
+    } catch { /* no-op */ }
+  },
+};
 
 /* ------------------- SCROLL REVEAL HOOK ------------------- */
 function useScrollReveal() {
@@ -66,6 +81,7 @@ const customStyles = `
 
   .animate-entrance { animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
   .animate-pop      { animation: scaleIn  0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  .animate-drop     { animation: dropIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
   .animate-mic-pulse { animation: pulseRed 1.5s infinite; }
 
   /* ── Scroll-reveal ── */
@@ -163,10 +179,10 @@ const customStyles = `
 
   /* ── "STARTUPS" STYLED BUTTON ── */
   .btn-startups {
-    background: linear-gradient(135deg, #6b21a8 0%, #db2777 50%, #f43f5e 100%);
+    background: linear-gradient(135deg, var(--theme-start) 0%, var(--theme-end) 100%);
     box-shadow: inset 0px 2px 4px rgba(255, 255, 255, 0.25),
                 inset 0px -2px 4px rgba(0, 0, 0, 0.4),
-                0px 8px 20px rgba(219, 39, 119, 0.35);
+                0px 8px 20px var(--theme-shadow);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
     position: relative;
@@ -187,52 +203,202 @@ const customStyles = `
   /* Folder SVG Colors */
   .folder-paper { fill: #F1F5F9; stroke: #CBD5E1; stroke-width: 2; }
   .dark .folder-paper { fill: #222222; stroke: #444444; }
+
+  /* ── MASCOT ── */
+  @keyframes typingDot {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30%           { transform: translateY(-3px); opacity: 1; }
+  }
+  .typing-dot { animation: typingDot 1s infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-blob, .new-badge, .typing-dot { animation: none !important; }
+  }
 `;
 
 /* ------------------- ICONS ------------------- */
 const Icons = {
-  Search:        () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
-  Bell:          () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
-  Grid:          () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="2"/><rect width="7" height="7" x="14" y="3" rx="2"/><rect width="7" height="7" x="14" y="14" rx="2"/><rect width="7" height="7" x="3" y="14" rx="2"/></svg>,
-  Users:         () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-  FileText:      () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>,
-  History:       () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>,
-  Chart:         () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>,
-  Brain:         () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg>,
-  Zap:           () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
-  ChevronRight:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>,
-  ChevronDown:   () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
-  Trophy:        () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
-  Clock:         () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-  GradCap:       () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>,
-  MessageCircle: () => <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
-  MessageSmall:  () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
-  Mail:          () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>,
-  Check:         () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
-  X:             () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  Menu:          () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>,
-  Moon:          () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>,
-  Sun:           () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>,
-  User:          () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-  LogOut:        () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
-  Send:          () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>,
-  Loader:        () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
-  Globe:         () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>,
-  Youtube:       () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>,
-  Sparkles:      () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3L8 5 6 7 4 5 6 3Z"/><path d="M18 13L20 15 18 17 16 15 18 13Z"/><path d="M10 7L13 10 13 10 7 10 10 7Z"/><path d="m13 17 2 3 2-3"/><path d="M18 3v4"/><path d="M20 5h-4"/></svg>,
-  Star:          () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
-  Book:          () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
-  Microphone:    () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" x2="12" y1="19" y2="22"/></svg>,
+  Search: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>,
+  Bell: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>,
+  Grid: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="7" x="3" y="3" rx="2" /><rect width="7" height="7" x="14" y="3" rx="2" /><rect width="7" height="7" x="14" y="14" rx="2" /><rect width="7" height="7" x="3" y="14" rx="2" /></svg>,
+  Users: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+  FileText: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /></svg>,
+  History: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></svg>,
+  Chart: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg>,
+  Brain: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" /><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" /></svg>,
+  Zap: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>,
+  ChevronRight: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>,
+  ChevronDown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>,
+  Trophy: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>,
+  Clock: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
+  GradCap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c3 3 9 3 12 0v-5" /></svg>,
+  Mail: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>,
+  Check: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>,
+  X: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
+  Menu: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" /></svg>,
+  Moon: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>,
+  Sun: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" /></svg>,
+  User: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
+  LogOut: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>,
+  Send: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>,
+  Globe: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /><path d="M2 12h20" /></svg>,
+  Youtube: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" /></svg>,
+  Sparkles: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3L8 5 6 7 4 5 6 3Z" /><path d="M18 13L20 15 18 17 16 15 18 13Z" /><path d="M10 7L13 10 13 10 7 10 10 7Z" /><path d="m13 17 2 3 2-3" /><path d="M18 3v4" /><path d="M20 5h-4" /></svg>,
+  Star: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>,
+  Book: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg>,
+  Microphone: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" x2="12" y1="19" y2="22" /></svg>,
 };
+
+/* ------------------- ROBOT MASCOT (AI Sarthi) ------------------- */
+/**
+ * a4ai's floating robot assistant.
+ * White shell with radial shading, glowing blue visor, teal fins.
+ * `look` offsets the eyes so it can glance toward the cursor.
+ * Gradient IDs are per-instance so several mascots can render at once.
+ */
+function RobotMascot({
+  size = 72,
+  state = "idle",
+  look = { x: 0, y: 0 },
+}: {
+  size?: number;
+  state?: "idle" | "thinking" | "sleep";
+  look?: { x: number; y: number };
+}) {
+  const uid = useRef(`rb${Math.random().toString(36).slice(2, 8)}`).current;
+  const gHead = `${uid}-head`;
+  const gBody = `${uid}-body`;
+  const gArm = `${uid}-arm`;
+  const gVisor = `${uid}-visor`;
+  const gFin = `${uid}-fin`;
+  const gChest = `${uid}-chest`;
+  const fGlow = `${uid}-glow`;
+  const fSoft = `${uid}-soft`;
+
+  const ex = Math.max(-3.5, Math.min(3.5, look.x));
+  const ey = Math.max(-2.5, Math.min(2.5, look.y));
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 105" style={{ overflow: "visible" }}>
+      <defs>
+        <radialGradient id={gHead} cx="0.34" cy="0.26" r="0.85">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="46%" stopColor="#F3F5FA" />
+          <stop offset="78%" stopColor="#DCE1ED" />
+          <stop offset="100%" stopColor="#B9C1D4" />
+        </radialGradient>
+
+        <radialGradient id={gBody} cx="0.38" cy="0.24" r="0.9">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="52%" stopColor="#EFF2F8" />
+          <stop offset="100%" stopColor="#C3CAD9" />
+        </radialGradient>
+
+        <radialGradient id={gArm} cx="0.35" cy="0.25" r="0.9">
+          <stop offset="0%" stopColor="#FDFDFF" />
+          <stop offset="60%" stopColor="#E7EBF3" />
+          <stop offset="100%" stopColor="#BFC7D8" />
+        </radialGradient>
+
+        <radialGradient id={gVisor} cx="0.66" cy="0.22" r="0.95">
+          <stop offset="0%" stopColor="#5C78FF" />
+          <stop offset="34%" stopColor="#2438E6" />
+          <stop offset="72%" stopColor="#131FBE" />
+          <stop offset="100%" stopColor="#060C86" />
+        </radialGradient>
+
+        <linearGradient id={gFin} x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0%" stopColor="#8FE8F2" />
+          <stop offset="55%" stopColor="#5BC4D8" />
+          <stop offset="100%" stopColor="#2E90AE" />
+        </linearGradient>
+
+        <linearGradient id={gChest} x1="0.3" y1="0" x2="0.7" y2="1">
+          <stop offset="0%" stopColor="#6FD3E4" />
+          <stop offset="100%" stopColor="#3AA7BE" />
+        </linearGradient>
+
+        <filter id={fGlow} x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="2.6" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        <filter id={fSoft} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="1.6" />
+        </filter>
+      </defs>
+
+      {/* ground shadow */}
+      <ellipse cx="50" cy="100" rx="23" ry="4" fill="#0B1B3A" opacity="0.16" filter={`url(#${fSoft})`} />
+
+      {/* fins */}
+      <rect x="15" y="14" width="9.5" height="29" rx="4.75" fill={`url(#${gFin})`} transform="rotate(-13 19 28)" />
+      <rect x="76" y="14" width="9.5" height="29" rx="4.75" fill={`url(#${gFin})`} transform="rotate(13 81 28)" />
+
+      {/* arms */}
+      <ellipse cx="18" cy="68" rx="14" ry="8" fill={`url(#${gArm})`} transform="rotate(32 18 68)" />
+      <ellipse cx="84" cy="60" rx="15" ry="8" fill={`url(#${gArm})`} transform="rotate(-25 84 60)" />
+
+      {/* body */}
+      <ellipse cx="50" cy="76" rx="27" ry="22" fill={`url(#${gBody})`} />
+      <ellipse cx="43" cy="63" rx="14" ry="6" fill="#FFFFFF" opacity="0.55" filter={`url(#${fSoft})`} />
+
+      {/* chest plate */}
+      <path d="M35 62 H65 A15 15 0 0 1 50 84 A15 15 0 0 1 35 62 Z" fill={`url(#${gChest})`} />
+      <path d="M32 62 H68" stroke="#1E2450" strokeWidth="1.8" strokeLinecap="round" opacity="0.85" />
+
+      {/* head */}
+      <rect x="31" y="3" width="17" height="10" rx="3.5" fill={`url(#${gHead})`} />
+      <ellipse cx="50" cy="39" rx="34" ry="32" fill={`url(#${gHead})`} />
+      <ellipse cx="38" cy="18" rx="16" ry="7" fill="#FFFFFF" opacity="0.6" filter={`url(#${fSoft})`} transform="rotate(-18 38 18)" />
+
+      {/* ear port */}
+      <ellipse cx="16" cy="39" rx="8" ry="6.5" fill={`url(#${gHead})`} />
+      <circle cx="13.5" cy="39" r="3.8" fill="#1E2450" />
+      <circle cx="12.6" cy="37.8" r="1.1" fill="#5B6690" opacity="0.7" />
+
+      {/* visor */}
+      <path d="M27 29 A23 20 0 0 1 73 29 L73 46 A23 17 0 0 1 27 46 Z" fill="#2438E6" opacity="0.35" filter={`url(#${fSoft})`} />
+      <path d="M27 29 A23 20 0 0 1 73 29 L73 46 A23 17 0 0 1 27 46 Z" fill={`url(#${gVisor})`} />
+      <ellipse cx="60" cy="28" rx="12.5" ry="5.5" fill="#FFFFFF" opacity="0.22" />
+      <ellipse cx="35" cy="44" rx="7" ry="2.5" fill="#8FA6FF" opacity="0.18" />
+
+      {/* eyes */}
+      <g filter={`url(#${fGlow})`} transform={`translate(${ex} ${ey})`}>
+        {state === "thinking" ? (
+          <>
+            <circle cx="39" cy="39" r="4.2" fill="#EAFBFF" />
+            <circle cx="61" cy="39" r="4.2" fill="#EAFBFF" />
+          </>
+        ) : state === "sleep" ? (
+          <>
+            <path d="M33 40 H45" stroke="#EAFBFF" strokeWidth="4.6" strokeLinecap="round" />
+            <path d="M55 40 H67" stroke="#EAFBFF" strokeWidth="4.6" strokeLinecap="round" />
+          </>
+        ) : (
+          <>
+            <path d="M33 42.5 Q39 32 45 42.5" stroke="#EAFBFF" strokeWidth="5.2" strokeLinecap="round" fill="none" />
+            <path d="M55 42.5 Q61 32 67 42.5" stroke="#EAFBFF" strokeWidth="5.2" strokeLinecap="round" fill="none" />
+          </>
+        )}
+      </g>
+    </svg>
+  );
+}
 
 /* ------------------- THEME COLORS ------------------- */
 const COLOR_SCHEMES = {
-  black:      { start: '#333333', end: '#000000', shadow: 'rgba(0,0,0,0.4)' },
-  maroon:     { start: '#A52A2A', end: '#800000', shadow: 'rgba(128,0,0,0.4)' },
-  magenta:    { start: '#FF00FF', end: '#8B008B', shadow: 'rgba(139,0,139,0.4)' },
-  teal:       { start: '#20B2AA', end: '#008080', shadow: 'rgba(0,128,128,0.4)' },
+  orange: { start: '#FF6B35', end: '#E85A28', shadow: 'rgba(255,107,53,0.35)' },
+  black: { start: '#333333', end: '#000000', shadow: 'rgba(0,0,0,0.4)' },
+  maroon: { start: '#A52A2A', end: '#800000', shadow: 'rgba(128,0,0,0.4)' },
+  magenta: { start: '#DB2777', end: '#8B008B', shadow: 'rgba(139,0,139,0.4)' },
+  teal: { start: '#20B2AA', end: '#008080', shadow: 'rgba(0,128,128,0.4)' },
   darkYellow: { start: '#DAA520', end: '#B8860B', shadow: 'rgba(184,134,11,0.4)' },
-  darkGreen:  { start: '#228B22', end: '#006400', shadow: 'rgba(0,100,0,0.4)' },
+  darkGreen: { start: '#228B22', end: '#006400', shadow: 'rgba(0,100,0,0.4)' },
   darkPurple: { start: '#8A2BE2', end: '#4B0082', shadow: 'rgba(75,0,130,0.4)' },
   crimsonRed: { start: '#DC143C', end: '#8B0000', shadow: 'rgba(139,0,0,0.4)' },
 };
@@ -242,11 +408,10 @@ const COLOR_SCHEMES = {
 const SidebarButton = ({ active, Icon, label, colorClass, onClick }: any) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 active:scale-95 ${
-      active
+    className={`w-full flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 active:scale-95 ${active
         ? "bg-slate-200/50 dark:bg-slate-800 shadow-sm text-slate-800 dark:text-white"
         : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-    }`}
+      }`}
   >
     <div className="flex items-center gap-3 sm:gap-4">
       <div className={`${active ? "scale-110" : ""} transition-transform shrink-0 ${colorClass}`}>
@@ -272,15 +437,12 @@ const GlossyButton = ({
 }: any) => (
   <button
     onClick={onClick}
-    className={`relative flex items-center justify-center gap-2 sm:gap-3 rounded-[28px] transform transition-all duration-300 ease-out hover:-translate-y-1 active:scale-[0.98] ${
-      isStartupsStyle ? "btn-startups" : "btn-glossy-theme"
-    } ${
-      fullWidth ? "w-full" : "w-auto"
-    } ${
-      small
+    className={`relative flex items-center justify-center gap-2 sm:gap-3 rounded-[28px] transform transition-all duration-300 ease-out hover:-translate-y-1 active:scale-[0.98] ${isStartupsStyle ? "btn-startups" : "btn-glossy-theme"
+      } ${fullWidth ? "w-full" : "w-auto"
+      } ${small
         ? "px-4 sm:px-5 py-2.5 sm:py-3 min-h-[44px] sm:min-h-[48px]"
         : "px-5 sm:px-8 py-4 sm:py-5 min-h-[56px] sm:min-h-[64px] text-base sm:text-lg"
-    } overflow-hidden group`}
+      } overflow-hidden group`}
   >
     {Icon && (
       <div
@@ -359,42 +521,42 @@ function SearchBar({
   }, []);
 
   const staticSuggestions: Suggestion[] = [
-    { type: "nav",  label: "Dashboard",       sub: "Overview & stats",    Icon: Icons.Grid,     action: () => { navigate("/dashboard"); onNavChange("dashboard"); } },
-    { type: "nav",  label: "Students",         sub: "Manage your class",   Icon: Icons.Users,     action: () => onNavChange("students") },
-    { type: "nav",  label: "Test History",     sub: "All your tests",      Icon: Icons.History,  action: () => onNavChange("tests") },
-    { type: "nav",  label: "Analytics",        sub: "Performance graphs",  Icon: Icons.Chart,     action: () => onNavChange("analytics") },
-    { type: "nav",  label: "AI Tools",         sub: "Teaching utilities",  Icon: Icons.Brain,     action: () => onNavChange("ai-tools") },
-    { type: "tool", label: "Community Quiz",   sub: "From YouTube video",  Icon: Icons.Youtube,  action: () => navigate("/teacher/community-quiz/new") },
-    { type: "tool", label: "Create Test",      sub: "CBSE test generator", Icon: Icons.Zap,       action: () => navigate("/dashboard/test-generator") },
-    { type: "tool", label: "Host Contest",     sub: "Live competition",    Icon: Icons.Trophy,   action: () => navigate("/contests") },
-    { type: "tool", label: "Pricing / Plans",  sub: "Buy Premium",         Icon: Icons.Star,     action: () => navigate("/pricing") },
+    { type: "nav", label: "Dashboard", sub: "Overview & stats", Icon: Icons.Grid, action: () => { navigate("/dashboard"); onNavChange("dashboard"); } },
+    { type: "nav", label: "Students", sub: "Manage your class", Icon: Icons.Users, action: () => onNavChange("students") },
+    { type: "nav", label: "Test History", sub: "All your tests", Icon: Icons.History, action: () => onNavChange("tests") },
+    { type: "nav", label: "Analytics", sub: "Performance graphs", Icon: Icons.Chart, action: () => onNavChange("analytics") },
+    { type: "nav", label: "AI Tools", sub: "Teaching utilities", Icon: Icons.Brain, action: () => onNavChange("ai-tools") },
+    { type: "tool", label: "Community Quiz", sub: "From YouTube video", Icon: Icons.Youtube, action: () => navigate("/teacher/community-quiz/new") },
+    { type: "tool", label: "Create Test", sub: "CBSE test generator", Icon: Icons.Zap, action: () => navigate("/dashboard/test-generator") },
+    { type: "tool", label: "Host Contest", sub: "Live competition", Icon: Icons.Trophy, action: () => navigate("/contests") },
+    { type: "tool", label: "Pricing / Plans", sub: "Buy Premium", Icon: Icons.Star, action: () => navigate("/pricing") },
   ];
 
   const suggestions: Suggestion[] =
     query.trim().length < 1
       ? []
       : [
-          ...tests
-            .filter(
-              (t) =>
-                (t.exam_title?.toLowerCase() || "").includes(query.toLowerCase()) ||
-                (t.subject?.toLowerCase() || "").includes(query.toLowerCase()) ||
-                (t.class_grade?.toLowerCase() || "").includes(query.toLowerCase())
-            )
-            .slice(0, 3)
-            .map<Suggestion>((t) => ({
-              type: "test",
-              label: t.exam_title || "Untitled Test",
-              sub: `Class ${t.class_grade} · ${t.subject} · ${t.board}`,
-              Icon: Icons.FileText,
-              action: () => onNavChange("tests"),
-            })),
-          ...staticSuggestions.filter(
-            (s) =>
-              s.label.toLowerCase().includes(query.toLowerCase()) ||
-              s.sub.toLowerCase().includes(query.toLowerCase())
-          ),
-        ].slice(0, 7);
+        ...tests
+          .filter(
+            (t) =>
+              (t.exam_title?.toLowerCase() || "").includes(query.toLowerCase()) ||
+              (t.subject?.toLowerCase() || "").includes(query.toLowerCase()) ||
+              (t.class_grade?.toLowerCase() || "").includes(query.toLowerCase())
+          )
+          .slice(0, 3)
+          .map<Suggestion>((t) => ({
+            type: "test",
+            label: t.exam_title || "Untitled Test",
+            sub: `Class ${t.class_grade} · ${t.subject} · ${t.board}`,
+            Icon: Icons.FileText,
+            action: () => onNavChange("tests"),
+          })),
+        ...staticSuggestions.filter(
+          (s) =>
+            s.label.toLowerCase().includes(query.toLowerCase()) ||
+            s.sub.toLowerCase().includes(query.toLowerCase())
+        ),
+      ].slice(0, 7);
 
   const handleSelect = (s: Suggestion) => {
     s.action();
@@ -441,13 +603,12 @@ function SearchBar({
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-[20px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left group"
               >
                 <div
-                  className={`p-2 rounded-[14px] inset-pill border-none shrink-0 ${
-                    s.type === "test"
+                  className={`p-2 rounded-[14px] inset-pill border-none shrink-0 ${s.type === "test"
                       ? "text-slate-800 dark:text-slate-200"
                       : s.type === "tool"
-                      ? "text-slate-500 dark:text-slate-400"
-                      : "text-slate-700 dark:text-slate-300"
-                  }`}
+                        ? "text-slate-500 dark:text-slate-400"
+                        : "text-slate-700 dark:text-slate-300"
+                    }`}
                 >
                   <SuggestionIcon />
                 </div>
@@ -518,13 +679,13 @@ function SidebarHelpWidget() {
       <div className="w-28 h-28 relative mb-2 flex items-center justify-center">
         <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-xl overflow-visible">
           <rect x="25" y="15" width="40" height="50" rx="2" className="folder-paper" transform="rotate(-15 45 40)" />
-          <line x1="30" y1="25" x2="55" y2="25" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" transform="rotate(-15 45 40)"/>
-          <line x1="30" y1="32" x2="50" y2="32" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" transform="rotate(-15 45 40)"/>
-          
+          <line x1="30" y1="25" x2="55" y2="25" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" transform="rotate(-15 45 40)" />
+          <line x1="30" y1="32" x2="50" y2="32" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" transform="rotate(-15 45 40)" />
+
           <rect x="35" y="15" width="45" height="55" rx="2" className="folder-paper" transform="rotate(10 55 40)" />
-          <circle cx="58" cy="35" r="8" fill="#E2E8F0" transform="rotate(10 55 40)"/>
-          <path d="M58 27 A8 8 0 0 1 66 35 L58 35 Z" fill="#94A3B8" transform="rotate(10 55 40)"/>
-          
+          <circle cx="58" cy="35" r="8" fill="#E2E8F0" transform="rotate(10 55 40)" />
+          <path d="M58 27 A8 8 0 0 1 66 35 L58 35 Z" fill="#94A3B8" transform="rotate(10 55 40)" />
+
           <rect x="40" y="10" width="35" height="50" rx="2" className="folder-paper" />
           <line x1="45" y1="20" x2="70" y2="20" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
           <line x1="45" y1="26" x2="65" y2="26" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
@@ -639,10 +800,10 @@ function TestHistory({
 }
 
 /* ------------------- CHATBOT TYPE ------------------- */
-interface Message { 
-  role: "user" | "assistant" | "system"; 
-  content: string; 
-  suggestions?: string[]; 
+interface Message {
+  role: "user" | "assistant" | "system";
+  content: string;
+  suggestions?: string[];
 }
 
 /* ------------------- MAIN PAGE ------------------- */
@@ -675,18 +836,19 @@ export default function TeacherDashboardPage() {
     "Solve Any doubt 24x7"
   ];
 
-  // Chat Setup 
+  // Chat Setup — AI Sarthi, the teaching-assistant persona for a4ai's support chatbot
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Hi, I am your a4ai assistant, how can I help you with?",
+      content:
+        "Namaste! Main AI Sarthi hoon — aapka a4ai assistant. Test paper banana ho, pricing samajhni ho, ya koi doubt solve karna ho, main yahin hoon. Kahaan se shuru karein?",
       suggestions: chatOptions
     }
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false); 
+  const [isListening, setIsListening] = useState(false);
   const [showChatTooltip, setShowChatTooltip] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -694,8 +856,34 @@ export default function TeacherDashboardPage() {
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recognitionRef = useRef<any>(null);
 
-  // Theme configuration
-  const [activeTheme, setActiveTheme] = useState<keyof typeof COLOR_SCHEMES>("black");
+  // ── MASCOT DRAG + 3D TILT ──
+  const dragControls = useDragControls();
+  const didDragRef = useRef(false);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  const [look, setLook] = useState({ x: 0, y: 0 });
+
+  const savedPos = useMemo(() => {
+    try {
+      const raw = safeStorage.get("sarthiPos");
+      return raw ? JSON.parse(raw) : { x: 0, y: 0 };
+    } catch { return { x: 0, y: 0 }; }
+  }, []);
+
+  const handleMascotMove = (e: React.MouseEvent) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+    const py = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    setTilt({ rx: -py * 15, ry: px * 20 });
+    setLook({ x: px * 3.5, y: py * 2.5 });
+  };
+
+  const resetMascot = () => {
+    setTilt({ rx: 0, ry: 0 });
+    setLook({ x: 0, y: 0 });
+  };
+
+  // Theme configuration — orange is the a4ai house colour
+  const [activeTheme, setActiveTheme] = useState<keyof typeof COLOR_SCHEMES>("orange");
   const currentThemeConfig = COLOR_SCHEMES[activeTheme];
 
   // Data
@@ -719,10 +907,10 @@ export default function TeacherDashboardPage() {
       });
   }, [user]);
 
-  // Chatbot Tooltip Timer - Pops up at 2 seconds, closes 2 seconds later.
+  // Chatbot Tooltip Timer
   useEffect(() => {
     const showTimer = setTimeout(() => setShowChatTooltip(true), 2000);
-    const hideTimer = setTimeout(() => setShowChatTooltip(false), 4000);
+    const hideTimer = setTimeout(() => setShowChatTooltip(false), 5000);
     return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
   }, []);
 
@@ -753,7 +941,6 @@ export default function TeacherDashboardPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Cleanup active audio threads on unmount
   useEffect(() => {
     return () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
@@ -775,13 +962,11 @@ export default function TeacherDashboardPage() {
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    
-    // Configurations
+
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-IN";
 
-    // Setup reset timer tracking audio sound signals
     const resetSilenceTimeout = () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => {
@@ -804,10 +989,9 @@ export default function TeacherDashboardPage() {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     };
 
-    // FIXED: Build the transcript iteratively from the fresh array map stack to prevent loops
     recognition.onresult = (event: any) => {
-      resetSilenceTimeout(); // Sound verified -> reset internal alarm counter
-      
+      resetSilenceTimeout();
+
       let finalTranscript = "";
       let interimTranscript = "";
 
@@ -820,7 +1004,6 @@ export default function TeacherDashboardPage() {
         }
       }
 
-      // Populate input bar accurately without multiplying past entries
       const combinedText = finalTranscript || interimTranscript;
       setInputMessage(combinedText);
     };
@@ -834,23 +1017,31 @@ export default function TeacherDashboardPage() {
 
     const userMsg: Message = { role: "user", content: textToSend };
     setChatMessages((prev) => [...prev, userMsg]);
-    
+
     if (!overrideMsg) setInputMessage("");
 
-    // ── EXACT MATCH INTERCEPTION FOR PREDEFINED OPTIONS ──
     const exactMatchResponses: Record<string, string> = {
-      "Explain me a4ai": "Here is what a4ai is all about:\n• a4ai is a platform designed for teachers to create and manage tests efficiently.\n• It generates CBSE-pattern papers in 30 seconds using actual NCERT content, saving teachers 2+ hours daily.\n• The platform supports various question types and exports tests to PDF & DOCX formats.\n• a4ai offers a free plan and two paid plans (Starter and Pro) with features like mobile proctoring and custom logos.",
-      "What are the pricing": "Here are our pricing plans:\n• Free Plan: ₹0 (forever) – 2 tests/month, MCQ + Short + Long formats.\n• Starter Plan: **₹149/month** (Just ₹5/day) – 10 tests/month, 2 free contests, no watermark.\n• Pro Plan: **₹299/month** (Just ₹10/day) – Unlimited tests, unlimited proctored contests, custom school logo.\n\n*Note: Upgrades are instant and we accept UPI, Cards, and Net Banking.*",
-      "How to Generate Test Paper": "Follow these simple steps to create a test:\n• Step 1: Go to the Dashboard page.\n• Step 2: Click on the Create Test button.\n• Step 3: Select fields like Exam Title, Class, Subject, Board, etc.\n• Step 4: Upload your institute logo (optional).\n• Step 5: Select Custom or CBSE pattern.\n• Step 6: Click on the Generate CBSE paper button.",
-      "Learn any topic": "I'm here to help. Which Topic you want to Understand?",
-      "Solve Any doubt 24x7": "I'm available 24/7! Please type your doubt below, and I'll help you solve it step-by-step."
+      "Explain me a4ai":
+        "Namaste! a4ai is built for teachers like you — so the hours you'd spend setting question papers can go back into actual teaching.\n\n• Pick a class, subject, and chapters — a4ai generates a full CBSE-pattern paper straight from NCERT content in under 30 seconds.\n• Every paper comes with a ready answer key, so checking is faster too.\n• Export to PDF or Word, add your institute's logo, and share directly with your students.\n\nThink of it as an assistant that handles the paper-setting grind for you. Want me to walk you through making your first test?",
+
+      "How to Generate Test Paper":
+        "Sure, let's make your test paper together — it takes about a minute:\n\n1. Go to your Dashboard and tap Create Test.\n2. Choose the Class, Subject, and Board.\n3. Pick the chapters you want questions from.\n4. (Optional) Upload your institute's logo.\n5. Choose a CBSE pattern or build a Custom one.\n6. Hit Generate — your paper with answer key is ready in seconds.\n\nStuck at any step? Tell me where, and I'll guide you through it.",
+
+      "What are the pricing":
+        "Here's how a4ai's plans work — pick whichever fits your teaching load:\n\n• Free Plan — ₹0, forever. 2 tests/month, all question formats.\n• Starter Plan — ₹149/month (~₹5/day). 10 tests/month, 2 free contests, no watermark.\n• Pro Plan — ₹299/month (~₹10/day). Unlimited tests & contests, your school's logo on every paper.\n\nUPI, cards, and net banking all work, and upgrades apply instantly. Want help picking the right plan for your class size?",
+
+      "Learn any topic":
+        "Happy to help — Maths, Science, English, anything on the NCERT syllabus. Just tell me the topic and class, and I'll explain it clearly, with examples if that helps.",
+
+      "Solve Any doubt 24x7":
+        "I'm here round the clock — go ahead and share your doubt. Type it out (or use the mic icon), and I'll walk you through it step by step, the way I would with a student."
     };
 
     if (exactMatchResponses[textToSend]) {
       setIsChatLoading(true);
       setTimeout(() => {
         setChatMessages((prev) => [
-          ...prev, 
+          ...prev,
           { role: "assistant", content: exactMatchResponses[textToSend], suggestions: chatOptions }
         ]);
         setIsChatLoading(false);
@@ -858,23 +1049,32 @@ export default function TeacherDashboardPage() {
       return;
     }
 
-    // ── API CALL FOR CUSTOM QUESTIONS ──
     let apiKey = "";
-    try { apiKey = import.meta.env.VITE_GROQ_API_KEY || ""; } catch (e) {}
+    try { apiKey = import.meta.env.VITE_GROQ_API_KEY || ""; } catch (e) { }
     if (!apiKey) {
       setChatMessages((prev) => [...prev, { role: "assistant", content: "Error: Missing VITE_GROQ_API_KEY", suggestions: chatOptions }]);
       return;
     }
-    
+
     setIsChatLoading(true);
 
-    const systemPromptText = `You are the a4ai Assistant for Teachers. Always use lowercase "a4ai" when referring to the platform. 
-    Context:
-    - a4ai: A platform designed for teachers to create and manage tests efficiently. Generates CBSE-pattern papers in 30 seconds from NCERT textbooks, saving 2+ hours daily. Supports MCQ, Short, Long, A&R, Cloze. Exports to PDF & DOCX.
-    - Pricing: Free Plan (₹0, 2 tests/mo, watermark), Starter Plan (₹149/mo or ₹5/day, 10 tests/mo, 2 proctored contests, WhatsApp sharing), Pro Plan (₹299/mo or ₹10/day, unlimited tests & contests, custom logo).
-    - FAQ: Free plan is forever. Upgrades take effect instantly. Accepts UPI/Cards/Net Banking. Discounts for govt schools. Accuracy is high as it uses actual NCERT content. Mobile proctoring is supported.
-    - Creating a Test: Step 1 - Go to Dashboard. Step 2 - Click Create Test. Step 3 - Select Exam Title, Class, Subject, Board. Step 4 - Upload logo (optional). Step 5 - Select custom or CBSE pattern. Step 6 - Click Generate.
-    Keep answers concise, helpful, and use bullet points when explaining features, pricing, or steps.`;
+    const systemPromptText = `You are AI Sarthi, the in-app teaching assistant for a4ai. You are a knowledgeable, patient colleague helping a busy teacher — not a sales bot reciting a brochure. Always use lowercase "a4ai" when referring to the platform.
+
+Tone and style:
+- Warm, encouraging, and direct — like a helpful senior teacher or support person who respects the teacher's time.
+- Open and close with a natural sentence; use bullets or numbered steps in between for clarity, not as the entire answer.
+- Light Hinglish is fine occasionally (e.g. "chaliye dekhte hain", "bilkul") since many a4ai teachers write that way — but keep core explanations clear.
+- End with a small, genuine next step where it fits — offer to walk them through something, or ask one clarifying question. Don't just stop after listing facts.
+- Never push upgrades unprompted. Mention pricing only when asked or clearly relevant, and frame everything around time saved and ease of teaching, not sales.
+- If a teacher seems stuck or frustrated, acknowledge that briefly before jumping into steps.
+
+Context:
+- a4ai: built for teachers to create and manage tests efficiently. Generates CBSE-pattern papers in 30 seconds from real NCERT content, saving 2+ hours daily. Supports MCQ, Short, Long, A&R, Cloze. Exports to PDF & DOCX.
+- Pricing: Free (₹0, 2 tests/mo, watermark), Starter (₹149/mo or ₹5/day, 10 tests/mo, 2 proctored contests, WhatsApp sharing), Pro (₹299/mo or ₹10/day, unlimited tests & contests, custom logo).
+- FAQ: Free plan is forever. Upgrades apply instantly. Accepts UPI/Cards/Net Banking. Discounts available for govt schools. High accuracy since it draws from actual NCERT content. Mobile proctoring supported.
+- Creating a Test: Dashboard → Create Test → select Exam Title, Class, Subject, Board → upload logo (optional) → choose custom or CBSE pattern → Generate.
+
+Keep answers concise and genuinely helpful — a teacher should feel like they just asked a colleague, not read a product page.`;
 
     try {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -884,8 +1084,10 @@ export default function TeacherDashboardPage() {
           model: "llama-3.3-70b-versatile",
           messages: [
             { role: "system", content: systemPromptText },
-            ...chatMessages.filter((m) => m.role !== "system"),
-            userMsg,
+            ...chatMessages
+              .filter((m) => m.role !== "system")
+              .map((m) => ({ role: m.role, content: m.content })),
+            { role: userMsg.role, content: userMsg.content },
           ],
           temperature: 0.7,
           max_tokens: 1024,
@@ -895,7 +1097,7 @@ export default function TeacherDashboardPage() {
       if (data.error) throw new Error(data.error.message);
       if (data.choices?.[0])
         setChatMessages((prev) => [
-          ...prev, 
+          ...prev,
           { role: "assistant", content: data.choices[0].message.content, suggestions: chatOptions }
         ]);
     } catch (error: any) {
@@ -928,709 +1130,748 @@ export default function TeacherDashboardPage() {
   };
 
   const navItems = [
-    { id: "dashboard", Icon: Icons.Grid,   label: "Dashboard",   color: "text-blue-500" },
-    { id: "students",  Icon: Icons.Users,  label: "Students",    color: "text-orange-500" },
-    { id: "tests",     Icon: Icons.History, label: "Test History", color: "text-rose-500" },
-    { id: "analytics", Icon: Icons.Chart,   label: "Analytics",    color: "text-emerald-500" },
-    { id: "ai-tools",  Icon: Icons.Brain,  label: "AI Tools",    color: "text-cyan-500" },
+    { id: "dashboard", Icon: Icons.Grid, label: "Dashboard", color: "text-blue-500" },
+    { id: "students", Icon: Icons.Users, label: "Students", color: "text-orange-500" },
+    { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
+    { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
+    { id: "ai-tools", Icon: Icons.Brain, label: "AI Tools", color: "text-cyan-500" },
   ];
 
   return (
-    <>
-      <div 
-        className={isDarkMode ? "dark" : ""} 
-        style={{
-          '--theme-start': currentThemeConfig.start,
-          '--theme-end': currentThemeConfig.end,
-          '--theme-shadow': currentThemeConfig.shadow,
-        } as React.CSSProperties}
-      >
-        <div className="flex h-[100dvh] w-full font-sans text-slate-800 dark:text-slate-100 overflow-hidden relative bg-[#F8F9FA] dark:bg-[#0A0A0A] transition-colors duration-500">
-          <style dangerouslySetInnerHTML={{ __html: customStyles }} />
+    <div
+      className={isDarkMode ? "dark" : ""}
+      style={{
+        '--theme-start': currentThemeConfig.start,
+        '--theme-end': currentThemeConfig.end,
+        '--theme-shadow': currentThemeConfig.shadow,
+      } as React.CSSProperties}
+    >
+      <div className="flex h-[100dvh] w-full font-sans text-slate-800 dark:text-slate-100 overflow-hidden relative bg-[#F8F9FA] dark:bg-[#0A0A0A] transition-colors duration-500">
+        <style dangerouslySetInnerHTML={{ __html: customStyles }} />
 
-          {/* ── Auto-moving animated blobs background covering a large area ── */}
-          <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-            <div 
-              className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-20 dark:opacity-[0.15] animate-blob" 
-              style={{ background: 'var(--theme-start)' }}
-            />
-            <div 
-              className="absolute top-[20%] right-[-10%] w-[40vw] h-[40vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-20 dark:opacity-[0.15] animate-blob animation-delay-2000" 
-              style={{ background: 'var(--theme-end)' }}
-            />
-            <div 
-              className="absolute bottom-[-20%] left-[20%] w-[60vw] h-[60vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-20 dark:opacity-[0.15] animate-blob animation-delay-4000" 
-              style={{ background: 'var(--theme-start)' }}
-            />
+        {/* ── Auto-moving animated blobs (very faint) ── */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+          <div
+            className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animate-blob"
+            style={{ background: 'var(--theme-start)' }}
+          />
+          <div
+            className="absolute top-[20%] right-[-10%] w-[40vw] h-[40vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animate-blob animation-delay-2000"
+            style={{ background: 'var(--theme-end)' }}
+          />
+          <div
+            className="absolute bottom-[-20%] left-[20%] w-[60vw] h-[60vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animate-blob animation-delay-4000"
+            style={{ background: 'var(--theme-start)' }}
+          />
+        </div>
+
+        {mobileMenuOpen && (
+          <div
+            className="fixed inset-0 bg-white/20 dark:bg-black/60 backdrop-blur-md z-[190] lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
+
+        {/* ===== SIDEBAR ===== */}
+        <aside
+          className={`fixed lg:relative top-0 left-0 w-[288px] h-full flex flex-col bg-white/80 dark:bg-black/80 backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5 z-[200] lg:z-50 shrink-0 transform transition-transform duration-300 overflow-y-auto ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+            }`}
+        >
+          <div className="p-5 pb-2">
+            <div className="flex items-center justify-between mb-8 animate-entrance px-2 border-b border-slate-100 dark:border-white/5 pb-6" style={{ animationDelay: "100ms" }}>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-[20px] sm:rounded-[24px] inset-pill border-none flex items-center justify-center shrink-0 overflow-hidden bg-white dark:bg-slate-800">
+                  <img
+                    src="/ICON.ico"
+                    alt="a4ai logo"
+                    className="w-8 h-8 sm:w-10 sm:h-10 object-contain"
+                    onError={(e: any) => {
+                      e.currentTarget.style.display = "none";
+                      const parent = e.currentTarget.parentElement;
+                      if (parent) {
+                        parent.innerHTML = '<span style="font-size:22px;font-weight:900;color:#111">a4</span>';
+                      }
+                    }}
+                  />
+                </div>
+                <span className="font-black text-2xl sm:text-3xl tracking-tight text-slate-900 dark:text-white leading-none">
+                  a4ai
+                </span>
+              </div>
+              <button
+                className="lg:hidden text-slate-500 bg-slate-100 p-1.5 rounded-full"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Icons.X />
+              </button>
+            </div>
+
+            {/* Nav Pages */}
+            <div className="animate-entrance" style={{ animationDelay: "200ms" }}>
+              <nav className="space-y-1.5 mt-2">
+                {navItems.map((item) => {
+                  const ItemIcon = item.Icon;
+                  return (
+                    <SidebarButton
+                      key={item.id}
+                      active={activeTab === item.id}
+                      Icon={ItemIcon}
+                      label={item.label}
+                      colorClass={item.color}
+                      onClick={() => {
+                        if (item.id === "dashboard") {
+                          navigate("/dashboard");
+                        }
+                        setActiveTab(item.id);
+                        setMobileMenuOpen(false);
+                      }}
+                    />
+                  );
+                })}
+              </nav>
+            </div>
           </div>
 
-          {mobileMenuOpen && (
-            <div
-              className="fixed inset-0 bg-white/20 dark:bg-black/60 backdrop-blur-md z-[190] lg:hidden"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-          )}
+          <div className="mt-auto px-5 pb-4 animate-entrance" style={{ animationDelay: "300ms" }}>
+            <SubscriptionSidebarWidget navigate={navigate} />
+            <SidebarHelpWidget />
+          </div>
+        </aside>
 
-          {/* ===== SIDEBAR ===== */}
-          <aside
-            className={`fixed lg:relative top-0 left-0 w-[288px] h-full flex flex-col bg-white/80 dark:bg-black/80 backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5 z-[200] lg:z-50 shrink-0 transform transition-transform duration-300 overflow-y-auto ${
-              mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-            }`}
-          >
-            <div className="p-5 pb-2">
-              <div className="flex items-center justify-between mb-8 animate-entrance px-2 border-b border-slate-100 dark:border-white/5 pb-6" style={{ animationDelay: "100ms" }}>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-[20px] sm:rounded-[24px] inset-pill border-none flex items-center justify-center shrink-0 overflow-hidden bg-white dark:bg-slate-800">
+        {/* ===== MAIN CONTENT ===== */}
+        <main className="flex-1 h-full overflow-y-auto relative z-10 scroll-smooth pb-24 sm:pb-32">
+          <div className="p-4 sm:p-6 lg:p-10 max-w-[1400px] mx-auto relative">
+
+            {/* ── STICKY / ADAPTIVE HEADER ── */}
+            <header
+              className="sticky lg:relative top-0 z-[150] lg:z-[100] bg-white/80 dark:bg-black/80 lg:bg-transparent backdrop-blur-xl lg:backdrop-blur-none border-b lg:border-none border-slate-200/50 dark:border-white/5 px-4 sm:px-6 lg:px-0 py-3 lg:py-0 -mx-4 sm:-mx-6 lg:mx-0 mb-6 lg:mb-12 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 lg:gap-6 animate-entrance transition-colors duration-500"
+              style={{ animationDelay: "100ms" }}
+            >
+              {/* MOBILE TOP ROW: Menu + Logo */}
+              <div className="flex lg:hidden items-center gap-3">
+                <button
+                  className="p-2 sm:p-2.5 text-slate-800 dark:text-white glass-panel rounded-[16px] sm:rounded-[20px] shrink-0"
+                  onClick={() => setMobileMenuOpen(true)}
+                >
+                  <Icons.Menu />
+                </button>
+                <button
+                  onClick={() => { navigate("/dashboard"); setActiveTab("dashboard"); }}
+                  className="flex items-center gap-3 ml-1"
+                >
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-[12px] sm:rounded-[16px] inset-pill border-none flex items-center justify-center shrink-0 overflow-hidden bg-white dark:bg-slate-800">
                     <img
                       src="/ICON.ico"
                       alt="a4ai logo"
-                      className="w-8 h-8 sm:w-10 sm:h-10 object-contain"
+                      className="w-5 h-5 sm:w-6 sm:h-6 object-contain"
                       onError={(e: any) => {
                         e.currentTarget.style.display = "none";
                         const parent = e.currentTarget.parentElement;
                         if (parent) {
-                          parent.innerHTML = '<span style="font-size:22px;font-weight:900;color:#111">a4</span>';
+                          parent.innerHTML = '<span style="font-size:14px;font-weight:900;color:#111">a4</span>';
                         }
                       }}
                     />
                   </div>
-                  <span className="font-black text-2xl sm:text-3xl tracking-tight text-slate-900 dark:text-white leading-none">
+                  <span className="font-black text-xl sm:text-2xl tracking-tight text-slate-900 dark:text-white leading-none">
                     a4ai
                   </span>
-                </div>
-                <button
-                  className="lg:hidden text-slate-500 bg-slate-100 p-1.5 rounded-full"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <Icons.X />
                 </button>
               </div>
 
-              {/* Nav Pages */}
-              <div className="animate-entrance" style={{ animationDelay: "200ms" }}>
-                <nav className="space-y-1.5 mt-2">
-                  {navItems.map((item) => {
-                    const ItemIcon = item.Icon;
-                    return (
-                      <SidebarButton
-                        key={item.id}
-                        active={activeTab === item.id}
-                        Icon={ItemIcon}
-                        label={item.label}
-                        colorClass={item.color}
-                        onClick={() => {
-                          if (item.id === "dashboard") {
-                            navigate("/dashboard");
-                          }
-                          setActiveTab(item.id); 
-                          setMobileMenuOpen(false); 
-                        }}
-                      />
-                    );
-                  })}
-                </nav>
-              </div>
-            </div>
-
-            <div className="mt-auto px-5 pb-4 animate-entrance" style={{ animationDelay: "300ms" }}>
-              <SubscriptionSidebarWidget navigate={navigate} />
-              <SidebarHelpWidget />
-            </div>
-          </aside>
-
-          {/* ===== MAIN CONTENT ===== */}
-          <main className="flex-1 h-full overflow-y-auto relative z-10 scroll-smooth pb-24 sm:pb-32">
-            <div className="p-4 sm:p-6 lg:p-10 max-w-[1400px] mx-auto relative">
-
-              {/* ── STICKY / ADAPTIVE HEADER ── */}
-              <header
-                className="sticky lg:relative top-0 z-[150] lg:z-[100] bg-white/80 dark:bg-black/80 lg:bg-transparent backdrop-blur-xl lg:backdrop-blur-none border-b lg:border-none border-slate-200/50 dark:border-white/5 px-4 sm:px-6 lg:px-0 py-3 lg:py-0 -mx-4 sm:-mx-6 lg:mx-0 mb-6 lg:mb-12 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 lg:gap-6 animate-entrance transition-colors duration-500"
-                style={{ animationDelay: "100ms" }}
-              >
-                {/* MOBILE TOP ROW: Menu + Logo */}
-                <div className="flex lg:hidden items-center gap-3">
-                  <button
-                    className="p-2 sm:p-2.5 text-slate-800 dark:text-white glass-panel rounded-[16px] sm:rounded-[20px] shrink-0"
-                    onClick={() => setMobileMenuOpen(true)}
-                  >
-                    <Icons.Menu />
-                  </button>
-                  <button
-                    onClick={() => { navigate("/dashboard"); setActiveTab("dashboard"); }}
-                    className="flex items-center gap-3 ml-1"
-                  >
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-[12px] sm:rounded-[16px] inset-pill border-none flex items-center justify-center shrink-0 overflow-hidden bg-white dark:bg-slate-800">
-                      <img
-                        src="/ICON.ico"
-                        alt="a4ai logo"
-                        className="w-5 h-5 sm:w-6 sm:h-6 object-contain"
-                        onError={(e: any) => {
-                          e.currentTarget.style.display = "none";
-                          const parent = e.currentTarget.parentElement;
-                          if (parent) {
-                            parent.innerHTML = '<span style="font-size:14px;font-weight:900;color:#111">a4</span>';
-                          }
-                        }}
-                      />
-                    </div>
-                    <span className="font-black text-xl sm:text-2xl tracking-tight text-slate-900 dark:text-white leading-none">
-                      a4ai
-                    </span>
-                  </button>
-                </div>
-
-                {/* DESKTOP LEFT: Greeting */}
-                <div className="hidden lg:flex flex-col min-w-0 w-full lg:w-auto">
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white tracking-tight truncate">
-                    Welcome, {getFirstName()}
-                  </h1>
-                  <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-1 sm:mt-2 font-medium truncate">
-                    Here's what's happening in your classes.
-                  </p>
-                </div>
-
-                {/* RIGHT / BOTTOM ROW: Search + Notif + Profile */}
-                <div className="flex items-center gap-2 sm:gap-3 w-full lg:w-auto justify-between lg:justify-end">
-                  <div className="flex-1 lg:flex-none min-w-0">
-                    <SearchBar tests={allTests} onNavChange={(tab) => { setActiveTab(tab); }} />
-                  </div>
-
-                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    {/* Notifications */}
-                    <div className="relative shrink-0" ref={notifRef}>
-                      <button
-                        onClick={() => setIsNotifOpen(!isNotifOpen)}
-                        className={`p-2.5 sm:p-3 rounded-[20px] sm:rounded-[24px] inset-pill transition-all relative active:scale-95 ${
-                          isNotifOpen ? "text-slate-800 dark:text-white" : "text-slate-500 dark:text-slate-400"
-                        }`}
-                      >
-                        <Icons.Bell />
-                        <span className="absolute top-2 sm:top-2.5 right-2 sm:right-2.5 w-2.5 h-2.5 bg-slate-800 dark:bg-white rounded-full border-2 border-white dark:border-black" style={{ background: "var(--theme-start)" }} />
-                      </button>
-                      {isNotifOpen && (
-                        <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-4 sm:p-5 flex flex-col gap-2 animate-pop z-[150]">
-                          <div className="flex justify-between items-center mb-3 px-2">
-                            <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white">
-                              Notifications
-                            </h3>
-                            <span className="text-[10px] font-bold btn-glossy-theme px-2.5 py-1 rounded-full">
-                              New
-                            </span>
-                          </div>
-                          <div className="flex gap-3 items-start p-3 sm:p-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors cursor-pointer inset-pill border-none">
-                            <div className="text-slate-800 dark:text-white shrink-0 mt-0.5" style={{ color: "var(--theme-start)" }}><Icons.Check /></div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                                Welcome to a4ai!
-                              </p>
-                              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                                Start generating CBSE papers.
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex gap-3 items-start p-3 sm:p-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors cursor-pointer inset-pill border-none">
-                            <div className="text-slate-800 dark:text-white shrink-0 mt-0.5" style={{ color: "var(--theme-start)" }}><Icons.Youtube /></div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                                Community Quiz is here!
-                              </p>
-                              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                                Create quizzes from any YouTube video instantly.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* ── PROFILE BUTTON ── */}
-                    <div className="relative shrink-0" ref={profileRef}>
-                      <button
-                        onClick={() => {
-                          setIsProfileOpen(!isProfileOpen);
-                          if (isProfileOpen) setShowAppearance(false);
-                        }}
-                        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[24px] glass-panel transition-all duration-200 hover:shadow-md active:scale-95 group ${
-                          isProfileOpen ? "ring-2 ring-slate-400/50" : ""
-                        }`}
-                      >
-                        <div 
-                          className="w-8 h-8 sm:w-10 sm:h-10 rounded-[18px] sm:rounded-[20px] flex items-center justify-center text-white shrink-0 shadow-sm"
-                          style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
-                        >
-                          <Icons.GradCap />
-                        </div>
-                        <div className="hidden sm:block text-left">
-                          <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight transition-colors truncate max-w-[110px]">
-                            {displayName}
-                          </p>
-                          <p className="text-[11px] text-slate-500 font-medium">Educator</p>
-                        </div>
-                        <div className="text-slate-400 hidden sm:block transition-transform duration-200" style={{ transform: isProfileOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
-                          <Icons.ChevronDown />
-                        </div>
-                      </button>
-
-                      {isProfileOpen && (
-                        <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-3 flex flex-col gap-1 animate-pop z-[150]">
-                          {/* Profile info */}
-                          <div className="px-4 sm:px-5 py-4 sm:py-5 mb-1 inset-pill rounded-[28px] sm:rounded-[32px] border-none flex items-center gap-4">
-                            <div 
-                              className="w-12 h-12 rounded-[20px] flex items-center justify-center text-white shrink-0 shadow-md"
-                              style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
-                            >
-                              <Icons.GradCap />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-extrabold text-slate-800 dark:text-white text-base truncate">
-                                {displayName}
-                              </p>
-                              <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                            </div>
-                          </div>
-
-                          {/* My Profile */}
-                          <button
-                            onClick={() => { navigate("/settings"); setIsProfileOpen(false); }}
-                            className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors group"
-                          >
-                            <div className="flex items-center gap-3">
-                              <Icons.User /> My Profile
-                            </div>
-                            <div className="text-slate-400 group-hover:translate-x-0.5 transition-transform">
-                              <Icons.ChevronRight />
-                            </div>
-                          </button>
-
-                          {/* Language Selector */}
-                          <button
-                            className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors group"
-                          >
-                            <div className="flex items-center gap-3">
-                              <Icons.Globe /> Language
-                            </div>
-                            <div className="text-slate-400 group-hover:translate-x-0.5 transition-transform">
-                              <Icons.ChevronRight />
-                            </div>
-                          </button>
-
-                          {/* Appearance / Theme Picker */}
-                          <div className="flex flex-col rounded-[24px] sm:rounded-[28px] overflow-hidden">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setShowAppearance(!showAppearance); }}
-                              className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors group w-full"
-                            >
-                              <div className="flex items-center gap-3">
-                                <Icons.Sun /> Appearance
-                              </div>
-                              <div className="text-slate-400 transition-transform duration-200" style={{ transform: showAppearance ? "rotate(180deg)" : "rotate(0deg)" }}>
-                                <Icons.ChevronDown />
-                              </div>
-                            </button>
-                            
-                            {showAppearance && (
-                              <div className="px-4 sm:px-5 pb-4 pt-1 flex flex-col gap-4 animate-entrance bg-black/5 dark:bg-white/5">
-                                
-                                {/* Dark Mode Toggle */}
-                                <div className="flex items-center justify-between pt-2">
-                                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Dark Mode</span>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setIsDarkMode(!isDarkMode); }}
-                                    className={`w-11 h-6 rounded-full shadow-inner relative flex items-center px-1 transition-colors duration-300 ${
-                                      isDarkMode ? "bg-slate-700" : "bg-slate-300"
-                                    }`}
-                                  >
-                                    <div
-                                      className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 ${
-                                        isDarkMode ? "translate-x-5" : "translate-x-0"
-                                      }`}
-                                    />
-                                  </button>
-                                </div>
-
-                                {/* Color Scheme Picker */}
-                                <div>
-                                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2 block">Color Scheme</span>
-                                  <div className="flex flex-wrap gap-3 place-items-center">
-                                    {(Object.keys(COLOR_SCHEMES) as Array<keyof typeof COLOR_SCHEMES>).map((key) => (
-                                      <button
-                                        key={key}
-                                        onClick={(e) => { e.stopPropagation(); setActiveTheme(key); }}
-                                        className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center transition-transform hover:scale-110 shadow-sm border-2 ${
-                                          activeTheme === key ? "border-slate-800 dark:border-white scale-110" : "border-transparent"
-                                        }`}
-                                        style={{ background: COLOR_SCHEMES[key].start }}
-                                        title={key}
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="h-px bg-slate-200/50 dark:bg-slate-700/50 my-1 mx-4" />
-
-                          {/* LOGOUT BUTTON */}
-                          <button
-                            onClick={handleLogout}
-                            className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-red-500 hover:bg-red-500/10 rounded-[24px] sm:rounded-[28px] transition-colors"
-                          >
-                            <Icons.LogOut /> Logout
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </header>
-
-              {/* MOBILE GREETING */}
-              <div className="lg:hidden mb-6 sm:mb-8 px-1 animate-entrance" style={{ animationDelay: "150ms" }}>
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">
+              {/* DESKTOP LEFT: Greeting */}
+              <div className="hidden lg:flex flex-col min-w-0 w-full lg:w-auto">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white tracking-tight truncate">
                   Welcome, {getFirstName()}
                 </h1>
-                <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-1 font-medium truncate">
+                <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-1 sm:mt-2 font-medium truncate">
                   Here's what's happening in your classes.
                 </p>
               </div>
 
-              {/* ===== DASHBOARD TAB ===== */}
-              {activeTab === "dashboard" && (
-                <div className="space-y-6 sm:space-y-8">
-                  {/* Hero cards */}
-                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
-                    {/* NCERT generator card */}
-                    <div className="xl:col-span-2 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 lg:p-14 relative overflow-hidden flex flex-col justify-center group">
-                      <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-[48px]" />
-                      <div className="relative z-10 max-w-xl">
-                        <div className="flex items-center gap-2 mb-4 sm:mb-6 bg-white/60 dark:bg-black/50 border border-white/40 dark:border-white/10 w-fit px-3 sm:px-5 py-1.5 sm:py-2 rounded-[20px] sm:rounded-[24px] shadow-sm">
-                          <div className="text-slate-800 dark:text-slate-200" style={{ color: "var(--theme-start)" }}><Icons.Brain /></div>
-                          <span className="text-[10px] sm:text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">
-                            NCERT Test Generator
-                          </span>
-                        </div>
-                        <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-4 sm:mb-6 tracking-tight leading-[1.1]">
-                          Create CBSE papers in minutes.
-                        </h2>
-                        <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base lg:text-lg mb-6 sm:mb-10 font-medium">
-                          Pick chapters, set marks — get a section-wise paper with answer key, ready to print.
-                        </p>
-                        <GlossyButton
-                          label="Create Test"
-                          icon={Icons.Zap}
-                          onClick={() => navigate("/dashboard/test-generator")}
-                          isStartupsStyle={true}
-                        />
-                      </div>
-                    </div>
+              {/* RIGHT / BOTTOM ROW: Search + Notif + Profile */}
+              <div className="flex items-center gap-2 sm:gap-3 w-full lg:w-auto justify-between lg:justify-end">
+                <div className="flex-1 lg:flex-none min-w-0">
+                  <SearchBar tests={allTests} onNavChange={(tab) => { setActiveTab(tab); }} />
+                </div>
 
-                    {/* What's New card */}
-                    <div className="xl:col-span-1 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col relative overflow-hidden">
-                      <div className="flex items-center gap-3 sm:gap-5 mb-6 sm:mb-8">
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 inset-pill border-none flex items-center justify-center shadow-inner rounded-[24px] sm:rounded-[28px] shrink-0" style={{ color: "var(--theme-start)" }}>
-                          <Icons.Sparkles />
-                        </div>
-                        <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                          What's New
-                        </h3>
-                      </div>
-                      <div className="space-y-3 sm:space-y-4">
-                        <GlossyButton
-                          label="Community Quiz"
-                          subLabel="From any YouTube video"
-                          icon={Icons.Youtube}
-                          fullWidth
-                          showNewBadge
-                          onClick={() => navigate("/teacher/community-quiz/new")}
-                        />
-                        <GlossyButton
-                          label="Host Contest"
-                          subLabel="Start Live Competition"
-                          icon={Icons.Trophy}
-                          fullWidth
-                          onClick={() => navigate("/contests")}
-                        />
-                        <GlossyButton
-                          label="Join Institute"
-                          subLabel="Enter code to join"
-                          icon={Icons.Users}
-                          fullWidth
-                          onClick={() => navigate("/join-institute")}
-                        />
-                        <GlossyButton
-                          label="Test History"
-                          subLabel="View past papers"
-                          icon={Icons.History}
-                          fullWidth
-                          onClick={() => setActiveTab("tests")}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stats grid */}
-                  <div
-                    className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-8 scroll-reveal"
-                    style={{ transitionDelay: "80ms" }}
-                  >
-                    {[
-                      { t: "Active Students", v: "156",                          c: "+12%",      Icon: Icons.Users   },
-                      { t: "Tests Created",   v: String(allTests.length || "0"), c: "All time",  Icon: Icons.FileText },
-                      { t: "Engagement",      v: "92%",                          c: "+3.2%",     Icon: Icons.Chart   },
-                      { t: "Time Saved",      v: "8h",                            c: "This week", Icon: Icons.Clock   },
-                    ].map((stat, i) => {
-                      const StatIcon = stat.Icon;
-                      return (
-                        <div
-                          key={i}
-                          className="glass-panel rounded-[24px] sm:rounded-[40px] p-4 sm:p-8 flex flex-col items-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all duration-300"
-                        >
-                          <div className="mb-3 sm:mb-5 inset-pill p-2.5 sm:p-4 rounded-[16px] sm:rounded-[24px] border-none shrink-0 text-slate-800 dark:text-white" style={{ color: "var(--theme-start)" }}>
-                            <StatIcon />
-                          </div>
-                          <h3 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-1 sm:mb-2">
-                            {stat.v}
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                  {/* Notifications */}
+                  <div className="relative shrink-0" ref={notifRef}>
+                    <button
+                      onClick={() => setIsNotifOpen(!isNotifOpen)}
+                      className={`p-2.5 sm:p-3 rounded-[20px] sm:rounded-[24px] inset-pill transition-all relative active:scale-95 ${isNotifOpen ? "text-slate-800 dark:text-white" : "text-slate-500 dark:text-slate-400"
+                        }`}
+                    >
+                      <Icons.Bell />
+                      <span className="absolute top-2 sm:top-2.5 right-2 sm:right-2.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-black" style={{ background: "var(--theme-start)" }} />
+                    </button>
+                    {isNotifOpen && (
+                      <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-4 sm:p-5 flex flex-col gap-2 animate-pop z-[150]">
+                        <div className="flex justify-between items-center mb-3 px-2">
+                          <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white">
+                            Notifications
                           </h3>
-                          <p className="text-[9px] sm:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 sm:mb-4">
-                            {stat.t}
-                          </p>
-                          <span className="text-[10px] sm:text-xs text-slate-800 dark:text-slate-200 font-extrabold bg-slate-200/50 dark:bg-white/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-[16px] sm:rounded-[20px] border border-slate-300/50 dark:border-white/10">
-                            {stat.c}
+                          <span className="text-[10px] font-bold btn-glossy-theme px-2.5 py-1 rounded-full">
+                            New
                           </span>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Institute section */}
-                  <div className="scroll-reveal" style={{ transitionDelay: "140ms" }}>
-                    <InstituteTeacherPanel userId={user?.id} />
-                  </div>
-
-                  {/* Recent Tests */}
-                  <div
-                    className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12 scroll-reveal"
-                    style={{ transitionDelay: "200ms" }}
-                  >
-                    <div className="flex justify-between items-center mb-5 sm:mb-8">
-                      <h3 className="font-black text-slate-900 dark:text-white text-xl sm:text-3xl">
-                        Recent Tests
-                      </h3>
-                      <button
-                        onClick={() => setActiveTab("tests")}
-                        className="inset-pill text-slate-800 dark:text-slate-200 px-4 sm:px-6 py-2 sm:py-3 rounded-[20px] sm:rounded-[24px] font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-none"
-                      >
-                        View All
-                      </button>
-                    </div>
-
-                    {testsLoading ? (
-                      <div className="space-y-3">
-                        {[1, 2, 3].map((i) => (
-                          <div key={i} className="animate-pulse h-20 bg-black/5 dark:bg-white/5 rounded-[20px]" />
-                        ))}
-                      </div>
-                    ) : recentTests.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-slate-500 font-medium">No tests yet — create your first one!</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3 sm:space-y-4">
-                        {recentTests.map((test) => (
-                          <div
-                            key={test.id}
-                            className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-black/5 dark:border-white/10 hover:bg-white/80 dark:hover:bg-slate-800/60 transition-all duration-300 cursor-pointer group gap-3"
-                          >
-                            <div className="flex items-center gap-3 sm:gap-5 min-w-0">
-                              <div className="p-3 sm:p-4 rounded-[16px] sm:rounded-[24px] inset-pill border-none text-slate-800 dark:text-white shadow-inner shrink-0" style={{ color: "var(--theme-start)" }}>
-                                <Icons.FileText />
-                              </div>
-                              <div className="min-w-0">
-                                <h4 className="font-extrabold text-slate-900 dark:text-white text-base sm:text-xl transition-colors truncate">
-                                  {test.exam_title || "Untitled Test"}
-                                </h4>
-                                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 font-medium">
-                                  Class {test.class_grade} · {test.subject} · {formatDate(test.created_at)}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 sm:gap-6">
-                              {test.total_questions > 0 && (
-                                <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 inset-pill border-none px-3 sm:px-4 py-1.5 sm:py-2 rounded-[16px] sm:rounded-[20px]">
-                                  {test.total_questions}Q
-                                </span>
-                              )}
-                              <span
-                                className={`text-[10px] px-3 py-1.5 rounded-[16px] font-bold uppercase border ${
-                                  test.status === "saved"
-                                    ? "bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-700/60 dark:text-slate-200"
-                                    : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400"
-                                }`}
-                              >
-                                {test.status}
-                              </span>
-                            </div>
+                        <div className="flex gap-3 items-start p-3 sm:p-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors cursor-pointer inset-pill border-none">
+                          <div className="shrink-0 mt-0.5" style={{ color: "var(--theme-start)" }}><Icons.Check /></div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                              Welcome to a4ai!
+                            </p>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                              Start generating CBSE papers.
+                            </p>
                           </div>
-                        ))}
+                        </div>
+                        <div className="flex gap-3 items-start p-3 sm:p-4 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors cursor-pointer inset-pill border-none">
+                          <div className="shrink-0 mt-0.5" style={{ color: "var(--theme-start)" }}><Icons.Youtube /></div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                              Community Quiz is here!
+                            </p>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                              Create quizzes from any YouTube video instantly.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── PROFILE BUTTON ── */}
+                  <div className="relative shrink-0" ref={profileRef}>
+                    <button
+                      onClick={() => {
+                        setIsProfileOpen(!isProfileOpen);
+                        if (isProfileOpen) setShowAppearance(false);
+                      }}
+                      className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[24px] glass-panel transition-all duration-200 hover:shadow-md active:scale-95 group ${isProfileOpen ? "ring-2 ring-slate-400/50" : ""
+                        }`}
+                    >
+                      <div
+                        className="w-8 h-8 sm:w-10 sm:h-10 rounded-[18px] sm:rounded-[20px] flex items-center justify-center text-white shrink-0 shadow-sm"
+                        style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
+                      >
+                        <Icons.GradCap />
+                      </div>
+                      <div className="hidden sm:block text-left">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight transition-colors truncate max-w-[110px]">
+                          {displayName}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-medium">Educator</p>
+                      </div>
+                      <div className="text-slate-400 hidden sm:block transition-transform duration-200" style={{ transform: isProfileOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                        <Icons.ChevronDown />
+                      </div>
+                    </button>
+
+                    {isProfileOpen && (
+                      <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-3 flex flex-col gap-1 animate-pop z-[150]">
+                        {/* Profile info */}
+                        <div className="px-4 sm:px-5 py-4 sm:py-5 mb-1 inset-pill rounded-[28px] sm:rounded-[32px] border-none flex items-center gap-4">
+                          <div
+                            className="w-12 h-12 rounded-[20px] flex items-center justify-center text-white shrink-0 shadow-md"
+                            style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
+                          >
+                            <Icons.GradCap />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-slate-800 dark:text-white text-base truncate">
+                              {displayName}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                          </div>
+                        </div>
+
+                        {/* My Profile */}
+                        <button
+                          onClick={() => { navigate("/settings"); setIsProfileOpen(false); }}
+                          className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Icons.User /> My Profile
+                          </div>
+                          <div className="text-slate-400 group-hover:translate-x-0.5 transition-transform">
+                            <Icons.ChevronRight />
+                          </div>
+                        </button>
+
+                        {/* Language Selector */}
+                        <button
+                          className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Icons.Globe /> Language
+                          </div>
+                          <div className="text-slate-400 group-hover:translate-x-0.5 transition-transform">
+                            <Icons.ChevronRight />
+                          </div>
+                        </button>
+
+                        {/* Appearance / Theme Picker */}
+                        <div className="flex flex-col rounded-[24px] sm:rounded-[28px] overflow-hidden">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShowAppearance(!showAppearance); }}
+                            className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors group w-full"
+                          >
+                            <div className="flex items-center gap-3">
+                              <Icons.Sun /> Appearance
+                            </div>
+                            <div className="text-slate-400 transition-transform duration-200" style={{ transform: showAppearance ? "rotate(180deg)" : "rotate(0deg)" }}>
+                              <Icons.ChevronDown />
+                            </div>
+                          </button>
+
+                          {showAppearance && (
+                            <div className="px-4 sm:px-5 pb-4 pt-1 flex flex-col gap-4 animate-entrance bg-black/5 dark:bg-white/5">
+
+                              {/* Dark Mode Toggle */}
+                              <div className="flex items-center justify-between pt-2">
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Dark Mode</span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setIsDarkMode(!isDarkMode); }}
+                                  className={`w-11 h-6 rounded-full shadow-inner relative flex items-center px-1 transition-colors duration-300 ${isDarkMode ? "bg-slate-700" : "bg-slate-300"
+                                    }`}
+                                >
+                                  <div
+                                    className={`w-4 h-4 rounded-full bg-white shadow transition-transform duration-300 ${isDarkMode ? "translate-x-5" : "translate-x-0"
+                                      }`}
+                                  />
+                                </button>
+                              </div>
+
+                              {/* Color Scheme Picker */}
+                              <div>
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2 block">Color Scheme</span>
+                                <div className="flex flex-wrap gap-3 place-items-center">
+                                  {(Object.keys(COLOR_SCHEMES) as Array<keyof typeof COLOR_SCHEMES>).map((key) => (
+                                    <button
+                                      key={key}
+                                      onClick={(e) => { e.stopPropagation(); setActiveTheme(key); }}
+                                      className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center transition-transform hover:scale-110 shadow-sm border-2 ${activeTheme === key ? "border-slate-800 dark:border-white scale-110" : "border-transparent"
+                                        }`}
+                                      style={{ background: COLOR_SCHEMES[key].start }}
+                                      title={key}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="h-px bg-slate-200/50 dark:bg-slate-700/50 my-1 mx-4" />
+
+                        {/* LOGOUT BUTTON */}
+                        <button
+                          onClick={handleLogout}
+                          className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-red-500 hover:bg-red-500/10 rounded-[24px] sm:rounded-[28px] transition-colors"
+                        >
+                          <Icons.LogOut /> Logout
+                        </button>
                       </div>
                     )}
                   </div>
                 </div>
-              )}
+              </div>
+            </header>
 
-              {/* ===== STUDENTS TAB ===== */}
-              {activeTab === "students" && (
-                <div className="space-y-6 sm:space-y-8 animate-pop">
+            {/* MOBILE GREETING */}
+            <div className="lg:hidden mb-6 sm:mb-8 px-1 animate-entrance" style={{ animationDelay: "150ms" }}>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">
+                Welcome, {getFirstName()}
+              </h1>
+              <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-1 font-medium truncate">
+                Here's what's happening in your classes.
+              </p>
+            </div>
+
+            {/* ===== DASHBOARD TAB ===== */}
+            {activeTab === "dashboard" && (
+              <div className="space-y-6 sm:space-y-8">
+                {/* Hero cards */}
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
+                  {/* NCERT generator card */}
+                  <div className="xl:col-span-2 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 lg:p-14 relative overflow-hidden flex flex-col justify-center group">
+                    <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-[48px]" />
+                    <div className="relative z-10 max-w-xl">
+                      <div className="flex items-center gap-2 mb-4 sm:mb-6 bg-white/60 dark:bg-black/50 border border-white/40 dark:border-white/10 w-fit px-3 sm:px-5 py-1.5 sm:py-2 rounded-[20px] sm:rounded-[24px] shadow-sm">
+                        <div style={{ color: "var(--theme-start)" }}><Icons.Brain /></div>
+                        <span className="text-[10px] sm:text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">
+                          NCERT Test Generator
+                        </span>
+                      </div>
+                      <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-4 sm:mb-6 tracking-tight leading-[1.1]">
+                        Create CBSE papers in minutes.
+                      </h2>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base lg:text-lg mb-6 sm:mb-10 font-medium">
+                        Pick chapters, set marks — get a section-wise paper with answer key, ready to print.
+                      </p>
+                      <GlossyButton
+                        label="Create Test"
+                        icon={Icons.Zap}
+                        onClick={() => navigate("/dashboard/test-generator")}
+                        isStartupsStyle={true}
+                      />
+                    </div>
+                  </div>
+
+                  {/* What's New card */}
+                  <div className="xl:col-span-1 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col relative overflow-hidden">
+                    <div className="flex items-center gap-3 sm:gap-5 mb-6 sm:mb-8">
+                      <div className="w-12 h-12 sm:w-14 sm:h-14 inset-pill border-none flex items-center justify-center shadow-inner rounded-[24px] sm:rounded-[28px] shrink-0" style={{ color: "var(--theme-start)" }}>
+                        <Icons.Sparkles />
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                        What's New
+                      </h3>
+                    </div>
+                    <div className="space-y-3 sm:space-y-4">
+                      <GlossyButton
+                        label="Community Quiz"
+                        subLabel="From any YouTube video"
+                        icon={Icons.Youtube}
+                        fullWidth
+                        showNewBadge
+                        onClick={() => navigate("/teacher/community-quiz/new")}
+                      />
+                      <GlossyButton
+                        label="Host Contest"
+                        subLabel="Start Live Competition"
+                        icon={Icons.Trophy}
+                        fullWidth
+                        onClick={() => navigate("/contests")}
+                      />
+                      <GlossyButton
+                        label="Join Institute"
+                        subLabel="Enter code to join"
+                        icon={Icons.Users}
+                        fullWidth
+                        onClick={() => navigate("/join-institute")}
+                      />
+                      <GlossyButton
+                        label="Test History"
+                        subLabel="View past papers"
+                        icon={Icons.History}
+                        fullWidth
+                        onClick={() => setActiveTab("tests")}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats grid */}
+                <div
+                  className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-8 scroll-reveal"
+                  style={{ transitionDelay: "80ms" }}
+                >
+                  {[
+                    { t: "Active Students", v: "156", c: "+12%", Icon: Icons.Users },
+                    { t: "Tests Created", v: String(allTests.length || "0"), c: "All time", Icon: Icons.FileText },
+                    { t: "Engagement", v: "92%", c: "+3.2%", Icon: Icons.Chart },
+                    { t: "Time Saved", v: "8h", c: "This week", Icon: Icons.Clock },
+                  ].map((stat, i) => {
+                    const StatIcon = stat.Icon;
+                    return (
+                      <div
+                        key={i}
+                        className="glass-panel rounded-[24px] sm:rounded-[40px] p-4 sm:p-8 flex flex-col items-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all duration-300"
+                      >
+                        <div className="mb-3 sm:mb-5 inset-pill p-2.5 sm:p-4 rounded-[16px] sm:rounded-[24px] border-none shrink-0" style={{ color: "var(--theme-start)" }}>
+                          <StatIcon />
+                        </div>
+                        <h3 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-1 sm:mb-2">
+                          {stat.v}
+                        </h3>
+                        <p className="text-[9px] sm:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 sm:mb-4">
+                          {stat.t}
+                        </p>
+                        <span className="text-[10px] sm:text-xs text-slate-800 dark:text-slate-200 font-extrabold bg-slate-200/50 dark:bg-white/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-[16px] sm:rounded-[20px] border border-slate-300/50 dark:border-white/10">
+                          {stat.c}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Institute section */}
+                <div className="scroll-reveal" style={{ transitionDelay: "140ms" }}>
                   <InstituteTeacherPanel userId={user?.id} />
                 </div>
-              )}
 
-              {/* ===== TEST HISTORY TAB ===== */}
-              {activeTab === "tests" && (
-                <TestHistory
-                  onCreateNew={() => navigate("/dashboard/test-generator")}
-                  tests={allTests}
-                  loading={testsLoading}
-                />
-              )}
-
-              {/* ===== ANALYTICS TAB ===== */}
-              {activeTab === "analytics" && (
-                <div className="space-y-6 sm:space-y-8 animate-pop">
-                  <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-8 sm:p-10 min-h-[300px] sm:min-h-[500px] flex flex-col justify-center items-center text-center">
-                    <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none text-slate-800 dark:text-white rounded-full flex items-center justify-center mb-6 sm:mb-8" style={{ color: "var(--theme-start)" }}>
-                      <Icons.Chart />
-                    </div>
-                    <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3 sm:mb-4">
-                      Performance Trends
+                {/* Recent Tests */}
+                <div
+                  className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12 scroll-reveal"
+                  style={{ transitionDelay: "200ms" }}
+                >
+                  <div className="flex justify-between items-center mb-5 sm:mb-8">
+                    <h3 className="font-black text-slate-900 dark:text-white text-xl sm:text-3xl">
+                      Recent Tests
                     </h3>
-                    <p className="text-slate-500 font-medium max-w-sm text-sm sm:text-lg">
-                      Graphs will appear after 5 tests are completed.
-                    </p>
+                    <button
+                      onClick={() => setActiveTab("tests")}
+                      className="inset-pill text-slate-800 dark:text-slate-200 px-4 sm:px-6 py-2 sm:py-3 rounded-[20px] sm:rounded-[24px] font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-none"
+                    >
+                      View All
+                    </button>
                   </div>
-                </div>
-              )}
 
-              {/* ===== AI TOOLS TAB ===== */}
-              {activeTab === "ai-tools" && (
-                <div className="space-y-6 sm:space-y-8 animate-pop">
-                  <div className="glass-panel rounded-[28px] sm:rounded-[40px] p-5 sm:p-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
-                    <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">
-                      AI Utilities
-                    </h2>
-                    <p className="text-sm sm:text-base text-slate-500 font-medium mt-1 sm:mt-2">
-                      Supercharge your teaching workflow.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
-                    {[
-                      { Icon: Icons.Youtube,  title: "Community Quiz",  desc: "Generate quizzes from any YouTube video.", action: () => navigate("/teacher/community-quiz/new"), isNew: true, primary: true },
-                      { Icon: Icons.Brain,    title: "Test Generator",  desc: "Create CBSE-pattern papers from NCERT.",   action: () => navigate("/dashboard/test-generator"), isNew: false, primary: false },
-                      { Icon: Icons.FileText, title: "Auto-Grade",      desc: "AI-analyze long-form answers instantly.",  isNew: false, primary: false },
-                      { Icon: Icons.Book,     title: "Study Guides",     desc: "Convert notes into smart flashcards.",      isNew: false, primary: false },
-                      { Icon: Icons.Search,   title: "Plagiarism Check", desc: "Scan against web and AI datasets.",         isNew: false, primary: false },
-                      { Icon: Icons.Grid,     title: "Smart Rubrics",   desc: "Generate standard-aligned rubrics.",       isNew: false, primary: false },
-                      { Icon: Icons.Clock,    title: "Lesson Planner",  desc: "Plan lessons by pacing & standard.",        isNew: false, primary: false },
-                    ].map((tool, i) => {
-                      const ToolIcon = tool.Icon;
-                      return (
+                  {testsLoading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="animate-pulse h-20 bg-black/5 dark:bg-white/5 rounded-[20px]" />
+                      ))}
+                    </div>
+                  ) : recentTests.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-slate-500 font-medium">No tests yet — create your first one!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 sm:space-y-4">
+                      {recentTests.map((test) => (
                         <div
-                          key={i}
-                          className="glass-panel p-6 sm:p-10 rounded-[28px] sm:rounded-[48px] flex flex-col justify-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all relative overflow-hidden group scroll-reveal"
-                          style={{ transitionDelay: `${60 + i * 50}ms` }}
+                          key={test.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-black/5 dark:border-white/10 hover:bg-white/80 dark:hover:bg-slate-800/60 transition-all duration-300 cursor-pointer group gap-3"
                         >
-                          {tool.isNew && (
-                            <div className="absolute top-3 right-3">
-                              <span className="new-badge btn-glossy-theme text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-lg">
-                                NEW
-                              </span>
+                          <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+                            <div className="p-3 sm:p-4 rounded-[16px] sm:rounded-[24px] inset-pill border-none shadow-inner shrink-0" style={{ color: "var(--theme-start)" }}>
+                              <Icons.FileText />
                             </div>
-                          )}
-                          <div
-                            className={`w-14 h-14 sm:w-20 sm:h-20 inset-pill border-none text-slate-800 dark:text-white rounded-[20px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shrink-0`}
-                            style={{ color: "var(--theme-start)" }}
-                          >
-                            <ToolIcon />
+                            <div className="min-w-0">
+                              <h4 className="font-extrabold text-slate-900 dark:text-white text-base sm:text-xl transition-colors truncate">
+                                {test.exam_title || "Untitled Test"}
+                              </h4>
+                              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1 font-medium">
+                                Class {test.class_grade} · {test.subject} · {formatDate(test.created_at)}
+                              </p>
+                            </div>
                           </div>
-                          <h3
-                            className={`text-lg sm:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 ${
-                              tool.isNew ? "shimmer-text" : ""
-                            }`}
-                          >
-                            {tool.title}
-                          </h3>
-                          <p className="text-xs sm:text-base text-slate-500 mb-4 sm:mb-8 font-medium">
-                            {tool.desc}
-                          </p>
-                          <GlossyButton
-                            label={tool.isNew ? "Try Now" : tool.primary ? "Create Test" : "Launch"}
-                            fullWidth
-                            small
-                            onClick={tool.action || (() => {})}
-                            showNewBadge={tool.isNew}
-                            isStartupsStyle={tool.primary}
-                          />
+                          <div className="flex items-center gap-3 sm:gap-6">
+                            {test.total_questions > 0 && (
+                              <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 inset-pill border-none px-3 sm:px-4 py-1.5 sm:py-2 rounded-[16px] sm:rounded-[20px]">
+                                {test.total_questions}Q
+                              </span>
+                            )}
+                            <span
+                              className={`text-[10px] px-3 py-1.5 rounded-[16px] font-bold uppercase border ${test.status === "saved"
+                                  ? "bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-700/60 dark:text-slate-200"
+                                  : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400"
+                                }`}
+                            >
+                              {test.status}
+                            </span>
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-
-            </div>
-          </main>
-
-          {/* ===== CHATBOT FAB & HOVER TOOLTIP ===== */}
-          <div className="fixed bottom-4 sm:bottom-8 right-4 sm:right-8 z-[110] flex flex-col items-end gap-4 sm:gap-5">
-            {showChatTooltip && !isChatOpen && (
-              <div className="absolute bottom-full right-0 mb-4 mr-2 px-5 py-3 bg-white dark:bg-slate-800 text-slate-800 dark:text-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] font-black tracking-wide text-sm border border-slate-100 dark:border-slate-700 whitespace-nowrap animate-dropIn z-[120]">
-                Need any help...?
-                <div className="absolute -bottom-1.5 right-6 w-3 h-3 bg-white dark:bg-slate-800 rotate-45 border-b border-r border-slate-100 dark:border-slate-700"></div>
               </div>
             )}
 
+            {/* ===== STUDENTS TAB ===== */}
+            {activeTab === "students" && (
+              <div className="space-y-6 sm:space-y-8 animate-pop">
+                <InstituteTeacherPanel userId={user?.id} />
+              </div>
+            )}
+
+            {/* ===== TEST HISTORY TAB ===== */}
+            {activeTab === "tests" && (
+              <TestHistory
+                onCreateNew={() => navigate("/dashboard/test-generator")}
+                tests={allTests}
+                loading={testsLoading}
+              />
+            )}
+
+            {/* ===== ANALYTICS TAB ===== */}
+            {activeTab === "analytics" && (
+              <div className="space-y-6 sm:space-y-8 animate-pop">
+                <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-8 sm:p-10 min-h-[300px] sm:min-h-[500px] flex flex-col justify-center items-center text-center">
+                  <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none rounded-full flex items-center justify-center mb-6 sm:mb-8" style={{ color: "var(--theme-start)" }}>
+                    <Icons.Chart />
+                  </div>
+                  <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3 sm:mb-4">
+                    Performance Trends
+                  </h3>
+                  <p className="text-slate-500 font-medium max-w-sm text-sm sm:text-lg">
+                    Graphs will appear after 5 tests are completed.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ===== AI TOOLS TAB ===== */}
+            {activeTab === "ai-tools" && (
+              <div className="space-y-6 sm:space-y-8 animate-pop">
+                <div className="glass-panel rounded-[28px] sm:rounded-[40px] p-5 sm:p-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
+                  <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">
+                    AI Utilities
+                  </h2>
+                  <p className="text-sm sm:text-base text-slate-500 font-medium mt-1 sm:mt-2">
+                    Supercharge your teaching workflow.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
+                  {[
+                    { Icon: Icons.Youtube, title: "Community Quiz", desc: "Generate quizzes from any YouTube video.", action: () => navigate("/teacher/community-quiz/new"), isNew: true, primary: true },
+                    { Icon: Icons.Brain, title: "Test Generator", desc: "Create CBSE-pattern papers from NCERT.", action: () => navigate("/dashboard/test-generator"), isNew: false, primary: false },
+                    { Icon: Icons.FileText, title: "Auto-Grade", desc: "AI-analyze long-form answers instantly.", isNew: false, primary: false },
+                    { Icon: Icons.Book, title: "Study Guides", desc: "Convert notes into smart flashcards.", isNew: false, primary: false },
+                    { Icon: Icons.Search, title: "Plagiarism Check", desc: "Scan against web and AI datasets.", isNew: false, primary: false },
+                    { Icon: Icons.Grid, title: "Smart Rubrics", desc: "Generate standard-aligned rubrics.", isNew: false, primary: false },
+                    { Icon: Icons.Clock, title: "Lesson Planner", desc: "Plan lessons by pacing & standard.", isNew: false, primary: false },
+                  ].map((tool, i) => {
+                    const ToolIcon = tool.Icon;
+                    return (
+                      <div
+                        key={i}
+                        className="glass-panel p-6 sm:p-10 rounded-[28px] sm:rounded-[48px] flex flex-col justify-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all relative overflow-hidden group scroll-reveal"
+                        style={{ transitionDelay: `${60 + i * 50}ms` }}
+                      >
+                        {tool.isNew && (
+                          <div className="absolute top-3 right-3">
+                            <span className="new-badge btn-glossy-theme text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-lg">
+                              NEW
+                            </span>
+                          </div>
+                        )}
+                        <div
+                          className="w-14 h-14 sm:w-20 sm:h-20 inset-pill border-none rounded-[20px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shrink-0"
+                          style={{ color: "var(--theme-start)" }}
+                        >
+                          <ToolIcon />
+                        </div>
+                        <h3
+                          className={`text-lg sm:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 ${tool.isNew ? "shimmer-text" : ""
+                            }`}
+                        >
+                          {tool.title}
+                        </h3>
+                        <p className="text-xs sm:text-base text-slate-500 mb-4 sm:mb-8 font-medium">
+                          {tool.desc}
+                        </p>
+                        <GlossyButton
+                          label={tool.isNew ? "Try Now" : tool.primary ? "Create Test" : "Launch"}
+                          fullWidth
+                          small
+                          onClick={tool.action || (() => { })}
+                          showNewBadge={tool.isNew}
+                          isStartupsStyle={tool.primary}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+          </div>
+        </main>
+
+        {/* ══════════════════════════════════════════════════════════
+            AI SARTHI — draggable 3D robot mascot
+           ══════════════════════════════════════════════════════════ */}
+        <motion.div
+          drag
+          dragListener={false}
+          dragControls={dragControls}
+          dragMomentum={false}
+          dragElastic={0.06}
+          initial={{ x: savedPos.x, y: savedPos.y }}
+          dragConstraints={{
+            left: -(typeof window !== "undefined" ? window.innerWidth - 160 : 900),
+            top: -(typeof window !== "undefined" ? window.innerHeight - 180 : 700),
+            right: 16,
+            bottom: 16,
+          }}
+          onDragStart={() => { didDragRef.current = true; }}
+          onDragEnd={(_e, info) => {
+            setTimeout(() => { didDragRef.current = false; }, 60);
+            safeStorage.set("sarthiPos", JSON.stringify({
+              x: savedPos.x + info.offset.x,
+              y: savedPos.y + info.offset.y,
+            }));
+          }}
+          className="fixed bottom-4 sm:bottom-8 right-4 sm:right-8 z-[110] flex flex-col items-end gap-3 touch-none"
+        >
+          {/* hover tooltip */}
+          <AnimatePresence>
+            {showChatTooltip && !isChatOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                className="absolute bottom-full right-0 mb-3 mr-2 flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 text-slate-800 dark:text-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] font-bold tracking-wide text-sm border border-slate-100 dark:border-slate-700 whitespace-nowrap z-[120]"
+              >
+                <RobotMascot size={22} />
+                Need any help...?
+                <div className="absolute -bottom-1.5 right-8 w-3 h-3 bg-white dark:bg-slate-800 rotate-45 border-b border-r border-slate-100 dark:border-slate-700" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* chat window */}
+          <AnimatePresence>
             {isChatOpen && (
-              <div className="w-[calc(100vw-2rem)] sm:w-96 h-[450px] sm:h-[500px] rounded-[32px] sm:rounded-[48px] shadow-2xl overflow-hidden flex flex-col animate-pop glass-overlay border border-black/5 dark:border-white/10">
-                <div 
-                  className="p-4 sm:p-5 flex justify-between items-center text-white shrink-0"
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.85 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.85 }}
+                transition={{ type: "spring", stiffness: 300, damping: 26 }}
+                className="w-[calc(100vw-2rem)] sm:w-96 h-[450px] sm:h-[520px] rounded-[28px] sm:rounded-[32px] shadow-2xl overflow-hidden flex flex-col glass-overlay border border-black/5 dark:border-white/10"
+              >
+                <div
+                  className="p-4 flex justify-between items-center text-white shrink-0"
                   style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
                 >
-                  <span className="font-extrabold text-sm sm:text-base flex items-center gap-2 sm:gap-3">
-                    <Icons.MessageSmall /> AI Sarthi
+                  <span className="font-extrabold text-sm sm:text-base flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+                      <RobotMascot size={30} />
+                    </span>
+                    <span>
+                      AI Sarthi
+                      <span className="block text-[10px] font-semibold text-white/75 tracking-wide">
+                        your a4ai teaching buddy
+                      </span>
+                    </span>
                   </span>
                   <button
-                    className="hover:bg-white/20 p-1.5 sm:p-2 rounded-full transition-all"
+                    className="hover:bg-white/20 p-2 rounded-full transition-all"
                     onClick={() => setIsChatOpen(false)}
                   >
                     <Icons.X />
                   </button>
                 </div>
-                <div className="flex-1 p-4 sm:p-5 overflow-y-auto space-y-3 sm:space-y-4 bg-black/5 dark:bg-white/5">
-                  {/* Tracking Chat History Timeline */}
+
+                <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-black/5 dark:bg-white/5">
                   {chatMessages.map((msg, idx) => (
                     <div key={idx} className="flex flex-col gap-2">
-                      <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`flex items-end gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                        {msg.role === "assistant" && <RobotMascot size={26} />}
                         <div
-                          className={`p-3 sm:p-4 rounded-[24px] sm:rounded-[28px] max-w-[85%] text-xs sm:text-sm font-bold whitespace-pre-wrap ${
-                            msg.role === "user"
-                              ? "text-white rounded-tr-none"
-                              : "bg-white/80 dark:bg-black/60 text-slate-800 dark:text-white rounded-tl-none border border-black/5 dark:border-white/10"
-                          }`}
+                          className={`p-3 rounded-2xl max-w-[80%] text-[13px] font-medium whitespace-pre-wrap ${msg.role === "user"
+                              ? "text-white rounded-br-md"
+                              : "bg-white dark:bg-black/60 text-slate-800 dark:text-white rounded-bl-md border border-black/5 dark:border-white/10"
+                            }`}
                           style={msg.role === "user" ? { background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` } : {}}
                         >
                           {msg.content}
                         </div>
                       </div>
 
-                      {/* Render Persistent Dynamic Chips bound to this stage of history */}
                       {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pl-2 mt-1">
+                        <div className="flex flex-wrap gap-2 pl-8">
                           {msg.suggestions.map((opt, i) => (
                             <button
                               key={i}
                               onClick={() => handleSendMessage(opt)}
-                              className="text-xs font-bold text-slate-700 dark:text-slate-200 bg-white/60 dark:bg-black/40 hover:bg-white dark:hover:bg-black/80 border border-black/5 dark:border-white/10 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[16px] transition-all shadow-sm text-left"
+                              className="text-[12px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-black/40 hover:border-slate-300 border border-black/5 dark:border-white/10 px-3 py-1.5 rounded-full transition-all text-left"
                             >
                               {opt}
                             </button>
@@ -1641,18 +1882,23 @@ export default function TeacherDashboardPage() {
                   ))}
 
                   {isChatLoading && (
-                    <div className="flex justify-start">
-                      <div className="p-3 sm:p-4 rounded-[24px] rounded-tl-none bg-white/80 dark:bg-black/60 border border-black/5 dark:border-white/10 flex items-center gap-2 text-slate-800 dark:text-slate-200">
-                        <Icons.Loader />
-                        <span className="text-[10px] font-black uppercase tracking-widest">Thinking...</span>
+                    <div className="flex items-end gap-2 justify-start">
+                      <RobotMascot size={26} state="thinking" />
+                      <div className="p-3 rounded-2xl rounded-bl-md bg-white dark:bg-black/60 border border-black/5 dark:border-white/10 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                        <span className="flex items-center gap-1">
+                          <span className="typing-dot w-1.5 h-1.5 rounded-full" style={{ background: "var(--theme-start)", animationDelay: "0ms" }} />
+                          <span className="typing-dot w-1.5 h-1.5 rounded-full" style={{ background: "var(--theme-start)", animationDelay: "150ms" }} />
+                          <span className="typing-dot w-1.5 h-1.5 rounded-full" style={{ background: "var(--theme-start)", animationDelay: "300ms" }} />
+                        </span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Sarthi is typing</span>
                       </div>
                     </div>
                   )}
                   <div ref={chatEndRef} />
                 </div>
-                
-                {/* Chat Input Container Bar */}
-                <div className="p-3 sm:p-4 shrink-0 glass-panel border-t-0 bg-white/40 dark:bg-black/40">
+
+                {/* input bar */}
+                <div className="p-3 shrink-0 bg-white/60 dark:bg-black/40 border-t border-black/5 dark:border-white/10">
                   <div className="relative flex items-center gap-2">
                     <div className="relative flex-1 flex items-center">
                       <input
@@ -1661,103 +1907,121 @@ export default function TeacherDashboardPage() {
                         onChange={(e) => setInputMessage(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") handleSendMessage(); }}
                         placeholder={isListening ? "Listening..." : "Type a message..."}
-                        className="w-full text-xs sm:text-sm font-bold p-3 sm:p-4 pr-12 sm:pr-14 rounded-[24px] sm:rounded-[32px] inset-pill border-none focus:outline-none focus:ring-2 focus:ring-slate-400/50 text-slate-800 dark:text-white placeholder-slate-500 bg-white/80 dark:bg-black/60"
+                        className="w-full text-[13px] font-medium p-3 pr-11 rounded-2xl inset-pill focus:outline-none focus:ring-2 focus:ring-slate-400/40 text-slate-800 dark:text-white placeholder-slate-400"
                       />
-                      
-                      {/* Integrated Audio Input Button */}
                       <button
                         onClick={startListening}
-                        className={`absolute right-3 p-1.5 rounded-full transition-all text-slate-400 hover:text-slate-600 dark:hover:text-white ${
-                          isListening ? "text-red-500 bg-red-500/15 animate-mic-pulse hover:text-red-600" : ""
-                        }`}
+                        className={`absolute right-3 p-1.5 rounded-full transition-all text-slate-400 hover:text-slate-600 dark:hover:text-white ${isListening ? "text-red-500 bg-red-500/15 animate-mic-pulse hover:text-red-600" : ""
+                          }`}
                         title="Voice typing"
                       >
                         <Icons.Microphone />
                       </button>
                     </div>
-                    
+
                     <button
                       onClick={() => handleSendMessage()}
                       disabled={isChatLoading || !inputMessage.trim()}
-                      className="p-3 sm:p-4 text-white rounded-[24px] sm:rounded-[32px] hover:scale-105 disabled:opacity-50 transition-all shrink-0 flex items-center justify-center"
+                      className="p-3 text-white rounded-2xl hover:brightness-110 disabled:opacity-40 transition-all shrink-0 flex items-center justify-center"
                       style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
                     >
                       <Icons.Send />
                     </button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
-            <button
-              onClick={() => setIsChatOpen(!isChatOpen)}
-              className="relative w-14 h-14 sm:w-20 sm:h-20 btn-glossy-theme rounded-[24px] sm:rounded-[32px] transition-all hover:-translate-y-2 active:scale-95 flex items-center justify-center z-10 shadow-[0_10px_30px_rgba(0,0,0,0.15)]"
-            >
-              {isChatOpen ? (
-                <div className="scale-100 sm:scale-125"><Icons.X /></div>
-              ) : (
-                <div className="scale-100 sm:scale-125"><Icons.MessageCircle /></div>
-              )}
-            </button>
-          </div>
+          </AnimatePresence>
 
-          {/* ===== INVITE MODAL ===== */}
-          {showInviteModal && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 animate-pop">
-              <div
-                className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
-                onClick={() => setShowInviteModal(false)}
+          {/* the robot — drag handle + chat toggle */}
+          <motion.button
+            onPointerDown={(e) => dragControls.start(e)}
+            onClick={() => { if (!didDragRef.current) setIsChatOpen(!isChatOpen); }}
+            onMouseMove={handleMascotMove}
+            onMouseLeave={resetMascot}
+            animate={{ y: isChatOpen ? 0 : [0, -8, 0] }}
+            transition={{ duration: 3.2, repeat: isChatOpen ? 0 : Infinity, ease: "easeInOut" }}
+            whileTap={{ scale: 0.92 }}
+            className="cursor-grab active:cursor-grabbing select-none bg-transparent border-none p-0"
+            style={{ perspective: 700 }}
+            title="Drag me anywhere"
+            aria-label="AI Sarthi assistant"
+          >
+            <motion.div
+              animate={{
+                rotateX: tilt.rx,
+                rotateY: tilt.ry,
+                scale: tilt.rx !== 0 || tilt.ry !== 0 ? 1.08 : 1,
+              }}
+              transition={{ type: "spring", stiffness: 260, damping: 18 }}
+              style={{ transformStyle: "preserve-3d" }}
+            >
+              <RobotMascot
+                size={85}
+                state={isChatLoading ? "thinking" : "idle"}
+                look={look}
               />
-              <div className="glass-overlay p-6 sm:p-10 lg:p-12 rounded-[32px] sm:rounded-[56px] w-full max-w-md relative z-10 text-center">
-                <button
-                  onClick={() => setShowInviteModal(false)}
-                  className="absolute top-4 sm:top-8 right-4 sm:right-8 p-2 sm:p-3 text-slate-500 inset-pill border-none rounded-full hover:text-slate-800 dark:hover:text-white"
-                >
-                  <Icons.X />
-                </button>
-                {!inviteSent ? (
-                  <>
-                    <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none text-slate-800 dark:text-slate-200 rounded-[24px] sm:rounded-[36px] flex items-center justify-center mx-auto mb-5 sm:mb-8" style={{ color: "var(--theme-start)" }}>
-                      <div className="scale-100 sm:scale-125"><Icons.Mail /></div>
-                    </div>
-                    <h3 className="text-2xl sm:text-4xl font-black mb-3 sm:mb-4 text-slate-900 dark:text-white">
-                      Invite Student
-                    </h3>
-                    <p className="text-sm sm:text-base text-slate-500 mb-6 sm:mb-10 font-medium">
-                      Send an email invitation to your student.
-                    </p>
-                    <form onSubmit={handleInvite} className="space-y-5 sm:space-y-8 text-left">
-                      <div className="relative">
-                        <div className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 text-slate-500" style={{ color: "var(--theme-start)" }}>
-                          <Icons.Mail />
-                        </div>
-                        <input
-                          required
-                          type="email"
-                          placeholder="Email Address"
-                          className="w-full pl-12 sm:pl-16 pr-4 sm:pr-6 py-4 sm:py-5 rounded-[24px] sm:rounded-[32px] inset-pill border-none focus:outline-none focus:ring-2 focus:ring-slate-400/50 font-bold text-slate-800 dark:text-white placeholder-slate-400"
-                          value={inviteEmail}
-                          onChange={(e) => setInviteEmail(e.target.value)}
-                        />
-                      </div>
-                      <GlossyButton label="Send Invitation" fullWidth />
-                    </form>
-                  </>
-                ) : (
-                  <div className="py-8 sm:py-10">
-                    <div className="w-20 h-20 sm:w-28 sm:h-28 bg-slate-200/50 dark:bg-white/10 text-slate-800 dark:text-slate-200 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 border border-slate-300/50 dark:border-white/10" style={{ color: "var(--theme-start)" }}>
-                      <div className="scale-125 sm:scale-150"><Icons.Check /></div>
-                    </div>
-                    <h4 className="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white mb-3 sm:mb-4">Sent!</h4>
-                    <p className="text-slate-500 font-medium text-sm sm:text-lg">
-                      They'll appear once they join.
-                    </p>
+            </motion.div>
+          </motion.button>
+        </motion.div>
+
+        {/* ===== INVITE MODAL ===== */}
+        {showInviteModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 animate-pop">
+            <div
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
+              onClick={() => setShowInviteModal(false)}
+            />
+            <div className="glass-overlay p-6 sm:p-10 lg:p-12 rounded-[32px] sm:rounded-[40px] w-full max-w-md relative z-10 text-center">
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="absolute top-4 sm:top-8 right-4 sm:right-8 p-2 sm:p-3 text-slate-500 inset-pill border-none rounded-full hover:text-slate-800 dark:hover:text-white"
+              >
+                <Icons.X />
+              </button>
+              {!inviteSent ? (
+                <>
+                  <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none rounded-[24px] sm:rounded-[36px] flex items-center justify-center mx-auto mb-5 sm:mb-8" style={{ color: "var(--theme-start)" }}>
+                    <div className="scale-100 sm:scale-125"><Icons.Mail /></div>
                   </div>
-                )}
-              </div>
+                  <h3 className="text-2xl sm:text-4xl font-black mb-3 sm:mb-4 text-slate-900 dark:text-white">
+                    Invite Student
+                  </h3>
+                  <p className="text-sm sm:text-base text-slate-500 mb-6 sm:mb-10 font-medium">
+                    Send an email invitation to your student.
+                  </p>
+                  <form onSubmit={handleInvite} className="space-y-5 sm:space-y-8 text-left">
+                    <div className="relative">
+                      <div className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2" style={{ color: "var(--theme-start)" }}>
+                        <Icons.Mail />
+                      </div>
+                      <input
+                        required
+                        type="email"
+                        placeholder="Email Address"
+                        className="w-full pl-12 sm:pl-16 pr-4 sm:pr-6 py-4 sm:py-5 rounded-[24px] sm:rounded-[32px] inset-pill border-none focus:outline-none focus:ring-2 focus:ring-slate-400/50 font-bold text-slate-800 dark:text-white placeholder-slate-400"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                      />
+                    </div>
+                    <GlossyButton label="Send Invitation" fullWidth />
+                  </form>
+                </>
+              ) : (
+                <div className="py-8 sm:py-10">
+                  <div className="w-20 h-20 sm:w-28 sm:h-28 bg-slate-200/50 dark:bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 border border-slate-300/50 dark:border-white/10" style={{ color: "var(--theme-start)" }}>
+                    <div className="scale-125 sm:scale-150"><Icons.Check /></div>
+                  </div>
+                  <h4 className="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white mb-3 sm:mb-4">Sent!</h4>
+                  <p className="text-slate-500 font-medium text-sm sm:text-lg">
+                    They'll appear once they join.
+                  </p>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }

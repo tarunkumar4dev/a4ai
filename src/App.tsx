@@ -347,10 +347,8 @@ const App = () => {
                       />
 
                       {/* ============================================ */}
-                      {/*  INSTITUTE ROUTES (add InstituteDashboard     */}
-                      {/*  page when ready)                            */}
+                      {/*  INSTITUTE ROUTES                            */}
                       {/* ============================================ */}
-                      {/* <Route path="/institute/dashboard" element={<RoleAuthGate allowedRoles={["institute"]}><InstituteDashboardPage /></RoleAuthGate>} /> */}
                       <Route path="/institute/dashboard" element={<RoleAuthGate allowedRoles={["institute"]}><InstituteDashboardPage /></RoleAuthGate>} />
 
                       {/* ============================================ */}
@@ -400,6 +398,7 @@ const App = () => {
                       {/* ============================================ */}
                       <Route path="/dashboard/student" element={<Navigate to="/student/dashboard" replace />} />
                       <Route path="/dashboard/teacher" element={<Navigate to="/teacher/dashboard" replace />} />
+                      <Route path="/dashboard/institute" element={<Navigate to="/institute/dashboard" replace />} />
                       <Route path="/role-selection" element={<Navigate to="/select-role" replace />} />
                       <Route path="/dashboard/students" element={<Navigate to="/students" replace />} />
                       <Route path="/dashboard/notes" element={<Navigate to="/notes" replace />} />

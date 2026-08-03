@@ -8,7 +8,7 @@ import React, {
   useRef,
 } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTheme } from "@/context/ThemeContext";
@@ -30,7 +30,6 @@ import {
   BookOpen,
   Award,
   TrendingUp,
-  MessageCircle,
   User,
   Moon,
   Sun,
@@ -71,7 +70,7 @@ const translations = {
     welcome: "Welcome back",
     courseProgress: "Your average course progress is",
     levelUp: "Level up your learning to improve your student rank!",
-    takeQuiz: "Take quiz", // CHANGED: specific label for the button
+    takeQuiz: "Take quiz",
     learningActivity: "Learning Activity",
     totalTime: "Total Time",
     courses: "Courses",
@@ -98,7 +97,10 @@ const translations = {
     notifications: "Notifications",
     noNotifications: "No new notifications",
     chatHello: "Hello! I am your AI assistant . How can I help you?",
-    typeMessage: "Type a message..."
+    typeMessage: "Type a message...",
+    assistant: "a4ai Assistant",
+    dragHint: "Drag me anywhere",
+    thinking: "Thinking..."
   },
   hi: {
     dashboard: "डैशबोर्ड",
@@ -113,7 +115,7 @@ const translations = {
     welcome: "वापसी पर स्वागत है",
     courseProgress: "आपकी औसत पाठ्यक्रम प्रगति है",
     levelUp: "अपनी रैंक सुधारने के लिए पढ़ाई का स्तर बढ़ाएं!",
-    takeQuiz: "क्विज़ लें", // CHANGED: Hindi translation
+    takeQuiz: "क्विज़ लें",
     learningActivity: "सीखने की गतिविधि",
     totalTime: "कुल समय",
     courses: "पाठ्यक्रम",
@@ -140,9 +142,162 @@ const translations = {
     notifications: "सूचनाएं",
     noNotifications: "कोई नई सूचना नहीं",
     chatHello: "नमस्ते! मैं a4ai हूँ, भारतीय शिक्षा के लिए आपका AI सहायक। मैं कैसे मदद कर सकता हूँ?",
-    typeMessage: "संदेश टाइप करें..."
+    typeMessage: "संदेश टाइप करें...",
+    assistant: "a4ai सहायक",
+    dragHint: "मुझे कहीं भी खींचें",
+    thinking: "सोच रहा हूँ..."
   }
 };
+
+/* ------------------- ROBOT MASCOT ------------------- */
+/**
+ * a4ai's floating robot assistant.
+ * White shell with radial shading, glowing blue visor, teal fins.
+ * `look` offsets the eyes so the robot can glance toward the cursor.
+ * Gradient IDs are per-instance so several mascots can render at once.
+ */
+function RobotMascot({
+  size = 72,
+  state = "idle",
+  look = { x: 0, y: 0 },
+}: {
+  size?: number;
+  state?: "idle" | "thinking" | "sleep";
+  look?: { x: number; y: number };
+}) {
+  const uid = useRef(`rb${Math.random().toString(36).slice(2, 8)}`).current;
+  const gHead = `${uid}-head`;
+  const gBody = `${uid}-body`;
+  const gArm = `${uid}-arm`;
+  const gVisor = `${uid}-visor`;
+  const gFin = `${uid}-fin`;
+  const gChest = `${uid}-chest`;
+  const fGlow = `${uid}-glow`;
+  const fSoft = `${uid}-soft`;
+
+  const ex = Math.max(-3.5, Math.min(3.5, look.x));
+  const ey = Math.max(-2.5, Math.min(2.5, look.y));
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 105" style={{ overflow: "visible" }}>
+      <defs>
+        {/* head — light from upper-left */}
+        <radialGradient id={gHead} cx="0.34" cy="0.26" r="0.85">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="46%" stopColor="#F3F5FA" />
+          <stop offset="78%" stopColor="#DCE1ED" />
+          <stop offset="100%" stopColor="#B9C1D4" />
+        </radialGradient>
+
+        <radialGradient id={gBody} cx="0.38" cy="0.24" r="0.9">
+          <stop offset="0%" stopColor="#FFFFFF" />
+          <stop offset="52%" stopColor="#EFF2F8" />
+          <stop offset="100%" stopColor="#C3CAD9" />
+        </radialGradient>
+
+        <radialGradient id={gArm} cx="0.35" cy="0.25" r="0.9">
+          <stop offset="0%" stopColor="#FDFDFF" />
+          <stop offset="60%" stopColor="#E7EBF3" />
+          <stop offset="100%" stopColor="#BFC7D8" />
+        </radialGradient>
+
+        {/* visor — deep glossy blue */}
+        <radialGradient id={gVisor} cx="0.66" cy="0.22" r="0.95">
+          <stop offset="0%" stopColor="#5C78FF" />
+          <stop offset="34%" stopColor="#2438E6" />
+          <stop offset="72%" stopColor="#131FBE" />
+          <stop offset="100%" stopColor="#060C86" />
+        </radialGradient>
+
+        <linearGradient id={gFin} x1="0.2" y1="0" x2="0.8" y2="1">
+          <stop offset="0%" stopColor="#8FE8F2" />
+          <stop offset="55%" stopColor="#5BC4D8" />
+          <stop offset="100%" stopColor="#2E90AE" />
+        </linearGradient>
+
+        <linearGradient id={gChest} x1="0.3" y1="0" x2="0.7" y2="1">
+          <stop offset="0%" stopColor="#6FD3E4" />
+          <stop offset="100%" stopColor="#3AA7BE" />
+        </linearGradient>
+
+        <filter id={fGlow} x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="2.6" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        <filter id={fSoft} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="1.6" />
+        </filter>
+      </defs>
+
+      {/* ground shadow */}
+      <ellipse cx="50" cy="100" rx="23" ry="4" fill="#0B1B3A" opacity="0.16" filter={`url(#${fSoft})`} />
+
+      {/* ── fins (behind everything) ── */}
+      <g>
+        <rect x="15" y="14" width="9.5" height="29" rx="4.75" fill={`url(#${gFin})`} transform="rotate(-13 19 28)" />
+        <rect x="76" y="14" width="9.5" height="29" rx="4.75" fill={`url(#${gFin})`} transform="rotate(13 81 28)" />
+      </g>
+
+      {/* ── arms ── */}
+      <ellipse cx="18" cy="68" rx="14" ry="8" fill={`url(#${gArm})`} transform="rotate(32 18 68)" />
+      <ellipse cx="84" cy="60" rx="15" ry="8" fill={`url(#${gArm})`} transform="rotate(-25 84 60)" />
+
+      {/* ── body ── */}
+      <ellipse cx="50" cy="76" rx="27" ry="22" fill={`url(#${gBody})`} />
+      {/* body top highlight */}
+      <ellipse cx="43" cy="63" rx="14" ry="6" fill="#FFFFFF" opacity="0.55" filter={`url(#${fSoft})`} />
+
+      {/* chest plate */}
+      <path d="M35 62 H65 A15 15 0 0 1 50 84 A15 15 0 0 1 35 62 Z" fill={`url(#${gChest})`} />
+      <path d="M32 62 H68" stroke="#1E2450" strokeWidth="1.8" strokeLinecap="round" opacity="0.85" />
+
+      {/* ── head ── */}
+      {/* crown nub */}
+      <rect x="31" y="3" width="17" height="10" rx="3.5" fill={`url(#${gHead})`} />
+      <ellipse cx="50" cy="39" rx="34" ry="32" fill={`url(#${gHead})`} />
+      {/* head rim highlight */}
+      <ellipse cx="38" cy="18" rx="16" ry="7" fill="#FFFFFF" opacity="0.6" filter={`url(#${fSoft})`} transform="rotate(-18 38 18)" />
+
+      {/* ear port */}
+      <ellipse cx="16" cy="39" rx="8" ry="6.5" fill={`url(#${gHead})`} />
+      <circle cx="13.5" cy="39" r="3.8" fill="#1E2450" />
+      <circle cx="12.6" cy="37.8" r="1.1" fill="#5B6690" opacity="0.7" />
+
+      {/* ── visor ── */}
+      {/* glow spill under the visor */}
+      <path d="M27 29 A23 20 0 0 1 73 29 L73 46 A23 17 0 0 1 27 46 Z" fill="#2438E6" opacity="0.35" filter={`url(#${fSoft})`} />
+      <path d="M27 29 A23 20 0 0 1 73 29 L73 46 A23 17 0 0 1 27 46 Z" fill={`url(#${gVisor})`} />
+      {/* glass highlight */}
+      <ellipse cx="60" cy="28" rx="12.5" ry="5.5" fill="#FFFFFF" opacity="0.22" />
+      <ellipse cx="35" cy="44" rx="7" ry="2.5" fill="#8FA6FF" opacity="0.18" />
+
+      {/* ── eyes ── */}
+      <g filter={`url(#${fGlow})`} transform={`translate(${ex} ${ey})`}>
+        {state === "thinking" ? (
+          <>
+            <circle cx="39" cy="39" r="4.2" fill="#EAFBFF" />
+            <circle cx="61" cy="39" r="4.2" fill="#EAFBFF" />
+          </>
+        ) : state === "sleep" ? (
+          <>
+            <path d="M33 40 H45" stroke="#EAFBFF" strokeWidth="4.6" strokeLinecap="round" />
+            <path d="M55 40 H67" stroke="#EAFBFF" strokeWidth="4.6" strokeLinecap="round" />
+          </>
+        ) : (
+          <>
+            <path d="M33 42.5 Q39 32 45 42.5" stroke="#EAFBFF" strokeWidth="5.2" strokeLinecap="round" fill="none" />
+            <path d="M55 42.5 Q61 32 67 42.5" stroke="#EAFBFF" strokeWidth="5.2" strokeLinecap="round" fill="none" />
+          </>
+        )}
+      </g>
+    </svg>
+  );
+}
 
 /* ------------------- CUSTOM COMPONENTS ------------------- */
 
@@ -196,7 +351,6 @@ const GlossyButton = ({
   );
 };
 
-// Dark Black Text (text-slate-900)
 const NavItem = ({ icon: Icon, label, active = false, to }: { icon: any, label: string, active?: boolean, to?: string }) => {
   const navigate = useNavigate();
   return (
@@ -225,9 +379,7 @@ type Message = {
 
 // --- API CONFIGURATION ---
 const AI_CONFIG = {
-    // API KEY from .env.local
     apiKey: import.meta.env.VITE_GROQ_API_KEY,
-    // New Model to fix decommissioning error
     model: "llama-3.3-70b-versatile",
 };
 
@@ -253,6 +405,33 @@ export default function StudentDashboardPage() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // --- MASCOT DRAG + 3D TILT ---
+  const dragControls = useDragControls();
+  const didDragRef = useRef(false);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  const [look, setLook] = useState({ x: 0, y: 0 });
+
+  // remember where the student parked the robot
+  const savedPos = useMemo(() => {
+    try {
+      const raw = safeStorage.get("mascotPos");
+      return raw ? JSON.parse(raw) : { x: 0, y: 0 };
+    } catch { return { x: 0, y: 0 }; }
+  }, []);
+
+  const handleMascotMove = (e: React.MouseEvent) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+    const py = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    setTilt({ rx: -py * 15, ry: px * 20 });
+    setLook({ x: px * 3.5, y: py * 2.5 });
+  };
+
+  const resetMascot = () => {
+    setTilt({ rx: 0, ry: 0 });
+    setLook({ x: 0, y: 0 });
+  };
+
   // Scroll to bottom of chat
   useEffect(() => {
     if (chatEndRef.current) {
@@ -264,7 +443,6 @@ export default function StudentDashboardPage() {
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
-    // Check if API Key exists
     if (!AI_CONFIG.apiKey) {
        setChatMessages(prev => [...prev, { role: 'assistant', content: "Error: API Key is missing. Please add VITE_GROQ_API_KEY to your .env.local file." }]);
        return;
@@ -285,7 +463,6 @@ export default function StudentDashboardPage() {
             body: JSON.stringify({
                 model: AI_CONFIG.model,
                 messages: [
-                    // --- DETAILED AI PERSONA ---
                     {
                         role: "system",
                         content: `You are a4ai (Artificial Intelligence for All India), a practical AI tool designed specifically for Indian education.
@@ -310,7 +487,7 @@ export default function StudentDashboardPage() {
                         - If asked about your capabilities, mention the Test Generator and Indian curriculum focus.
                         - Be polite and professional.`
                     },
-                    ...chatMessages.filter(m => m.role !== 'system'), // Send history
+                    ...chatMessages.filter(m => m.role !== 'system'),
                     userMsg
                 ],
                 temperature: 0.7,
@@ -340,13 +517,11 @@ export default function StudentDashboardPage() {
     }
   };
 
-  // Handle Enter Key in Chat
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
         handleSendMessage();
     }
   };
-
 
   // Calendar Logic
   const date = new Date();
@@ -414,7 +589,6 @@ export default function StudentDashboardPage() {
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-orange-400 to-pink-500 p-6 text-center shadow-lg shadow-orange-200 dark:shadow-none">
             <h4 className="text-white font-bold mb-1">{t.getPremium}</h4>
             <p className="text-white/80 text-xs mb-4">{t.unlockFeatures}</p>
-            {/* Upgrade Button Action */}
             <GlossyButton
                 label={t.upgradePlan}
                 variant="dark"
@@ -446,7 +620,6 @@ export default function StudentDashboardPage() {
                   {t.courseProgress} <span className="text-orange-600">73%</span>.
                 </h2>
                 <p className="text-slate-500 dark:text-slate-400 text-sm mb-6 font-medium">{t.levelUp}</p>
-                {/* MODIFIED BUTTON: Take Quiz */}
                 <GlossyButton
                     label={t.takeQuiz}
                     variant="orange"
@@ -504,7 +677,6 @@ export default function StudentDashboardPage() {
                 <div className="flex-1 flex flex-col justify-center gap-3">
                   <Link to="/dashboard/contests"><GlossyButton label={t.joinContests} variant="blue" icon={Award} fullWidth /></Link>
                   <Link to="/dashboard/leaderboard"><GlossyButton label={t.leaderboard} variant="yellow" icon={Flame} fullWidth /></Link>
-                  {/* Practice Button */}
                   <Link to="/practice"><GlossyButton label={t.practice} variant="red" icon={Target} fullWidth /></Link>
                 </div>
               </div>
@@ -522,11 +694,11 @@ export default function StudentDashboardPage() {
                     <tr><th className="pb-3">{t.testName}</th><th className="pb-3">{t.deadline}</th><th className="pb-3 text-right">{t.status}</th></tr>
                   </thead>
                   <tbody>
-                    {recentTests.map((t) => (
-                      <tr key={t.id} className="border-b border-slate-300/20 dark:border-slate-700 last:border-0">
-                        <td className={`py-4 font-semibold ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{t.name}</td>
-                        <td className="py-4 text-xs">{t.date}</td>
-                        <td className="py-4 text-right"><span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full font-bold text-[10px]">{t.status}</span></td>
+                    {recentTests.map((row) => (
+                      <tr key={row.id} className="border-b border-slate-300/20 dark:border-slate-700 last:border-0">
+                        <td className={`py-4 font-semibold ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>{row.name}</td>
+                        <td className="py-4 text-xs">{row.date}</td>
+                        <td className="py-4 text-right"><span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full font-bold text-[10px]">{row.status}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -538,7 +710,7 @@ export default function StudentDashboardPage() {
           {/* RIGHT COLUMN (4/12) */}
           <div className="col-span-12 xl:col-span-4 flex flex-col gap-8">
 
-            {/* --- NEW HEADER ACTION BAR --- */}
+            {/* --- HEADER ACTION BAR --- */}
             <div className="flex justify-end gap-4 items-center h-[50px] relative">
 
               {/* Expanding Search Bar */}
@@ -561,7 +733,7 @@ export default function StudentDashboardPage() {
                 />
               </motion.div>
 
-              {/* Animated Notification Bell (Opens on Hover) */}
+              {/* Notification Bell */}
               <div
                   className="relative z-40"
                   onMouseEnter={() => setIsNotificationsOpen(true)}
@@ -638,13 +810,11 @@ export default function StudentDashboardPage() {
                                     <User size={16} /> {t.profile}
                                 </Link>
 
-                                {/* Dark Mode Toggle */}
                                 <div onClick={toggleTheme} className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer text-sm transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}>
                                     {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
                                     {theme === 'dark' ? t.lightMode : t.darkMode}
                                 </div>
 
-                                {/* Language Toggle */}
                                 <div onClick={toggleLanguage} className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer text-sm transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}>
                                     <Globe size={16} /> {t.language}
                                 </div>
@@ -666,7 +836,7 @@ export default function StudentDashboardPage() {
 
             </div>
 
-            {/* Calendar (Real Sync) */}
+            {/* Calendar */}
             <div className={uniformGlassStyle}>
               <h3 className={`font-bold mb-6 text-sm text-center ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>{currentMonth} {currentYear}</h3>
               <div className="grid grid-cols-7 gap-2 text-center text-xs">
@@ -713,86 +883,157 @@ export default function StudentDashboardPage() {
             </div>
           </div>
         </div>
-
-        {/* --- CHATBOT FAB (Bloody Red & Interactive with Groq) --- */}
-        <div
-            className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-2"
-        >
-             <AnimatePresence>
-                {isChatOpen && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.8 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.8 }}
-                        className={`mb-2 w-80 h-96 rounded-2xl shadow-2xl overflow-hidden border flex flex-col ${theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}
-                    >
-                        <div className="bg-gradient-to-r from-red-600 to-red-800 p-4 flex justify-between items-center text-white shrink-0">
-                            <span className="font-bold text-sm">a4ai Assistant</span>
-                            <X size={16} className="cursor-pointer hover:scale-110" onClick={() => setIsChatOpen(false)} />
-                        </div>
-
-                        <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50 dark:bg-slate-900/50">
-                            <div className={`p-3 rounded-lg rounded-tl-none max-w-[85%] text-sm ${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700 shadow-sm'}`}>
-                                {t.chatHello}
-                            </div>
-
-                            {chatMessages.map((msg, idx) => (
-                                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`p-3 rounded-lg max-w-[85%] text-sm ${
-                                        msg.role === 'user'
-                                            ? 'bg-red-600 text-white rounded-tr-none'
-                                            : `${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700 shadow-sm'} rounded-tl-none`
-                                    }`}>
-                                            {msg.content}
-                                    </div>
-                                </div>
-                            ))}
-
-                            {isChatLoading && (
-                                <div className="flex justify-start">
-                                    <div className={`p-3 rounded-lg rounded-tl-none bg-slate-200 dark:bg-slate-800 flex items-center gap-2`}>
-                                        <Loader2 size={16} className="animate-spin text-slate-500" />
-                                        <span className="text-xs text-slate-500">Thinking...</span>
-                                    </div>
-                                </div>
-                            )}
-                            <div ref={chatEndRef} />
-                        </div>
-
-                        <div className={`p-3 border-t shrink-0 ${theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'}`}>
-                            <div className="relative flex items-center">
-                                <input
-                                    type="text"
-                                    value={inputMessage}
-                                    onChange={(e) => setInputMessage(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder={t.typeMessage}
-                                    className={`w-full text-sm p-3 pr-10 rounded-xl border focus:outline-none focus:ring-2 focus:ring-red-500/50 ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500' : 'bg-slate-100 border-slate-200 text-slate-800'}`}
-                                />
-                                <button
-                                    onClick={handleSendMessage}
-                                    disabled={isChatLoading || !inputMessage.trim()}
-                                    className="absolute right-2 p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <Send size={14} />
-                                </button>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-             </AnimatePresence>
-
-            <motion.button
-                onClick={() => setIsChatOpen(!isChatOpen)}
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                whileTap={{ scale: 0.9 }}
-                className="w-16 h-16 bg-[#DC143C] hover:bg-[#B91C1C] rounded-full shadow-[0_0_20px_rgba(220,20,60,0.5)] flex items-center justify-center text-white border-4 border-white/10 transition-colors"
-            >
-                {isChatOpen ? <X size={32} /> : <MessageCircle size={32} fill="white" />}
-            </motion.button>
-        </div>
-
       </main>
+
+      {/* ══════════════════════════════════════════════════════════
+          CHATBOT — draggable 3D robot mascot
+          Lives outside <main> so it floats over the whole viewport.
+         ══════════════════════════════════════════════════════════ */}
+      <motion.div
+        drag
+        dragListener={false}
+        dragControls={dragControls}
+        dragMomentum={false}
+        dragElastic={0.06}
+        initial={{ x: savedPos.x, y: savedPos.y }}
+        dragConstraints={{
+          left: -(typeof window !== "undefined" ? window.innerWidth - 150 : 900),
+          top: -(typeof window !== "undefined" ? window.innerHeight - 170 : 700),
+          right: 16,
+          bottom: 16,
+        }}
+        onDragStart={() => { didDragRef.current = true; }}
+        onDragEnd={(_e, info) => {
+          setTimeout(() => { didDragRef.current = false; }, 60);
+          try {
+            const prev = savedPos;
+            safeStorage.set("mascotPos", JSON.stringify({
+              x: prev.x + info.offset.x,
+              y: prev.y + info.offset.y,
+            }));
+          } catch { /* no-op */ }
+        }}
+        className="fixed bottom-8 right-8 z-[60] flex flex-col items-end gap-3 touch-none"
+      >
+        <AnimatePresence>
+          {isChatOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.85 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.85 }}
+              transition={{ type: "spring", stiffness: 300, damping: 26 }}
+              className={`w-80 h-96 rounded-3xl shadow-2xl overflow-hidden border flex flex-col ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
+              }`}
+            >
+              {/* header */}
+              <div className="bg-gradient-to-r from-[#1B2FD8] to-[#4A66FF] p-4 flex justify-between items-center text-white shrink-0">
+                <span className="font-bold text-sm flex items-center gap-2.5">
+                  <span className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+                    <RobotMascot size={28} />
+                  </span>
+                  {t.assistant}
+                </span>
+                <X size={16} className="cursor-pointer hover:scale-110 transition-transform" onClick={() => setIsChatOpen(false)} />
+              </div>
+
+              {/* messages */}
+              <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50 dark:bg-slate-900/50">
+                <div className="flex items-end gap-2">
+                  <RobotMascot size={26} />
+                  <div className={`p-3 rounded-2xl rounded-bl-md max-w-[80%] text-sm ${
+                    theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700 shadow-sm'
+                  }`}>
+                    {t.chatHello}
+                  </div>
+                </div>
+
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.role !== 'user' && <RobotMascot size={26} />}
+                    <div className={`p-3 rounded-2xl max-w-[80%] text-sm whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? 'bg-[#1B2FD8] text-white rounded-br-md'
+                        : `${theme === 'dark' ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-700 shadow-sm'} rounded-bl-md`
+                    }`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+
+                {isChatLoading && (
+                  <div className="flex items-end gap-2 justify-start">
+                    <RobotMascot size={26} state="thinking" />
+                    <div className="p-3 rounded-2xl rounded-bl-md bg-slate-200 dark:bg-slate-800 flex items-center gap-2">
+                      <Loader2 size={16} className="animate-spin text-slate-500" />
+                      <span className="text-xs text-slate-500">{t.thinking}</span>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* input */}
+              <div className={`p-3 border-t shrink-0 ${
+                theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-100 bg-white'
+              }`}>
+                <div className="relative flex items-center">
+                  <input
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={t.typeMessage}
+                    className={`w-full text-sm p-3 pr-10 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#1B2FD8]/40 ${
+                      theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
+                        : 'bg-slate-100 border-slate-200 text-slate-800'
+                    }`}
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={isChatLoading || !inputMessage.trim()}
+                    className="absolute right-2 p-1.5 bg-[#1B2FD8] text-white rounded-lg hover:bg-[#4A66FF] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Send size={14} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* the robot — drag handle + chat toggle */}
+        <motion.button
+          onPointerDown={(e) => dragControls.start(e)}
+          onClick={() => { if (!didDragRef.current) setIsChatOpen(!isChatOpen); }}
+          onMouseMove={handleMascotMove}
+          onMouseLeave={resetMascot}
+          animate={{ y: isChatOpen ? 0 : [0, -8, 0] }}
+          transition={{ duration: 3.2, repeat: isChatOpen ? 0 : Infinity, ease: "easeInOut" }}
+          whileTap={{ scale: 0.92 }}
+          className="cursor-grab active:cursor-grabbing select-none bg-transparent border-none p-0"
+          style={{ perspective: 700 }}
+          title={t.dragHint}
+          aria-label={t.assistant}
+        >
+          <motion.div
+            animate={{
+              rotateX: tilt.rx,
+              rotateY: tilt.ry,
+              scale: tilt.ry !== 0 || tilt.rx !== 0 ? 1.08 : 1,
+            }}
+            transition={{ type: "spring", stiffness: 260, damping: 18 }}
+            style={{ transformStyle: "preserve-3d" }}
+          >
+            <RobotMascot
+              size={84}
+              state={isChatLoading ? "thinking" : "idle"}
+              look={look}
+            />
+          </motion.div>
+        </motion.button>
+      </motion.div>
     </div>
   );
 }
