@@ -447,7 +447,7 @@ export default function SignupPage() {
                         value={formValues.phone}
                         onChange={onChange}
                         className={`h-11 rounded-xl flex-1 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`}
-                        placeholder="9876543210"
+                        placeholder="9593457XXX"
                         maxLength={10}
                       />
                       <Button
@@ -459,7 +459,7 @@ export default function SignupPage() {
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">10-digit number (e.g. 9876543210)</p>
+                    <p className="text-xs text-slate-500 mt-1">10-digit number (e.g. 9593457XXX)</p>
                   </div>
                   {otpSent && (
                     <div className="space-y-1 animate-in zoom-in-95 duration-200">

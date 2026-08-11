@@ -290,12 +290,12 @@ export default function LoginPage() {
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Phone Number</Label>
                     <div className="flex gap-2">
-                      <Input type="tel" name="phone" value={formValues.phone} onChange={onChange} className={`h-11 rounded-xl flex-1 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`} placeholder="9310200167" />
+                      <Input type="tel" name="phone" value={formValues.phone} onChange={onChange} className={`h-11 rounded-xl flex-1 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`} placeholder="9593457XXX" />
                       <Button type="button" onClick={sendOtp} disabled={timer > 0 || isLoading} className={`h-11 rounded-xl px-4 text-xs font-bold transition-all ${isDarkMode ? "bg-white text-black hover:bg-slate-200" : "bg-black text-white hover:bg-slate-900"}`}>
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">10-digit number (e.g. 9310200167)</p>
+                    <p className="text-xs text-slate-500 mt-1">10-digit number (e.g. 9593457XXX)</p>
                   </div>
                   {otpSent && (
                     <div className="space-y-1 animate-in zoom-in-95 duration-200">
