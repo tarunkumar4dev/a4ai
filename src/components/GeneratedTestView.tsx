@@ -794,7 +794,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
       }
 
       // Valid user — proceed with save
-      await api.saveTest(result.testId, user.id);
+      await api.saveTest(result.testId, user.id, activeQuestions);
       setSaveStatus("saved");
       clearStoredProgress();
 
