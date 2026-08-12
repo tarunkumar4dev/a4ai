@@ -1,5 +1,4 @@
-// src/pages/LoginPage.tsx
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import {
-  Eye, EyeOff, ArrowLeft, Sun, Moon, Phone
+  Eye, EyeOff, ArrowLeft, Sun, Moon, Phone, Mail
 } from "lucide-react";
 
 // Format 10-digit Indian number to +91XXXXXXXXXX
@@ -45,6 +44,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
   const [formValues, setFormValues] = useState({ email: "", password: "", phone: "" });
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -54,7 +54,25 @@ export default function LoginPage() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
 
-  // If already logged in, redirect
+  // Detect Mobile Device / Screen width on mount
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isSmallScreen = window.innerWidth < 768;
+      const mobile = mobileUA || isSmallScreen;
+      
+      setIsMobileDevice(mobile);
+      if (mobile) {
+        setLoginMethod("phone"); // Force phone auth on mobile
+      }
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Redirect if already logged in
   useEffect(() => {
     if (session && role) {
       navigate(`/${role}/dashboard`, { replace: true });
@@ -102,8 +120,9 @@ export default function LoginPage() {
       setOtpSent(true);
       setTimer(60);
       toast({ title: "OTP Sent", description: "Check your mobile" });
-    } catch (error: any) {
-      toast({ title: "Failed", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -112,10 +131,6 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
-      // Detect if user is on Android / Mobile browser or App WebView
-      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      
-      // Select deep link redirect for Android mobile app, or standard origin for Web
       const redirectTarget = isMobileDevice
         ? "io.supabase.a4ai://login-callback"
         : `${window.location.origin}/auth/callback`;
@@ -128,8 +143,9 @@ export default function LoginPage() {
         },
       });
       if (error) throw error;
-    } catch (error: any) {
-      toast({ title: "Google login failed", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast({ title: "Google login failed", description: err.message, variant: "destructive" });
       setIsLoading(false);
     }
   };
@@ -146,7 +162,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      if (loginMethod === "email") {
+      if (loginMethod === "email" && !isMobileDevice) {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: formValues.email.trim(),
           password: formValues.password,
@@ -162,15 +178,16 @@ export default function LoginPage() {
         if (error) throw error;
         redirectAfterLogin(data.user?.user_metadata?.role);
       }
-    } catch (error: any) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast({ title: "Login failed", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className={`min-h-screen w-full flex flex-col items-center justify-center p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
+    <div className={`min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
       
       {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
       <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
@@ -209,67 +226,84 @@ export default function LoginPage() {
       {/* Dark mode toggle */}
       <button
         onClick={() => setIsDarkMode(!isDarkMode)}
-        className={`fixed top-24 right-8 p-3 rounded-2xl backdrop-blur-md border transition-all z-40 shadow-lg ${
+        className={`fixed top-20 right-4 sm:top-24 sm:right-8 p-3 rounded-2xl backdrop-blur-md border transition-all z-40 shadow-lg ${
           isDarkMode ? "bg-white/10 border-white/20 text-yellow-400 hover:bg-white/20" : "bg-black/5 border-black/10 text-slate-700 hover:bg-black/10"
         }`}
       >
-        {isDarkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
+        {isDarkMode ? <Sun className="w-5 h-5 sm:w-6 sm:h-6" /> : <Moon className="w-5 h-5 sm:w-6 sm:h-6" />}
       </button>
 
-      <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 items-center relative z-10 pt-24 pb-6">
+      <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 items-center relative z-10 pt-20 sm:pt-24 pb-6">
+        
         {/* -------- CARD -------- */}
         <div
-          className={`backdrop-blur-[30px] saturate-[180%] border rounded-[3rem] shadow-2xl p-10 flex flex-col transition-all duration-500 max-h-[85vh] overflow-y-auto ${
+          className={`backdrop-blur-[30px] saturate-[180%] border flex flex-col transition-all duration-500 overflow-y-auto ${
+            isMobileDevice 
+              ? "rounded-[2.5rem] p-6 shadow-xl w-full" 
+              : "rounded-[3rem] p-10 shadow-2xl max-h-[85vh]"
+          } ${
             isDarkMode ? "bg-slate-900/60 border-white/10 shadow-black/40" : "bg-white/40 border-white/50 shadow-slate-300/50"
           }`}
         >
-          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className={`mb-6 -ml-2 rounded-full w-fit ${isDarkMode ? "text-slate-400 hover:bg-white/10" : "text-slate-600 hover:bg-white/20"}`}>
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className={`mb-4 -ml-2 rounded-full w-fit ${isDarkMode ? "text-slate-400 hover:bg-white/10" : "text-slate-600 hover:bg-white/20"}`}>
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
 
-          <div className="mb-8">
-            <h1 className={`text-4xl font-bold tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>Welcome back</h1>
-            <p className={`text-sm font-semibold mt-2 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              New here?{" "}
-              <Link to="/signup" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>
-                Create account
-              </Link>
-            </p>
+          {/* HEADER AREA */}
+          <div className="mb-6">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+              Sign In
+            </h1>
           </div>
 
           <div className="space-y-5">
-            {/* Toggle email / phone */}
-            <Button
-              onClick={() => setLoginMethod(loginMethod === "email" ? "phone" : "email")}
-              className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
-                isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
-              }`}
-            >
-              <Phone className="w-4 h-4" />
-              {loginMethod === "email" ? "Use Mobile Number Instead" : "Use Email Instead"}
-            </Button>
+            {/* Toggle email / phone — ONLY SHOWN ON DESKTOP */}
+            {!isMobileDevice && (
+              <Button
+                type="button"
+                onClick={() => setLoginMethod(loginMethod === "email" ? "phone" : "email")}
+                className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
+                  isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
+                }`}
+              >
+                {loginMethod === "email" ? (
+                  <>
+                    <Phone className="w-4 h-4" />
+                    Use Mobile Number Instead
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4" />
+                    Use Email Instead
+                  </>
+                )}
+              </Button>
+            )}
 
-            {/* Google */}
-            <Button
-              variant="outline"
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all ${
-                isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
-              }`}
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-              </svg>
-              Google Login
-            </Button>
+            {/* Google Login — ONLY SHOWN ON DESKTOP */}
+            {!isMobileDevice && (
+              <Button
+                variant="outline"
+                onClick={handleGoogleLogin}
+                disabled={isLoading}
+                className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all ${
+                  isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
+                }`}
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                </svg>
+                Google Login
+              </Button>
+            )}
 
-            {/* Form */}
+            {/* FORM AREA */}
             <form onSubmit={onSubmit} className="space-y-4">
-              {loginMethod === "email" ? (
+              {loginMethod === "email" && !isMobileDevice ? (
+                /* ── Desktop Email Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
@@ -286,30 +320,45 @@ export default function LoginPage() {
                   </div>
                 </div>
               ) : (
+                /* ── Native Mobile App-Like Phone OTP Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Phone Number</Label>
                     <div className="flex gap-2">
-                      <Input type="tel" name="phone" value={formValues.phone} onChange={onChange} className={`h-11 rounded-xl flex-1 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`} placeholder="9593457XXX" />
-                      <Button type="button" onClick={sendOtp} disabled={timer > 0 || isLoading} className={`h-11 rounded-xl px-4 text-xs font-bold transition-all ${isDarkMode ? "bg-white text-black hover:bg-slate-200" : "bg-black text-white hover:bg-slate-900"}`}>
+                      <Input 
+                        type="tel" 
+                        name="phone" 
+                        value={formValues.phone} 
+                        onChange={onChange} 
+                        className={`h-12 rounded-2xl flex-1 text-base transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/60 border-white/60 focus:bg-white"}`} 
+                        placeholder="9593457XXX" 
+                      />
+                      <Button 
+                        type="button" 
+                        onClick={sendOtp} 
+                        disabled={timer > 0 || isLoading} 
+                        className={`h-12 rounded-2xl px-5 text-xs font-bold transition-all shadow-md ${isDarkMode ? "bg-white text-black hover:bg-slate-200" : "bg-black text-white hover:bg-slate-900"}`}
+                      >
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">10-digit number (e.g. 9593457XXX)</p>
+                    <p className="text-xs text-slate-500 mt-1 ml-1">Enter your 10-digit mobile number</p>
                   </div>
+
                   {otpSent && (
-                    <div className="space-y-1 animate-in zoom-in-95 duration-200">
-                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Enter OTP</Label>
+                    <div className="space-y-2 animate-in zoom-in-95 duration-200 pt-2">
+                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Verification Code</Label>
                       <div className="flex justify-between gap-2">
                         {otp.map((digit, idx) => (
                           <input
                             key={idx}
                             id={`otp-${idx}`}
                             type="text"
+                            inputMode="numeric"
                             maxLength={1}
                             value={digit}
                             onChange={(e) => handleOtpChange(e.target.value, idx)}
-                            className={`w-10 h-12 text-center text-lg font-bold rounded-xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`}
+                            className={`w-11 h-13 text-center text-xl font-black rounded-2xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/60 border-white/60 focus:bg-white shadow-sm"}`}
                           />
                         ))}
                       </div>
@@ -318,29 +367,42 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between px-2">
+              <div className="flex items-center justify-between px-2 pt-1">
                 <div className="flex items-center gap-2">
                   <Checkbox id="rem" checked={remember} onCheckedChange={(c) => setRemember(Boolean(c))} />
-                  <label htmlFor="rem" className={`text-xs font-medium cursor-pointer ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>Stay signed in</label>
+                  <label htmlFor="rem" className={`text-xs font-semibold cursor-pointer ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                    Remember me
+                  </label>
                 </div>
-                {loginMethod === "email" && (
-                  <Link to="/forgot" className={`text-xs font-bold hover:underline ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>Forgot?</Link>
+                {loginMethod === "email" && !isMobileDevice && (
+                  <Link to="/forgot" className={`text-xs font-bold hover:underline ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                    Forgot Password?
+                  </Link>
                 )}
               </div>
 
-              <Button type="submit" disabled={isLoading} className={`w-full h-14 rounded-[1.5rem] font-bold shadow-lg transition-transform active:scale-[0.98] mt-2 ${isDarkMode ? "bg-white text-black hover:bg-slate-100" : "bg-black text-white hover:bg-slate-900"}`}>
-                {isLoading ? "Verifying..." : "Log In"}
+              <Button 
+                type="submit" 
+                disabled={isLoading} 
+                className={`w-full h-14 rounded-2xl font-bold text-base shadow-xl transition-all active:scale-[0.98] mt-3 ${
+                  isDarkMode ? "bg-white text-black hover:bg-slate-100" : "bg-black text-white hover:bg-slate-900"
+                }`}
+              >
+                {isLoading ? "Verifying..." : "Sign In"}
               </Button>
 
-              <p className={`text-center text-sm font-medium transition-colors ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+              {/* RESTORED SIGN UP LINK */}
+              <p className={`text-center text-sm font-medium transition-colors pt-2 ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
                 Don't have an account?{" "}
-                <Link to="/signup" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>Sign up</Link>
+                <Link to="/signup" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>
+                  Sign up
+                </Link>
               </p>
             </form>
           </div>
         </div>
 
-        {/* Right side illustration */}
+        {/* Right side illustration (Desktop/Tablet standard view) */}
         <div className={`hidden lg:flex items-center justify-center p-10 h-[600px] rounded-[3.5rem] relative overflow-hidden transition-all duration-500 ${isDarkMode ? "bg-slate-800/40" : "bg-white/40 shadow-inner"}`}>
           <RubberHoseShapes pointer={pointer} isDarkMode={isDarkMode} />
         </div>
@@ -350,8 +412,18 @@ export default function LoginPage() {
 }
 
 // ---- RubberHoseShapes Component ----
+interface EyeItemProps {
+  x: number;
+  y: number;
+  r?: number;
+  pr?: number;
+  w?: string;
+  p?: string;
+}
+
 function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: number }; isDarkMode: boolean }) {
   const ref = useRef<SVGSVGElement>(null);
+
   const getMove = (baseX: number, baseY: number, max = 5) => {
     if (!ref.current) return { x: 0, y: 0 };
     const r = ref.current.getBoundingClientRect();
@@ -362,10 +434,17 @@ function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: nu
     const dist = Math.hypot(dx, dy) || 1;
     return { x: (dx / dist) * max, y: (dy / dist) * max };
   };
-  const EyeItem = ({ x, y, r = 7, pr = 3.5, w = "#0F0F12", p = "#FFF" }: any) => {
+
+  const EyeItem = ({ x, y, r = 7, pr = 3.5, w = "#0F0F12", p = "#FFF" }: EyeItemProps) => {
     const m = getMove(x, y, 3);
-    return (<g><circle cx={x} cy={y} r={r} fill={w} /><circle cx={x + m.x} cy={y + m.y} r={pr} fill={p} /></g>);
+    return (
+      <g>
+        <circle cx={x} cy={y} r={r} fill={w} />
+        <circle cx={x + m.x} cy={y + m.y} r={pr} fill={p} />
+      </g>
+    );
   };
+
   return (
     <svg ref={ref} viewBox="0 0 460 330" className="w-full h-full drop-shadow-2xl select-none">
       <ellipse cx="230" cy="305" rx="170" ry="10" fill={isDarkMode ? "#1e293b" : "#cbd5e1"} opacity="0.6" />

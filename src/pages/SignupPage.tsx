@@ -1,5 +1,4 @@
-// src/pages/SignupPage.tsx
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +8,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import { motion, AnimatePresence } from "framer-motion";
-import { Confetti } from "@/components/ui/confetti";
 import {
   Eye, EyeOff, User, Mail, ArrowLeft, Phone,
   GraduationCap, School, Building2, ChevronDown,
@@ -155,8 +153,9 @@ export default function SignupPage() {
       setOtpSent(true);
       setTimer(60);
       toast({ title: "OTP Sent", description: "Check your mobile" });
-    } catch (error: any) {
-      toast({ title: "Failed", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -173,10 +172,8 @@ export default function SignupPage() {
     try {
       localStorage.setItem("a4ai_pending_role", selectedRole);
 
-      // Detect if user is on Android / Mobile device
       const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       
-      // Select deep link redirect for Android mobile app, or standard origin for Web
       const redirectTarget = isMobileDevice
         ? "io.supabase.a4ai://login-callback"
         : `${window.location.origin}/auth/callback`;
@@ -189,8 +186,9 @@ export default function SignupPage() {
         },
       });
       if (error) throw error;
-    } catch (error: any) {
-      toast({ title: "Google signup failed", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast({ title: "Google signup failed", description: err.message, variant: "destructive" });
       setIsLoading(false);
     }
   };
@@ -244,7 +242,6 @@ export default function SignupPage() {
           navigate("/login");
         }
       } else {
-        // Phone OTP verification
         const otpCode = otp.join("");
         if (otpCode.length !== 6) {
           toast({ title: "Enter 6-digit OTP", variant: "destructive" });
@@ -258,7 +255,6 @@ export default function SignupPage() {
         });
         if (error) throw error;
 
-        // Set role in user metadata
         if (data.user) {
           await supabase.auth.updateUser({
             data: { role: selectedRole },
@@ -267,8 +263,9 @@ export default function SignupPage() {
 
         redirectAfterLogin(selectedRole);
       }
-    } catch (error: any) {
-      toast({ title: "Signup failed", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast({ title: "Signup failed", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -290,8 +287,7 @@ export default function SignupPage() {
 
   return (
     <div className={`min-h-screen w-full flex flex-col items-center justify-center p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
-      {coinsScratched && <Confetti />}
-
+      
       {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
       <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
         <nav 
@@ -571,8 +567,18 @@ export default function SignupPage() {
 }
 
 // ---- RubberHoseShapes ----
+interface EyeItemProps {
+  x: number;
+  y: number;
+  r?: number;
+  pr?: number;
+  w?: string;
+  p?: string;
+}
+
 function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: number }; isDarkMode: boolean }) {
   const ref = useRef<SVGSVGElement>(null);
+
   const getMove = (baseX: number, baseY: number, max = 5) => {
     if (!ref.current) return { x: 0, y: 0 };
     const r = ref.current.getBoundingClientRect();
@@ -583,10 +589,17 @@ function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: nu
     const dist = Math.hypot(dx, dy) || 1;
     return { x: (dx / dist) * max, y: (dy / dist) * max };
   };
-  const EyeItem = ({ x, y, r = 7, pr = 3.5, w = "#0F0F12", p = "#FFF" }: any) => {
+
+  const EyeItem = ({ x, y, r = 7, pr = 3.5, w = "#0F0F12", p = "#FFF" }: EyeItemProps) => {
     const m = getMove(x, y, 3);
-    return (<g><circle cx={x} cy={y} r={r} fill={w} /><circle cx={x + m.x} cy={y + m.y} r={pr} fill={p} /></g>);
+    return (
+      <g>
+        <circle cx={x} cy={y} r={r} fill={w} />
+        <circle cx={x + m.x} cy={y + m.y} r={pr} fill={p} />
+      </g>
+    );
   };
+
   return (
     <svg ref={ref} viewBox="0 0 460 330" className="w-full h-full drop-shadow-2xl select-none">
       <ellipse cx="230" cy="305" rx="170" ry="10" fill={isDarkMode ? "#1e293b" : "#cbd5e1"} opacity="0.6" />
