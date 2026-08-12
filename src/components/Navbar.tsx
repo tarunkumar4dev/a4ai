@@ -15,8 +15,20 @@ const navItems = [
   { name: "About", path: "/about" },
 ];
 
-const BRAND_GRADIENT =
+// 🇮🇳 Tricolor (Saffron → Soft White → Green), doubled so it loops seamlessly.
+const TRICOLOR_GRADIENT =
+  "linear-gradient(90deg, #FF9933, #F3F4F6, #138808, #FF9933, #F3F4F6, #138808, #FF9933)";
+// Original brand gradient (used when the festive theme is OFF).
+const BRAND_GRADIENT_DEFAULT =
   "linear-gradient(90deg, #34d399, #22d3ee, #818cf8, #c084fc, #34d399, #22d3ee, #818cf8, #c084fc)";
+
+// true → always tricolor (matches your hero) · false → never · null → only Aug 11–17
+const FORCE_TRICOLOR: boolean | null = true;
+const isIndependenceWeek = () => {
+  const n = new Date();
+  return n.getMonth() === 7 && n.getDate() >= 11 && n.getDate() <= 17; // month 7 = August
+};
+
 const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
 
 interface SuggestionItem {
@@ -49,6 +61,13 @@ export default function Navbar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchRef = useRef<HTMLDivElement>(null);
+
+  // Festive (tricolor) resolved on client.
+  const [festive, setFestive] = useState(FORCE_TRICOLOR === true);
+  useEffect(() => {
+    setFestive(FORCE_TRICOLOR ?? isIndependenceWeek());
+  }, []);
+  const brandGradient = festive ? TRICOLOR_GRADIENT : BRAND_GRADIENT_DEFAULT;
 
   const { pathname } = useLocation();
   const activeName =
@@ -133,7 +152,7 @@ export default function Navbar() {
   }
 
   const mutedColor = "#5f6368";
-  const activeColor = "#047857";
+  const activeColor = festive ? "#138808" : "#047857"; // flag green during the festive window
   const textColor = "#202124";
 
   return (
@@ -203,7 +222,23 @@ export default function Navbar() {
               <Link to="/" className="flex items-center flex-shrink-0">
                 <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex items-center gap-2">
                   <img src="/ICON.ico" alt="a4ai" className="h-7 w-7 sm:h-8 sm:w-8" />
-                  <span className="text-lg sm:text-xl font-extrabold text-neutral-900">
+                  <span
+                    className={`text-lg sm:text-xl font-extrabold ${festive ? "" : "text-neutral-900"}`}
+                    style={
+                      festive
+                        ? {
+                            backgroundImage: brandGradient,
+                            ...gradientAnimStyle,
+                            WebkitBackgroundClip: "text",
+                            backgroundClip: "text",
+                            color: "transparent",
+                            WebkitTextFillColor: "transparent",
+                            // keeps the soft-white band readable on the light dock
+                            filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.18))",
+                          }
+                        : undefined
+                    }
+                  >
                     a4ai
                   </span>
                 </motion.div>
@@ -228,7 +263,7 @@ export default function Navbar() {
                           <motion.span
                             layoutId="navLine"
                             className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full"
-                            style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}
+                            style={{ background: brandGradient, ...gradientAnimStyle }}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
@@ -413,7 +448,7 @@ export default function Navbar() {
                     className="block rounded-xl px-3 py-2.5 text-base font-medium transition-colors"
                     style={{
                       color: active ? activeColor : mutedColor,
-                      background: active ? "rgba(16,185,129,0.06)" : "transparent",
+                      background: active ? "rgba(19,136,8,0.06)" : "transparent",
                     }}
                   >
                     {item.name}
