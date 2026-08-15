@@ -1,6 +1,14 @@
 // src/components/GeneratedTestView.tsx
 // ──────────────────────────────────────────────────────────────────────
-// V11 — Fixed authentication and save logic
+// V14 — Institute-paper export details
+//
+// v14 changes vs v11:
+//   - When the "colorful" (institute_paper) template is selected, a small
+//     "Institute Details" form appears in the download menu to collect
+//     Teacher name, Institute name, Time (duration) and Topic.
+//   - These are threaded through downloadFile() into the export payload as
+//     teacher_name / institute_name / duration / topic (also sent in
+//     camelCase as a hedge). Other templates ignore them on the backend.
 //
 // v11 changes vs v10:
 //   - Removed zero-UUID fallback from performSave
@@ -40,6 +48,17 @@ const TEMPLATE_OPTIONS: { id: ExportTemplate; label: string }[] = [
   { id: "compact", label: "Compact" },
   { id: "colorful", label: "Colorful" },
 ];
+
+// v14: which templates use the institute_paper layout (need extra details)
+const INSTITUTE_TEMPLATES: ExportTemplate[] = ["colorful"];
+
+// v14: institute-paper meta collected at export time (only for institute layout)
+interface InstituteDetails {
+  teacherName?: string;
+  instituteName?: string;
+  duration?: string;
+  topic?: string;
+}
 
 interface AnswerTable {
   type: string;  // "journal_entry" | "ledger" | "trial_balance"
@@ -601,7 +620,12 @@ async function downloadFile(
   mode: "student" | "answers" | "teacher",
   template: ExportTemplate,   // v10: which visual template to render
   logoBase64?: string | null,
+  institute?: InstituteDetails,   // v14: institute-paper meta (only used by "colorful")
 ) {
+  // v14: trim helper — send null (not empty string) so the backend uses its
+  // own fallbacks ("______" / exam title) instead of rendering blanks.
+  const clean = (s?: string) => (s && s.trim() ? s.trim() : null);
+
   const payload = {
     examTitle: meta.examTitle,
     paperDate: meta.paperDate,
@@ -614,6 +638,18 @@ async function downloadFile(
     format,
     template,   // v10: sent through to backend ExportRequest.template
     logoBase64: logoBase64 || null,
+
+    // v14: institute-paper meta. Only the "colorful" (institute_paper)
+    // layout renders these; other templates accept-and-ignore them on the
+    // backend. Sent in snake_case (primary) AND camelCase (hedge) so it
+    // matches ExportRequest regardless of its field casing — Pydantic
+    // ignores whichever keys don't match.
+    teacher_name: clean(institute?.teacherName),
+    institute_name: clean(institute?.instituteName),
+    duration: clean(institute?.duration),
+    topic: clean(institute?.topic),
+    teacherName: clean(institute?.teacherName),
+    instituteName: clean(institute?.instituteName),
   };
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -657,6 +693,15 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
 
   // v10: Selected export template — persists across format/mode choices
   const [selectedTemplate, setSelectedTemplate] = useState<ExportTemplate>("modern");
+
+  // v14: institute-paper details (only used by the "colorful" template)
+  const [institute, setInstitute] = useState<InstituteDetails>({
+    teacherName: "",
+    instituteName: "",
+    duration: "",
+    topic: "",
+  });
+  const isInstituteTemplate = INSTITUTE_TEMPLATES.includes(selectedTemplate);
 
   // Paper Date State
   const [paperDate, setPaperDate] = useState<string>(
@@ -924,7 +969,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
         classGrade: result.meta?.classGrade || "Class 10",
         subject: result.meta?.subject || "Science",
         paperDate: paperDate,
-      }, format, mode, selectedTemplate, logoBase64);   // v10: pass selectedTemplate
+      }, format, mode, selectedTemplate, logoBase64, institute);   // v14: + institute details
       toast.success("Download started!");
     } catch (err) {
       console.error("Export failed:", err);
@@ -1088,6 +1133,45 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                           ))}
                         </div>
                       </div>
+
+                      {/* v14: Institute-paper details — only for the institute layout ("colorful") */}
+                      {isInstituteTemplate && (
+                        <div className="px-3 pb-2.5 mb-1 border-b border-gray-100 space-y-1.5">
+                          <div className="text-[10px] font-bold text-gray-400 uppercase pt-1">
+                            Institute Details
+                          </div>
+                          <input
+                            type="text"
+                            value={institute.teacherName}
+                            onChange={(e) => setInstitute((p) => ({ ...p, teacherName: e.target.value }))}
+                            placeholder="Teacher name (e.g. Murli Sir)"
+                            className="w-full text-[11px] px-2.5 py-2 rounded-lg border border-gray-200 bg-gray-50 outline-none focus:ring-1 focus:ring-indigo-300 focus:bg-white transition-colors"
+                          />
+                          <input
+                            type="text"
+                            value={institute.instituteName}
+                            onChange={(e) => setInstitute((p) => ({ ...p, instituteName: e.target.value }))}
+                            placeholder="Institute name"
+                            className="w-full text-[11px] px-2.5 py-2 rounded-lg border border-gray-200 bg-gray-50 outline-none focus:ring-1 focus:ring-indigo-300 focus:bg-white transition-colors"
+                          />
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <input
+                              type="text"
+                              value={institute.duration}
+                              onChange={(e) => setInstitute((p) => ({ ...p, duration: e.target.value }))}
+                              placeholder="Time (1 hr 30 min)"
+                              className="w-full text-[11px] px-2.5 py-2 rounded-lg border border-gray-200 bg-gray-50 outline-none focus:ring-1 focus:ring-indigo-300 focus:bg-white transition-colors"
+                            />
+                            <input
+                              type="text"
+                              value={institute.topic}
+                              onChange={(e) => setInstitute((p) => ({ ...p, topic: e.target.value }))}
+                              placeholder="Topic (optional)"
+                              className="w-full text-[11px] px-2.5 py-2 rounded-lg border border-gray-200 bg-gray-50 outline-none focus:ring-1 focus:ring-indigo-300 focus:bg-white transition-colors"
+                            />
+                          </div>
+                        </div>
+                      )}
 
                       <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">PDF</div>
                       <button onClick={() => handleDownload("pdf", "student")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
