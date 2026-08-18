@@ -250,12 +250,6 @@ const Icons = {
 };
 
 /* ------------------- ROBOT MASCOT (AI Sarthi) ------------------- */
-/**
- * a4ai's floating robot assistant.
- * White shell with radial shading, glowing blue visor, teal fins.
- * `look` offsets the eyes so it can glance toward the cursor.
- * Gradient IDs are per-instance so several mascots can render at once.
- */
 function RobotMascot({
   size = 72,
   state = "idle",
@@ -434,10 +428,15 @@ const GlossyButton = ({
   small = false,
   showNewBadge = false,
   isStartupsStyle = false,
+  disabled = false,
 }: any) => (
   <button
-    onClick={onClick}
-    className={`relative flex items-center justify-center gap-2 sm:gap-3 rounded-[28px] transform transition-all duration-300 ease-out hover:-translate-y-1 active:scale-[0.98] ${isStartupsStyle ? "btn-startups" : "btn-glossy-theme"
+    onClick={disabled ? undefined : onClick}
+    disabled={disabled}
+    className={`relative flex items-center justify-center gap-2 sm:gap-3 rounded-[28px] transform transition-all duration-300 ease-out ${disabled
+        ? "opacity-60 cursor-not-allowed filter grayscale"
+        : "hover:-translate-y-1 active:scale-[0.98]"
+      } ${isStartupsStyle ? "btn-startups" : "btn-glossy-theme"
       } ${fullWidth ? "w-full" : "w-auto"
       } ${small
         ? "px-4 sm:px-5 py-2.5 sm:py-3 min-h-[44px] sm:min-h-[48px]"
@@ -446,7 +445,7 @@ const GlossyButton = ({
   >
     {Icon && (
       <div
-        className={`flex items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md ${small ? "h-7 w-7 sm:h-8 sm:w-8" : "h-8 w-8 sm:h-10 sm:w-10"} border border-white/40 shadow-inner group-hover:scale-110 transition-transform shrink-0`}
+        className={`flex items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md ${small ? "h-7 w-7 sm:h-8 sm:w-8" : "h-8 w-8 sm:h-10 sm:w-10"} border border-white/40 shadow-inner ${disabled ? "" : "group-hover:scale-110"} transition-transform shrink-0`}
       >
         <Icon size={small ? 14 : 18} />
       </div>
@@ -465,7 +464,7 @@ const GlossyButton = ({
       )}
     </div>
     {!small && (
-      <div className="ml-auto pl-2 sm:pl-4 text-white/50 group-hover:translate-x-1 transition-transform shrink-0">
+      <div className={`ml-auto pl-2 sm:pl-4 text-white/50 ${disabled ? "" : "group-hover:translate-x-1"} transition-transform shrink-0`}>
         <Icons.ChevronRight />
       </div>
     )}
@@ -639,6 +638,20 @@ function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
   const limit = status?.test_limit || 10;
   const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
 
+  // Device check for mobile screen / viewport
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileWidth = window.innerWidth < 768;
+      const isMobileAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobile(isMobileWidth || isMobileAgent);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   return (
     <div className="bg-slate-50 dark:bg-slate-800/60 p-5 rounded-[32px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-none border border-slate-100 dark:border-white/5 mb-6 text-center flex flex-col items-center relative overflow-hidden">
       <div className="w-12 h-12 bg-white dark:bg-slate-700 rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100 dark:border-slate-600 shrink-0">
@@ -663,10 +676,18 @@ function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
 
       {!isPro && (
         <GlossyButton
-          label="Upgrade"
+          label={isMobile ? "Coming Soon" : "Upgrade"}
           small
           fullWidth
-          onClick={() => navigate("/pricing")}
+          disabled={isMobile}
+          onClick={() => {
+            if (isMobile) {
+              // Mobile Purchase working commented out:
+              // navigate("/pricing");
+              return;
+            }
+            navigate("/pricing");
+          }}
         />
       )}
     </div>
