@@ -1,6 +1,6 @@
 // src/pages/TeacherDashboardPage.tsx
-
 import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
+import TeacherAttendanceView from "@/components/attendance/TeacherAttendanceView";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -373,8 +373,8 @@ const SidebarButton = ({ active, Icon, label, colorClass, onClick }: any) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 active:scale-95 ${active
-        ? "bg-slate-200/50 dark:bg-slate-800 shadow-sm text-slate-800 dark:text-white"
-        : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+      ? "bg-slate-200/50 dark:bg-slate-800 shadow-sm text-slate-800 dark:text-white"
+      : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60"
       }`}
   >
     <div className="flex items-center gap-3 sm:gap-4">
@@ -404,8 +404,8 @@ const GlossyButton = ({
     onClick={disabled ? undefined : onClick}
     disabled={disabled}
     className={`relative flex items-center justify-center gap-2 sm:gap-3 rounded-[28px] transform transition-all duration-300 ease-out ${disabled
-        ? "opacity-60 cursor-not-allowed filter grayscale"
-        : "hover:-translate-y-1 active:scale-[0.98]"
+      ? "opacity-60 cursor-not-allowed filter grayscale"
+      : "hover:-translate-y-1 active:scale-[0.98]"
       } ${isStartupsStyle ? "btn-startups" : "btn-glossy-theme"
       } ${fullWidth ? "w-full" : "w-auto"
       } ${small
@@ -574,10 +574,10 @@ function SearchBar({
               >
                 <div
                   className={`p-2 rounded-[14px] inset-pill border-none shrink-0 ${s.type === "test"
-                      ? "text-slate-800 dark:text-slate-200"
-                      : s.type === "tool"
-                        ? "text-slate-500 dark:text-slate-400"
-                        : "text-slate-700 dark:text-slate-300"
+                    ? "text-slate-800 dark:text-slate-200"
+                    : s.type === "tool"
+                      ? "text-slate-500 dark:text-slate-400"
+                      : "text-slate-700 dark:text-slate-300"
                     }`}
                 >
                   <SuggestionIcon />
@@ -1012,12 +1012,14 @@ export default function TeacherDashboardPage() {
     const exactMatchResponses: Record<string, string> = {
       "Explain me a4ai":
         "Namaste! a4ai is built for teachers like you — so the hours you'd spend setting question papers can go back into actual teaching.\n\n• Pick a class, subject, and chapters — a4ai generates a full CBSE-pattern paper straight from NCERT content in under 30 seconds.\n• Every paper comes with a ready answer key, so checking is faster too.\n• Export to PDF or Word, add your institute's logo, and share directly with your students.\n\nThink of it as an assistant that handles the paper-setting grind for you. Want me to walk you through making your first test?",
+
       "How to Generate Test Paper":
         "Sure, let's make your test paper together — it takes about a minute:\n\n1. Go to your Dashboard and tap Create Test.\n2. Choose the Class, Subject, and Board.\n3. Pick the chapters you want questions from.\n4. (Optional) Upload your institute's logo.\n5. Choose a CBSE pattern or build a Custom one.\n6. Hit Generate — your paper with answer key is ready in seconds.\n\nStuck at any step? Tell me where, and I'll guide you through it.",
       "What are the pricing":
         "Here's how a4ai's plans work — pick whichever fits your teaching load:\n\n• Free Plan — ₹0, forever. 2 tests/month, all question formats.\n• Starter Plan — ₹149/month (~₹5/day). 10 tests/month, 2 free contests, no watermark.\n• Pro Plan — ₹299/month (~₹10/day). Unlimited tests & contests, your school's logo on every paper.\n\nUPI, cards, and net banking all work, and upgrades apply instantly. Want help picking the right plan for your class size?",
       "Learn any topic":
         "Happy to help — Maths, Science, English, anything on the NCERT syllabus. Just tell me the topic and class, and I'll explain it clearly, with examples if that helps.",
+
       "Solve Any doubt 24x7":
         "I'm here round the clock — go ahead and share your doubt. Type it out (or use the mic icon), and I'll walk you through it step by step, the way I would with a student."
     };
@@ -1044,29 +1046,29 @@ export default function TeacherDashboardPage() {
     setIsChatLoading(true);
 
     const systemPromptText = `You are AI Sarthi, the in-app teaching assistant for a4ai. You are a knowledgeable, patient colleague helping a busy teacher — not a sales bot reciting a brochure. Always use lowercase "a4ai" when referring to the platform.
-
-Tone and style:
-- Warm, encouraging, and direct — like a helpful senior teacher or support person who respects the teacher's time.
-- Open and close with a natural sentence; use bullets or numbered steps in between for clarity, not as the entire answer.
-- Light Hinglish is fine occasionally (e.g. "chaliye dekhte hain", "bilkul") since many a4ai teachers write that way — but keep core explanations clear.
-- End with a small, genuine next step where it fits — offer to walk them through something, or ask one clarifying question. Don't just stop after listing facts.
-- Never push upgrades unprompted. Mention pricing only when asked or clearly relevant, and frame everything around time saved and ease of teaching, not sales.
-- If a teacher seems stuck or frustrated, acknowledge that briefly before jumping into steps.
-
-Context:
-- a4ai: built for teachers to create and manage tests efficiently. Generates CBSE-pattern papers in 30 seconds from real NCERT content, saving 2+ hours daily. Supports MCQ, Short, Long, A&R, Cloze. Exports to PDF & DOCX.
-- Pricing: Free (₹0, 2 tests/mo, watermark), Starter (₹149/mo or ₹5/day, 10 tests/mo, 2 proctored contests, WhatsApp sharing), Pro (₹299/mo or ₹10/day, unlimited tests & contests, custom logo).
-- FAQ: Free plan is forever. Upgrades apply instantly. Accepts UPI/Cards/Net Banking. Discounts available for govt schools. High accuracy since it draws from actual NCERT content. Mobile proctoring supported.
-- Creating a Test: Dashboard → Create Test → select Exam Title, Class, Subject, Board → upload logo (optional) → choose custom or CBSE pattern → Generate.
-
-Keep answers concise and genuinely helpful — a teacher should feel like they just asked a colleague, not read a product page.`;
+  
+  Tone and style:
+  - Warm, encouraging, and direct — like a helpful senior teacher or support person who respects the teacher's time.
+  - Open and close with a natural sentence; use bullets or numbered steps in between for clarity, not as the entire answer.
+  - Light Hinglish is fine occasionally (e.g. "chaliye dekhte hain", "bilkul") since many a4ai teachers write that way — but keep core explanations clear.
+  - End with a small, genuine next step where it fits — offer to walk them through something, or ask one clarifying question. Don't just stop after listing facts.
+  - Never push upgrades unprompted. Mention pricing only when asked or clearly relevant, and frame everything around time saved and ease of teaching, not sales.
+  - If a teacher seems stuck or frustrated, acknowledge that briefly before jumping into steps.
+  
+  Context:
+  - a4ai: built for teachers to create and manage tests efficiently. Generates CBSE-pattern papers in 30 seconds from real NCERT content, saving 2+ hours daily. Supports MCQ, Short, Long, A&R, Cloze. Exports to PDF & DOCX.
+  - Pricing: Free (₹0, 2 tests/mo, watermark), Starter (₹149/mo or ₹5/day, 10 tests/mo, 2 proctored contests, WhatsApp sharing), Pro (₹299/mo or ₹10/day, unlimited tests & contests, custom logo).
+  - FAQ: Free plan is forever. Upgrades apply instantly. Accepts UPI/Cards/Net Banking. Discounts available for govt schools. High accuracy since it draws from actual NCERT content. Mobile proctoring supported.
+  - Creating a Test: Dashboard → Create Test → select Exam Title, Class, Subject, Board → upload logo (optional) → choose custom or CBSE pattern → Generate.
+  
+  Keep answers concise and genuinely helpful — a teacher should feel like they just asked a colleague, not read a product page.`;
 
     try {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model: "llama-3.1-70b-versatile", // ✅ UPDATED: Working model
           messages: [
             { role: "system", content: systemPromptText },
             ...chatMessages
@@ -1117,6 +1119,7 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
   // 🔑 NAV ITEMS - MODULES ADDED HERE
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid, label: "Dashboard", color: "text-blue-500" },
+    { id: "attendance", Icon: Icons.Clock, label: "Attendance", color: "text-violet-500" },
     { id: "students", Icon: Icons.Users, label: "Students", color: "text-orange-500" },
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
@@ -1624,8 +1627,8 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                             )}
                             <span
                               className={`text-[10px] px-3 py-1.5 rounded-[16px] font-bold uppercase border ${test.status === "saved"
-                                  ? "bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-700/60 dark:text-slate-200"
-                                  : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400"
+                                ? "bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-700/60 dark:text-slate-200"
+                                : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400"
                                 }`}
                             >
                               {test.status}
@@ -1645,9 +1648,15 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                 <InstituteTeacherPanel userId={user?.id} />
               </div>
             )}
-
             {/* ===== MODULES TAB ===== 🔑 NEW */}
             {activeTab === "modules" && <ModulesTab />}
+
+            {/* ===== ATTENDANCE TAB ===== */}
+            {activeTab === "attendance" && (
+              <div className="space-y-6 sm:space-y-8 animate-pop">
+                <TeacherAttendanceView />
+              </div>
+            )}
 
             {/* ===== TEST HISTORY TAB ===== */}
             {activeTab === "tests" && (
@@ -1821,8 +1830,8 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                         {msg.role === "assistant" && <RobotMascot size={26} />}
                         <div
                           className={`p-3 rounded-2xl max-w-[80%] text-[13px] font-medium whitespace-pre-wrap ${msg.role === "user"
-                              ? "text-white rounded-br-md"
-                              : "bg-white dark:bg-black/60 text-slate-800 dark:text-white rounded-bl-md border border-black/5 dark:border-white/10"
+                            ? "text-white rounded-br-md"
+                            : "bg-white dark:bg-black/60 text-slate-800 dark:text-white rounded-bl-md border border-black/5 dark:border-white/10"
                             }`}
                           style={msg.role === "user" ? { background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` } : {}}
                         >
