@@ -173,7 +173,7 @@ export default function LandingHero() {
         <div className="text-center relative z-10 w-full">
           <motion.h1 className="font-halenoir font-bold tracking-[-0.02em]" style={{ lineHeight: 1 }} {...rise(0.15)}>
             <span className="block lg:whitespace-nowrap text-neutral-900" style={{ fontSize: "clamp(2.4rem, 8vw, 7.2rem)" }}>
-              Smartest.{" "}
+              Create.{" "}
               <span
                 className="bg-clip-text text-transparent"
                 style={{
@@ -184,7 +184,7 @@ export default function LandingHero() {
                   filter: festive ? "drop-shadow(0 1px 1.5px rgba(0,0,0,0.15))" : "none",
                 }}
               >
-                Tests.Ever.
+                CBSE Papers
               </span>
             </span>
 
@@ -192,7 +192,7 @@ export default function LandingHero() {
               className="mt-3 sm:mt-5 md:mt-6 block font-semibold tracking-[-0.01em] text-neutral-700"
               style={{ fontSize: "clamp(0.95rem, 2.5vw, 2.2rem)", lineHeight: 1.2 }}
             >
-              The Teacher's Assessment Co-Pilot
+              in Minutes, Not Hours.
             </span>
           </motion.h1>
 
