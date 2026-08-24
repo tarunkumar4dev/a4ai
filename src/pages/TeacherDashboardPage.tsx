@@ -1,12 +1,13 @@
 // src/pages/TeacherDashboardPage.tsx
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel";
+import ModuleCreator from "@/components/ModuleCreator"; // 🔑 MODULE CREATOR IMPORT
 
 /* ------------------- SAFE STORAGE ------------------- */
 const safeStorage = {
@@ -96,7 +97,6 @@ const customStyles = `
     transform: translateY(0);
   }
 
-  /* Shimmer for accent text using theme color */
   .shimmer-text {
     background: linear-gradient(90deg, var(--theme-end) 0%, var(--theme-start) 50%, var(--theme-end) 100%);
     background-size: 200% 100%;
@@ -114,7 +114,6 @@ const customStyles = `
   ::-webkit-scrollbar-thumb  { background: rgba(0, 0, 0, 0.2); border-radius: 10px; }
   .dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
 
-  /* ── Glass surfaces ── */
   .glass-panel {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(40px);
@@ -154,7 +153,6 @@ const customStyles = `
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
-  /* ── DYNAMIC THEME GLOSSY BUTTON ── */
   .btn-glossy-theme {
     background: linear-gradient(135deg, var(--theme-start) 0%, var(--theme-end) 100%);
     box-shadow: inset 0px 2px 4px rgba(255, 255, 255, 0.25),
@@ -177,7 +175,6 @@ const customStyles = `
   .btn-glossy-theme:hover  { filter: brightness(1.15); transform: translateY(-2px); }
   .btn-glossy-theme:active { transform: translateY(0); filter: brightness(0.9); }
 
-  /* ── "STARTUPS" STYLED BUTTON ── */
   .btn-startups {
     background: linear-gradient(135deg, var(--theme-start) 0%, var(--theme-end) 100%);
     box-shadow: inset 0px 2px 4px rgba(255, 255, 255, 0.25),
@@ -200,11 +197,9 @@ const customStyles = `
   .btn-startups:hover  { filter: brightness(1.15); transform: translateY(-2px); }
   .btn-startups:active { transform: translateY(0); filter: brightness(0.9); }
 
-  /* Folder SVG Colors */
   .folder-paper { fill: #F1F5F9; stroke: #CBD5E1; stroke-width: 2; }
   .dark .folder-paper { fill: #222222; stroke: #444444; }
 
-  /* ── MASCOT ── */
   @keyframes typingDot {
     0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
     30%           { transform: translateY(-3px); opacity: 1; }
@@ -247,6 +242,7 @@ const Icons = {
   Star: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>,
   Book: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg>,
   Microphone: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" x2="12" y1="19" y2="22" /></svg>,
+  FolderOpen: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><path d="M6 11h12" /></svg>,
 };
 
 /* ------------------- ROBOT MASCOT (AI Sarthi) ------------------- */
@@ -281,37 +277,31 @@ function RobotMascot({
           <stop offset="78%" stopColor="#DCE1ED" />
           <stop offset="100%" stopColor="#B9C1D4" />
         </radialGradient>
-
         <radialGradient id={gBody} cx="0.38" cy="0.24" r="0.9">
           <stop offset="0%" stopColor="#FFFFFF" />
           <stop offset="52%" stopColor="#EFF2F8" />
           <stop offset="100%" stopColor="#C3CAD9" />
         </radialGradient>
-
         <radialGradient id={gArm} cx="0.35" cy="0.25" r="0.9">
           <stop offset="0%" stopColor="#FDFDFF" />
           <stop offset="60%" stopColor="#E7EBF3" />
           <stop offset="100%" stopColor="#BFC7D8" />
         </radialGradient>
-
         <radialGradient id={gVisor} cx="0.66" cy="0.22" r="0.95">
           <stop offset="0%" stopColor="#5C78FF" />
           <stop offset="34%" stopColor="#2438E6" />
           <stop offset="72%" stopColor="#131FBE" />
           <stop offset="100%" stopColor="#060C86" />
         </radialGradient>
-
         <linearGradient id={gFin} x1="0.2" y1="0" x2="0.8" y2="1">
           <stop offset="0%" stopColor="#8FE8F2" />
           <stop offset="55%" stopColor="#5BC4D8" />
           <stop offset="100%" stopColor="#2E90AE" />
         </linearGradient>
-
         <linearGradient id={gChest} x1="0.3" y1="0" x2="0.7" y2="1">
           <stop offset="0%" stopColor="#6FD3E4" />
           <stop offset="100%" stopColor="#3AA7BE" />
         </linearGradient>
-
         <filter id={fGlow} x="-80%" y="-80%" width="260%" height="260%">
           <feGaussianBlur stdDeviation="2.6" result="b" />
           <feMerge>
@@ -320,48 +310,29 @@ function RobotMascot({
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-
         <filter id={fSoft} x="-30%" y="-30%" width="160%" height="160%">
           <feGaussianBlur stdDeviation="1.6" />
         </filter>
       </defs>
-
-      {/* ground shadow */}
       <ellipse cx="50" cy="100" rx="23" ry="4" fill="#0B1B3A" opacity="0.16" filter={`url(#${fSoft})`} />
-
-      {/* fins */}
       <rect x="15" y="14" width="9.5" height="29" rx="4.75" fill={`url(#${gFin})`} transform="rotate(-13 19 28)" />
       <rect x="76" y="14" width="9.5" height="29" rx="4.75" fill={`url(#${gFin})`} transform="rotate(13 81 28)" />
-
-      {/* arms */}
       <ellipse cx="18" cy="68" rx="14" ry="8" fill={`url(#${gArm})`} transform="rotate(32 18 68)" />
       <ellipse cx="84" cy="60" rx="15" ry="8" fill={`url(#${gArm})`} transform="rotate(-25 84 60)" />
-
-      {/* body */}
       <ellipse cx="50" cy="76" rx="27" ry="22" fill={`url(#${gBody})`} />
       <ellipse cx="43" cy="63" rx="14" ry="6" fill="#FFFFFF" opacity="0.55" filter={`url(#${fSoft})`} />
-
-      {/* chest plate */}
       <path d="M35 62 H65 A15 15 0 0 1 50 84 A15 15 0 0 1 35 62 Z" fill={`url(#${gChest})`} />
       <path d="M32 62 H68" stroke="#1E2450" strokeWidth="1.8" strokeLinecap="round" opacity="0.85" />
-
-      {/* head */}
       <rect x="31" y="3" width="17" height="10" rx="3.5" fill={`url(#${gHead})`} />
       <ellipse cx="50" cy="39" rx="34" ry="32" fill={`url(#${gHead})`} />
       <ellipse cx="38" cy="18" rx="16" ry="7" fill="#FFFFFF" opacity="0.6" filter={`url(#${fSoft})`} transform="rotate(-18 38 18)" />
-
-      {/* ear port */}
       <ellipse cx="16" cy="39" rx="8" ry="6.5" fill={`url(#${gHead})`} />
       <circle cx="13.5" cy="39" r="3.8" fill="#1E2450" />
       <circle cx="12.6" cy="37.8" r="1.1" fill="#5B6690" opacity="0.7" />
-
-      {/* visor */}
       <path d="M27 29 A23 20 0 0 1 73 29 L73 46 A23 17 0 0 1 27 46 Z" fill="#2438E6" opacity="0.35" filter={`url(#${fSoft})`} />
       <path d="M27 29 A23 20 0 0 1 73 29 L73 46 A23 17 0 0 1 27 46 Z" fill={`url(#${gVisor})`} />
       <ellipse cx="60" cy="28" rx="12.5" ry="5.5" fill="#FFFFFF" opacity="0.22" />
       <ellipse cx="35" cy="44" rx="7" ry="2.5" fill="#8FA6FF" opacity="0.18" />
-
-      {/* eyes */}
       <g filter={`url(#${fGlow})`} transform={`translate(${ex} ${ey})`}>
         {state === "thinking" ? (
           <>
@@ -398,7 +369,6 @@ const COLOR_SCHEMES = {
 };
 
 /* ------------------- REUSABLE COMPONENTS ------------------- */
-
 const SidebarButton = ({ active, Icon, label, colorClass, onClick }: any) => (
   <button
     onClick={onClick}
@@ -471,7 +441,7 @@ const GlossyButton = ({
   </button>
 );
 
-/* ------------------- SEARCH BAR WITH LIVE SUGGESTIONS ------------------- */
+/* ------------------- SEARCH BAR ------------------- */
 interface SavedTest {
   id: string;
   exam_title: string;
@@ -522,6 +492,7 @@ function SearchBar({
   const staticSuggestions: Suggestion[] = [
     { type: "nav", label: "Dashboard", sub: "Overview & stats", Icon: Icons.Grid, action: () => { navigate("/dashboard"); onNavChange("dashboard"); } },
     { type: "nav", label: "Students", sub: "Manage your class", Icon: Icons.Users, action: () => onNavChange("students") },
+    { type: "nav", label: "Modules", sub: "Manage your modules", Icon: Icons.FolderOpen, action: () => onNavChange("modules") },
     { type: "nav", label: "Test History", sub: "All your tests", Icon: Icons.History, action: () => onNavChange("tests") },
     { type: "nav", label: "Analytics", sub: "Performance graphs", Icon: Icons.Chart, action: () => onNavChange("analytics") },
     { type: "nav", label: "AI Tools", sub: "Teaching utilities", Icon: Icons.Brain, action: () => onNavChange("ai-tools") },
@@ -702,17 +673,13 @@ function SidebarHelpWidget() {
           <rect x="25" y="15" width="40" height="50" rx="2" className="folder-paper" transform="rotate(-15 45 40)" />
           <line x1="30" y1="25" x2="55" y2="25" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" transform="rotate(-15 45 40)" />
           <line x1="30" y1="32" x2="50" y2="32" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" transform="rotate(-15 45 40)" />
-
           <rect x="35" y="15" width="45" height="55" rx="2" className="folder-paper" transform="rotate(10 55 40)" />
           <circle cx="58" cy="35" r="8" fill="#E2E8F0" transform="rotate(10 55 40)" />
           <path d="M58 27 A8 8 0 0 1 66 35 L58 35 Z" fill="#94A3B8" transform="rotate(10 55 40)" />
-
           <rect x="40" y="10" width="35" height="50" rx="2" className="folder-paper" />
           <line x1="45" y1="20" x2="70" y2="20" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
           <line x1="45" y1="26" x2="65" y2="26" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
           <line x1="45" y1="32" x2="70" y2="32" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round" />
-
-          {/* DYNAMIC FOLDER COLORS */}
           <path d="M15 40 C15 35 18 32 23 32 L40 32 L48 40 L85 40 C90 40 93 43 93 48 L93 85 C93 90 90 93 85 93 L23 93 C18 93 15 90 15 85 Z" fill="var(--theme-end)" />
           <path d="M12 48 C12 43 15 40 20 40 L45 40 L53 48 L88 48 C93 48 96 51 96 56 L90 88 C89 92 85 95 80 95 L20 95 C15 95 11 92 10 88 Z" fill="var(--theme-start)" />
         </svg>
@@ -827,6 +794,16 @@ interface Message {
   suggestions?: string[];
 }
 
+/* ------------------- MODULES TAB COMPONENT ------------------- */
+const ModulesPageComponent = lazy(() => import("../pages/ModulesPage"));
+function ModulesTab() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>}>
+      <ModulesPageComponent />
+    </Suspense>
+  );
+}
+
 /* ------------------- MAIN PAGE ------------------- */
 export default function TeacherDashboardPage() {
   const navigate = useNavigate();
@@ -848,7 +825,6 @@ export default function TeacherDashboardPage() {
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  // Predefined Chat Options
   const chatOptions = [
     "Explain me a4ai",
     "How to Generate Test Paper",
@@ -857,7 +833,6 @@ export default function TeacherDashboardPage() {
     "Solve Any doubt 24x7"
   ];
 
-  // Chat Setup — AI Sarthi, the teaching-assistant persona for a4ai's support chatbot
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([
     {
@@ -873,11 +848,9 @@ export default function TeacherDashboardPage() {
   const [showChatTooltip, setShowChatTooltip] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Sound detection reference state parameters
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recognitionRef = useRef<any>(null);
 
-  // ── MASCOT DRAG + 3D TILT ──
   const dragControls = useDragControls();
   const didDragRef = useRef(false);
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
@@ -903,11 +876,9 @@ export default function TeacherDashboardPage() {
     setLook({ x: 0, y: 0 });
   };
 
-  // Theme configuration — orange is the a4ai house colour
   const [activeTheme, setActiveTheme] = useState<keyof typeof COLOR_SCHEMES>("orange");
   const currentThemeConfig = COLOR_SCHEMES[activeTheme];
 
-  // Data
   const [allTests, setAllTests] = useState<SavedTest[]>([]);
   const [testsLoading, setTestsLoading] = useState(true);
 
@@ -928,7 +899,6 @@ export default function TeacherDashboardPage() {
       });
   }, [user]);
 
-  // Chatbot Tooltip Timer
   useEffect(() => {
     const showTimer = setTimeout(() => setShowChatTooltip(true), 2000);
     const hideTimer = setTimeout(() => setShowChatTooltip(false), 5000);
@@ -937,7 +907,6 @@ export default function TeacherDashboardPage() {
 
   const recentTests = allTests.slice(0, 3);
 
-  // Dynamic Dark Mode CSS Class
   useEffect(() => {
     const root = window.document.documentElement;
     if (isDarkMode) root.classList.add("dark");
@@ -968,7 +937,6 @@ export default function TeacherDashboardPage() {
     };
   }, []);
 
-  // Real-Time Speech Recognition Engine with Silence Warning Systems
   const startListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -1044,16 +1012,12 @@ export default function TeacherDashboardPage() {
     const exactMatchResponses: Record<string, string> = {
       "Explain me a4ai":
         "Namaste! a4ai is built for teachers like you — so the hours you'd spend setting question papers can go back into actual teaching.\n\n• Pick a class, subject, and chapters — a4ai generates a full CBSE-pattern paper straight from NCERT content in under 30 seconds.\n• Every paper comes with a ready answer key, so checking is faster too.\n• Export to PDF or Word, add your institute's logo, and share directly with your students.\n\nThink of it as an assistant that handles the paper-setting grind for you. Want me to walk you through making your first test?",
-
       "How to Generate Test Paper":
         "Sure, let's make your test paper together — it takes about a minute:\n\n1. Go to your Dashboard and tap Create Test.\n2. Choose the Class, Subject, and Board.\n3. Pick the chapters you want questions from.\n4. (Optional) Upload your institute's logo.\n5. Choose a CBSE pattern or build a Custom one.\n6. Hit Generate — your paper with answer key is ready in seconds.\n\nStuck at any step? Tell me where, and I'll guide you through it.",
-
       "What are the pricing":
         "Here's how a4ai's plans work — pick whichever fits your teaching load:\n\n• Free Plan — ₹0, forever. 2 tests/month, all question formats.\n• Starter Plan — ₹149/month (~₹5/day). 10 tests/month, 2 free contests, no watermark.\n• Pro Plan — ₹299/month (~₹10/day). Unlimited tests & contests, your school's logo on every paper.\n\nUPI, cards, and net banking all work, and upgrades apply instantly. Want help picking the right plan for your class size?",
-
       "Learn any topic":
         "Happy to help — Maths, Science, English, anything on the NCERT syllabus. Just tell me the topic and class, and I'll explain it clearly, with examples if that helps.",
-
       "Solve Any doubt 24x7":
         "I'm here round the clock — go ahead and share your doubt. Type it out (or use the mic icon), and I'll walk you through it step by step, the way I would with a student."
     };
@@ -1150,9 +1114,11 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
     }
   };
 
+  // 🔑 NAV ITEMS - MODULES ADDED HERE
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid, label: "Dashboard", color: "text-blue-500" },
     { id: "students", Icon: Icons.Users, label: "Students", color: "text-orange-500" },
+    { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
     { id: "ai-tools", Icon: Icons.Brain, label: "AI Tools", color: "text-cyan-500" },
@@ -1170,7 +1136,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
       <div className="flex h-[100dvh] w-full font-sans text-slate-800 dark:text-slate-100 overflow-hidden relative bg-[#F8F9FA] dark:bg-[#0A0A0A] transition-colors duration-500">
         <style dangerouslySetInnerHTML={{ __html: customStyles }} />
 
-        {/* ── Auto-moving animated blobs (very faint) ── */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
           <div
             className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animate-blob"
@@ -1227,7 +1192,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
               </button>
             </div>
 
-            {/* Nav Pages */}
             <div className="animate-entrance" style={{ animationDelay: "200ms" }}>
               <nav className="space-y-1.5 mt-2">
                 {navItems.map((item) => {
@@ -1263,12 +1227,11 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
         <main className="flex-1 h-full overflow-y-auto relative z-10 scroll-smooth pb-24 sm:pb-32">
           <div className="p-4 sm:p-6 lg:p-10 max-w-[1400px] mx-auto relative">
 
-            {/* ── STICKY / ADAPTIVE HEADER ── */}
+            {/* HEADER */}
             <header
               className="sticky lg:relative top-0 z-[150] lg:z-[100] bg-white/80 dark:bg-black/80 lg:bg-transparent backdrop-blur-xl lg:backdrop-blur-none border-b lg:border-none border-slate-200/50 dark:border-white/5 px-4 sm:px-6 lg:px-0 py-3 lg:py-0 -mx-4 sm:-mx-6 lg:mx-0 mb-6 lg:mb-12 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 lg:gap-6 animate-entrance transition-colors duration-500"
               style={{ animationDelay: "100ms" }}
             >
-              {/* MOBILE TOP ROW: Menu + Logo */}
               <div className="flex lg:hidden items-center gap-3">
                 <button
                   className="p-2 sm:p-2.5 text-slate-800 dark:text-white glass-panel rounded-[16px] sm:rounded-[20px] shrink-0"
@@ -1300,7 +1263,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                 </button>
               </div>
 
-              {/* DESKTOP LEFT: Greeting */}
               <div className="hidden lg:flex flex-col min-w-0 w-full lg:w-auto">
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white tracking-tight truncate">
                   Welcome, {getFirstName()}
@@ -1310,14 +1272,12 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                 </p>
               </div>
 
-              {/* RIGHT / BOTTOM ROW: Search + Notif + Profile */}
               <div className="flex items-center gap-2 sm:gap-3 w-full lg:w-auto justify-between lg:justify-end">
                 <div className="flex-1 lg:flex-none min-w-0">
                   <SearchBar tests={allTests} onNavChange={(tab) => { setActiveTab(tab); }} />
                 </div>
 
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  {/* Notifications */}
                   <div className="relative shrink-0" ref={notifRef}>
                     <button
                       onClick={() => setIsNotifOpen(!isNotifOpen)}
@@ -1363,7 +1323,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                     )}
                   </div>
 
-                  {/* ── PROFILE BUTTON ── */}
                   <div className="relative shrink-0" ref={profileRef}>
                     <button
                       onClick={() => {
@@ -1392,7 +1351,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
 
                     {isProfileOpen && (
                       <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-3 flex flex-col gap-1 animate-pop z-[150]">
-                        {/* Profile info */}
                         <div className="px-4 sm:px-5 py-4 sm:py-5 mb-1 inset-pill rounded-[28px] sm:rounded-[32px] border-none flex items-center gap-4">
                           <div
                             className="w-12 h-12 rounded-[20px] flex items-center justify-center text-white shrink-0 shadow-md"
@@ -1408,7 +1366,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                           </div>
                         </div>
 
-                        {/* My Profile */}
                         <button
                           onClick={() => { navigate("/settings"); setIsProfileOpen(false); }}
                           className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors group"
@@ -1421,7 +1378,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                           </div>
                         </button>
 
-                        {/* Language Selector */}
                         <button
                           className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-[24px] sm:rounded-[28px] transition-colors group"
                         >
@@ -1433,7 +1389,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                           </div>
                         </button>
 
-                        {/* Appearance / Theme Picker */}
                         <div className="flex flex-col rounded-[24px] sm:rounded-[28px] overflow-hidden">
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowAppearance(!showAppearance); }}
@@ -1449,8 +1404,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
 
                           {showAppearance && (
                             <div className="px-4 sm:px-5 pb-4 pt-1 flex flex-col gap-4 animate-entrance bg-black/5 dark:bg-white/5">
-
-                              {/* Dark Mode Toggle */}
                               <div className="flex items-center justify-between pt-2">
                                 <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Dark Mode</span>
                                 <button
@@ -1465,7 +1418,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                                 </button>
                               </div>
 
-                              {/* Color Scheme Picker */}
                               <div>
                                 <span className="text-xs font-bold text-slate-600 dark:text-slate-300 mb-2 block">Color Scheme</span>
                                 <div className="flex flex-wrap gap-3 place-items-center">
@@ -1487,7 +1439,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
 
                         <div className="h-px bg-slate-200/50 dark:bg-slate-700/50 my-1 mx-4" />
 
-                        {/* LOGOUT BUTTON */}
                         <button
                           onClick={handleLogout}
                           className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-4 text-sm font-bold text-red-500 hover:bg-red-500/10 rounded-[24px] sm:rounded-[28px] transition-colors"
@@ -1514,9 +1465,7 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
             {/* ===== DASHBOARD TAB ===== */}
             {activeTab === "dashboard" && (
               <div className="space-y-6 sm:space-y-8">
-                {/* Hero cards */}
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
-                  {/* NCERT generator card */}
                   <div className="xl:col-span-2 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 lg:p-14 relative overflow-hidden flex flex-col justify-center group">
                     <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-[48px]" />
                     <div className="relative z-10 max-w-xl">
@@ -1541,7 +1490,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                     </div>
                   </div>
 
-                  {/* What's New card */}
                   <div className="xl:col-span-1 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col relative overflow-hidden">
                     <div className="flex items-center gap-3 sm:gap-5 mb-6 sm:mb-8">
                       <div className="w-12 h-12 sm:w-14 sm:h-14 inset-pill border-none flex items-center justify-center shadow-inner rounded-[24px] sm:rounded-[28px] shrink-0" style={{ color: "var(--theme-start)" }}>
@@ -1585,7 +1533,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                   </div>
                 </div>
 
-                {/* Stats grid */}
                 <div
                   className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-8 scroll-reveal"
                   style={{ transitionDelay: "80ms" }}
@@ -1619,12 +1566,10 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                   })}
                 </div>
 
-                {/* Institute section */}
                 <div className="scroll-reveal" style={{ transitionDelay: "140ms" }}>
                   <InstituteTeacherPanel userId={user?.id} />
                 </div>
 
-                {/* Recent Tests */}
                 <div
                   className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12 scroll-reveal"
                   style={{ transitionDelay: "200ms" }}
@@ -1700,6 +1645,9 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                 <InstituteTeacherPanel userId={user?.id} />
               </div>
             )}
+
+            {/* ===== MODULES TAB ===== 🔑 NEW */}
+            {activeTab === "modules" && <ModulesTab />}
 
             {/* ===== TEST HISTORY TAB ===== */}
             {activeTab === "tests" && (
@@ -1795,9 +1743,7 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
           </div>
         </main>
 
-        {/* ══════════════════════════════════════════════════════════
-            AI SARTHI — draggable 3D robot mascot
-           ══════════════════════════════════════════════════════════ */}
+        {/* ===== AI SARTHI CHATBOT ===== */}
         <motion.div
           drag
           dragListener={false}
@@ -1821,7 +1767,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
           }}
           className="fixed bottom-4 sm:bottom-8 right-4 sm:right-8 z-[110] flex flex-col items-end gap-3 touch-none"
         >
-          {/* hover tooltip */}
           <AnimatePresence>
             {showChatTooltip && !isChatOpen && (
               <motion.div
@@ -1837,7 +1782,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
             )}
           </AnimatePresence>
 
-          {/* chat window */}
           <AnimatePresence>
             {isChatOpen && (
               <motion.div
@@ -1918,7 +1862,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
                   <div ref={chatEndRef} />
                 </div>
 
-                {/* input bar */}
                 <div className="p-3 shrink-0 bg-white/60 dark:bg-black/40 border-t border-black/5 dark:border-white/10">
                   <div className="relative flex items-center gap-2">
                     <div className="relative flex-1 flex items-center">
@@ -1954,7 +1897,6 @@ Keep answers concise and genuinely helpful — a teacher should feel like they j
             )}
           </AnimatePresence>
 
-          {/* the robot — drag handle + chat toggle */}
           <motion.button
             onPointerDown={(e) => dragControls.start(e)}
             onClick={() => { if (!didDragRef.current) setIsChatOpen(!isChatOpen); }}

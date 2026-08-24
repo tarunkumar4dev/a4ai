@@ -1,4 +1,3 @@
-
 // src/components/DashboardSidebar.tsx
 import React, { useMemo, useState } from "react";
 import { NavLink, Link, useLocation } from "react-router-dom";
@@ -8,6 +7,7 @@ import {
   FileText, BarChart2, Users, Bookmark, Settings, LayoutDashboard,
   ChevronRight, Zap, Trophy, Notebook, CalendarDays, Users2,
   Sparkles, Plus, Menu, X, BookOpen, Brain, TrendingUp, 
+  FolderOpen,  // ← NAYA ICON ADD KIYA (Modules ke liye)
 } from "lucide-react";
 
 /* ---------------- Cluely theme tokens ---------------- */
@@ -151,6 +151,12 @@ const useSidebarData = () =>
       items: [
         { icon: LayoutDashboard, label: "Overview", to: "/dashboard" },
         { icon: FileText, label: "Test Generator", to: "/dashboard/test-generator", alert: true },
+        { 
+          icon: FolderOpen,  // ← MODULES KE LIYE NAYA ICON
+          label: "Modules",   // ← NAYA ITEM
+          to: "/dashboard/modules",  // ← NAYA ROUTE
+          badge: "NEW"        // ← "NEW" BADGE DIKHAEGA
+        },
         { 
           icon: Brain, 
           label: "Flashcards", 

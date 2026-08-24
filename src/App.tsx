@@ -65,6 +65,9 @@ const InstituteDashboardPage = lazy(() => import("./pages/institute/InstituteDas
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
+/* ---------- NEW MODULE PAGE ---------- */
+const ModulesPage = lazy(() => import("./pages/ModulesPage"));
+
 /* ---------- NEW QUIZ PAGE ---------- */
 const QuizPage = lazy(() => import("./pages/Quiz"));
 
@@ -392,6 +395,18 @@ const App = () => {
                       <Route path="/mega-contest/:contestId" element={<PrivateRoute><MegaContestLivePage /></PrivateRoute>} />
                       <Route path="/admin/contest/:contestId/questions" element={<PrivateRoute><AdminAddQuestions /></PrivateRoute>} />
                       <Route path="/coinshop" element={<PrivateRoute><CoinShop /></PrivateRoute>} />
+
+                      {/* ============================================ */}
+                      {/*  MODULES ROUTE - NAYA ADD KIYA HAI           */}
+                      {/* ============================================ */}
+                      <Route 
+                        path="/dashboard/modules" 
+                        element={
+                          <PrivateRoute>
+                            <ModulesPage />
+                          </PrivateRoute>
+                        } 
+                      />
                       
                       {/* ============================================ */}
                       {/*  REDIRECTS (old paths → new paths)           */}
