@@ -45,7 +45,7 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
+  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("phone");
   const [formValues, setFormValues] = useState({ email: "", password: "", phone: "" });
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpSent, setOtpSent] = useState(false);
@@ -63,7 +63,7 @@ export default function LoginPage() {
       
       setIsMobileDevice(mobile);
       if (mobile) {
-        setLoginMethod("phone"); // Force phone auth on mobile initially, but user can toggle
+        setLoginMethod("phone");
       }
     };
 
@@ -189,7 +189,7 @@ export default function LoginPage() {
   return (
     <div className={`min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
       
-      {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
+      {/* DETACHED FLOATING TOP BAR */}
       <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
         <nav 
           className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-colors duration-500 ${
@@ -257,7 +257,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-5">
-            {/* Toggle email / phone — SHOWN ON ALL DEVICES */}
+            {/* Toggle email / phone */}
             <Button
               type="button"
               onClick={() => setLoginMethod(loginMethod === "email" ? "phone" : "email")}
@@ -301,7 +301,7 @@ export default function LoginPage() {
             {/* FORM AREA */}
             <form onSubmit={onSubmit} className="space-y-4">
               {loginMethod === "email" ? (
-                /* ── Desktop & Mobile Email Form ── */
+                /* ── Email Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
@@ -318,7 +318,7 @@ export default function LoginPage() {
                   </div>
                 </div>
               ) : (
-                /* ── Native Mobile App-Like Phone OTP Form ── */
+                /* ── Phone OTP Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Phone Number</Label>
@@ -356,7 +356,7 @@ export default function LoginPage() {
                             maxLength={1}
                             value={digit}
                             onChange={(e) => handleOtpChange(e.target.value, idx)}
-                            className={`w-11 h-13 text-center text-xl font-black rounded-2xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/60 border-white/60 focus:bg-white shadow-sm"}`}
+                            className={`w-11 h-12 text-center text-xl font-black rounded-2xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/60 border-white/60 focus:bg-white shadow-sm"}`}
                           />
                         ))}
                       </div>
@@ -389,9 +389,8 @@ export default function LoginPage() {
                 {isLoading ? "Verifying..." : "Sign In"}
               </Button>
 
-              {/* RESTORED SIGN UP LINK */}
               <p className={`text-center text-sm font-medium transition-colors pt-2 ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <Link to="/signup" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>
                   Sign up
                 </Link>
@@ -400,7 +399,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Right side illustration (Desktop/Tablet standard view) */}
+        {/* Right side illustration */}
         <div className={`hidden lg:flex items-center justify-center p-10 h-[600px] rounded-[3.5rem] relative overflow-hidden transition-all duration-500 ${isDarkMode ? "bg-slate-800/40" : "bg-white/40 shadow-inner"}`}>
           <RubberHoseShapes pointer={pointer} isDarkMode={isDarkMode} />
         </div>

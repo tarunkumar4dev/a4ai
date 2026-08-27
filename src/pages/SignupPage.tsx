@@ -55,7 +55,7 @@ export default function SignupPage() {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
   const [logoFailed, setLogoFailed] = useState(false);
-  const [isMobileDevice, setIsMobileDevice] = useState(false); // Added mobile detection state
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   // Phone OTP states
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -218,8 +218,12 @@ export default function SignupPage() {
   // ---------- Submit (Email or Phone OTP) ----------
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRole) { setIsExpanded(true); return; }
+    if (!selectedRole) { 
+      setIsExpanded(true); 
+      return; 
+    }
 
+    const currentRole = selectedRole;
     setIsLoading(true);
     try {
       const redirectTarget = isMobileDevice
@@ -241,7 +245,7 @@ export default function SignupPage() {
           email: formValues.email.trim(),
           password: formValues.password,
           options: {
-            data: { full_name: formValues.name, role: selectedRole },
+            data: { full_name: formValues.name, role: currentRole },
             emailRedirectTo: redirectTarget,
           },
         });
@@ -268,11 +272,11 @@ export default function SignupPage() {
 
         if (data.user) {
           await supabase.auth.updateUser({
-            data: { role: selectedRole },
+            data: { role: currentRole },
           });
         }
 
-        redirectAfterLogin(selectedRole);
+        redirectAfterLogin(currentRole);
       }
     } catch (error: unknown) {
       const err = error as Error;
@@ -299,7 +303,7 @@ export default function SignupPage() {
   return (
     <div className={`min-h-screen w-full flex flex-col items-center justify-center p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
       
-      {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
+      {/* DETACHED FLOATING TOP BAR */}
       <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
         <nav 
           className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-colors duration-500 ${
@@ -412,7 +416,7 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Toggle phone / email — SHOWN ON ALL DEVICES */}
+            {/* Toggle phone / email */}
             <Button
               type="button"
               onClick={() => { setSignupMethod(signupMethod === "email" ? "phone" : "email"); setOtpSent(false); setOtp(["","","","","",""]); }}
@@ -553,7 +557,7 @@ export default function SignupPage() {
                   <div className="flex items-center gap-2 px-2 py-2">
                     <Checkbox id="acceptTerms" name="acceptTerms" checked={formValues.acceptTerms} onCheckedChange={(c) => setFormValues((s) => ({ ...s, acceptTerms: Boolean(c) }))} />
                     <label htmlFor="acceptTerms" className={`text-[11px] font-medium leading-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                      I agree to the <Link to="/terms" className="font-bold underline">Terms</Link> & <Link to="/privacy" className="font-bold underline">Privacy</Link>
+                      I agree to the <Link to="/terms" className="font-bold underline">Terms</Link> &amp; <Link to="/privacy" className="font-bold underline">Privacy</Link>
                     </label>
                   </div>
                 </div>
@@ -612,7 +616,6 @@ function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: nu
       </g>
     );
   };
-  //
 
   return (
     <svg ref={ref} viewBox="0 0 460 330" className="w-full h-full drop-shadow-2xl select-none">
