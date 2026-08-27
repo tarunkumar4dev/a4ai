@@ -63,7 +63,7 @@ export default function LoginPage() {
       
       setIsMobileDevice(mobile);
       if (mobile) {
-        setLoginMethod("phone"); // Force phone auth on mobile
+        setLoginMethod("phone"); // Force phone auth on mobile initially, but user can toggle
       }
     };
 
@@ -162,7 +162,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      if (loginMethod === "email" && !isMobileDevice) {
+      if (loginMethod === "email") {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: formValues.email.trim(),
           password: formValues.password,
@@ -257,30 +257,28 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-5">
-            {/* Toggle email / phone — ONLY SHOWN ON DESKTOP */}
-            {!isMobileDevice && (
-              <Button
-                type="button"
-                onClick={() => setLoginMethod(loginMethod === "email" ? "phone" : "email")}
-                className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
-                  isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
-                }`}
-              >
-                {loginMethod === "email" ? (
-                  <>
-                    <Phone className="w-4 h-4" />
-                    Use Mobile Number Instead
-                  </>
-                ) : (
-                  <>
-                    <Mail className="w-4 h-4" />
-                    Use Email Instead
-                  </>
-                )}
-              </Button>
-            )}
+            {/* Toggle email / phone — SHOWN ON ALL DEVICES */}
+            <Button
+              type="button"
+              onClick={() => setLoginMethod(loginMethod === "email" ? "phone" : "email")}
+              className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
+                isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
+              }`}
+            >
+              {loginMethod === "email" ? (
+                <>
+                  <Phone className="w-4 h-4" />
+                  Use Mobile Number Instead
+                </>
+              ) : (
+                <>
+                  <Mail className="w-4 h-4" />
+                  Use Email Instead
+                </>
+              )}
+            </Button>
 
-            {/* Google Login — ONLY SHOWN ON DESKTOP */}
+            {/* Google Login — HIDDEN ON MOBILE */}
             {!isMobileDevice && (
               <Button
                 variant="outline"
@@ -302,8 +300,8 @@ export default function LoginPage() {
 
             {/* FORM AREA */}
             <form onSubmit={onSubmit} className="space-y-4">
-              {loginMethod === "email" && !isMobileDevice ? (
-                /* ── Desktop Email Form ── */
+              {loginMethod === "email" ? (
+                /* ── Desktop & Mobile Email Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
@@ -374,7 +372,7 @@ export default function LoginPage() {
                     Remember me
                   </label>
                 </div>
-                {loginMethod === "email" && !isMobileDevice && (
+                {loginMethod === "email" && (
                   <Link to="/forgot" className={`text-xs font-bold hover:underline ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
                     Forgot Password?
                   </Link>
@@ -413,7 +411,6 @@ export default function LoginPage() {
 
 // ---- RubberHoseShapes Component ----
 
-//
 interface EyeItemProps {
   x: number;
   y: number;
