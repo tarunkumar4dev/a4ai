@@ -442,7 +442,7 @@ function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: nu
       </g>
     );
   };
-
+//just a comment
   return (
     <svg ref={ref} viewBox="0 0 460 330" className="w-full h-full drop-shadow-2xl select-none">
       <ellipse cx="230" cy="305" rx="170" ry="10" fill={isDarkMode ? "#1e293b" : "#cbd5e1"} opacity="0.6" />
@@ -455,3 +455,4 @@ function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: nu
     </svg>
   );
 }
+
