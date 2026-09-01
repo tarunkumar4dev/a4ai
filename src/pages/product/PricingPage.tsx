@@ -1,9 +1,9 @@
 // src/pages/product/PricingPage.tsx
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Check, Users, Building, School, Clock, Sparkles, ArrowRight, Gift } from "lucide-react";
+import { Check, Users, Building, School, Clock, Sparkles, ArrowRight, Gift, GraduationCap } from "lucide-react";
 
-type AudienceKey = "individual" | "institute" | "school";
+type AudienceKey = "individual" | "institute" | "college";
 type PeriodKey = "monthly" | "yearly";
 
 const hx = {
@@ -56,7 +56,6 @@ const GlobalStyles = () => {
         }
       }
 
-      /* Premium Glossy Button Gradients */
       .btn-blue-gradient {
         background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 85%) !important;
         color: #ffffff !important;
@@ -76,6 +75,26 @@ const GlobalStyles = () => {
       }
       .btn-green-gradient * { color: #ffffff !important; }
       @media (hover: hover) { .btn-green-gradient:hover { filter: brightness(1.06); } }
+
+      .btn-orange-gradient {
+        background: linear-gradient(180deg, #fdba74 0%, #f97316 85%) !important;
+        color: #ffffff !important;
+        border: 1px solid #fb923c !important;
+        box-shadow: 0 8px 20px rgba(249, 115, 22, 0.2) !important;
+        transition: filter 0.2s;
+      }
+      .btn-orange-gradient * { color: #ffffff !important; }
+      @media (hover: hover) { .btn-orange-gradient:hover { filter: brightness(1.06); } }
+
+      .btn-purple-gradient {
+        background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 85%) !important;
+        color: #ffffff !important;
+        border: 1px solid #a78bfa !important;
+        box-shadow: 0 8px 20px rgba(139, 92, 246, 0.2) !important;
+        transition: filter 0.2s;
+      }
+      .btn-purple-gradient * { color: #ffffff !important; }
+      @media (hover: hover) { .btn-purple-gradient:hover { filter: brightness(1.06); } }
     `;
     document.head.appendChild(s);
     return () => {
@@ -100,6 +119,9 @@ export default function PricingPage() {
       features: string[];
       popular?: boolean;
       free?: boolean;
+      studentLimit?: string;
+      teacherLimit?: string;
+      buttonGradient?: string;
     }>
   > = {
     individual: [
@@ -152,102 +174,139 @@ export default function PricingPage() {
     ],
     institute: [
       {
-        name: "Growth",
-        price: { monthly: "₹1,999", yearly: "₹19,999" },
+        name: "Micro",
+        price: { monthly: "₹999", yearly: "₹9,990" },
         priceNote: { monthly: "/ month", yearly: "/ year" },
-        description: "For small coaching centers. Up to 5 teachers.",
+        description: "Perfect for small coaching centers.",
+        studentLimit: "Up to 100 students",
+        teacherLimit: "Up to 3 teachers",
         features: [
-          "Up to 5 teacher accounts",
-          "500 student capacity",
+          "Up to 3 teacher accounts",
+          "100 student capacity",
           "Institute admin dashboard",
           "Teacher & student attendance",
-          "Contest hosting for batches",
-          "Basic performance analytics",
+          "Basic test generation",
           "Branded test papers",
-          "Email + chat support",
+          "Email support",
         ],
       },
       {
-        name: "Scale",
-        price: { monthly: "₹4,999", yearly: "₹49,999" },
+        name: "Starter Institute",
+        price: { monthly: "₹1,499", yearly: "₹14,990" },
         priceNote: { monthly: "/ month", yearly: "/ year" },
-        description: "Advanced analytics & full control. Up to 15 teachers.",
+        description: "Growing institute with more students.",
+        studentLimit: "Up to 300 students",
+        teacherLimit: "Up to 8 teachers",
         features: [
-          "All Growth features",
+          "Up to 8 teacher accounts",
+          "300 student capacity",
+          "All Micro features",
+          "Contest hosting for batches",
+          "Basic performance analytics",
+          "Batch-wise test reports",
+          "Priority email support",
+        ],
+      },
+      {
+        name: "Growth",
+        price: { monthly: "₹1,999", yearly: "₹19,990" },
+        priceNote: { monthly: "/ month", yearly: "/ year" },
+        description: "For established institutes with multiple batches.",
+        studentLimit: "Up to 500 students",
+        teacherLimit: "Up to 15 teachers",
+        features: [
           "Up to 15 teacher accounts",
-          "1,500 student capacity",
-          "Advanced reporting & benchmarking",
-          "Batch-wise performance comparison",
+          "500 student capacity",
+          "All Starter features",
+          "Advanced reporting & analytics",
+          "Department-wise tracking",
           "Custom domain (yourname.a4ai.in)",
           "API access for integration",
-          "Dedicated account manager",
+          "Priority support",
         ],
         popular: true,
       },
       {
-        name: "Enterprise",
-        price: { monthly: "Custom", yearly: "Custom" },
-        description: "Unlimited everything. White-label solution.",
+        name: "Pro Institute",
+        price: { monthly: "₹2,999", yearly: "₹29,990" },
+        priceNote: { monthly: "/ month", yearly: "/ year" },
+        description: "Large institute with full control.",
+        studentLimit: "Up to 1,000+ students",
+        teacherLimit: "Unlimited teachers",
         features: [
-          "Unlimited teachers & students",
+          "Unlimited teacher accounts",
+          "1,000+ student capacity",
+          "All Growth features",
           "Multi-branch management",
-          "White-label solution",
-          "SSO & custom integrations",
-          "Dedicated infrastructure",
-          "On-site training & onboarding",
-          "24/7 premium support",
-          "Custom feature development",
+          "Advanced benchmarking & insights",
+          "Dedicated account manager",
+          "Training & onboarding included",
+          "Custom feature requests",
         ],
       },
     ],
-    school: [
+    college: [
       {
-        name: "Standard",
-        price: { monthly: "₹8,333", yearly: "₹99,999" },
+        name: "College Pro",
+        price: { monthly: "₹5,999", yearly: "₹59,990" },
         priceNote: { monthly: "/ month", yearly: "/ year" },
-        description: "Complete school package. Up to 30 teachers.",
+        description: "Complete college solution. Department hierarchy.",
+        studentLimit: "Up to 2,000 students",
+        teacherLimit: "Unlimited teachers",
         features: [
-          "Up to 30 teacher accounts",
+          "Unlimited teacher accounts",
           "2,000 student capacity",
-          "School admin dashboard",
-          "Parent & teacher portals",
-          "Custom report cards",
-          "School-wide analytics",
-          "Attendance management",
-          "Print-ready with school letterhead",
+          "Full department hierarchy",
+          "HOD & admin dashboards",
+          "Advanced attendance tracking",
+          "AI test generation from syllabus",
+          "Proctored online exams",
+          "Custom branding & logo",
+          "Dedicated account manager",
+          "Onboarding & training included",
         ],
+        buttonGradient: "btn-purple-gradient",
       },
       {
-        name: "Premium",
-        price: { monthly: "₹16,666", yearly: "₹1,99,999" },
+        name: "College Premium",
+        price: { monthly: "₹7,499", yearly: "₹74,990" },
         priceNote: { monthly: "/ month", yearly: "/ year" },
-        description: "Full-featured school management. Up to 75 teachers.",
+        description: "Premium support with full customization.",
+        studentLimit: "Up to 5,000 students",
+        teacherLimit: "Unlimited teachers",
         features: [
-          "All Standard features",
-          "Up to 75 teacher accounts",
+          "All College Pro features",
           "5,000 student capacity",
-          "Advanced analytics suite",
+          "Full white-label solution",
           "Custom integrations (ERP/SIS)",
-          "Training & onboarding included",
-          "99.9% uptime SLA",
-          "Priority phone support",
+          "Advanced analytics suite",
+          "SSO & custom authentication",
+          "Dedicated infrastructure",
+          "24/7 premium support",
+          "Quarterly review meetings",
+          "On-site deployment option",
         ],
         popular: true,
+        buttonGradient: "btn-orange-gradient",
       },
       {
-        name: "Enterprise",
+        name: "College Enterprise",
         price: { monthly: "Custom", yearly: "Custom" },
-        description: "For school chains. Fully customized.",
+        description: "For universities & large institutions.",
+        studentLimit: "Unlimited students",
+        teacherLimit: "Unlimited teachers",
         features: [
           "Unlimited everything",
-          "Multi-school dashboard",
-          "Dedicated infrastructure",
+          "Multi-campus management",
+          "Fully white-labeled solution",
           "Custom feature development",
-          "White-label solution",
-          "On-site deployment option",
+          "Dedicated infrastructure",
+          "On-site deployment",
           "24/7 premium support",
           "Dedicated success manager",
+          "Custom SLA & compliance",
         ],
+        buttonGradient: "btn-purple-gradient",
       },
     ],
   };
@@ -295,7 +354,7 @@ export default function PricingPage() {
             {[
               { id: "individual", label: "Teachers", icon: <Users size={16} /> },
               { id: "institute", label: "Institutes", icon: <Building size={16} /> },
-              { id: "school", label: "Schools", icon: <School size={16} /> },
+              { id: "college", label: "Colleges & Schools", icon: <GraduationCap size={16} /> },
             ].map((t) => {
               const active = audience === (t.id as AudienceKey);
               return (
@@ -342,13 +401,14 @@ export default function PricingPage() {
           </div>
         </div>
 
-        {/* Cards container wrapper without overflow-hidden inside CSS to prevent badge truncation */}
+        {/* Cards */}
         <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 bg-white">
           {cards.map((plan, i) => {
             const price = plan.price[billingPeriod];
             const note = plan.priceNote?.[billingPeriod] || "";
             const isEnterprise = plan.name.toLowerCase().includes("enterprise");
             const isFree = plan.free;
+            const buttonGradient = plan.buttonGradient || "btn-blue-gradient";
 
             return (
               <div
@@ -370,6 +430,12 @@ export default function PricingPage() {
                   {plan.name}
                 </div>
 
+                {plan.studentLimit && (
+                  <div className="mt-1 text-xs font-medium text-slate-500">
+                    {plan.studentLimit}
+                  </div>
+                )}
+
                 <div className="mt-2 mb-1">
                   <div className="flex items-baseline gap-2 bg-transparent">
                     <span className="text-4xl tracking-tight text-slate-900" style={hx}>{price}</span>
@@ -379,6 +445,12 @@ export default function PricingPage() {
                   </div>
                 </div>
 
+                {plan.teacherLimit && (
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    {plan.teacherLimit}
+                  </div>
+                )}
+
                 {!isFree && !isEnterprise && billingPeriod === "yearly" && audience === "individual" && (
                   <div className="mb-3 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-medium px-2.5 py-1 rounded-full">
                     <Clock size={10} />
@@ -386,12 +458,23 @@ export default function PricingPage() {
                   </div>
                 )}
 
-                {/* Hardcoded Premium Button Components (Free is now matching Light-Green theme metrics) */}
+                {!isFree && !isEnterprise && billingPeriod === "yearly" && audience === "institute" && (
+                  <div className="mb-3 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-medium px-2.5 py-1 rounded-full">
+                    <Clock size={10} />
+                    Just ₹{Math.round(parseInt(plan.price.yearly.replace(/[^0-9]/g, "")) / 365)}/day
+                  </div>
+                )}
+
+                {!isFree && !isEnterprise && billingPeriod === "yearly" && audience === "college" && (
+                  <div className="mb-3 inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-medium px-2.5 py-1 rounded-full">
+                    <Clock size={10} />
+                    Just ₹{Math.round(parseInt(plan.price.yearly.replace(/[^0-9]/g, "")) / 365)}/day
+                  </div>
+                )}
+
                 <button
                   onClick={() => isEnterprise ? navigate("/contact") : isFree ? navigate("/signup") : navigate("/payment")}
-                  className={`inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-[14px] cursor-pointer ${
-                    isFree ? "btn-green-gradient" : "btn-blue-gradient"
-                  }`}
+                  className={`inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-[14px] cursor-pointer ${buttonGradient}`}
                   style={hx}
                 >
                   {isFree ? "Start Free" : isEnterprise ? "Talk to Sales" : plan.popular ? "Subscribe" : "Get Started"}
@@ -434,6 +517,85 @@ export default function PricingPage() {
               Try Free — No card needed
               <ArrowRight size={14} />
             </button>
+          </div>
+        </div>
+
+        {/* Pricing Summary Table - New */}
+        <div className="mt-14 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+            <h3 className="text-lg font-bold text-slate-900" style={hx}>Pricing Summary — Institutes & Colleges</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Plan</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Students</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Teachers</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Monthly</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Yearly</th>
+                  <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                <tr>
+                  <td className="px-4 py-3 font-bold text-slate-800">Micro</td>
+                  <td className="px-4 py-3 text-slate-600">Up to 100</td>
+                  <td className="px-4 py-3 text-slate-600">Up to 3</td>
+                  <td className="px-4 py-3 text-slate-800 font-bold">₹999</td>
+                  <td className="px-4 py-3 text-slate-800 font-bold">₹9,990</td>
+                  <td className="px-4 py-3"><button className="text-blue-600 font-bold text-xs hover:underline">Get Started</button></td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-bold text-slate-800">Starter Institute</td>
+                  <td className="px-4 py-3 text-slate-600">Up to 300</td>
+                  <td className="px-4 py-3 text-slate-600">Up to 8</td>
+                  <td className="px-4 py-3 text-slate-800 font-bold">₹1,499</td>
+                  <td className="px-4 py-3 text-slate-800 font-bold">₹14,990</td>
+                  <td className="px-4 py-3"><button className="text-blue-600 font-bold text-xs hover:underline">Get Started</button></td>
+                </tr>
+                <tr className="bg-blue-50/30">
+                  <td className="px-4 py-3 font-bold text-slate-800">Growth</td>
+                  <td className="px-4 py-3 text-slate-600">Up to 500</td>
+                  <td className="px-4 py-3 text-slate-600">Up to 15</td>
+                  <td className="px-4 py-3 text-slate-800 font-bold">₹1,999</td>
+                  <td className="px-4 py-3 text-slate-800 font-bold">₹19,990</td>
+                  <td className="px-4 py-3"><button className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Popular</button></td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-bold text-slate-800">Pro Institute</td>
+                  <td className="px-4 py-3 text-slate-600">1,000+</td>
+                  <td className="px-4 py-3 text-slate-600">Unlimited</td>
+                  <td className="px-4 py-3 text-slate-800 font-bold">₹2,999</td>
+                  <td className="px-4 py-3 text-slate-800 font-bold">₹29,990</td>
+                  <td className="px-4 py-3"><button className="text-blue-600 font-bold text-xs hover:underline">Get Started</button></td>
+                </tr>
+                <tr className="border-t-2 border-slate-300">
+                  <td className="px-4 py-3 font-bold text-purple-700">College Pro</td>
+                  <td className="px-4 py-3 text-slate-600">Up to 2,000</td>
+                  <td className="px-4 py-3 text-slate-600">Unlimited</td>
+                  <td className="px-4 py-3 text-purple-700 font-bold">₹5,999</td>
+                  <td className="px-4 py-3 text-purple-700 font-bold">₹59,990</td>
+                  <td className="px-4 py-3"><button className="bg-purple-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Contact</button></td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-bold text-orange-700">College Premium</td>
+                  <td className="px-4 py-3 text-slate-600">Up to 5,000</td>
+                  <td className="px-4 py-3 text-slate-600">Unlimited</td>
+                  <td className="px-4 py-3 text-orange-700 font-bold">₹7,499</td>
+                  <td className="px-4 py-3 text-orange-700 font-bold">₹74,990</td>
+                  <td className="px-4 py-3"><button className="bg-orange-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Contact</button></td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-bold text-slate-700">Enterprise</td>
+                  <td className="px-4 py-3 text-slate-600">Unlimited</td>
+                  <td className="px-4 py-3 text-slate-600">Unlimited</td>
+                  <td className="px-4 py-3 text-slate-700 font-bold">Custom</td>
+                  <td className="px-4 py-3 text-slate-700 font-bold">Custom</td>
+                  <td className="px-4 py-3"><button className="text-blue-600 font-bold text-xs hover:underline">Talk to Sales</button></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 

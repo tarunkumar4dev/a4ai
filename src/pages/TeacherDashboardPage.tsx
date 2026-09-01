@@ -7,7 +7,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel";
-import ModuleCreator from "@/components/ModuleCreator"; // 🔑 MODULE CREATOR IMPORT
+import TeacherAssignmentsTab from "@/components/teacher/TeacherAssignmentsTab";
+import TeacherCalendarTab from "@/components/teacher/TeacherCalendarTab";
 
 /* ------------------- SAFE STORAGE ------------------- */
 const safeStorage = {
@@ -243,6 +244,7 @@ const Icons = {
   Book: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg>,
   Microphone: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" x2="12" y1="19" y2="22" /></svg>,
   FolderOpen: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><path d="M6 11h12" /></svg>,
+    Calendar: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
 };
 
 /* ------------------- ROBOT MASCOT (AI Sarthi) ------------------- */
@@ -856,12 +858,20 @@ export default function TeacherDashboardPage() {
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
   const [look, setLook] = useState({ x: 0, y: 0 });
 
-  const savedPos = useMemo(() => {
+  // FIX: track current pos in state so drag never drifts off-screen
+  const [chatPos, setChatPos] = useState<{ x: number; y: number }>(() => {
     try {
       const raw = safeStorage.get("sarthiPos");
-      return raw ? JSON.parse(raw) : { x: 0, y: 0 };
-    } catch { return { x: 0, y: 0 }; }
-  }, []);
+      if (raw) {
+        const p = JSON.parse(raw);
+        const maxX = typeof window !== "undefined" ? window.innerWidth - 120 : 400;
+        const maxY = typeof window !== "undefined" ? window.innerHeight - 120 : 600;
+        return { x: Math.max(-maxX, Math.min(16, p.x)), y: Math.max(-maxY, Math.min(16, p.y)) };
+      }
+    } catch { /* */ }
+    return { x: 0, y: 0 };
+  });
+  const savedPos = chatPos;
 
   const handleMascotMove = (e: React.MouseEvent) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -1039,59 +1049,82 @@ export default function TeacherDashboardPage() {
     let apiKey = "";
     try { apiKey = import.meta.env.VITE_GROQ_API_KEY || ""; } catch (e) { }
     if (!apiKey) {
-      setChatMessages((prev) => [...prev, { role: "assistant", content: "Error: Missing VITE_GROQ_API_KEY", suggestions: chatOptions }]);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "⚠️ API key missing. Please add VITE_GROQ_API_KEY to your .env file.", suggestions: chatOptions }]);
       return;
     }
 
     setIsChatLoading(true);
 
-    const systemPromptText = `You are AI Sarthi, the in-app teaching assistant for a4ai. You are a knowledgeable, patient colleague helping a busy teacher — not a sales bot reciting a brochure. Always use lowercase "a4ai" when referring to the platform.
-  
-  Tone and style:
-  - Warm, encouraging, and direct — like a helpful senior teacher or support person who respects the teacher's time.
-  - Open and close with a natural sentence; use bullets or numbered steps in between for clarity, not as the entire answer.
-  - Light Hinglish is fine occasionally (e.g. "chaliye dekhte hain", "bilkul") since many a4ai teachers write that way — but keep core explanations clear.
-  - End with a small, genuine next step where it fits — offer to walk them through something, or ask one clarifying question. Don't just stop after listing facts.
-  - Never push upgrades unprompted. Mention pricing only when asked or clearly relevant, and frame everything around time saved and ease of teaching, not sales.
-  - If a teacher seems stuck or frustrated, acknowledge that briefly before jumping into steps.
-  
-  Context:
-  - a4ai: built for teachers to create and manage tests efficiently. Generates CBSE-pattern papers in 30 seconds from real NCERT content, saving 2+ hours daily. Supports MCQ, Short, Long, A&R, Cloze. Exports to PDF & DOCX.
-  - Pricing: Free (₹0, 2 tests/mo, watermark), Starter (₹149/mo or ₹5/day, 10 tests/mo, 2 proctored contests, WhatsApp sharing), Pro (₹299/mo or ₹10/day, unlimited tests & contests, custom logo).
-  - FAQ: Free plan is forever. Upgrades apply instantly. Accepts UPI/Cards/Net Banking. Discounts available for govt schools. High accuracy since it draws from actual NCERT content. Mobile proctoring supported.
-  - Creating a Test: Dashboard → Create Test → select Exam Title, Class, Subject, Board → upload logo (optional) → choose custom or CBSE pattern → Generate.
-  
-  Keep answers concise and genuinely helpful — a teacher should feel like they just asked a colleague, not read a product page.`;
+    // Auto-detect language from user message
+    const isHindi = /[\u0900-\u097F]/.test(textToSend);
+    const isHinglish = !isHindi && /\b(kya|hai|hain|ho|kar|karo|mujhe|mera|meri|aap|bhi|nahi|toh|kaise|chahiye|batao|dekho|abhi|agar|lekin|aur|se|pe|ko|ka|ki|ke|hoga|krna|bnao|samjhao)\b/i.test(textToSend);
+    const langInstruction = isHindi
+      ? "IMPORTANT: User ne Hindi (Devanagari) mein likha hai. Poora reply Hindi Devanagari mein do. Simple aur clear Hindi use karo."
+      : isHinglish
+        ? "IMPORTANT: User ne Hinglish mein likha hai. Reply natural Hinglish mein do — jaise user ne likha, waise hi mix karo Hindi aur English. Force mat karo."
+        : "IMPORTANT: User wrote in English. Reply in clear English only. No Hindi unless user switches.";
+
+    const systemPromptText = `You are AI Sarthi, the smart teaching assistant built into a4ai — India's fastest test generation platform for teachers. You are a knowledgeable, patient colleague. Always write "a4ai" in lowercase.
+
+${langInstruction}
+
+Tone:
+- Warm, direct — like a senior teacher colleague who respects time
+- Natural sentences first, then bullets/numbered steps for clarity
+- Short replies (3-5 lines) unless step-by-step is needed
+- End with one genuine next step or clarifying question
+- Never push upgrades unprompted — mention pricing only when asked
+
+a4ai features you can help with:
+- Test generation: 30 seconds from NCERT content, CBSE pattern, MCQ/Short/Long/A&R/Cloze, PDF & DOCX export
+- Attendance: Mark batch-wise daily attendance, per-student tracking
+- Assignments: Teacher creates PDF assignments, students submit via code portal, teacher grades inline with feedback
+- Student Portal: 6-char access code (no signup needed), students see assignments + announcements
+- Pricing: Free (2 tests/mo), Starter ₹149/mo (10 tests + contests), Pro ₹299/mo (unlimited)
+- Create Test: Dashboard → Create Test → Class/Subject/Board → Generate
+
+STRICT RULES — follow always:
+- NEVER use LaTeX, $formula$, dollar signs for math, or markdown math syntax. Write math in plain text only (e.g. "sin = opposite divided by hypotenuse", not "$\sin(\theta) = \frac{Opp}{Hyp}$").
+- NEVER use ** bold ** or markdown formatting in responses — plain text only.
+- If asked anything NOT related to a4ai platform (general science, math concepts, history, coding, current events, etc.), redirect warmly in 1 sentence: "Main a4ai ka assistant hoon — platform se related koi bhi sawaal puchh sakte ho!" Then offer one relevant a4ai action.
+- a4ai was founded by Tarun Pathak, B.Tech ECE graduate and experienced teacher turned edtech founder.
+
+Be genuinely helpful. Teacher should feel like they asked a colleague, not a chatbot.`;
+
+    // Backend proxy call — Groq API key stays safe on server
+    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+
+    const groqMessages = [
+      { role: "system", content: systemPromptText },
+      ...chatMessages
+        .filter((m) => m.role !== "system")
+        .map((m) => ({ role: m.role, content: m.content })),
+      { role: userMsg.role, content: userMsg.content },
+    ];
 
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const res = await fetch(`${apiBase}/chat`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "llama-3.1-70b-versatile", // ✅ UPDATED: Working model
-          messages: [
-            { role: "system", content: systemPromptText },
-            ...chatMessages
-              .filter((m) => m.role !== "system")
-              .map((m) => ({ role: m.role, content: m.content })),
-            { role: userMsg.role, content: userMsg.content },
-          ],
-          temperature: 0.7,
-          max_tokens: 1024,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: groqMessages }),
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error.message);
-      if (data.choices?.[0])
-        setChatMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.choices[0].message.content, suggestions: chatOptions }
-        ]);
-    } catch (error: any) {
-      setChatMessages((prev) => [...prev, { role: "assistant", content: `Error: ${error.message || "Failed"}`, suggestions: chatOptions }]);
-    } finally {
-      setIsChatLoading(false);
+      if (!res.ok) throw new Error(data.detail || "Backend error");
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.content, suggestions: chatOptions }
+      ]);
+    } catch (err: any) {
+      setChatMessages((prev) => [...prev, {
+        role: "assistant",
+        content: err.message?.includes("fetch")
+          ? "⚠️ Backend server not running. Start it with: uvicorn app.main:app --reload"
+          : `⚠️ ${err.message || "Something went wrong. Please try again."}`,
+        suggestions: chatOptions
+      }]);
     }
+
+    setIsChatLoading(false);
   };
 
   const getFirstName = () => displayName?.split(" ")[0] || "Educator";
@@ -1119,12 +1152,15 @@ export default function TeacherDashboardPage() {
   // 🔑 NAV ITEMS - MODULES ADDED HERE
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid, label: "Dashboard", color: "text-blue-500" },
+    { id: "calendar", Icon: Icons.Calendar, label: "Calendar", color: "text-indigo-500" },
+    { id: "assignments", Icon: Icons.FileText, label: "Assignments" },
     { id: "attendance", Icon: Icons.Clock, label: "Attendance", color: "text-violet-500" },
     { id: "students", Icon: Icons.Users, label: "Students", color: "text-orange-500" },
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
     { id: "ai-tools", Icon: Icons.Brain, label: "AI Tools", color: "text-cyan-500" },
+
   ];
 
   return (
@@ -1468,7 +1504,12 @@ export default function TeacherDashboardPage() {
             {/* ===== DASHBOARD TAB ===== */}
             {activeTab === "dashboard" && (
               <div className="space-y-6 sm:space-y-8">
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
+                {/* Institute panel — always at top so teacher sees their institute immediately */}
+                <div className="scroll-reveal" style={{ transitionDelay: "0ms" }}>
+                  <InstituteTeacherPanel userId={user?.id} />
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8 scroll-reveal" style={{ transitionDelay: "60ms" }}>
                   <div className="xl:col-span-2 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 lg:p-14 relative overflow-hidden flex flex-col justify-center group">
                     <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-[48px]" />
                     <div className="relative z-10 max-w-xl">
@@ -1569,10 +1610,6 @@ export default function TeacherDashboardPage() {
                   })}
                 </div>
 
-                <div className="scroll-reveal" style={{ transitionDelay: "140ms" }}>
-                  <InstituteTeacherPanel userId={user?.id} />
-                </div>
-
                 <div
                   className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12 scroll-reveal"
                   style={{ transitionDelay: "200ms" }}
@@ -1648,8 +1685,12 @@ export default function TeacherDashboardPage() {
                 <InstituteTeacherPanel userId={user?.id} />
               </div>
             )}
+
+            {activeTab === "calendar" && <TeacherCalendarTab />}
             {/* ===== MODULES TAB ===== 🔑 NEW */}
             {activeTab === "modules" && <ModulesTab />}
+
+            {activeTab === "assignments" && <TeacherAssignmentsTab />}
 
             {/* ===== ATTENDANCE TAB ===== */}
             {activeTab === "attendance" && (
@@ -1704,6 +1745,7 @@ export default function TeacherDashboardPage() {
                     { Icon: Icons.Search, title: "Plagiarism Check", desc: "Scan against web and AI datasets.", isNew: false, primary: false },
                     { Icon: Icons.Grid, title: "Smart Rubrics", desc: "Generate standard-aligned rubrics.", isNew: false, primary: false },
                     { Icon: Icons.Clock, title: "Lesson Planner", desc: "Plan lessons by pacing & standard.", isNew: false, primary: false },
+                    
                   ].map((tool, i) => {
                     const ToolIcon = tool.Icon;
                     return (
@@ -1769,10 +1811,11 @@ export default function TeacherDashboardPage() {
           onDragStart={() => { didDragRef.current = true; }}
           onDragEnd={(_e, info) => {
             setTimeout(() => { didDragRef.current = false; }, 60);
-            safeStorage.set("sarthiPos", JSON.stringify({
-              x: savedPos.x + info.offset.x,
-              y: savedPos.y + info.offset.y,
-            }));
+            setChatPos(prev => {
+              const next = { x: prev.x + info.offset.x, y: prev.y + info.offset.y };
+              safeStorage.set("sarthiPos", JSON.stringify(next));
+              return next;
+            });
           }}
           className="fixed bottom-4 sm:bottom-8 right-4 sm:right-8 z-[110] flex flex-col items-end gap-3 touch-none"
         >

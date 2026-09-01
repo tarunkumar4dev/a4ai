@@ -6,14 +6,17 @@
 // Backward compatible: dept/section nullable, works without them
 // ──────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import InstituteAttendanceView from "@/components/attendance/InstituteAttendanceView";
+import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import AssignTeacherModal from "@/components/institute/AssignTeacherModal";
 import BulkStudentUpload from "@/components/institute/BulkStudentUpload";
+
+// Lazy load attendance view for better initial load performance
+const InstituteAttendanceView = lazy(() => import("@/components/attendance/InstituteAttendanceView"));
+
 
 /* ═══════════════════════════════════════════════════════════════════
    STYLES
@@ -99,7 +102,29 @@ const customStyles = `
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 100px; }
 
-  /* Animations */
+  /* ── Responsive Attendance Grid ── */
+  .attendance-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 640px) {
+    .attendance-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (min-width: 1024px) {
+    .attendance-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (min-width: 1280px) {
+    .attendance-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  /* ── Touch-friendly sizing ── */
+  @media (max-width: 640px) {
+    .touch-target { min-height: 48px; min-width: 48px; }
+    .field, .field-soft { font-size: 16px; padding: 14px 16px; }
+  }
+
+  /* ── Animations ── */
   @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
   @keyframes fadeInUp { from { opacity:0; transform:translateY(16px);} to { opacity:1; transform:translateY(0);} }
   @keyframes scaleIn  { from { opacity:0; transform:scale(0.96);}       to { opacity:1; transform:scale(1);} }
@@ -185,7 +210,9 @@ const Icons = {
   Loader: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="anim-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>,
   Crown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" /></svg>,
   Filter: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>,
+  Image: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>,
   Upload: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
+  Calendar: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -326,6 +353,30 @@ export default function InstituteDashboardPage() {
   const [newInstituteName, setNewInstituteName] = useState("");
   const [creatingInstitute, setCreatingInstitute] = useState(false);
 
+  // ── Logo & Banner ──
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Name Editing ──
+  const [editingName, setEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState("");
+
+  // ── Performance: Debounced search ──
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
+  }, [search]);
+
   useEffect(() => {
     if (user) fetchData();
     else setLoading(false);
@@ -363,7 +414,26 @@ export default function InstituteDashboardPage() {
         supabase.from("sections").select("*, departments!inner(institute_id)").eq("departments.institute_id", id).order("name", { ascending: true }),
       ]);
 
-      if (a.data) setInstitute(a.data as Institute);
+      if (a.data) {
+        setInstitute(a.data as Institute);
+        const instId = a.data.id;
+        try {
+          const { data: logoData } = supabase.storage.from("institute-assets").getPublicUrl(`${instId}/logo`);
+          const { data: bannerData } = supabase.storage.from("institute-assets").getPublicUrl(`${instId}/banner`);
+          try {
+            const logoRes = await fetch(logoData.publicUrl, { method: "HEAD" });
+            if (logoRes.ok && logoRes.headers.get("content-type")?.startsWith("image")) {
+              setLogoUrl(logoData.publicUrl + `?t=${Date.now()}`);
+            }
+          } catch { setLogoUrl(null); }
+          try {
+            const bannerRes = await fetch(bannerData.publicUrl, { method: "HEAD" });
+            if (bannerRes.ok && bannerRes.headers.get("content-type")?.startsWith("image")) {
+              setBannerUrl(bannerData.publicUrl + `?t=${Date.now()}`);
+            }
+          } catch { setBannerUrl(null); }
+        } catch { /* ignore */ }
+      }
       if (b.data) setTeachers(b.data as Teacher[]);
       if (c.data) setBatches(c.data as Batch[]);
       if (d.data) setStudents(d.data.map((s: any) => ({ ...s, batch_name: s.batches?.name || "Unassigned" })));
@@ -602,6 +672,51 @@ export default function InstituteDashboardPage() {
     navigate("/login");
   };
 
+  const saveInstituteName = async () => {
+    if (!editNameValue.trim() || !institute) return;
+    try {
+      const { error } = await supabase.from("institutes").update({ name: editNameValue.trim() }).eq("id", institute.id);
+      if (error) throw error;
+      setInstitute({ ...institute, name: editNameValue.trim() });
+      toast.success("Institute name updated!");
+      setEditingName(false);
+    } catch (e: any) { toast.error(e.message || "Failed to update name"); }
+  };
+
+  const uploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !institute) return;
+    if (!file.type.startsWith("image/")) return toast.error("Select an image file");
+    if (file.size > 2 * 1024 * 1024) return toast.error("Logo must be under 2MB");
+    setUploadingLogo(true);
+    try {
+      const { error } = await supabase.storage.from("institute-assets").upload(`${institute.id}/logo`, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      const { data } = supabase.storage.from("institute-assets").getPublicUrl(`${institute.id}/logo`);
+      setLogoUrl(data.publicUrl + `?t=${Date.now()}`);
+      toast.success("Logo updated!");
+    } catch (err: any) { toast.error(err.message || "Upload failed"); }
+    setUploadingLogo(false);
+    if (logoInputRef.current) logoInputRef.current.value = "";
+  };
+
+  const uploadBanner = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !institute) return;
+    if (!file.type.startsWith("image/")) return toast.error("Select an image file");
+    if (file.size > 5 * 1024 * 1024) return toast.error("Banner must be under 5MB");
+    setUploadingBanner(true);
+    try {
+      const { error } = await supabase.storage.from("institute-assets").upload(`${institute.id}/banner`, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      const { data } = supabase.storage.from("institute-assets").getPublicUrl(`${institute.id}/banner`);
+      setBannerUrl(data.publicUrl + `?t=${Date.now()}`);
+      toast.success("Banner updated!");
+    } catch (err: any) { toast.error(err.message || "Upload failed"); }
+    setUploadingBanner(false);
+    if (bannerInputRef.current) bannerInputRef.current.value = "";
+  };
+
   const goHome = () => navigate("/");
   const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
   const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "";
@@ -643,7 +758,7 @@ export default function InstituteDashboardPage() {
     , [batches, deptFilter, sectionFilter]);
 
   const filteredStudents = useMemo(() => {
-    const q = search.toLowerCase().trim();
+    const q = debouncedSearch.toLowerCase().trim();
     let list = students.filter(s => matchesDept(s.department_id) && matchesSection(s.section_id));
     if (!q) return list;
     return list.filter(s =>
@@ -651,7 +766,7 @@ export default function InstituteDashboardPage() {
       (s.roll_no || "").toLowerCase().includes(q) ||
       (s.batch_name || "").toLowerCase().includes(q)
     );
-  }, [students, search, deptFilter, sectionFilter]);
+  }, [students, debouncedSearch, deptFilter, sectionFilter]);
 
   const batchChart = useMemo(() =>
     batches.slice(0, 12).map((b) => ({
@@ -681,7 +796,7 @@ export default function InstituteDashboardPage() {
     { id: "teachers", icon: Icons.Users, label: "Teachers", badge: totalTeachersAll || undefined },
     { id: "students", icon: Icons.User, label: "Students", badge: totalStudents || undefined },
     { id: "batches", icon: Icons.Layers, label: "Batches", badge: totalBatches || undefined },
-    { id: "attendance", icon: Icons.Chart, label: "Attendance" },
+    { id: "attendance", icon: Icons.Calendar, label: "Attendance" },
     { id: "analytics", icon: Icons.Chart, label: "Analytics" },
   ];
 
@@ -847,72 +962,145 @@ export default function InstituteDashboardPage() {
 
       {/* ═══════════ MAIN ═══════════ */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <div className={`px-5 sm:px-8 py-8 mx-auto w-full ${activeTab === "attendance" ? "max-w-6xl" : "max-w-5xl"}`}>
+        <div className={`px-4 sm:px-6 lg:px-8 py-6 sm:py-8 mx-auto w-full ${activeTab === "attendance" ? "max-w-7xl" : "max-w-5xl"}`}>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-            <div className="flex items-center gap-2 min-w-0">
-              <button className="lg:hidden p-2 -ml-2 text-slate-500" onClick={() => setMobileMenuOpen(true)}><Icons.Menu /></button>
-              <button onClick={goHome} title="Back to home" className="lg:hidden p-2 rounded-lg bg-[#FFF5F2] text-[#FF7043]"><Icons.Home /></button>
-              <div className="min-w-0">
-                <h1 className="text-2xl font-black text-slate-900">
-                  {navItems.find(n => n.id === activeTab)?.label}
-                </h1>
-                <p className="text-[14px] text-slate-500 mt-0.5 font-medium">
-                  {activeTab === "overview" && `Welcome back, ${displayName.split(" ")[0]}. Let's get back to work.`}
-                  {activeTab === "departments" && `${totalDepartments} department${totalDepartments !== 1 ? "s" : ""} · ${totalSections} section${totalSections !== 1 ? "s" : ""} · ${hods.length} HOD${hods.length !== 1 ? "s" : ""}`}
-                  {activeTab === "teachers" && `${activeTeachers} active of ${totalTeachersAll} member${totalTeachersAll !== 1 ? "s" : ""} (${hods.length} HOD${hods.length !== 1 ? "s" : ""})`}
-                  {activeTab === "students" && `${totalStudents} student${totalStudents !== 1 ? "s" : ""} enrolled`}
-                  {activeTab === "batches" && `${totalBatches} active batch${totalBatches !== 1 ? "es" : ""}`}
-                  {activeTab === "analytics" && "Insights and institute settings"}
-                  {activeTab === "attendance" && "Mark and review attendance by teacher and batch"}
-                </p>
-              </div>
-            </div>
-
-            {activeTab !== "attendance" && activeTab !== "departments" && (
-              <div className="flex items-center bg-white px-4 py-2.5 rounded-xl card-shadow w-full sm:w-72 border border-slate-100 shrink-0">
-                <span className="text-slate-400 mr-2"><Icons.Search /></span>
-                <input
-                  type="text"
-                  placeholder="Search students..."
-                  value={search}
-                  onChange={e => { setSearch(e.target.value); if (e.target.value && activeTab !== "students") setActiveTab("students"); }}
-                  className="bg-transparent border-none outline-none text-[13px] font-medium w-full text-slate-700 placeholder-slate-400"
-                />
-                {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600"><Icons.X /></button>}
-              </div>
-            )}
+          {/* ── Mobile top bar ── */}
+          <div className="flex items-center gap-2 mb-4 lg:hidden">
+            <button className="p-2 -ml-2 text-slate-500 touch-target" onClick={() => setMobileMenuOpen(true)}><Icons.Menu /></button>
+            <button onClick={goHome} title="Back to home" className="p-2 rounded-lg bg-[#FFF5F2] text-[#FF7043]"><Icons.Home /></button>
+            <span className="text-lg font-black text-slate-900 truncate">{institute.name}</span>
           </div>
 
+          {/* ── ATTENDANCE TAB ── */}
           {activeTab === "attendance" && (
-            <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
-              <InstituteAttendanceView teachers={teachers} batches={batches} students={students} />
+            <div className="anim-entrance w-full" style={{ animationDelay: "0.05s" }}>
+              <div className="mb-4 sm:mb-6">
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Attendance</h2>
+                <p className="text-sm text-slate-500 font-medium mt-1">Mark and review attendance by teacher and batch</p>
+              </div>
+              <Suspense fallback={
+                <div className="attendance-grid">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="animate-pulse h-48 bg-slate-200/50 dark:bg-slate-700/30 rounded-2xl" />
+                  ))}
+                </div>
+              }>
+                <InstituteAttendanceView teachers={teachers} batches={batches} students={students} />
+              </Suspense>
             </div>
           )}
 
-          {/* OVERVIEW */}
+          {/* ── OVERVIEW TAB ── */}
           {activeTab === "overview" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+
+              {/* ═══ INSTITUTE PROFILE CARD ─── */}
+              <div className="bg-white rounded-3xl card-shadow border border-slate-50 overflow-hidden mb-6">
+                <div
+                  className="relative h-40 sm:h-48 bg-gradient-to-br from-[#FF7043] via-[#FF8A65] to-[#FFAB91] group cursor-pointer"
+                  onClick={() => bannerInputRef.current?.click()}
+                >
+                  {bannerUrl && <img src={bannerUrl} alt="Banner" className="absolute inset-0 w-full h-full object-cover" />}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold text-slate-700 shadow-lg">
+                      {uploadingBanner ? <><Icons.Loader /> Uploading...</> : <><Icons.Image /> {bannerUrl ? "Change Banner" : "Upload Banner"}</>}
+                    </div>
+                  </div>
+                  <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={uploadBanner} />
+                </div>
+
+                <div className="px-4 sm:px-6 lg:px-8 pb-6 relative">
+                  <div className="-mt-14 sm:-mt-16 mb-4">
+                    <button onClick={() => logoInputRef.current?.click()} className="relative group shrink-0" disabled={uploadingLogo}>
+                      <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white border-4 border-white shadow-lg overflow-hidden flex items-center justify-center">
+                        {logoUrl
+                          ? <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full bg-gradient-to-br from-[#FFF5F2] to-[#FFECDF] flex items-center justify-center">
+                            <span className="text-3xl font-black text-[#FF7043]">{institute.name.slice(0, 2).toUpperCase()}</span>
+                          </div>
+                        }
+                      </div>
+                      <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center border-4 border-transparent">
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white">
+                          {uploadingLogo ? <Icons.Loader /> : <Icons.Image />}
+                        </div>
+                      </div>
+                      <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={uploadLogo} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0 space-y-2">
+                      {editingName ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input className="field text-xl font-black py-2 flex-1 min-w-[180px]" value={editNameValue} onChange={e => setEditNameValue(e.target.value)} autoFocus
+                            onKeyDown={e => { if (e.key === "Enter") saveInstituteName(); if (e.key === "Escape") setEditingName(false); }} />
+                          <button onClick={saveInstituteName} className="btn-orange px-4 py-2 rounded-xl text-sm touch-target">Save</button>
+                          <button onClick={() => setEditingName(false)} className="btn-ghost px-3 py-2 rounded-xl text-sm touch-target">Cancel</button>
+                        </div>
+                      ) : (
+                        <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight cursor-pointer hover:text-[#FF7043] transition-colors group"
+                          onClick={() => { setEditNameValue(institute.name); setEditingName(true); }}>
+                          {institute.name}
+                          <span className="opacity-0 group-hover:opacity-100 text-[12px] font-bold text-slate-400 ml-2">✎ edit</span>
+                        </h2>
+                      )}
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-500"><Icons.Building /> {totalDepartments} dept{totalDepartments !== 1 ? "s" : ""}</span>
+                        <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-500"><Icons.Users /> {totalTeachersAll} teacher{totalTeachersAll !== 1 ? "s" : ""}</span>
+                        <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-500"><Icons.User /> {totalStudents} student{totalStudents !== 1 ? "s" : ""}</span>
+                        <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-500"><Icons.Layers /> {totalBatches} batch{totalBatches !== 1 ? "es" : ""}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-start sm:items-end gap-1 shrink-0">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Teacher Join Code</span>
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                        <Icons.Key />
+                        <code className="join-code text-[14px] font-black text-slate-800">{institute.join_code}</code>
+                        <button onClick={copyCode} className="p-1 rounded-lg text-slate-400 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors">
+                          {joinCodeCopied ? <Icons.Check /> : <Icons.Copy />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ═══ SEARCH BAR ─── */}
+              <div className="flex items-center bg-white px-4 py-3 rounded-xl card-shadow border border-slate-100 mb-6">
+                <span className="text-slate-400 mr-2"><Icons.Search /></span>
+                <input
+                  type="text"
+                  placeholder="Search students by name, roll no, batch..."
+                  value={search}
+                  onChange={e => { setSearch(e.target.value); if (e.target.value && activeTab !== "students") setActiveTab("students"); }}
+                  className="bg-transparent border-none outline-none text-[14px] font-medium w-full text-slate-700 placeholder-slate-400"
+                />
+                {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600 p-1"><Icons.X /></button>}
+              </div>
+
+              {/* ═══ STAT CARDS ─── */}
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
                 {[
                   { label: "Departments", value: totalDepartments, cap: 0, pct: totalDepartments ? Math.min(totalDepartments / 10, 1) : 0, tint: "bg-teal-100 text-teal-600", bar: "#14B8A6", Icon: Icons.Building, tab: "departments" },
                   { label: "Teachers", value: totalTeachersAll, cap: maxTeachers, pct: teacherPct, tint: "bg-blue-100 text-blue-600", bar: "#5C67F2", Icon: Icons.Users, tab: "teachers" },
                   { label: "Students", value: totalStudents, cap: maxStudents, pct: studentPct, tint: "bg-red-100 text-red-500", bar: "#FF5252", Icon: Icons.User, tab: "students" },
                   { label: "Batches", value: totalBatches, cap: 0, pct: batchPct, tint: "bg-green-100 text-green-600", bar: "#00C853", Icon: Icons.Layers, tab: "batches" },
                 ].map((card, i) => (
-                  <button key={i} onClick={() => setActiveTab(card.tab)} className="bg-white rounded-2xl p-5 card-shadow card-hover border border-slate-50 flex flex-col justify-between h-36 text-left">
-                    <div className="flex items-start gap-3">
-                      <div className={`w-11 h-11 rounded-full ${card.tint} flex items-center justify-center shrink-0`}><card.Icon /></div>
+                  <button key={i} onClick={() => setActiveTab(card.tab)} className="bg-white rounded-2xl p-4 sm:p-5 card-shadow card-hover border border-slate-50 flex flex-col justify-between h-32 sm:h-36 text-left">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full ${card.tint} flex items-center justify-center shrink-0`}><card.Icon /></div>
                       <div>
-                        <p className="text-[12px] font-bold text-slate-400">{card.label}</p>
-                        <p className="text-2xl font-black text-slate-800 mt-1 stat-number">{card.value}</p>
+                        <p className="text-[11px] sm:text-[12px] font-bold text-slate-400">{card.label}</p>
+                        <p className="text-xl sm:text-2xl font-black text-slate-800 mt-0.5 sm:mt-1 stat-number">{card.value}</p>
                       </div>
                     </div>
                     <div>
-                      <div className="progress-bar-bg mb-2">
+                      <div className="progress-bar-bg mb-1 sm:mb-2">
                         <div className="progress-fill" style={{ width: `${card.pct * 100}%`, background: card.bar }} />
                       </div>
-                      <p className="text-[11px] font-bold text-slate-400">
+                      <p className="text-[10px] sm:text-[11px] font-bold text-slate-400">
                         {card.cap ? `${Math.round(card.pct * 100)}% of ${card.cap} limit` : "no limit set"}
                       </p>
                     </div>
@@ -920,8 +1108,9 @@ export default function InstituteDashboardPage() {
                 ))}
               </div>
 
-              <div className="w-full bg-white rounded-2xl card-shadow border border-slate-50 p-6 mb-8 flex flex-col">
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+              {/* ═══ ENROLLMENT CHART ─── */}
+              <div className="w-full bg-white rounded-2xl card-shadow border border-slate-50 p-4 sm:p-6 mb-6 sm:mb-8">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                   <div>
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Seats Used</p>
                     <p className="text-[16px] font-bold text-slate-800 stat-number">{totalStudents}<span className="text-slate-400"> / {maxStudents || "—"}</span></p>
@@ -944,78 +1133,44 @@ export default function InstituteDashboardPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[16px] font-bold text-slate-800">Latest Students</h3>
-                    {totalStudents > 4 && <button onClick={() => setActiveTab("students")} className="text-[11px] font-bold text-[#FF7043] hover:underline">View All</button>}
-                  </div>
-                  <div className="space-y-3">
-                    {students.length > 0 ? students.slice(0, 4).map(student => (
-                      <div key={student.id} className="bg-white rounded-2xl p-3 flex items-center justify-between card-shadow border border-slate-50 anim-row">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center font-bold text-sm shrink-0">{getInitials(student.name)}</div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-bold text-slate-800 leading-tight truncate">{student.name}</p>
-                            <p className="text-[11px] font-medium text-slate-400 mt-0.5 truncate">{student.batch_name} · Roll {student.roll_no || "N/A"}</p>
-                          </div>
-                        </div>
-                        <button onClick={() => contactParent(student)} title={student.parent_phone ? `WhatsApp ${student.parent_phone}` : "No parent phone saved"} className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:border-[#FF7043] hover:text-[#FF7043] transition-colors shrink-0"><Icons.Phone /></button>
-                      </div>
-                    )) : (
-                      <div className="bg-white rounded-2xl p-8 text-center card-shadow border border-slate-50">
-                        <p className="text-sm text-slate-500 font-medium mb-4">No students enrolled yet.</p>
-                        <button onClick={() => setShowAddStudent(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px] mx-auto"><Icons.Plus /> Add Student</button>
-                      </div>
-                    )}
-                  </div>
+              {/* ═══ LATEST STUDENTS ─── */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[16px] font-bold text-slate-800">Latest Students</h3>
+                  {totalStudents > 6 && <button onClick={() => setActiveTab("students")} className="text-[11px] font-bold text-[#FF7043] hover:underline">View All →</button>}
                 </div>
-
-                <div className="bg-white rounded-3xl p-6 card-shadow border border-slate-50">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-[16px] font-bold text-slate-800">Institute Utilization</h3>
-                    <div className="flex bg-slate-100 rounded-lg p-1">
-                      <button onClick={() => setUtilView("ring")} title="Ring view" className={`px-2 py-1 rounded transition-all ${utilView === "ring" ? "bg-white shadow-sm text-slate-700" : "text-slate-400"}`}><Icons.Layers /></button>
-                      <button onClick={() => setUtilView("bars")} title="Bar view" className={`px-2 py-1 rounded transition-all ${utilView === "bars" ? "bg-white shadow-sm text-slate-700" : "text-slate-400"}`}><Icons.Chart /></button>
-                    </div>
-                  </div>
-                  {utilView === "ring" ? (
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[11px] font-bold text-slate-400 uppercase">Teachers</p>
-                        <p className="text-[15px] font-bold text-slate-800 mt-1 stat-number">{totalTeachersAll} <span className="text-slate-400 font-medium">/ {maxTeachers || "—"}</span></p>
-                        <div className="mt-6">
-                          <p className="text-[11px] font-bold text-slate-400 uppercase">Students</p>
-                          <p className="text-[15px] font-bold text-slate-800 mt-1 stat-number">{totalStudents} <span className="text-slate-400 font-medium">/ {maxStudents || "—"}</span></p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {students.length > 0 ? students.slice(0, 6).map(student => (
+                    <div key={student.id} onClick={() => navigate(`/institute/students/${student.id}`)} className="bg-white rounded-2xl p-3 sm:p-3.5 flex items-center justify-between card-shadow border border-slate-50 anim-row cursor-pointer hover:border-[#FF7043]/30 hover:shadow-md transition-all">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center font-bold text-sm shrink-0">{getInitials(student.name)}</div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-bold text-slate-800 leading-tight truncate">{student.name}</p>
+                          <p className="text-[11px] font-medium text-slate-400 mt-0.5 truncate">
+                            {student.batch_name}{student.roll_no ? ` · Roll ${student.roll_no}` : ""}
+                            {student.department_id ? ` · ${deptName(student.department_id)}` : ""}
+                          </p>
                         </div>
                       </div>
-                      <DonutStat pct={studentPct} label="seats" />
+                      <button onClick={(e) => { e.stopPropagation(); contactParent(student); }} title={student.parent_phone ? `WhatsApp ${student.parent_phone}` : "No phone"} className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:border-[#FF7043] hover:text-[#FF7043] transition-colors shrink-0"><Icons.Phone /></button>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {[{ l: "Teachers", v: totalTeachersAll, max: maxTeachers }, { l: "Students", v: totalStudents, max: maxStudents }, { l: "Monthly tests", v: 0, max: institute.monthly_test_limit }].map(row => (
-                        <div key={row.l}>
-                          <div className="flex justify-between text-[12px] font-bold mb-1.5">
-                            <span className="text-slate-400">{row.l}</span>
-                            <span className="text-slate-700 stat-number">{row.v} / {row.max || "—"}</span>
-                          </div>
-                          <div className="progress-bar-bg"><div className="progress-fill" style={{ width: `${row.max ? Math.min((row.v / row.max) * 100, 100) : 0}%`, background: "#FF7043" }} /></div>
-                        </div>
-                      ))}
+                  )) : (
+                    <div className="sm:col-span-2 bg-white rounded-2xl p-8 text-center card-shadow border border-slate-50">
+                      <p className="text-sm text-slate-500 font-medium mb-4">No students enrolled yet.</p>
+                      <button onClick={() => setShowAddStudent(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px] mx-auto"><Icons.Plus /> Add Student</button>
                     </div>
                   )}
-                  <button onClick={() => navigate("/pricing")} className="mt-8 w-full bg-[#FFF5F2] text-[#FF7043] font-bold text-[13px] py-3.5 rounded-xl hover:bg-orange-100 transition-colors flex items-center justify-center gap-2"><Icons.Rocket /> View plans &amp; upgrade</button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* DEPARTMENTS */}
+          {/* ── DEPARTMENTS TAB ── */}
           {activeTab === "departments" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                 <p className="text-[13px] text-slate-500 font-bold">{totalDepartments} department{totalDepartments !== 1 ? "s" : ""} · {totalSections} section{totalSections !== 1 ? "s" : ""}</p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button onClick={() => { setNewSection({ department_id: departments[0]?.id || "", name: "", year: "" }); setShowAddSection(true); }} disabled={departments.length === 0} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px] disabled:opacity-40 disabled:cursor-not-allowed"><Icons.Layers /> New Section</button>
                   <button onClick={() => setShowAddDept(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px]"><Icons.Plus /> New Department</button>
                 </div>
@@ -1139,7 +1294,7 @@ export default function InstituteDashboardPage() {
             </div>
           )}
 
-          {/* TEACHERS */}
+          {/* ── TEACHERS TAB ── */}
           {activeTab === "teachers" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
               <div className="bg-white rounded-2xl p-5 mb-4 card-shadow border border-slate-50">
@@ -1215,10 +1370,10 @@ export default function InstituteDashboardPage() {
             </div>
           )}
 
-          {/* STUDENTS */}
+          {/* ── STUDENTS TAB ── */}
           {activeTab === "students" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <p className="text-[13px] text-slate-500 font-bold">{search || deptFilter || sectionFilter ? `${filteredStudents.length} match${filteredStudents.length !== 1 ? "es" : ""}` : `${totalStudents} total`}</p>
                 <div className="flex gap-2">
                   <button onClick={() => setShowBulkUpload(true)} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]"><Icons.Upload /> Bulk Upload</button>
@@ -1256,7 +1411,7 @@ export default function InstituteDashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {filteredStudents.map(s => (
-                    <div key={s.id} className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row">
+                    <div key={s.id} onClick={() => navigate(`/institute/students/${s.id}`)} className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row cursor-pointer hover:border-[#FF7043]/30 hover:shadow-md transition-all">
                       <div className="w-10 h-10 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center font-bold text-sm shrink-0">{getInitials(s.name)}</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1267,8 +1422,8 @@ export default function InstituteDashboardPage() {
                         <p className="text-[11px] font-medium text-slate-400 truncate">{s.batch_name} · Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}</p>
                       </div>
                       <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">Class {s.class_level || "—"}</span>
-                      <button onClick={() => contactParent(s)} title="Message parent" className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Phone /></button>
-                      <button onClick={() => removeStudent(s.id)} title="Remove student" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
+                      <button onClick={(e) => { e.stopPropagation(); contactParent(s); }} title="Message parent" className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Phone /></button>
+                      <button onClick={(e) => { e.stopPropagation(); removeStudent(s.id); }} title="Remove student" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                     </div>
                   ))}
                 </div>
@@ -1276,10 +1431,10 @@ export default function InstituteDashboardPage() {
             </div>
           )}
 
-          {/* BATCHES */}
+          {/* ── BATCHES TAB ── */}
           {activeTab === "batches" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <p className="text-[13px] text-slate-500 font-bold">{deptFilter || sectionFilter ? `${filteredBatches.length} match${filteredBatches.length !== 1 ? "es" : ""}` : `${totalBatches} active`}</p>
                 <button onClick={() => setShowAddBatch(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px]"><Icons.Plus /> New Batch</button>
               </div>
@@ -1327,10 +1482,10 @@ export default function InstituteDashboardPage() {
             </div>
           )}
 
-          {/* ANALYTICS */}
+          {/* ── ANALYTICS TAB ── */}
           {activeTab === "analytics" && (
             <div className="anim-entrance space-y-6" style={{ animationDelay: "0.05s" }}>
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
                 {[
                   { l: "Departments", v: totalDepartments },
                   { l: "Sections", v: totalSections },
@@ -1338,19 +1493,19 @@ export default function InstituteDashboardPage() {
                   { l: "Batches", v: totalBatches },
                   { l: "Students", v: totalStudents },
                 ].map((s, i) => (
-                  <div key={i} className="bg-white rounded-2xl p-5 card-shadow border border-slate-50">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase mb-1">{s.l}</p>
-                    <p className="text-2xl font-black text-slate-800 stat-number">{s.v}</p>
+                  <div key={i} className="bg-white rounded-2xl p-4 sm:p-5 card-shadow border border-slate-50">
+                    <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase mb-1">{s.l}</p>
+                    <p className="text-xl sm:text-2xl font-black text-slate-800 stat-number">{s.v}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="bg-white rounded-2xl p-6 card-shadow border border-slate-50">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
                 <h3 className="text-[16px] font-bold text-slate-800 mb-6">Enrollment by Batch</h3>
                 {batchChart.length > 0 ? <BatchBars data={batchChart} /> : <div className="h-40 flex items-center justify-center text-sm text-slate-500 font-medium">No batches yet</div>}
               </div>
 
-              <div className="bg-white rounded-2xl p-6 card-shadow border border-slate-50">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
                 <h3 className="text-[16px] font-bold text-slate-800 mb-5">Institute Details</h3>
                 <div className="space-y-5">
                   <div>
@@ -1377,7 +1532,7 @@ export default function InstituteDashboardPage() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl p-6 card-shadow border border-slate-50">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
                 <h3 className="text-[16px] font-bold text-slate-800 mb-4">Account</h3>
                 <div className="space-y-2">
                   <button onClick={goHome} className="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-100 hover:border-[#FF7043]/40 hover:bg-[#FFF5F2] transition-all group">
@@ -1398,102 +1553,6 @@ export default function InstituteDashboardPage() {
           )}
         </div>
       </main>
-
-      {/* ═══════════ RIGHT SIDEBAR ═══════════ */}
-      <aside className="hidden xl:flex w-[320px] bg-white border-l border-slate-200 flex-col shrink-0 z-20 overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-6 pb-4">
-          <button onClick={goHome} title="Home page" className="w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Home /></button>
-          <div className="flex gap-2" ref={notifRef}>
-            <div className="relative">
-              <button onClick={() => setIsNotifOpen(!isNotifOpen)} title="Alerts" className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 relative hover:bg-slate-50 transition-colors">
-                <Icons.Bell />
-                {(unassigned > 0 || (totalDepartments > 0 && hods.length < totalDepartments)) && <span className="absolute top-2 right-2.5 w-2 h-2 bg-[#FF7043] rounded-full border-2 border-white" />}
-              </button>
-              {isNotifOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-slate-100 shadow-xl p-3 z-50 anim-in">
-                  <h4 className="text-[13px] font-black text-slate-800 mb-2 px-1">Needs attention</h4>
-                  <div className="space-y-2">
-                    {unassigned > 0 && (
-                      <button onClick={() => { setActiveTab("students"); setIsNotifOpen(false); }} className="w-full text-left p-3 rounded-xl bg-orange-50 border border-orange-100 hover:bg-orange-100 transition-colors">
-                        <p className="text-[12px] font-bold text-orange-700">{unassigned} student{unassigned !== 1 ? "s" : ""} unassigned</p>
-                        <p className="text-[11px] text-orange-600/70 mt-0.5">Not linked to any batch yet.</p>
-                      </button>
-                    )}
-                    {totalDepartments > 0 && hods.length < totalDepartments && (
-                      <button onClick={() => { setActiveTab("departments"); setIsNotifOpen(false); }} className="w-full text-left p-3 rounded-xl bg-purple-50 border border-purple-100 hover:bg-purple-100 transition-colors">
-                        <p className="text-[12px] font-bold text-purple-700">{totalDepartments - hods.length} dept{totalDepartments - hods.length !== 1 ? "s" : ""} without HOD</p>
-                        <p className="text-[11px] text-purple-600/70 mt-0.5">Assign an HOD to each department.</p>
-                      </button>
-                    )}
-                    {totalTeachersAll === 0 && (
-                      <button onClick={copyCode} className="w-full text-left p-3 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors">
-                        <p className="text-[12px] font-bold text-blue-700">No teachers yet</p>
-                        <p className="text-[11px] text-blue-600/70 mt-0.5">Tap to copy the join code.</p>
-                      </button>
-                    )}
-                    {unassigned === 0 && totalTeachersAll > 0 && (totalDepartments === 0 || hods.length === totalDepartments) && (
-                      <p className="text-[12px] text-slate-400 font-medium p-3">All caught up — nothing pending.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            <button onClick={() => setActiveTab("analytics")} title="Settings" className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors"><Icons.Settings /></button>
-          </div>
-        </div>
-
-        <div className="px-6 flex flex-col items-center mt-4 text-center">
-          <div className="relative mb-4">
-            <div className="w-20 h-20 rounded-full bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center text-2xl font-black border-2 border-[#FF7043]/20">{getInitials(displayName)}</div>
-            <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white" />
-          </div>
-          <h2 className="text-[18px] font-black text-slate-900 truncate max-w-full">{displayName}</h2>
-          <p className="text-[13px] font-medium text-slate-400 mt-1">Admin / Owner</p>
-        </div>
-
-        <div className="grid grid-cols-4 gap-2 mt-6 px-6">
-          {[
-            { label: "Depts", value: totalDepartments, tab: "departments" },
-            { label: "Staff", value: totalTeachersAll, tab: "teachers" },
-            { label: "Batches", value: totalBatches, tab: "batches" },
-            { label: "Students", value: totalStudents, tab: "students" },
-          ].map((s, i) => (
-            <button key={i} onClick={() => setActiveTab(s.tab)} className="text-center hover:opacity-70 transition-opacity">
-              <p className="text-xl font-black text-slate-800 stat-number">{s.value}</p>
-              <p className="text-[11px] font-bold text-slate-400 mt-0.5">{s.label}</p>
-            </button>
-          ))}
-        </div>
-
-        <div className="px-6 mt-8 space-y-3">
-          {[
-            { label: joinCodeCopied ? "Code Copied!" : "Copy Join Code", Icon: joinCodeCopied ? Icons.Check : Icons.Key, tint: "bg-slate-50 text-slate-500", fn: copyCode },
-            { label: "New Department", Icon: Icons.Building, tint: "bg-teal-50 text-teal-500", fn: () => setShowAddDept(true) },
-            { label: "New Batch", Icon: Icons.Layers, tint: "bg-pink-50 text-pink-500", fn: () => setShowAddBatch(true) },
-            { label: "Add Student", Icon: Icons.UserPlus, tint: "bg-orange-50 text-orange-500", fn: () => setShowAddStudent(true) },
-            { label: "Bulk Upload", Icon: Icons.Upload, tint: "bg-green-50 text-green-500", fn: () => setShowBulkUpload(true) },
-            { label: "Generate Test", Icon: Icons.Zap, tint: "bg-blue-50 text-blue-500", fn: () => navigate("/dashboard/test-generator") },
-          ].map(({ label, Icon, tint, fn }) => (
-            <button key={label} onClick={fn} className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-100 card-shadow bg-white hover:border-slate-200 transition-all group">
-              <div className="flex items-center gap-3 text-slate-600">
-                <div className={`w-8 h-8 rounded-full ${tint} flex items-center justify-center`}><Icon /></div>
-                <span className="text-[14px] font-bold">{label}</span>
-              </div>
-              <span className="text-slate-400 group-hover:text-slate-600"><Icons.ChevronRight /></span>
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-auto px-6 pb-8 pt-6">
-          <p className="text-[14px] font-bold text-slate-800 mb-1">Setup Progress</p>
-          <p className="text-[20px] font-black text-slate-900 stat-number">{setupDone} <span className="text-[14px] text-slate-300 font-bold">/ {setupTasks.length}</span></p>
-          <p className="text-[11px] font-medium text-slate-400 mb-4">steps completed</p>
-          <Gauge value={setupDone / setupTasks.length} />
-          {setupDone < setupTasks.length && (
-            <p className="text-[11px] font-bold text-[#FF7043] text-center mt-2 flex items-center justify-center gap-1"><Icons.Sparkles /> Next: {setupTasks.find(t => !t.done)?.label}</p>
-          )}
-        </div>
-      </aside>
 
       {/* ═══════════ MODALS ═══════════ */}
 

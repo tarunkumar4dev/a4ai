@@ -1,214 +1,277 @@
 // src/components/institute/InstituteTeacherPanel.tsx
-// Drop this into TeacherDashboardPage to show institute context
-// Shows: institute badge, assigned batches, batch students
+// Shows teacher's institute info — name, role, department, batches, student count
+// Fixes: #1 prominent card, #2 teacher name, #3 department display, #7 join prompt
 
-import React, { useState } from "react";
-import { useInstituteTeacher } from "@/hooks/useInstituteTeacher";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
-const panelStyles = `
-  .inst-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; background: #eff6ff; color: #2563eb; border: 1px solid #dbeafe; }
-  .dark .inst-badge { background: rgba(37,99,235,0.12); color: #60a5fa; border-color: rgba(96,165,250,0.2); }
-  .inst-card { background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 12px; }
-  .dark .inst-card { background: rgb(24,24,27); border-color: rgba(255,255,255,0.08); }
-  .inst-row { padding: 10px 14px; border-radius: 8px; display: flex; align-items: center; gap: 10px; transition: background 0.12s; }
-  .inst-row:hover { background: rgba(0,0,0,0.02); }
-  .dark .inst-row:hover { background: rgba(255,255,255,0.03); }
-  .inst-tab { padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: none; background: transparent; color: #71717a; }
-  .inst-tab:hover { background: rgba(0,0,0,0.04); }
-  .inst-tab.active { background: rgba(0,0,0,0.06); color: #18181b; font-weight: 600; }
-  .dark .inst-tab:hover { background: rgba(255,255,255,0.06); }
-  .dark .inst-tab.active { background: rgba(255,255,255,0.08); color: white; }
-  .inst-badge-sm { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: #f4f4f5; color: #52525b; }
-  .dark .inst-badge-sm { background: rgba(255,255,255,0.08); color: #a1a1aa; }
-  .inst-empty { padding: 40px 20px; text-align: center; }
-  .inst-empty p { font-size: 13px; color: #a1a1aa; }
-`;
+type InstituteInfo = {
+  id: string;
+  name: string;
+  logo_url?: string | null;
+};
 
-interface Props {
-  userId: string | undefined;
-}
+type MemberInfo = {
+  role: string;
+  status: string;
+  department_name?: string;
+  department_id?: string | null;
+};
 
-export default function InstituteTeacherPanel({ userId }: Props) {
+type BatchInfo = {
+  id: string;
+  name: string;
+  class_level?: string;
+  student_count?: number;
+};
+
+export default function InstituteTeacherPanel({ userId }: { userId?: string }) {
   const navigate = useNavigate();
-  const { membership, batches, students, loading } = useInstituteTeacher(userId);
-  const [activeView, setActiveView] = useState<"batches" | "students">("batches");
-  const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [institute, setInstitute]   = useState<InstituteInfo | null>(null);
+  const [member, setMember]         = useState<MemberInfo | null>(null);
+  const [batches, setBatches]       = useState<BatchInfo[]>([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [logoUrl, setLogoUrl]       = useState<string | null>(null);
 
-  // Not in any institute
-  if (!loading && !membership) {
+  useEffect(() => { if (userId) load(); }, [userId]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      // 1. Get institute membership
+      const { data: mem } = await supabase
+        .from("institute_members")
+        .select("institute_id, role, status, department_id, user_name, user_email")
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .limit(1)
+        .single();
+
+      if (!mem) { setLoading(false); return; }
+
+      // 2. Get institute details
+      const { data: inst } = await supabase
+        .from("institutes")
+        .select("id, name")
+        .eq("id", mem.institute_id)
+        .single();
+
+      if (!inst) { setLoading(false); return; }
+      setInstitute(inst);
+
+      // 3. Get department name if assigned
+      let deptName = "";
+      if (mem.department_id) {
+        const { data: dept } = await supabase
+          .from("departments")
+          .select("name")
+          .eq("id", mem.department_id)
+          .single();
+        if (dept) deptName = dept.name;
+      }
+
+      setMember({
+        role: mem.role,
+        status: mem.status,
+        department_name: deptName || undefined,
+        department_id: mem.department_id,
+      });
+
+      // 4. Get batches assigned to this teacher
+      // Batches where teacher_id = this user (if your schema supports it)
+      // Fallback: get all batches in the institute for this department
+      let batchQuery = supabase
+        .from("batches")
+        .select("id, name, class_level")
+        .eq("institute_id", mem.institute_id)
+        .eq("is_active", true);
+
+      if (mem.department_id) {
+        batchQuery = batchQuery.eq("department_id", mem.department_id);
+      }
+
+      const { data: batchRows } = await batchQuery.order("name");
+
+      if (batchRows && batchRows.length > 0) {
+        // Get student counts per batch
+        const { data: stuCounts } = await supabase
+          .from("students")
+          .select("batch_id")
+          .eq("institute_id", mem.institute_id)
+          .eq("is_active", true)
+          .in("batch_id", batchRows.map(b => b.id));
+
+        const countMap: Record<string, number> = {};
+        stuCounts?.forEach(s => {
+          if (s.batch_id) countMap[s.batch_id] = (countMap[s.batch_id] || 0) + 1;
+        });
+
+        const enriched = batchRows.map(b => ({
+          ...b,
+          student_count: countMap[b.id] || 0,
+        }));
+        setBatches(enriched);
+        setTotalStudents(Object.values(countMap).reduce((a, b) => a + b, 0));
+      }
+
+      // 5. Try logo
+      try {
+        const { data: logoData } = supabase.storage
+          .from("institute-assets")
+          .getPublicUrl(`${inst.id}/logo`);
+        const res = await fetch(logoData.publicUrl, { method: "HEAD" });
+        if (res.ok && res.headers.get("content-type")?.startsWith("image")) {
+          setLogoUrl(logoData.publicUrl + `?t=${Date.now()}`);
+        }
+      } catch { /* no logo */ }
+
+    } catch (e) { console.error("InstituteTeacherPanel:", e); }
+    setLoading(false);
+  }
+
+  // ── Not in any institute ──────────────────────────────────────
+  if (!loading && !institute) {
     return (
-      <>
-        <style>{panelStyles}</style>
-        <div className="inst-card p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>Institute</h3>
-              <p style={{ fontSize: 13, color: "#71717a" }}>Join an institute to manage classes and students.</p>
-            </div>
-            <button
-              onClick={() => navigate("/join-institute")}
-              style={{
-                background: "#111", color: "white", fontWeight: 600, fontSize: 13,
-                padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 6,
-              }}
-            >
-              Join Institute
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-            </button>
+      <div style={{
+        background: "#fff",
+        border: "1.5px dashed #E2E8F0",
+        borderRadius: 20,
+        padding: "24px 28px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        flexWrap: "wrap",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FFF5F2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🏛️</div>
+          <div>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#1E293B" }}>Not part of any institute</p>
+            <p style={{ margin: "2px 0 0", fontSize: 13, color: "#94A3B8" }}>Join an institute to manage classes and students</p>
           </div>
         </div>
-      </>
+        <button
+          onClick={() => navigate("/join-institute")}
+          style={{ background: "#FF7043", color: "#fff", border: "none", borderRadius: 12, padding: "10px 22px", fontWeight: 700, fontSize: 14, cursor: "pointer", whiteSpace: "nowrap" }}
+        >
+          Join Institute →
+        </button>
+      </div>
     );
   }
 
+  // ── Loading ───────────────────────────────────────────────────
   if (loading) {
     return (
-      <>
-        <style>{panelStyles}</style>
-        <div className="inst-card p-5">
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 16, height: 16, border: "2px solid #d4d4d8", borderTopColor: "#3b82f6", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
-            <span style={{ fontSize: 13, color: "#71717a" }}>Loading institute data...</span>
-          </div>
-        </div>
-      </>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+        <div style={{ height: 80, background: "#F8FAFC", borderRadius: 12, animation: "pulse 1.5s ease-in-out infinite" }} />
+        <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+      </div>
     );
   }
 
-  const filteredStudents = selectedBatch
-    ? students.filter((s) => s.batch_id === selectedBatch)
-    : students;
+  if (!institute || !member) return null;
 
+  const roleLabel = member.role === "hod" ? "HOD" : member.role === "admin" ? "Administrator" : "Teacher";
+  const roleColor = member.role === "hod" ? "#8B5CF6" : member.role === "admin" ? "#FF7043" : "#3B82F6";
+
+  // ── Main Card ─────────────────────────────────────────────────
   return (
-    <>
-      <style>{panelStyles}</style>
-      <div className="space-y-4">
-        {/* Institute header badge */}
-        <div className="inst-card p-4" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
-              {membership!.institute_name.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 600 }}>{membership!.institute_name}</p>
-              <p style={{ fontSize: 11, color: "#a1a1aa" }}>
-                {batches.length} batch{batches.length !== 1 ? "es" : ""} assigned · {students.length} student{students.length !== 1 ? "s" : ""}
-              </p>
-            </div>
+    <div style={{
+      background: "#fff",
+      borderRadius: 20,
+      boxShadow: "0 2px 16px rgba(0,0,0,0.07)",
+      overflow: "hidden",
+    }}>
+      {/* Header stripe */}
+      <div style={{
+        background: "linear-gradient(135deg, #FF7043, #F4511E)",
+        padding: "18px 24px",
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+      }}>
+        {/* Logo or initials */}
+        <div style={{
+          width: 52, height: 52, borderRadius: 14, overflow: "hidden",
+          background: "rgba(255,255,255,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          border: "2px solid rgba(255,255,255,0.3)", flexShrink: 0,
+        }}>
+          {logoUrl
+            ? <img src={logoUrl} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            : <span style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>
+                {institute.name.slice(0, 2).toUpperCase()}
+              </span>
+          }
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {institute.name}
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+            <span style={{ background: "rgba(255,255,255,0.25)", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20 }}>
+              {roleLabel}
+            </span>
+            {member.department_name && (
+              <span style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.9)", fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20 }}>
+                Dept: {member.department_name}
+              </span>
+            )}
+            {!member.department_name && (
+              <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>No department assigned yet</span>
+            )}
           </div>
-          <span className="inst-badge">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/></svg>
-            Teacher
+        </div>
+
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <p style={{ margin: 0, fontSize: 24, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{totalStudents}</p>
+          <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.75)", fontWeight: 700, textTransform: "uppercase" }}>Students</p>
+        </div>
+      </div>
+
+      {/* Batches list */}
+      <div style={{ padding: "16px 24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>
+            My Batches ({batches.length})
+          </p>
+          <span style={{ fontSize: 11, color: "#94A3B8" }}>
+            {batches.length} batch{batches.length !== 1 ? "es" : ""}
           </span>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: "flex", gap: 4, padding: "2px", background: "rgba(0,0,0,0.03)", borderRadius: 10 }}>
-          <button className={`inst-tab ${activeView === "batches" ? "active" : ""}`} onClick={() => setActiveView("batches")}>
-            My Batches ({batches.length})
-          </button>
-          <button className={`inst-tab ${activeView === "students" ? "active" : ""}`} onClick={() => { setActiveView("students"); setSelectedBatch(null); }}>
-            Students ({students.length})
-          </button>
-        </div>
-
-        {/* Batches view */}
-        {activeView === "batches" && (
-          <div className="inst-card" style={{ overflow: "hidden" }}>
-            {batches.length === 0 ? (
-              <div className="inst-empty">
-                <p>No batches assigned yet.</p>
-                <p style={{ fontSize: 11, color: "#d4d4d8", marginTop: 4 }}>Your admin will assign you to batches.</p>
-              </div>
-            ) : (
-              <div style={{ padding: 4 }}>
-                {batches.map((b) => {
-                  const batchStudentCount = students.filter((s) => s.batch_id === b.id).length;
-                  return (
-                    <div
-                      key={b.id}
-                      className="inst-row"
-                      style={{ cursor: "pointer" }}
-                      onClick={() => { setSelectedBatch(b.id); setActiveView("students"); }}
-                    >
-                      <div style={{ width: 34, height: 34, borderRadius: 8, background: "#f4f4f5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.name}</p>
-                        <p style={{ fontSize: 11, color: "#a1a1aa" }}>
-                          {b.class_level ? `Class ${b.class_level}` : ""}{b.subject ? ` · ${b.subject}` : ""}
-                        </p>
-                      </div>
-                      <span className="inst-badge-sm">{batchStudentCount} students</span>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d4d4d8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        {batches.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "16px 0", color: "#94A3B8", fontSize: 13 }}>
+            <p style={{ margin: 0 }}>No batches assigned yet</p>
+            <p style={{ margin: "4px 0 0", fontSize: 12 }}>Your admin will assign you to batches</p>
           </div>
-        )}
-
-        {/* Students view */}
-        {activeView === "students" && (
-          <div className="inst-card" style={{ overflow: "hidden" }}>
-            {/* Batch filter chips */}
-            {batches.length > 1 && (
-              <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(0,0,0,0.06)", display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <button
-                  className={`inst-tab ${!selectedBatch ? "active" : ""}`}
-                  style={{ fontSize: 12, padding: "4px 10px" }}
-                  onClick={() => setSelectedBatch(null)}
-                >
-                  All ({students.length})
-                </button>
-                {batches.map((b) => (
-                  <button
-                    key={b.id}
-                    className={`inst-tab ${selectedBatch === b.id ? "active" : ""}`}
-                    style={{ fontSize: 12, padding: "4px 10px" }}
-                    onClick={() => setSelectedBatch(b.id)}
-                  >
-                    {b.name} ({students.filter((s) => s.batch_id === b.id).length})
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {filteredStudents.length === 0 ? (
-              <div className="inst-empty">
-                <p>No students in {selectedBatch ? "this batch" : "your batches"} yet.</p>
-              </div>
-            ) : (
-              <div style={{ padding: 4 }}>
-                {filteredStudents.map((s) => (
-                  <div key={s.id} className="inst-row">
-                    <div style={{
-                      width: 32, height: 32, borderRadius: "50%", background: "#f4f4f5",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 12, fontWeight: 600, color: "#52525b", flexShrink: 0,
-                    }}>
-                      {s.name.charAt(0)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {s.name}
-                      </p>
-                      <p style={{ fontSize: 11, color: "#a1a1aa" }}>
-                        Roll {s.roll_no || "—"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}
-                      </p>
-                    </div>
-                    <span className="inst-badge-sm">{s.batch_name}</span>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {batches.map(b => (
+              <div key={b.id} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "10px 14px", background: "#F8FAFC", borderRadius: 12,
+                border: "1px solid #F1F5F9",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "#FFF5F2", display: "flex", alignItems: "center", justifyContent: "center", color: "#FF7043", fontSize: 14 }}>📚</div>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{b.name}</p>
+                    {b.class_level && <p style={{ margin: 0, fontSize: 11, color: "#94A3B8" }}>Class {b.class_level}</p>}
                   </div>
-                ))}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#64748B", background: "#E2E8F0", padding: "3px 10px", borderRadius: 20 }}>
+                  {b.student_count} student{b.student_count !== 1 ? "s" : ""}
+                </span>
               </div>
-            )}
+            ))}
           </div>
         )}
       </div>
-    </>
+    </div>
   );
-}
+} 

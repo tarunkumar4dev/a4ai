@@ -14,6 +14,8 @@ import {
   useLocation,
 } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
+import StudentProfilePage from "./pages/StudentProfilePage";
+import TestBuilderPage from "./pages/TestBuilderPage";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -26,16 +28,17 @@ import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import StudentPortalPage from "./pages/StudentPortalPage";
 
 /* ---------- Vercel Analytics ---------- */
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 
 /* ---------- Lazy Loading Configuration ---------- */
-const LAZY_LOADING_DELAY = 1000; 
+const LAZY_LOADING_DELAY = 1000;
 
 /* ---------- Lazy Marketing Pages ---------- */
-const LandingPage = lazy(() => 
+const LandingPage = lazy(() =>
   Promise.all([
     import("./pages/LandingPage"),
     new Promise(resolve => setTimeout(resolve, LAZY_LOADING_DELAY))
@@ -52,12 +55,12 @@ const ApiPage = lazy(() => import("./pages/product/ApiPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 
-const SubjectHubPage = lazy(() => import("@/practice/SubjectHub")); 
+const SubjectHubPage = lazy(() => import("@/practice/SubjectHub"));
 
 /* ---------- Lazy Auth & App Pages ---------- */
 const RoleSelectionPage = lazy(() => import("./pages/RoleSelectionPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
-const SignupPage = lazy(() => import("./pages/SignupPage"));  
+const SignupPage = lazy(() => import("./pages/SignupPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage"));
 const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage"));
@@ -97,7 +100,7 @@ const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
 const ContestPage = lazy(() => import("./pages/ContestPage"));
 
 /* ---------- Mega Contest Pages ---------- */
-const MegaContestLivePage = lazy(() => 
+const MegaContestLivePage = lazy(() =>
   import("./pages/MegaContestLivePage")
     .then(module => ({ default: module.default }))
     .catch(error => {
@@ -140,8 +143,8 @@ const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
 const PaymentPage = lazy(() => import("./pages/payment/PaymentPage"));
 
 /* ---------- Daily Practice Module ---------- */
-const PracticeSelectionPage = lazy(() => import("@/practice/index")); 
-const PracticeSessionPage = lazy(() => import("@/practice/session/index")); 
+const PracticeSelectionPage = lazy(() => import("@/practice/index"));
+const PracticeSessionPage = lazy(() => import("@/practice/session/index"));
 
 /* ---------- Practice page alias ---------- */
 const PracticePage = lazy(() => import("@/practice/index"));
@@ -157,14 +160,14 @@ const CommunityQuizCreatePage = lazy(() => import("./pages/teacher/CommunityQuiz
 /* ---------- Scroll Helper ---------- */
 function ScrollToTop() {
   const { pathname } = useLocation();
-  
+
   useEffect(() => {
-    window.scrollTo({ 
-      top: 0, 
-      behavior: pathname === "/" ? "auto" : "smooth" 
+    window.scrollTo({
+      top: 0,
+      behavior: pathname === "/" ? "auto" : "smooth"
     });
   }, [pathname]);
-  
+
   return null;
 }
 
@@ -217,16 +220,16 @@ function AuthGateForAuthPages({ children }: { children: ReactNode }) {
 /** Role-based gate — checks if user has the right role */
 function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowedRoles: string[] }) {
   const { loading, session, role } = useAuth();
-  
+
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
   if (!role) return <Navigate to="/select-role" replace />;
-  
+
   if (!allowedRoles.includes(role)) {
     toast.error(`Access denied. You are registered as a ${role}.`);
     return <Navigate to={`/${role}/dashboard`} replace />;
   }
-  
+
   return <>{children}</>;
 }
 
@@ -271,7 +274,7 @@ const App = () => {
             <TooltipProvider>
               <Toaster position="top-right" />
               <Sonner position="top-right" expand={false} richColors closeButton />
-              
+
               <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors">
                 <BrowserRouter>
                   <ScrollToTop />
@@ -283,13 +286,15 @@ const App = () => {
                       {/* ============================================ */}
                       <Route path="/" element={<LandingPage />} />
                       <Route path="/teacher/community-quizzes" element={
-  <RoleAuthGate allowedRoles={["teacher"]}>
-    <MyCommunityQuizzesPage />
-  </RoleAuthGate>
-} />
+                        <RoleAuthGate allowedRoles={["teacher"]}>
+                          <MyCommunityQuizzesPage />
+                        </RoleAuthGate>
+                      } />
                       <Route path="/q/:slug" element={<CommunityQuizPlayPage />} />
+                      <Route path="/institute/students/:studentId" element={<StudentProfilePage />} />
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
                       <Route path="/features" element={<FeaturesPage />} />
+                      <Route path="/student" element={<StudentPortalPage />} />
                       <Route path="/pricing" element={<PricingPage />} />
                       <Route path="/api" element={<ApiPage />} />
                       <Route path="/about" element={<AboutPage />} />
@@ -297,6 +302,7 @@ const App = () => {
                       <Route path="/payment" element={<PaymentPage />} />
                       <Route path="/careers" element={<CareersPage />} />
                       <Route path="/privacy" element={<PrivacyPolicyPage />} />
+                      <Route path="/dashboard/test-builder" element={<TestBuilderPage />} />
                       <Route path="/terms" element={<TermsPage />} />
                       <Route path="/cookies" element={<CookiePolicyPage />} />
                       <Route path="/resources" element={<ResourcesHome />} />
@@ -336,17 +342,17 @@ const App = () => {
                       {/*  TEACHER ROUTES                              */}
                       {/* ============================================ */}
                       <Route path="/teacher/dashboard" element={<RoleAuthGate allowedRoles={["teacher"]}><TeacherDashboardPage /></RoleAuthGate>} />
-                      
+
                       {/* B) NEW TEACHER ROUTE FOR COMMUNITY QUIZ CREATE */}
-                      <Route 
-                        path="/teacher/community-quiz/new" 
-                        element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizCreatePage /></RoleAuthGate>} 
+                      <Route
+                        path="/teacher/community-quiz/new"
+                        element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizCreatePage /></RoleAuthGate>}
                       />
-                      
+
                       {/* C) NEW TEACHER ROUTE FOR COMMUNITY QUIZ LEADERBOARD */}
-                      <Route 
-                        path="/teacher/community-quiz/:quizId/leaderboard" 
-                        element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizLeaderboardPage /></RoleAuthGate>} 
+                      <Route
+                        path="/teacher/community-quiz/:quizId/leaderboard"
+                        element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizLeaderboardPage /></RoleAuthGate>}
                       />
 
                       {/* ============================================ */}
@@ -366,24 +372,24 @@ const App = () => {
                       <Route path="/practice/zone" element={<PrivateRoute><PracticeZonePage /></PrivateRoute>} />
                       <Route path="/practice/pyq-session" element={<PrivateRoute><PYQPracticeSessionPage /></PrivateRoute>} />
                       <Route path="/admin/pyq" element={<RoleAuthGate allowedRoles={["teacher", "admin"]}><PYQAdminPage /></RoleAuthGate>} />
-                      
+
                       <Route path="/dashboard/practice" element={<PrivateRoute><PracticePage /></PrivateRoute>} />
                       <Route path="/practice" element={<PracticePage />} />
                       <Route path="/practice/chemistry" element={<PrivateRoute><SubjectHubPage /></PrivateRoute>} />
-                      <Route path="/practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} /> 
+                      <Route path="/practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} />
                       <Route path="/daily-practice" element={<PrivateRoute><PracticeSelectionPage /></PrivateRoute>} />
-                      <Route path="/daily-practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} /> 
-                      
+                      <Route path="/daily-practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} />
+
                       {/* Flashcards */}
                       <Route path="/dashboard/flashcards" element={<PrivateRoute><FlashcardDashboard /></PrivateRoute>} />
                       <Route path="/dashboard/flashcards/:subject/:chapter" element={<PrivateRoute><FlashcardChapter /></PrivateRoute>} />
                       <Route path="/dashboard/flashcards/class/:class/subject/:subject" element={<PrivateRoute><FlashcardSubject /></PrivateRoute>} />
-                      
+
                       {/* Others */}
                       <Route path="/students" element={<PrivateRoute><StudentsPage /></PrivateRoute>} />
                       <Route path="/notes" element={<PrivateRoute><NotesPage /></PrivateRoute>} />
                       <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
-                      
+
                       {/* Contests */}
                       <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
                       <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
@@ -399,15 +405,15 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  MODULES ROUTE - NAYA ADD KIYA HAI           */}
                       {/* ============================================ */}
-                      <Route 
-                        path="/dashboard/modules" 
+                      <Route
+                        path="/dashboard/modules"
                         element={
                           <PrivateRoute>
                             <ModulesPage />
                           </PrivateRoute>
-                        } 
+                        }
                       />
-                      
+
                       {/* ============================================ */}
                       {/*  REDIRECTS (old paths → new paths)           */}
                       {/* ============================================ */}
@@ -423,7 +429,7 @@ const App = () => {
                       <Route path="/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
                       <Route path="/study/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
                       <Route path="/home" element={<Navigate to="/" replace />} />
-                      
+
                       {/* ============================================ */}
                       {/*  CATCH-ALL                                   */}
                       {/* ============================================ */}

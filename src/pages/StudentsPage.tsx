@@ -5,6 +5,8 @@
 // - Headless invite dialog (works with shadcn inputs/buttons)
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+const navigate = useNavigate();
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,24 +41,24 @@ type Student = {
    Mock Data (replace with API later)
 ===================================================================== */
 const MOCK: Student[] = [
-  { id: "1",  name: "Aarav Sharma",  email: "aarav@example.com", className: "Class 10", status: "Active" },
-  { id: "2",  name: "Diya Verma",    email: "diya@example.com",  className: "Class 9",  status: "Invited" },
-  { id: "3",  name: "Kabir Singh",   email: "kabir@example.com", className: "Class 10", status: "Active" },
-  { id: "4",  name: "Ira Kapoor",    email: "ira@example.com",   className: "Class 8",  status: "Suspended" },
-  { id: "5",  name: "Mihir Sethi",   email: "mihir@example.com", className: "Class 9",  status: "Active" },
-  { id: "6",  name: "Neha Rao",      email: "neha@example.com",  className: "Class 10", status: "Invited" },
-  { id: "7",  name: "Riya Mehta",    email: "riya@example.com",  className: "Class 8",  status: "Active" },
-  { id: "8",  name: "Vihaan Iyer",   email: "vihaan@example.com",className: "Class 10", status: "Active" },
-  { id: "9",  name: "Sara Khan",     email: "sara@example.com",  className: "Class 9",  status: "Suspended" },
-  { id: "10", name: "Arjun Patel",   email: "arjun@example.com", className: "Class 8",  status: "Active" },
+  { id: "1", name: "Aarav Sharma", email: "aarav@example.com", className: "Class 10", status: "Active" },
+  { id: "2", name: "Diya Verma", email: "diya@example.com", className: "Class 9", status: "Invited" },
+  { id: "3", name: "Kabir Singh", email: "kabir@example.com", className: "Class 10", status: "Active" },
+  { id: "4", name: "Ira Kapoor", email: "ira@example.com", className: "Class 8", status: "Suspended" },
+  { id: "5", name: "Mihir Sethi", email: "mihir@example.com", className: "Class 9", status: "Active" },
+  { id: "6", name: "Neha Rao", email: "neha@example.com", className: "Class 10", status: "Invited" },
+  { id: "7", name: "Riya Mehta", email: "riya@example.com", className: "Class 8", status: "Active" },
+  { id: "8", name: "Vihaan Iyer", email: "vihaan@example.com", className: "Class 10", status: "Active" },
+  { id: "9", name: "Sara Khan", email: "sara@example.com", className: "Class 9", status: "Suspended" },
+  { id: "10", name: "Arjun Patel", email: "arjun@example.com", className: "Class 8", status: "Active" },
 ];
 
 /* =====================================================================
    Helpers (Cluely-blue theme)
 ===================================================================== */
 const STATUS_STYLES: Record<Status, string> = {
-  Active:    "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
-  Invited:   "bg-sky-100  text-sky-700  dark:bg-sky-900/30  dark:text-sky-200",
+  Active: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200",
+  Invited: "bg-sky-100  text-sky-700  dark:bg-sky-900/30  dark:text-sky-200",
   Suspended: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-200",
 };
 
@@ -298,11 +300,7 @@ export default function StudentsPage() {
                       </td>
                       <td className="py-3 pr-2">
                         <div className="flex justify-end gap-2 opacity-80 transition-opacity group-hover:opacity-100">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-blue-200 text-blue-700 hover:bg-blue-50"
-                          >
+                          <Button onClick={() => navigate(`/dashboard/students/${s.id}`)}>
                             View
                           </Button>
                           <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -457,7 +455,7 @@ function InviteDialog({ onSubmit }: { onSubmit: (e: React.FormEvent<HTMLFormElem
                   <div className="relative">
                     <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input name="email" type="email" placeholder="student@mail.com" className="pl-9" />
-                </div>
+                  </div>
                 </div>
 
                 <div className="grid gap-1.5">
