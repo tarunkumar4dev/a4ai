@@ -55,6 +55,7 @@ export default function SignupPage() {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
   const [logoFailed, setLogoFailed] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   // Phone OTP states
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -70,6 +71,19 @@ export default function SignupPage() {
   const [formValues, setFormValues] = useState({
     name: "", email: "", password: "", confirmPassword: "", acceptTerms: false, phone: "",
   });
+
+  // Check if Mobile Device
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isSmallScreen = window.innerWidth < 768;
+      setIsMobileDevice(mobileUA || isSmallScreen);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // If already logged in with role, redirect
   useEffect(() => {
@@ -171,8 +185,6 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       localStorage.setItem("a4ai_pending_role", selectedRole);
-
-      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       
       const redirectTarget = isMobileDevice
         ? "io.supabase.a4ai://login-callback"
@@ -206,11 +218,14 @@ export default function SignupPage() {
   // ---------- Submit (Email or Phone OTP) ----------
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRole) { setIsExpanded(true); return; }
+    if (!selectedRole) { 
+      setIsExpanded(true); 
+      return; 
+    }
 
+    const currentRole = selectedRole;
     setIsLoading(true);
     try {
-      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       const redirectTarget = isMobileDevice
         ? "io.supabase.a4ai://login-callback"
         : `${window.location.origin}/auth/callback`;
@@ -230,7 +245,7 @@ export default function SignupPage() {
           email: formValues.email.trim(),
           password: formValues.password,
           options: {
-            data: { full_name: formValues.name, role: selectedRole },
+            data: { full_name: formValues.name, role: currentRole },
             emailRedirectTo: redirectTarget,
           },
         });
@@ -257,11 +272,11 @@ export default function SignupPage() {
 
         if (data.user) {
           await supabase.auth.updateUser({
-            data: { role: selectedRole },
+            data: { role: currentRole },
           });
         }
 
-        redirectAfterLogin(selectedRole);
+        redirectAfterLogin(currentRole);
       }
     } catch (error: unknown) {
       const err = error as Error;
@@ -288,7 +303,7 @@ export default function SignupPage() {
   return (
     <div className={`min-h-screen w-full flex flex-col items-center justify-center p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
       
-      {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
+      {/* DETACHED FLOATING TOP BAR */}
       <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
         <nav 
           className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-colors duration-500 ${
@@ -413,21 +428,23 @@ export default function SignupPage() {
               {signupMethod === "phone" ? "Use Email Instead" : "Use Mobile Number Instead"}
             </Button>
 
-            {/* Google Signup */}
-            <Button
-              variant="outline"
-              onClick={handleGoogleSignup}
-              disabled={isLoading}
-              className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"}`}
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-              </svg>
-              Sign up with Google
-            </Button>
+            {/* Google Signup — HIDDEN ON MOBILE */}
+            {!isMobileDevice && (
+              <Button
+                variant="outline"
+                onClick={handleGoogleSignup}
+                disabled={isLoading}
+                className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"}`}
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                </svg>
+                Sign up with Google
+              </Button>
+            )}
 
             {/* Form */}
             <form onSubmit={onSubmit} className="space-y-3">
@@ -540,7 +557,7 @@ export default function SignupPage() {
                   <div className="flex items-center gap-2 px-2 py-2">
                     <Checkbox id="acceptTerms" name="acceptTerms" checked={formValues.acceptTerms} onCheckedChange={(c) => setFormValues((s) => ({ ...s, acceptTerms: Boolean(c) }))} />
                     <label htmlFor="acceptTerms" className={`text-[11px] font-medium leading-tight ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                      I agree to the <Link to="/terms" className="font-bold underline">Terms</Link> & <Link to="/privacy" className="font-bold underline">Privacy</Link>
+                      I agree to the <Link to="/terms" className="font-bold underline">Terms</Link> &amp; <Link to="/privacy" className="font-bold underline">Privacy</Link>
                     </label>
                   </div>
                 </div>
@@ -599,7 +616,6 @@ function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: nu
       </g>
     );
   };
-  //
 
   return (
     <svg ref={ref} viewBox="0 0 460 330" className="w-full h-full drop-shadow-2xl select-none">

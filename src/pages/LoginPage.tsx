@@ -45,7 +45,7 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
+  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("phone");
   const [formValues, setFormValues] = useState({ email: "", password: "", phone: "" });
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpSent, setOtpSent] = useState(false);
@@ -63,7 +63,7 @@ export default function LoginPage() {
       
       setIsMobileDevice(mobile);
       if (mobile) {
-        setLoginMethod("phone"); // Force phone auth on mobile
+        setLoginMethod("phone");
       }
     };
 
@@ -162,7 +162,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      if (loginMethod === "email" && !isMobileDevice) {
+      if (loginMethod === "email") {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: formValues.email.trim(),
           password: formValues.password,
@@ -189,7 +189,7 @@ export default function LoginPage() {
   return (
     <div className={`min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
       
-      {/* DETACHED FLOATING TOP BAR — TRANSPARENT BACKGROUND */}
+      {/* DETACHED FLOATING TOP BAR */}
       <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
         <nav 
           className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-colors duration-500 ${
@@ -257,30 +257,28 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-5">
-            {/* Toggle email / phone — ONLY SHOWN ON DESKTOP */}
-            {!isMobileDevice && (
-              <Button
-                type="button"
-                onClick={() => setLoginMethod(loginMethod === "email" ? "phone" : "email")}
-                className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
-                  isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
-                }`}
-              >
-                {loginMethod === "email" ? (
-                  <>
-                    <Phone className="w-4 h-4" />
-                    Use Mobile Number Instead
-                  </>
-                ) : (
-                  <>
-                    <Mail className="w-4 h-4" />
-                    Use Email Instead
-                  </>
-                )}
-              </Button>
-            )}
+            {/* Toggle email / phone */}
+            <Button
+              type="button"
+              onClick={() => setLoginMethod(loginMethod === "email" ? "phone" : "email")}
+              className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
+                isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
+              }`}
+            >
+              {loginMethod === "email" ? (
+                <>
+                  <Phone className="w-4 h-4" />
+                  Use Mobile Number Instead
+                </>
+              ) : (
+                <>
+                  <Mail className="w-4 h-4" />
+                  Use Email Instead
+                </>
+              )}
+            </Button>
 
-            {/* Google Login — ONLY SHOWN ON DESKTOP */}
+            {/* Google Login — HIDDEN ON MOBILE */}
             {!isMobileDevice && (
               <Button
                 variant="outline"
@@ -302,8 +300,8 @@ export default function LoginPage() {
 
             {/* FORM AREA */}
             <form onSubmit={onSubmit} className="space-y-4">
-              {loginMethod === "email" && !isMobileDevice ? (
-                /* ── Desktop Email Form ── */
+              {loginMethod === "email" ? (
+                /* ── Email Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
@@ -320,7 +318,7 @@ export default function LoginPage() {
                   </div>
                 </div>
               ) : (
-                /* ── Native Mobile App-Like Phone OTP Form ── */
+                /* ── Phone OTP Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Phone Number</Label>
@@ -358,7 +356,7 @@ export default function LoginPage() {
                             maxLength={1}
                             value={digit}
                             onChange={(e) => handleOtpChange(e.target.value, idx)}
-                            className={`w-11 h-13 text-center text-xl font-black rounded-2xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/60 border-white/60 focus:bg-white shadow-sm"}`}
+                            className={`w-11 h-12 text-center text-xl font-black rounded-2xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/60 border-white/60 focus:bg-white shadow-sm"}`}
                           />
                         ))}
                       </div>
@@ -374,7 +372,7 @@ export default function LoginPage() {
                     Remember me
                   </label>
                 </div>
-                {loginMethod === "email" && !isMobileDevice && (
+                {loginMethod === "email" && (
                   <Link to="/forgot" className={`text-xs font-bold hover:underline ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
                     Forgot Password?
                   </Link>
@@ -391,9 +389,8 @@ export default function LoginPage() {
                 {isLoading ? "Verifying..." : "Sign In"}
               </Button>
 
-              {/* RESTORED SIGN UP LINK */}
               <p className={`text-center text-sm font-medium transition-colors pt-2 ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <Link to="/signup" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>
                   Sign up
                 </Link>
@@ -402,7 +399,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Right side illustration (Desktop/Tablet standard view) */}
+        {/* Right side illustration */}
         <div className={`hidden lg:flex items-center justify-center p-10 h-[600px] rounded-[3.5rem] relative overflow-hidden transition-all duration-500 ${isDarkMode ? "bg-slate-800/40" : "bg-white/40 shadow-inner"}`}>
           <RubberHoseShapes pointer={pointer} isDarkMode={isDarkMode} />
         </div>
@@ -413,7 +410,6 @@ export default function LoginPage() {
 
 // ---- RubberHoseShapes Component ----
 
-//
 interface EyeItemProps {
   x: number;
   y: number;
@@ -446,7 +442,7 @@ function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: nu
       </g>
     );
   };
-
+//just a comment
   return (
     <svg ref={ref} viewBox="0 0 460 330" className="w-full h-full drop-shadow-2xl select-none">
       <ellipse cx="230" cy="305" rx="170" ry="10" fill={isDarkMode ? "#1e293b" : "#cbd5e1"} opacity="0.6" />
@@ -459,3 +455,4 @@ function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: nu
     </svg>
   );
 }
+
