@@ -334,6 +334,11 @@ export default function InstituteDashboardPage() {
   const [showAddSection, setShowAddSection] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [assignBatch, setAssignBatch] = useState<{ id: string; name: string } | null>(null);
+  const [assignTeacherBatches, setAssignTeacherBatches] = useState<{ teacherId: string; teacherName: string } | null>(null);
+  const [teacherBatchMap, setTeacherBatchMap] = useState<Record<string, string[]>>({});
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceDateFilter, setAttendanceDateFilter] = useState(new Date().toISOString().slice(0,10));
   const [assignHodDept, setAssignHodDept] = useState<Department | null>(null);
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
 
@@ -391,6 +396,13 @@ export default function InstituteDashboardPage() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // ── Auto-fetch attendance when tab switches ──
+  useEffect(() => {
+    if (activeTab === "attendance" && institute) {
+      fetchAttendance(attendanceDateFilter);
+    }
+  }, [activeTab, institute]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -439,6 +451,18 @@ export default function InstituteDashboardPage() {
       if (d.data) setStudents(d.data.map((s: any) => ({ ...s, batch_name: s.batches?.name || "Unassigned" })));
       if (e.data) setDepartments(e.data as Department[]);
       if (f.data) setSections(f.data as Section[]);
+
+      // Fetch teacher-batch assignments
+      const { data: tbData } = await supabase
+        .from("teacher_batches")
+        .select("teacher_id, batch_id")
+        .eq("institute_id", id);
+      const tbMap: Record<string, string[]> = {};
+      tbData?.forEach((tb: any) => {
+        if (!tbMap[tb.teacher_id]) tbMap[tb.teacher_id] = [];
+        tbMap[tb.teacher_id].push(tb.batch_id);
+      });
+      setTeacherBatchMap(tbMap);
     } catch (err) {
       console.error("Data load error:", err);
       toast.error("Couldn't load your institute data");
@@ -559,6 +583,109 @@ export default function InstituteDashboardPage() {
     if (error) return toast.error(error.message);
     toast.success("Department updated");
     fetchData();
+  };
+
+  const assignBatchToTeacher = async (teacherUserId: string, batchId: string) => {
+    if (!institute) return;
+    const { error } = await supabase.from("teacher_batches").insert({
+      teacher_id: teacherUserId,
+      batch_id: batchId,
+      institute_id: institute.id,
+    });
+    if (error && error.code !== "23505") return toast.error(error.message);
+    toast.success("Batch assigned!");
+    fetchData();
+  };
+
+  const removeBatchFromTeacher = async (teacherUserId: string, batchId: string) => {
+    if (!institute) return;
+    const { error } = await supabase.from("teacher_batches")
+      .delete()
+      .eq("teacher_id", teacherUserId)
+      .eq("batch_id", batchId);
+    if (error) return toast.error(error.message);
+    toast.success("Batch removed");
+    fetchData();
+  };
+
+  const fetchAttendance = async (dateStr: string) => {
+    if (!institute) return;
+    setAttendanceLoading(true);
+    try {
+      const { data } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("institute_id", institute.id)
+        .eq("date", dateStr);
+
+      if (data) {
+        // Enrich with batch names and teacher names
+        const enriched = data.map((a: any) => {
+          const batch = batches.find(b => b.id === a.batch_id);
+          const teacher = teachers.find(t => t.user_id === a.marked_by);
+          const records: Record<string, string> = a.records || {};
+          const total = Object.keys(records).length;
+          const present = Object.values(records).filter(v => v === "present").length;
+          return {
+            ...a,
+            batch_name: batch?.name || "Unknown",
+            teacher_name: teacher?.user_name || teacher?.user_email || "—",
+            total,
+            present,
+            absent: total - present,
+            pct: total > 0 ? Math.round((present / total) * 100) : 0,
+          };
+        });
+        setAttendanceRecords(enriched);
+      }
+    } catch (e) { console.error(e); }
+    setAttendanceLoading(false);
+  };
+
+  // 5. CSV download for access codes
+  const downloadAccessCodesCSV = async () => {
+    if (!institute) return;
+    try {
+      const { data } = await supabase
+        .from("student_access_codes")
+        .select("access_code, students(name, roll_no, phone, parent_phone, email), batches(name)")
+        .eq("institute_id", institute.id)
+        .eq("is_active", true);
+
+      if (!data || data.length === 0) {
+        toast.error("No access codes found. Generate them first.");
+        return;
+      }
+
+      const rows = data.map((d: any) => ({
+        name: d.students?.name || "",
+        roll_no: d.students?.roll_no || "",
+        phone: d.students?.phone || "",
+        parent_phone: d.students?.parent_phone || "",
+        email: d.students?.email || "",
+        batch: (d.batches as any)?.name || "",
+        access_code: d.access_code,
+        portal_link: window.location.origin + "/student",
+      }));
+
+      const headers = "Name,Roll No,Phone,Parent Phone,Email,Batch,Access Code,Portal Link";
+      const csv = headers + "\n" + rows.map((r: any) =>
+        [r.name, r.roll_no, r.phone, r.parent_phone, r.email, r.batch, r.access_code, r.portal_link]
+          .map(v => `"${(v || "").replace(/"/g, '""')}"`)
+          .join(",")
+      ).join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `student_access_codes_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("CSV downloaded!");
+    } catch (e: any) {
+      toast.error(e.message || "Download failed");
+    }
   };
 
   const handleAddDept = async () => {
@@ -993,7 +1120,6 @@ export default function InstituteDashboardPage() {
           {/* ── OVERVIEW TAB ── */}
           {activeTab === "overview" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
-
               {/* ═══ INSTITUTE PROFILE CARD ─── */}
               <div className="bg-white rounded-3xl card-shadow border border-slate-50 overflow-hidden mb-6">
                 <div
@@ -1338,7 +1464,8 @@ export default function InstituteDashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {filteredTeachers.map(t => (
-                    <div key={t.id} className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row">
+                    <React.Fragment key={t.id}>
+                    <div className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row" onClick={() => navigate(`/institute/students/${t.user_id}`)} style={{cursor:"pointer"}} onMouseEnter={e=>(e.currentTarget.style.boxShadow="0 2px 8px rgba(59,130,246,0.15)")} onMouseLeave={e=>(e.currentTarget.style.boxShadow="")}>
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.role === "hod" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-500"}`}>
                         {t.role === "hod" ? <Icons.Crown /> : <Icons.User />}
                       </div>
@@ -1353,20 +1480,103 @@ export default function InstituteDashboardPage() {
                       {departments.length > 0 && (
                         <select
                           value={t.department_id || ""}
-                          onChange={e => setTeacherDept(t.id, e.target.value || null)}
+                          onChange={e => { e.stopPropagation(); setTeacherDept(t.id, e.target.value || null); }}
                           className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:border-[#FF7043]"
                           title="Change department"
+                          onClick={e => e.stopPropagation()}
                         >
                           <option value="">No dept</option>
                           {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                         </select>
                       )}
+                      <button
+                        onClick={e => { e.stopPropagation(); setAssignTeacherBatches({ teacherId: t.user_id, teacherName: t.user_name || t.user_email || "Teacher" }); }}
+                        className="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                        title="Assign batches to this teacher"
+                      >
+                        📚 Batches ({(teacherBatchMap[t.user_id] || []).length})
+                      </button>
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${t.status === "active" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>{t.status}</span>
-                      <button onClick={() => removeTeacher(t.id)} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
+                      <button onClick={e => { e.stopPropagation(); removeTeacher(t.id); }} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                     </div>
+                    {(teacherBatchMap[t.user_id] || []).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 px-4 pb-2 -mt-2">
+                        {(teacherBatchMap[t.user_id] || []).map(bid => {
+                          const b = batches.find(x => x.id === bid);
+                          return b ? (
+                            <span key={bid} className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              📚 {b.name}
+                              <button onClick={() => removeBatchFromTeacher(t.user_id, bid)} className="text-indigo-400 hover:text-red-500 ml-0.5">×</button>
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                    </React.Fragment>
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── ATTENDANCE MONITORING TAB ── */}
+          {activeTab === "attendance" && (
+            <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">Attendance Monitor</h2>
+                  <p className="text-xs text-slate-400">View attendance marked by teachers across all batches</p>
+                </div>
+                <input
+                  type="date"
+                  value={attendanceDateFilter}
+                  onChange={e => { setAttendanceDateFilter(e.target.value); fetchAttendance(e.target.value); }}
+                  className="text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none"
+                />
+              </div>
+
+              {attendanceRecords.length === 0 && !attendanceLoading && (
+                <div className="bg-white rounded-2xl p-8 text-center card-shadow border border-slate-50">
+                  <p className="text-4xl mb-3">📊</p>
+                  <p className="font-bold text-slate-700">No attendance records for this date</p>
+                  <p className="text-sm text-slate-400 mt-1">Teachers will mark attendance from their dashboard</p>
+                  <button onClick={() => fetchAttendance(attendanceDateFilter)} className="btn-ghost mt-4 px-4 py-2 rounded-xl text-sm">🔄 Refresh</button>
+                </div>
+              )}
+
+              {attendanceLoading && <p className="text-center py-8 text-slate-400">Loading attendance data...</p>}
+
+              <div className="space-y-3">
+                {attendanceRecords.map((rec: any) => (
+                  <div key={rec.id} className="bg-white rounded-2xl p-4 card-shadow border border-slate-50">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center font-bold text-sm">
+                          {rec.pct}%
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{rec.batch_name}</p>
+                          <p className="text-xs text-slate-400">Marked by: {rec.teacher_name} · {rec.updated_at ? new Date(rec.updated_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : ""}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 text-center">
+                        <div>
+                          <p className="text-lg font-black text-green-600">{rec.present}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Present</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-black text-red-500">{rec.absent}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Absent</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-black text-slate-600">{rec.total}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Total</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1376,6 +1586,7 @@ export default function InstituteDashboardPage() {
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <p className="text-[13px] text-slate-500 font-bold">{search || deptFilter || sectionFilter ? `${filteredStudents.length} match${filteredStudents.length !== 1 ? "es" : ""}` : `${totalStudents} total`}</p>
                 <div className="flex gap-2">
+                  <button onClick={downloadAccessCodesCSV} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]" title="Download access codes CSV for parents">📥 Access Codes CSV</button>
                   <button onClick={() => setShowBulkUpload(true)} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]"><Icons.Upload /> Bulk Upload</button>
                   <button onClick={() => setShowAddStudent(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px]"><Icons.Plus /> Add Student</button>
                 </div>
@@ -1730,6 +1941,41 @@ export default function InstituteDashboardPage() {
           onClose={() => setAssignBatch(null)}
           onAssigned={fetchData}
         />
+      )}
+
+      {/* Assign Batches to Teacher Modal */}
+      {assignTeacherBatches && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAssignTeacherBatches(null)}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Assign Batches</h3>
+              <button onClick={() => setAssignTeacherBatches(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
+            </div>
+            <p className="text-sm text-slate-500 mb-4">Teacher: <strong>{assignTeacherBatches.teacherName}</strong></p>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {batches.map(b => {
+                const isAssigned = (teacherBatchMap[assignTeacherBatches.teacherId] || []).includes(b.id);
+                return (
+                  <div key={b.id}
+                    className={"flex items-center justify-between p-3 rounded-xl border transition-colors " + (isAssigned ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-100 hover:border-slate-200")}
+                  >
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{b.name}</p>
+                      <p className="text-xs text-slate-400">{b.class_level ? "Class " + b.class_level : ""} {b.department_id ? "· " + deptName(b.department_id) : ""}</p>
+                    </div>
+                    <button
+                      onClick={() => isAssigned ? removeBatchFromTeacher(assignTeacherBatches.teacherId, b.id) : assignBatchToTeacher(assignTeacherBatches.teacherId, b.id)}
+                      className={"px-4 py-1.5 rounded-lg text-xs font-bold transition-colors " + (isAssigned ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-indigo-500 text-white hover:bg-indigo-600")}
+                    >
+                      {isAssigned ? "Remove" : "Assign"}
+                    </button>
+                  </div>
+                );
+              })}
+              {batches.length === 0 && <p className="text-center text-slate-400 py-4">No batches created yet</p>}
+            </div>
+          </div>
+        </div>
       )}
 
       {showBulkUpload && (

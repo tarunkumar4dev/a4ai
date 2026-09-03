@@ -1,6 +1,6 @@
 // src/components/teacher/TeacherCalendarTab.tsx
 // Microsoft Outlook-style calendar for teachers
-// Fully responsive — no overflow, proper date boxes
+// FULLY RESPONSIVE — mobile first
 
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -36,7 +36,9 @@ const EVENT_TYPES = [
 ];
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 /* ─── Helpers ───────────────────────────── */
 function sameDay(a: Date, b: Date) { 
@@ -51,6 +53,20 @@ function fmtDate(d: Date) {
 function isToday(d: Date) {
   const t = new Date();
   return sameDay(d, t);
+}
+
+function eventInHourSlot(event: CalendarEvent, date: Date, hour: number): boolean {
+  const eventDate = new Date(event.start_time);
+  if (!sameDay(eventDate, date)) return false;
+  const eventHour = eventDate.getHours();
+  return eventHour === hour;
+}
+
+function getEventsForDay(events: CalendarEvent[], date: Date) {
+  return events.filter(e => {
+    const eventDate = new Date(e.start_time);
+    return sameDay(eventDate, date);
+  });
 }
 
 /* ═══════════════════════════════════════════
@@ -221,35 +237,53 @@ export default function TeacherCalendarTab() {
 
   const hours = Array.from({ length: 14 }, (_, i) => i + 7);
 
-  function getEventsForDay(date: Date) {
-    return events.filter(e => sameDay(new Date(e.start_time), date));
+  function getEventsForDayFn(date: Date) {
+    return getEventsForDay(events, date);
+  }
+
+  function getEventsForHourSlot(date: Date, hour: number) {
+    return events.filter(e => eventInHourSlot(e, date, hour));
   }
 
   const upcoming = events
     .filter(e => new Date(e.start_time) >= new Date(today.getFullYear(), today.getMonth(), today.getDate()))
     .slice(0, 8);
 
+  // ── Mobile state ──
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   /* ═══════════════════════════════════════
      RENDER
   ═══════════════════════════════════════ */
   return (
-    <div style={{ fontFamily: "'Segoe UI', 'Plus Jakarta Sans', system-ui, sans-serif", maxWidth: "100%", overflow: "hidden" }}>
+    <div style={{ 
+      fontFamily: "'Segoe UI', 'Plus Jakarta Sans', system-ui, sans-serif", 
+      maxWidth: "100%", 
+      overflow: "hidden",
+      padding: isMobile ? "8px" : "0"
+    }}>
       {/* ── Create Modal ── */}
       {showCreate && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
           onClick={() => setShowCreate(false)}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, padding: 28, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", animation: "slideIn 0.2s ease-out" }}
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, padding: isMobile ? 16 : 28, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", animation: "slideIn 0.2s ease-out" }}
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 700, color: "#1E293B" }}>📅 New Event</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 20, fontWeight: 700, color: "#1E293B" }}>📅 New Event</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <input style={{ width: "100%", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} placeholder="Event title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} autoFocus />
               
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                 {EVENT_TYPES.map(t => (
                   <button key={t.id}
                     onClick={() => setForm({ ...form, event_type: t.id, color: t.color })}
-                    style={{ border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.15s", background: form.event_type === t.id ? t.color : "#F1F5F9", color: form.event_type === t.id ? "#fff" : "#64748B" }}>
-                    {t.icon} {t.label}
+                    style={{ border: "none", borderRadius: 8, padding: "4px 10px", fontSize: isMobile ? 10 : 12, fontWeight: 700, cursor: "pointer", transition: "all 0.15s", background: form.event_type === t.id ? t.color : "#F1F5F9", color: form.event_type === t.id ? "#fff" : "#64748B" }}>
+                    {t.icon} {isMobile ? "" : t.label}
                   </button>
                 ))}
               </div>
@@ -259,7 +293,7 @@ export default function TeacherCalendarTab() {
                 {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 4 }}>START</label>
                   <input style={{ width: "100%", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} type="datetime-local" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} />
@@ -296,11 +330,11 @@ export default function TeacherCalendarTab() {
       {selectedEvent && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
           onClick={() => setSelectedEvent(null)}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 420, padding: 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", animation: "slideIn 0.2s ease-out" }}
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 420, padding: isMobile ? 20 : 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", animation: "slideIn 0.2s ease-out" }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <div style={{ width: 12, height: 12, borderRadius: 3, background: selectedEvent.color }} />
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1E293B", flex: 1 }}>{selectedEvent.title}</h3>
+              <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 700, color: "#1E293B", flex: 1 }}>{selectedEvent.title}</h3>
               <button style={{ border: "none", background: "#F1F5F9", borderRadius: 8, padding: "4px 8px", cursor: "pointer", fontSize: 14 }} onClick={() => setSelectedEvent(null)}>✕</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 14, color: "#475569" }}>
@@ -325,52 +359,55 @@ export default function TeacherCalendarTab() {
       )}
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: "#1E293B" }}>
-            {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", marginBottom: 16, gap: isMobile ? 8 : 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", width: isMobile ? "100%" : "auto" }}>
+          <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 24, fontWeight: 700, color: "#1E293B" }}>
+            {isMobile ? MONTHS_SHORT[currentDate.getMonth()] : MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
           </h2>
-          <div style={{ display: "flex", gap: 4 }}>
-            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontWeight: 700, fontSize: 16 }} onClick={viewMode === "month" ? prevMonth : prevWeek}>‹</button>
-            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontWeight: 700, fontSize: 12 }} onClick={goToday}>Today</button>
-            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontWeight: 700, fontSize: 16 }} onClick={viewMode === "month" ? nextMonth : nextWeek}>›</button>
+          <div style={{ display: "flex", gap: 2 }}>
+            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 700, fontSize: isMobile ? 14 : 16 }} onClick={viewMode === "month" ? prevMonth : prevWeek}>‹</button>
+            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 700, fontSize: isMobile ? 10 : 12 }} onClick={goToday}>Today</button>
+            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 700, fontSize: isMobile ? 14 : 16 }} onClick={viewMode === "month" ? nextMonth : nextWeek}>›</button>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 2, background: "#F1F5F9", borderRadius: 10, padding: 2 }}>
-            <button style={{ border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: viewMode === "month" ? "#fff" : "transparent", color: viewMode === "month" ? "#1E293B" : "#94A3B8", boxShadow: viewMode === "month" ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }} onClick={() => setViewMode("month")}>Month</button>
-            <button style={{ border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: viewMode === "week" ? "#fff" : "transparent", color: viewMode === "week" ? "#1E293B" : "#94A3B8", boxShadow: viewMode === "week" ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }} onClick={() => setViewMode("week")}>Week</button>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", width: isMobile ? "100%" : "auto" }}>
+          <div style={{ display: "flex", gap: 2, background: "#F1F5F9", borderRadius: 8, padding: 2 }}>
+            <button style={{ border: "none", borderRadius: 6, padding: "4px 10px", fontSize: isMobile ? 10 : 12, fontWeight: 700, cursor: "pointer", background: viewMode === "month" ? "#fff" : "transparent", color: viewMode === "month" ? "#1E293B" : "#94A3B8", boxShadow: viewMode === "month" ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }} onClick={() => setViewMode("month")}>Month</button>
+            <button style={{ border: "none", borderRadius: 6, padding: "4px 10px", fontSize: isMobile ? 10 : 12, fontWeight: 700, cursor: "pointer", background: viewMode === "week" ? "#fff" : "transparent", color: viewMode === "week" ? "#1E293B" : "#94A3B8", boxShadow: viewMode === "week" ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }} onClick={() => setViewMode("week")}>Week</button>
           </div>
-          <button style={{ border: "none", borderRadius: 10, padding: "8px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer", background: "linear-gradient(135deg, #6366F1, #4F46E5)", color: "#fff" }} onClick={() => openCreate()}>+ Add Event</button>
+          <button style={{ border: "none", borderRadius: 8, padding: isMobile ? "6px 14px" : "8px 20px", fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", background: "linear-gradient(135deg, #6366F1, #4F46E5)", color: "#fff", width: isMobile ? "100%" : "auto" }} onClick={() => openCreate()}>+ Add Event</button>
         </div>
       </div>
 
       {/* ── Main Grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 20, maxWidth: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 280px", gap: isMobile ? 12 : 20, maxWidth: "100%" }}>
         {/* ── Calendar Grid ── */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden", maxWidth: "100%" }}>
+        <div style={{ background: "#fff", borderRadius: isMobile ? 12 : 16, padding: isMobile ? 8 : 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden", maxWidth: "100%" }}>
           {viewMode === "month" ? (
             <>
               {/* Day headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
-                {DAYS.map(d => (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, marginBottom: 4 }}>
+                {isMobile ? DAYS_SHORT.map(d => (
+                  <div key={d} style={{ padding: "4px 2px", textAlign: "center", fontSize: 9, fontWeight: 700, color: "#94A3B8" }}>{d}</div>
+                )) : DAYS.map(d => (
                   <div key={d} style={{ padding: "8px 4px", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#94A3B8" }}>{d}</div>
                 ))}
               </div>
               {/* Date grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
                 {monthGrid.map((cell, i) => {
-                  const dayEvents = getEventsForDay(cell.date);
+                  const dayEvents = getEventsForDayFn(cell.date);
                   const isTodayDate = isToday(cell.date);
                   const isCurrent = cell.isCurrentMonth;
+                  const dateNum = cell.date.getDate();
                   return (
                     <div key={i}
                       style={{
-                        minHeight: 90,
-                        padding: "4px 6px",
+                        minHeight: isMobile ? 44 : 90,
+                        padding: isMobile ? "2px 2px" : "4px 6px",
                         background: isTodayDate ? "#EEF2FF" : isCurrent ? "#fff" : "#F8FAFC",
-                        borderRadius: 8,
+                        borderRadius: 6,
                         border: isTodayDate ? "2px solid #6366F1" : "1px solid #F1F5F9",
                         cursor: "pointer",
                         transition: "background 0.1s",
@@ -381,22 +418,23 @@ export default function TeacherCalendarTab() {
                       onClick={() => openCreate(cell.date)}
                     >
                       <div style={{
-                        fontSize: 14,
+                        fontSize: isMobile ? 11 : 14,
                         fontWeight: isTodayDate ? 800 : 500,
                         color: isTodayDate ? "#6366F1" : isCurrent ? "#1E293B" : "#CBD5E1",
-                        width: 28,
-                        height: 28,
+                        width: isMobile ? 20 : 28,
+                        height: isMobile ? 20 : 28,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         borderRadius: "50%",
                         background: isTodayDate ? "#6366F1" : "transparent",
                         color: isTodayDate ? "#fff" : isCurrent ? "#1E293B" : "#CBD5E1",
-                        marginBottom: 4,
+                        marginBottom: isMobile ? 1 : 4,
+                        fontSize: isMobile ? 10 : 14,
                       }}>
-                        {cell.date.getDate()}
+                        {dateNum}
                       </div>
-                      {dayEvents.slice(0, 3).map(e => (
+                      {!isMobile && dayEvents.slice(0, 3).map(e => (
                         <div key={e.id}
                           style={{
                             fontSize: 11,
@@ -417,7 +455,21 @@ export default function TeacherCalendarTab() {
                           {e.title.length > 12 ? e.title.slice(0, 12) + "…" : e.title}
                         </div>
                       ))}
-                      {dayEvents.length > 3 && (
+                      {isMobile && dayEvents.length > 0 && (
+                        <div style={{ 
+                          fontSize: 8, 
+                          color: "#6366F1", 
+                          fontWeight: 700, 
+                          textAlign: "center",
+                          background: "#EEF2FF",
+                          borderRadius: 4,
+                          padding: "1px 2px",
+                          marginTop: 1
+                        }}>
+                          {dayEvents.length}
+                        </div>
+                      )}
+                      {!isMobile && dayEvents.length > 3 && (
                         <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 700, padding: "0 4px" }}>+{dayEvents.length - 3} more</div>
                       )}
                     </div>
@@ -427,28 +479,25 @@ export default function TeacherCalendarTab() {
             </>
           ) : (
             /* ── Week View ── */
-            <div style={{ overflow: "auto", maxWidth: "100%" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", gap: 0, minWidth: 600 }}>
+            <div style={{ overflow: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "30px repeat(7, 1fr)" : "60px repeat(7, 1fr)", gap: 0, minWidth: isMobile ? 320 : 600 }}>
                 <div />
                 {weekDays.map((d, i) => (
-                  <div key={i} style={{ padding: "8px 4px", textAlign: "center", fontSize: 12, fontWeight: 700, color: isToday(d) ? "#6366F1" : "#94A3B8", borderBottom: isToday(d) ? "2px solid #6366F1" : "2px solid #F1F5F9" }}>
-                    <div style={{ fontSize: 11, textTransform: "uppercase" }}>{DAYS[d.getDay()]}</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: isToday(d) ? "#6366F1" : "#1E293B" }}>{d.getDate()}</div>
+                  <div key={i} style={{ padding: isMobile ? "4px 2px" : "8px 4px", textAlign: "center", fontSize: isMobile ? 9 : 12, fontWeight: 700, color: isToday(d) ? "#6366F1" : "#94A3B8", borderBottom: isToday(d) ? "2px solid #6366F1" : "2px solid #F1F5F9" }}>
+                    <div style={{ fontSize: isMobile ? 8 : 11, textTransform: "uppercase" }}>{isMobile ? DAYS_SHORT[d.getDay()] : DAYS[d.getDay()]}</div>
+                    <div style={{ fontSize: isMobile ? 12 : 18, fontWeight: 800, color: isToday(d) ? "#6366F1" : "#1E293B" }}>{d.getDate()}</div>
                   </div>
                 ))}
               </div>
               {hours.map(h => (
-                <div key={h} style={{ display: "grid", gridTemplateColumns: "60px repeat(7, 1fr)", gap: 0, minWidth: 600 }}>
-                  <div style={{ fontSize: 10, color: "#94A3B8", textAlign: "right", paddingRight: 8, height: 48, display: "flex", alignItems: "flex-start", paddingTop: 4 }}>
-                    {h > 12 ? h-12 : h}{h >= 12 ? "PM" : "AM"}
+                <div key={h} style={{ display: "grid", gridTemplateColumns: isMobile ? "30px repeat(7, 1fr)" : "60px repeat(7, 1fr)", gap: 0, minWidth: isMobile ? 320 : 600 }}>
+                  <div style={{ fontSize: isMobile ? 7 : 10, color: "#94A3B8", textAlign: "right", paddingRight: isMobile ? 2 : 8, height: isMobile ? 32 : 48, display: "flex", alignItems: "flex-start", paddingTop: 2 }}>
+                    {h > 12 ? h-12 : h}{h >= 12 ? "P" : "A"}
                   </div>
                   {weekDays.map((d, di) => {
-                    const dayEvts = getEventsForDay(d).filter(e => {
-                      const eHour = new Date(e.start_time).getHours();
-                      return eHour === h;
-                    });
+                    const dayEvts = getEventsForHourSlot(d, h);
                     return (
-                      <div key={di} style={{ borderLeft: "1px solid #F8FAFC", borderBottom: "1px solid #F8FAFC", minHeight: 48, padding: 2, cursor: "pointer" }}
+                      <div key={di} style={{ borderLeft: "1px solid #F8FAFC", borderBottom: "1px solid #F8FAFC", minHeight: isMobile ? 32 : 48, padding: isMobile ? 1 : 2, cursor: "pointer", background: dayEvts.length > 0 ? "#F8FAFF" : "transparent" }}
                         onClick={() => {
                           const clickDate = new Date(d);
                           clickDate.setHours(h, 0, 0, 0);
@@ -456,21 +505,21 @@ export default function TeacherCalendarTab() {
                         }}>
                         {dayEvts.map(e => (
                           <div key={e.id} style={{
-                            fontSize: 11,
+                            fontSize: isMobile ? 7 : 11,
                             fontWeight: 600,
-                            padding: "3px 6px",
-                            borderRadius: 6,
-                            marginBottom: 2,
+                            padding: isMobile ? "1px 3px" : "3px 6px",
+                            borderRadius: isMobile ? 3 : 6,
+                            marginBottom: 1,
                             background: e.color + "20",
                             color: e.color,
-                            borderLeft: `3px solid ${e.color}`,
+                            borderLeft: `2px solid ${e.color}`,
                             cursor: "pointer",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
                           }}
                             onClick={ev => { ev.stopPropagation(); setSelectedEvent(e); }}>
-                            {fmtTime(e.start_time)} {e.title.length > 14 ? e.title.slice(0, 14) + "…" : e.title}
+                            {isMobile ? "" : fmtTime(e.start_time)} {e.title.length > (isMobile ? 6 : 14) ? e.title.slice(0, isMobile ? 6 : 14) + "…" : e.title}
                           </div>
                         ))}
                       </div>
@@ -483,82 +532,119 @@ export default function TeacherCalendarTab() {
         </div>
 
         {/* ── Sidebar ── */}
-        <div style={{ maxWidth: "100%" }}>
-          {/* Mini calendar */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{MONTHS[currentDate.getMonth()].slice(0, 3)} {currentDate.getFullYear()}</span>
-              <div style={{ display: "flex", gap: 2 }}>
-                <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 12 }} onClick={prevMonth}>‹</button>
-                <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 12 }} onClick={nextMonth}>›</button>
+        {!isMobile && (
+          <div style={{ maxWidth: "100%" }}>
+            {/* Mini calendar */}
+            <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{MONTHS_SHORT[currentDate.getMonth()]} {currentDate.getFullYear()}</span>
+                <div style={{ display: "flex", gap: 2 }}>
+                  <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 12 }} onClick={prevMonth}>‹</button>
+                  <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 12 }} onClick={nextMonth}>›</button>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, textAlign: "center" }}>
+                {DAYS.map(d => <div key={d} style={{ fontSize: 9, fontWeight: 700, color: "#CBD5E1", padding: "2px 0" }}>{d[0]}</div>)}
+                {monthGrid.slice(0, 35).map((cell, i) => {
+                  const isTodayDate = isToday(cell.date);
+                  const hasEvents = getEventsForDayFn(cell.date).length > 0;
+                  return (
+                    <div key={i}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: isTodayDate ? 800 : 500,
+                        color: !cell.isCurrentMonth ? "#CBD5E1" : isTodayDate ? "#fff" : "#475569",
+                        background: isTodayDate ? "#6366F1" : "transparent",
+                        borderRadius: "50%",
+                        width: 24,
+                        height: 24,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        margin: "0 auto",
+                        cursor: "pointer",
+                        position: "relative",
+                      }}
+                      onClick={() => setCurrentDate(cell.date)}>
+                      {cell.date.getDate()}
+                      {hasEvents && !isTodayDate && <div style={{ position: "absolute", bottom: 0, width: 4, height: 4, borderRadius: "50%", background: "#6366F1" }} />}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, textAlign: "center" }}>
-              {DAYS.map(d => <div key={d} style={{ fontSize: 9, fontWeight: 700, color: "#CBD5E1", padding: "2px 0" }}>{d[0]}</div>)}
-              {monthGrid.slice(0, 35).map((cell, i) => {
-                const isTodayDate = isToday(cell.date);
-                const hasEvents = getEventsForDay(cell.date).length > 0;
-                return (
-                  <div key={i}
-                    style={{
-                      fontSize: 11,
-                      fontWeight: isTodayDate ? 800 : 500,
-                      color: !cell.isCurrentMonth ? "#CBD5E1" : isTodayDate ? "#fff" : "#475569",
-                      background: isTodayDate ? "#6366F1" : "transparent",
-                      borderRadius: "50%",
-                      width: 24,
-                      height: 24,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto",
-                      cursor: "pointer",
-                      position: "relative",
-                    }}
-                    onClick={() => setCurrentDate(cell.date)}>
-                    {cell.date.getDate()}
-                    {hasEvents && !isTodayDate && <div style={{ position: "absolute", bottom: 0, width: 4, height: 4, borderRadius: "50%", background: "#6366F1" }} />}
+
+            {/* Upcoming events */}
+            <div style={{ background: "#fff", borderRadius: 16, padding: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+              <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Upcoming Events</h4>
+              {upcoming.length === 0 ? (
+                <p style={{ fontSize: 13, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No upcoming events</p>
+              ) : (
+                upcoming.map(e => (
+                  <div key={e.id}
+                    style={{ padding: "10px 14px", borderRadius: 12, borderLeft: `4px solid ${e.color}`, marginBottom: 8, background: "#FAFAFA", cursor: "pointer", transition: "all 0.15s" }}
+                    onClick={() => setSelectedEvent(e)}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{e.title}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "#94A3B8" }}>
+                      {fmtDate(new Date(e.start_time))} {!e.all_day && `· ${fmtTime(e.start_time)}`}
+                      {e.batch_name && ` · ${e.batch_name}`}
+                    </p>
+                    {e.meeting_link && <span style={{ fontSize: 11, color: "#4F46E5", fontWeight: 700 }}>📹 Meeting</span>}
                   </div>
-                );
-              })}
+                ))
+              )}
+            </div>
+
+            {/* Legend */}
+            <div style={{ background: "#fff", borderRadius: 16, padding: 14, marginTop: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>Categories</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {EVENT_TYPES.map(t => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569" }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 3, background: t.color }} />
+                    {t.icon} {t.label}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-
-          {/* Upcoming events */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-            <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Upcoming Events</h4>
-            {upcoming.length === 0 ? (
-              <p style={{ fontSize: 13, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No upcoming events</p>
-            ) : (
-              upcoming.map(e => (
-                <div key={e.id}
-                  style={{ padding: "10px 14px", borderRadius: 12, borderLeft: `4px solid ${e.color}`, marginBottom: 8, background: "#FAFAFA", cursor: "pointer", transition: "all 0.15s" }}
-                  onClick={() => setSelectedEvent(e)}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{e.title}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#94A3B8" }}>
-                    {fmtDate(new Date(e.start_time))} {!e.all_day && `· ${fmtTime(e.start_time)}`}
-                    {e.batch_name && ` · ${e.batch_name}`}
-                  </p>
-                  {e.meeting_link && <span style={{ fontSize: 11, color: "#4F46E5", fontWeight: 700 }}>📹 Meeting</span>}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Legend */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 14, marginTop: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-            <h4 style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>Categories</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {EVENT_TYPES.map(t => (
-                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569" }}>
-                  <div style={{ width: 10, height: 10, borderRadius: 3, background: t.color }} />
-                  {t.icon} {t.label}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* ── Mobile Bottom Bar ── */}
+      {isMobile && (
+        <div style={{ 
+          display: "flex", 
+          gap: 6, 
+          marginTop: 12, 
+          paddingTop: 12, 
+          borderTop: "1px solid #F1F5F9",
+          overflowX: "auto",
+          WebkitOverflowScrolling: "touch",
+          paddingBottom: 4,
+          scrollbarWidth: "none",
+          msOverflowStyle: "none"
+        }}>
+          {EVENT_TYPES.map(t => (
+            <div key={t.id} style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 4, 
+              fontSize: 11, 
+              color: "#475569",
+              whiteSpace: "nowrap",
+              background: "#F8FAFC",
+              padding: "4px 10px",
+              borderRadius: 20,
+              border: "1px solid #F1F5F9",
+              flexShrink: 0
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: t.color }} />
+              <span>{t.icon} {t.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Keyframe animation ── */}
       <style>{`
@@ -566,10 +652,8 @@ export default function TeacherCalendarTab() {
           from { opacity: 0; transform: translateY(10px) scale(0.97); }
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
-        .tc-root * { box-sizing: border-box; }
         @media (max-width: 768px) {
-          .tc-main-grid { grid-template-columns: 1fr !important; }
-          .tc-day-cell { min-height: 60px !important; }
+          .tc-root * { box-sizing: border-box; }
         }
       `}</style>
     </div>

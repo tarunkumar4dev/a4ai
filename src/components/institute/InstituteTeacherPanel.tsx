@@ -79,20 +79,25 @@ export default function InstituteTeacherPanel({ userId }: { userId?: string }) {
         department_id: mem.department_id,
       });
 
-      // 4. Get batches assigned to this teacher
-      // Batches where teacher_id = this user (if your schema supports it)
-      // Fallback: get all batches in the institute for this department
-      let batchQuery = supabase
-        .from("batches")
-        .select("id, name, class_level")
-        .eq("institute_id", mem.institute_id)
-        .eq("is_active", true);
+      // 4. Get assigned batches from teacher_batches table
+      const { data: tb } = await supabase
+        .from("teacher_batches").select("batch_id")
+        .eq("teacher_id", userId).eq("institute_id", mem.institute_id);
 
-      if (mem.department_id) {
-        batchQuery = batchQuery.eq("department_id", mem.department_id);
+      let batchRows: any[] = [];
+      if (tb && tb.length > 0) {
+        const { data: bRows } = await supabase
+          .from("batches").select("id, name, class_level")
+          .in("id", tb.map(t => t.batch_id)).eq("is_active", true).order("name");
+        batchRows = bRows || [];
+      } else if (mem.department_id) {
+        // Fallback: department batches
+        const { data: bRows } = await supabase
+          .from("batches").select("id, name, class_level")
+          .eq("institute_id", mem.institute_id).eq("department_id", mem.department_id)
+          .eq("is_active", true).order("name");
+        batchRows = bRows || [];
       }
-
-      const { data: batchRows } = await batchQuery.order("name");
 
       if (batchRows && batchRows.length > 0) {
         // Get student counts per batch
@@ -274,4 +279,4 @@ export default function InstituteTeacherPanel({ userId }: { userId?: string }) {
       </div>
     </div>
   );
-} 
+}

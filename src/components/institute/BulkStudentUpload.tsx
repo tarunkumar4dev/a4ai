@@ -197,6 +197,10 @@ export default function BulkStudentUpload({
   };
 
   const uploadStudents = async () => {
+    if (!selectedBatch) {
+      toast.error("Please select a batch before uploading.");
+      return;
+    }
     setUploading(true);
     let successCount = 0;
     let failCount = 0;
@@ -211,6 +215,8 @@ export default function BulkStudentUpload({
           class_level: getMappedValue(row, "class_level") || null,
           parent_name: getMappedValue(row, "parent_name") || null,
           parent_phone: getMappedValue(row, "parent_phone") || null,
+          phone: getMappedValue(row, "phone") || null,
+          email: getMappedValue(row, "email") || null,
           batch_id: selectedBatch || null,
           department_id: selectedDepartment || null,
           section_id: selectedSection || null,
@@ -229,7 +235,12 @@ export default function BulkStudentUpload({
       }
 
       if (successCount > 0) {
-        toast.success(`Successfully uploaded ${successCount} students${failCount > 0 ? `, ${failCount} failed` : ""}`);
+        toast.success(`Uploaded ${successCount} students${failCount > 0 ? `, ${failCount} failed` : ""}`);
+        // Auto-generate access codes for newly uploaded students
+        try {
+          await supabase.rpc("generate_student_access_codes", { p_institute_id: instituteId });
+          toast.success("Access codes generated for all students!");
+        } catch { /* codes will be generated later */ }
       } else {
         toast.error(`Failed to upload any students.`);
       }
@@ -417,14 +428,16 @@ export default function BulkStudentUpload({
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Batch (optional)</label>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Batch <span className="text-red-500">*</span></label>
                 <select
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-[#FF7043] focus:ring-2 focus:ring-[#FF7043]/20"
                   value={selectedBatch}
                   onChange={(e) => setSelectedBatch(e.target.value)}
                 >
                   <option value="">None</option>
-                  {batches.map((b) => (
+                  {batches
+                    .filter((b: any) => !selectedDepartment || b.department_id === selectedDepartment)
+                    .map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>

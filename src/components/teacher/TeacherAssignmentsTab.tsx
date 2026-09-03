@@ -162,13 +162,25 @@ export default function TeacherAssignmentsTab() {
       const instId = member.institute_id;
       setInstituteId(instId);
 
-      const { data: batchRows } = await supabase
-        .from("batches")
-        .select("id, name, class_level")
-        .eq("institute_id", instId)
-        .eq("is_active", true)
-        .order("name");
-      if (batchRows) setBatches(batchRows);
+      // Get assigned batches (teacher_batches) or fallback to department
+      const { data: tb } = await supabase
+        .from("teacher_batches").select("batch_id")
+        .eq("teacher_id", user?.id).eq("institute_id", instId);
+
+      let batchRows: any[] = [];
+      if (tb && tb.length > 0) {
+        const { data: bRows } = await supabase
+          .from("batches").select("id, name, class_level")
+          .in("id", tb.map(t => t.batch_id)).eq("is_active", true).order("name");
+        batchRows = bRows || [];
+      } else {
+        // Fallback: all batches in institute
+        const { data: bRows } = await supabase
+          .from("batches").select("id, name, class_level")
+          .eq("institute_id", instId).eq("is_active", true).order("name");
+        batchRows = bRows || [];
+      }
+      setBatches(batchRows);
 
       const { data: asgns } = await supabase
         .from("assignments")

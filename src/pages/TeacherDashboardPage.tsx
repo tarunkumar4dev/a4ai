@@ -43,6 +43,17 @@ function useScrollReveal() {
 
 /* ------------------- STYLES ------------------- */
 const customStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+
+  .dashboard-root {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background-color: #F8F9FA;
+  }
+  .dark .dashboard-root {
+    background-color: #0A0A0A;
+  }
+
   @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -67,6 +78,20 @@ const customStyles = `
     0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
     50% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
   }
+
+  .btn-join-black {
+  background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%) !important;
+  box-shadow: inset 0px 2px 4px rgba(255,255,255,0.1), inset 0px -2px 4px rgba(0,0,0,0.6), 0px 8px 20px rgba(0,0,0,0.3) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  color: white !important;
+}
+.btn-join-black:hover {
+  filter: brightness(1.2) !important;
+  transform: translateY(-2px) !important;
+}
+.btn-join-black .text-white\/50 {
+  color: rgba(255,255,255,0.5) !important;
+}
 
   /* ── Auto-Moving Background Blobs ── */
   @keyframes blobBounce {
@@ -163,6 +188,7 @@ const customStyles = `
     color: white;
     position: relative;
     overflow: hidden;
+    font-weight: 700;
   }
   .btn-glossy-theme::before {
     content: '';
@@ -185,6 +211,7 @@ const customStyles = `
     color: white;
     position: relative;
     overflow: hidden;
+    font-weight: 700;
   }
   .btn-startups::before {
     content: '';
@@ -206,6 +233,17 @@ const customStyles = `
     30%           { transform: translateY(-3px); opacity: 1; }
   }
   .typing-dot { animation: typingDot 1s infinite; }
+
+  /* ── Stat numbers ── */
+  .stat-number {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .join-code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    letter-spacing: .2em;
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .animate-blob, .new-badge, .typing-dot { animation: none !important; }
@@ -244,7 +282,7 @@ const Icons = {
   Book: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" /></svg>,
   Microphone: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" x2="12" y1="19" y2="22" /></svg>,
   FolderOpen: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><path d="M6 11h12" /></svg>,
-    Calendar: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  Calendar: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
 };
 
 /* ------------------- ROBOT MASCOT (AI Sarthi) ------------------- */
@@ -549,7 +587,7 @@ function SearchBar({
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          className="flex-1 bg-transparent outline-none text-sm font-bold text-slate-700 dark:text-white px-2 placeholder-slate-400"
+          className="flex-1 bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-white px-2 placeholder-slate-400"
         />
         {query && (
           <button
@@ -611,7 +649,6 @@ function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
   const limit = status?.test_limit || 10;
   const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
 
-  // Device check for mobile screen / viewport
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -655,8 +692,6 @@ function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
           disabled={isMobile}
           onClick={() => {
             if (isMobile) {
-              // Mobile Purchase working commented out:
-              // navigate("/pricing");
               return;
             }
             navigate("/pricing");
@@ -687,11 +722,15 @@ function SidebarHelpWidget() {
         </svg>
       </div>
 
-      <h4 className="font-bold text-[15px] text-slate-800 dark:text-white mb-0.5 tracking-tight">Need help?</h4>
+      <h4 className="font-extrabold text-[15px] text-slate-800 dark:text-white mb-0.5 tracking-tight">Need help?</h4>
       <p className="text-[11px] text-slate-500 font-medium mb-4">Please check our docs</p>
 
-      <button className="w-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-xl py-2.5 text-[13px] font-bold mb-3 transition-colors shadow-sm">
-        Documentation
+      <button
+        onClick={() => window.open("https://www.a4ai.in/docs", "_blank")}
+        className="w-full bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-xl py-2.5 text-[13px] font-bold mb-3 transition-colors shadow-sm flex items-center justify-center gap-2"
+      >
+        📚 Documentation
+        <span className="text-[10px] text-slate-500 dark:text-slate-400">↗</span>
       </button>
     </div>
   );
@@ -725,10 +764,10 @@ function TestHistory({
       <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-10">
           <div>
-            <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">
+            <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
               Test History
             </h2>
-            <p className="text-sm text-slate-500 mt-1 font-medium">{tests.length} tests found</p>
+            <p className="text-sm text-slate-500 font-medium mt-1">{tests.length} tests found</p>
           </div>
           <GlossyButton label="Create Test" icon={Icons.Zap} small onClick={onCreateNew} isStartupsStyle />
         </div>
@@ -745,7 +784,7 @@ function TestHistory({
               <Icons.FileText />
             </div>
             <p className="text-slate-500 font-bold text-lg">No tests yet</p>
-            <p className="text-slate-400 text-sm mt-1">Generate your first test to see it here</p>
+            <p className="text-slate-400 text-sm font-medium mt-1">Generate your first test to see it here</p>
             <div className="mt-6 flex justify-center">
               <GlossyButton label="Create First Test" icon={Icons.Zap} small onClick={onCreateNew} isStartupsStyle />
             </div>
@@ -776,7 +815,7 @@ function TestHistory({
                       {t.total_questions}Q · {t.total_marks}M
                     </span>
                   )}
-                  <span className={`text-[10px] px-3 py-1.5 rounded-[16px] font-bold uppercase tracking-wider border ${statusColor(t.status)}`}>
+                  <span className={`text-[10px] px-3 py-1.5 rounded-[16px] font-extrabold uppercase tracking-wider border ${statusColor(t.status)}`}>
                     {t.status}
                   </span>
                 </div>
@@ -840,7 +879,7 @@ export default function TeacherDashboardPage() {
     {
       role: "assistant",
       content:
-        "Namaste! Main AI Sarthi hoon — aapka a4ai assistant. Test paper banana ho, pricing samajhni ho, ya koi doubt solve karna ho, main yahin hoon. Kahaan se shuru karein?",
+        "Namaste! My Name is Dablu — I'm your a4ai assistant",
       suggestions: chatOptions
     }
   ]);
@@ -858,7 +897,6 @@ export default function TeacherDashboardPage() {
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
   const [look, setLook] = useState({ x: 0, y: 0 });
 
-  // FIX: track current pos in state so drag never drifts off-screen
   const [chatPos, setChatPos] = useState<{ x: number; y: number }>(() => {
     try {
       const raw = safeStorage.get("sarthiPos");
@@ -1046,16 +1084,8 @@ export default function TeacherDashboardPage() {
       return;
     }
 
-    let apiKey = "";
-    try { apiKey = import.meta.env.VITE_GROQ_API_KEY || ""; } catch (e) { }
-    if (!apiKey) {
-      setChatMessages((prev) => [...prev, { role: "assistant", content: "⚠️ API key missing. Please add VITE_GROQ_API_KEY to your .env file.", suggestions: chatOptions }]);
-      return;
-    }
-
     setIsChatLoading(true);
 
-    // Auto-detect language from user message
     const isHindi = /[\u0900-\u097F]/.test(textToSend);
     const isHinglish = !isHindi && /\b(kya|hai|hain|ho|kar|karo|mujhe|mera|meri|aap|bhi|nahi|toh|kaise|chahiye|batao|dekho|abhi|agar|lekin|aur|se|pe|ko|ka|ki|ke|hoga|krna|bnao|samjhao)\b/i.test(textToSend);
     const langInstruction = isHindi
@@ -1064,34 +1094,35 @@ export default function TeacherDashboardPage() {
         ? "IMPORTANT: User ne Hinglish mein likha hai. Reply natural Hinglish mein do — jaise user ne likha, waise hi mix karo Hindi aur English. Force mat karo."
         : "IMPORTANT: User wrote in English. Reply in clear English only. No Hindi unless user switches.";
 
-    const systemPromptText = `You are AI Sarthi, the smart teaching assistant built into a4ai — India's fastest test generation platform for teachers. You are a knowledgeable, patient colleague. Always write "a4ai" in lowercase.
+        const systemPromptText = `You are AI Sarthi, the smart teaching assistant built into a4ai — India's fastest test generation platform for teachers. You are a knowledgeable, patient colleague. Always write "a4ai" in lowercase.
 
-${langInstruction}
+        ${langInstruction}
+        
+        Tone:
+        - Warm, direct — like a senior teacher colleague who respects time
+        - Natural sentences first, then bullets/numbered steps for clarity
+        - Short replies (3-5 lines) unless step-by-step is needed
+        - End with one genuine next step or clarifying question
+        - Never push upgrades unprompted — mention pricing only when asked
+        
+        a4ai features you can help with:
+        - Test generation: 30 seconds from NCERT content, CBSE pattern, MCQ/Short/Long/A&R/Cloze, PDF & DOCX export
+        - Attendance: Mark batch-wise daily attendance, per-student tracking
+        - Assignments: Teacher creates PDF assignments, students submit via code portal, teacher grades inline with feedback
+        - Student Portal: 6-char access code (no signup needed), students see assignments + announcements
+        - Pricing: Free (2 tests/mo), Starter ₹149/mo (10 tests + contests), Pro ₹299/mo (unlimited)
+        
+        STRICT RULES — follow always:
+        - NEVER use LaTeX, $formula$, dollar signs for math, or markdown math syntax. Write math in plain text only.
+        - NEVER use ** bold ** or markdown formatting in responses — plain text only.
+        - If asked anything NOT related to a4ai platform, redirect warmly in 1 sentence.
+        - a4ai was founded by Tarun Pathak, B.Tech ECE graduate and experienced teacher turned edtech founder.
+        - Do NOT ask "Want me to guide you through creating a test?" or "Want me to walk you through..." unless the user explicitly asks for help with test creation.
+        - Do NOT repeat the "Go to Dashboard → Create Test → Select Class/Subject → Generate" instruction in every response. Only mention it if the user specifically asks how to create a test.
+        - Keep responses concise and helpful. No unnecessary upsells or repeated instructions.
+        
+        Be genuinely helpful. Teacher should feel like they asked a colleague, not a chatbot.`;
 
-Tone:
-- Warm, direct — like a senior teacher colleague who respects time
-- Natural sentences first, then bullets/numbered steps for clarity
-- Short replies (3-5 lines) unless step-by-step is needed
-- End with one genuine next step or clarifying question
-- Never push upgrades unprompted — mention pricing only when asked
-
-a4ai features you can help with:
-- Test generation: 30 seconds from NCERT content, CBSE pattern, MCQ/Short/Long/A&R/Cloze, PDF & DOCX export
-- Attendance: Mark batch-wise daily attendance, per-student tracking
-- Assignments: Teacher creates PDF assignments, students submit via code portal, teacher grades inline with feedback
-- Student Portal: 6-char access code (no signup needed), students see assignments + announcements
-- Pricing: Free (2 tests/mo), Starter ₹149/mo (10 tests + contests), Pro ₹299/mo (unlimited)
-- Create Test: Dashboard → Create Test → Class/Subject/Board → Generate
-
-STRICT RULES — follow always:
-- NEVER use LaTeX, $formula$, dollar signs for math, or markdown math syntax. Write math in plain text only (e.g. "sin = opposite divided by hypotenuse", not "$\sin(\theta) = \frac{Opp}{Hyp}$").
-- NEVER use ** bold ** or markdown formatting in responses — plain text only.
-- If asked anything NOT related to a4ai platform (general science, math concepts, history, coding, current events, etc.), redirect warmly in 1 sentence: "Main a4ai ka assistant hoon — platform se related koi bhi sawaal puchh sakte ho!" Then offer one relevant a4ai action.
-- a4ai was founded by Tarun Pathak, B.Tech ECE graduate and experienced teacher turned edtech founder.
-
-Be genuinely helpful. Teacher should feel like they asked a colleague, not a chatbot.`;
-
-    // Backend proxy call — Groq API key stays safe on server
     const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
     const groqMessages = [
@@ -1102,6 +1133,8 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
       { role: userMsg.role, content: userMsg.content },
     ];
 
+    let backendAvailable = false;
+
     try {
       const res = await fetch(`${apiBase}/chat`, {
         method: "POST",
@@ -1110,18 +1143,58 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Backend error");
+      backendAvailable = true;
       setChatMessages((prev) => [
         ...prev,
         { role: "assistant", content: data.content, suggestions: chatOptions }
       ]);
     } catch (err: any) {
-      setChatMessages((prev) => [...prev, {
-        role: "assistant",
-        content: err.message?.includes("fetch")
-          ? "⚠️ Backend server not running. Start it with: uvicorn app.main:app --reload"
-          : `⚠️ ${err.message || "Something went wrong. Please try again."}`,
-        suggestions: chatOptions
-      }]);
+      // Fallback: use Groq API directly from frontend
+      // Fallback: OpenRouter API (stable, multiple models)
+      // Fallback: OpenRouter API
+      try {
+        const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+        if (!openRouterKey) {
+          throw new Error("OpenRouter API key not found");
+        }
+
+        const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openRouterKey}`,
+            "HTTP-Referer": window.location.origin,
+            "X-Title": "a4ai"
+          },
+          body: JSON.stringify({
+            model: "deepseek/deepseek-chat",  // ✅ YEH USE KARO
+            messages: groqMessages,
+            temperature: 0.7,
+            max_tokens: 500,
+          })
+        });
+
+        if (!openRouterRes.ok) {
+          const errData = await openRouterRes.json();
+          throw new Error(errData.error?.message || "OpenRouter API error");
+        }
+
+        const openRouterData = await openRouterRes.json();
+        const reply = openRouterData.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.";
+        setChatMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: reply, suggestions: chatOptions }
+        ]);
+      } catch (fallbackErr: any) {
+        const errorMsg = fallbackErr.message?.includes("API key")
+          ? "⚠️ OpenRouter API key missing. Please add VITE_OPENROUTER_API_KEY to your .env file."
+          : `⚠️ ${fallbackErr.message || "Something went wrong. Please try again."}`;
+        setChatMessages((prev) => [...prev, {
+          role: "assistant",
+          content: errorMsg,
+          suggestions: chatOptions
+        }]);
+      }
     }
 
     setIsChatLoading(false);
@@ -1149,7 +1222,6 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
     }
   };
 
-  // 🔑 NAV ITEMS - MODULES ADDED HERE
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid, label: "Dashboard", color: "text-blue-500" },
     { id: "calendar", Icon: Icons.Calendar, label: "Calendar", color: "text-indigo-500" },
@@ -1159,20 +1231,19 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
-    { id: "ai-tools", Icon: Icons.Brain, label: "AI Tools", color: "text-cyan-500" },
-
+    // { id: "ai-tools", Icon: Icons.Brain, label: "AI Tools", color: "text-cyan-500" },
   ];
 
   return (
     <div
-      className={isDarkMode ? "dark" : ""}
+      className={`dashboard-root ${isDarkMode ? "dark" : ""}`}
       style={{
         '--theme-start': currentThemeConfig.start,
         '--theme-end': currentThemeConfig.end,
         '--theme-shadow': currentThemeConfig.shadow,
       } as React.CSSProperties}
     >
-      <div className="flex h-[100dvh] w-full font-sans text-slate-800 dark:text-slate-100 overflow-hidden relative bg-[#F8F9FA] dark:bg-[#0A0A0A] transition-colors duration-500">
+      <div className="flex h-[100dvh] w-full text-slate-800 dark:text-slate-100 overflow-hidden relative bg-[#F8F9FA] dark:bg-[#0A0A0A] transition-colors duration-500">
         <style dangerouslySetInnerHTML={{ __html: customStyles }} />
 
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
@@ -1329,7 +1400,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                     {isNotifOpen && (
                       <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-4 sm:p-5 flex flex-col gap-2 animate-pop z-[150]">
                         <div className="flex justify-between items-center mb-3 px-2">
-                          <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white">
+                          <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">
                             Notifications
                           </h3>
                           <span className="text-[10px] font-bold btn-glossy-theme px-2.5 py-1 rounded-full">
@@ -1343,7 +1414,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                               Welcome to a4ai!
                             </p>
                             <p className="text-xs text-slate-500 font-medium mt-0.5">
-                              Start generating CBSE papers.
+                              Start generating Test papers.
                             </p>
                           </div>
                         </div>
@@ -1401,7 +1472,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                             <p className="font-extrabold text-slate-800 dark:text-white text-base truncate">
                               {displayName}
                             </p>
-                            <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                            <p className="text-xs text-slate-500 font-medium truncate">{user?.email}</p>
                           </div>
                         </div>
 
@@ -1496,7 +1567,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
               <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">
                 Welcome, {getFirstName()}
               </h1>
-              <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-1 font-medium truncate">
+              <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base font-medium mt-1 truncate">
                 Here's what's happening in your classes.
               </p>
             </div>
@@ -1504,7 +1575,6 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
             {/* ===== DASHBOARD TAB ===== */}
             {activeTab === "dashboard" && (
               <div className="space-y-6 sm:space-y-8">
-                {/* Institute panel — always at top so teacher sees their institute immediately */}
                 <div className="scroll-reveal" style={{ transitionDelay: "0ms" }}>
                   <InstituteTeacherPanel userId={user?.id} />
                 </div>
@@ -1515,12 +1585,12 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                     <div className="relative z-10 max-w-xl">
                       <div className="flex items-center gap-2 mb-4 sm:mb-6 bg-white/60 dark:bg-black/50 border border-white/40 dark:border-white/10 w-fit px-3 sm:px-5 py-1.5 sm:py-2 rounded-[20px] sm:rounded-[24px] shadow-sm">
                         <div style={{ color: "var(--theme-start)" }}><Icons.Brain /></div>
-                        <span className="text-[10px] sm:text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">
-                          NCERT Test Generator
+                        <span className="text-[10px] sm:text-[11px] font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-widest">
+                          Test Generator
                         </span>
                       </div>
                       <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-4 sm:mb-6 tracking-tight leading-[1.1]">
-                        Create CBSE papers in minutes.
+                        Create Test Papers in Minutes.
                       </h2>
                       <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base lg:text-lg mb-6 sm:mb-10 font-medium">
                         Pick chapters, set marks — get a section-wise paper with answer key, ready to print.
@@ -1539,7 +1609,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                       <div className="w-12 h-12 sm:w-14 sm:h-14 inset-pill border-none flex items-center justify-center shadow-inner rounded-[24px] sm:rounded-[28px] shrink-0" style={{ color: "var(--theme-start)" }}>
                         <Icons.Sparkles />
                       </div>
-                      <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                      <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                         What's New
                       </h3>
                     </div>
@@ -1559,13 +1629,21 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                         fullWidth
                         onClick={() => navigate("/contests")}
                       />
-                      <GlossyButton
-                        label="Join Institute"
-                        subLabel="Enter code to join"
-                        icon={Icons.Users}
-                        fullWidth
+                      <button
                         onClick={() => navigate("/join-institute")}
-                      />
+                        className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-[28px] font-bold text-white transition-all duration-300 hover:-translate-y-1 active:scale-[0.98] btn-join-black group"
+                      >
+                        <div className="flex items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md h-8 w-8 border border-white/40 shadow-inner shrink-0">
+                          <Icons.Users />
+                        </div>
+                        <div className="flex flex-col text-left min-w-0">
+                          <span className="font-bold leading-none tracking-tight truncate text-white">Join Institute</span>
+                          <span className="text-xs font-medium text-white/60 truncate">Enter code to join</span>
+                        </div>
+                        <div className="ml-auto pl-2 text-white/30 group-hover:translate-x-1 transition-transform shrink-0">
+                          <Icons.ChevronRight />
+                        </div>
+                      </button>
                       <GlossyButton
                         label="Test History"
                         subLabel="View past papers"
@@ -1596,10 +1674,10 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                         <div className="mb-3 sm:mb-5 inset-pill p-2.5 sm:p-4 rounded-[16px] sm:rounded-[24px] border-none shrink-0" style={{ color: "var(--theme-start)" }}>
                           <StatIcon />
                         </div>
-                        <h3 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-1 sm:mb-2">
+                        <h3 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white mb-1 sm:mb-2 tracking-tight stat-number">
                           {stat.v}
                         </h3>
-                        <p className="text-[9px] sm:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 sm:mb-4">
+                        <p className="text-[9px] sm:text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 sm:mb-4">
                           {stat.t}
                         </p>
                         <span className="text-[10px] sm:text-xs text-slate-800 dark:text-slate-200 font-extrabold bg-slate-200/50 dark:bg-white/10 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-[16px] sm:rounded-[20px] border border-slate-300/50 dark:border-white/10">
@@ -1615,7 +1693,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                   style={{ transitionDelay: "200ms" }}
                 >
                   <div className="flex justify-between items-center mb-5 sm:mb-8">
-                    <h3 className="font-black text-slate-900 dark:text-white text-xl sm:text-3xl">
+                    <h3 className="font-black text-slate-900 dark:text-white text-xl sm:text-3xl tracking-tight">
                       Recent Tests
                     </h3>
                     <button
@@ -1663,7 +1741,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                               </span>
                             )}
                             <span
-                              className={`text-[10px] px-3 py-1.5 rounded-[16px] font-bold uppercase border ${test.status === "saved"
+                              className={`text-[10px] px-3 py-1.5 rounded-[16px] font-extrabold uppercase border ${test.status === "saved"
                                 ? "bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-700/60 dark:text-slate-200"
                                 : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400"
                                 }`}
@@ -1687,9 +1765,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
             )}
 
             {activeTab === "calendar" && <TeacherCalendarTab />}
-            {/* ===== MODULES TAB ===== 🔑 NEW */}
             {activeTab === "modules" && <ModulesTab />}
-
             {activeTab === "assignments" && <TeacherAssignmentsTab />}
 
             {/* ===== ATTENDANCE TAB ===== */}
@@ -1715,7 +1791,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                   <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none rounded-full flex items-center justify-center mb-6 sm:mb-8" style={{ color: "var(--theme-start)" }}>
                     <Icons.Chart />
                   </div>
-                  <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3 sm:mb-4">
+                  <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3 sm:mb-4 tracking-tight">
                     Performance Trends
                   </h3>
                   <p className="text-slate-500 font-medium max-w-sm text-sm sm:text-lg">
@@ -1729,7 +1805,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
             {activeTab === "ai-tools" && (
               <div className="space-y-6 sm:space-y-8 animate-pop">
                 <div className="glass-panel rounded-[28px] sm:rounded-[40px] p-5 sm:p-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
-                  <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white">
+                  <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
                     AI Utilities
                   </h2>
                   <p className="text-sm sm:text-base text-slate-500 font-medium mt-1 sm:mt-2">
@@ -1745,7 +1821,6 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                     { Icon: Icons.Search, title: "Plagiarism Check", desc: "Scan against web and AI datasets.", isNew: false, primary: false },
                     { Icon: Icons.Grid, title: "Smart Rubrics", desc: "Generate standard-aligned rubrics.", isNew: false, primary: false },
                     { Icon: Icons.Clock, title: "Lesson Planner", desc: "Plan lessons by pacing & standard.", isNew: false, primary: false },
-                    
                   ].map((tool, i) => {
                     const ToolIcon = tool.Icon;
                     return (
@@ -1768,7 +1843,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                           <ToolIcon />
                         </div>
                         <h3
-                          className={`text-lg sm:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 ${tool.isNew ? "shimmer-text" : ""
+                          className={`text-lg sm:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 tracking-tight ${tool.isNew ? "shimmer-text" : ""
                             }`}
                         >
                           {tool.title}
@@ -1790,7 +1865,6 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                 </div>
               </div>
             )}
-
           </div>
         </main>
 
@@ -1999,7 +2073,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                   <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none rounded-[24px] sm:rounded-[36px] flex items-center justify-center mx-auto mb-5 sm:mb-8" style={{ color: "var(--theme-start)" }}>
                     <div className="scale-100 sm:scale-125"><Icons.Mail /></div>
                   </div>
-                  <h3 className="text-2xl sm:text-4xl font-black mb-3 sm:mb-4 text-slate-900 dark:text-white">
+                  <h3 className="text-2xl sm:text-4xl font-black mb-3 sm:mb-4 text-slate-900 dark:text-white tracking-tight">
                     Invite Student
                   </h3>
                   <p className="text-sm sm:text-base text-slate-500 mb-6 sm:mb-10 font-medium">
@@ -2027,7 +2101,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                   <div className="w-20 h-20 sm:w-28 sm:h-28 bg-slate-200/50 dark:bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 border border-slate-300/50 dark:border-white/10" style={{ color: "var(--theme-start)" }}>
                     <div className="scale-125 sm:scale-150"><Icons.Check /></div>
                   </div>
-                  <h4 className="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white mb-3 sm:mb-4">Sent!</h4>
+                  <h4 className="font-black text-2xl sm:text-3xl text-slate-900 dark:text-white mb-3 sm:mb-4 tracking-tight">Sent!</h4>
                   <p className="text-slate-500 font-medium text-sm sm:text-lg">
                     They'll appear once they join.
                   </p>

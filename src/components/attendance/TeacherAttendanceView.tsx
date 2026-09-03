@@ -511,7 +511,7 @@ export default function TeacherAttendanceView() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // ── Load real batches from Supabase ──
+  // ── Load assigned batches from teacher_batches table ──
   useEffect(() => {
     async function loadBatches() {
       setBatchesLoading(true);
@@ -521,10 +521,27 @@ export default function TeacherAttendanceView() {
           .eq("user_id", user?.id).eq("status", "active").limit(1).single();
         if (!mem) { setBatchesLoading(false); return; }
         setInstituteId(mem.institute_id);
-        let q = supabase.from("batches").select("id, name, class_level")
-          .eq("institute_id", mem.institute_id).eq("is_active", true).order("name");
-        if (mem.department_id) q = q.eq("department_id", mem.department_id);
-        const { data: batches } = await q;
+
+        // Get specifically assigned batches first
+        const { data: tb } = await supabase
+          .from("teacher_batches").select("batch_id")
+          .eq("teacher_id", user?.id).eq("institute_id", mem.institute_id);
+
+        let batches: any[] = [];
+        if (tb && tb.length > 0) {
+          // Teacher has specific batches assigned
+          const { data: bRows } = await supabase
+            .from("batches").select("id, name, class_level")
+            .in("id", tb.map(t => t.batch_id)).eq("is_active", true).order("name");
+          batches = bRows || [];
+        } else if (mem.department_id) {
+          // Fallback: show all batches in teacher's department
+          const { data: bRows } = await supabase
+            .from("batches").select("id, name, class_level")
+            .eq("institute_id", mem.institute_id).eq("department_id", mem.department_id)
+            .eq("is_active", true).order("name");
+          batches = bRows || [];
+        }
         if (batches && batches.length > 0) {
           const { data: stuCounts } = await supabase
             .from("students").select("batch_id").eq("institute_id", mem.institute_id)
@@ -739,17 +756,16 @@ export default function TeacherAttendanceView() {
     return (
       <>
         <ToastStack toasts={toasts} onDismiss={dismissToast} />
-        <style>
-          {`
-          @keyframes popIn { from { opacity:0; transform:scale(0.96) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
-          @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-          @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
-          @media (prefers-reduced-motion: reduce) {
-            .animate-pop, [class*="animate-"] { animation: none !important; }
-          }
-        `}
-        </style>
-
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes popIn { from { opacity:0; transform:scale(0.96) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
+            @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+            @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+            @media (prefers-reduced-motion: reduce) {
+              .animate-pop, [class*="animate-"] { animation: none !important; }
+            }
+          `
+        }} />
         <div className="space-y-5 sm:space-y-8 animate-[popIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
           {/* Teacher info + Calendar */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 lg:gap-8">
@@ -919,9 +935,9 @@ export default function TeacherAttendanceView() {
 
             <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               {batchesLoading ? (
-                <p style={{textAlign:"center",padding:32,color:"#94A3B8"}}>Loading your batches...</p>
+                <p style={{ textAlign: "center", padding: 32, color: "#94A3B8" }}>Loading your batches...</p>
               ) : fetchedBatches.length === 0 ? (
-                <p style={{textAlign:"center",padding:32,color:"#94A3B8",fontWeight:600}}>No batches assigned yet. Your admin will assign batches to your account.</p>
+                <p style={{ textAlign: "center", padding: 32, color: "#94A3B8", fontWeight: 600 }}>No batches assigned yet. Your admin will assign batches to your account.</p>
               ) : fetchedBatches.map((cls) => (
                 <button
                   key={cls.id}
@@ -975,16 +991,16 @@ export default function TeacherAttendanceView() {
         message={confirmMessage}
         type={confirmType}
       />
-      <style>
-        {`
-        @keyframes popIn { from { opacity:0; transform:scale(0.96) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-        @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
-        @media (prefers-reduced-motion: reduce) {
-          .animate-pop, [class*="animate-"] { animation: none !important; }
-        }
-      `}
-      </style>
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes popIn { from { opacity:0; transform:scale(0.96) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
+          @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+          @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+          @media (prefers-reduced-motion: reduce) {
+            .animate-pop, [class*="animate-"] { animation: none !important; }
+          }
+        `
+      }} />
 
       <div className="space-y-4 sm:space-y-6 lg:space-y-8 animate-[popIn_0.3s_cubic-bezier(0.16,1,0.3,1)]">
         {/* Sticky header on mobile */}
