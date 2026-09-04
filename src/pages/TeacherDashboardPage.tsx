@@ -80,18 +80,18 @@ const customStyles = `
   }
 
   .btn-join-black {
-  background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%) !important;
-  box-shadow: inset 0px 2px 4px rgba(255,255,255,0.1), inset 0px -2px 4px rgba(0,0,0,0.6), 0px 8px 20px rgba(0,0,0,0.3) !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
-  color: white !important;
-}
-.btn-join-black:hover {
-  filter: brightness(1.2) !important;
-  transform: translateY(-2px) !important;
-}
-.btn-join-black .text-white\/50 {
-  color: rgba(255,255,255,0.5) !important;
-}
+    background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%) !important;
+    box-shadow: inset 0px 2px 4px rgba(255,255,255,0.1), inset 0px -2px 4px rgba(0,0,0,0.6), 0px 8px 20px rgba(0,0,0,0.3) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: white !important;
+  }
+  .btn-join-black:hover {
+    filter: brightness(1.2) !important;
+    transform: translateY(-2px) !important;
+  }
+  .btn-join-black .text-white\/50 {
+    color: rgba(255,255,255,0.5) !important;
+  }
 
   /* ── Auto-Moving Background Blobs ── */
   @keyframes blobBounce {
@@ -537,7 +537,7 @@ function SearchBar({
     { type: "nav", label: "Analytics", sub: "Performance graphs", Icon: Icons.Chart, action: () => onNavChange("analytics") },
     { type: "nav", label: "AI Tools", sub: "Teaching utilities", Icon: Icons.Brain, action: () => onNavChange("ai-tools") },
     { type: "tool", label: "Community Quiz", sub: "From YouTube video", Icon: Icons.Youtube, action: () => navigate("/teacher/community-quiz/new") },
-    { type: "tool", label: "Create Test", sub: "CBSE test generator", Icon: Icons.Zap, action: () => navigate("/dashboard/test-generator") },
+    { type: "tool", label: "Create Test", sub: "Test generator", Icon: Icons.Zap, action: () => navigate("/dashboard/test-generator") },
     { type: "tool", label: "Host Contest", sub: "Live competition", Icon: Icons.Trophy, action: () => navigate("/contests") },
     { type: "tool", label: "Pricing / Plans", sub: "Buy Premium", Icon: Icons.Star, action: () => navigate("/pricing") },
   ];
@@ -879,7 +879,7 @@ export default function TeacherDashboardPage() {
     {
       role: "assistant",
       content:
-        "Namaste! My Name is Dablu — I'm your a4ai assistant",
+        "Namaste! Main AI Sarthi hoon — aapka a4ai assistant. Test paper banana ho, pricing samajhni ho, ya koi doubt solve karna ho, main yahin hoon. Kahaan se shuru karein?",
       suggestions: chatOptions
     }
   ]);
@@ -1059,10 +1059,10 @@ export default function TeacherDashboardPage() {
 
     const exactMatchResponses: Record<string, string> = {
       "Explain me a4ai":
-        "Namaste! a4ai is built for teachers like you — so the hours you'd spend setting question papers can go back into actual teaching.\n\n• Pick a class, subject, and chapters — a4ai generates a full CBSE-pattern paper straight from NCERT content in under 30 seconds.\n• Every paper comes with a ready answer key, so checking is faster too.\n• Export to PDF or Word, add your institute's logo, and share directly with your students.\n\nThink of it as an assistant that handles the paper-setting grind for you. Want me to walk you through making your first test?",
+        "Namaste! a4ai is built for teachers like you — so the hours you'd spend setting question papers can go back into actual teaching.\n\n• Pick a class, subject, and chapters — a4ai generates a full test paper from NCERT content in under 30 seconds.\n• Every paper comes with a ready answer key, so checking is faster too.\n• Export to PDF or Word, add your institute's logo, and share directly with your students.\n\nThink of it as an assistant that handles the paper-setting grind for you. Want me to walk you through making your first test?",
 
       "How to Generate Test Paper":
-        "Sure, let's make your test paper together — it takes about a minute:\n\n1. Go to your Dashboard and tap Create Test.\n2. Choose the Class, Subject, and Board.\n3. Pick the chapters you want questions from.\n4. (Optional) Upload your institute's logo.\n5. Choose a CBSE pattern or build a Custom one.\n6. Hit Generate — your paper with answer key is ready in seconds.\n\nStuck at any step? Tell me where, and I'll guide you through it.",
+        "Sure, let's make your test paper together — it takes about a minute:\n\n1. Go to your Dashboard and tap Create Test.\n2. Choose the Class, Subject, and Board.\n3. Pick the chapters you want questions from.\n4. (Optional) Upload your institute's logo.\n5. Choose a test pattern or build a Custom one.\n6. Hit Generate — your paper with answer key is ready in seconds.\n\nStuck at any step? Tell me where, and I'll guide you through it.",
       "What are the pricing":
         "Here's how a4ai's plans work — pick whichever fits your teaching load:\n\n• Free Plan — ₹0, forever. 2 tests/month, all question formats.\n• Starter Plan — ₹149/month (~₹5/day). 10 tests/month, 2 free contests, no watermark.\n• Pro Plan — ₹299/month (~₹10/day). Unlimited tests & contests, your school's logo on every paper.\n\nUPI, cards, and net banking all work, and upgrades apply instantly. Want help picking the right plan for your class size?",
       "Learn any topic":
@@ -1094,34 +1094,34 @@ export default function TeacherDashboardPage() {
         ? "IMPORTANT: User ne Hinglish mein likha hai. Reply natural Hinglish mein do — jaise user ne likha, waise hi mix karo Hindi aur English. Force mat karo."
         : "IMPORTANT: User wrote in English. Reply in clear English only. No Hindi unless user switches.";
 
-        const systemPromptText = `You are AI Sarthi, the smart teaching assistant built into a4ai — India's fastest test generation platform for teachers. You are a knowledgeable, patient colleague. Always write "a4ai" in lowercase.
+    const systemPromptText = `You are AI Sarthi, the smart teaching assistant built into a4ai — India's fastest test generation platform for teachers. You are a knowledgeable, patient colleague. Always write "a4ai" in lowercase.
 
-        ${langInstruction}
-        
-        Tone:
-        - Warm, direct — like a senior teacher colleague who respects time
-        - Natural sentences first, then bullets/numbered steps for clarity
-        - Short replies (3-5 lines) unless step-by-step is needed
-        - End with one genuine next step or clarifying question
-        - Never push upgrades unprompted — mention pricing only when asked
-        
-        a4ai features you can help with:
-        - Test generation: 30 seconds from NCERT content, CBSE pattern, MCQ/Short/Long/A&R/Cloze, PDF & DOCX export
-        - Attendance: Mark batch-wise daily attendance, per-student tracking
-        - Assignments: Teacher creates PDF assignments, students submit via code portal, teacher grades inline with feedback
-        - Student Portal: 6-char access code (no signup needed), students see assignments + announcements
-        - Pricing: Free (2 tests/mo), Starter ₹149/mo (10 tests + contests), Pro ₹299/mo (unlimited)
-        
-        STRICT RULES — follow always:
-        - NEVER use LaTeX, $formula$, dollar signs for math, or markdown math syntax. Write math in plain text only.
-        - NEVER use ** bold ** or markdown formatting in responses — plain text only.
-        - If asked anything NOT related to a4ai platform, redirect warmly in 1 sentence.
-        - a4ai was founded by Tarun Pathak, B.Tech ECE graduate and experienced teacher turned edtech founder.
-        - Do NOT ask "Want me to guide you through creating a test?" or "Want me to walk you through..." unless the user explicitly asks for help with test creation.
-        - Do NOT repeat the "Go to Dashboard → Create Test → Select Class/Subject → Generate" instruction in every response. Only mention it if the user specifically asks how to create a test.
-        - Keep responses concise and helpful. No unnecessary upsells or repeated instructions.
-        
-        Be genuinely helpful. Teacher should feel like they asked a colleague, not a chatbot.`;
+${langInstruction}
+
+Tone:
+- Warm, direct — like a senior teacher colleague who respects time
+- Natural sentences first, then bullets/numbered steps for clarity
+- Short replies (3-5 lines) unless step-by-step is needed
+- End with one genuine next step or clarifying question
+- Never push upgrades unprompted — mention pricing only when asked
+
+a4ai features you can help with:
+- Test generation: 30 seconds from NCERT content, MCQ/Short/Long/A&R/Cloze, PDF & DOCX export
+- Attendance: Mark batch-wise daily attendance, per-student tracking
+- Assignments: Teacher creates PDF assignments, students submit via code portal, teacher grades inline with feedback
+- Student Portal: 6-char access code (no signup needed), students see assignments + announcements
+- Pricing: Free (2 tests/mo), Starter ₹149/mo (10 tests + contests), Pro ₹299/mo (unlimited)
+
+STRICT RULES — follow always:
+- NEVER use LaTeX, $formula$, dollar signs for math, or markdown math syntax. Write math in plain text only.
+- NEVER use ** bold ** or markdown formatting in responses — plain text only.
+- If asked anything NOT related to a4ai platform, redirect warmly in 1 sentence.
+- a4ai was founded by Tarun Pathak, B.Tech ECE graduate and experienced teacher turned edtech founder.
+- Do NOT ask "Want me to guide you through creating a test?" or "Want me to walk you through..." unless the user explicitly asks for help with test creation.
+- Do NOT repeat the "Go to Dashboard → Create Test → Select Class/Subject → Generate" instruction in every response. Only mention it if the user specifically asks how to create a test.
+- Keep responses concise and helpful. No unnecessary upsells or repeated instructions.
+
+Be genuinely helpful. Teacher should feel like they asked a colleague, not a chatbot.`;
 
     const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
@@ -1133,8 +1133,6 @@ export default function TeacherDashboardPage() {
       { role: userMsg.role, content: userMsg.content },
     ];
 
-    let backendAvailable = false;
-
     try {
       const res = await fetch(`${apiBase}/chat`, {
         method: "POST",
@@ -1143,14 +1141,11 @@ export default function TeacherDashboardPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Backend error");
-      backendAvailable = true;
       setChatMessages((prev) => [
         ...prev,
         { role: "assistant", content: data.content, suggestions: chatOptions }
       ]);
     } catch (err: any) {
-      // Fallback: use Groq API directly from frontend
-      // Fallback: OpenRouter API (stable, multiple models)
       // Fallback: OpenRouter API
       try {
         const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
@@ -1167,7 +1162,7 @@ export default function TeacherDashboardPage() {
             "X-Title": "a4ai"
           },
           body: JSON.stringify({
-            model: "deepseek/deepseek-chat",  // ✅ YEH USE KARO
+            model: "deepseek/deepseek-chat",
             messages: groqMessages,
             temperature: 0.7,
             max_tokens: 500,
@@ -1231,7 +1226,6 @@ export default function TeacherDashboardPage() {
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
-    // { id: "ai-tools", Icon: Icons.Brain, label: "AI Tools", color: "text-cyan-500" },
   ];
 
   return (
@@ -1414,7 +1408,7 @@ export default function TeacherDashboardPage() {
                               Welcome to a4ai!
                             </p>
                             <p className="text-xs text-slate-500 font-medium mt-0.5">
-                              Start generating Test papers.
+                              Start generating test papers.
                             </p>
                           </div>
                         </div>
@@ -1815,7 +1809,7 @@ export default function TeacherDashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
                   {[
                     { Icon: Icons.Youtube, title: "Community Quiz", desc: "Generate quizzes from any YouTube video.", action: () => navigate("/teacher/community-quiz/new"), isNew: true, primary: true },
-                    { Icon: Icons.Brain, title: "Test Generator", desc: "Create CBSE-pattern papers from NCERT.", action: () => navigate("/dashboard/test-generator"), isNew: false, primary: false },
+                    { Icon: Icons.Brain, title: "Test Generator", desc: "Create test papers from NCERT content.", action: () => navigate("/dashboard/test-generator"), isNew: false, primary: false },
                     { Icon: Icons.FileText, title: "Auto-Grade", desc: "AI-analyze long-form answers instantly.", isNew: false, primary: false },
                     { Icon: Icons.Book, title: "Study Guides", desc: "Convert notes into smart flashcards.", isNew: false, primary: false },
                     { Icon: Icons.Search, title: "Plagiarism Check", desc: "Scan against web and AI datasets.", isNew: false, primary: false },

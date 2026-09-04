@@ -42,7 +42,9 @@ const GlobalStyles = () => {
 
     const s = document.createElement("style");
     s.textContent = `
-      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; background-color: #ffffff !important; }
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+
+      .lp { font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; background-color: #ffffff !important; }
       
       html, body, #root, main, section { background: #ffffff !important; background-color: #ffffff !important; }
 
@@ -79,7 +81,7 @@ const GlobalStyles = () => {
         background-color: #0d0d0e !important;
         border: 1px solid rgba(255, 255, 255, 0.16) !important;
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 14px rgba(0,0,0,0.3) !important;
-        color: #ffffff !important; font-weight:600;
+        color: #ffffff !important; font-weight: 600;
         border-radius: 14px;
         transition: transform 0.2s, box-shadow 0.2s;
         -webkit-tap-highlight-color: transparent;
@@ -103,7 +105,7 @@ const GlobalStyles = () => {
         border: 1px solid #e5e7eb !important;
         backdrop-filter: blur(12px) !important;
         -webkit-backdrop-filter: blur(12px) !important;
-        border-radius: 14px; font-weight:600;
+        border-radius: 14px; font-weight: 600;
         transition: transform 0.2s;
         color: #202124 !important;
         color-scheme: light only !important;
@@ -145,6 +147,21 @@ const GlobalStyles = () => {
         -webkit-text-fill-color: transparent;
         background-clip: text;
         animation: fast-gradient 4s linear infinite;
+        font-weight: 800;
+      }
+      
+      /* Typography fixes */
+      .heading-xl {
+        font-weight: 900;
+        letter-spacing: -0.02em;
+      }
+      .heading-lg {
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      .body-text {
+        font-weight: 500;
+        line-height: 1.6;
       }
     `;
     document.head.appendChild(s);
@@ -271,14 +288,14 @@ export default function FeaturesPage() {
           className="mx-auto max-w-7xl rounded-2xl border transition-all duration-300 relative overflow-hidden force-light-dock"
         >
           <div className="flex items-center justify-between px-4 py-3 sm:px-6">
-            <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight transition-opacity active:opacity-90">
+            <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-bold tracking-tight transition-opacity active:opacity-90">
               <img 
                 src="/ICON.ico" 
                 alt="a4ai Logo" 
                 className="h-6 w-6 object-contain rounded transition-transform duration-200 group-hover:scale-105"
               />
               <span style={{ color: txtHead }}>
-                a4ai <span className="text-xs font-normal opacity-60 ml-1">Features</span>
+                a4ai <span className="text-xs font-medium opacity-60 ml-1">Features</span>
               </span>
             </Link>
             <TabNav value={tab} onChange={setTab} />
@@ -299,13 +316,13 @@ export default function FeaturesPage() {
                 </span>
               </div>
 
-              <h1 className="text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight text-neutral-900">
+              <h1 className="text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-black tracking-tight text-neutral-900">
                 Powerful features,{" "}
                 <br className="hidden sm:block" />
                 real <span className="nlm-text">classroom impact</span>
               </h1>
 
-              <p className="mx-auto mt-5 max-w-2xl text-lg" style={{ color: txtMuted }}>
+              <p className="mx-auto mt-5 max-w-2xl text-lg font-medium" style={{ color: txtMuted }}>
                 Everything you need to create curriculum-perfect assessments in half the time.
               </p>
             </motion.div>
@@ -353,7 +370,7 @@ export default function FeaturesPage() {
 
             {/* Comparison Module */}
             <motion.div {...fadeUp} viewport={{ once: true }} className="mt-10 p-6 ag-card bg-white shadow-sm">
-              <div className="grid gap-4 md:grid-cols-3 text-sm">
+              <div className="grid gap-4 md:grid-cols-3 text-sm font-medium">
                 <Compare good="Outcome-aware generation" bad="Generic question dumps" />
                 <Compare good="Deterministic blueprints" bad="Unstable lengths & marks" />
                 <Compare good="Rubrics + rationales" bad="Answer-only keys" />
@@ -365,7 +382,7 @@ export default function FeaturesPage() {
 
             {/* Bottom Footer Call-To-Action Button */}
             <div className="relative z-10 text-center mt-20 mb-24">
-              <button onClick={() => navigate("/dashboard/test-generator")} className="btn-blk px-8 py-4 text-base sm:text-lg">
+              <button onClick={() => navigate("/dashboard/test-generator")} className="btn-blk px-8 py-4 text-base sm:text-lg font-bold">
                 <span className="relative z-10 flex items-center justify-center gap-2">
                   🚀 Start creating tests <ArrowRight className="h-5 w-5" />
                 </span>
@@ -392,7 +409,7 @@ function TabNav({ value, onChange }: { value: TabKey; onChange: (v: TabKey) => v
           <button
             key={t.key}
             onClick={() => onChange(t.key)}
-            className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm md:text-base font-semibold transition-colors duration-200 ${
+            className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm md:text-base font-bold transition-colors duration-200 ${
               active ? "text-slate-900" : "text-slate-500 hover:text-slate-900"
             }`}
           >
@@ -443,19 +460,19 @@ function FeatureCard({ feature }: { feature: Feature }) {
             >
               <Icon className="h-6 w-6" style={{ color: accentColor }} />
               {feature.tag && (
-                <span className="absolute -right-2 -top-2 rounded-full px-2 py-0.5 text-[10px] font-bold text-white shadow-sm" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+                <span className="absolute -right-2 -top-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white shadow-sm" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
                   {feature.tag}
                 </span>
               )}
             </div>
-            <h3 className="text-lg font-semibold text-neutral-900">{feature.title}</h3>
+            <h3 className="text-lg font-extrabold text-neutral-900 tracking-tight">{feature.title}</h3>
           </div>
 
           <div className="flex-grow">
-            <p className="text-sm leading-relaxed mb-4" style={{ color: txtMuted }}>{feature.description}</p>
+            <p className="text-sm font-medium leading-relaxed mb-4" style={{ color: txtMuted }}>{feature.description}</p>
             <ul className="space-y-2.5">
               {feature.bullets.map((b, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm">
+                <li key={i} className="flex items-start gap-2 text-sm font-medium">
                   <span className="mt-[3px] rounded flex-shrink-0 p-[2px] bg-blue-50">
                     <Check className="h-3.5 w-3.5" style={{ color: accentColor }} />
                   </span>
@@ -486,12 +503,12 @@ function Compare({ good, bad }: { good: string; bad: string }) {
       className="rounded-xl p-4 text-left shadow-sm relative overflow-hidden bg-neutral-50 border border-neutral-200/70"
     >
       <div className="text-sm flex items-center mb-1">
-        <span className="mr-2 rounded px-1.5 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+        <span className="mr-2 rounded px-1.5 py-0.5 text-[10px] font-extrabold text-white uppercase tracking-wider" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
           a4ai
         </span>
         <span className="font-semibold text-neutral-900">{good}</span>
       </div>
-      <div className="mt-1 text-sm text-neutral-500">vs “{bad}”</div>
+      <div className="mt-1 text-sm font-medium text-neutral-500">vs “{bad}”</div>
     </div>
   );
 }
@@ -503,7 +520,7 @@ function VideoRow() {
     <motion.div {...fadeUp} viewport={{ once: true }} className="mt-16 md:mt-24 grid items-start gap-6 md:grid-cols-[1.2fr_1fr] bg-white">
       <div className="overflow-hidden flex flex-col ag-card bg-white">
         <div 
-          className="px-6 py-4 text-sm font-semibold flex items-center gap-2 border-b border-neutral-100 bg-neutral-50 text-neutral-800"
+          className="px-6 py-4 text-sm font-bold flex items-center gap-2 border-b border-neutral-100 bg-neutral-50 text-neutral-800"
         >
           <Video className="h-4 w-4 text-blue-500" /> See it in action
         </div>
@@ -519,7 +536,7 @@ function VideoRow() {
         </div>
         <div className="justify-between gap-3 flex-wrap flex px-6 py-4 bg-neutral-50 border-t border-neutral-100">
           <button
-            className="btn-blk px-5 py-2.5 text-sm font-semibold"
+            className="btn-blk px-5 py-2.5 text-sm font-bold"
             onClick={() => {
               const v = demoRef.current;
               if (v) { v.scrollIntoView({ behavior: "smooth", block: "center" }); v.play(); }
@@ -528,15 +545,15 @@ function VideoRow() {
             <span className="relative z-10 flex items-center gap-2"><Play className="h-4 w-4" /> Watch demo</span>
           </button>
 
-          <button className="px-5 py-2.5 text-sm flex items-center gap-2 btn-glass-light">
+          <button className="px-5 py-2.5 text-sm flex items-center gap-2 btn-glass-light font-bold">
             <span className="relative z-10 flex items-center gap-2"><Download className="h-4 w-4" /> Download sample paper</span>
           </button>
         </div>
       </div>
 
       <div className="p-6 ag-card bg-white border border-neutral-100 shadow-sm">
-        <div className="mb-4 text-sm font-semibold uppercase tracking-wider text-blue-600">Why it feels different</div>
-        <div className="grid gap-4 text-sm">
+        <div className="mb-4 text-sm font-extrabold uppercase tracking-wider text-blue-600">Why it feels different</div>
+        <div className="grid gap-4 text-sm font-medium">
           <Bullet>Blueprint-first generation matches your marking scheme exactly.</Bullet>
           <Bullet>Outcome coverage heatmaps catch blind-spots before export.</Bullet>
           <Bullet>Item analytics prune weak questions over time.</Bullet>
@@ -551,7 +568,7 @@ function Bullet({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3">
       <span className="mt-[6px] h-2 w-2 flex-shrink-0 rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }} />
-      <span className="leading-relaxed text-neutral-800">{children}</span>
+      <span className="leading-relaxed font-medium text-neutral-800">{children}</span>
     </div>
   );
 }

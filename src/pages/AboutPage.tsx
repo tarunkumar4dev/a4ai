@@ -41,7 +41,13 @@ const GlobalStyles = () => {
 
     const s = document.createElement("style");
     s.textContent = `
-      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; background-color: #ffffff !important; }
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+
+      .lp {
+        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background-color: #ffffff !important;
+      }
       html, body, #root, main, section { background: #ffffff !important; background-color: #ffffff !important; }
       
       .ag-card {
@@ -79,7 +85,8 @@ const GlobalStyles = () => {
         background-color: #0d0d0e !important;
         border: 1px solid rgba(255, 255, 255, 0.16) !important;
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 14px rgba(0,0,0,0.3) !important;
-        color: #ffffff !important; font-weight:600;
+        color: #ffffff !important;
+        font-weight: 700;
         border-radius: 14px;
         transition: transform 0.2s, box-shadow 0.2s;
         -webkit-tap-highlight-color: transparent;
@@ -103,7 +110,8 @@ const GlobalStyles = () => {
         border: 1px solid #e5e7eb !important;
         backdrop-filter: blur(12px) !important;
         -webkit-backdrop-filter: blur(12px) !important;
-        border-radius: 14px; font-weight:600;
+        border-radius: 14px;
+        font-weight: 700;
         transition: transform 0.2s;
         color: #202124 !important;
         color-scheme: light only !important;
@@ -126,7 +134,9 @@ const GlobalStyles = () => {
 
       .nlm-pill {
         display:inline-flex; align-items:center; gap:5px;
-        padding:5px 14px; border-radius:999px; font-size:13px; font-weight:500;
+        padding:5px 14px; border-radius:999px;
+        font-size:13px;
+        font-weight: 700;
         background: rgba(59,130,246,0.06); color: #1d4ed8; border: 1px solid rgba(59,130,246,0.14);
       }
       .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(70px); }
@@ -135,9 +145,24 @@ const GlobalStyles = () => {
       /* Hardcoded Metric Font Colors (Forces Deep Obsidian Black Counter Text) */
       .stat-n-forced {
         color: #111111 !important;
-        font-weight: 800 !important;
+        font-weight: 900 !important;
+        letter-spacing: -0.02em !important;
         color-scheme: light only !important;
         forced-color-adjust: none !important;
+      }
+      
+      /* Typography fixes */
+      .heading-hero {
+        font-weight: 900;
+        letter-spacing: -0.02em;
+      }
+      .heading-section {
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      .body-text {
+        font-weight: 500;
+        line-height: 1.6;
       }
     `;
     document.head.appendChild(s);
@@ -189,7 +214,7 @@ function AboutSubTabNav({ value, onChange }: { value: AboutTabKey; onChange: (v:
           <button
             key={t.id}
             onClick={() => onChange(t.id as AboutTabKey)}
-            className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-semibold transition-colors duration-200 ${
+            className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-bold transition-colors duration-200 ${
               active ? "text-slate-900" : "text-slate-500 hover:text-slate-900"
             }`}
           >
@@ -341,7 +366,7 @@ export default function AboutPage() {
         <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
           <nav className="mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-all duration-300 force-light-dock">
             <div className="flex items-center justify-between px-4 py-3 sm:px-6 bg-transparent">
-              <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight transition-opacity active:opacity-90">
+              <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-extrabold tracking-tight transition-opacity active:opacity-90">
                 <div className="h-6 w-6 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20 overflow-hidden">
                   {!logoFailed ? (
                     <img 
@@ -355,7 +380,7 @@ export default function AboutPage() {
                   )}
                 </div>
                 <span style={{ color: txtHead }}>
-                  a4ai <span className="text-xs font-normal opacity-60 ml-1">About</span>
+                  a4ai <span className="text-xs font-medium opacity-60 ml-1">About</span>
                 </span>
               </Link>
               <AboutSubTabNav value={activeTab} onChange={handleTabChange} />
@@ -378,7 +403,7 @@ export default function AboutPage() {
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, ease: EASE }}
-                className="text-center text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight text-neutral-900"
+                className="text-center text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-black tracking-tight text-neutral-900"
               >
                 About <span className="nlm-text">a4ai</span>
               </motion.h1>
@@ -387,7 +412,7 @@ export default function AboutPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
-                className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl"
+                className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl font-medium"
                 style={{ color: txtMuted }}
               >
                 Building the assessment stack for Indian classrooms—fast, fair, and aligned to how teachers actually teach.
@@ -409,7 +434,7 @@ export default function AboutPage() {
                     transition={{ duration: 0.5, ease: "easeOut" }}
                     className="p-6 text-center ag-card bg-white"
                   >
-                    <div className="text-2xl md:text-3xl font-extrabold tracking-tight stat-n-forced">{s.v}</div>
+                    <div className="text-2xl md:text-3xl font-black tracking-tight stat-n-forced">{s.v}</div>
                     <div className="mt-1 text-sm font-medium" style={{ color: txtMuted }}>{s.k}</div>
                   </motion.div>
                 ))}
@@ -426,20 +451,20 @@ export default function AboutPage() {
                 transition={{ duration: 0.6 }}
                 className="[&_h2]:tracking-tight bg-transparent"
               >
-                <h2 className="text-3xl md:text-4xl font-extrabold text-neutral-900">Our mission</h2>
-                <p className="mt-6 text-lg leading-relaxed" style={{ color: txtMuted }}>
+                <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-900">Our mission</h2>
+                <p className="mt-6 text-lg font-medium leading-relaxed" style={{ color: txtMuted }}>
                   Give teachers superpowers with AI that respects context and curriculum. Save hours weekly and return that time to students.
                 </p>
-                <p className="mt-4 text-lg leading-relaxed" style={{ color: txtMuted }}>
+                <p className="mt-4 text-lg font-medium leading-relaxed" style={{ color: txtMuted }}>
                   We combine multi‑LLM generation with rubric checks, plagiarism guards,
                   and contest‑grade proctoring to ensure quality from day one.
                 </p>
 
                 <div className="mt-8 flex flex-wrap gap-4">
-                  <button onClick={() => navigate("/features")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
+                  <button onClick={() => navigate("/features")} className="btn-blk px-8 py-3.5 text-base sm:text-lg font-bold">
                     <span className="relative z-10 flex items-center justify-center gap-2">See how it works</span>
                   </button>
-                  <button onClick={() => navigate("/contact")} className="btn-glass-light px-8 py-3.5 text-base sm:text-lg">
+                  <button onClick={() => navigate("/contact")} className="btn-glass-light px-8 py-3.5 text-base sm:text-lg font-bold">
                     <span className="relative z-10 flex items-center justify-center gap-2">Talk to us</span>
                   </button>
                 </div>
@@ -451,11 +476,11 @@ export default function AboutPage() {
                     { icon: BookOpen, title: "Better pedagogy", copy: "Curriculum mapping + rubric checks by default." },
                   ].map((item) => (
                     <div key={item.title} className="p-5 ag-card bg-white">
-                      <div className="flex items-center gap-2 font-semibold text-neutral-800">
+                      <div className="flex items-center gap-2 font-bold text-neutral-800">
                         <item.icon className="h-4 w-4" style={{ color: accentColor }} />
                         {item.title}
                       </div>
-                      <p className="mt-2 text-sm leading-relaxed" style={{ color: txtMuted }}>{item.copy}</p>
+                      <p className="mt-2 text-sm font-medium leading-relaxed" style={{ color: txtMuted }}>{item.copy}</p>
                     </div>
                   ))}
                 </div>
@@ -478,8 +503,8 @@ export default function AboutPage() {
           <section ref={valuesRef} className="relative z-10 py-16 scroll-mt-28 bg-white">
             <div className={sectionX}>
               <div className="mb-12 text-center bg-transparent">
-                <h3 className="text-3xl font-extrabold text-neutral-900">What we value</h3>
-                <p className="mt-3 text-neutral-500">Principles that steer product and policy.</p>
+                <h3 className="text-3xl font-extrabold tracking-tight text-neutral-900">What we value</h3>
+                <p className="mt-3 text-neutral-500 font-medium">Principles that steer product and policy.</p>
               </div>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
                 {values.map((x, i) => (
@@ -495,9 +520,9 @@ export default function AboutPage() {
                       <div className="relative flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 bg-blue-50 border border-blue-100">
                         <x.icon className="h-5 w-5" style={{ color: accentColor }} />
                       </div>
-                      <div className="font-semibold text-neutral-800">{x.k}</div>
+                      <div className="font-extrabold text-neutral-800">{x.k}</div>
                     </div>
-                    <p className="text-sm leading-relaxed text-neutral-500">{x.v}</p>
+                    <p className="text-sm font-medium leading-relaxed text-neutral-500">{x.v}</p>
                   </motion.div>
                 ))}
               </div>
@@ -507,7 +532,7 @@ export default function AboutPage() {
           {/* MILESTONES TIMELINE BLOCK */}
           <section className="relative z-10 py-16 bg-white">
             <div className="mx-auto max-w-5xl px-4 bg-transparent">
-              <h3 className="text-3xl font-extrabold text-center text-neutral-900">Milestones</h3>
+              <h3 className="text-3xl font-extrabold tracking-tight text-center text-neutral-900">Milestones</h3>
               <div className="mt-12 space-y-6 bg-transparent">
                 {milestones.map((m, i) => (
                   <motion.div
@@ -518,10 +543,10 @@ export default function AboutPage() {
                     transition={{ duration: 0.5, ease: "easeOut" }}
                     className="grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] ag-card bg-white"
                   >
-                    <div className="text-sm font-semibold mt-1 text-blue-600">{m.date}</div>
+                    <div className="text-sm font-bold mt-1 text-blue-600">{m.date}</div>
                     <div>
-                      <div className="text-lg font-bold text-neutral-900">{m.title}</div>
-                      <div className="mt-2 text-sm leading-relaxed text-neutral-500">{m.detail}</div>
+                      <div className="text-lg font-extrabold text-neutral-900">{m.title}</div>
+                      <div className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">{m.detail}</div>
                     </div>
                   </motion.div>
                 ))}
@@ -533,7 +558,7 @@ export default function AboutPage() {
           <section ref={teamRef} className="relative z-10 py-16 scroll-mt-28 bg-white">
             <div className={sectionX}>
               <div className="text-center bg-transparent">
-                <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold mb-6 text-neutral-900">
+                <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold tracking-tight mb-6 text-neutral-900">
                   Team Behind a4ai
                 </motion.h2>
                 <motion.p
@@ -541,7 +566,7 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.15, duration: 0.5 }}
-                  className="mx-auto max-w-3xl text-lg text-neutral-500"
+                  className="mx-auto max-w-3xl text-lg font-medium text-neutral-500"
                 >
                   A small team building a4ai — step by step, every day.
                 </motion.p>
@@ -553,7 +578,7 @@ export default function AboutPage() {
                 ))}
               </div>
 
-              <p className="mt-12 text-center text-sm font-medium text-neutral-400">
+              <p className="mt-12 text-center text-sm font-bold text-neutral-400">
                 …and many more people who quietly help shape a4ai every moment.
               </p>
             </div>
@@ -563,13 +588,13 @@ export default function AboutPage() {
           <section className="relative z-10 py-16 bg-white">
             <div className="mx-auto max-w-6xl px-4 bg-transparent">
               <div className="text-center bg-transparent">
-                <h3 className="text-3xl font-extrabold text-neutral-900">Schools & partners</h3>
-                <p className="mt-3 text-neutral-500">Pilots and early adopters we're grateful for.</p>
+                <h3 className="text-3xl font-extrabold tracking-tight text-neutral-900">Schools & partners</h3>
+                <p className="mt-3 text-neutral-500 font-medium">Pilots and early adopters we're grateful for.</p>
               </div>
               <div className="mt-12 grid grid-cols-2 items-center gap-6 sm:grid-cols-4 bg-transparent">
                 {partners.map((p) => (
                   <div key={p.name} className="flex items-center justify-center p-8 ag-card bg-white border border-neutral-100 shadow-sm">
-                    <span className="text-sm font-semibold tracking-wide text-neutral-700 hover:text-neutral-900 transition-colors">
+                    <span className="text-sm font-bold tracking-wide text-neutral-700 hover:text-neutral-900 transition-colors">
                       {p.name}
                     </span>
                   </div>
@@ -592,10 +617,10 @@ export default function AboutPage() {
                     className="relative p-8 ag-card bg-white border border-neutral-100 shadow-sm flex flex-col"
                   >
                     <Quote className="absolute -top-3 -left-3 h-8 w-8 text-neutral-200/50" />
-                    <p className="text-base leading-relaxed italic text-neutral-800">"{t.quote}"</p>
+                    <p className="text-base font-medium leading-relaxed italic text-neutral-800">"{t.quote}"</p>
                     <footer className="mt-6 text-sm bg-transparent">
-                      <span className="font-semibold text-neutral-800">{t.name}</span>,{" "}
-                      <span style={{ color: txtMuted }}>{t.title}</span>
+                      <span className="font-bold text-neutral-800">{t.name}</span>,{" "}
+                      <span className="font-medium" style={{ color: txtMuted }}>{t.title}</span>
                     </footer>
                   </motion.blockquote>
                 ))}
@@ -622,7 +647,7 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.15, duration: 0.5 }}
-                    className="mx-auto mt-4 max-w-2xl text-lg text-neutral-500"
+                    className="mx-auto mt-4 max-w-2xl text-lg font-medium text-neutral-500"
                   >
                     Join educators using a4ai to save time and improve outcomes.
                   </motion.p>
@@ -633,12 +658,12 @@ export default function AboutPage() {
                     transition={{ delay: 0.25, duration: 0.5 }}
                     className="mt-8 flex flex-col sm:flex-row justify-center gap-4 bg-transparent"
                   >
-                    <button onClick={() => navigate("/")} className="btn-blk px-8 py-3.5 text-base sm:text-lg">
+                    <button onClick={() => navigate("/")} className="btn-blk px-8 py-3.5 text-base sm:text-lg font-bold">
                       <span className="relative z-10 flex items-center justify-center gap-2">
                         Get started for free
                       </span>
                     </button>
-                    <button onClick={() => navigate("/contact")} className="btn-glass-light px-8 py-3.5 text-base sm:text-lg flex items-center justify-center gap-2">
+                    <button onClick={() => navigate("/contact")} className="btn-glass-light px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
                       <span className="relative z-10 flex items-center gap-2">Book a demo <ArrowRight className="h-5 w-5" /></span>
                     </button>
                   </motion.div>
@@ -696,14 +721,14 @@ function TeamCard({
           <div className="relative z-10 text-center bg-transparent">
             <Avatar className="mx-auto mb-4 h-28 w-28 ring-2 ring-neutral-100 border border-neutral-200/50">
               <AvatarImage src={member.image} alt={member.name} className="object-cover" />
-              <AvatarFallback className="text-xl font-bold bg-neutral-50 text-neutral-800">
+              <AvatarFallback className="text-xl font-extrabold bg-neutral-50 text-neutral-800">
                 {member.name.substring(0, 2)}
               </AvatarFallback>
             </Avatar>
 
-            <h3 className="text-xl font-extrabold text-neutral-900">{member.name}</h3>
-            <p className="mt-1 text-sm font-semibold text-blue-600">{member.role}</p>
-            <p className="mt-3 text-sm leading-relaxed text-neutral-500">{member.description}</p>
+            <h3 className="text-xl font-extrabold tracking-tight text-neutral-900">{member.name}</h3>
+            <p className="mt-1 text-sm font-bold text-blue-600">{member.role}</p>
+            <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500">{member.description}</p>
           </div>
         </motion.div>
       </div>

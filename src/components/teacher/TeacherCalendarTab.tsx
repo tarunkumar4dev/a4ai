@@ -1,6 +1,9 @@
 // src/components/teacher/TeacherCalendarTab.tsx
-// Microsoft Outlook-style calendar for teachers
-// FULLY RESPONSIVE — mobile first
+// MS Office-style calendar for teachers — create events, auto-sync assignment deadlines
+// Usage in TeacherDashboardPage:
+//   import TeacherCalendarTab from "@/components/teacher/TeacherCalendarTab";
+//   navItems: { id: "calendar", Icon: Icons.Calendar, label: "Calendar" }
+//   {activeTab === "calendar" && <TeacherCalendarTab />}
 
 import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -36,38 +39,48 @@ const EVENT_TYPES = [
 ];
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DAYS_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 /* ─── Helpers ───────────────────────────── */
-function sameDay(a: Date, b: Date) { 
-  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); 
-}
-function fmtTime(d: string) { 
-  return new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }); 
-}
-function fmtDate(d: Date) { 
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }); 
-}
-function isToday(d: Date) {
-  const t = new Date();
-  return sameDay(d, t);
-}
+function sameDay(a: Date, b: Date) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function fmtTime(d: string) { return new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }); }
+function fmtDate(d: Date) { return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }); }
 
-function eventInHourSlot(event: CalendarEvent, date: Date, hour: number): boolean {
-  const eventDate = new Date(event.start_time);
-  if (!sameDay(eventDate, date)) return false;
-  const eventHour = eventDate.getHours();
-  return eventHour === hour;
-}
+/* ─── Styles ────────────────────────────── */
+const css = `
+  .tc-root { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+  .tc-card { background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .tc-btn { border: none; border-radius: 10px; padding: 8px 16px; font-weight: 700; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .15s; }
+  .tc-primary { background: linear-gradient(135deg, #6366F1, #4F46E5); color: #fff; }
+  .tc-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+  .tc-primary:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+  .tc-ghost { background: #F1F5F9; color: #475569; }
+  .tc-ghost:hover { background: #E2E8F0; }
+  .tc-field { width: 100%; padding: 10px 14px; background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; font-size: 14px; outline: none; font-family: inherit; box-sizing: border-box; }
+  .tc-field:focus { border-color: #6366F1; box-shadow: 0 0 0 3px rgba(99,102,241,.1); }
 
-function getEventsForDay(events: CalendarEvent[], date: Date) {
-  return events.filter(e => {
-    const eventDate = new Date(e.start_time);
-    return sameDay(eventDate, date);
-  });
-}
+  .tc-month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .tc-day-cell { min-height: 90px; padding: 6px; border: 1px solid #F1F5F9; border-radius: 8px; cursor: pointer; transition: background .1s; position: relative; overflow: hidden; }
+  .tc-day-cell:hover { background: #F8FAFC; }
+  .tc-day-cell.today { background: #EEF2FF; border-color: #C7D2FE; }
+  .tc-day-cell.other-month { opacity: .3; }
+  .tc-day-num { font-size: 13px; font-weight: 700; color: #1E293B; margin-bottom: 4px; }
+  .tc-day-num.today { background: #6366F1; color: #fff; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .tc-event-dot { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+
+  .tc-week-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); gap: 0; }
+  .tc-week-header { padding: 8px 4px; text-align: center; font-size: 12px; font-weight: 700; color: #94A3B8; border-bottom: 2px solid #F1F5F9; }
+  .tc-week-header.today { color: #6366F1; border-bottom-color: #6366F1; }
+  .tc-time-label { font-size: 10px; color: #94A3B8; text-align: right; padding-right: 8px; height: 48px; display: flex; align-items: flex-start; }
+  .tc-week-cell { border-left: 1px solid #F8FAFC; border-bottom: 1px solid #F8FAFC; min-height: 48px; padding: 2px; position: relative; }
+  .tc-week-event { font-size: 11px; font-weight: 600; padding: 3px 6px; border-radius: 6px; margin-bottom: 2px; cursor: pointer; }
+
+  @keyframes slideIn { from { opacity:0; transform: translateX(10px); } to { opacity:1; transform: translateX(0); } }
+  .tc-slide { animation: slideIn .2s ease-out; }
+
+  .tc-sidebar-event { padding: 10px 14px; border-radius: 12px; border-left: 4px solid; margin-bottom: 8px; background: #fff; cursor: pointer; transition: all .15s; }
+  .tc-sidebar-event:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }
+`;
 
 /* ═══════════════════════════════════════════
    MAIN COMPONENT
@@ -84,6 +97,7 @@ export default function TeacherCalendarTab() {
 
   // Create modal
   const [showCreate, setShowCreate] = useState(false);
+  const [createDate, setCreateDate] = useState<Date | null>(null);
   const [form, setForm] = useState({
     title: "", description: "", event_type: "event", start_time: "",
     end_time: "", all_day: false, meeting_link: "", batch_id: "", color: "#6366F1"
@@ -122,11 +136,13 @@ export default function TeacherCalendarTab() {
       const batchMap: Record<string, string> = {};
       bRows?.forEach(b => batchMap[b.id] = b.name);
 
+      // Fetch calendar events
       const { data: evts } = await supabase
         .from("calendar_events").select("*")
         .eq("institute_id", member.institute_id)
         .order("start_time");
 
+      // Fetch assignments with deadlines (auto-show as calendar events)
       const { data: asgns } = await supabase
         .from("assignments").select("id, title, batch_id, deadline, max_marks")
         .eq("institute_id", member.institute_id)
@@ -134,9 +150,11 @@ export default function TeacherCalendarTab() {
         .not("deadline", "is", null);
 
       const calEvents: CalendarEvent[] = [];
+
       if (evts) evts.forEach(e => calEvents.push({
         ...e, batch_name: e.batch_id ? batchMap[e.batch_id] || "" : "All",
       }));
+
       if (asgns) asgns.forEach(a => {
         if (a.deadline) calEvents.push({
           id: `asgn-${a.id}`,
@@ -166,6 +184,7 @@ export default function TeacherCalendarTab() {
       title: "", description: "", event_type: "event", start_time: iso,
       end_time: "", all_day: false, meeting_link: "", batch_id: "", color: "#6366F1"
     });
+    setCreateDate(d);
     setShowCreate(true);
   }
 
@@ -227,7 +246,9 @@ export default function TeacherCalendarTab() {
   /* ── Week Grid Data ── */
   const weekDays = useMemo(() => {
     const startOfWeek = new Date(currentDate);
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    const day = startOfWeek.getDay(); // 0=Sun
+    startOfWeek.setDate(startOfWeek.getDate() - day);
+    startOfWeek.setHours(0, 0, 0, 0);
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(startOfWeek);
       d.setDate(d.getDate() + i);
@@ -235,72 +256,64 @@ export default function TeacherCalendarTab() {
     });
   }, [currentDate]);
 
-  const hours = Array.from({ length: 14 }, (_, i) => i + 7);
+  const hours = Array.from({ length: 14 }, (_, i) => i + 7); // 7 AM to 8 PM
 
-  function getEventsForDayFn(date: Date) {
-    return getEventsForDay(events, date);
+  function getEventsForDay(date: Date) {
+    return events.filter(e => {
+      const evDate = new Date(e.start_time);
+      return evDate.getFullYear() === date.getFullYear() &&
+             evDate.getMonth() === date.getMonth() &&
+             evDate.getDate() === date.getDate();
+    });
   }
 
-  function getEventsForHourSlot(date: Date, hour: number) {
-    return events.filter(e => eventInHourSlot(e, date, hour));
-  }
-
+  /* ── Upcoming events (sidebar) ── */
   const upcoming = events
     .filter(e => new Date(e.start_time) >= new Date(today.getFullYear(), today.getMonth(), today.getDate()))
     .slice(0, 8);
-
-  // ── Mobile state ──
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
 
   /* ═══════════════════════════════════════
      RENDER
   ═══════════════════════════════════════ */
   return (
-    <div style={{ 
-      fontFamily: "'Segoe UI', 'Plus Jakarta Sans', system-ui, sans-serif", 
-      maxWidth: "100%", 
-      overflow: "hidden",
-      padding: isMobile ? "8px" : "0"
-    }}>
+    <div className="tc-root">
+      <style>{css}</style>
+
       {/* ── Create Modal ── */}
       {showCreate && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
           onClick={() => setShowCreate(false)}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 480, padding: isMobile ? 16 : 28, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", animation: "slideIn 0.2s ease-out" }}
+          <div className="tc-card tc-slide" style={{ width: "100%", maxWidth: 480, padding: 28 }}
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 20, fontWeight: 700, color: "#1E293B" }}>📅 New Event</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <input style={{ width: "100%", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} placeholder="Event title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} autoFocus />
-              
-              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            <h3 style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 800, color: "#1E293B" }}>📅 New Event</h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <input className="tc-field" placeholder="Event title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} autoFocus />
+
+              {/* Type selector */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {EVENT_TYPES.map(t => (
-                  <button key={t.id}
+                  <button key={t.id} className="tc-btn"
                     onClick={() => setForm({ ...form, event_type: t.id, color: t.color })}
-                    style={{ border: "none", borderRadius: 8, padding: "4px 10px", fontSize: isMobile ? 10 : 12, fontWeight: 700, cursor: "pointer", transition: "all 0.15s", background: form.event_type === t.id ? t.color : "#F1F5F9", color: form.event_type === t.id ? "#fff" : "#64748B" }}>
-                    {t.icon} {isMobile ? "" : t.label}
+                    style={{ background: form.event_type === t.id ? t.color : "#F1F5F9", color: form.event_type === t.id ? "#fff" : "#64748B", fontSize: 12, padding: "6px 12px" }}>
+                    {t.icon} {t.label}
                   </button>
                 ))}
               </div>
 
-              <select style={{ width: "100%", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} value={form.batch_id} onChange={e => setForm({ ...form, batch_id: e.target.value })}>
+              <select className="tc-field" value={form.batch_id} onChange={e => setForm({ ...form, batch_id: e.target.value })}>
                 <option value="">All batches</option>
                 {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
 
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 4 }}>START</label>
-                  <input style={{ width: "100%", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} type="datetime-local" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} />
+                  <input className="tc-field" type="datetime-local" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 4 }}>END</label>
-                  <input style={{ width: "100%", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} type="datetime-local" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} />
+                  <input className="tc-field" type="datetime-local" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} />
                 </div>
               </div>
 
@@ -310,14 +323,14 @@ export default function TeacherCalendarTab() {
               </div>
 
               {form.event_type === "meeting" && (
-                <input style={{ width: "100%", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box" }} placeholder="Meeting link (Google Meet / Zoom)" value={form.meeting_link} onChange={e => setForm({ ...form, meeting_link: e.target.value })} />
+                <input className="tc-field" placeholder="Meeting link (Google Meet / Zoom)" value={form.meeting_link} onChange={e => setForm({ ...form, meeting_link: e.target.value })} />
               )}
 
-              <textarea style={{ width: "100%", padding: "10px 14px", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 14, outline: "none", boxSizing: "border-box", resize: "vertical" }} rows={2} placeholder="Description (optional)" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+              <textarea className="tc-field" rows={2} placeholder="Description (optional)" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={{ resize: "vertical" }} />
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 4 }}>
-                <button style={{ border: "none", borderRadius: 10, padding: "8px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", background: "#F1F5F9", color: "#475569" }} onClick={() => setShowCreate(false)}>Cancel</button>
-                <button style={{ border: "none", borderRadius: 10, padding: "8px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", background: "linear-gradient(135deg, #6366F1, #4F46E5)", color: "#fff", opacity: saving || !form.title.trim() ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !form.title.trim()}>
+                <button className="tc-btn tc-ghost" onClick={() => setShowCreate(false)}>Cancel</button>
+                <button className="tc-btn tc-primary" onClick={handleCreate} disabled={saving || !form.title.trim()}>
                   {saving ? "Creating..." : "✓ Create Event"}
                 </button>
               </div>
@@ -328,14 +341,14 @@ export default function TeacherCalendarTab() {
 
       {/* ── Event Detail Modal ── */}
       {selectedEvent && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
           onClick={() => setSelectedEvent(null)}>
-          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 420, padding: isMobile ? 20 : 28, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", animation: "slideIn 0.2s ease-out" }}
+          <div className="tc-card tc-slide" style={{ width: "100%", maxWidth: 420, padding: 28 }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <div style={{ width: 12, height: 12, borderRadius: 3, background: selectedEvent.color }} />
-              <h3 style={{ margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 700, color: "#1E293B", flex: 1 }}>{selectedEvent.title}</h3>
-              <button style={{ border: "none", background: "#F1F5F9", borderRadius: 8, padding: "4px 8px", cursor: "pointer", fontSize: 14 }} onClick={() => setSelectedEvent(null)}>✕</button>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#1E293B", flex: 1 }}>{selectedEvent.title}</h3>
+              <button className="tc-btn tc-ghost" style={{ padding: "4px 8px" }} onClick={() => setSelectedEvent(null)}>✕</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 14, color: "#475569" }}>
               <p style={{ margin: 0 }}>📅 {new Date(selectedEvent.start_time).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
@@ -351,7 +364,7 @@ export default function TeacherCalendarTab() {
             </div>
             {!selectedEvent.is_assignment && (
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20, paddingTop: 12, borderTop: "1px solid #F1F5F9" }}>
-                <button style={{ border: "none", borderRadius: 10, padding: "8px 16px", fontWeight: 700, fontSize: 13, cursor: "pointer", background: "#FEE2E2", color: "#DC2626" }} onClick={() => deleteEvent(selectedEvent.id)}>🗑️ Delete</button>
+                <button className="tc-btn" style={{ background: "#FEE2E2", color: "#DC2626" }} onClick={() => deleteEvent(selectedEvent.id)}>🗑️ Delete</button>
               </div>
             )}
           </div>
@@ -359,117 +372,52 @@ export default function TeacherCalendarTab() {
       )}
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", marginBottom: 16, gap: isMobile ? 8 : 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", width: isMobile ? "100%" : "auto" }}>
-          <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 24, fontWeight: 700, color: "#1E293B" }}>
-            {isMobile ? MONTHS_SHORT[currentDate.getMonth()] : MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: "#1E293B" }}>
+            {MONTHS[currentDate.getMonth()]} {currentDate.getFullYear()}
           </h2>
-          <div style={{ display: "flex", gap: 2 }}>
-            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 700, fontSize: isMobile ? 14 : 16 }} onClick={viewMode === "month" ? prevMonth : prevWeek}>‹</button>
-            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 700, fontSize: isMobile ? 10 : 12 }} onClick={goToday}>Today</button>
-            <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontWeight: 700, fontSize: isMobile ? 14 : 16 }} onClick={viewMode === "month" ? nextMonth : nextWeek}>›</button>
+          <div style={{ display: "flex", gap: 4 }}>
+            <button className="tc-btn tc-ghost" style={{ padding: "6px 10px" }} onClick={viewMode === "month" ? prevMonth : prevWeek}>‹</button>
+            <button className="tc-btn tc-ghost" style={{ padding: "6px 10px", fontSize: 12 }} onClick={goToday}>Today</button>
+            <button className="tc-btn tc-ghost" style={{ padding: "6px 10px" }} onClick={viewMode === "month" ? nextMonth : nextWeek}>›</button>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", width: isMobile ? "100%" : "auto" }}>
-          <div style={{ display: "flex", gap: 2, background: "#F1F5F9", borderRadius: 8, padding: 2 }}>
-            <button style={{ border: "none", borderRadius: 6, padding: "4px 10px", fontSize: isMobile ? 10 : 12, fontWeight: 700, cursor: "pointer", background: viewMode === "month" ? "#fff" : "transparent", color: viewMode === "month" ? "#1E293B" : "#94A3B8", boxShadow: viewMode === "month" ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }} onClick={() => setViewMode("month")}>Month</button>
-            <button style={{ border: "none", borderRadius: 6, padding: "4px 10px", fontSize: isMobile ? 10 : 12, fontWeight: 700, cursor: "pointer", background: viewMode === "week" ? "#fff" : "transparent", color: viewMode === "week" ? "#1E293B" : "#94A3B8", boxShadow: viewMode === "week" ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }} onClick={() => setViewMode("week")}>Week</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 2, background: "#F1F5F9", borderRadius: 10, padding: 2 }}>
+            <button className="tc-btn" style={{ background: viewMode === "month" ? "#fff" : "transparent", color: viewMode === "month" ? "#1E293B" : "#94A3B8", boxShadow: viewMode === "month" ? "0 1px 4px rgba(0,0,0,0.1)" : "none", fontSize: 12, padding: "6px 14px" }} onClick={() => setViewMode("month")}>Month</button>
+            <button className="tc-btn" style={{ background: viewMode === "week" ? "#fff" : "transparent", color: viewMode === "week" ? "#1E293B" : "#94A3B8", boxShadow: viewMode === "week" ? "0 1px 4px rgba(0,0,0,0.1)" : "none", fontSize: 12, padding: "6px 14px" }} onClick={() => setViewMode("week")}>Week</button>
           </div>
-          <button style={{ border: "none", borderRadius: 8, padding: isMobile ? "6px 14px" : "8px 20px", fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", background: "linear-gradient(135deg, #6366F1, #4F46E5)", color: "#fff", width: isMobile ? "100%" : "auto" }} onClick={() => openCreate()}>+ Add Event</button>
+          <button className="tc-btn tc-primary" onClick={() => openCreate()}>+ Add Event</button>
         </div>
       </div>
 
-      {/* ── Main Grid ── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 280px", gap: isMobile ? 12 : 20, maxWidth: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 20 }}>
         {/* ── Calendar Grid ── */}
-        <div style={{ background: "#fff", borderRadius: isMobile ? 12 : 16, padding: isMobile ? 8 : 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden", maxWidth: "100%" }}>
+        <div className="tc-card" style={{ padding: 16, overflow: "hidden" }}>
           {viewMode === "month" ? (
             <>
-              {/* Day headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, marginBottom: 4 }}>
-                {isMobile ? DAYS_SHORT.map(d => (
-                  <div key={d} style={{ padding: "4px 2px", textAlign: "center", fontSize: 9, fontWeight: 700, color: "#94A3B8" }}>{d}</div>
-                )) : DAYS.map(d => (
-                  <div key={d} style={{ padding: "8px 4px", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#94A3B8" }}>{d}</div>
-                ))}
+              <div className="tc-month-grid" style={{ marginBottom: 4 }}>
+                {DAYS.map(d => <div key={d} style={{ padding: "8px 4px", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#94A3B8" }}>{d}</div>)}
               </div>
-              {/* Date grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
+              <div className="tc-month-grid">
                 {monthGrid.map((cell, i) => {
-                  const dayEvents = getEventsForDayFn(cell.date);
-                  const isTodayDate = isToday(cell.date);
-                  const isCurrent = cell.isCurrentMonth;
-                  const dateNum = cell.date.getDate();
+                  const dayEvents = getEventsForDay(cell.date);
+                  const isToday = sameDay(cell.date, today);
                   return (
                     <div key={i}
-                      style={{
-                        minHeight: isMobile ? 44 : 90,
-                        padding: isMobile ? "2px 2px" : "4px 6px",
-                        background: isTodayDate ? "#EEF2FF" : isCurrent ? "#fff" : "#F8FAFC",
-                        borderRadius: 6,
-                        border: isTodayDate ? "2px solid #6366F1" : "1px solid #F1F5F9",
-                        cursor: "pointer",
-                        transition: "background 0.1s",
-                        overflow: "hidden",
-                        maxWidth: "100%",
-                        boxSizing: "border-box",
-                      }}
-                      onClick={() => openCreate(cell.date)}
-                    >
-                      <div style={{
-                        fontSize: isMobile ? 11 : 14,
-                        fontWeight: isTodayDate ? 800 : 500,
-                        color: isTodayDate ? "#6366F1" : isCurrent ? "#1E293B" : "#CBD5E1",
-                        width: isMobile ? 20 : 28,
-                        height: isMobile ? 20 : 28,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderRadius: "50%",
-                        background: isTodayDate ? "#6366F1" : "transparent",
-                        color: isTodayDate ? "#fff" : isCurrent ? "#1E293B" : "#CBD5E1",
-                        marginBottom: isMobile ? 1 : 4,
-                        fontSize: isMobile ? 10 : 14,
-                      }}>
-                        {dateNum}
-                      </div>
-                      {!isMobile && dayEvents.slice(0, 3).map(e => (
-                        <div key={e.id}
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            marginBottom: 2,
-                            background: e.color + "20",
-                            color: e.color,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            cursor: "pointer",
-                            maxWidth: "100%",
-                          }}
-                          onClick={ev => { ev.stopPropagation(); setSelectedEvent(e); }}
-                        >
-                          {e.title.length > 12 ? e.title.slice(0, 12) + "…" : e.title}
+                      className={`tc-day-cell ${isToday ? "today" : ""} ${!cell.isCurrentMonth ? "other-month" : ""}`}
+                      onClick={() => openCreate(cell.date)}>
+                      <div className={`tc-day-num ${isToday ? "today" : ""}`}>{cell.date.getDate()}</div>
+                      {dayEvents.slice(0, 3).map(e => (
+                        <div key={e.id} className="tc-event-dot"
+                          style={{ background: e.color + "20", color: e.color }}
+                          onClick={ev => { ev.stopPropagation(); setSelectedEvent(e); }}>
+                          {e.title.length > 14 ? e.title.slice(0, 14) + "…" : e.title}
                         </div>
                       ))}
-                      {isMobile && dayEvents.length > 0 && (
-                        <div style={{ 
-                          fontSize: 8, 
-                          color: "#6366F1", 
-                          fontWeight: 700, 
-                          textAlign: "center",
-                          background: "#EEF2FF",
-                          borderRadius: 4,
-                          padding: "1px 2px",
-                          marginTop: 1
-                        }}>
-                          {dayEvents.length}
-                        </div>
-                      )}
-                      {!isMobile && dayEvents.length > 3 && (
+                      {dayEvents.length > 3 && (
                         <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 700, padding: "0 4px" }}>+{dayEvents.length - 3} more</div>
                       )}
                     </div>
@@ -479,47 +427,39 @@ export default function TeacherCalendarTab() {
             </>
           ) : (
             /* ── Week View ── */
-            <div style={{ overflow: "auto", maxWidth: "100%", WebkitOverflowScrolling: "touch" }}>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "30px repeat(7, 1fr)" : "60px repeat(7, 1fr)", gap: 0, minWidth: isMobile ? 320 : 600 }}>
+            <div style={{ overflowX: "auto" }}>
+              {/* Week header */}
+              <div className="tc-week-grid">
                 <div />
                 {weekDays.map((d, i) => (
-                  <div key={i} style={{ padding: isMobile ? "4px 2px" : "8px 4px", textAlign: "center", fontSize: isMobile ? 9 : 12, fontWeight: 700, color: isToday(d) ? "#6366F1" : "#94A3B8", borderBottom: isToday(d) ? "2px solid #6366F1" : "2px solid #F1F5F9" }}>
-                    <div style={{ fontSize: isMobile ? 8 : 11, textTransform: "uppercase" }}>{isMobile ? DAYS_SHORT[d.getDay()] : DAYS[d.getDay()]}</div>
-                    <div style={{ fontSize: isMobile ? 12 : 18, fontWeight: 800, color: isToday(d) ? "#6366F1" : "#1E293B" }}>{d.getDate()}</div>
+                  <div key={i} className={`tc-week-header ${sameDay(d, today) ? "today" : ""}`}>
+                    <div style={{ fontSize: 11, textTransform: "uppercase" }}>{DAYS[d.getDay()]}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: sameDay(d, today) ? "#6366F1" : "#1E293B" }}>{d.getDate()}</div>
                   </div>
                 ))}
               </div>
+              {/* Time slots */}
               {hours.map(h => (
-                <div key={h} style={{ display: "grid", gridTemplateColumns: isMobile ? "30px repeat(7, 1fr)" : "60px repeat(7, 1fr)", gap: 0, minWidth: isMobile ? 320 : 600 }}>
-                  <div style={{ fontSize: isMobile ? 7 : 10, color: "#94A3B8", textAlign: "right", paddingRight: isMobile ? 2 : 8, height: isMobile ? 32 : 48, display: "flex", alignItems: "flex-start", paddingTop: 2 }}>
-                    {h > 12 ? h-12 : h}{h >= 12 ? "P" : "A"}
-                  </div>
+                <div key={h} className="tc-week-grid">
+                  <div className="tc-time-label">{h > 12 ? h-12 : h}{h >= 12 ? "PM" : "AM"}</div>
                   {weekDays.map((d, di) => {
-                    const dayEvts = getEventsForHourSlot(d, h);
+                    const dayEvts = getEventsForDay(d).filter(e => {
+                      if (e.all_day) return h === 7; // show all-day events at 7am row
+                      const dt = new Date(e.start_time);
+                      const eHour = dt.getHours(); // local timezone
+                      return eHour === h;
+                    });
                     return (
-                      <div key={di} style={{ borderLeft: "1px solid #F8FAFC", borderBottom: "1px solid #F8FAFC", minHeight: isMobile ? 32 : 48, padding: isMobile ? 1 : 2, cursor: "pointer", background: dayEvts.length > 0 ? "#F8FAFF" : "transparent" }}
-                        onClick={() => {
-                          const clickDate = new Date(d);
-                          clickDate.setHours(h, 0, 0, 0);
-                          openCreate(clickDate);
-                        }}>
+                      <div key={di} className="tc-week-cell" onClick={() => {
+                        const clickDate = new Date(d);
+                        clickDate.setHours(h, 0, 0, 0);
+                        openCreate(clickDate);
+                      }}>
                         {dayEvts.map(e => (
-                          <div key={e.id} style={{
-                            fontSize: isMobile ? 7 : 11,
-                            fontWeight: 600,
-                            padding: isMobile ? "1px 3px" : "3px 6px",
-                            borderRadius: isMobile ? 3 : 6,
-                            marginBottom: 1,
-                            background: e.color + "20",
-                            color: e.color,
-                            borderLeft: `2px solid ${e.color}`,
-                            cursor: "pointer",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
+                          <div key={e.id} className="tc-week-event"
+                            style={{ background: e.color + "20", color: e.color, borderLeft: `3px solid ${e.color}` }}
                             onClick={ev => { ev.stopPropagation(); setSelectedEvent(e); }}>
-                            {isMobile ? "" : fmtTime(e.start_time)} {e.title.length > (isMobile ? 6 : 14) ? e.title.slice(0, isMobile ? 6 : 14) + "…" : e.title}
+                            {fmtTime(e.start_time)} {e.title.length > 16 ? e.title.slice(0, 16) + "…" : e.title}
                           </div>
                         ))}
                       </div>
@@ -532,130 +472,68 @@ export default function TeacherCalendarTab() {
         </div>
 
         {/* ── Sidebar ── */}
-        {!isMobile && (
-          <div style={{ maxWidth: "100%" }}>
-            {/* Mini calendar */}
-            <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#1E293B" }}>{MONTHS_SHORT[currentDate.getMonth()]} {currentDate.getFullYear()}</span>
-                <div style={{ display: "flex", gap: 2 }}>
-                  <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 12 }} onClick={prevMonth}>‹</button>
-                  <button style={{ border: "none", background: "#F1F5F9", borderRadius: 6, padding: "2px 8px", cursor: "pointer", fontSize: 12 }} onClick={nextMonth}>›</button>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, textAlign: "center" }}>
-                {DAYS.map(d => <div key={d} style={{ fontSize: 9, fontWeight: 700, color: "#CBD5E1", padding: "2px 0" }}>{d[0]}</div>)}
-                {monthGrid.slice(0, 35).map((cell, i) => {
-                  const isTodayDate = isToday(cell.date);
-                  const hasEvents = getEventsForDayFn(cell.date).length > 0;
-                  return (
-                    <div key={i}
-                      style={{
-                        fontSize: 11,
-                        fontWeight: isTodayDate ? 800 : 500,
-                        color: !cell.isCurrentMonth ? "#CBD5E1" : isTodayDate ? "#fff" : "#475569",
-                        background: isTodayDate ? "#6366F1" : "transparent",
-                        borderRadius: "50%",
-                        width: 24,
-                        height: 24,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        margin: "0 auto",
-                        cursor: "pointer",
-                        position: "relative",
-                      }}
-                      onClick={() => setCurrentDate(cell.date)}>
-                      {cell.date.getDate()}
-                      {hasEvents && !isTodayDate && <div style={{ position: "absolute", bottom: 0, width: 4, height: 4, borderRadius: "50%", background: "#6366F1" }} />}
-                    </div>
-                  );
-                })}
+        <div>
+          {/* Mini calendar */}
+          <div className="tc-card" style={{ padding: 16, marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#1E293B" }}>
+                {MONTHS[currentDate.getMonth()].slice(0, 3)} {currentDate.getFullYear()}
+              </span>
+              <div style={{ display: "flex", gap: 2 }}>
+                <button className="tc-btn tc-ghost" style={{ padding: "2px 8px", fontSize: 12 }} onClick={prevMonth}>‹</button>
+                <button className="tc-btn tc-ghost" style={{ padding: "2px 8px", fontSize: 12 }} onClick={nextMonth}>›</button>
               </div>
             </div>
-
-            {/* Upcoming events */}
-            <div style={{ background: "#fff", borderRadius: 16, padding: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-              <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "#1E293B" }}>Upcoming Events</h4>
-              {upcoming.length === 0 ? (
-                <p style={{ fontSize: 13, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No upcoming events</p>
-              ) : (
-                upcoming.map(e => (
-                  <div key={e.id}
-                    style={{ padding: "10px 14px", borderRadius: 12, borderLeft: `4px solid ${e.color}`, marginBottom: 8, background: "#FAFAFA", cursor: "pointer", transition: "all 0.15s" }}
-                    onClick={() => setSelectedEvent(e)}>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{e.title}</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "#94A3B8" }}>
-                      {fmtDate(new Date(e.start_time))} {!e.all_day && `· ${fmtTime(e.start_time)}`}
-                      {e.batch_name && ` · ${e.batch_name}`}
-                    </p>
-                    {e.meeting_link && <span style={{ fontSize: 11, color: "#4F46E5", fontWeight: 700 }}>📹 Meeting</span>}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, textAlign: "center" }}>
+              {DAYS.map(d => <div key={d} style={{ fontSize: 9, fontWeight: 700, color: "#CBD5E1", padding: "2px 0" }}>{d[0]}</div>)}
+              {monthGrid.slice(0, 35).map((cell, i) => {
+                const isToday = sameDay(cell.date, today);
+                const hasEvents = getEventsForDay(cell.date).length > 0;
+                return (
+                  <div key={i} style={{ fontSize: 11, fontWeight: isToday ? 800 : 500, color: !cell.isCurrentMonth ? "#CBD5E1" : isToday ? "#fff" : "#475569", background: isToday ? "#6366F1" : "transparent", borderRadius: "50%", width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", cursor: "pointer", position: "relative" }}
+                    onClick={() => setCurrentDate(cell.date)}>
+                    {cell.date.getDate()}
+                    {hasEvents && !isToday && <div style={{ position: "absolute", bottom: 0, width: 4, height: 4, borderRadius: "50%", background: "#6366F1" }} />}
                   </div>
-                ))
-              )}
-            </div>
-
-            {/* Legend */}
-            <div style={{ background: "#fff", borderRadius: 16, padding: 14, marginTop: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>Categories</h4>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {EVENT_TYPES.map(t => (
-                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569" }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 3, background: t.color }} />
-                    {t.icon} {t.label}
-                  </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           </div>
-        )}
-      </div>
 
-      {/* ── Mobile Bottom Bar ── */}
-      {isMobile && (
-        <div style={{ 
-          display: "flex", 
-          gap: 6, 
-          marginTop: 12, 
-          paddingTop: 12, 
-          borderTop: "1px solid #F1F5F9",
-          overflowX: "auto",
-          WebkitOverflowScrolling: "touch",
-          paddingBottom: 4,
-          scrollbarWidth: "none",
-          msOverflowStyle: "none"
-        }}>
-          {EVENT_TYPES.map(t => (
-            <div key={t.id} style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: 4, 
-              fontSize: 11, 
-              color: "#475569",
-              whiteSpace: "nowrap",
-              background: "#F8FAFC",
-              padding: "4px 10px",
-              borderRadius: 20,
-              border: "1px solid #F1F5F9",
-              flexShrink: 0
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: t.color }} />
-              <span>{t.icon} {t.label}</span>
+          {/* Upcoming events */}
+          <div className="tc-card" style={{ padding: 16 }}>
+            <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 800, color: "#1E293B" }}>Upcoming Events</h4>
+            {upcoming.length === 0 ? (
+              <p style={{ fontSize: 13, color: "#94A3B8", textAlign: "center", padding: "20px 0" }}>No upcoming events</p>
+            ) : (
+              upcoming.map(e => (
+                <div key={e.id} className="tc-sidebar-event" style={{ borderLeftColor: e.color }}
+                  onClick={() => setSelectedEvent(e)}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{e.title}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 11, color: "#94A3B8" }}>
+                    {fmtDate(new Date(e.start_time))} {!e.all_day && `· ${fmtTime(e.start_time)}`}
+                    {e.batch_name && ` · ${e.batch_name}`}
+                  </p>
+                  {e.meeting_link && <span style={{ fontSize: 11, color: "#4F46E5", fontWeight: 700 }}>📹 Meeting</span>}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Legend */}
+          <div className="tc-card" style={{ padding: 14, marginTop: 12 }}>
+            <h4 style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>Categories</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {EVENT_TYPES.map(t => (
+                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569" }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: t.color }} />
+                  {t.icon} {t.label}
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
-      )}
-
-      {/* ── Keyframe animation ── */}
-      <style>{`
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(10px) scale(0.97); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @media (max-width: 768px) {
-          .tc-root * { box-sizing: border-box; }
-        }
-      `}</style>
+      </div>
     </div>
   );
 }

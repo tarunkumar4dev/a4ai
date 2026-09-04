@@ -41,6 +41,11 @@ interface ClassItem {
   roomNumber?: string;
 }
 
+/* ───── CONSTANTS ───── */
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 /* ───── ICONS ───── */
 const I = {
   Back: () => (
@@ -146,57 +151,7 @@ const I = {
   ),
 };
 
-/* ───── DATA HELPERS ───── */
-function toDateStr(d: Date) { return d.toISOString().slice(0, 10); }
-
-const STUDENT_NAMES = [
-  "Aarav Sharma", "Diya Patel", "Kabir Nair", "Meera Iyer", "Rohan Gupta",
-  "Sana Khan", "Vikram Rao", "Priya Singh", "Arjun Reddy", "Ananya Das",
-  "Ishaan Joshi", "Kavya Menon", "Rishi Verma", "Tanya Bose", "Nikhil Pandey",
-  "Pooja Thakur", "Varun Kapoor", "Shreya Nath", "Amit Saxena", "Neha Agarwal",
-  "Rahul Mehta", "Sneha Kulkarni", "Aditya Roy", "Nisha Verma", "Karan Malhotra",
-  "Riya Chopra", "Siddharth Jain", "Anushka Rao", "Manav Shah", "Divya Krishnan",
-  "Harsh Vardhan", "Ishita Gupta", "Pranav Desai", "Tanvi Kaur", "Yash Raj",
-  "Zoya Sheikh", "Aryan Bansal", "Kriti Sanon", "Lakshya Singh", "Mahi Patel",
-  "Naman Arora", "Ojasvi Joshi", "Parth Khanna", "Qasim Ali", "Ritika Sharma",
-];
-
-const seededRandom = (seed: number) => {
-  const x = Math.sin(seed) * 10000;
-  return x - Math.floor(x);
-};
-
-const generateHistory = (seed: number): { date: string; status: Status }[] => {
-  const history = [];
-  const statuses: Status[] = ["present", "present", "present", "absent", "leave"];
-  for (let d = 1; d <= 15; d++) {
-    const rand = seededRandom(seed + d * 10);
-    history.push({
-      date: `2026-08-${String(d).padStart(2, "0")}`,
-      status: statuses[Math.floor(rand * 5)],
-    });
-  }
-  return history;
-};
-
-const makeStudents = (count: number): Student[] =>
-  STUDENT_NAMES.slice(0, count).map((name, i) => {
-    const rand = seededRandom(i);
-    const statuses: Status[] = ["present", "present", "present", "absent", "leave"];
-    return {
-      id: `s${i}`,
-      name,
-      status: statuses[Math.floor(rand * 5)],
-      attendanceHistory: generateHistory(rand),
-    };
-  });
-
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const DAYS_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-/* ───── HELPERS ───── */
+/* ───── STATUS HELPERS ───── */
 const statusLabel: Record<Status, string> = { present: "P", absent: "A", leave: "L" };
 const statusFullLabel: Record<Status, string> = { present: "Present", absent: "Absent", leave: "On Leave" };
 const statusColor: Record<Status, { bg: string; text: string; ring: string; dot: string }> = {
@@ -210,237 +165,100 @@ const statusBg: Record<Status, string> = {
   leave: "bg-blue-50/80 dark:bg-blue-900/20",
 };
 
-/* ═══════════════════════════════════════════════════════════════════
-   TOAST
-   ═══════════════════════════════════════════════════════════════════ */
-interface Toast {
-  id: number;
-  message: string;
-  type: "success" | "info" | "warning";
-}
+/* ───── DATA HELPERS ───── */
+function toDateStr(d: Date) { return d.toISOString().slice(0, 10); }
 
-const ToastStack = memo(({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) => {
-  if (toasts.length === 0) return null;
+/* ── Toast notification stack ─────────────────────────────── */
+type Toast = { id: number; message: string; type?: string };
+
+function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
+  if (!toasts.length) return null;
   return (
-    <div className="fixed top-3 right-3 sm:top-4 sm:right-4 z-[300] space-y-2 max-w-[min(100vw-1.5rem,24rem)] pointer-events-none">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className="pointer-events-auto animate-[popIn_0.28s_cubic-bezier(0.16,1,0.3,1)_forwards] glass-overlay rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3 shadow-xl will-change-transform"
-        >
-          <span
-            className={`shrink-0 ${
-              toast.type === "success" ? "text-emerald-600" : toast.type === "warning" ? "text-amber-600" : "text-blue-600"
-            }`}
-          >
-            {toast.type === "success" ? <I.Check /> : toast.type === "warning" ? <I.Alert /> : <I.Info />}
-          </span>
-          <p className="text-[13px] sm:text-sm font-bold text-slate-800 dark:text-white flex-1 leading-snug">{toast.message}</p>
-          <button
-            onClick={() => onDismiss(toast.id)}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0 p-1 -mr-1 rounded-lg active:scale-90 transition-transform"
-            aria-label="Dismiss"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+    <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, pointerEvents: "none" }}>
+      {toasts.map(t => (
+        <div key={t.id} onClick={() => onDismiss(t.id)}
+          style={{ background: "#1E293B", color: "#fff", borderRadius: 12, padding: "10px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", cursor: "pointer", pointerEvents: "all", maxWidth: 320, display: "flex", alignItems: "center", gap: 8 }}>
+          <span>{t.type === "info" ? "ℹ️" : "✅"}</span>
+          {t.message}
         </div>
       ))}
     </div>
   );
-});
-ToastStack.displayName = "ToastStack";
+}
 
-/* ═══════════════════════════════════════════════════════════════════
-   CONFIRM MODAL
-   ═══════════════════════════════════════════════════════════════════ */
-const ConfirmModal = memo(
-  ({
-    isOpen,
-    onClose,
-    onConfirm,
-    title,
-    message,
-    confirmLabel = "Confirm",
-    type = "info",
-  }: {
-    isOpen: boolean;
-    onClose: () => void;
-    onConfirm: () => void;
-    title: string;
-    message: string;
-    confirmLabel?: string;
-    type?: "success" | "warning" | "info";
-  }) => {
-    if (!isOpen) return null;
-    return (
-      <div className="fixed inset-0 z-[250] flex items-end sm:items-center justify-center px-0 sm:px-4">
-        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={onClose} />
-        <div className="glass-overlay rounded-t-[28px] sm:rounded-[32px] p-5 sm:p-8 w-full max-w-md relative z-10 animate-[slideUp_0.3s_cubic-bezier(0.16,1,0.3,1)] sm:animate-[popIn_0.28s_cubic-bezier(0.16,1,0.3,1)] will-change-transform">
-          <div className="flex items-start gap-3.5 sm:gap-4 mb-5">
-            <div
-              className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 ${
-                type === "success" ? "bg-emerald-100 text-emerald-600" : type === "warning" ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"
-              }`}
-            >
-              {type === "success" ? <I.Check /> : type === "warning" ? <I.Alert /> : <I.Info />}
-            </div>
-            <div className="flex-1 min-w-0 pt-0.5">
-              <h3 className="font-black text-base sm:text-lg text-slate-900 dark:text-white leading-tight">{title}</h3>
-              <p className="text-[13px] sm:text-sm text-slate-500 font-medium mt-1 leading-relaxed">{message}</p>
-            </div>
-          </div>
-          <div className="flex gap-2.5 sm:gap-3 justify-end">
-            <button
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-5 py-2.5 rounded-2xl inset-pill border-none font-bold text-sm text-slate-600 dark:text-slate-300 active:scale-[0.97] transition-transform"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                onConfirm();
-                onClose();
-              }}
-              className="flex-1 sm:flex-none px-5 py-2.5 rounded-2xl font-bold text-sm text-white active:scale-[0.97] transition-transform"
-              style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
-            >
-              {confirmLabel}
-            </button>
-          </div>
+/* ── Confirm Modal ─────────────────────────────────────────── */
+function ConfirmModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  type = "info",
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  type?: "success" | "warning" | "info";
+}) {
+  if (!isOpen) return null;
+  const isWarning = type === "warning";
+  return (
+    <div className="fixed inset-0 z-[250] flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-[popIn_0.28s_cubic-bezier(0.16,1,0.3,1)]">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">{message}</p>
+        <div className="flex gap-3 mt-6 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+          <button onClick={onConfirm} className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition-colors ${isWarning ? "bg-red-500 hover:bg-red-600" : "bg-blue-500 hover:bg-blue-600"}`}>
+            {confirmLabel}
+          </button>
         </div>
       </div>
-    );
-  }
-);
-ConfirmModal.displayName = "ConfirmModal";
+    </div>
+  );
+}
 
-/* ═══════════════════════════════════════════════════════════════════
-   MEMOISED STUDENT ROW (desktop table)
-   ═══════════════════════════════════════════════════════════════════ */
-const StudentRow = memo(
-  ({
-    student,
-    index,
-    onMark,
-    getPct,
-  }: {
-    student: Student;
-    index: number;
-    onMark: (id: string, s: Status) => void;
-    getPct: (s: Student) => number;
-  }) => {
-    const pct = getPct(student);
-    const initials = student.name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2);
-    const hue = (index * 37) % 360;
+/* ── Student Row (Desktop) ────────────────────────────────── */
+const StudentRow = memo(({
+  student,
+  index,
+  onMark,
+  getPct,
+}: {
+  student: Student;
+  index: number;
+  onMark: (id: string, s: Status) => void;
+  getPct: (s: Student) => number;
+}) => {
+  const pct = getPct(student);
+  const initials = student.name.split(" ").map(w => w[0]).join("").slice(0, 2);
+  const hue = (index * 37) % 360;
 
-    return (
-      <tr className={`border-t border-slate-100/80 dark:border-white/5 transition-colors duration-150 ${statusBg[student.status]}`}>
-        <td className="py-2.5 sm:py-3 pl-2 sm:pl-3 text-sm font-bold text-slate-400 w-10 sm:w-12">
-          <span className="flex items-center gap-1.5 sm:gap-2">
-            {index + 1}
-            <span className={`w-1 h-6 sm:h-8 rounded-full ${statusColor[student.status].dot} opacity-70`} />
-          </span>
-        </td>
-        <td className="py-2.5 sm:py-3">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div
-              className="w-8 h-8 rounded-[10px] flex items-center justify-center text-white text-[11px] font-black shrink-0"
-              style={{ background: `hsl(${hue}, 55%, 52%)` }}
-            >
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <span className="font-bold text-[13px] sm:text-sm text-slate-800 dark:text-white truncate block">{student.name}</span>
-              <span className="text-[10px] font-medium text-slate-400 block">Roll {index + 1}</span>
-            </div>
-          </div>
-        </td>
-        <td className="py-2.5 sm:py-3">
-          <div className="flex items-center justify-center gap-1.5 sm:gap-2">
-            {(["present", "absent", "leave"] as Status[]).map((s) => {
-              const active = student.status === s;
-              const c = statusColor[s];
-              return (
-                <button
-                  key={s}
-                  onClick={() => onMark(student.id, s)}
-                  className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-black text-[13px] sm:text-sm transition-all duration-150 active:scale-90 touch-manipulation ${
-                    active
-                      ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring} scale-105`
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-                  }`}
-                  title={`Mark as ${statusFullLabel[s]}`}
-                  aria-pressed={active}
-                >
-                  {statusLabel[s]}
-                </button>
-              );
-            })}
-          </div>
-        </td>
-        <td className="py-2.5 sm:py-3 text-center w-14 sm:w-16">
-          <span className={`text-[13px] sm:text-sm font-extrabold ${pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}`}>
-            {pct}%
-          </span>
-          <span className="block text-[9px] font-bold text-slate-400">overall</span>
-        </td>
-      </tr>
-    );
-  }
-);
-StudentRow.displayName = "StudentRow";
-
-/* ═══════════════════════════════════════════════════════════════════
-   MEMOISED MOBILE CARD
-   ═══════════════════════════════════════════════════════════════════ */
-const StudentCard = memo(
-  ({
-    student,
-    index,
-    onMark,
-    getPct,
-  }: {
-    student: Student;
-    index: number;
-    onMark: (id: string, s: Status) => void;
-    getPct: (s: Student) => number;
-  }) => {
-    const pct = getPct(student);
-    const initials = student.name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 2);
-    const hue = (index * 37) % 360;
-
-    return (
-      <div
-        className={`rounded-2xl p-3.5 border border-slate-100/80 dark:border-white/5 transition-colors duration-150 ${statusBg[student.status]}`}
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0"
-            style={{ background: `hsl(${hue}, 55%, 52%)` }}
-          >
+  return (
+    <tr className={`border-t border-slate-100/80 dark:border-white/5 transition-colors duration-150 ${statusBg[student.status]}`}>
+      <td className="py-2.5 sm:py-3 pl-2 sm:pl-3 text-sm font-bold text-slate-400 w-10 sm:w-12">
+        <span className="flex items-center gap-1.5 sm:gap-2">
+          {index + 1}
+          <span className={`w-1 h-6 sm:h-8 rounded-full ${statusColor[student.status].dot} opacity-70`} />
+        </span>
+      </td>
+      <td className="py-2.5 sm:py-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-[10px] flex items-center justify-center text-white text-[11px] font-black shrink-0" style={{ background: `hsl(${hue}, 55%, 52%)` }}>
             {initials}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-[14px] text-slate-800 dark:text-white truncate">{student.name}</p>
-            <p className="text-[11px] font-medium text-slate-400">
-              #{index + 1} · Roll {index + 1} ·{" "}
-              <span className={pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}>{pct}%</span>
-            </p>
+          <div className="min-w-0">
+            <span className="font-bold text-[13px] sm:text-sm text-slate-800 dark:text-white truncate block">{student.name}</span>
+            <span className="text-[10px] font-medium text-slate-400 block">Roll {index + 1}</span>
           </div>
-          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusColor[student.status].dot}`} />
         </div>
-        <div className="flex gap-2">
+      </td>
+      <td className="py-2.5 sm:py-3">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2">
           {(["present", "absent", "leave"] as Status[]).map((s) => {
             const active = student.status === s;
             const c = statusColor[s];
@@ -448,27 +266,90 @@ const StudentCard = memo(
               <button
                 key={s}
                 onClick={() => onMark(student.id, s)}
-                className={`flex-1 h-11 rounded-xl font-black text-sm transition-all duration-150 active:scale-[0.96] touch-manipulation ${
+                className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-black text-[13px] sm:text-sm transition-all duration-150 active:scale-90 touch-manipulation ${
                   active
-                    ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring}`
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                    ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring} scale-105`
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
+                title={`Mark as ${statusFullLabel[s]}`}
                 aria-pressed={active}
               >
-                {statusFullLabel[s]}
+                {statusLabel[s]}
               </button>
             );
           })}
         </div>
+      </td>
+      <td className="py-2.5 sm:py-3 text-center w-14 sm:w-16">
+        <span className={`text-[13px] sm:text-sm font-extrabold ${pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}`}>
+          {pct}%
+        </span>
+        <span className="block text-[9px] font-bold text-slate-400">overall</span>
+      </td>
+    </tr>
+  );
+});
+StudentRow.displayName = "StudentRow";
+
+/* ── Student Card (Mobile) ────────────────────────────────── */
+const StudentCard = memo(({
+  student,
+  index,
+  onMark,
+  getPct,
+}: {
+  student: Student;
+  index: number;
+  onMark: (id: string, s: Status) => void;
+  getPct: (s: Student) => number;
+}) => {
+  const pct = getPct(student);
+  const initials = student.name.split(" ").map(w => w[0]).join("").slice(0, 2);
+  const hue = (index * 37) % 360;
+
+  return (
+    <div className={`rounded-2xl p-3.5 border border-slate-100/80 dark:border-white/5 transition-colors duration-150 ${statusBg[student.status]}`}>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0" style={{ background: `hsl(${hue}, 55%, 52%)` }}>
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-[14px] text-slate-800 dark:text-white truncate">{student.name}</p>
+          <p className="text-[11px] font-medium text-slate-400">
+            #{index + 1} · Roll {index + 1} ·{" "}
+            <span className={pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}>{pct}%</span>
+          </p>
+        </div>
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusColor[student.status].dot}`} />
       </div>
-    );
-  }
-);
+      <div className="flex gap-2">
+        {(["present", "absent", "leave"] as Status[]).map((s) => {
+          const active = student.status === s;
+          const c = statusColor[s];
+          return (
+            <button
+              key={s}
+              onClick={() => onMark(student.id, s)}
+              className={`flex-1 h-11 rounded-xl font-black text-sm transition-all duration-150 active:scale-[0.96] touch-manipulation ${
+                active
+                  ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring}`
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+              }`}
+              aria-pressed={active}
+            >
+              {statusFullLabel[s]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
 StudentCard.displayName = "StudentCard";
 
-/* ═══════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════
    MAIN COMPONENT
-   ═══════════════════════════════════════════════════════════════════ */
+═══════════════════════════════════════════════════════════ */
 export default function TeacherAttendanceView() {
   const { user } = useAuth();
   const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
@@ -522,20 +403,17 @@ export default function TeacherAttendanceView() {
         if (!mem) { setBatchesLoading(false); return; }
         setInstituteId(mem.institute_id);
 
-        // Get specifically assigned batches first
         const { data: tb } = await supabase
           .from("teacher_batches").select("batch_id")
           .eq("teacher_id", user?.id).eq("institute_id", mem.institute_id);
 
         let batches: any[] = [];
         if (tb && tb.length > 0) {
-          // Teacher has specific batches assigned
           const { data: bRows } = await supabase
             .from("batches").select("id, name, class_level")
             .in("id", tb.map(t => t.batch_id)).eq("is_active", true).order("name");
           batches = bRows || [];
         } else if (mem.department_id) {
-          // Fallback: show all batches in teacher's department
           const { data: bRows } = await supabase
             .from("batches").select("id, name, class_level")
             .eq("institute_id", mem.institute_id).eq("department_id", mem.department_id)
@@ -559,44 +437,41 @@ export default function TeacherAttendanceView() {
     if (user?.id) loadBatches();
   }, [user?.id]);
 
-  const openClass = useCallback(
-    async (cls: ClassItem) => {
-      setSelectedClass(cls);
-      setStudents([]);
-      setHasChanges(false);
-      setSearchQuery("");
-      setStatusFilter("all");
-      setLastSaved(null);
-      try {
-        const { data: stuRows } = await supabase
-          .from("students").select("id, name, roll_no")
-          .eq("batch_id", cls.id).eq("is_active", true).order("roll_no");
-        if (!stuRows || stuRows.length === 0) {
-          addToast(`${cls.name} has no students yet`, "info");
-          setOriginalStudents([]);
-          return;
-        }
-        const dateStr = toDateStr(selectedDate);
-        const { data: existing } = await supabase
-          .from("attendance").select("records")
-          .eq("batch_id", cls.id).eq("date", dateStr).single();
-        const savedRecords: Record<string, Status> = existing?.records || {};
-        const loaded: Student[] = stuRows.map(s => ({
-          id: s.id,
-          name: s.name + (s.roll_no ? ` (${s.roll_no})` : ""),
-          status: (savedRecords[s.id] as Status) || "present",
-          attendanceHistory: [],
-        }));
-        setStudents(loaded);
-        setOriginalStudents(JSON.parse(JSON.stringify(loaded)));
-        addToast(`Opened ${cls.name} — ${loaded.length} students`, "info");
-      } catch (e) {
-        console.error("openClass:", e);
-        addToast("Failed to load students", "success");
+  const openClass = useCallback(async (cls: ClassItem) => {
+    setSelectedClass(cls);
+    setStudents([]);
+    setHasChanges(false);
+    setSearchQuery("");
+    setStatusFilter("all");
+    setLastSaved(null);
+    try {
+      const { data: stuRows } = await supabase
+        .from("students").select("id, name, roll_no")
+        .eq("batch_id", cls.id).eq("is_active", true).order("roll_no");
+      if (!stuRows || stuRows.length === 0) {
+        addToast(`${cls.name} has no students yet`, "info");
+        setOriginalStudents([]);
+        return;
       }
-    },
-    [addToast, selectedDate]
-  );
+      const dateStr = toDateStr(selectedDate);
+      const { data: existing } = await supabase
+        .from("attendance").select("records")
+        .eq("batch_id", cls.id).eq("date", dateStr).single();
+      const savedRecords: Record<string, Status> = existing?.records || {};
+      const loaded: Student[] = stuRows.map(s => ({
+        id: s.id,
+        name: s.name + (s.roll_no ? ` (${s.roll_no})` : ""),
+        status: (savedRecords[s.id] as Status) || "present",
+        attendanceHistory: [],
+      }));
+      setStudents(loaded);
+      setOriginalStudents(JSON.parse(JSON.stringify(loaded)));
+      addToast(`Opened ${cls.name} — ${loaded.length} students`, "info");
+    } catch (e) {
+      console.error("openClass:", e);
+      addToast("Failed to load students", "success");
+    }
+  }, [addToast, selectedDate]);
 
   const goBack = useCallback(() => {
     if (hasChanges) {
@@ -695,24 +570,19 @@ export default function TeacherAttendanceView() {
     return cells;
   }, [calMonth, calYear]);
 
-  const isToday = useCallback(
-    (d: number) => {
-      const now = new Date();
-      return d === now.getDate() && calMonth === now.getMonth() && calYear === now.getFullYear();
-    },
-    [calMonth, calYear]
-  );
-  const isSelected = useCallback(
-    (d: number) => d === selectedDate.getDate() && calMonth === selectedDate.getMonth() && calYear === selectedDate.getFullYear(),
-    [selectedDate, calMonth, calYear]
-  );
-  const isWeekend = useCallback(
-    (d: number) => {
-      const day = new Date(calYear, calMonth, d).getDay();
-      return day === 0 || day === 6;
-    },
-    [calMonth, calYear]
-  );
+  const isToday = useCallback((d: number) => {
+    const now = new Date();
+    return d === now.getDate() && calMonth === now.getMonth() && calYear === now.getFullYear();
+  }, [calMonth, calYear]);
+
+  const isSelected = useCallback((d: number) => 
+    d === selectedDate.getDate() && calMonth === selectedDate.getMonth() && calYear === selectedDate.getFullYear(),
+  [selectedDate, calMonth, calYear]);
+
+  const isWeekend = useCallback((d: number) => {
+    const day = new Date(calYear, calMonth, d).getDay();
+    return day === 0 || day === 6;
+  }, [calMonth, calYear]);
 
   // Analytics
   const presentCount = useMemo(() => students.filter((s) => s.status === "present").length, [students]);
@@ -792,7 +662,9 @@ export default function TeacherAttendanceView() {
 
               <div className="mt-4 flex items-center gap-2 inset-pill border-none rounded-2xl px-4 py-2 sm:px-5 sm:py-2.5">
                 <I.Users />
-                <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200">{batchesLoading ? "Loading..." : (fetchedBatches.length + (fetchedBatches.length !== 1 ? " batches" : " batch") + " assigned")}</span>
+                <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200">
+                  {batchesLoading ? "Loading..." : `${fetchedBatches.length} ${fetchedBatches.length !== 1 ? "batches" : "batch"} assigned`}
+                </span>
               </div>
 
               <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-2 w-full">
@@ -963,7 +835,6 @@ export default function TeacherAttendanceView() {
                       <I.Clock /> {cls.timeSlot}
                     </p>
                   )}
-                  {cls.timeSlot && !cls.timeSlot.startsWith("Class") && <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">{cls.timeSlot}</p>}
                   <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-2 flex items-center gap-1">
                     Tap to mark attendance
                     <span className="inline-block transition-transform duration-200 group-hover:translate-x-1">→</span>

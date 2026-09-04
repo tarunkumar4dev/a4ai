@@ -140,7 +140,7 @@ function PremiumFlashCard({
              
              {/* Top Right Live Badge */}
              <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20">
-               <Badge className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 text-xs font-bold animate-pulse shadow-lg">
+               <Badge className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 text-xs font-extrabold animate-pulse shadow-lg">
                  LIVE
                </Badge>
              </div>
@@ -157,10 +157,9 @@ function PremiumFlashCard({
                <div className="space-y-2 sm:space-y-3">
                  {/* Title - Top Aligned */}
                  <div className="pr-10 sm:pr-12 mt-8"> 
-                   <h3 className="text-base sm:text-lg md:text-xl font-bold text-white leading-tight tracking-tight drop-shadow-lg line-clamp-2">
+                   <h3 className="text-base sm:text-lg md:text-xl font-extrabold text-white leading-tight tracking-tight drop-shadow-lg line-clamp-2">
                      {title}
                    </h3>
-                   {/* Subtitle removed as requested */}
                  </div>
                </div>
      
@@ -433,7 +432,7 @@ const ContestLandingPage: React.FC = () => {
                   }}
                 />
                 <div className="hidden sm:block">
-                  <h1 className="text-lg font-bold tracking-tight text-slate-900">a4ai <span className="text-indigo-600">Contest Zone</span></h1>
+                  <h1 className="text-lg font-extrabold tracking-tight text-slate-900">a4ai <span className="text-indigo-600">Contest Zone</span></h1>
                 </div>
               </motion.div>
             </div>
@@ -450,7 +449,7 @@ const ContestLandingPage: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search contests, topics..."
-                  className="pl-10 h-10 rounded-xl bg-slate-100/80 border-transparent focus:bg-white focus:border-indigo-200 focus:ring-3 focus:ring-indigo-500/20 transition-all"
+                  className="pl-10 h-10 rounded-xl bg-slate-100/80 border-transparent focus:bg-white focus:border-indigo-200 focus:ring-3 focus:ring-indigo-500/20 transition-all font-medium"
                 />
               </motion.div>
             </div>
@@ -474,10 +473,10 @@ const ContestLandingPage: React.FC = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-white font-extrabold text-xs shadow-sm">
                   <Award size={12} />
                 </div>
-                <span className="font-bold text-amber-800 text-sm">{coins.toLocaleString()}</span>
+                <span className="font-extrabold text-amber-800 text-sm">{coins.toLocaleString()}</span>
               </motion.div>
 
               {/* User Profile */}
@@ -510,7 +509,7 @@ const ContestLandingPage: React.FC = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search contests..."
                     autoFocus
-                    className="w-full h-11 rounded-xl bg-slate-100/80 border-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+                    className="w-full h-11 rounded-xl bg-slate-100/80 border-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 font-medium"
                   />
                 </div>
               </motion.div>
@@ -529,7 +528,7 @@ const ContestLandingPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">
               Ready to Compete, <br className="sm:hidden" />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">
                 {userProfile?.full_name?.split(' ')[0] || "Tarun"}?
@@ -565,10 +564,10 @@ const ContestLandingPage: React.FC = () => {
         {/* 2. Hero FlashCards - Mega Contests */}
         <section>
           <div className="flex items-center justify-between mb-4 sm:mb-5">
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 flex items-center gap-2">
               <Sparkles size={18} className="text-indigo-500" /> Mega Contests
             </h2>
-            <Badge variant="outline" className="text-xs bg-indigo-50 text-indigo-700 border-indigo-200">
+            <Badge variant="outline" className="text-xs font-bold bg-indigo-50 text-indigo-700 border-indigo-200">
               Live Today
             </Badge>
           </div>
@@ -594,8 +593,8 @@ const ContestLandingPage: React.FC = () => {
             {/* Topic Pills */}
             <div>
               <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Browse Topics</h3>
-                <span className="text-xs text-slate-400">{topics.reduce((sum, t) => sum + t.count, 0)} topics</span>
+                <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider ml-1">Browse Topics</h3>
+                <span className="text-xs text-slate-400 font-medium">{topics.reduce((sum, t) => sum + t.count, 0)} topics</span>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
                 {topics.map((topic, index) => {
@@ -620,7 +619,7 @@ const ContestLandingPage: React.FC = () => {
                       <span className="text-base">{topic.icon}</span>
                       {topic.name}
                       {active && (
-                        <span className="bg-white/20 px-2 py-0.5 rounded-lg text-xs ml-1.5">
+                        <span className="bg-white/20 px-2 py-0.5 rounded-lg text-xs font-bold ml-1.5">
                           {topic.count}
                         </span>
                       )}
@@ -655,8 +654,8 @@ const ContestLandingPage: React.FC = () => {
                     ) : (
                       <div className="p-10 text-center">
                         <Search size={48} className="text-slate-300 mx-auto mb-4" />
-                        <p className="text-slate-400 font-medium">No contests found.</p>
-                        <p className="text-slate-400 text-sm mt-1">Try a different search term</p>
+                        <p className="text-slate-400 font-bold">No contests found.</p>
+                        <p className="text-slate-400 text-sm font-medium mt-1">Try a different search term</p>
                       </div>
                     )}
                   </div>
@@ -730,12 +729,12 @@ function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, i
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             {isOngoing && (
-              <Badge className="bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 text-xs">
+              <Badge className="bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 text-xs font-extrabold">
                 LIVE
               </Badge>
             )}
             <Badge variant="outline" className={clsx(
-              "text-xs font-medium",
+              "text-xs font-bold",
               data.difficulty === "Easy" ? "border-green-200 text-green-700 bg-green-50" :
               data.difficulty === "Medium" ? "border-amber-200 text-amber-700 bg-amber-50" :
               "border-red-200 text-red-700 bg-red-50"
@@ -748,7 +747,7 @@ function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, i
             {data.title}
           </h4>
           
-          <div className="flex flex-wrap items-center gap-3 mt-2.5 text-sm text-slate-500">
+          <div className="flex flex-wrap items-center gap-3 mt-2.5 text-sm font-medium text-slate-500">
             <span className="flex items-center gap-1.5">
               <Users size={14} />
               {data.participants.toLocaleString()} participants
@@ -766,7 +765,7 @@ function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, i
         <Button 
           size="sm"
           className={clsx(
-            "rounded-xl font-bold px-6 h-10 w-full sm:w-auto shadow-md transition-all",
+            "rounded-xl font-extrabold px-6 h-10 w-full sm:w-auto shadow-md transition-all",
             isOngoing 
               ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white" 
               : "bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-lg"
@@ -791,23 +790,23 @@ function ProblemRow({ data, onClick, index }: { data: Problem, onClick: any, ind
       className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 cursor-pointer group"
     >
       <div className="flex items-center gap-3 sm:gap-4">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex shrink-0 items-center justify-center text-slate-600 font-bold text-sm group-hover:from-indigo-100 group-hover:to-purple-100 group-hover:text-indigo-600 transition-all shadow-sm">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex shrink-0 items-center justify-center text-slate-600 font-extrabold text-sm group-hover:from-indigo-100 group-hover:to-purple-100 group-hover:text-indigo-600 transition-all shadow-sm">
           #{data.id}
         </div>
         <div>
-          <h4 className="font-semibold text-slate-900 text-sm group-hover:text-indigo-700 line-clamp-2">
+          <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-700 line-clamp-2">
             {data.title}
           </h4>
           <div className="flex items-center gap-3 mt-1.5">
             <Badge variant="outline" className={clsx(
-              "text-xs font-medium px-2",
+              "text-xs font-bold px-2",
               data.difficulty === "Easy" ? "border-green-200 text-green-700 bg-green-50" :
               data.difficulty === "Medium" ? "border-amber-200 text-amber-700 bg-amber-50" :
               "border-red-200 text-red-700 bg-red-50"
             )}>
               {data.difficulty}
             </Badge>
-            <span className="text-xs text-slate-500">Acc: {data.acceptance}</span>
+            <span className="text-xs font-medium text-slate-500">Acc: {data.acceptance}</span>
           </div>
         </div>
       </div>
@@ -832,12 +831,12 @@ function CoinsCard({ coins }: { coins: number }) {
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <p className="text-amber-100 text-sm font-medium mb-1">Your Balance</p>
+            <p className="text-amber-100 text-sm font-bold mb-1">Your Balance</p>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl sm:text-4xl font-black tracking-tight">{coins.toLocaleString()}</span>
               <span className="text-xl opacity-80">©</span>
             </div>
-            <p className="text-amber-100/80 text-sm mt-2">Earn more by solving problems</p>
+            <p className="text-amber-100/80 text-sm font-medium mt-2">Earn more by solving problems</p>
           </div>
           <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-lg">
             <Award size={24} className="text-white" />
@@ -848,7 +847,7 @@ function CoinsCard({ coins }: { coins: number }) {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => window.location.href = '/coinshop'}
-          className="w-full bg-white text-amber-700 font-bold h-12 rounded-xl shadow-lg hover:shadow-xl hover:bg-amber-50 transition-all flex items-center justify-center gap-2"
+          className="w-full bg-white text-amber-700 font-extrabold h-12 rounded-xl shadow-lg hover:shadow-xl hover:bg-amber-50 transition-all flex items-center justify-center gap-2"
         >
           <Sparkles size={16} />
           Redeem Rewards
@@ -882,8 +881,8 @@ function ScheduleWidget() {
             <Calendar size={20} className="text-indigo-600" />
           </div>
           <div>
-            <h3 className="font-bold text-slate-900">Study Calendar</h3>
-            <p className="text-slate-500 text-sm">Upcoming tests & deadlines</p>
+            <h3 className="font-extrabold text-slate-900">Study Calendar</h3>
+            <p className="text-slate-500 text-sm font-medium">Upcoming tests & deadlines</p>
           </div>
         </div>
         
@@ -894,7 +893,7 @@ function ScheduleWidget() {
             const isToday = index === currentDay;
             return (
               <div key={`${day.full}-${day.id}`} className="flex flex-col items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">{day.label}</span>
+                <span className="text-xs font-bold text-slate-500">{day.label}</span>
                 <div className={clsx(
                   "w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all",
                   isToday 
@@ -914,13 +913,13 @@ function ScheduleWidget() {
             <div className="w-1.5 bg-gradient-to-b from-indigo-500 to-purple-500 rounded-full h-full min-h-[48px]" />
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-0.5 text-xs">
+                <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-0.5 text-xs font-extrabold">
                   Physics
                 </Badge>
-                <span className="text-xs text-indigo-600 font-medium">Mock Test</span>
+                <span className="text-xs text-indigo-600 font-bold">Mock Test</span>
               </div>
               <h4 className="text-sm font-bold text-indigo-900">Weekly Assessment</h4>
-              <p className="text-xs text-indigo-600 mt-0.5">Today • 7:30 PM • 60 mins</p>
+              <p className="text-xs text-indigo-600 font-medium mt-0.5">Today • 7:30 PM • 60 mins</p>
             </div>
           </div>
         </div>
@@ -934,40 +933,40 @@ function ProfileWidget({ userStats }: { userStats: any }) {
     <Card className="rounded-2xl sm:rounded-3xl border-slate-200 shadow-sm overflow-hidden">
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 border-4 border-white shadow-lg flex items-center justify-center text-white font-bold text-xl">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 border-4 border-white shadow-lg flex items-center justify-center text-white font-extrabold text-xl">
             T
           </div>
           <div>
-            <h3 className="font-bold text-slate-900 text-lg">Tarun</h3>
+            <h3 className="font-extrabold text-slate-900 text-lg">Tarun</h3>
             <div className="flex items-center gap-2 mt-1">
-              <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white">
+              <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold">
                 {userStats.rank}
               </Badge>
-              <span className="text-xs text-slate-500">Student</span>
+              <span className="text-xs font-medium text-slate-500">Student</span>
             </div>
           </div>
         </div>
         
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100 text-center shadow-sm">
-            <div className="text-xs font-bold text-slate-500 uppercase mb-2">Solved</div>
+            <div className="text-xs font-extrabold text-slate-500 uppercase mb-2">Solved</div>
             <div className="text-2xl font-black text-slate-900">{userStats.solved}</div>
             <Progress value={75} className="h-1.5 mt-2" />
           </div>
           <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100 text-center shadow-sm">
-            <div className="text-xs font-bold text-slate-500 uppercase mb-2">Streak</div>
+            <div className="text-xs font-extrabold text-slate-500 uppercase mb-2">Streak</div>
             <div className="text-2xl font-black text-slate-900 flex items-center justify-center gap-1.5">
               {userStats.streak} 
               <Flame size={16} className="text-orange-500 fill-orange-500" />
             </div>
-            <p className="text-xs text-slate-500 mt-1">7 days active</p>
+            <p className="text-xs font-medium text-slate-500 mt-1">7 days active</p>
           </div>
         </div>
         
         <div className="mt-4 pt-4 border-t border-slate-100">
           <div className="flex justify-between items-center">
-            <span className="text-sm text-slate-600">Weekly Progress</span>
-            <span className="text-sm font-bold text-green-600">+12%</span>
+            <span className="text-sm font-medium text-slate-600">Weekly Progress</span>
+            <span className="text-sm font-extrabold text-green-600">+12%</span>
           </div>
           <Progress value={65} className="h-2 mt-2" />
         </div>
@@ -982,7 +981,7 @@ function WeeklyChallenge() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4 }}
-      className="rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 p-5 sm:p-6 text-white text-center shadow-xl"
+      className="rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 p-5 sm:p-6 text-white text-center shadow-xl relative overflow-hidden"
     >
       {/* Background Elements */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16 blur-3xl" />
@@ -993,30 +992,30 @@ function WeeklyChallenge() {
           <Trophy size={28} className="text-white" />
         </div>
         
-        <h3 className="text-lg sm:text-xl font-bold mb-2">Weekly Championship</h3>
-        <p className="text-indigo-100 text-sm mb-6 max-w-xs mx-auto">
+        <h3 className="text-lg sm:text-xl font-extrabold mb-2">Weekly Championship</h3>
+        <p className="text-indigo-100 text-sm font-medium mb-6 max-w-xs mx-auto">
           Compete with 10,000+ students. Win exclusive badges & rewards.
         </p>
         
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
             <div className="text-xl font-black">₹10K</div>
-            <div className="text-xs text-indigo-200">Prize Pool</div>
+            <div className="text-xs text-indigo-200 font-bold">Prize Pool</div>
           </div>
           <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
             <div className="text-xl font-black">4.8★</div>
-            <div className="text-xs text-indigo-200">Rating</div>
+            <div className="text-xs text-indigo-200 font-bold">Rating</div>
           </div>
           <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
             <div className="text-xl font-black">72</div>
-            <div className="text-xs text-indigo-200">Hours Left</div>
+            <div className="text-xs text-indigo-200 font-bold">Hours Left</div>
           </div>
         </div>
         
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="w-full py-3.5 bg-white text-indigo-700 font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-2"
+          className="w-full py-3.5 bg-white text-indigo-700 font-extrabold rounded-xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-2"
         >
           <TrendingUp size={18} />
           Register for Free
@@ -1039,7 +1038,7 @@ function SafetyNote() {
       </div>
       <div>
         <h4 className="text-sm font-bold text-blue-900 mb-1">Fair Play & Security</h4>
-        <p className="text-xs text-blue-700/90 leading-relaxed">
+        <p className="text-xs text-blue-700/90 font-medium leading-relaxed">
           Advanced proctoring monitors tab switching. All contests are timed and recorded to ensure a fair competitive environment.
         </p>
       </div>

@@ -103,6 +103,26 @@ const TYPE_LABELS: Record<string, string> = {
   all: "All",
 };
 
+// ── Diagram Badge Component ────────────────────────────────────
+function DiagramBadge() {
+  return (
+    <span style={{
+      display: "inline-block",
+      fontSize: 9,
+      fontWeight: 700,
+      color: "#b91c1c",
+      background: "#fee2e2",
+      padding: "2px 8px",
+      borderRadius: 4,
+      marginLeft: 6,
+      border: "1px solid #fecaca",
+      letterSpacing: "0.3px",
+    }}>
+      ⚠️ Refer to textbook Fig.
+    </span>
+  );
+}
+
 // ── Draggable Question Card (Library) ───────────────────────────
 function DraggableQuestion({
   question,
@@ -156,6 +176,8 @@ function DraggableQuestion({
               {question.section}
             </span>
           )}
+          {/* 🔥 DIAGRAM BADGE - LIBRARY */}
+          {question.question_type === 'diagram' && <DiagramBadge />}
           <div style={{ margin: "4px 0 0", color: "#1e293b" }}>
             {question.question_text.length > 180
               ? renderMathText(question.question_text.slice(0, 180) + "...")
@@ -183,6 +205,8 @@ function DraggableQuestion({
         <span>{question.marks} marks</span>
         <span>|</span>
         <span>{question.difficulty}</span>
+        <span>|</span>
+        <span>{TYPE_LABELS[question.question_type] || question.question_type}</span>
       </div>
     </div>
   );
@@ -236,6 +260,8 @@ function SortableTestQuestion({
                 ? renderMathText(question.question_text.slice(0, 200) + "...")
                 : renderMathText(question.question_text)}
             </span>
+            {/* 🔥 DIAGRAM BADGE - TEST PAPER */}
+            {question.question_type === 'diagram' && <DiagramBadge />}
           </div>
         </div>
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
@@ -276,6 +302,9 @@ function SortableTestQuestion({
         <span>{question.difficulty}</span>
         <span>|</span>
         <span>{TYPE_LABELS[question.question_type] || question.question_type}</span>
+        {question.question_type === 'diagram' && (
+          <span style={{ color: "#dc2626", fontWeight: 600 }}>⚠️ Diagram</span>
+        )}
       </div>
     </div>
   );
@@ -439,6 +468,7 @@ export default function TestBuilderPage() {
           section: q.section,
           isManual: false,
           validationStatus: "valid",
+          isDiagram: q.question_type === 'diagram', // 🔥 Diagram flag for export
         })),
       };
 
@@ -638,7 +668,7 @@ export default function TestBuilderPage() {
                   </>
                 ) : (
                   <div style={{ textAlign: "center", paddingTop: 60, color: "#94a3b8" }}>
-                    <p style={{ fontSize: 32, marginBottom: 8 }}>&#128218;</p>
+                    <p style={{ fontSize: 32, marginBottom: 8 }}>📖</p>
                     <p style={{ fontSize: 14 }}>Select a chapter from the sidebar</p>
                     <p style={{ fontSize: 12 }}>to browse NCERT questions</p>
                   </div>
@@ -685,7 +715,7 @@ export default function TestBuilderPage() {
                   minHeight: 300, display: "flex", flexDirection: "column",
                   justifyContent: "center", alignItems: "center",
                 }}>
-                  <p style={{ fontSize: 32, marginBottom: 8 }}>&#128196;</p>
+                  <p style={{ fontSize: 32, marginBottom: 8 }}>📄</p>
                   <p style={{ fontSize: 14, fontWeight: 500 }}>Drop questions here to build your test</p>
                   <p style={{ fontSize: 12, marginTop: 4 }}>
                     Or click "Add" on any question from the library

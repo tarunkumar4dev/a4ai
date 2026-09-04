@@ -42,7 +42,12 @@ const GlobalStyles = () => {
   useEffect(() => {
     const s = document.createElement("style");
     s.textContent = `
-      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+
+      .lp {
+        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
       .ag-card {
         border-radius: 18px;
         transition: transform 0.2s cubic-bezier(.16,1,.3,1), box-shadow 0.2s cubic-bezier(.16,1,.3,1);
@@ -81,7 +86,8 @@ const GlobalStyles = () => {
         background: linear-gradient(180deg,#202124 0%,#111111 100%);
         border: 1px solid rgba(255,255,255,0.14);
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
-        color: white; font-weight:600;
+        color: white;
+        font-weight: 700;
         border-radius: 14px;
         transition: transform 0.2s, box-shadow 0.2s;
         -webkit-tap-highlight-color: transparent;
@@ -91,7 +97,8 @@ const GlobalStyles = () => {
         background: rgba(235, 235, 240, 0.85);
         border: 1px solid rgba(0,0,0,0.12);
         backdrop-filter: blur(20px) saturate(160%);
-        border-radius: 14px; font-weight:600;
+        border-radius: 14px;
+        font-weight: 700;
         transition: transform 0.2s;
       }
       .btn-glass-dark {
@@ -99,14 +106,31 @@ const GlobalStyles = () => {
         background: rgba(60, 60, 65, 0.7);
         border: 1px solid rgba(255,255,255,0.15);
         backdrop-filter: blur(20px) saturate(160%);
-        border-radius: 14px; font-weight:600;
+        border-radius: 14px;
+        font-weight: 700;
         transition: transform 0.2s;
       }
       .nlm-pill {
         display:inline-flex; align-items:center; gap:5px;
-        padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500;
+        padding:4px 12px; border-radius:999px;
+        font-size:12px;
+        font-weight: 700;
       }
       .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(50px); }
+      
+      /* Typography fixes */
+      .heading-hero {
+        font-weight: 900;
+        letter-spacing: -0.02em;
+      }
+      .heading-section {
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      .body-text {
+        font-weight: 500;
+        line-height: 1.6;
+      }
     `;
     document.head.appendChild(s);
     return () => {
@@ -282,7 +306,7 @@ export default function ResourcesPage() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, ease: EASE }}
-              className="text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-extrabold tracking-tight"
+              className="text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-black tracking-tight"
               style={{ color: head(isDark) }}
             >
               Everything you need to <span className="nlm-text">build & learn</span>
@@ -292,10 +316,10 @@ export default function ResourcesPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
-              className="mt-6 max-w-2xl text-lg md:text-xl"
+              className="mt-6 max-w-2xl text-lg md:text-xl font-medium"
               style={{ color: muted(isDark) }}
             >
-              Guides, examples, videos, and community links to help you ship faster with a4ai—whether you’re a solo learner or an institute admin.
+              Guides, examples, videos, and community links to help you ship faster with a4ai—whether you're a solo learner or an institute admin.
             </motion.p>
           </div>
 
@@ -313,7 +337,7 @@ export default function ResourcesPage() {
                 placeholder="Search guides, examples, docs…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-transparent border-none outline-none text-base"
+                className="w-full bg-transparent border-none outline-none text-base font-medium"
                 style={{ color: head(isDark) }}
               />
             </div>
@@ -325,7 +349,7 @@ export default function ResourcesPage() {
                   <button
                     key={t}
                     onClick={() => toggleTag(t)}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${isActive ? "btn-blk" : (isDark ? "btn-glass-dark" : "btn-glass-light")}`}
+                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all duration-200 ${isActive ? "btn-blk" : (isDark ? "btn-glass-dark" : "btn-glass-light")}`}
                     style={{ color: isActive ? "#fff" : head(isDark) }}
                   >
                     {t}
@@ -370,17 +394,17 @@ export default function ResourcesPage() {
             <div className="flex flex-col items-center justify-between gap-6 rounded-2xl px-8 py-12 md:flex-row md:py-16 text-center md:text-left relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
               <div>
                 <motion.h3 initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-2xl font-extrabold tracking-tight" style={{ color: head(isDark) }}>
-                  Can’t find what you need?
+                  Can't find what you need?
                 </motion.h3>
-                <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="mt-2 text-lg" style={{ color: muted(isDark) }}>
-                  Tell us what you’re building—we’ll point you to the right examples or create a new guide.
+                <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="mt-2 text-lg font-medium" style={{ color: muted(isDark) }}>
+                  Tell us what you're building—we'll point you to the right examples or create a new guide.
                 </motion.p>
               </div>
               <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.2 }} className="flex flex-col sm:flex-row gap-4 shrink-0">
-                <button className="btn-blk px-6 py-3 text-base">
+                <button className="btn-blk px-6 py-3 text-base font-bold">
                   <span className="relative z-10 flex items-center justify-center gap-2"><LifeBuoy className="h-4 w-4" /> Contact support</span>
                 </button>
-                <button className={`px-6 py-3 text-base ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
+                <button className={`px-6 py-3 text-base font-bold ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
                   <span className="relative z-10 flex items-center gap-2"><Lightbulb className="h-4 w-4" /> Request a guide</span>
                 </button>
               </motion.div>
@@ -403,7 +427,7 @@ function Section({ icon, title, subtitle, isDark, children }: { icon: React.Reac
         </div>
         <div>
           <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: head(isDark) }}>{title}</h2>
-          {subtitle && <p className="mt-1 text-base" style={{ color: muted(isDark) }}>{subtitle}</p>}
+          {subtitle && <p className="mt-1 text-base font-medium" style={{ color: muted(isDark) }}>{subtitle}</p>}
         </div>
       </div>
       {children}
@@ -459,17 +483,17 @@ function ResourceCard({ resource, index, isDark }: { resource: Resource; index: 
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]" style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)" }}>
                 <resource.icon className="h-5 w-5" style={{ color: head(isDark) }} />
               </div>
-              <h3 className="text-lg font-bold tracking-tight" style={{ color: head(isDark) }}>{resource.title}</h3>
+              <h3 className="text-lg font-extrabold tracking-tight" style={{ color: head(isDark) }}>{resource.title}</h3>
             </div>
             
-            <p className="text-sm leading-relaxed mb-5 flex-grow" style={{ color: muted(isDark) }}>
+            <p className="text-sm font-medium leading-relaxed mb-5 flex-grow" style={{ color: muted(isDark) }}>
               {resource.description}
             </p>
             
             <div className="mt-auto">
               <div className="flex flex-wrap gap-2 mb-5">
                 {resource.tags.map((t) => (
-                  <span key={t} className="px-2.5 py-1 text-xs font-medium rounded-md" style={{ background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)", color: muted(isDark) }}>
+                  <span key={t} className="px-2.5 py-1 text-xs font-bold rounded-md" style={{ background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)", color: muted(isDark) }}>
                     {t}
                   </span>
                 ))}

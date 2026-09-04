@@ -334,6 +334,8 @@ export default function InstituteDashboardPage() {
   const [showAddSection, setShowAddSection] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [assignBatch, setAssignBatch] = useState<{ id: string; name: string } | null>(null);
+  const [isHod, setIsHod] = useState(false);
+  const [hodDeptId, setHodDeptId] = useState<string | null>(null);
   const [assignTeacherBatches, setAssignTeacherBatches] = useState<{ teacherId: string; teacherName: string } | null>(null);
   const [teacherBatchMap, setTeacherBatchMap] = useState<Record<string, string[]>>({});
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
@@ -419,9 +421,9 @@ export default function InstituteDashboardPage() {
 
       const [a, b, c, d, e, f] = await Promise.all([
         supabase.from("institutes").select("*").eq("id", id).single(),
-        supabase.from("institute_members").select("*").eq("institute_id", id).in("role", ["teacher", "hod"]).order("joined_at", { ascending: false }),
+        supabase.from("institute_members").select("*").eq("institute_id", id).eq("status", "active").in("role", ["teacher", "hod"]).order("joined_at", { ascending: false }),
         supabase.from("batches").select("*").eq("institute_id", id).eq("is_active", true).order("created_at", { ascending: false }),
-        supabase.from("students").select("*, batches(name)").eq("institute_id", id).eq("is_active", true).order("name", { ascending: true }),
+        supabase.from("students").select("*, batches(name), student_access_codes(access_code)").eq("institute_id", id).eq("is_active", true).order("name", { ascending: true }),
         supabase.from("departments").select("*").eq("institute_id", id).order("name", { ascending: true }),
         supabase.from("sections").select("*, departments!inner(institute_id)").eq("departments.institute_id", id).order("name", { ascending: true }),
       ]);
@@ -533,16 +535,22 @@ export default function InstituteDashboardPage() {
   };
 
   const removeStudent = async (id: string) => {
-    if (!confirm("Remove this student?")) return;
-    const { error } = await supabase.from("students").update({ is_active: false }).eq("id", id);
+    if (!confirm("Remove this student? Their attendance and submissions will also be deleted.")) return;
+    // Remove access codes
+    await supabase.from("student_access_codes").delete().eq("student_id", id);
+    // Hard delete student
+    const { error } = await supabase.from("students").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Student removed");
     fetchData();
   };
 
-  const removeTeacher = async (id: string) => {
-    if (!confirm("Remove this teacher from the institute?")) return;
-    const { error } = await supabase.from("institute_members").update({ status: "inactive" }).eq("id", id);
+  const removeTeacher = async (id: string, userId?: string) => {
+    if (!confirm("Remove this teacher from the institute? This cannot be undone.")) return;
+    // Remove batch assignments first
+    if (userId) await supabase.from("teacher_batches").delete().eq("teacher_id", userId);
+    // Hard delete from institute
+    const { error } = await supabase.from("institute_members").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Teacher removed");
     fetchData();
@@ -877,8 +885,11 @@ export default function InstituteDashboardPage() {
   };
 
   const filteredTeachers = useMemo(() =>
-    teachers.filter(t => matchesDept(t.department_id))
-    , [teachers, deptFilter]);
+    teachers.filter(t => {
+      if (isHod && hodDeptId) return t.department_id === hodDeptId;
+      return matchesDept(t.department_id);
+    })
+    , [teachers, deptFilter, isHod, hodDeptId]);
 
   const filteredBatches = useMemo(() =>
     batches.filter(b => matchesDept(b.department_id) && matchesSection(b.section_id))
@@ -1497,7 +1508,7 @@ export default function InstituteDashboardPage() {
                         📚 Batches ({(teacherBatchMap[t.user_id] || []).length})
                       </button>
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${t.status === "active" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>{t.status}</span>
-                      <button onClick={e => { e.stopPropagation(); removeTeacher(t.id); }} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
+                      <button onClick={e => { e.stopPropagation(); removeTeacher(t.id, t.user_id); }} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                     </div>
                     {(teacherBatchMap[t.user_id] || []).length > 0 && (
                       <div className="flex flex-wrap gap-1.5 px-4 pb-2 -mt-2">
@@ -1630,7 +1641,7 @@ export default function InstituteDashboardPage() {
                           {s.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(s.department_id)}</span>}
                           {s.section_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600">{sectionName(s.section_id)}</span>}
                         </div>
-                        <p className="text-[11px] font-medium text-slate-400 truncate">{s.batch_name} · Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}</p>
+                        <p className="text-[11px] font-medium text-slate-400 truncate">{s.batch_name} · Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}{(s as any).student_access_codes?.[0]?.access_code ? ` · 🔑 ${(s as any).student_access_codes[0].access_code}` : ""}</p>
                       </div>
                       <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">Class {s.class_level || "—"}</span>
                       <button onClick={(e) => { e.stopPropagation(); contactParent(s); }} title="Message parent" className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Phone /></button>
