@@ -34,7 +34,7 @@ function useScrollReveal() {
         });
       },
       { threshold: 0.06, rootMargin: "0px 0px -48px 0px" }
-    );
+    ); 
     const els = document.querySelectorAll(".scroll-reveal");
     els.forEach((el) => observer.observe(el));
     return () => observer.disconnect();

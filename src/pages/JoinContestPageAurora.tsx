@@ -1,4 +1,4 @@
-// =======================================
+ // =======================================
 // src/pages/JoinContestPageAurora.tsx
 // Clean join screen with steps + glass UI
 // =======================================
@@ -23,7 +23,7 @@ export const JoinContestPageAurora: React.FC = () => {
   const navigate = useNavigate();
 
   const contest = state?.contest ?? {
-    id: id || "unknown",
+    id: id || "unknown", 
     title: "Contest",
     duration: "—",
     participants: 0,

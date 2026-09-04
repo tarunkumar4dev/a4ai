@@ -70,6 +70,8 @@ const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
 /* ---------- NEW MODULE PAGE ---------- */
 const ModulesPage = lazy(() => import("./pages/ModulesPage"));
+/* ---------- TEST CHECKER ---------- */
+const TestChecker = lazy(() => import("./pages/TestChecker"));
 
 /* ---------- NEW QUIZ PAGE ---------- */
 const QuizPage = lazy(() => import("./pages/Quiz"));
@@ -325,7 +327,6 @@ const App = () => {
                       <Route path="/auth/callback" element={<AuthCallback />} />
                       <Route path="/select-role" element={<RoleSelectionPage />} />
                       <Route path="/login" element={<AuthGateForAuthPages><LoginPage /></AuthGateForAuthPages>} />
-                      {/* /signup redirects to /login — phone OTP handles both login & signup */}
                       <Route path="/signup" element={<AuthGateForAuthPages><SignupPage /></AuthGateForAuthPages>} />
 
                       {/* ============================================ */}
@@ -353,6 +354,15 @@ const App = () => {
                       <Route
                         path="/teacher/community-quiz/:quizId/leaderboard"
                         element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizLeaderboardPage /></RoleAuthGate>}
+                      
+                      <Route 
+                        path="/teacher/community-quiz/new" 
+                        element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizCreatePage /></RoleAuthGate>} 
+                      />
+                      
+                      <Route 
+                        path="/teacher/community-quiz/:quizId/leaderboard" 
+                        element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizLeaderboardPage /></RoleAuthGate>} 
                       />
 
                       {/* ============================================ */}
@@ -363,8 +373,15 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  SHARED PROTECTED ROUTES (any logged-in user) */}
                       {/* ============================================ */}
-                      {/* <Route path="/dashboard/test-generator" element={<PrivateRoute><TestGeneratorPage /></PrivateRoute>} /> */}
                       <Route path="/dashboard/test-generator" element={<TestGeneratorPage />} />
+                      
+                      {/* ── Answer Sheet Checker (teacher + institute only) ── */}
+                      <Route path="/dashboard/test-checker" element={
+                        <RoleAuthGate allowedRoles={["teacher", "institute"]}>
+                          <TestChecker />
+                        </RoleAuthGate>
+                      } />
+
                       <Route path="/dashboard/analytics" element={<PrivateRoute><AnalyticsPage /></PrivateRoute>} />
                       <Route path="/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} />
 
