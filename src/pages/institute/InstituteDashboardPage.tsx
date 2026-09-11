@@ -1,3 +1,4 @@
+// InstituteDashboardPage.tsx - Updated with HODAttendanceDashboard
 // src/pages/institute/InstituteDashboardPage.tsx
 // ──────────────────────────────────────────────────────────────────────
 // a4ai — Institute admin dashboard  ·  ORANGE THEME  ·  3-column layout
@@ -13,6 +14,8 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import AssignTeacherModal from "@/components/institute/AssignTeacherModal";
 import BulkStudentUpload from "@/components/institute/BulkStudentUpload";
+import BatchManagementPanel from "@/components/admin/BatchManagementPanel";
+import HODAttendanceDashboard from "@/components/attendance/HODAttendanceDashboard";
 
 // Lazy load attendance view for better initial load performance
 const InstituteAttendanceView = lazy(() => import("@/components/attendance/InstituteAttendanceView"));
@@ -1109,25 +1112,6 @@ export default function InstituteDashboardPage() {
             <span className="text-lg font-black text-slate-900 truncate">{institute.name}</span>
           </div>
 
-          {/* ── ATTENDANCE TAB ── */}
-          {activeTab === "attendance" && (
-            <div className="anim-entrance w-full" style={{ animationDelay: "0.05s" }}>
-              <div className="mb-4 sm:mb-6">
-                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Attendance</h2>
-                <p className="text-sm text-slate-500 font-medium mt-1">Mark and review attendance by teacher and batch</p>
-              </div>
-              <Suspense fallback={
-                <div className="attendance-grid">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="animate-pulse h-48 bg-slate-200/50 dark:bg-slate-700/30 rounded-2xl" />
-                  ))}
-                </div>
-              }>
-                <InstituteAttendanceView teachers={teachers} batches={batches} students={students} />
-              </Suspense>
-            </div>
-          )}
-
           {/* ── OVERVIEW TAB ── */}
           {activeTab === "overview" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
@@ -1530,67 +1514,6 @@ export default function InstituteDashboardPage() {
             </div>
           )}
 
-          {/* ── ATTENDANCE MONITORING TAB ── */}
-          {activeTab === "attendance" && (
-            <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-800">Attendance Monitor</h2>
-                  <p className="text-xs text-slate-400">View attendance marked by teachers across all batches</p>
-                </div>
-                <input
-                  type="date"
-                  value={attendanceDateFilter}
-                  onChange={e => { setAttendanceDateFilter(e.target.value); fetchAttendance(e.target.value); }}
-                  className="text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-2 outline-none"
-                />
-              </div>
-
-              {attendanceRecords.length === 0 && !attendanceLoading && (
-                <div className="bg-white rounded-2xl p-8 text-center card-shadow border border-slate-50">
-                  <p className="text-4xl mb-3">📊</p>
-                  <p className="font-bold text-slate-700">No attendance records for this date</p>
-                  <p className="text-sm text-slate-400 mt-1">Teachers will mark attendance from their dashboard</p>
-                  <button onClick={() => fetchAttendance(attendanceDateFilter)} className="btn-ghost mt-4 px-4 py-2 rounded-xl text-sm">🔄 Refresh</button>
-                </div>
-              )}
-
-              {attendanceLoading && <p className="text-center py-8 text-slate-400">Loading attendance data...</p>}
-
-              <div className="space-y-3">
-                {attendanceRecords.map((rec: any) => (
-                  <div key={rec.id} className="bg-white rounded-2xl p-4 card-shadow border border-slate-50">
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center font-bold text-sm">
-                          {rec.pct}%
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-800">{rec.batch_name}</p>
-                          <p className="text-xs text-slate-400">Marked by: {rec.teacher_name} · {rec.updated_at ? new Date(rec.updated_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : ""}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-4 text-center">
-                        <div>
-                          <p className="text-lg font-black text-green-600">{rec.present}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase">Present</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-black text-red-500">{rec.absent}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase">Absent</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-black text-slate-600">{rec.total}</p>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase">Total</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* ── STUDENTS TAB ── */}
           {activeTab === "students" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
@@ -1704,6 +1627,17 @@ export default function InstituteDashboardPage() {
             </div>
           )}
 
+          {/* ── ATTENDANCE TAB ── */}
+          {activeTab === "attendance" && (
+            <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
+              <div className="mb-4 sm:mb-6">
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-800">Attendance</h2>
+                <p className="text-sm text-slate-400 mt-1">Monitor teacher marking status and export monthly reports</p>
+              </div>
+              <HODAttendanceDashboard instituteId={institute.id} />
+            </div>
+          )}
+
           {/* ── ANALYTICS TAB ── */}
           {activeTab === "analytics" && (
             <div className="anim-entrance space-y-6" style={{ animationDelay: "0.05s" }}>
@@ -1725,6 +1659,12 @@ export default function InstituteDashboardPage() {
               <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
                 <h3 className="text-[16px] font-bold text-slate-800 mb-6">Enrollment by Batch</h3>
                 {batchChart.length > 0 ? <BatchBars data={batchChart} /> : <div className="h-40 flex items-center justify-center text-sm text-slate-500 font-medium">No batches yet</div>}
+              </div>
+
+              {/* ═══ BATCH MANAGEMENT PANEL ═══ */}
+              <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
+                <h3 className="text-[16px] font-bold text-slate-800 mb-4">Batch Settings</h3>
+                <BatchManagementPanel instituteId={institute.id} />
               </div>
 
               <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">

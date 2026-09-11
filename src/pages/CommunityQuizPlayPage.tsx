@@ -1,7 +1,6 @@
 // src/pages/CommunityQuizPlayPage.tsx
 // ──────────────────────────────────────────────────────────
-// Public participant page — Apple-grade refinement
-// Same SF Pro typography + clean palette as CreatePage
+// Public participant page — Orange theme with Jakarta Sans
 // ──────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -20,10 +19,10 @@ import {
 
 /* ------------------- STYLES ------------------- */
 const customStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-  .sf-pro {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  .jakarta {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'kern', 'ss01', 'cv01';
@@ -32,91 +31,110 @@ const customStyles = `
 
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes scaleIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
-  @keyframes pulseRed { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); } 50% { box-shadow: 0 0 0 6px rgba(255, 59, 48, 0); } }
+  @keyframes pulseOrange { 0%, 100% { box-shadow: 0 0 0 0 rgba(251, 146, 60, 0.4); } 50% { box-shadow: 0 0 0 6px rgba(251, 146, 60, 0); } }
   .anim-in { animation: fadeIn 0.5s cubic-bezier(0.32, 0.72, 0, 1) forwards; opacity: 0; }
   .anim-pop { animation: scaleIn 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
-  .timer-warning { animation: pulseRed 1.5s infinite; }
+  .timer-warning { animation: pulseOrange 1.5s infinite; }
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(251, 146, 60, 0.3); border-radius: 10px; }
 
   .ap-panel {
     background: rgba(255, 255, 255, 0.72);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
-    border: 0.5px solid rgba(0, 0, 0, 0.06);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.04);
+    border: 0.5px solid rgba(251, 146, 60, 0.12);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(251, 146, 60, 0.06);
   }
   .dark .ap-panel {
     background: rgba(28, 28, 30, 0.72);
-    border: 0.5px solid rgba(255, 255, 255, 0.08);
+    border: 0.5px solid rgba(251, 146, 60, 0.15);
   }
 
   .ap-input {
     background: rgba(255, 255, 255, 0.6);
-    border: 0.5px solid rgba(0, 0, 0, 0.08);
+    border: 0.5px solid rgba(251, 146, 60, 0.15);
     transition: all 0.15s ease;
   }
   .ap-input:focus {
     background: rgba(255, 255, 255, 1);
-    border-color: rgba(0, 122, 255, 0.5);
-    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+    border-color: #FB923C;
+    box-shadow: 0 0 0 4px rgba(251, 146, 60, 0.1);
     outline: none;
   }
 
   .ap-btn-primary {
-    background: #007AFF;
+    background: linear-gradient(135deg, #FB923C, #F97316);
     color: white;
     font-weight: 600;
     transition: all 0.15s ease;
+    box-shadow: 0 2px 8px rgba(251, 146, 60, 0.3);
   }
-  .ap-btn-primary:hover { background: #0066D9; }
-  .ap-btn-primary:active { background: #0058BD; transform: scale(0.985); }
-  .ap-btn-primary:disabled { background: #B5D4FF; cursor: not-allowed; }
+  .ap-btn-primary:hover { 
+    background: linear-gradient(135deg, #F97316, #EA580C);
+    box-shadow: 0 4px 12px rgba(251, 146, 60, 0.4);
+    transform: translateY(-1px);
+  }
+  .ap-btn-primary:active { transform: scale(0.985); }
+  .ap-btn-primary:disabled { 
+    background: #FDE68A; 
+    cursor: not-allowed;
+    box-shadow: none;
+  }
 
   .ap-btn-secondary {
-    background: rgba(120, 120, 128, 0.12);
+    background: rgba(251, 146, 60, 0.1);
     color: #1d1d1f;
     font-weight: 500;
     transition: all 0.15s ease;
+    border: 0.5px solid rgba(251, 146, 60, 0.15);
   }
-  .ap-btn-secondary:hover { background: rgba(120, 120, 128, 0.2); }
+  .ap-btn-secondary:hover { 
+    background: rgba(251, 146, 60, 0.2);
+    transform: translateY(-1px);
+  }
   .ap-btn-secondary:active { transform: scale(0.985); }
 
   .ap-btn-success {
-    background: #34C759;
+    background: linear-gradient(135deg, #34C759, #28A745);
     color: white;
     font-weight: 600;
     transition: all 0.15s ease;
+    box-shadow: 0 2px 8px rgba(52, 199, 89, 0.3);
   }
-  .ap-btn-success:hover { background: #2BB350; }
+  .ap-btn-success:hover { 
+    background: linear-gradient(135deg, #28A745, #1E7E34);
+    box-shadow: 0 4px 12px rgba(52, 199, 89, 0.4);
+    transform: translateY(-1px);
+  }
   .ap-btn-success:active { transform: scale(0.985); }
 
   .opt-btn {
     background: rgba(255, 255, 255, 0.7);
-    border: 0.5px solid rgba(0, 0, 0, 0.08);
+    border: 0.5px solid rgba(251, 146, 60, 0.12);
     transition: all 0.15s ease;
     text-align: left;
   }
   .opt-btn:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.95);
-    border-color: rgba(0, 122, 255, 0.3);
+    border-color: rgba(251, 146, 60, 0.3);
+    transform: translateX(2px);
   }
   .opt-btn.selected {
-    background: rgba(0, 122, 255, 0.08);
-    border-color: #007AFF;
-    border-width: 1px;
+    background: rgba(251, 146, 60, 0.08);
+    border-color: #FB923C;
+    border-width: 1.5px;
   }
   .opt-btn.correct {
     background: rgba(52, 199, 89, 0.1);
     border-color: #34C759;
-    border-width: 1px;
+    border-width: 1.5px;
   }
   .opt-btn.wrong {
     background: rgba(255, 59, 48, 0.08);
     border-color: #FF3B30;
-    border-width: 1px;
+    border-width: 1.5px;
   }
 `;
 
@@ -286,30 +304,30 @@ export default function CommunityQuizPlayPage() {
   const answeredCount = Object.values(answers).filter((a) => a.selected !== null).length;
 
   return (
-    <div className="sf-pro min-h-[100dvh] w-full text-[15px] text-[#1d1d1f] bg-[#F5F5F7] relative">
+    <div className="jakarta min-h-[100dvh] w-full text-[15px] text-[#1d1d1f] bg-gradient-to-br from-orange-50 to-amber-50 relative">
       <style>{customStyles}</style>
 
-      <div className="absolute top-0 left-0 right-0 h-[400px] bg-gradient-to-b from-[#E3F2FF]/60 to-transparent pointer-events-none" />
+      <div className="absolute top-0 left-0 right-0 h-[400px] bg-gradient-to-b from-orange-100/40 to-transparent pointer-events-none" />
 
       <main className="relative z-10 max-w-[640px] mx-auto px-4 sm:px-6 py-8 sm:py-12">
 
         {/* ──── LOADING ──── */}
         {screen === "loading" && (
           <div className="ap-panel rounded-[16px] p-12 text-center anim-pop">
-            <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[#007AFF]">
+            <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-orange-100 flex items-center justify-center text-orange-500">
               <Icons.Loader size={20} />
             </div>
-            <p className="text-[14px] text-[#86868b]">Loading quiz…</p>
+            <p className="text-[14px] text-[#86868b] font-medium">Loading quiz…</p>
           </div>
         )}
 
         {/* ──── NOT FOUND ──── */}
         {screen === "not_found" && (
           <div className="ap-panel rounded-[16px] p-10 text-center anim-pop">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-[#FF3B30]/10 flex items-center justify-center text-[#FF3B30]">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center text-red-500">
               <Icons.X size={20} />
             </div>
-            <h2 className="text-[22px] font-semibold tracking-[-0.01em] mb-2">Quiz not found</h2>
+            <h2 className="text-[22px] font-bold tracking-[-0.01em] mb-2">Quiz not found</h2>
             <p className="text-[14px] text-[#86868b] mb-6">{errorMsg || "This link is invalid or no longer available."}</p>
             <button onClick={() => navigate("/")} className="ap-btn-primary px-5 h-10 rounded-[10px] text-[14px]">Visit a4ai</button>
           </div>
@@ -318,10 +336,10 @@ export default function CommunityQuizPlayPage() {
         {/* ──── ENDED ──── */}
         {screen === "ended" && (
           <div className="ap-panel rounded-[16px] p-10 text-center anim-pop">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-[#FF9500]/15 flex items-center justify-center text-[#FF9500]">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
               <Icons.Clock size={20} />
             </div>
-            <h2 className="text-[22px] font-semibold tracking-[-0.01em] mb-2">This quiz has ended</h2>
+            <h2 className="text-[22px] font-bold tracking-[-0.01em] mb-2">This quiz has ended</h2>
             <p className="text-[14px] text-[#86868b] mb-6">The submission window has closed. Better luck next time.</p>
             <button onClick={() => navigate("/")} className="ap-btn-primary px-5 h-10 rounded-[10px] text-[14px]">Discover a4ai</button>
           </div>
@@ -332,45 +350,45 @@ export default function CommunityQuizPlayPage() {
           <div className="space-y-4 anim-pop">
             <div className="ap-panel rounded-[16px] p-7 sm:p-8 text-center">
               {quiz.creator_name && (
-                <div className="inline-flex items-center gap-1.5 mb-5 px-3 h-7 rounded-full bg-[rgba(120,120,128,0.1)]">
+                <div className="inline-flex items-center gap-1.5 mb-5 px-3 h-7 rounded-full bg-orange-50 border border-orange-100">
                   {quiz.creator_logo_url ? (
                     <img src={quiz.creator_logo_url} alt="" className="w-4 h-4 rounded-full" />
                   ) : (
-                    <Icons.Trophy size={12} />
+                    <Icons.Trophy size={12} className="text-orange-500" />
                   )}
-                  <span className="text-[12px] font-medium">by {quiz.creator_name}</span>
+                  <span className="text-[12px] font-medium text-orange-700">by {quiz.creator_name}</span>
                 </div>
               )}
-              <h1 className="text-[28px] sm:text-[34px] font-semibold tracking-[-0.02em] leading-[1.15] mb-3">
+              <h1 className="text-[28px] sm:text-[34px] font-extrabold tracking-[-0.02em] leading-[1.15] mb-3">
                 {quiz.title}
               </h1>
               {quiz.description && (
                 <p className="text-[15px] text-[#86868b] mb-6 max-w-md mx-auto leading-snug">{quiz.description}</p>
               )}
 
-              {/* Stats — Apple style: minimal, refined */}
+              {/* Stats — Orange theme */}
               <div className="grid grid-cols-3 gap-3 max-w-md mx-auto mt-6">
-                <div className="p-4 rounded-[12px] bg-[rgba(120,120,128,0.06)]">
-                  <div className="text-[#86868b] mb-1.5 flex justify-center"><Icons.FileText size={14} /></div>
-                  <p className="text-[24px] font-semibold tracking-[-0.01em] tabular-nums">{quiz.total_questions}</p>
-                  <p className="text-[11px] text-[#86868b] mt-0.5">Questions</p>
+                <div className="p-4 rounded-[12px] bg-orange-50/60 border border-orange-100/50">
+                  <div className="text-orange-400 mb-1.5 flex justify-center"><Icons.FileText size={14} /></div>
+                  <p className="text-[24px] font-bold tracking-[-0.01em] tabular-nums text-orange-700">{quiz.total_questions}</p>
+                  <p className="text-[11px] text-[#86868b] mt-0.5 font-medium">Questions</p>
                 </div>
-                <div className="p-4 rounded-[12px] bg-[rgba(120,120,128,0.06)]">
-                  <div className="text-[#86868b] mb-1.5 flex justify-center"><Icons.Clock size={14} /></div>
-                  <p className="text-[24px] font-semibold tracking-[-0.01em] tabular-nums">{quiz.duration_minutes}</p>
-                  <p className="text-[11px] text-[#86868b] mt-0.5">Minutes</p>
+                <div className="p-4 rounded-[12px] bg-orange-50/60 border border-orange-100/50">
+                  <div className="text-orange-400 mb-1.5 flex justify-center"><Icons.Clock size={14} /></div>
+                  <p className="text-[24px] font-bold tracking-[-0.01em] tabular-nums text-orange-700">{quiz.duration_minutes}</p>
+                  <p className="text-[11px] text-[#86868b] mt-0.5 font-medium">Minutes</p>
                 </div>
-                <div className="p-4 rounded-[12px] bg-[rgba(120,120,128,0.06)]">
-                  <div className="text-[#86868b] mb-1.5 flex justify-center"><Icons.Trophy size={14} /></div>
-                  <p className="text-[24px] font-semibold tracking-[-0.01em] tabular-nums">{quiz.total_marks}</p>
-                  <p className="text-[11px] text-[#86868b] mt-0.5">Marks</p>
+                <div className="p-4 rounded-[12px] bg-orange-50/60 border border-orange-100/50">
+                  <div className="text-orange-400 mb-1.5 flex justify-center"><Icons.Trophy size={14} /></div>
+                  <p className="text-[24px] font-bold tracking-[-0.01em] tabular-nums text-orange-700">{quiz.total_marks}</p>
+                  <p className="text-[11px] text-[#86868b] mt-0.5 font-medium">Marks</p>
                 </div>
               </div>
             </div>
 
             {/* Rules */}
-            <div className="ap-panel rounded-[16px] p-5">
-              <h3 className="text-[15px] font-semibold mb-3">How it works</h3>
+            <div className="ap-panel rounded-[16px] p-5 border-orange-100/50">
+              <h3 className="text-[15px] font-bold mb-3 text-orange-800">How it works</h3>
               <ul className="space-y-2">
                 {[
                   "One attempt per phone number",
@@ -379,7 +397,7 @@ export default function CommunityQuizPlayPage() {
                   "No going back after you submit",
                 ].map((r, i) => (
                   <li key={i} className="flex gap-2.5 text-[13px] text-[#3a3a3c]">
-                    <div className="w-4 h-4 rounded-full bg-[#34C759]/15 text-[#34C759] flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="w-4 h-4 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0 mt-0.5">
                       <Icons.Check size={9} />
                     </div>
                     <span>{r}</span>
@@ -405,34 +423,34 @@ export default function CommunityQuizPlayPage() {
                 <Icons.ArrowLeft />
               </button>
               <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-semibold truncate">{quiz.title}</p>
+                <p className="text-[14px] font-bold truncate text-orange-800">{quiz.title}</p>
                 <p className="text-[12px] text-[#86868b]">Enter your details to begin</p>
               </div>
             </div>
 
-            <form onSubmit={handleRegister} className="ap-panel rounded-[16px] p-6 space-y-4">
+            <form onSubmit={handleRegister} className="ap-panel rounded-[16px] p-6 space-y-4 border-orange-100/50">
               <div>
-                <h2 className="text-[20px] font-semibold tracking-[-0.01em]">Your details</h2>
+                <h2 className="text-[20px] font-bold tracking-[-0.01em] text-orange-800">Your details</h2>
                 <p className="text-[12px] text-[#86868b] mt-1">Phone is needed to contact winners.</p>
               </div>
 
               <div>
-                <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">Full name</label>
+                <label className="block text-[12px] font-semibold text-[#86868b] mb-1.5">Full name</label>
                 <input type="text" required value={pName} onChange={(e) => setPName(e.target.value)} maxLength={100} placeholder="Your name" className="ap-input w-full px-3.5 h-10 rounded-[8px] text-[14px]" />
               </div>
 
               <div>
-                <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">Phone</label>
+                <label className="block text-[12px] font-semibold text-[#86868b] mb-1.5">Phone</label>
                 <input type="tel" required value={pPhone} onChange={(e) => setPPhone(e.target.value)} maxLength={20} placeholder="+91 98765 43210" className="ap-input w-full px-3.5 h-10 rounded-[8px] text-[14px]" />
               </div>
 
               <div>
-                <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">Email <span className="text-[#a1a1a6] font-normal">(optional)</span></label>
+                <label className="block text-[12px] font-semibold text-[#86868b] mb-1.5">Email <span className="text-[#a1a1a6] font-normal">(optional)</span></label>
                 <input type="email" value={pEmail} onChange={(e) => setPEmail(e.target.value)} placeholder="you@example.com" className="ap-input w-full px-3.5 h-10 rounded-[8px] text-[14px]" />
               </div>
 
               <div>
-                <label className="block text-[12px] font-medium text-[#86868b] mb-1.5">Class <span className="text-[#a1a1a6] font-normal">(optional)</span></label>
+                <label className="block text-[12px] font-semibold text-[#86868b] mb-1.5">Class <span className="text-[#a1a1a6] font-normal">(optional)</span></label>
                 <select value={pClass} onChange={(e) => setPClass(e.target.value)} className="ap-input w-full px-3 h-10 rounded-[8px] text-[14px]">
                   <option value="">Select</option>
                   {CLASSES.map((c) => (<option key={c} value={c}>Class {c}</option>))}
@@ -440,7 +458,7 @@ export default function CommunityQuizPlayPage() {
               </div>
 
               <label className="flex items-start gap-2.5 pt-1 cursor-pointer">
-                <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#007AFF] cursor-pointer shrink-0" />
+                <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} className="mt-0.5 w-4 h-4 accent-orange-500 cursor-pointer shrink-0" />
                 <span className="text-[12px] text-[#3a3a3c] leading-snug">
                   I agree to the rules. The creator may use my contact info to share results or prizes.
                 </span>
@@ -456,39 +474,39 @@ export default function CommunityQuizPlayPage() {
         {/* ──── QUIZ ──── */}
         {screen === "quiz" && questions.length > 0 && (
           <div className="space-y-3 anim-pop">
-            {/* Top bar — sticky, refined */}
-            <div className="ap-panel rounded-[12px] px-3 py-2.5 flex items-center gap-3 sticky top-2 z-20">
+            {/* Top bar — sticky, orange theme */}
+            <div className="ap-panel rounded-[12px] px-3 py-2.5 flex items-center gap-3 sticky top-2 z-20 border-orange-100/50">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-medium text-[#86868b]">
+                  <span className="text-[11px] font-semibold text-[#86868b]">
                     Question {currentIdx + 1} of {questions.length}
                   </span>
                   <span className="text-[11px] text-[#86868b]">
                     {answeredCount} answered
                   </span>
                 </div>
-                <div className="h-1 bg-[rgba(120,120,128,0.15)] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#007AFF] rounded-full transition-all" style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }} />
+                <div className="h-1 bg-orange-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-orange-400 to-amber-500 rounded-full transition-all" style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }} />
                 </div>
               </div>
               <div className={`px-2.5 h-7 rounded-[6px] flex items-center gap-1 shrink-0 ${
-                timeLeft < 60 ? "bg-[#FF3B30]/10 timer-warning" :
-                timeLeft < 180 ? "bg-[#FF9500]/15" :
-                "bg-[rgba(120,120,128,0.1)]"
+                timeLeft < 60 ? "bg-red-100 timer-warning" :
+                timeLeft < 180 ? "bg-amber-100" :
+                "bg-orange-50"
               }`}>
-                <Icons.Clock size={12} />
-                <span className={`text-[13px] font-semibold tabular-nums ${
-                  timeLeft < 60 ? "text-[#FF3B30]" :
-                  timeLeft < 180 ? "text-[#FF9500]" :
+                <Icons.Clock size={12} className={timeLeft < 60 ? "text-red-500" : timeLeft < 180 ? "text-amber-600" : "text-orange-500"} />
+                <span className={`text-[13px] font-bold tabular-nums ${
+                  timeLeft < 60 ? "text-red-500" :
+                  timeLeft < 180 ? "text-amber-600" :
                   "text-[#1d1d1f]"
                 }`}>{formatTime(timeLeft)}</span>
               </div>
             </div>
 
             {/* Question */}
-            <div key={currentIdx} className="ap-panel rounded-[16px] p-6 anim-pop">
+            <div key={currentIdx} className="ap-panel rounded-[16px] p-6 anim-pop border-orange-100/50">
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#007AFF]">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-500">
                   Q{currentIdx + 1}
                 </span>
                 <span className="text-[11px] text-[#86868b]">·</span>
@@ -496,7 +514,7 @@ export default function CommunityQuizPlayPage() {
                   {questions[currentIdx].marks} {questions[currentIdx].marks > 1 ? "marks" : "mark"}
                 </span>
               </div>
-              <h2 className="text-[18px] font-semibold tracking-[-0.005em] leading-snug mb-5">
+              <h2 className="text-[18px] font-bold tracking-[-0.005em] leading-snug mb-5 text-gray-800">
                 {questions[currentIdx].question_text}
               </h2>
 
@@ -509,11 +527,11 @@ export default function CommunityQuizPlayPage() {
                       onClick={() => selectOption(questions[currentIdx].id, idx)}
                       className={`opt-btn w-full px-4 py-3.5 rounded-[10px] text-[14px] flex items-center gap-3 ${selected ? "selected" : ""}`}
                     >
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-semibold text-[12px] shrink-0 ${selected ? "bg-[#007AFF] text-white" : "bg-[rgba(120,120,128,0.15)] text-[#86868b]"}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[12px] shrink-0 ${selected ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white" : "bg-orange-50 text-[#86868b]"}`}>
                         {String.fromCharCode(65 + idx)}
                       </div>
                       <span className="flex-1 text-left">{opt}</span>
-                      {selected && <div className="text-[#007AFF] shrink-0"><Icons.Check size={14} /></div>}
+                      {selected && <div className="text-orange-500 shrink-0"><Icons.Check size={14} /></div>}
                     </button>
                   );
                 })}
@@ -537,8 +555,8 @@ export default function CommunityQuizPlayPage() {
             </div>
 
             {/* Question grid */}
-            <div className="ap-panel rounded-[12px] p-4">
-              <p className="text-[11px] font-medium text-[#86868b] mb-2.5">Quick navigation</p>
+            <div className="ap-panel rounded-[12px] p-4 border-orange-100/50">
+              <p className="text-[11px] font-semibold text-[#86868b] mb-2.5">Quick navigation</p>
               <div className="flex flex-wrap gap-1.5">
                 {questions.map((q, idx) => {
                   const isAnswered = answers[q.id]?.selected !== null && answers[q.id]?.selected !== undefined;
@@ -547,10 +565,10 @@ export default function CommunityQuizPlayPage() {
                     <button
                       key={q.id}
                       onClick={() => jumpTo(idx)}
-                      className={`w-8 h-8 rounded-[8px] text-[12px] font-semibold transition-all ${
-                        isCurrent ? "bg-[#007AFF] text-white" :
-                        isAnswered ? "bg-[#34C759]/15 text-[#34C759]" :
-                        "bg-[rgba(120,120,128,0.1)] text-[#86868b]"
+                      className={`w-8 h-8 rounded-[8px] text-[12px] font-bold transition-all ${
+                        isCurrent ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white" :
+                        isAnswered ? "bg-green-100 text-green-600" :
+                        "bg-orange-50 text-[#86868b] hover:bg-orange-100"
                       }`}
                     >
                       {idx + 1}
@@ -565,23 +583,25 @@ export default function CommunityQuizPlayPage() {
         {/* ──── SUBMITTING ──── */}
         {screen === "submitting" && (
           <div className="ap-panel rounded-[16px] p-12 text-center anim-pop">
-            <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-[#007AFF]/10 flex items-center justify-center text-[#007AFF]">
+            <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-orange-100 flex items-center justify-center text-orange-500">
               <Icons.Loader size={20} />
             </div>
-            <p className="text-[14px] text-[#86868b]">Calculating your score…</p>
+            <p className="text-[14px] text-[#86868b] font-medium">Calculating your score…</p>
           </div>
         )}
 
         {/* ──── RESULT ──── */}
         {screen === "result" && result && quiz && (
           <div className="space-y-4 anim-pop">
-            <div className="ap-panel rounded-[16px] p-8 text-center">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#34C759]/15 flex items-center justify-center text-[#34C759]">
+            <div className="ap-panel rounded-[16px] p-8 text-center border-orange-100/50">
+              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center text-green-600">
                 <Icons.Check size={20} />
               </div>
-              <p className="text-[12px] font-medium text-[#86868b] uppercase tracking-wider mb-2">Your score</p>
-              <h1 className="text-[56px] sm:text-[64px] font-semibold tracking-[-0.03em] tabular-nums leading-none">
-                {result.total_score}
+              <p className="text-[12px] font-semibold text-[#86868b] uppercase tracking-wider mb-2">Your score</p>
+              <h1 className="text-[56px] sm:text-[64px] font-extrabold tracking-[-0.03em] tabular-nums leading-none">
+                <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">
+                  {result.total_score}
+                </span>
                 <span className="text-[28px] text-[#a1a1a6] font-normal">/{result.total_marks}</span>
               </h1>
               <p className="text-[14px] text-[#86868b] mt-3">
@@ -589,9 +609,9 @@ export default function CommunityQuizPlayPage() {
               </p>
 
               {result.show_leaderboard && result.rank !== null && (
-                <div className="inline-flex items-center gap-1.5 mt-5 px-3 h-8 rounded-full bg-[#007AFF]/10 text-[#007AFF]">
-                  <Icons.Trophy size={13} />
-                  <span className="text-[13px] font-semibold">
+                <div className="inline-flex items-center gap-1.5 mt-5 px-3 h-8 rounded-full bg-orange-100 text-orange-700">
+                  <Icons.Trophy size={13} className="text-orange-500" />
+                  <span className="text-[13px] font-bold">
                     Rank #{result.rank} of {result.total_participants}
                   </span>
                 </div>
@@ -600,11 +620,11 @@ export default function CommunityQuizPlayPage() {
 
             {/* Reveal-mode message */}
             {!result.show_leaderboard && (
-              <div className="ap-panel rounded-[14px] p-5 text-center bg-[#FF9500]/8">
-                <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-[#FF9500]/15 flex items-center justify-center text-[#FF9500]">
+              <div className="ap-panel rounded-[14px] p-5 text-center bg-amber-50/60 border border-amber-200">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
                   <Icons.Clock size={16} />
                 </div>
-                <p className="text-[14px] font-semibold text-[#1d1d1f] mb-1">
+                <p className="text-[14px] font-bold text-[#1d1d1f] mb-1">
                   {result.leaderboard_reveal_mode === "after_end"
                     ? "Leaderboard reveals when quiz ends"
                     : "Results will be shared later"}
@@ -634,8 +654,8 @@ export default function CommunityQuizPlayPage() {
               </button>
             </div>
 
-            <div className="ap-panel rounded-[14px] p-5 text-center">
-              <p className="text-[14px] text-[#3a3a3c] mb-3">
+            <div className="ap-panel rounded-[14px] p-5 text-center border-orange-100/50">
+              <p className="text-[14px] text-[#3a3a3c] mb-3 font-medium">
                 Want to create quizzes like this for your students?
               </p>
               <button onClick={() => navigate("/")} className="ap-btn-primary px-4 h-9 rounded-[8px] text-[13px]">
@@ -647,13 +667,13 @@ export default function CommunityQuizPlayPage() {
             {reviewMode && result.answers_review && (
               <div className="space-y-3 anim-pop">
                 {result.answers_review.map((rev, idx) => (
-                  <div key={rev.question_id} className="ap-panel rounded-[14px] p-5">
+                  <div key={rev.question_id} className="ap-panel rounded-[14px] p-5 border-orange-100/50">
                     <div className="flex items-center gap-2 mb-3">
-                      <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 h-5 rounded-[4px] flex items-center ${rev.is_correct ? "bg-[#34C759]/15 text-[#34C759]" : "bg-[#FF3B30]/10 text-[#FF3B30]"}`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 h-5 rounded-[4px] flex items-center ${rev.is_correct ? "bg-green-100 text-green-600" : "bg-red-100 text-red-500"}`}>
                         Q{idx + 1} · {rev.is_correct ? "Correct" : "Incorrect"}
                       </span>
                     </div>
-                    <p className="text-[14px] font-semibold leading-snug mb-3">{rev.question_text}</p>
+                    <p className="text-[14px] font-bold leading-snug mb-3 text-gray-800">{rev.question_text}</p>
                     <div className="space-y-1.5">
                       {rev.options.map((opt, oi) => {
                         const isUserChoice = rev.selected_option === oi;
@@ -663,17 +683,17 @@ export default function CommunityQuizPlayPage() {
                         else if (isUserChoice && !isRight) cls = "opt-btn wrong";
                         return (
                           <div key={oi} className={`${cls} px-3 py-2 rounded-[8px] text-[13px] flex items-center gap-2`}>
-                            <span className="font-semibold text-[10px] text-[#86868b]">{String.fromCharCode(65 + oi)}</span>
+                            <span className="font-bold text-[10px] text-[#86868b]">{String.fromCharCode(65 + oi)}</span>
                             <span className="flex-1">{opt}</span>
-                            {isRight && <Icons.Check size={12} />}
-                            {isUserChoice && !isRight && <Icons.X size={12} />}
+                            {isRight && <Icons.Check size={12} className="text-green-600" />}
+                            {isUserChoice && !isRight && <Icons.X size={12} className="text-red-500" />}
                           </div>
                         );
                       })}
                     </div>
                     {rev.explanation && (
-                      <div className="mt-3 p-3 rounded-[8px] bg-[rgba(120,120,128,0.06)]">
-                        <p className="text-[10px] font-medium text-[#86868b] uppercase tracking-wider mb-1">Explanation</p>
+                      <div className="mt-3 p-3 rounded-[8px] bg-orange-50/60 border border-orange-100/50">
+                        <p className="text-[10px] font-bold text-[#86868b] uppercase tracking-wider mb-1">Explanation</p>
                         <p className="text-[13px] text-[#3a3a3c] leading-snug">{rev.explanation}</p>
                       </div>
                     )}

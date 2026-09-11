@@ -1,4 +1,4 @@
-// src/pages/TeacherDashboardPage.tsx
+// TeacherDashboardPage.tsx - Updated (removed batch-settings from navItems)
 import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import TeacherAttendanceView from "@/components/attendance/TeacherAttendanceView";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabaseClient";
 import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel";
 import TeacherAssignmentsTab from "@/components/teacher/TeacherAssignmentsTab";
 import TeacherCalendarTab from "@/components/teacher/TeacherCalendarTab";
+import ProctorSectionView, { useProctorCheck } from "@/components/attendance/ProctorSectionView";
+
 
 /* ------------------- SAFE STORAGE ------------------- */
 const safeStorage = {
@@ -24,6 +26,7 @@ const safeStorage = {
   },
 };
 
+
 /* ------------------- SCROLL REVEAL HOOK ------------------- */
 function useScrollReveal() {
   useEffect(() => {
@@ -34,7 +37,7 @@ function useScrollReveal() {
         });
       },
       { threshold: 0.06, rootMargin: "0px 0px -48px 0px" }
-    ); 
+    );
     const els = document.querySelectorAll(".scroll-reveal");
     els.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
@@ -851,6 +854,7 @@ export default function TeacherDashboardPage() {
   const { user } = useAuth();
   const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
 
+  const { isProctor } = useProctorCheck();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1226,7 +1230,13 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
+    { id: "ai-tools", Icon: Icons.Brain, label: "AI Tools", color: "text-sky-500" },
   ];
+
+  // My Section only for proctors
+  const finalNavItems = isProctor
+    ? [...navItems, { id: "section", Icon: Icons.Grid, label: "My Section", color: "text-teal-500" }]
+    : navItems;
 
   return (
     <div
@@ -1298,7 +1308,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
 
             <div className="animate-entrance" style={{ animationDelay: "200ms" }}>
               <nav className="space-y-1.5 mt-2">
-                {navItems.map((item) => {
+                {finalNavItems.map((item) => {
                   const ItemIcon = item.Icon;
                   return (
                     <SidebarButton
@@ -1755,6 +1765,12 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
             {activeTab === "students" && (
               <div className="space-y-6 sm:space-y-8 animate-pop">
                 <InstituteTeacherPanel userId={user?.id} />
+              </div>
+            )}
+
+            {activeTab === "section" && (
+              <div className="space-y-6 sm:space-y-8 animate-pop">
+                <ProctorSectionView />
               </div>
             )}
 

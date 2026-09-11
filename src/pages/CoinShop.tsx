@@ -83,9 +83,9 @@ const CoinShop: React.FC = () => {
 
   const getPopularityColor = (popularity: string) => {
     switch (popularity) {
-      case 'trending': return 'from-red-500 to-pink-500';
-      case 'popular': return 'from-blue-500 to-purple-500';
-      default: return 'from-green-500 to-emerald-500';
+      case 'trending': return 'from-orange-500 to-red-500';
+      case 'popular': return 'from-orange-400 to-amber-500';
+      default: return 'from-amber-400 to-orange-400';
     }
   };
 
@@ -98,20 +98,20 @@ const CoinShop: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 py-8 font-jakarta">
       <div className="max-w-7xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">🎁 Reward Store</h1>
-          <div className="bg-white rounded-2xl shadow-lg p-6 inline-block">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4 font-jakarta">🎁 Reward Store</h1>
+          <div className="bg-white rounded-2xl shadow-lg p-6 inline-block border border-orange-100">
             <div className="flex items-center gap-4">
-              <div className="bg-yellow-400 rounded-full p-3">
-                <lucide.Coins size={32} className="text-yellow-800" />
+              <div className="bg-gradient-to-br from-orange-400 to-amber-500 rounded-full p-3 shadow-lg shadow-orange-200">
+                <lucide.Coins size={32} className="text-white" />
               </div>
               <div className="text-left">
-                <p className="text-gray-600 text-sm">Your Coin Balance</p>
-                <p className="text-3xl font-bold text-gray-900">{coins.toLocaleString()} coins</p>
-                <p className="text-sm text-green-600 font-semibold">Redeem for real vouchers!</p>
+                <p className="text-gray-600 text-sm font-jakarta">Your Coin Balance</p>
+                <p className="text-3xl font-bold text-gray-900 font-jakarta">{coins.toLocaleString()} coins</p>
+                <p className="text-sm text-orange-600 font-semibold font-jakarta">Redeem for real vouchers!</p>
               </div>
             </div>
           </div>
@@ -119,32 +119,32 @@ const CoinShop: React.FC = () => {
 
         {/* Tabs */}
         <div className="flex justify-center mb-8">
-          <div className="bg-white rounded-2xl p-2 shadow-lg">
+          <div className="bg-white rounded-2xl p-2 shadow-lg border border-orange-100">
             <button
-              className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+              className={`px-6 py-3 rounded-xl font-semibold transition-all font-jakarta ${
                 activeTab === 'vouchers' 
-                  ? 'bg-purple-500 text-white shadow-md' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-200' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-orange-50'
               }`}
               onClick={() => setActiveTab('vouchers')}
             >
               🎯 Redeem Vouchers
             </button>
             <button
-              className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+              className={`px-6 py-3 rounded-xl font-semibold transition-all font-jakarta ${
                 activeTab === 'categories' 
-                  ? 'bg-green-500 text-white shadow-md' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-200' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-orange-50'
               }`}
               onClick={() => setActiveTab('categories')}
             >
               🛍️ By Category
             </button>
             <button
-              className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+              className={`px-6 py-3 rounded-xl font-semibold transition-all font-jakarta ${
                 activeTab === 'earn' 
-                  ? 'bg-blue-500 text-white shadow-md' 
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-200' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-orange-50'
               }`}
               onClick={() => setActiveTab('earn')}
             >
@@ -157,51 +157,51 @@ const CoinShop: React.FC = () => {
         {activeTab === 'vouchers' && (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {vouchers.map((voucher) => (
-              <div key={voucher.id} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow border-2 border-transparent hover:border-purple-200">
+              <div key={voucher.id} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 border border-orange-100 hover:border-orange-200 hover:scale-[1.02]">
                 <div className={`h-2 bg-gradient-to-r ${getPopularityColor(voucher.popularity)}`}></div>
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <div className="text-2xl">{voucher.image}</div>
                       <div>
-                        <h3 className="text-lg font-bold text-gray-900">{voucher.brand}</h3>
+                        <h3 className="text-lg font-bold text-gray-900 font-jakarta">{voucher.brand}</h3>
                         <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                          voucher.popularity === 'trending' ? 'bg-red-100 text-red-600' :
-                          voucher.popularity === 'popular' ? 'bg-blue-100 text-blue-600' :
+                          voucher.popularity === 'trending' ? 'bg-orange-100 text-orange-600' :
+                          voucher.popularity === 'popular' ? 'bg-amber-100 text-amber-600' :
                           'bg-green-100 text-green-600'
-                        }`}>
+                        } font-jakarta`}>
                           {getPopularityBadge(voucher.popularity)}
                         </span>
                       </div>
                     </div>
                   </div>
                   
-                  <h4 className="font-bold text-gray-800 mb-2">{voucher.name}</h4>
-                  <p className="text-gray-600 text-sm mb-4">{voucher.description}</p>
+                  <h4 className="font-bold text-gray-800 mb-2 font-jakarta">{voucher.name}</h4>
+                  <p className="text-gray-600 text-sm mb-4 font-jakarta">{voucher.description}</p>
                   
                   <div className="flex justify-between items-center mb-4">
                     <div>
-                      <div className="text-2xl font-bold text-yellow-600">{voucher.coinsRequired}</div>
-                      <div className="text-xs text-gray-500">coins required</div>
+                      <div className="text-2xl font-bold text-orange-500 font-jakarta">{voucher.coinsRequired}</div>
+                      <div className="text-xs text-gray-500 font-jakarta">coins required</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold text-green-600">{voucher.value}</div>
-                      <div className="text-xs text-gray-500">voucher value</div>
+                      <div className="text-lg font-bold text-amber-600 font-jakarta">{voucher.value}</div>
+                      <div className="text-xs text-gray-500 font-jakarta">voucher value</div>
                     </div>
                   </div>
 
-                  <div className="flex justify-between text-xs text-gray-500 mb-4">
+                  <div className="flex justify-between text-xs text-gray-500 mb-4 font-jakarta">
                     <span>Valid: {voucher.validity}</span>
-                    <span>{voucher.category}</span>
+                    <span className="capitalize">{voucher.category}</span>
                   </div>
 
                   <button
                     onClick={() => handleRedeem(voucher)}
                     disabled={coins < voucher.coinsRequired}
-                    className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
+                    className={`w-full py-3 px-4 rounded-xl font-semibold transition-all font-jakarta ${
                       coins >= voucher.coinsRequired
-                        ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:shadow-lg'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:shadow-lg hover:shadow-orange-200 hover:scale-[1.02]'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                     }`}
                   >
                     {coins >= voucher.coinsRequired ? 'Redeem Now 🎁' : 'Need More Coins'}
@@ -220,10 +220,10 @@ const CoinShop: React.FC = () => {
                 <button
                   key={category.id}
                   onClick={() => setSelectedCategory(category.id)}
-                  className={`p-4 rounded-2xl text-center transition-all ${
+                  className={`p-4 rounded-2xl text-center transition-all font-jakarta ${
                     selectedCategory === category.id
-                      ? 'bg-purple-500 text-white shadow-lg transform scale-105'
-                      : 'bg-white text-gray-700 shadow-md hover:shadow-lg'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-200 transform scale-105'
+                      : 'bg-white text-gray-700 shadow-md hover:shadow-lg hover:border-orange-200 border border-transparent'
                   }`}
                 >
                   <div className="text-2xl mb-2">{category.icon}</div>
@@ -236,29 +236,29 @@ const CoinShop: React.FC = () => {
             {/* Vouchers Grid */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredVouchers.map((voucher) => (
-                <div key={voucher.id} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
+                <div key={voucher.id} className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 border border-orange-100 hover:border-orange-200 hover:scale-[1.02]">
                   <div className={`h-2 bg-gradient-to-r ${getPopularityColor(voucher.popularity)}`}></div>
                   <div className="p-6">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="text-2xl">{voucher.image}</div>
                       <div>
-                        <h3 className="font-bold text-gray-900">{voucher.brand}</h3>
-                        <p className="text-sm text-gray-600">{voucher.name}</p>
+                        <h3 className="font-bold text-gray-900 font-jakarta">{voucher.brand}</h3>
+                        <p className="text-sm text-gray-600 font-jakarta">{voucher.name}</p>
                       </div>
                     </div>
                     
                     <div className="flex justify-between items-center mb-4">
-                      <span className="text-2xl font-bold text-yellow-600">{voucher.coinsRequired}</span>
-                      <span className="text-lg font-bold text-green-600">{voucher.value}</span>
+                      <span className="text-2xl font-bold text-orange-500 font-jakarta">{voucher.coinsRequired}</span>
+                      <span className="text-lg font-bold text-amber-600 font-jakarta">{voucher.value}</span>
                     </div>
 
                     <button
                       onClick={() => handleRedeem(voucher)}
                       disabled={coins < voucher.coinsRequired}
-                      className={`w-full py-3 px-4 rounded-xl font-semibold transition-all ${
+                      className={`w-full py-3 px-4 rounded-xl font-semibold transition-all font-jakarta ${
                         coins >= voucher.coinsRequired
-                          ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:shadow-lg'
-                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:shadow-lg hover:shadow-orange-200 hover:scale-[1.02]'
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                       }`}
                     >
                       {coins >= voucher.coinsRequired ? 'Redeem Voucher' : 'Need More Coins'}
@@ -273,23 +273,23 @@ const CoinShop: React.FC = () => {
         {activeTab === 'earn' && (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {earningMethods.map((method) => (
-              <div key={method.method} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <div key={method.method} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 border border-orange-100 hover:border-orange-200 hover:scale-[1.02]">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="p-2 bg-green-100 rounded-lg text-green-600">
+                  <div className="p-2 bg-gradient-to-br from-orange-100 to-amber-100 rounded-lg text-orange-600">
                     {method.icon}
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900">{method.name}</h3>
+                    <h3 className="font-bold text-gray-900 font-jakarta">{method.name}</h3>
                     <div className="flex items-center gap-2 mt-1">
-                      <lucide.Coins size={16} className="text-yellow-500" />
-                      <span className="font-semibold text-yellow-600">+{method.coins}</span>
+                      <lucide.Coins size={16} className="text-orange-500" />
+                      <span className="font-semibold text-orange-500 font-jakarta">+{method.coins}</span>
                     </div>
                   </div>
                 </div>
-                <p className="text-gray-600 text-sm mb-4">{method.description}</p>
+                <p className="text-gray-600 text-sm mb-4 font-jakarta">{method.description}</p>
                 <button
                   onClick={method.action}
-                  className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                  className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-2 px-4 rounded-lg font-semibold hover:shadow-lg hover:shadow-orange-200 transition-all font-jakarta hover:scale-[1.02]"
                 >
                   Earn Now
                 </button>
@@ -299,23 +299,23 @@ const CoinShop: React.FC = () => {
         )}
 
         {/* Info Section */}
-        <div className="mt-12 bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">How It Works 🎯</h2>
+        <div className="mt-12 bg-white rounded-2xl shadow-lg p-6 border border-orange-100">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4 font-jakarta">How It Works 🎯</h2>
           <div className="grid md:grid-cols-3 gap-6">
-            <div className="text-center p-4">
+            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50">
               <div className="text-3xl mb-2">💪</div>
-              <h3 className="font-bold text-gray-900 mb-2">1. Learn & Practice</h3>
-              <p className="text-gray-600">Solve problems, join contests, complete lessons</p>
+              <h3 className="font-bold text-gray-900 mb-2 font-jakarta">1. Learn & Practice</h3>
+              <p className="text-gray-600 font-jakarta">Solve problems, join contests, complete lessons</p>
             </div>
-            <div className="text-center p-4">
+            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50">
               <div className="text-3xl mb-2">🪙</div>
-              <h3 className="font-bold text-gray-900 mb-2">2. Earn Coins</h3>
-              <p className="text-gray-600">Get coins for every learning activity</p>
+              <h3 className="font-bold text-gray-900 mb-2 font-jakarta">2. Earn Coins</h3>
+              <p className="text-gray-600 font-jakarta">Get coins for every learning activity</p>
             </div>
-            <div className="text-center p-4">
+            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50">
               <div className="text-3xl mb-2">🎁</div>
-              <h3 className="font-bold text-gray-900 mb-2">3. Redeem Rewards</h3>
-              <p className="text-gray-600">Exchange coins for real brand vouchers</p>
+              <h3 className="font-bold text-gray-900 mb-2 font-jakarta">3. Redeem Rewards</h3>
+              <p className="text-gray-600 font-jakarta">Exchange coins for real brand vouchers</p>
             </div>
           </div>
         </div>

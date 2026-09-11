@@ -1,15 +1,16 @@
 // src/components/attendance/TeacherAttendanceView.tsx
 // ──────────────────────────────────────────────────────────────────────
-// Teacher attendance module — HIGH-UX · RESPONSIVE · BUTTERY SMOOTH
-// Render as: {activeTab === "attendance" && <TeacherAttendanceView />}
+// Teacher attendance module — v2 (session-based schema)
 //
-// Flow: Teacher Info + Calendar + Assigned Classes grid
-//       → click a class → Excel-like attendance sheet
-//         (serial, name, Red/Green/Blue status buttons, attendance %)
-//       + Class analytics (present/absent/leave counts, monthly trend)
+// Flow: Teacher Info + Calendar
+//       → Today's timetable classes (auto) OR pick batch+subject (manual)
+//       → Attendance sheet (P/A/Leave per student) → mark_attendance() RPC
 //
-// Optimised: memoised rows, touch-friendly targets, mobile card view,
-// sticky toolbar, reduced motion respect, GPU-friendly transitions.
+// Backend: class_sessions + attendance_records (normalized).
+//   - get_teacher_today_sessions()  → today's scheduled classes
+//   - teaching_assignments          → manual batch+subject picker
+//   - get_monthly_attendance()      → real per-student %
+//   - mark_attendance()             → saves session + records atomically
 // ──────────────────────────────────────────────────────────────────────
 
 import React, {
@@ -30,15 +31,22 @@ interface Student {
   id: string;
   name: string;
   status: Status;
-  attendanceHistory?: { date: string; status: Status }[];
+  pct?: number; // real monthly % for the selected subject
 }
 
-interface ClassItem {
-  id: string;
-  name: string;
-  studentCount: number;
+// A class the teacher can mark — either from timetable or picked manually
+interface SessionTarget {
+  batchId: string;
+  batchName: string;
+  subjectId: string;
+  subjectName: string;
+  subjectCode?: string;
+  timetableSlotId?: string | null;
+  sessionId?: string | null; // existing session (from timetable) if any
+  studentCount?: number;
   timeSlot?: string;
-  roomNumber?: string;
+  room?: string;
+  isMarked?: boolean;
 }
 
 /* ───── CONSTANTS ───── */
@@ -59,16 +67,6 @@ const I = {
       <line x1="16" x2="16" y1="2" y2="6" />
       <line x1="8" x2="8" y1="2" y2="6" />
       <line x1="3" x2="21" y1="10" y2="10" />
-    </svg>
-  ),
-  Star: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  ),
-  StarOff: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   ),
   Users: () => (
@@ -130,18 +128,10 @@ const I = {
       <polyline points="7 3 7 8 15 8" />
     </svg>
   ),
-  Info: () => (
+  Book: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 16v-4" />
-      <path d="M12 8h.01" />
-    </svg>
-  ),
-  Alert: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-      <line x1="12" x2="12" y1="9" y2="13" />
-      <line x1="12" x2="12" y1="17" y2="17.01" />
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
     </svg>
   ),
   Spinner: () => (
@@ -166,7 +156,13 @@ const statusBg: Record<Status, string> = {
 };
 
 /* ───── DATA HELPERS ───── */
-function toDateStr(d: Date) { return d.toISOString().slice(0, 10); }
+function toDateStr(d: Date) {
+  // Local date (not UTC) so "today" matches the teacher's timezone
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 /* ── Toast notification stack ─────────────────────────────── */
 type Toast = { id: number; message: string; type?: string };
@@ -177,8 +173,8 @@ function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
     <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, pointerEvents: "none" }}>
       {toasts.map(t => (
         <div key={t.id} onClick={() => onDismiss(t.id)}
-          style={{ background: "#1E293B", color: "#fff", borderRadius: 12, padding: "10px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", cursor: "pointer", pointerEvents: "all", maxWidth: 320, display: "flex", alignItems: "center", gap: 8 }}>
-          <span>{t.type === "info" ? "ℹ️" : "✅"}</span>
+          style={{ background: t.type === "error" ? "#7F1D1D" : "#1E293B", color: "#fff", borderRadius: 12, padding: "10px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", cursor: "pointer", pointerEvents: "all", maxWidth: 340, display: "flex", alignItems: "center", gap: 8 }}>
+          <span>{t.type === "error" ? "⚠️" : t.type === "info" ? "ℹ️" : "✅"}</span>
           {t.message}
         </div>
       ))}
@@ -188,20 +184,10 @@ function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
 
 /* ── Confirm Modal ─────────────────────────────────────────── */
 function ConfirmModal({
-  isOpen,
-  onClose,
-  onConfirm,
-  title,
-  message,
-  confirmLabel = "Confirm",
-  type = "info",
+  isOpen, onClose, onConfirm, title, message, confirmLabel = "Confirm", type = "info",
 }: {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  title: string;
-  message: string;
-  confirmLabel?: string;
+  isOpen: boolean; onClose: () => void; onConfirm: () => void;
+  title: string; message: string; confirmLabel?: string;
   type?: "success" | "warning" | "info";
 }) {
   if (!isOpen) return null;
@@ -224,17 +210,11 @@ function ConfirmModal({
 
 /* ── Student Row (Desktop) ────────────────────────────────── */
 const StudentRow = memo(({
-  student,
-  index,
-  onMark,
-  getPct,
+  student, index, onMark,
 }: {
-  student: Student;
-  index: number;
-  onMark: (id: string, s: Status) => void;
-  getPct: (s: Student) => number;
+  student: Student; index: number; onMark: (id: string, s: Status) => void;
 }) => {
-  const pct = getPct(student);
+  const pct = student.pct ?? 0;
   const initials = student.name.split(" ").map(w => w[0]).join("").slice(0, 2);
   const hue = (index * 37) % 360;
 
@@ -253,7 +233,6 @@ const StudentRow = memo(({
           </div>
           <div className="min-w-0">
             <span className="font-bold text-[13px] sm:text-sm text-slate-800 dark:text-white truncate block">{student.name}</span>
-            <span className="text-[10px] font-medium text-slate-400 block">Roll {index + 1}</span>
           </div>
         </div>
       </td>
@@ -267,8 +246,7 @@ const StudentRow = memo(({
                 key={s}
                 onClick={() => onMark(student.id, s)}
                 className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-black text-[13px] sm:text-sm transition-all duration-150 active:scale-90 touch-manipulation ${
-                  active
-                    ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring} scale-105`
+                  active ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring} scale-105`
                     : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
                 title={`Mark as ${statusFullLabel[s]}`}
@@ -284,7 +262,7 @@ const StudentRow = memo(({
         <span className={`text-[13px] sm:text-sm font-extrabold ${pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}`}>
           {pct}%
         </span>
-        <span className="block text-[9px] font-bold text-slate-400">overall</span>
+        <span className="block text-[9px] font-bold text-slate-400">month</span>
       </td>
     </tr>
   );
@@ -293,17 +271,11 @@ StudentRow.displayName = "StudentRow";
 
 /* ── Student Card (Mobile) ────────────────────────────────── */
 const StudentCard = memo(({
-  student,
-  index,
-  onMark,
-  getPct,
+  student, index, onMark,
 }: {
-  student: Student;
-  index: number;
-  onMark: (id: string, s: Status) => void;
-  getPct: (s: Student) => number;
+  student: Student; index: number; onMark: (id: string, s: Status) => void;
 }) => {
-  const pct = getPct(student);
+  const pct = student.pct ?? 0;
   const initials = student.name.split(" ").map(w => w[0]).join("").slice(0, 2);
   const hue = (index * 37) % 360;
 
@@ -316,8 +288,8 @@ const StudentCard = memo(({
         <div className="flex-1 min-w-0">
           <p className="font-bold text-[14px] text-slate-800 dark:text-white truncate">{student.name}</p>
           <p className="text-[11px] font-medium text-slate-400">
-            #{index + 1} · Roll {index + 1} ·{" "}
-            <span className={pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}>{pct}%</span>
+            #{index + 1} ·{" "}
+            <span className={pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}>{pct}% this month</span>
           </p>
         </div>
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusColor[student.status].dot}`} />
@@ -331,8 +303,7 @@ const StudentCard = memo(({
               key={s}
               onClick={() => onMark(student.id, s)}
               className={`flex-1 h-11 rounded-xl font-black text-sm transition-all duration-150 active:scale-[0.96] touch-manipulation ${
-                active
-                  ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring}`
+                active ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring}`
                   : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
               }`}
               aria-pressed={active}
@@ -353,9 +324,8 @@ StudentCard.displayName = "StudentCard";
 export default function TeacherAttendanceView() {
   const { user } = useAuth();
   const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
-  const teacherId = user?.id?.slice(0, 6) || "DEMO";
 
-  const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
+  const [selected, setSelected] = useState<SessionTarget | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [originalStudents, setOriginalStudents] = useState<Student[]>([]);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -372,10 +342,17 @@ export default function TeacherAttendanceView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingSheet, setIsLoadingSheet] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
-  const [fetchedBatches, setFetchedBatches] = useState<ClassItem[]>([]);
-  const [batchesLoading, setBatchesLoading] = useState(true);
+
   const [instituteId, setInstituteId] = useState<string | null>(null);
+  const [todaySessions, setTodaySessions] = useState<SessionTarget[]>([]);
+  const [assignments, setAssignments] = useState<SessionTarget[]>([]); // manual picker options
+  const [loading, setLoading] = useState(true);
+
+  // Manual picker state
+  const [pickBatchId, setPickBatchId] = useState("");
+  const [pickSubjectId, setPickSubjectId] = useState("");
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const toastIdRef = useRef(0);
@@ -383,110 +360,178 @@ export default function TeacherAttendanceView() {
   const addToast = useCallback((message: string, type: Toast["type"] = "success") => {
     const id = ++toastIdRef.current;
     setToasts((prev) => [...prev.slice(-4), { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 2800);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3200);
   }, []);
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // ── Load assigned batches from teacher_batches table ──
-  useEffect(() => {
-    async function loadBatches() {
-      setBatchesLoading(true);
-      try {
-        const { data: mem } = await supabase
-          .from("institute_members").select("institute_id, department_id")
-          .eq("user_id", user?.id).eq("status", "active").limit(1).single();
-        if (!mem) { setBatchesLoading(false); return; }
-        setInstituteId(mem.institute_id);
+  // ── Load institute + today's sessions + teaching assignments ──
+  const loadData = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    try {
+      const { data: mem } = await supabase
+        .from("institute_members").select("institute_id")
+        .eq("user_id", user.id).eq("status", "active").limit(1).single();
+      if (!mem) { setLoading(false); return; }
+      setInstituteId(mem.institute_id);
 
-        const { data: tb } = await supabase
-          .from("teacher_batches").select("batch_id")
-          .eq("teacher_id", user?.id).eq("institute_id", mem.institute_id);
+      const dateStr = toDateStr(selectedDate);
 
-        let batches: any[] = [];
-        if (tb && tb.length > 0) {
-          const { data: bRows } = await supabase
-            .from("batches").select("id, name, class_level")
-            .in("id", tb.map(t => t.batch_id)).eq("is_active", true).order("name");
-          batches = bRows || [];
-        } else if (mem.department_id) {
-          const { data: bRows } = await supabase
-            .from("batches").select("id, name, class_level")
-            .eq("institute_id", mem.institute_id).eq("department_id", mem.department_id)
-            .eq("is_active", true).order("name");
-          batches = bRows || [];
-        }
-        if (batches && batches.length > 0) {
-          const { data: stuCounts } = await supabase
-            .from("students").select("batch_id").eq("institute_id", mem.institute_id)
-            .eq("is_active", true).in("batch_id", batches.map(b => b.id));
-          const countMap: Record<string, number> = {};
-          stuCounts?.forEach(s => { if (s.batch_id) countMap[s.batch_id] = (countMap[s.batch_id] || 0) + 1; });
-          setFetchedBatches(batches.map(b => ({
-            id: b.id, name: b.name, studentCount: countMap[b.id] || 0,
-            timeSlot: b.class_level ? `Class ${b.class_level}` : undefined,
-          })));
-        } else { setFetchedBatches([]); }
-      } catch (e) { console.error(e); }
-      setBatchesLoading(false);
+      // Today's timetable-scheduled sessions
+      const { data: sessRows } = await supabase.rpc("get_teacher_today_sessions", {
+        p_institute_id: mem.institute_id,
+        p_date: dateStr,
+      });
+      setTodaySessions(
+        (sessRows || []).map((r: any): SessionTarget => ({
+          batchId: r.batch_id,
+          batchName: r.batch_name,
+          subjectId: r.subject_id,
+          subjectName: r.subject_name,
+          subjectCode: r.subject_code,
+          timetableSlotId: r.timetable_slot_id,
+          sessionId: r.session_id,
+          studentCount: Number(r.student_count) || 0,
+          timeSlot: r.start_time ? String(r.start_time).slice(0, 5) : undefined,
+          room: r.room || undefined,
+          isMarked: r.is_marked,
+        }))
+      );
+
+      // Teaching assignments (manual picker: batch + subject options)
+      const { data: taRows } = await supabase
+        .from("teaching_assignments")
+        .select("batch_id, subject_id, batches(name), subjects(name, code)")
+        .eq("teacher_id", user.id)
+        .eq("institute_id", mem.institute_id)
+        .eq("is_active", true);
+      setAssignments(
+        (taRows || []).map((r: any): SessionTarget => ({
+          batchId: r.batch_id,
+          batchName: r.batches?.name || "Batch",
+          subjectId: r.subject_id,
+          subjectName: r.subjects?.name || "Subject",
+          subjectCode: r.subjects?.code,
+        }))
+      );
+    } catch (e) {
+      console.error("loadData:", e);
+      addToast("Failed to load classes", "error");
     }
-    if (user?.id) loadBatches();
-  }, [user?.id]);
+    setLoading(false);
+  }, [user?.id, selectedDate, addToast]);
 
-  const openClass = useCallback(async (cls: ClassItem) => {
-    setSelectedClass(cls);
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // Distinct batches for manual picker dropdown
+  const pickBatches = useMemo(() => {
+    const seen = new Map<string, string>();
+    assignments.forEach(a => { if (!seen.has(a.batchId)) seen.set(a.batchId, a.batchName); });
+    return Array.from(seen, ([id, name]) => ({ id, name }));
+  }, [assignments]);
+
+  // Subjects available for the chosen batch
+  const pickSubjects = useMemo(
+    () => assignments.filter(a => a.batchId === pickBatchId),
+    [assignments, pickBatchId]
+  );
+
+  // ── Open a class (from timetable card OR manual pick) ──
+  const openSession = useCallback(async (target: SessionTarget) => {
+    setSelected(target);
     setStudents([]);
     setHasChanges(false);
     setSearchQuery("");
     setStatusFilter("all");
     setLastSaved(null);
+    setIsLoadingSheet(true);
     try {
+      const dateStr = toDateStr(selectedDate);
+
+      // 1. Students of the batch
       const { data: stuRows } = await supabase
         .from("students").select("id, name, roll_no")
-        .eq("batch_id", cls.id).eq("is_active", true).order("roll_no");
+        .eq("batch_id", target.batchId).eq("is_active", true).order("roll_no");
       if (!stuRows || stuRows.length === 0) {
-        addToast(`${cls.name} has no students yet`, "info");
+        addToast(`${target.batchName} has no students yet`, "info");
         setOriginalStudents([]);
+        setIsLoadingSheet(false);
         return;
       }
-      const dateStr = toDateStr(selectedDate);
-      const { data: existing } = await supabase
-        .from("attendance").select("records")
-        .eq("batch_id", cls.id).eq("date", dateStr).single();
-      const savedRecords: Record<string, Status> = existing?.records || {};
-      const loaded: Student[] = stuRows.map(s => ({
+
+      // 2. Existing attendance for this session (if already marked)
+      let sessionId = target.sessionId ?? null;
+      if (!sessionId) {
+        const { data: sess } = await supabase
+          .from("class_sessions").select("id")
+          .eq("batch_id", target.batchId)
+          .eq("subject_id", target.subjectId)
+          .eq("session_date", dateStr)
+          .eq("teacher_id", user?.id)
+          .order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
+        sessionId = sess?.id ?? null;
+      }
+      const savedRecords: Record<string, Status> = {};
+      if (sessionId) {
+        const { data: recs } = await supabase
+          .from("attendance_records").select("student_id, status")
+          .eq("session_id", sessionId);
+        recs?.forEach((r: any) => { savedRecords[r.student_id] = r.status as Status; });
+      }
+
+      // 3. Real monthly % per student for this subject
+      const pctMap: Record<string, number> = {};
+      try {
+        const { data: monthly } = await supabase.rpc("get_monthly_attendance", {
+          p_batch_id: target.batchId,
+          p_month: selectedDate.getMonth() + 1,
+          p_year: selectedDate.getFullYear(),
+          p_subject_id: target.subjectId,
+        });
+        monthly?.forEach((m: any) => { pctMap[m.student_id] = Number(m.percentage) || 0; });
+      } catch { /* non-fatal */ }
+
+      const loaded: Student[] = stuRows.map((s: any) => ({
         id: s.id,
         name: s.name + (s.roll_no ? ` (${s.roll_no})` : ""),
-        status: (savedRecords[s.id] as Status) || "present",
-        attendanceHistory: [],
+        status: savedRecords[s.id] || "present",
+        pct: pctMap[s.id] ?? 0,
       }));
       setStudents(loaded);
       setOriginalStudents(JSON.parse(JSON.stringify(loaded)));
-      addToast(`Opened ${cls.name} — ${loaded.length} students`, "info");
+      addToast(
+        `${target.batchName} · ${target.subjectName} — ${loaded.length} students${sessionId ? " (already marked)" : ""}`,
+        "info"
+      );
     } catch (e) {
-      console.error("openClass:", e);
-      addToast("Failed to load students", "success");
+      console.error("openSession:", e);
+      addToast("Failed to load students", "error");
     }
-  }, [addToast, selectedDate]);
+    setIsLoadingSheet(false);
+  }, [addToast, selectedDate, user?.id]);
+
+  const openManual = useCallback(() => {
+    const target = assignments.find(a => a.batchId === pickBatchId && a.subjectId === pickSubjectId);
+    if (!target) { addToast("Pick a batch and subject first", "info"); return; }
+    openSession(target);
+  }, [assignments, pickBatchId, pickSubjectId, openSession, addToast]);
 
   const goBack = useCallback(() => {
     if (hasChanges) {
-      setConfirmAction(() => () => {
-        setSelectedClass(null);
-        setHasChanges(false);
-      });
+      setConfirmAction(() => () => { setSelected(null); setHasChanges(false); });
       setConfirmTitle("Discard changes?");
-      setConfirmMessage("You have unsaved attendance changes. Are you sure you want to go back?");
+      setConfirmMessage("You have unsaved attendance changes. Go back anyway?");
       setConfirmType("warning");
       setShowConfirm(true);
     } else {
-      setSelectedClass(null);
+      setSelected(null);
+      loadData(); // refresh marked-status on the landing
     }
-  }, [hasChanges]);
+  }, [hasChanges, loadData]);
 
   const markStatus = useCallback((studentId: string, status: Status) => {
     setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, status } : s)));
@@ -497,10 +542,10 @@ export default function TeacherAttendanceView() {
     setConfirmAction(() => () => {
       setStudents((prev) => prev.map((s) => ({ ...s, status: "present" as Status })));
       setHasChanges(true);
-      addToast(`Marked all ${students.length} students as present`);
+      addToast(`Marked all ${students.length} students present`);
     });
     setConfirmTitle("Mark all present?");
-    setConfirmMessage(`This will mark all ${students.length} students as present. You can adjust individual students afterward.`);
+    setConfirmMessage(`All ${students.length} students will be marked present. Adjust individuals after.`);
     setConfirmType("info");
     setShowConfirm(true);
   }, [students.length, addToast]);
@@ -514,35 +559,36 @@ export default function TeacherAttendanceView() {
   }, [originalStudents, addToast]);
 
   const saveAttendance = useCallback(async () => {
-    if (!selectedClass || !instituteId) return;
+    if (!selected || !instituteId) return;
     setIsSaving(true);
     try {
       const dateStr = toDateStr(selectedDate);
-      const records: Record<string, string> = {};
-      students.forEach(s => { records[s.id] = s.status; });
-      const { error } = await supabase.from("attendance").upsert({
-        batch_id: selectedClass.id,
-        institute_id: instituteId,
-        date: dateStr,
-        records,
-        marked_by: user?.id,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "batch_id,date" });
+      const records = students.map(s => ({ student_id: s.id, status: s.status }));
+      const { data, error } = await supabase.rpc("mark_attendance", {
+        p_institute_id: instituteId,
+        p_batch_id: selected.batchId,
+        p_subject_id: selected.subjectId,
+        p_session_date: dateStr,
+        p_timetable_slot_id: selected.timetableSlotId ?? null,
+        p_topic: null,
+        p_records: records,
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
       setOriginalStudents(JSON.parse(JSON.stringify(students)));
       setHasChanges(false);
-      const now = new Date();
-      setLastSaved(now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
-      addToast(`Attendance saved for ${selectedClass.name}`);
+      setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
+      addToast(`Saved — ${selected.subjectName} attendance for ${selected.batchName}`);
     } catch (e: any) {
-      addToast(e.message || "Save failed", "success");
+      addToast(e.message || "Save failed", "error");
     }
     setIsSaving(false);
-  }, [students, selectedClass, addToast, selectedDate, instituteId, user?.id]);
+  }, [students, selected, addToast, selectedDate, instituteId]);
 
   // Keyboard shortcuts
   useEffect(() => {
-    if (!selectedClass) return;
+    if (!selected) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
@@ -556,7 +602,7 @@ export default function TeacherAttendanceView() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedClass, hasChanges, isSaving, saveAttendance, goBack]);
+  }, [selected, hasChanges, isSaving, saveAttendance, goBack]);
 
   // Calendar
   const calDays = useMemo(() => {
@@ -575,7 +621,7 @@ export default function TeacherAttendanceView() {
     return d === now.getDate() && calMonth === now.getMonth() && calYear === now.getFullYear();
   }, [calMonth, calYear]);
 
-  const isSelected = useCallback((d: number) => 
+  const isSelected = useCallback((d: number) =>
     d === selectedDate.getDate() && calMonth === selectedDate.getMonth() && calYear === selectedDate.getFullYear(),
   [selectedDate, calMonth, calYear]);
 
@@ -584,13 +630,20 @@ export default function TeacherAttendanceView() {
     return day === 0 || day === 6;
   }, [calMonth, calYear]);
 
-  // Analytics
+  // ─── FIX: Future date check ───────────────────────────────
+  const isFutureDate = useCallback((d: number) => {
+    const clicked = new Date(calYear, calMonth, d);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return clicked > today;
+  }, [calYear, calMonth]);
+
+  // Analytics (current sheet)
   const presentCount = useMemo(() => students.filter((s) => s.status === "present").length, [students]);
   const absentCount = useMemo(() => students.filter((s) => s.status === "absent").length, [students]);
   const leaveCount = useMemo(() => students.filter((s) => s.status === "leave").length, [students]);
   const attendancePct = students.length > 0 ? Math.round((presentCount / students.length) * 100) : 0;
 
-  // Filtered students
   const filteredStudents = useMemo(() => {
     let filtered = students;
     if (statusFilter !== "all") filtered = filtered.filter((s) => s.status === statusFilter);
@@ -600,12 +653,6 @@ export default function TeacherAttendanceView() {
     }
     return filtered;
   }, [students, statusFilter, searchQuery]);
-
-  const getStudentPct = useCallback((student: Student) => {
-    if (!student.attendanceHistory?.length) return 0;
-    const present = student.attendanceHistory.filter((h) => h.status === "present").length;
-    return Math.round((present / student.attendanceHistory.length) * 100);
-  }, []);
 
   const saveStatus = useMemo(() => {
     if (isSaving) return { text: "Saving…", color: "text-amber-600" };
@@ -619,10 +666,19 @@ export default function TeacherAttendanceView() {
     return students.reduce((acc, s, i) => (s.status !== originalStudents[i]?.status ? acc + 1 : acc), 0);
   }, [students, originalStudents, hasChanges]);
 
+  const totalStudents = useMemo(() => {
+    const seen = new Set<string>();
+    let sum = 0;
+    [...todaySessions, ...assignments].forEach(a => {
+      if (!seen.has(a.batchId)) { seen.add(a.batchId); sum += a.studentCount || 0; }
+    });
+    return sum;
+  }, [todaySessions, assignments]);
+
   /* ═══════════════════════════════════════════════════════════
-     RENDER: CLASS LIST
+     RENDER: LANDING (today's classes + manual pick)
      ═══════════════════════════════════════════════════════════ */
-  if (!selectedClass) {
+  if (!selected) {
     return (
       <>
         <ToastStack toasts={toasts} onDismiss={dismissToast} />
@@ -630,51 +686,35 @@ export default function TeacherAttendanceView() {
           __html: `
             @keyframes popIn { from { opacity:0; transform:scale(0.96) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
             @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-            @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
-            @media (prefers-reduced-motion: reduce) {
-              .animate-pop, [class*="animate-"] { animation: none !important; }
-            }
+            @media (prefers-reduced-motion: reduce) { [class*="animate-"] { animation: none !important; } }
           `
         }} />
         <div className="space-y-5 sm:space-y-8 animate-[popIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
           {/* Teacher info + Calendar */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 lg:gap-8">
-            {/* Teacher card */}
             <div className="lg:col-span-2 glass-panel rounded-[28px] sm:rounded-[40px] lg:rounded-[48px] p-5 sm:p-7 lg:p-8 flex flex-col items-center text-center">
-              <div
-                className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-[22px] sm:rounded-[28px] lg:rounded-[32px] flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-lg mb-3 sm:mb-4 transition-transform duration-200 hover:scale-105"
-                style={{ background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }}
-              >
+              <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-[22px] sm:rounded-[28px] lg:rounded-[32px] flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-lg mb-3 sm:mb-4"
+                style={{ background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }}>
                 {displayName.charAt(0).toUpperCase()}
               </div>
               <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white tracking-tight">{displayName}</h3>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">Teacher ID: T-{teacherId}</p>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium">Department: Science</p>
-
-              <div className="flex items-center gap-0.5 mt-3 sm:mt-4">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <span key={n} className={n <= 4 ? "text-amber-400" : "text-slate-300 dark:text-slate-600"}>
-                    {n <= 4 ? <I.Star /> : <I.StarOff />}
-                  </span>
-                ))}
-                <span className="text-xs font-bold text-slate-500 ml-1">4.0</span>
-              </div>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">Teacher</p>
 
               <div className="mt-4 flex items-center gap-2 inset-pill border-none rounded-2xl px-4 py-2 sm:px-5 sm:py-2.5">
-                <I.Users />
+                <I.Book />
                 <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200">
-                  {batchesLoading ? "Loading..." : `${fetchedBatches.length} ${fetchedBatches.length !== 1 ? "batches" : "batch"} assigned`}
+                  {loading ? "Loading…" : `${assignments.length} ${assignments.length !== 1 ? "classes" : "class"} assigned`}
                 </span>
               </div>
 
               <div className="mt-3 sm:mt-4 grid grid-cols-2 gap-2 w-full">
                 <div className="inset-pill border-none rounded-xl sm:rounded-2xl px-2.5 py-2 sm:px-3 sm:py-2.5">
-                  <span className="block text-base sm:text-lg font-black text-emerald-600">412</span>
+                  <span className="block text-base sm:text-lg font-black text-emerald-600">{totalStudents || "—"}</span>
                   <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wide">Total Students</span>
                 </div>
                 <div className="inset-pill border-none rounded-xl sm:rounded-2xl px-2.5 py-2 sm:px-3 sm:py-2.5">
-                  <span className="block text-base sm:text-lg font-black text-blue-600">87.5%</span>
-                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wide">Avg. Attendance</span>
+                  <span className="block text-base sm:text-lg font-black text-blue-600">{todaySessions.length}</span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wide">Today's Classes</span>
                 </div>
               </div>
             </div>
@@ -683,91 +723,67 @@ export default function TeacherAttendanceView() {
             <div className="lg:col-span-3 glass-panel rounded-[28px] sm:rounded-[40px] lg:rounded-[48px] p-5 sm:p-7 lg:p-8">
               <div className="flex items-center justify-between mb-4 sm:mb-5 gap-2">
                 <h3 className="text-base sm:text-lg lg:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <span style={{ color: "var(--theme-start)" }}>
-                    <I.Calendar />
-                  </span>
+                  <span style={{ color: "var(--theme-start)" }}><I.Calendar /></span>
                   <span className="hidden xs:inline">Calendar</span>
                 </h3>
                 <div className="flex items-center gap-1 sm:gap-2">
-                  <button
-                    onClick={() => {
-                      if (calMonth === 0) {
-                        setCalMonth(11);
-                        setCalYear(calYear - 1);
-                      } else setCalMonth(calMonth - 1);
-                    }}
-                    className="p-2 rounded-xl inset-pill border-none text-slate-500 active:scale-95 transition-transform touch-manipulation"
-                    aria-label="Previous month"
-                  >
-                    <I.ChevL />
-                  </button>
+                  <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else setCalMonth(calMonth - 1); }}
+                    className="p-2 rounded-xl inset-pill border-none text-slate-500 active:scale-95 transition-transform touch-manipulation" aria-label="Previous month"><I.ChevL /></button>
                   <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 min-w-[88px] sm:min-w-[110px] text-center tabular-nums">
                     {MONTHS_SHORT[calMonth]} {calYear}
                   </span>
-                  <button
-                    onClick={() => {
-                      if (calMonth === 11) {
-                        setCalMonth(0);
-                        setCalYear(calYear + 1);
-                      } else setCalMonth(calMonth + 1);
-                    }}
-                    className="p-2 rounded-xl inset-pill border-none text-slate-500 active:scale-95 transition-transform touch-manipulation"
-                    aria-label="Next month"
-                  >
-                    <I.ChevR />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCalMonth(new Date().getMonth());
-                      setCalYear(new Date().getFullYear());
-                      setSelectedDate(new Date());
-                    }}
-                    className="ml-1 px-2.5 py-1.5 rounded-xl inset-pill border-none text-[11px] sm:text-xs font-bold text-slate-500 active:scale-95 transition-transform touch-manipulation"
-                  >
-                    Today
-                  </button>
+                  <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); } else setCalMonth(calMonth + 1); }}
+                    className="p-2 rounded-xl inset-pill border-none text-slate-500 active:scale-95 transition-transform touch-manipulation" aria-label="Next month"><I.ChevR /></button>
+                  <button onClick={() => { setCalMonth(new Date().getMonth()); setCalYear(new Date().getFullYear()); setSelectedDate(new Date()); }}
+                    className="ml-1 px-2.5 py-1.5 rounded-xl inset-pill border-none text-[11px] sm:text-xs font-bold text-slate-500 active:scale-95 transition-transform touch-manipulation">Today</button>
                 </div>
               </div>
 
               <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center">
                 {DAYS.map((d) => (
-                  <div key={d} className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider py-0.5 sm:py-1">
-                    {d}
-                  </div>
+                  <div key={d} className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider py-0.5 sm:py-1">{d}</div>
                 ))}
                 {calDays.map((d, i) => {
                   if (d === null) return <div key={i} className="h-8 sm:h-9 lg:h-10" />;
+                  
                   const isSel = isSelected(d);
                   const isTdy = isToday(d);
                   const isWknd = isWeekend(d);
-                  const hasAttendance = d <= new Date().getDate() && calMonth === new Date().getMonth() && calYear === new Date().getFullYear();
-                  const demoStatus = d % 3 === 0 ? "present" : d % 3 === 1 ? "absent" : "leave";
+                  const isFuture = isFutureDate(d);
+                  
+                  // ─── FIX: Future dates are not clickable ──────
+                  const handleClick = () => {
+                    if (isFuture) return; // future date click = ignore
+                    setSelectedDate(new Date(calYear, calMonth, d));
+                  };
 
                   return (
-                    <button
-                      key={i}
-                      onClick={() => setSelectedDate(new Date(calYear, calMonth, d))}
+                    <button 
+                      key={i} 
+                      onClick={handleClick}
+                      disabled={isFuture}
                       className={`relative h-8 sm:h-9 lg:h-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all duration-150 active:scale-95 touch-manipulation ${
-                        isSel
-                          ? "text-white shadow-md"
-                          : isTdy
-                          ? "inset-pill border-none text-slate-800 dark:text-white ring-2"
-                          : isWknd
-                          ? "text-slate-400 dark:text-slate-500"
-                          : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        isFuture 
+                          ? "opacity-30 cursor-not-allowed text-slate-400 dark:text-slate-500" 
+                          : isSel 
+                            ? "text-white shadow-md" 
+                            : isTdy 
+                              ? "inset-pill border-none text-slate-800 dark:text-white ring-2" 
+                              : isWknd 
+                                ? "text-slate-400 dark:text-slate-500" 
+                                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                       }`}
-                      style={
-                        isSel
-                          ? { background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }
-                          : isTdy
-                          ? ({ ["--tw-ring-color" as string]: "var(--theme-start)" } as React.CSSProperties)
-                          : undefined
-                      }
+                      style={isSel && !isFuture 
+                        ? { background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" } 
+                        : isTdy && !isFuture 
+                          ? ({ ["--tw-ring-color" as string]: "var(--theme-start)" } as React.CSSProperties) 
+                          : undefined}
+                      aria-disabled={isFuture}
                     >
                       {d}
-                      {hasAttendance && (
-                        <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${statusColor[demoStatus as Status].dot}`} />
-                      )}
+                      {/* {isFuture && (
+                        <span className="absolute -top-1 -right-1 text-[6px] font-bold text-slate-300">🔒</span>
+                      )} */}
                     </button>
                   );
                 })}
@@ -781,67 +797,80 @@ export default function TeacherAttendanceView() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Today</span>
                 )}
               </div>
-
-              <div className="mt-2.5 sm:mt-3 flex items-center gap-3 sm:gap-4 justify-center flex-wrap">
-                {[
-                  { c: "bg-emerald-500", l: "Present" },
-                  { c: "bg-red-500", l: "Absent" },
-                  { c: "bg-blue-500", l: "Leave" },
-                ].map((item) => (
-                  <span key={item.l} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                    <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${item.c}`} /> {item.l}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
 
-          {/* Assigned classes */}
+          {/* Today's timetable classes */}
           <div className="glass-panel rounded-[28px] sm:rounded-[40px] lg:rounded-[48px] p-5 sm:p-7 lg:p-8">
             <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2">
-              <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white">Assigned classes</h3>
+              <h3 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white">Today's classes</h3>
               <span className="text-[11px] sm:text-xs font-bold text-slate-400 inset-pill border-none px-3 py-1.5 sm:px-4 sm:py-2 rounded-full shrink-0">
-                {fetchedBatches.length} total
+                {todaySessions.length} scheduled
               </span>
             </div>
 
-            <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {batchesLoading ? (
-                <p style={{ textAlign: "center", padding: 32, color: "#94A3B8" }}>Loading your batches...</p>
-              ) : fetchedBatches.length === 0 ? (
-                <p style={{ textAlign: "center", padding: 32, color: "#94A3B8", fontWeight: 600 }}>No batches assigned yet. Your admin will assign batches to your account.</p>
-              ) : fetchedBatches.map((cls) => (
-                <button
-                  key={cls.id}
-                  onClick={() => openClass(cls)}
-                  className="group glass-panel rounded-[20px] sm:rounded-[28px] lg:rounded-[32px] p-4 sm:p-5 lg:p-6 text-left transition-all duration-200 active:scale-[0.98] hover:-translate-y-0.5 touch-manipulation will-change-transform"
-                >
-                  <div className="flex items-center justify-between mb-2.5 sm:mb-3">
-                    <div
-                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-[12px] sm:rounded-[14px] flex items-center justify-center text-white font-black text-xs sm:text-sm shadow-sm transition-transform duration-200 group-hover:scale-110"
-                      style={{ background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }}
-                    >
-                      {cls.name.split("—")[0]?.trim().replace("Class ", "C") || "C"}
+            {loading ? (
+              <p className="text-center py-8 text-slate-400 font-semibold">Loading…</p>
+            ) : todaySessions.length === 0 ? (
+              <p className="text-center py-6 text-slate-400 font-semibold text-sm">
+                No timetable classes for this date. Use "Mark a class" below to pick manually.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {todaySessions.map((s, idx) => (
+                  <button key={s.sessionId || idx} onClick={() => openSession(s)}
+                    className="group glass-panel rounded-[20px] sm:rounded-[28px] lg:rounded-[32px] p-4 sm:p-5 lg:p-6 text-left transition-all duration-200 active:scale-[0.98] hover:-translate-y-0.5 touch-manipulation will-change-transform">
+                    <div className="flex items-center justify-between mb-2.5 sm:mb-3">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-[12px] sm:rounded-[14px] flex items-center justify-center text-white font-black text-xs sm:text-sm shadow-sm"
+                        style={{ background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }}>
+                        {s.subjectCode?.slice(0, 3) || s.batchName.slice(0, 2)}
+                      </div>
+                      {s.isMarked ? (
+                        <span className="text-[10px] font-bold text-emerald-600 inset-pill border-none px-2.5 py-1 rounded-full flex items-center gap-1"><I.Check /> Marked</span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-600 inset-pill border-none px-2.5 py-1 rounded-full">Pending</span>
+                      )}
                     </div>
-                    <span className="text-[11px] sm:text-xs font-bold text-slate-400 inset-pill border-none px-2.5 py-1 rounded-full flex items-center gap-1">
-                      <I.Users /> {cls.studentCount}
-                    </span>
-                  </div>
-                  <h4 className="font-extrabold text-slate-900 dark:text-white text-[15px] sm:text-base lg:text-lg tracking-tight truncate group-hover:text-[var(--theme-start)] transition-colors duration-200">
-                    {cls.name}
-                  </h4>
-                  {cls.timeSlot && (
-                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-1 flex items-center gap-1">
-                      <I.Clock /> {cls.timeSlot}
-                    </p>
-                  )}
-                  <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-2 flex items-center gap-1">
-                    Tap to mark attendance
-                    <span className="inline-block transition-transform duration-200 group-hover:translate-x-1">→</span>
-                  </p>
-                </button>
-              ))}
+                    <h4 className="font-extrabold text-slate-900 dark:text-white text-[15px] sm:text-base tracking-tight truncate group-hover:text-[var(--theme-start)] transition-colors">
+                      {s.subjectName}
+                    </h4>
+                    <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-1 truncate">{s.batchName}</p>
+                    <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-400 font-medium">
+                      {s.timeSlot && <span className="flex items-center gap-1"><I.Clock /> {s.timeSlot}</span>}
+                      <span className="flex items-center gap-1"><I.Users /> {s.studentCount}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Manual pick */}
+          <div className="glass-panel rounded-[28px] sm:rounded-[40px] lg:rounded-[48px] p-5 sm:p-7 lg:p-8">
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mb-1">Mark a class</h3>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium mb-4">Pick a batch and subject to mark attendance manually.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <select value={pickBatchId} onChange={(e) => { setPickBatchId(e.target.value); setPickSubjectId(""); }}
+                className="inset-pill border-none rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none">
+                <option value="">Select batch…</option>
+                {pickBatches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+              <select value={pickSubjectId} onChange={(e) => setPickSubjectId(e.target.value)} disabled={!pickBatchId}
+                className="inset-pill border-none rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none disabled:opacity-40">
+                <option value="">Select subject…</option>
+                {pickSubjects.map(s => <option key={s.subjectId} value={s.subjectId}>{s.subjectName}{s.subjectCode ? ` (${s.subjectCode})` : ""}</option>)}
+              </select>
+              <button onClick={openManual} disabled={!pickBatchId || !pickSubjectId}
+                className="rounded-2xl px-4 py-3 text-sm font-bold text-white active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all touch-manipulation"
+                style={{ background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }}>
+                Open sheet →
+              </button>
             </div>
+            {assignments.length === 0 && !loading && (
+              <p className="text-center py-4 mt-2 text-slate-400 font-semibold text-sm">
+                No classes assigned to you yet. Ask your admin to set up teaching assignments.
+              </p>
+            )}
           </div>
         </div>
       </>
@@ -854,91 +883,51 @@ export default function TeacherAttendanceView() {
   return (
     <>
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
-      <ConfirmModal
-        isOpen={showConfirm}
-        onClose={() => setShowConfirm(false)}
-        onConfirm={confirmAction}
-        title={confirmTitle}
-        message={confirmMessage}
-        type={confirmType}
-      />
+      <ConfirmModal isOpen={showConfirm} onClose={() => setShowConfirm(false)} onConfirm={confirmAction}
+        title={confirmTitle} message={confirmMessage} type={confirmType} />
       <style dangerouslySetInnerHTML={{
         __html: `
           @keyframes popIn { from { opacity:0; transform:scale(0.96) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
           @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-          @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
-          @media (prefers-reduced-motion: reduce) {
-            .animate-pop, [class*="animate-"] { animation: none !important; }
-          }
+          @media (prefers-reduced-motion: reduce) { [class*="animate-"] { animation: none !important; } }
         `
       }} />
 
       <div className="space-y-4 sm:space-y-6 lg:space-y-8 animate-[popIn_0.3s_cubic-bezier(0.16,1,0.3,1)]">
-        {/* Sticky header on mobile */}
-        <div className="sticky top-0 z-20 -mx-1 px-1 py-1 sm:static sm:mx-0 sm:px-0 sm:py-0 bg-[var(--bg,transparent)] sm:bg-transparent backdrop-blur-md sm:backdrop-blur-none">
+        {/* Sticky header */}
+        <div className="sticky top-0 z-20 -mx-1 px-1 py-1 sm:static sm:mx-0 sm:px-0 sm:py-0 backdrop-blur-md sm:backdrop-blur-none">
           <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 flex-wrap">
-            <button
-              onClick={goBack}
-              className="p-2.5 rounded-2xl inset-pill border-none text-slate-600 dark:text-slate-300 active:scale-95 transition-transform touch-manipulation shrink-0"
-              title="Back (Esc)"
-              aria-label="Back to classes"
-            >
-              <I.Back />
-            </button>
-
+            <button onClick={goBack} className="p-2.5 rounded-2xl inset-pill border-none text-slate-600 dark:text-slate-300 active:scale-95 transition-transform touch-manipulation shrink-0" title="Back (Esc)" aria-label="Back"><I.Back /></button>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1 truncate">
-                <button onClick={goBack} className="hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-                  Attendance
-                </button>
+                <button onClick={goBack} className="hover:text-slate-600 dark:hover:text-slate-300 transition-colors">Attendance</button>
                 <span>›</span>
-                <span className="text-slate-600 dark:text-slate-300 truncate">{selectedClass.name}</span>
+                <span className="text-slate-600 dark:text-slate-300 truncate">{selected.subjectName}</span>
               </p>
               <h2 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">
-                {selectedClass.name}
+                {selected.subjectName} <span className="text-slate-400 font-bold">· {selected.batchName}</span>
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 font-medium truncate">
-                {DAYS_FULL[selectedDate.getDay()]}, {selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
-                {students.length} students
-                {selectedClass.timeSlot && ` · ${selectedClass.timeSlot}`}
+                {DAYS_FULL[selectedDate.getDay()]}, {selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} · {students.length} students
+                {selected.timeSlot && ` · ${selected.timeSlot}`}
               </p>
             </div>
-
             <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto justify-end">
-              <button
-                onClick={undoChanges}
-                disabled={!hasChanges}
-                className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl inset-pill border-none font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all touch-manipulation"
-                title="Undo"
-              >
-                <I.Undo /> <span className="hidden xs:inline">Undo</span>
-              </button>
-              <button
-                onClick={markAllPresent}
-                className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl inset-pill border-none font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 active:scale-95 transition-all touch-manipulation"
-                title="Mark all present"
-              >
-                <I.Check /> <span className="hidden xs:inline">All Present</span>
-              </button>
-              <button
-                onClick={saveAttendance}
-                disabled={!hasChanges || isSaving}
+              <button onClick={undoChanges} disabled={!hasChanges}
+                className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl inset-pill border-none font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all touch-manipulation" title="Undo"><I.Undo /> <span className="hidden xs:inline">Undo</span></button>
+              <button onClick={markAllPresent}
+                className="flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl inset-pill border-none font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 active:scale-95 transition-all touch-manipulation" title="Mark all present"><I.Check /> <span className="hidden xs:inline">All Present</span></button>
+              <button onClick={saveAttendance} disabled={!hasChanges || isSaving}
                 className="flex items-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 rounded-2xl font-bold text-xs sm:text-sm text-white active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all touch-manipulation"
-                style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
-                title="Save (Ctrl+S)"
-              >
-                {isSaving ? <I.Spinner /> : <I.Save />}
-                <span>{isSaving ? "Saving…" : "Save"}</span>
+                style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }} title="Save (Ctrl+S)">
+                {isSaving ? <I.Spinner /> : <I.Save />}<span>{isSaving ? "Saving…" : "Save"}</span>
               </button>
             </div>
           </div>
-
           <div className={`text-[11px] sm:text-xs font-bold ${saveStatus.color} flex items-center gap-1.5 mt-1.5 sm:mt-2`}>
             <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
             {saveStatus.text}
-            {hasChanges && !isSaving && changedCount > 0 && (
-              <span className="text-slate-400 font-medium">({changedCount} changed)</span>
-            )}
+            {hasChanges && !isSaving && changedCount > 0 && (<span className="text-slate-400 font-medium">({changedCount} changed)</span>)}
           </div>
         </div>
 
@@ -950,10 +939,7 @@ export default function TeacherAttendanceView() {
             { label: "On leave", value: leaveCount, color: "text-blue-600" },
             { label: "Attendance %", value: `${attendancePct}%`, color: "text-slate-900 dark:text-white" },
           ].map((s, i) => (
-            <div
-              key={i}
-              className="glass-panel rounded-[20px] sm:rounded-[28px] lg:rounded-[32px] p-3.5 sm:p-4 lg:p-5 flex flex-col items-center text-center transition-transform duration-200 hover:-translate-y-0.5"
-            >
+            <div key={i} className="glass-panel rounded-[20px] sm:rounded-[28px] lg:rounded-[32px] p-3.5 sm:p-4 lg:p-5 flex flex-col items-center text-center transition-transform duration-200 hover:-translate-y-0.5">
               <span className={`text-2xl sm:text-3xl lg:text-4xl font-black tabular-nums ${s.color}`}>{s.value}</span>
               <span className="text-[9px] sm:text-[10px] lg:text-xs font-black text-slate-500 uppercase tracking-widest mt-0.5 sm:mt-1">{s.label}</span>
             </div>
@@ -962,44 +948,24 @@ export default function TeacherAttendanceView() {
 
         {/* Table / Cards */}
         <div className="glass-panel rounded-[24px] sm:rounded-[32px] lg:rounded-[40px] p-3.5 sm:p-5 lg:p-6 overflow-hidden">
-          {/* Toolbar */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 mb-3 sm:mb-4">
             <div className="flex items-center gap-2 inset-pill border-none rounded-2xl px-3 py-2 flex-1 min-w-0">
-              <span className="text-slate-400 shrink-0">
-                <I.Search />
-              </span>
-              <input
-                ref={searchInputRef}
-                type="search"
-                placeholder="Search student…"
-                value={searchQuery}
+              <span className="text-slate-400 shrink-0"><I.Search /></span>
+              <input ref={searchInputRef} type="search" placeholder="Search student…" value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent outline-none text-sm font-bold text-slate-700 dark:text-white placeholder-slate-400 w-full min-w-0"
-                autoComplete="off"
-              />
+                className="bg-transparent outline-none text-sm font-bold text-slate-700 dark:text-white placeholder-slate-400 w-full min-w-0" autoComplete="off" />
               {searchQuery && (
                 <button onClick={() => setSearchQuery("")} className="text-slate-400 hover:text-slate-600 p-0.5 shrink-0" aria-label="Clear search">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <line x1="18" y1="6" x2="6" y2="18" />
-                    <line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                 </button>
               )}
             </div>
-
             <div className="flex items-center gap-1 overflow-x-auto scrollbar-none -mx-1 px-1 pb-0.5">
-              <span className="text-slate-400 shrink-0 ml-0.5">
-                <I.Filter />
-              </span>
+              <span className="text-slate-400 shrink-0 ml-0.5"><I.Filter /></span>
               {(["all", "present", "absent", "leave"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setStatusFilter(f)}
-                  className={`px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-150 active:scale-95 touch-manipulation whitespace-nowrap shrink-0 ${
-                    statusFilter === f ? "text-white shadow-sm" : "inset-pill border-none text-slate-500"
-                  }`}
-                  style={statusFilter === f ? { background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` } : undefined}
-                >
+                <button key={f} onClick={() => setStatusFilter(f)}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-150 active:scale-95 touch-manipulation whitespace-nowrap shrink-0 ${statusFilter === f ? "text-white shadow-sm" : "inset-pill border-none text-slate-500"}`}
+                  style={statusFilter === f ? { background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` } : undefined}>
                   {f === "all" ? "All" : statusFullLabel[f]}
                 </button>
               ))}
@@ -1007,65 +973,63 @@ export default function TeacherAttendanceView() {
           </div>
 
           {filteredStudents.length !== students.length && (
-            <p className="text-[11px] sm:text-xs font-bold text-slate-400 mb-2">
-              Showing {filteredStudents.length} of {students.length}
-            </p>
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 mb-2">Showing {filteredStudents.length} of {students.length}</p>
           )}
 
-          {/* Desktop table (md+) */}
-          <div className="hidden md:block overflow-x-auto -mx-1 px-1">
-            <table className="w-full min-w-[480px]">
-              <thead>
-                <tr>
-                  <th className="text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest pb-2.5 pl-2 sm:pl-3 w-10 sm:w-12">#</th>
-                  <th className="text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest pb-2.5">Student</th>
-                  <th className="text-center text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest pb-2.5 w-44 sm:w-52">Status</th>
-                  <th className="text-center text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest pb-2.5 w-14 sm:w-16">%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.map((student, idx) => (
-                  <StudentRow key={student.id} student={student} index={students.indexOf(student)} onMark={markStatus} getPct={getStudentPct} />
+          {isLoadingSheet ? (
+            <p className="text-center py-10 text-slate-400 font-semibold">Loading students…</p>
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto -mx-1 px-1">
+                <table className="w-full min-w-[480px]">
+                  <thead>
+                    <tr>
+                      <th className="text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest pb-2.5 pl-2 sm:pl-3 w-10 sm:w-12">#</th>
+                      <th className="text-left text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest pb-2.5">Student</th>
+                      <th className="text-center text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest pb-2.5 w-44 sm:w-52">Status</th>
+                      <th className="text-center text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest pb-2.5 w-14 sm:w-16">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStudents.map((student) => (
+                      <StudentRow key={student.id} student={student} index={students.indexOf(student)} onMark={markStatus} />
+                    ))}
+                    {filteredStudents.length === 0 && (
+                      <tr><td colSpan={4} className="py-10 text-center">
+                        <p className="text-slate-400 font-bold text-sm">No students found</p>
+                        <p className="text-slate-400 text-xs mt-1">Try adjusting search or filter</p>
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-2.5">
+                {filteredStudents.map((student) => (
+                  <StudentCard key={student.id} student={student} index={students.indexOf(student)} onMark={markStatus} />
                 ))}
                 {filteredStudents.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-10 text-center">
-                      <p className="text-slate-400 font-bold text-sm">No students found</p>
-                      <p className="text-slate-400 text-xs mt-1">Try adjusting search or filter</p>
-                    </td>
-                  </tr>
+                  <div className="py-10 text-center">
+                    <p className="text-slate-400 font-bold text-sm">No students found</p>
+                    <p className="text-slate-400 text-xs mt-1">Try adjusting search or filter</p>
+                  </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile cards (< md) */}
-          <div className="md:hidden space-y-2.5">
-            {filteredStudents.map((student) => (
-              <StudentCard key={student.id} student={student} index={students.indexOf(student)} onMark={markStatus} getPct={getStudentPct} />
-            ))}
-            {filteredStudents.length === 0 && (
-              <div className="py-10 text-center">
-                <p className="text-slate-400 font-bold text-sm">No students found</p>
-                <p className="text-slate-400 text-xs mt-1">Try adjusting search or filter</p>
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
-        {/* Analytics */}
+        {/* Analytics (today's sheet only — real numbers) */}
         <div className="glass-panel rounded-[24px] sm:rounded-[32px] lg:rounded-[40px] p-4 sm:p-6 lg:p-8">
           <div className="flex items-center gap-2.5 sm:gap-3 mb-4 sm:mb-5">
-            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl inset-pill border-none flex items-center justify-center" style={{ color: "var(--theme-start)" }}>
-              <I.Chart />
-            </div>
-            <h3 className="text-base sm:text-lg lg:text-xl font-black text-slate-900 dark:text-white">Class analytics</h3>
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl inset-pill border-none flex items-center justify-center" style={{ color: "var(--theme-start)" }}><I.Chart /></div>
+            <h3 className="text-base sm:text-lg lg:text-xl font-black text-slate-900 dark:text-white">Today's breakdown</h3>
           </div>
-
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] sm:text-xs font-bold text-slate-500">Today&apos;s attendance</span>
+                <span className="text-[11px] sm:text-xs font-bold text-slate-500">Present rate</span>
                 <span className="text-[11px] sm:text-xs font-extrabold text-slate-800 dark:text-white tabular-nums">{attendancePct}%</span>
               </div>
               <div className="w-full h-2.5 sm:h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
@@ -1078,7 +1042,6 @@ export default function TeacherAttendanceView() {
                 )}
               </div>
             </div>
-
             <div className="flex flex-wrap gap-3 sm:gap-4">
               {[
                 { label: "Present", count: presentCount, color: "bg-emerald-500" },
@@ -1087,42 +1050,10 @@ export default function TeacherAttendanceView() {
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-2">
                   <span className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                  <span className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-slate-300">
-                    {item.label}: {item.count}
-                  </span>
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-600 dark:text-slate-300">{item.label}: {item.count}</span>
                 </div>
               ))}
             </div>
-
-            <div className="mt-2 sm:mt-4">
-              <h4 className="text-xs sm:text-sm font-black text-slate-700 dark:text-slate-200 mb-2.5 sm:mb-3">Monthly trend</h4>
-              <div className="flex items-end gap-1.5 sm:gap-2 h-20 sm:h-28">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => {
-                  const pct = [88, 92, 78, 95, 85, 70][i];
-                  return (
-                    <div key={day} className="flex-1 flex flex-col items-center gap-1 group relative">
-                      <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-0.5 bg-slate-900 text-white px-1.5 py-0.5 rounded-md pointer-events-none">
-                        {pct}%
-                      </span>
-                      <div
-                        className="w-full rounded-t-md sm:rounded-t-lg transition-all duration-300 group-hover:brightness-110 cursor-default"
-                        style={{
-                          height: `${pct}%`,
-                          background:
-                            pct >= 85
-                              ? "linear-gradient(180deg, #34d399, #10b981)"
-                              : pct >= 70
-                              ? "linear-gradient(180deg, #fbbf24, #f59e0b)"
-                              : "linear-gradient(180deg, #f87171, #ef4444)",
-                        }}
-                      />
-                      <span className="text-[9px] sm:text-[10px] font-bold text-slate-400">{day}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
             <div className="mt-3 sm:mt-4 pt-3 border-t border-slate-100 dark:border-white/5">
               <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-relaxed">
                 Shortcuts: <kbd className="px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-slate-600 dark:text-slate-300">Ctrl+S</kbd> Save ·{" "}

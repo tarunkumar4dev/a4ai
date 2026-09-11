@@ -6,6 +6,7 @@ import "./styles/globals.css";
 import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
 import Rules from "@/pages/Rules";
 
+
 import {
   BrowserRouter,
   Routes,
@@ -354,6 +355,7 @@ const App = () => {
                       <Route
                         path="/teacher/community-quiz/:quizId/leaderboard"
                         element={<RoleAuthGate allowedRoles={["teacher"]}><CommunityQuizLeaderboardPage /></RoleAuthGate>}
+                      />
                       
                       <Route 
                         path="/teacher/community-quiz/new" 

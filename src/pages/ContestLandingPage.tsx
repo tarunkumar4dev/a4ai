@@ -80,7 +80,7 @@ interface MegaContest {
 }
 
 /* -------------------------------------------
-   Premium Bento FlashCard (Optimized)
+   Premium Bento FlashCard (Orange Theme)
 -------------------------------------------- */
 function PremiumFlashCard({
    onClick,
@@ -157,7 +157,7 @@ function PremiumFlashCard({
                <div className="space-y-2 sm:space-y-3">
                  {/* Title - Top Aligned */}
                  <div className="pr-10 sm:pr-12 mt-8"> 
-                   <h3 className="text-base sm:text-lg md:text-xl font-extrabold text-white leading-tight tracking-tight drop-shadow-lg line-clamp-2">
+                   <h3 className="text-base sm:text-lg md:text-xl font-extrabold text-white leading-tight tracking-tight drop-shadow-lg line-clamp-2 font-jakarta">
                      {title}
                    </h3>
                  </div>
@@ -170,7 +170,7 @@ function PremiumFlashCard({
                    whileHover={{ scale: 1.02 }}
                    whileTap={{ scale: 0.98 }}
                  >
-                   <button className="w-full flex items-center justify-center px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-white/95 hover:bg-white text-slate-900 text-xs sm:text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-[0.98] group/btn">
+                   <button className="w-full flex items-center justify-center px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-white/95 hover:bg-white text-slate-900 text-xs sm:text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-[0.98] group/btn font-jakarta">
                      <span>{cta}</span>
                      <div className="w-5 h-5 rounded-full bg-slate-100 group-hover/btn:bg-slate-200 transition-colors flex items-center justify-center ml-2">
                        <ChevronRight size={12} className="text-slate-600" />
@@ -187,7 +187,7 @@ function PremiumFlashCard({
  }
 
 /* ---------------------------
-   Main Page - Optimized
+   Main Page - Orange Theme
 ---------------------------- */
 const ContestLandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -235,14 +235,14 @@ const ContestLandingPage: React.FC = () => {
   // Mega Contest hero cards - Dynamic from database
   const heroCards = useMemo(() => {
     const gradients = [
-      "bg-gradient-to-br from-purple-500 to-pink-500",
-      "bg-gradient-to-br from-blue-500 to-cyan-500",
-      "bg-gradient-to-br from-green-500 to-emerald-600",
-      "bg-gradient-to-br from-orange-500 to-red-500",
-      "bg-gradient-to-br from-indigo-500 to-purple-600",
-      "bg-gradient-to-br from-teal-500 to-green-500",
+      "bg-gradient-to-br from-orange-500 to-amber-600",
+      "bg-gradient-to-br from-amber-500 to-yellow-500",
+      "bg-gradient-to-br from-orange-600 to-red-500",
+      "bg-gradient-to-br from-amber-600 to-orange-500",
+      "bg-gradient-to-br from-yellow-500 to-orange-500",
+      "bg-gradient-to-br from-orange-400 to-amber-500",
       "bg-gradient-to-br from-red-500 to-orange-500",
-      "bg-gradient-to-br from-yellow-500 to-amber-500"
+      "bg-gradient-to-br from-amber-500 to-orange-600"
     ];
     
     if (loading) {
@@ -331,14 +331,14 @@ const ContestLandingPage: React.FC = () => {
 
   const topics = useMemo(() => [
     { name: "All", count: 42, icon: <LayoutGrid size={12} className="sm:size-[14px]" />, color: "bg-slate-200" },
-    { name: "Class 10", count: 8, icon: "🔟", color: "bg-blue-100" },
-    { name: "Class 11", count: 12, icon: "1️⃣1️⃣", color: "bg-green-100" },
-    { name: "Class 12", count: 15, icon: "1️⃣2️⃣", color: "bg-purple-100" },
-    { name: "JEE", count: 14, icon: "⚛️", color: "bg-red-100" },
-    { name: "NEET", count: 10, icon: "🧬", color: "bg-green-100" },
+    { name: "Class 10", count: 8, icon: "🔟", color: "bg-amber-100" },
+    { name: "Class 11", count: 12, icon: "1️⃣1️⃣", color: "bg-orange-100" },
+    { name: "Class 12", count: 15, icon: "1️⃣2️⃣", color: "bg-amber-100" },
+    { name: "JEE", count: 14, icon: "⚛️", color: "bg-orange-100" },
+    { name: "NEET", count: 10, icon: "🧬", color: "bg-amber-100" },
     { name: "Physics", count: 11, icon: "⚡", color: "bg-orange-100" },
-    { name: "Chemistry", count: 9, icon: "🧪", color: "bg-blue-100" },
-    { name: "Maths", count: 13, icon: "📐", color: "bg-indigo-100" },
+    { name: "Chemistry", count: 9, icon: "🧪", color: "bg-amber-100" },
+    { name: "Maths", count: 13, icon: "📐", color: "bg-orange-100" },
   ], []);
 
   const contests: Contest[] = useMemo(() => [
@@ -371,10 +371,8 @@ const ContestLandingPage: React.FC = () => {
   // Handle Mega Contest card clicks
   const handleCardClick = useCallback((cardKey: string, contestData?: MegaContest) => {
     if (contestData?.contest_code) {
-      // Navigate to mega contest using contest_code
       navigate(`/mega-contest/${contestData.contest_code}`);
     } else {
-      // Fallback for demo contests
       toast.info('Contest details loading...');
     }
   }, [navigate]);
@@ -389,9 +387,9 @@ const ContestLandingPage: React.FC = () => {
 
   if (loading && megaContests.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
+      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] font-jakarta">
         <div className="text-center">
-          <div className="w-12 h-12 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-12 h-12 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-600 font-medium">Loading contests...</p>
         </div>
       </div>
@@ -399,9 +397,9 @@ const ContestLandingPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-slate-900 selection:bg-indigo-500/20 selection:text-indigo-800 pb-20">
+    <div className="min-h-screen bg-[#F8FAFC] font-jakarta text-slate-900 selection:bg-orange-500/20 selection:text-orange-800 pb-20">
       
-      {/* Header - Optimized */}
+      {/* Header - Orange Theme */}
       <div className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl shadow-sm transition-all">
         <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8">
           <div className="h-[64px] sm:h-[72px] flex items-center justify-between gap-3">
@@ -432,7 +430,7 @@ const ContestLandingPage: React.FC = () => {
                   }}
                 />
                 <div className="hidden sm:block">
-                  <h1 className="text-lg font-extrabold tracking-tight text-slate-900">a4ai <span className="text-indigo-600">Contest Zone</span></h1>
+                  <h1 className="text-lg font-extrabold tracking-tight text-slate-900 font-jakarta">a4ai <span className="text-orange-500">Contest Zone</span></h1>
                 </div>
               </motion.div>
             </div>
@@ -444,12 +442,12 @@ const ContestLandingPage: React.FC = () => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search contests, topics..."
-                  className="pl-10 h-10 rounded-xl bg-slate-100/80 border-transparent focus:bg-white focus:border-indigo-200 focus:ring-3 focus:ring-indigo-500/20 transition-all font-medium"
+                  className="pl-10 h-10 rounded-xl bg-slate-100/80 border-transparent focus:bg-white focus:border-orange-200 focus:ring-3 focus:ring-orange-500/20 transition-all font-jakarta"
                 />
               </motion.div>
             </div>
@@ -476,7 +474,7 @@ const ContestLandingPage: React.FC = () => {
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-white font-extrabold text-xs shadow-sm">
                   <Award size={12} />
                 </div>
-                <span className="font-extrabold text-amber-800 text-sm">{coins.toLocaleString()}</span>
+                <span className="font-extrabold text-amber-800 text-sm font-jakarta">{coins.toLocaleString()}</span>
               </motion.div>
 
               {/* User Profile */}
@@ -486,10 +484,10 @@ const ContestLandingPage: React.FC = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm font-jakarta">
                   {getUserInitials()}
                 </div>
-                <span className="text-sm font-bold text-slate-700 hidden sm:block">{userProfile?.full_name || "Tarun"}</span>
+                <span className="text-sm font-bold text-slate-700 hidden sm:block font-jakarta">{userProfile?.full_name || "Tarun"}</span>
               </motion.div>
             </div>
           </div>
@@ -509,7 +507,7 @@ const ContestLandingPage: React.FC = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search contests..."
                     autoFocus
-                    className="w-full h-11 rounded-xl bg-slate-100/80 border-slate-200 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 font-medium"
+                    className="w-full h-11 rounded-xl bg-slate-100/80 border-slate-200 focus:bg-white focus:ring-2 focus:ring-orange-500/20 font-jakarta"
                   />
                 </div>
               </motion.div>
@@ -528,13 +526,13 @@ const ContestLandingPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight font-jakarta">
               Ready to Compete, <br className="sm:hidden" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500 font-jakarta">
                 {userProfile?.full_name?.split(' ')[0] || "Tarun"}?
               </span>
             </h1>
-            <p className="text-slate-500 mt-2 font-medium text-sm sm:text-base">
+            <p className="text-slate-500 mt-2 font-medium text-sm sm:text-base font-jakarta">
               Your <span className="text-amber-500 font-bold">{userStats.streak} day streak</span> is active. Keep it up!
             </p>
           </motion.div>
@@ -547,16 +545,16 @@ const ContestLandingPage: React.FC = () => {
             transition={{ delay: 0.2 }}
           >
             <div className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
-              <Trophy size={16} className="text-yellow-500" />
-              <span className="text-xs sm:text-sm font-bold text-slate-700">{userStats.rank}</span>
+              <Trophy size={16} className="text-amber-500" />
+              <span className="text-xs sm:text-sm font-bold text-slate-700 font-jakarta">{userStats.rank}</span>
             </div>
             <div className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
-              <BarChart3 size={16} className="text-indigo-500" />
-              <span className="text-xs sm:text-sm font-bold text-slate-700">{userStats.rating}</span>
+              <BarChart3 size={16} className="text-orange-500" />
+              <span className="text-xs sm:text-sm font-bold text-slate-700 font-jakarta">{userStats.rating}</span>
             </div>
             <div className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
-              <Target size={16} className="text-green-500" />
-              <span className="text-xs sm:text-sm font-bold text-slate-700">{userStats.solved} solved</span>
+              <Target size={16} className="text-amber-600" />
+              <span className="text-xs sm:text-sm font-bold text-slate-700 font-jakarta">{userStats.solved} solved</span>
             </div>
           </motion.div>
         </section>
@@ -564,10 +562,10 @@ const ContestLandingPage: React.FC = () => {
         {/* 2. Hero FlashCards - Mega Contests */}
         <section>
           <div className="flex items-center justify-between mb-4 sm:mb-5">
-            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 flex items-center gap-2">
-              <Sparkles size={18} className="text-indigo-500" /> Mega Contests
+            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 flex items-center gap-2 font-jakarta">
+              <Sparkles size={18} className="text-orange-500" /> Mega Contests
             </h2>
-            <Badge variant="outline" className="text-xs font-bold bg-indigo-50 text-indigo-700 border-indigo-200">
+            <Badge variant="outline" className="text-xs font-bold bg-orange-50 text-orange-700 border-orange-200 font-jakarta">
               Live Today
             </Badge>
           </div>
@@ -593,8 +591,8 @@ const ContestLandingPage: React.FC = () => {
             {/* Topic Pills */}
             <div>
               <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider ml-1">Browse Topics</h3>
-                <span className="text-xs text-slate-400 font-medium">{topics.reduce((sum, t) => sum + t.count, 0)} topics</span>
+                <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider ml-1 font-jakarta">Browse Topics</h3>
+                <span className="text-xs text-slate-400 font-medium font-jakarta">{topics.reduce((sum, t) => sum + t.count, 0)} topics</span>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
                 {topics.map((topic, index) => {
@@ -610,10 +608,10 @@ const ContestLandingPage: React.FC = () => {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
                       className={clsx(
-                        "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 border shrink-0",
+                        "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 border shrink-0 font-jakarta",
                         active 
-                          ? "bg-gradient-to-r from-slate-900 to-slate-800 border-slate-900 text-white shadow-lg" 
-                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                          ? "bg-gradient-to-r from-orange-500 to-amber-500 border-orange-500 text-white shadow-lg" 
+                          : "bg-white border-slate-200 text-slate-600 hover:border-orange-300 hover:bg-orange-50"
                       )}
                     >
                       <span className="text-base">{topic.icon}</span>
@@ -634,11 +632,11 @@ const ContestLandingPage: React.FC = () => {
               <Tabs defaultValue="contests" className="w-full">
                 <div className="border-b border-slate-100 bg-slate-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-0">
                   <TabsList className="bg-slate-200/50 p-1 rounded-xl w-full sm:w-auto flex h-11 sm:h-12">
-                    <TabsTrigger value="contests" className="flex-1 sm:flex-none rounded-lg px-5 sm:px-6 h-9 text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-indigo-600">
+                    <TabsTrigger value="contests" className="flex-1 sm:flex-none rounded-lg px-5 sm:px-6 h-9 text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-orange-600 font-jakarta">
                       <Calendar size={16} className="mr-2 hidden sm:inline" />
                       Live Contests
                     </TabsTrigger>
-                    <TabsTrigger value="problems" className="flex-1 sm:flex-none rounded-lg px-5 sm:px-6 h-9 text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-indigo-600">
+                    <TabsTrigger value="problems" className="flex-1 sm:flex-none rounded-lg px-5 sm:px-6 h-9 text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-orange-600 font-jakarta">
                       <BookOpen size={16} className="mr-2 hidden sm:inline" />
                       Practice Bank
                     </TabsTrigger>
@@ -654,8 +652,8 @@ const ContestLandingPage: React.FC = () => {
                     ) : (
                       <div className="p-10 text-center">
                         <Search size={48} className="text-slate-300 mx-auto mb-4" />
-                        <p className="text-slate-400 font-bold">No contests found.</p>
-                        <p className="text-slate-400 text-sm font-medium mt-1">Try a different search term</p>
+                        <p className="text-slate-400 font-bold font-jakarta">No contests found.</p>
+                        <p className="text-slate-400 text-sm font-medium mt-1 font-jakarta">Try a different search term</p>
                       </div>
                     )}
                   </div>
@@ -674,12 +672,13 @@ const ContestLandingPage: React.FC = () => {
             <SafetyNote />
           </div>
 
-          {/* Right Column (Widgets) */}
+          {/* Right Column (Widgets) - Orange Theme, No Purple */}
           <div className="lg:col-span-4 space-y-5 sm:space-y-6">
             <CoinsCard coins={coins} />
             <ScheduleWidget />
             <div className="hidden lg:block"><ProfileWidget userStats={userStats} /></div>
-            <WeeklyChallenge />
+            {/* Removed WeeklyChallenge - replaced with something else */}
+            <DailyChallenge />
           </div>
         </div>
       </div>
@@ -688,7 +687,7 @@ const ContestLandingPage: React.FC = () => {
 };
 
 /* ---------------------------
-   Refined Sub-Components
+   Refined Sub-Components - Orange Theme
 ---------------------------- */
 
 function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, index: number }) {
@@ -703,7 +702,7 @@ function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, i
       onClick={() => onAction(data)}
       className={clsx(
         "p-4 sm:p-5 md:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:bg-slate-50/80 transition-colors cursor-pointer group relative",
-        isOngoing && "bg-gradient-to-r from-indigo-50/50 to-blue-50/50"
+        isOngoing && "bg-gradient-to-r from-orange-50/50 to-amber-50/50"
       )}
     >
       {/* Status Indicator */}
@@ -729,12 +728,12 @@ function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, i
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             {isOngoing && (
-              <Badge className="bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 text-xs font-extrabold">
+              <Badge className="bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 text-xs font-extrabold font-jakarta">
                 LIVE
               </Badge>
             )}
             <Badge variant="outline" className={clsx(
-              "text-xs font-bold",
+              "text-xs font-bold font-jakarta",
               data.difficulty === "Easy" ? "border-green-200 text-green-700 bg-green-50" :
               data.difficulty === "Medium" ? "border-amber-200 text-amber-700 bg-amber-50" :
               "border-red-200 text-red-700 bg-red-50"
@@ -743,11 +742,11 @@ function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, i
             </Badge>
           </div>
           
-          <h4 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
+          <h4 className="text-base font-bold text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-2 font-jakarta">
             {data.title}
           </h4>
           
-          <div className="flex flex-wrap items-center gap-3 mt-2.5 text-sm font-medium text-slate-500">
+          <div className="flex flex-wrap items-center gap-3 mt-2.5 text-sm font-medium text-slate-500 font-jakarta">
             <span className="flex items-center gap-1.5">
               <Users size={14} />
               {data.participants.toLocaleString()} participants
@@ -765,10 +764,10 @@ function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, i
         <Button 
           size="sm"
           className={clsx(
-            "rounded-xl font-extrabold px-6 h-10 w-full sm:w-auto shadow-md transition-all",
+            "rounded-xl font-extrabold px-6 h-10 w-full sm:w-auto shadow-md transition-all font-jakarta",
             isOngoing 
               ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white" 
-              : "bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-lg"
+              : "bg-white border border-slate-200 text-slate-700 hover:border-orange-300 hover:text-orange-600 hover:shadow-lg"
           )}
         >
           {isOngoing ? "Join Now" : 
@@ -790,27 +789,27 @@ function ProblemRow({ data, onClick, index }: { data: Problem, onClick: any, ind
       className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 cursor-pointer group"
     >
       <div className="flex items-center gap-3 sm:gap-4">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex shrink-0 items-center justify-center text-slate-600 font-extrabold text-sm group-hover:from-indigo-100 group-hover:to-purple-100 group-hover:text-indigo-600 transition-all shadow-sm">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex shrink-0 items-center justify-center text-slate-600 font-extrabold text-sm group-hover:from-orange-100 group-hover:to-amber-100 group-hover:text-orange-600 transition-all shadow-sm font-jakarta">
           #{data.id}
         </div>
         <div>
-          <h4 className="font-bold text-slate-900 text-sm group-hover:text-indigo-700 line-clamp-2">
+          <h4 className="font-bold text-slate-900 text-sm group-hover:text-orange-700 line-clamp-2 font-jakarta">
             {data.title}
           </h4>
           <div className="flex items-center gap-3 mt-1.5">
             <Badge variant="outline" className={clsx(
-              "text-xs font-bold px-2",
+              "text-xs font-bold px-2 font-jakarta",
               data.difficulty === "Easy" ? "border-green-200 text-green-700 bg-green-50" :
               data.difficulty === "Medium" ? "border-amber-200 text-amber-700 bg-amber-50" :
               "border-red-200 text-red-700 bg-red-50"
             )}>
               {data.difficulty}
             </Badge>
-            <span className="text-xs font-medium text-slate-500">Acc: {data.acceptance}</span>
+            <span className="text-xs font-medium text-slate-500 font-jakarta">Acc: {data.acceptance}</span>
           </div>
         </div>
       </div>
-      <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+      <ChevronRight size={18} className="text-slate-300 group-hover:text-orange-500 transition-colors" />
     </motion.div>
   );
 }
@@ -831,12 +830,12 @@ function CoinsCard({ coins }: { coins: number }) {
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <p className="text-amber-100 text-sm font-bold mb-1">Your Balance</p>
+            <p className="text-amber-100 text-sm font-bold mb-1 font-jakarta">Your Balance</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight">{coins.toLocaleString()}</span>
+              <span className="text-3xl sm:text-4xl font-black tracking-tight font-jakarta">{coins.toLocaleString()}</span>
               <span className="text-xl opacity-80">©</span>
             </div>
-            <p className="text-amber-100/80 text-sm font-medium mt-2">Earn more by solving problems</p>
+            <p className="text-amber-100/80 text-sm font-medium mt-2 font-jakarta">Earn more by solving problems</p>
           </div>
           <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-lg">
             <Award size={24} className="text-white" />
@@ -847,7 +846,7 @@ function CoinsCard({ coins }: { coins: number }) {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           onClick={() => window.location.href = '/coinshop'}
-          className="w-full bg-white text-amber-700 font-extrabold h-12 rounded-xl shadow-lg hover:shadow-xl hover:bg-amber-50 transition-all flex items-center justify-center gap-2"
+          className="w-full bg-white text-amber-700 font-extrabold h-12 rounded-xl shadow-lg hover:shadow-xl hover:bg-amber-50 transition-all flex items-center justify-center gap-2 font-jakarta"
         >
           <Sparkles size={16} />
           Redeem Rewards
@@ -877,27 +876,27 @@ function ScheduleWidget() {
     <Card className="rounded-2xl sm:rounded-3xl border-slate-200 shadow-sm overflow-hidden">
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
-            <Calendar size={20} className="text-indigo-600" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center">
+            <Calendar size={20} className="text-orange-600" />
           </div>
           <div>
-            <h3 className="font-extrabold text-slate-900">Study Calendar</h3>
-            <p className="text-slate-500 text-sm font-medium">Upcoming tests & deadlines</p>
+            <h3 className="font-extrabold text-slate-900 font-jakarta">Study Calendar</h3>
+            <p className="text-slate-500 text-sm font-medium font-jakarta">Upcoming tests & deadlines</p>
           </div>
         </div>
         
-        {/* Date Strip - FIXED: Added unique keys */}
+        {/* Date Strip */}
         <div className="flex justify-between mb-6">
           {days.map((day, index) => {
             const date = today - currentDay + index;
             const isToday = index === currentDay;
             return (
               <div key={`${day.full}-${day.id}`} className="flex flex-col items-center gap-2">
-                <span className="text-xs font-bold text-slate-500">{day.label}</span>
+                <span className="text-xs font-bold text-slate-500 font-jakarta">{day.label}</span>
                 <div className={clsx(
-                  "w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all",
+                  "w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all font-jakarta",
                   isToday 
-                    ? "bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-lg scale-110" 
+                    ? "bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg scale-110" 
                     : "text-slate-700 hover:bg-slate-100"
                 )}>
                   {date}
@@ -908,18 +907,18 @@ function ScheduleWidget() {
         </div>
         
         {/* Upcoming Event */}
-        <div className="bg-gradient-to-r from-indigo-50/80 to-blue-50/80 p-4 rounded-xl border border-indigo-100">
+        <div className="bg-gradient-to-r from-orange-50/80 to-amber-50/80 p-4 rounded-xl border border-orange-100">
           <div className="flex gap-3">
-            <div className="w-1.5 bg-gradient-to-b from-indigo-500 to-purple-500 rounded-full h-full min-h-[48px]" />
+            <div className="w-1.5 bg-gradient-to-b from-orange-500 to-amber-500 rounded-full h-full min-h-[48px]" />
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-0.5 text-xs font-extrabold">
+                <Badge className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-0.5 text-xs font-extrabold font-jakarta">
                   Physics
                 </Badge>
-                <span className="text-xs text-indigo-600 font-bold">Mock Test</span>
+                <span className="text-xs text-orange-600 font-bold font-jakarta">Mock Test</span>
               </div>
-              <h4 className="text-sm font-bold text-indigo-900">Weekly Assessment</h4>
-              <p className="text-xs text-indigo-600 font-medium mt-0.5">Today • 7:30 PM • 60 mins</p>
+              <h4 className="text-sm font-bold text-orange-900 font-jakarta">Weekly Assessment</h4>
+              <p className="text-xs text-orange-600 font-medium mt-0.5 font-jakarta">Today • 7:30 PM • 60 mins</p>
             </div>
           </div>
         </div>
@@ -933,40 +932,40 @@ function ProfileWidget({ userStats }: { userStats: any }) {
     <Card className="rounded-2xl sm:rounded-3xl border-slate-200 shadow-sm overflow-hidden">
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center gap-4 mb-6">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 border-4 border-white shadow-lg flex items-center justify-center text-white font-extrabold text-xl">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 border-4 border-white shadow-lg flex items-center justify-center text-white font-extrabold text-xl font-jakarta">
             T
           </div>
           <div>
-            <h3 className="font-extrabold text-slate-900 text-lg">Tarun</h3>
+            <h3 className="font-extrabold text-slate-900 text-lg font-jakarta">Tarun</h3>
             <div className="flex items-center gap-2 mt-1">
-              <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold">
+              <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold font-jakarta">
                 {userStats.rank}
               </Badge>
-              <span className="text-xs font-medium text-slate-500">Student</span>
+              <span className="text-xs font-medium text-slate-500 font-jakarta">Student</span>
             </div>
           </div>
         </div>
         
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100 text-center shadow-sm">
-            <div className="text-xs font-extrabold text-slate-500 uppercase mb-2">Solved</div>
-            <div className="text-2xl font-black text-slate-900">{userStats.solved}</div>
+            <div className="text-xs font-extrabold text-slate-500 uppercase mb-2 font-jakarta">Solved</div>
+            <div className="text-2xl font-black text-slate-900 font-jakarta">{userStats.solved}</div>
             <Progress value={75} className="h-1.5 mt-2" />
           </div>
           <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100 text-center shadow-sm">
-            <div className="text-xs font-extrabold text-slate-500 uppercase mb-2">Streak</div>
-            <div className="text-2xl font-black text-slate-900 flex items-center justify-center gap-1.5">
+            <div className="text-xs font-extrabold text-slate-500 uppercase mb-2 font-jakarta">Streak</div>
+            <div className="text-2xl font-black text-slate-900 flex items-center justify-center gap-1.5 font-jakarta">
               {userStats.streak} 
               <Flame size={16} className="text-orange-500 fill-orange-500" />
             </div>
-            <p className="text-xs font-medium text-slate-500 mt-1">7 days active</p>
+            <p className="text-xs font-medium text-slate-500 mt-1 font-jakarta">7 days active</p>
           </div>
         </div>
         
         <div className="mt-4 pt-4 border-t border-slate-100">
           <div className="flex justify-between items-center">
-            <span className="text-sm font-medium text-slate-600">Weekly Progress</span>
-            <span className="text-sm font-extrabold text-green-600">+12%</span>
+            <span className="text-sm font-medium text-slate-600 font-jakarta">Weekly Progress</span>
+            <span className="text-sm font-extrabold text-amber-600 font-jakarta">+12%</span>
           </div>
           <Progress value={65} className="h-2 mt-2" />
         </div>
@@ -975,50 +974,51 @@ function ProfileWidget({ userStats }: { userStats: any }) {
   );
 }
 
-function WeeklyChallenge() {
+// Replaced WeeklyChallenge with DailyChallenge - Orange Theme
+function DailyChallenge() {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4 }}
-      className="rounded-2xl sm:rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 p-5 sm:p-6 text-white text-center shadow-xl relative overflow-hidden"
+      className="rounded-2xl sm:rounded-3xl bg-gradient-to-br from-orange-500 via-amber-500 to-orange-600 p-5 sm:p-6 text-white text-center shadow-xl relative overflow-hidden"
     >
       {/* Background Elements */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16 blur-3xl" />
-      <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-500/10 rounded-full translate-y-16 -translate-x-16 blur-3xl" />
+      <div className="absolute bottom-0 left-0 w-40 h-40 bg-amber-500/10 rounded-full translate-y-16 -translate-x-16 blur-3xl" />
       
       <div className="relative z-10">
         <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg">
-          <Trophy size={28} className="text-white" />
+          <Zap size={28} className="text-white" />
         </div>
         
-        <h3 className="text-lg sm:text-xl font-extrabold mb-2">Weekly Championship</h3>
-        <p className="text-indigo-100 text-sm font-medium mb-6 max-w-xs mx-auto">
-          Compete with 10,000+ students. Win exclusive badges & rewards.
+        <h3 className="text-lg sm:text-xl font-extrabold mb-2 font-jakarta">Daily Challenge</h3>
+        <p className="text-orange-100 text-sm font-medium mb-6 max-w-xs mx-auto font-jakarta">
+          Solve today's challenge and earn 50 bonus coins!
         </p>
         
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
-            <div className="text-xl font-black">₹10K</div>
-            <div className="text-xs text-indigo-200 font-bold">Prize Pool</div>
+            <div className="text-xl font-black font-jakarta">50</div>
+            <div className="text-xs text-orange-200 font-bold font-jakarta">Coins</div>
           </div>
           <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
-            <div className="text-xl font-black">4.8★</div>
-            <div className="text-xs text-indigo-200 font-bold">Rating</div>
+            <div className="text-xl font-black font-jakarta">Easy</div>
+            <div className="text-xs text-orange-200 font-bold font-jakarta">Difficulty</div>
           </div>
           <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
-            <div className="text-xl font-black">72</div>
-            <div className="text-xs text-indigo-200 font-bold">Hours Left</div>
+            <div className="text-xl font-black font-jakarta">10</div>
+            <div className="text-xs text-orange-200 font-bold font-jakarta">Minutes</div>
           </div>
         </div>
         
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="w-full py-3.5 bg-white text-indigo-700 font-extrabold rounded-xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-2"
+          className="w-full py-3.5 bg-white text-orange-700 font-extrabold rounded-xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-2 font-jakarta"
         >
-          <TrendingUp size={18} />
-          Register for Free
+          <Target size={18} />
+          Start Challenge
         </motion.button>
       </div>
     </motion.div>
@@ -1031,14 +1031,14 @@ function SafetyNote() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: 0.5 }}
-      className="rounded-xl sm:rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 p-4 flex items-start gap-3"
+      className="rounded-xl sm:rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/80 to-amber-50/80 p-4 flex items-start gap-3"
     >
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center shadow-sm">
-        <ShieldCheck className="w-5 h-5 text-blue-600" />
+      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center shadow-sm">
+        <ShieldCheck className="w-5 h-5 text-orange-600" />
       </div>
       <div>
-        <h4 className="text-sm font-bold text-blue-900 mb-1">Fair Play & Security</h4>
-        <p className="text-xs text-blue-700/90 font-medium leading-relaxed">
+        <h4 className="text-sm font-bold text-orange-900 mb-1 font-jakarta">Fair Play & Security</h4>
+        <p className="text-xs text-orange-700/90 font-medium leading-relaxed font-jakarta">
           Advanced proctoring monitors tab switching. All contests are timed and recorded to ensure a fair competitive environment.
         </p>
       </div>

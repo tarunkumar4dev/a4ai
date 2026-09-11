@@ -133,7 +133,7 @@ export default function LandingHero() {
         }
       `}</style>
 
-      {/* ── Background: COMPLETELY WHITE (Removed Gradients) ── */}
+      {/* ── Background: COMPLETELY WHITE ── */}
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-white z-0" />
 
       {/* ── Center Ashoka Chakra Watermark (festive only) ── */}
@@ -141,7 +141,7 @@ export default function LandingHero() {
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[45%] w-[350px] h-[350px] md:w-[550px] md:h-[550px] opacity-[0.03] pointer-events-none z-0 flex items-center justify-center">
           <svg
             viewBox="0 0 100 100"
-            className="w-full h-full text-[#000080]" /* Navy Blue for Chakra */
+            className="w-full h-full text-[#000080]"
             stroke="currentColor"
             fill="none"
             style={{ animation: reduce ? "none" : "spin-slow 40s linear infinite" }}
@@ -165,7 +165,7 @@ export default function LandingHero() {
             style={{ x: noMagnet ? 0 : badgeX, y: noMagnet ? 0 : badgeY }}
           >
             <Sparkles className="h-3.5 w-3.5" style={{ color: festive ? "#FF9933" : "#14b8a6" }} />
-            <span className="text-xs sm:text-sm font-medium text-neutral-700">Built for CBSE Teachers</span>
+            <span className="text-xs sm:text-sm font-medium text-neutral-700">15,000+ NCERT Questions Ready</span>
           </motion.div>
         </motion.div>
 
@@ -173,7 +173,7 @@ export default function LandingHero() {
         <div className="text-center relative z-10 w-full">
           <motion.h1 className="font-halenoir font-bold tracking-[-0.02em]" style={{ lineHeight: 1 }} {...rise(0.15)}>
             <span className="block lg:whitespace-nowrap text-neutral-900" style={{ fontSize: "clamp(2.4rem, 8vw, 7.2rem)" }}>
-              Create.{" "}
+              You Teach.{" "}
               <span
                 className="bg-clip-text text-transparent"
                 style={{
@@ -184,7 +184,7 @@ export default function LandingHero() {
                   filter: festive ? "drop-shadow(0 1px 1.5px rgba(0,0,0,0.15))" : "none",
                 }}
               >
-                CBSE Papers
+                a4ai Handles
               </span>
             </span>
 
@@ -192,7 +192,7 @@ export default function LandingHero() {
               className="mt-3 sm:mt-5 md:mt-6 block font-semibold tracking-[-0.01em] text-neutral-700"
               style={{ fontSize: "clamp(0.95rem, 2.5vw, 2.2rem)", lineHeight: 1.2 }}
             >
-              in Minutes, Not Hours.
+              the Test Papers, Attendance &amp; Report Cards.
             </span>
           </motion.h1>
 
@@ -201,7 +201,8 @@ export default function LandingHero() {
             style={{ fontSize: "clamp(0.85rem, 1.3vw, 1.1rem)" }}
             {...rise(0.28)}
           >
-            Generate CBSE-pattern test papers from NCERT content in under 2 minutes — section-wise, with answer keys, ready to print.
+            Drag &amp; drop from 15,000+ NCERT questions — paper ready in 10 seconds.
+            Or let AI build it — done in under 2 minutes. Section-wise, with answer keys, ready to print.
           </motion.p>
 
           {/* ── Action Buttons ── */}
