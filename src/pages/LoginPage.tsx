@@ -8,16 +8,18 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import {
-  Eye, EyeOff, ArrowLeft, Sun, Moon, Phone, Mail
+  Eye, EyeOff, ArrowLeft, Sun, Moon, Phone, Mail, Lock, ShieldAlert
 } from "lucide-react";
+import { RateLimiter } from "@/lib/security/rateLimiter";
+import { RiskEngine } from "@/lib/security/riskEngine";
+import { WAF } from "@/lib/security/waf";
+import { SmartCaptcha } from "@/components/security/SmartCaptcha";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
 
 // Format 10-digit Indian number to +91XXXXXXXXXX
 const formatPhoneForIndia = (phone: string): string => {
-  const cleaned = phone.replace(/\D/g, "");
-  if (cleaned.length === 10) return `+91${cleaned}`;
-  if (cleaned.length === 12 && cleaned.startsWith("91")) return `+${cleaned}`;
-  if (phone.startsWith("+")) return phone;
-  return phone;
+  return WAF.sanitizeIndianPhone(phone);
 };
 
 /* ──────────────────────────────────────────────────────────────
@@ -47,12 +49,19 @@ export default function LoginPage() {
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("phone");
   const [formValues, setFormValues] = useState({ email: "", password: "", phone: "" });
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [timer, setTimer] = useState(0);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
+
+  // Security, Bot Honeypot, Risk & Lockout States
+  const formMountTime = useRef(Date.now());
+  const [honeypot, setHoneypot] = useState("");
+  const [requiresCaptcha, setRequiresCaptcha] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [lockoutSec, setLockoutSec] = useState(0);
 
   // Detect Mobile Device / Screen width on mount
   useEffect(() => {
@@ -87,42 +96,114 @@ export default function LoginPage() {
     return () => window.removeEventListener("pointermove", onMove);
   }, []);
 
+  // OTP Timer countdown
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (timer > 0) interval = setInterval(() => setTimer((p) => p - 1), 1000);
     return () => clearInterval(interval);
   }, [timer]);
 
+  // Lockout countdown timer
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (lockoutSec > 0) {
+      interval = setInterval(() => setLockoutSec((p) => (p > 0 ? p - 1 : 0)), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [lockoutSec]);
+
+  // Check lockout and OTP cooldown when user inputs change
+  useEffect(() => {
+    const identifier = loginMethod === "email" ? formValues.email.trim() : formValues.phone.trim();
+    if (identifier) {
+      const status = RiskEngine.getLockoutStatus(identifier);
+      if (status.isLocked) {
+        setLockoutSec(status.remainingSec);
+      }
+      if (status.failedAttempts >= 2) {
+        setRequiresCaptcha(true);
+      }
+    }
+    if (loginMethod === "phone" && formValues.phone) {
+      const remainingCooldown = RateLimiter.getOtpCooldownSeconds(formValues.phone);
+      if (remainingCooldown > 0) {
+        setTimer(remainingCooldown);
+        setOtpSent(true);
+      }
+    }
+  }, [loginMethod, formValues.email, formValues.phone]);
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormValues((s) => ({ ...s, [e.target.name]: e.target.value }));
-
-  const handleOtpChange = (value: string, index: number) => {
-    if (isNaN(Number(value))) return;
-    const next = [...otp];
-    next[index] = value.substring(value.length - 1);
-    setOtp(next);
-    if (value && index < 5) document.getElementById(`otp-${index + 1}`)?.focus();
-  };
 
   // ---------- AUTH METHODS ----------
 
   const sendOtp = async () => {
-    if (!formValues.phone) {
+    const phoneRaw = formValues.phone.trim();
+    if (!phoneRaw) {
       toast({ title: "Error", description: "Enter phone number", variant: "destructive" });
       return;
     }
+
+    // 1. WAF & Honeypot Check
+    const wafCheck = WAF.inspectPayload({ phone: phoneRaw, honeypot });
+    if (!wafCheck.isSafe) {
+      toast({ title: "Blocked by Shield", description: wafCheck.threatDetails || "Invalid input detected", variant: "destructive" });
+      return;
+    }
+
+    // 2. Lockout Check
+    const lockoutStatus = RiskEngine.getLockoutStatus(phoneRaw);
+    if (lockoutStatus.isLocked) {
+      setLockoutSec(lockoutStatus.remainingSec);
+      toast({
+        title: "Account Locked",
+        description: `Too many attempts. Cooldown: ${RiskEngine.formatTime(lockoutStatus.remainingSec)}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 3. API Cost Control: OTP Rate Limit check
+    const otpCheck = RateLimiter.checkOtpLimit(phoneRaw);
+    if (!otpCheck.allowed) {
+      toast({
+        title: "OTP Rate Limit",
+        description: otpCheck.reason || "Please wait before requesting another OTP.",
+        variant: "destructive",
+      });
+      if (otpCheck.retryAfterSec > 0 && otpCheck.retryAfterSec <= 60) {
+        setTimer(otpCheck.retryAfterSec);
+      }
+      return;
+    }
+
+    // 4. Smart CAPTCHA requirement if risk detected
+    if (requiresCaptcha && !captchaToken) {
+      toast({
+        title: "Verification Required",
+        description: "Please complete the security challenge below.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
-        phone: formatPhoneForIndia(formValues.phone),
+        phone: formatPhoneForIndia(phoneRaw),
       });
       if (error) throw error;
+
+      // Record successful OTP dispatch in rate limiter
+      RateLimiter.recordOtpSent(phoneRaw);
       setOtpSent(true);
       setTimer(60);
-      toast({ title: "OTP Sent", description: "Check your mobile" });
+      toast({ title: "OTP Sent", description: "Verification code sent to your mobile" });
     } catch (error: unknown) {
       const err = error as Error;
-      toast({ title: "Failed", description: err.message, variant: "destructive" });
+      RiskEngine.recordFailure(phoneRaw);
+      toast({ title: "Failed to send OTP", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -160,6 +241,67 @@ export default function LoginPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const identifier = loginMethod === "email" ? formValues.email.trim() : formValues.phone.trim();
+    if (!identifier) {
+      toast({ title: "Error", description: `Please enter your ${loginMethod}`, variant: "destructive" });
+      return;
+    }
+
+    // 1. Check if account is in temporary lockout
+    if (lockoutSec > 0) {
+      toast({
+        title: "Account In Cooldown",
+        description: `Please wait ${RiskEngine.formatTime(lockoutSec)} before trying again.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 2. WAF & Bot Honeypot Check
+    const wafCheck = WAF.inspectPayload({
+      email: formValues.email,
+      password: formValues.password,
+      phone: formValues.phone,
+      honeypot,
+    });
+    if (!wafCheck.isSafe) {
+      toast({
+        title: "Security Shield Block",
+        description: wafCheck.threatDetails || "Unsafe request detected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 3. Sliding-window Rate Limit Check
+    const rlCheck = RateLimiter.checkRateLimit(`login_${identifier}`, 5, 5 * 60 * 1000);
+    if (!rlCheck.allowed) {
+      toast({
+        title: "Too Many Requests",
+        description: `Rate limit reached. Try again in ${rlCheck.retryAfterSec}s.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 4. Evaluate Dynamic Risk
+    const risk = RiskEngine.evaluateRisk({
+      identifier,
+      formMountTimestamp: formMountTime.current,
+      honeypotValue: honeypot,
+    });
+
+    if (risk.requiresCaptcha && !captchaToken) {
+      setRequiresCaptcha(true);
+      toast({
+        title: "Verification Challenge Required",
+        description: "Suspicious activity detected. Please complete the security verification below.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       if (loginMethod === "email") {
@@ -168,19 +310,55 @@ export default function LoginPage() {
           password: formValues.password,
         });
         if (error) throw error;
+
+        // Reset risk and rate limits on success
+        RiskEngine.recordSuccess(identifier);
+        RateLimiter.resetAttempts(`login_${identifier}`);
         redirectAfterLogin(data.user?.user_metadata?.role);
       } else {
+        const otpToken = otp.trim();
+        if (otpToken.length !== 6) {
+          toast({ title: "Incomplete Code", description: "Please enter the 6-digit OTP", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
         const { data, error } = await supabase.auth.verifyOtp({
           phone: formatPhoneForIndia(formValues.phone),
-          token: otp.join(""),
+          token: otpToken,
           type: "sms",
         });
         if (error) throw error;
+
+        // Reset risk and rate limits on success
+        RiskEngine.recordSuccess(identifier);
+        RateLimiter.resetAttempts(`login_${identifier}`);
         redirectAfterLogin(data.user?.user_metadata?.role);
       }
     } catch (error: unknown) {
       const err = error as Error;
-      toast({ title: "Login failed", description: err.message, variant: "destructive" });
+
+      // Record failure in risk engine and rate limiter
+      const riskResult = RiskEngine.recordFailure(identifier);
+      RateLimiter.recordAttempt(`login_${identifier}`, 5 * 60 * 1000);
+
+      if (riskResult.isLocked) {
+        setLockoutSec(riskResult.lockoutRemainingSec);
+        toast({
+          title: "Account Temporarily Locked",
+          description: `Too many failed attempts. Cooldown enforced: ${RiskEngine.formatTime(riskResult.lockoutRemainingSec)}`,
+          variant: "destructive",
+        });
+      } else if (riskResult.requiresCaptcha) {
+        setRequiresCaptcha(true);
+        setCaptchaToken(null);
+        toast({
+          title: "Login Failed",
+          description: `${err.message}. Security verification is now required.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Login failed", description: err.message, variant: "destructive" });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -260,7 +438,10 @@ export default function LoginPage() {
             {/* Toggle email / phone */}
             <Button
               type="button"
-              onClick={() => setLoginMethod(loginMethod === "email" ? "phone" : "email")}
+              onClick={() => {
+                setLoginMethod(loginMethod === "email" ? "phone" : "email");
+                setOtp("");
+              }}
               className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
                 isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
               }`}
@@ -300,6 +481,31 @@ export default function LoginPage() {
 
             {/* FORM AREA */}
             <form onSubmit={onSubmit} className="space-y-4">
+              {/* Bot Honeypot Trap (Invisible) */}
+              <div className="hidden" aria-hidden="true" style={{ display: "none" }}>
+                <input
+                  type="text"
+                  name="website_hp"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* Temporary Lockout Alert Banner */}
+              {lockoutSec > 0 && (
+                <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 flex items-center gap-3 text-xs font-semibold animate-in fade-in duration-200">
+                  <Lock className="w-5 h-5 flex-shrink-0 animate-pulse" />
+                  <div>
+                    <p className="font-bold">Account Temporarily Locked</p>
+                    <p className="font-normal opacity-90">
+                      Too many failed login attempts. Cooldown remaining: {RiskEngine.formatTime(lockoutSec)}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {loginMethod === "email" ? (
                 /* ── Email Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -334,7 +540,7 @@ export default function LoginPage() {
                       <Button 
                         type="button" 
                         onClick={sendOtp} 
-                        disabled={timer > 0 || isLoading} 
+                        disabled={timer > 0 || isLoading || lockoutSec > 0} 
                         className={`h-12 rounded-2xl px-5 text-xs font-bold transition-all shadow-md ${isDarkMode ? "bg-white text-black hover:bg-slate-200" : "bg-black text-white hover:bg-slate-900"}`}
                       >
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
@@ -345,25 +551,53 @@ export default function LoginPage() {
 
                   {otpSent && (
                     <div className="space-y-2 animate-in zoom-in-95 duration-200 pt-2">
-                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Verification Code</Label>
-                      <div className="flex justify-between gap-2">
-                        {otp.map((digit, idx) => (
-                          <input
-                            key={idx}
-                            id={`otp-${idx}`}
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) => handleOtpChange(e.target.value, idx)}
-                            className={`w-11 h-12 text-center text-xl font-black rounded-2xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/60 border-white/60 focus:bg-white shadow-sm"}`}
-                          />
-                        ))}
+                      <div className="flex items-center justify-between ml-2 mr-1">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Verification Code</Label>
+                        {otp.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setOtp("")}
+                            className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-semibold transition-colors"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex justify-center w-full">
+                        <InputOTP
+                          maxLength={6}
+                          pattern={REGEXP_ONLY_DIGITS}
+                          value={otp}
+                          onChange={(val) => setOtp(val)}
+                          containerClassName="w-full justify-between"
+                        >
+                          <InputOTPGroup className="flex justify-between w-full gap-2">
+                            {[0, 1, 2, 3, 4, 5].map((idx) => (
+                              <InputOTPSlot
+                                key={idx}
+                                index={idx}
+                                className={`w-11 sm:w-12 h-14 text-center text-xl font-black rounded-2xl border transition-all ${
+                                  isDarkMode
+                                    ? "bg-white/5 border-white/10 text-white focus:border-white/30 focus:bg-white/10"
+                                    : "bg-white/60 border-white/60 text-slate-900 focus:border-black/30 focus:bg-white shadow-sm"
+                                }`}
+                              />
+                            ))}
+                          </InputOTPGroup>
+                        </InputOTP>
                       </div>
                     </div>
                   )}
                 </div>
               )}
+
+              {/* Risk-based Smart CAPTCHA Challenge */}
+              <SmartCaptcha
+                required={requiresCaptcha && lockoutSec === 0}
+                onVerify={(token) => setCaptchaToken(token)}
+                onReset={() => setCaptchaToken(null)}
+                isDarkMode={isDarkMode}
+              />
 
               <div className="flex items-center justify-between px-2 pt-1">
                 <div className="flex items-center gap-2">
@@ -381,12 +615,18 @@ export default function LoginPage() {
 
               <Button 
                 type="submit" 
-                disabled={isLoading} 
+                disabled={isLoading || lockoutSec > 0 || (requiresCaptcha && !captchaToken)} 
                 className={`w-full h-14 rounded-2xl font-bold text-base shadow-xl transition-all active:scale-[0.98] mt-3 ${
                   isDarkMode ? "bg-white text-black hover:bg-slate-100" : "bg-black text-white hover:bg-slate-900"
-                }`}
+                } ${lockoutSec > 0 || (requiresCaptcha && !captchaToken) ? "opacity-60 cursor-not-allowed" : ""}`}
               >
-                {isLoading ? "Verifying..." : "Sign In"}
+                {isLoading 
+                  ? "Verifying..." 
+                  : lockoutSec > 0 
+                  ? `Locked (${RiskEngine.formatTime(lockoutSec)})` 
+                  : requiresCaptcha && !captchaToken 
+                  ? "Solve CAPTCHA to Sign In" 
+                  : "Sign In"}
               </Button>
 
               <p className={`text-center text-sm font-medium transition-colors pt-2 ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>

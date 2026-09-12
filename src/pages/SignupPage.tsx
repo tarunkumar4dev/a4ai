@@ -11,18 +11,20 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Eye, EyeOff, User, Mail, ArrowLeft, Phone,
   GraduationCap, School, Building2, ChevronDown,
-  CheckCircle2, Sun, Moon, Gift
+  CheckCircle2, Sun, Moon, Gift, ShieldAlert, MailCheck
 } from "lucide-react";
+import { RateLimiter } from "@/lib/security/rateLimiter";
+import { RiskEngine } from "@/lib/security/riskEngine";
+import { WAF } from "@/lib/security/waf";
+import { SmartCaptcha } from "@/components/security/SmartCaptcha";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
 
 type Role = "student" | "teacher" | "institute";
 
 // Format 10-digit Indian number to +91XXXXXXXXXX
 const formatPhoneForIndia = (phone: string): string => {
-  const cleaned = phone.replace(/\D/g, "");
-  if (cleaned.length === 10) return `+91${cleaned}`;
-  if (cleaned.length === 12 && cleaned.startsWith("91")) return `+${cleaned}`;
-  if (phone.startsWith("+")) return phone;
-  return phone;
+  return WAF.sanitizeIndianPhone(phone);
 };
 
 /* ──────────────────────────────────────────────────────────────
@@ -58,9 +60,16 @@ export default function SignupPage() {
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   // Phone OTP states
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [timer, setTimer] = useState(0);
+
+  // Security, Bot Honeypot, Risk & Verification States
+  const formMountTime = useRef(Date.now());
+  const [honeypot, setHoneypot] = useState("");
+  const [requiresCaptcha, setRequiresCaptcha] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [emailVerificationSent, setEmailVerificationSent] = useState(false);
 
   // Scratch Card States
   const [showScratchCard, setShowScratchCard] = useState(false);
@@ -103,29 +112,27 @@ export default function SignupPage() {
     return () => window.removeEventListener("pointermove", onMove);
   }, []);
 
+  // Timer countdown
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (timer > 0) interval = setInterval(() => setTimer((p) => p - 1), 1000);
     return () => clearInterval(interval);
   }, [timer]);
 
+  // Persistent OTP Cooldown Check (prevents refresh abuse)
+  useEffect(() => {
+    if (signupMethod === "phone" && formValues.phone) {
+      const cd = RateLimiter.getOtpCooldownSeconds(formValues.phone);
+      if (cd > 0) {
+        setTimer(cd);
+        setOtpSent(true);
+      }
+    }
+  }, [signupMethod, formValues.phone]);
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormValues((p) => ({ ...p, [name]: type === "checkbox" ? checked : value }));
-  };
-
-  const handleOtpChangeRaw = (value: string, index: number) => {
-    if (isNaN(Number(value))) return;
-    const next = [...otp];
-    next[index] = value.substring(value.length - 1);
-    setOtp(next);
-    if (value && index < 5) document.getElementById(`signup-otp-${index + 1}`)?.focus();
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !otp[index] && index > 0) {
-      document.getElementById(`signup-otp-${index - 1}`)?.focus();
-    }
   };
 
   const getInitialCoins = () => {
@@ -147,26 +154,62 @@ export default function SignupPage() {
     }
   };
 
-  // ---------- Send OTP ----------
+  // ---------- Send OTP (API Cost Control Protected) ----------
   const sendOtp = async () => {
     if (!selectedRole) {
       setIsExpanded(true);
       toast({ title: "Select role first", description: "Choose your role before signing up", variant: "destructive" });
       return;
     }
-    if (!formValues.phone || formValues.phone.replace(/\D/g, "").length < 10) {
+    const phoneRaw = formValues.phone.trim();
+    if (!phoneRaw || phoneRaw.replace(/\D/g, "").length < 10) {
       toast({ title: "Error", description: "Enter valid 10-digit phone number", variant: "destructive" });
       return;
     }
+
+    // 1. WAF & Bot Honeypot Check
+    const wafCheck = WAF.inspectPayload({ phone: phoneRaw, honeypot });
+    if (!wafCheck.isSafe) {
+      toast({ title: "Blocked by Shield", description: wafCheck.threatDetails || "Invalid input detected", variant: "destructive" });
+      return;
+    }
+
+    // 2. API Cost Control: Multi-tier OTP limit check (60s cooldown, max 3/hr, max 5/day)
+    const otpCheck = RateLimiter.checkOtpLimit(phoneRaw);
+    if (!otpCheck.allowed) {
+      toast({
+        title: "OTP Rate Limit",
+        description: otpCheck.reason || "Please wait before requesting another OTP.",
+        variant: "destructive",
+      });
+      if (otpCheck.retryAfterSec > 0 && otpCheck.retryAfterSec <= 60) {
+        setTimer(otpCheck.retryAfterSec);
+      }
+      return;
+    }
+
+    // 3. Smart CAPTCHA challenge if risk detected
+    if (requiresCaptcha && !captchaToken) {
+      toast({
+        title: "Verification Required",
+        description: "Please complete the security challenge below.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
-        phone: formatPhoneForIndia(formValues.phone),
+        phone: formatPhoneForIndia(phoneRaw),
       });
       if (error) throw error;
+
+      // Record OTP dispatch
+      RateLimiter.recordOtpSent(phoneRaw);
       setOtpSent(true);
       setTimer(60);
-      toast({ title: "OTP Sent", description: "Check your mobile" });
+      toast({ title: "OTP Sent", description: "Check your mobile for verification code" });
     } catch (error: unknown) {
       const err = error as Error;
       toast({ title: "Failed", description: err.message, variant: "destructive" });
@@ -224,6 +267,53 @@ export default function SignupPage() {
     }
 
     const currentRole = selectedRole;
+
+    // 1. WAF & Bot Honeypot Check
+    const wafCheck = WAF.inspectPayload({
+      name: formValues.name,
+      email: formValues.email,
+      password: formValues.password,
+      phone: formValues.phone,
+      honeypot,
+    });
+    if (!wafCheck.isSafe) {
+      toast({
+        title: "Security Shield Block",
+        description: wafCheck.threatDetails || "Unsafe input detected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 2. Rate Limiting Check
+    const rlCheck = RateLimiter.checkRateLimit("signup_attempt", 5, 10 * 60 * 1000);
+    if (!rlCheck.allowed) {
+      toast({
+        title: "Rate Limit Exceeded",
+        description: `Too many signup attempts. Please wait ${rlCheck.retryAfterSec}s.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 3. Risk Evaluation
+    const identifier = signupMethod === "email" ? formValues.email.trim() : formValues.phone.trim();
+    const risk = RiskEngine.evaluateRisk({
+      identifier,
+      formMountTimestamp: formMountTime.current,
+      honeypotValue: honeypot,
+    });
+
+    if (risk.requiresCaptcha && !captchaToken) {
+      setRequiresCaptcha(true);
+      toast({
+        title: "Security Challenge Required",
+        description: "Please complete the verification below to proceed with registration.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const redirectTarget = isMobileDevice
@@ -251,13 +341,17 @@ export default function SignupPage() {
         });
         if (error) throw error;
         if (data.session) {
+          RiskEngine.recordSuccess(identifier);
           setShowScratchCard(true);
         } else {
-          toast({ title: "Verify your email", description: "Confirmation link sent to your inbox." });
-          navigate("/login");
+          setEmailVerificationSent(true);
+          toast({
+            title: "Verification Email Sent",
+            description: "Please click the confirmation link sent to your inbox to activate your account.",
+          });
         }
       } else {
-        const otpCode = otp.join("");
+        const otpCode = otp.trim();
         if (otpCode.length !== 6) {
           toast({ title: "Enter 6-digit OTP", variant: "destructive" });
           setIsLoading(false);
@@ -276,10 +370,12 @@ export default function SignupPage() {
           });
         }
 
+        RiskEngine.recordSuccess(identifier);
         redirectAfterLogin(currentRole);
       }
     } catch (error: unknown) {
       const err = error as Error;
+      RateLimiter.recordAttempt("signup_attempt", 10 * 60 * 1000);
       toast({ title: "Signup failed", description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -448,6 +544,34 @@ export default function SignupPage() {
 
             {/* Form */}
             <form onSubmit={onSubmit} className="space-y-3">
+              {/* Bot Honeypot Trap (Invisible) */}
+              <div className="hidden" aria-hidden="true" style={{ display: "none" }}>
+                <input
+                  type="text"
+                  name="website_hp"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                  tabIndex={-1}
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* Email Verification Sent Alert Banner */}
+              {emailVerificationSent && (
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 flex items-start gap-3 text-xs animate-in fade-in duration-300 mb-4">
+                  <MailCheck className="w-5 h-5 flex-shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                  <div>
+                    <p className="font-bold text-sm">Verify Your Email Address</p>
+                    <p className="mt-1 opacity-90 leading-relaxed">
+                      We have sent a verification link to <strong>{formValues.email}</strong>. Please check your inbox and click the link to activate your account.
+                    </p>
+                    <Link to="/login" className="inline-block mt-2 font-bold underline text-emerald-800 dark:text-emerald-200">
+                      Go to Sign In &rarr;
+                    </Link>
+                  </div>
+                </div>
+              )}
+
               {signupMethod === "phone" ? (
                 /* ── Phone OTP Signup ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -475,22 +599,41 @@ export default function SignupPage() {
                     <p className="text-xs text-slate-500 mt-1">10-digit number (e.g. 9593457XXX)</p>
                   </div>
                   {otpSent && (
-                    <div className="space-y-1 animate-in zoom-in-95 duration-200">
-                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Enter OTP</Label>
-                      <div className="flex justify-between gap-2">
-                        {otp.map((digit, idx) => (
-                          <input
-                            key={idx}
-                            id={`signup-otp-${idx}`}
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) => handleOtpChangeRaw(e.target.value, idx)}
-                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                            className={`w-10 h-12 text-center text-lg font-bold rounded-xl transition-all border ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`}
-                          />
-                        ))}
+                    <div className="space-y-2 animate-in zoom-in-95 duration-200 pt-2">
+                      <div className="flex items-center justify-between ml-2 mr-1">
+                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Enter OTP</Label>
+                        {otp.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setOtp("")}
+                            className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-semibold transition-colors"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex justify-center w-full">
+                        <InputOTP
+                          maxLength={6}
+                          pattern={REGEXP_ONLY_DIGITS}
+                          value={otp}
+                          onChange={(val) => setOtp(val)}
+                          containerClassName="w-full justify-between"
+                        >
+                          <InputOTPGroup className="flex justify-between w-full gap-2">
+                            {[0, 1, 2, 3, 4, 5].map((idx) => (
+                              <InputOTPSlot
+                                key={idx}
+                                index={idx}
+                                className={`w-10 sm:w-11 h-12 text-center text-lg font-bold rounded-xl border transition-all ${
+                                  isDarkMode
+                                    ? "bg-white/5 border-white/10 text-white focus:bg-white/10"
+                                    : "bg-white/40 border-white/40 text-slate-900 focus:bg-white/60"
+                                }`}
+                              />
+                            ))}
+                          </InputOTPGroup>
+                        </InputOTP>
                       </div>
                     </div>
                   )}
@@ -563,8 +706,28 @@ export default function SignupPage() {
                 </div>
               )}
 
-              <Button type="submit" disabled={isLoading} className={`w-full h-14 rounded-[1.5rem] font-bold shadow-lg transition-transform active:scale-[0.98] mt-2 ${isDarkMode ? "bg-white text-black hover:bg-slate-100" : "bg-black text-white hover:bg-slate-900"}`}>
-                {isLoading ? "Creating..." : signupMethod === "phone" ? "Verify & Sign Up" : "Get FREE Coins!"}
+              {/* Risk-based Smart CAPTCHA Challenge */}
+              <SmartCaptcha
+                required={requiresCaptcha}
+                onVerify={(token) => setCaptchaToken(token)}
+                onReset={() => setCaptchaToken(null)}
+                isDarkMode={isDarkMode}
+              />
+
+              <Button 
+                type="submit" 
+                disabled={isLoading || (requiresCaptcha && !captchaToken)} 
+                className={`w-full h-14 rounded-[1.5rem] font-bold shadow-lg transition-transform active:scale-[0.98] mt-2 ${
+                  isDarkMode ? "bg-white text-black hover:bg-slate-100" : "bg-black text-white hover:bg-slate-900"
+                } ${requiresCaptcha && !captchaToken ? "opacity-60 cursor-not-allowed" : ""}`}
+              >
+                {isLoading 
+                  ? "Creating..." 
+                  : requiresCaptcha && !captchaToken 
+                  ? "Complete Verification Challenge" 
+                  : signupMethod === "phone" 
+                  ? "Verify & Sign Up" 
+                  : "Get FREE Coins!"}
               </Button>
 
               <p className={`text-center text-sm font-medium transition-colors ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
