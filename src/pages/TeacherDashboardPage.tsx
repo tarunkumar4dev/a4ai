@@ -8,6 +8,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel";
 import TeacherAssignmentsTab from "@/components/teacher/TeacherAssignmentsTab";
+import WorksheetGenerator from "@/components/teacher/WorksheetGenerator";
 import TeacherCalendarTab from "@/components/teacher/TeacherCalendarTab";
 import ProctorSectionView, { useProctorCheck } from "@/components/attendance/ProctorSectionView";
 
@@ -845,6 +846,37 @@ function ModulesTab() {
     <Suspense fallback={<div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>}>
       <ModulesPageComponent />
     </Suspense>
+  );
+}
+function AssignmentsWithWorksheet() {
+  const [subTab, setSubTab] = React.useState<'assignments' | 'worksheet'>('assignments');
+  return (
+    <div className="space-y-4 animate-pop">
+      <div className="flex gap-1.5 bg-white dark:bg-slate-800 rounded-xl p-1 border border-gray-200 dark:border-slate-700 w-fit shadow-sm">
+        <button
+          onClick={() => setSubTab('assignments')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            subTab === 'assignments'
+              ? 'bg-indigo-500 text-white shadow-sm'
+              : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+          }`}
+        >
+          📋 Assignments
+        </button>
+        <button
+          onClick={() => setSubTab('worksheet')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            subTab === 'worksheet'
+              ? 'bg-violet-500 text-white shadow-sm'
+              : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700'
+          }`}
+        >
+          📝 Worksheet Generator
+        </button>
+      </div>
+      {subTab === 'assignments' && <TeacherAssignmentsTab />}
+      {subTab === 'worksheet' && <WorksheetGenerator />}
+    </div>
   );
 }
 
@@ -1776,7 +1808,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
 
             {activeTab === "calendar" && <TeacherCalendarTab />}
             {activeTab === "modules" && <ModulesTab />}
-            {activeTab === "assignments" && <TeacherAssignmentsTab />}
+            {activeTab === "assignments" && <AssignmentsWithWorksheet />}
 
             {/* ===== ATTENDANCE TAB ===== */}
             {activeTab === "attendance" && (

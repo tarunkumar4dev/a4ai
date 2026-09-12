@@ -696,6 +696,7 @@ const ModulesPage: React.FC = () => {
           </div>
         </div>
       )}
+        
     </div>
   );
 };
