@@ -1,11 +1,12 @@
 // src/pages/StudentPortalPage.tsx
 // Route: /student
 // No login needed — student enters 6-char access code
-// MS Teams-inspired classroom view — Professional · Clean · Responsive
+// MS Teams-inspired classroom view — Professional · Clean · Fully Responsive
 
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import StudentCalendar from "@/components/student/StudentCalendar";
 
 /* ─── Types ────────────────────────────────────────────────────── */
 type StudentData = {
@@ -54,9 +55,6 @@ type Announcement = {
 /* ─── Helpers ───────────────────────────────────────────────────── */
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-
-const fmtTime = (d: string) =>
-  new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
 const fmtDeadline = (d: string | null) => {
   if (!d) return null;
@@ -149,13 +147,6 @@ const Icons = {
       <path d="M13.73 21a2 2 0 01-3.46 0" />
     </svg>
   ),
-  Help: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  ),
   Upload: () => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
@@ -184,12 +175,6 @@ const Icons = {
   Star: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  ),
-  X: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   ),
   LogOut: () => (
@@ -422,7 +407,7 @@ export default function StudentPortalPage() {
   const graded = assignments.filter(a => a.submission && a.submission.status === "graded");
 
   /* ══════════════════════════════════════════
-     LOGIN SCREEN — Teams-inspired
+     LOGIN SCREEN
   ══════════════════════════════════════════ */
   if (view === "login") return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "linear-gradient(135deg, #E8EAF6, #C5CAE9)" }}>
@@ -433,14 +418,14 @@ export default function StudentPortalPage() {
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8"
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8"
       >
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-xl bg-[#6264A7] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[#6264A7]/25">
-            <span className="text-white font-black text-2xl tracking-tight">a4</span>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-[#6264A7] flex items-center justify-center mx-auto mb-4 shadow-lg shadow-[#6264A7]/25">
+            <span className="text-white font-black text-xl sm:text-2xl tracking-tight">a4</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Student Portal</h1>
-          <p className="text-slate-500 text-sm mt-1">Enter your access code to view your classroom</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Student Portal</h1>
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">Enter your access code to view your classroom</p>
         </div>
 
         <div className="mb-4">
@@ -452,7 +437,7 @@ export default function StudentPortalPage() {
             onChange={e => setCode(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === "Enter" && code.length >= 4 && loginWithCode(code)}
             placeholder="e.g. AB12CD"
-            className="w-full px-4 py-3.5 border-2 border-slate-200 rounded-xl text-2xl font-bold text-center tracking-[0.3em] outline-none font-mono text-slate-800 focus:border-[#6264A7] transition-colors"
+            className="w-full px-4 py-3 sm:py-3.5 border-2 border-slate-200 rounded-xl text-xl sm:text-2xl font-bold text-center tracking-[0.3em] outline-none font-mono text-slate-800 focus:border-[#6264A7] transition-colors"
             autoFocus
           />
         </div>
@@ -466,7 +451,7 @@ export default function StudentPortalPage() {
         <button
           onClick={() => loginWithCode(code)}
           disabled={loading || code.length < 4}
-          className="w-full py-3.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-3 sm:py-3.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ background: loading || code.length < 4 ? "#CBD5E1" : "linear-gradient(135deg, #6264A7, #4A4B7A)" }}
         >
           {loading ? <><Icons.Loader /> Verifying...</> : "Enter Classroom →"}
@@ -495,7 +480,7 @@ export default function StudentPortalPage() {
 
         {/* Teams-style header */}
         <div className="bg-[#6264A7] text-white sticky top-0 z-50 shadow-sm">
-          <div className="flex items-center h-12 px-4 max-w-7xl mx-auto">
+          <div className="flex items-center h-12 px-3 sm:px-4 max-w-7xl mx-auto">
             <button
               onClick={() => { setView("dashboard"); setActiveAssignment(null); }}
               className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors"
@@ -503,31 +488,31 @@ export default function StudentPortalPage() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
               Back
             </button>
-            <div className="flex-1 text-center">
-              <span className="text-sm font-semibold truncate">{activeAssignment.title}</span>
+            <div className="flex-1 text-center px-2 min-w-0">
+              <span className="text-sm font-semibold truncate block">{activeAssignment.title}</span>
             </div>
-            <div className="w-16" />
+            <div className="w-12 sm:w-16" />
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto px-4 py-6">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
           <div className="bg-white rounded-lg shadow-sm border border-slate-200/60 overflow-hidden">
             {/* Header */}
-            <div className="p-6 border-b border-slate-100">
-              <h1 className="text-xl font-bold text-slate-900">{activeAssignment.title}</h1>
-              <div className="flex flex-wrap gap-3 mt-2">
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 break-words">{activeAssignment.title}</h1>
+              <div className="flex flex-wrap gap-2 sm:gap-3 mt-2">
                 {dl && (
-                  <span className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: dl.color }}>
+                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium" style={{ color: dl.color }}>
                     <Icons.Clock /> {dl.text}
                   </span>
                 )}
                 {activeAssignment.max_marks && (
-                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-600">
+                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-amber-600">
                     <Icons.Star /> {activeAssignment.max_marks} marks
                   </span>
                 )}
                 {activeAssignment.file_url && (
-                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600">
+                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-indigo-600">
                     📎 PDF attached
                   </span>
                 )}
@@ -535,11 +520,11 @@ export default function StudentPortalPage() {
             </div>
 
             {/* Content */}
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
               {activeAssignment.description && (
                 <div>
                   <h3 className="text-sm font-semibold text-slate-600 mb-2">Description</h3>
-                  <p className="text-slate-700 leading-relaxed">{activeAssignment.description}</p>
+                  <p className="text-sm sm:text-base text-slate-700 leading-relaxed whitespace-pre-wrap">{activeAssignment.description}</p>
                 </div>
               )}
 
@@ -553,18 +538,18 @@ export default function StudentPortalPage() {
               )}
 
               {/* Submission */}
-              <div className="border-t border-slate-100 pt-6">
+              <div className="border-t border-slate-100 pt-5 sm:pt-6">
                 <h3 className="text-sm font-semibold text-slate-600 mb-3">Your Submission</h3>
 
                 {sub && sub.status === "graded" && (
                   <div className="bg-[#ECFDF5] rounded-lg p-4 border border-[#A7F3D0] mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
                         <Icons.Check />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-emerald-700">Graded ✓</p>
-                        <p className="text-2xl font-bold text-emerald-600">
+                        <p className="text-xl sm:text-2xl font-bold text-emerald-600">
                           {sub.grade ?? "—"} <span className="text-sm text-slate-400 font-medium">/ {activeAssignment.max_marks || "?"}</span>
                         </p>
                       </div>
@@ -578,18 +563,18 @@ export default function StudentPortalPage() {
                 )}
 
                 {sub && sub.status === "submitted" && (
-                  <div className="bg-[#EFF6FF] rounded-lg p-4 border border-[#BFDBFE] mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                  <div className="bg-[#EFF6FF] rounded-lg p-4 border border-[#BFDBFE] mb-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
                         <Icons.Check />
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-900">{sub.file_name || "Submitted"}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-900 truncate">{sub.file_name || "Submitted"}</p>
                         <p className="text-xs text-slate-500">Submitted {fmtDate(sub.submitted_at)}</p>
                       </div>
                     </div>
                     {sub.file_url && (
-                      <a href={sub.file_url} target="_blank" rel="noreferrer" className="text-indigo-600 text-sm font-medium hover:underline">View</a>
+                      <a href={sub.file_url} target="_blank" rel="noreferrer" className="text-indigo-600 text-sm font-medium hover:underline shrink-0">View</a>
                     )}
                   </div>
                 )}
@@ -642,7 +627,6 @@ export default function StudentPortalPage() {
       {/* ── Teams App Bar ── */}
       <div className="bg-[#6264A7] text-white sticky top-0 z-50 shadow-sm">
         <div className="flex items-center h-12 px-3 max-w-7xl mx-auto">
-          {/* Menu button (mobile) */}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="lg:hidden p-1.5 rounded hover:bg-white/10 transition-colors"
@@ -651,13 +635,11 @@ export default function StudentPortalPage() {
             <Icons.Menu />
           </button>
 
-          {/* Teams logo */}
           <div className="flex items-center gap-2 ml-1 lg:ml-0">
             <Icons.Teams />
             <span className="font-semibold text-sm hidden sm:block">a4ai Classroom</span>
           </div>
 
-          {/* Search bar */}
           <div className="hidden md:flex items-center bg-white/15 rounded-lg px-3 py-1.5 ml-4 flex-1 max-w-xs">
             <Icons.Search />
             <input
@@ -667,7 +649,6 @@ export default function StudentPortalPage() {
             />
           </div>
 
-          {/* Right actions */}
           <div className="flex-1" />
           <div className="flex items-center gap-1">
             <button className="p-1.5 rounded hover:bg-white/10 transition-colors relative" title="Notifications">
@@ -728,7 +709,10 @@ export default function StudentPortalPage() {
                 return (
                 <button
                   key={i}
-                  onClick={() => setSideView(item.view as any)}
+                  onClick={() => {
+                    setSideView(item.view as any);
+                    setSidebarOpen(false);
+                  }}
                   style={{
                     width: "100%", display: "flex", alignItems: "center", gap: 10,
                     padding: "9px 12px", borderRadius: 10, border: "none", cursor: "pointer",
@@ -790,67 +774,63 @@ export default function StudentPortalPage() {
         )}
 
         {/* ── Main Content ── */}
-        <div className="flex-1 min-w-0 p-4 lg:p-6">
-
-          {/* Welcome header — always visible */}
-          {sideView !== "calendar" && sideView !== "activity" && sideView !== "chat" && sideView !== "files" && sideView !== "tasks" ? null : (
-            <div className="mb-4">
-              <h1 className="text-xl font-bold text-slate-900 capitalize">{sideView}</h1>
-            </div>
-          )}
+        <div className="flex-1 min-w-0 p-3 sm:p-4 lg:p-6">
 
           {/* Calendar View */}
           {sideView === "calendar" && (
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200/60 p-4">
-              <h2 className="font-bold text-slate-800 mb-4">📅 Calendar</h2>
-              <div className="text-slate-500 text-sm">
-                <p>Coming soon: View your upcoming deadlines and events.</p>
-              </div>
-            </div>
+            <StudentCalendar
+              batchId={student.batch_id}
+              instituteId={student.institute_id}
+            />
           )}
 
           {/* Activity View */}
           {sideView === "activity" && (
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200/60 p-4">
-              <h2 className="font-bold text-slate-800 mb-4">Recent Activity</h2>
-              <div className="space-y-3">
-                {[
-                  ...assignments.filter(a => a.submission?.status === "graded").map(a => ({
-                    icon: "✅", text: `Graded: ${a.title} — ${a.submission?.grade}/${a.max_marks || "?"}`,
-                    time: a.submission?.submitted_at || a.created_at, color: "#22C55E"
-                  })),
-                  ...assignments.map(a => ({
-                    icon: "📋", text: `New assignment: ${a.title}`,
-                    time: a.created_at, color: "#6264A7"
-                  })),
-                  ...announcements.map(a => ({
-                    icon: "📢", text: a.title,
-                    time: a.created_at, color: "#F59E0B"
-                  }))
-                ].sort((a,b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-                 .slice(0, 10)
-                 .map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
-                    <span className="text-xl">{item.icon}</span>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-800">{item.text}</p>
-                      <p className="text-xs text-slate-400">{fmtDate(item.time)}</p>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-4">Recent Activity</h1>
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200/60 p-4">
+                <div className="space-y-3">
+                  {[
+                    ...assignments.filter(a => a.submission?.status === "graded").map(a => ({
+                      icon: "✅", text: `Graded: ${a.title} — ${a.submission?.grade}/${a.max_marks || "?"}`,
+                      time: a.submission?.submitted_at || a.created_at, color: "#22C55E"
+                    })),
+                    ...assignments.map(a => ({
+                      icon: "📋", text: `New assignment: ${a.title}`,
+                      time: a.created_at, color: "#6264A7"
+                    })),
+                    ...announcements.map(a => ({
+                      icon: "📢", text: a.title,
+                      time: a.created_at, color: "#F59E0B"
+                    }))
+                  ].sort((a,b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+                   .slice(0, 10)
+                   .map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
+                      <span className="text-xl">{item.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{item.text}</p>
+                        <p className="text-xs text-slate-400">{fmtDate(item.time)}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {assignments.length === 0 && announcements.length === 0 && (
-                  <p className="text-center text-slate-400 py-8">No activity yet</p>
-                )}
+                  ))}
+                  {assignments.length === 0 && announcements.length === 0 && (
+                    <p className="text-center text-slate-400 py-8">No activity yet</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
           {/* Coming Soon Views */}
           {(sideView === "chat" || sideView === "files" || sideView === "tasks") && (
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200/60 p-12 text-center">
-              <div className="text-6xl mb-4">{sideView === "chat" ? "💬" : sideView === "files" ? "📁" : "✅"}</div>
-              <p className="text-lg font-bold text-slate-700 capitalize">{sideView}</p>
-              <p className="text-sm text-slate-400 mt-2">This feature is coming soon!</p>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 mb-4 capitalize">{sideView}</h1>
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200/60 p-12 text-center">
+                <div className="text-6xl mb-4">{sideView === "chat" ? "💬" : sideView === "files" ? "📁" : "✅"}</div>
+                <p className="text-lg font-bold text-slate-700 capitalize">{sideView}</p>
+                <p className="text-sm text-slate-400 mt-2">This feature is coming soon!</p>
+              </div>
             </div>
           )}
 
@@ -858,9 +838,9 @@ export default function StudentPortalPage() {
           {sideView === "dashboard" && (
           <div>
           {/* Welcome header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">Hello, {student.name.split(" ")[0]}! 👋</h1>
-            <div className="flex items-center gap-2 text-slate-500 text-sm flex-wrap">
+          <div className="mb-4 sm:mb-6">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Hello, {student.name.split(" ")[0]}! 👋</h1>
+            <div className="flex items-center gap-2 text-slate-500 text-xs sm:text-sm flex-wrap mt-1">
               <span>{student.institute_name}</span>
               <span className="text-slate-300">•</span>
               <span>{student.batch_name}</span>
@@ -877,8 +857,8 @@ export default function StudentPortalPage() {
 
           {/* ── Tabs ── */}
           <div className="bg-white rounded-lg shadow-sm border border-slate-200/60 overflow-hidden">
-            <div className="border-b border-slate-200">
-              <div className="flex px-2">
+            <div className="border-b border-slate-200 overflow-x-auto">
+              <div className="flex px-1 sm:px-2 min-w-max">
                 {[
                   { id: "assignments", label: "Assignments", count: assignments.length },
                   { id: "announcements", label: "Announcements", count: announcements.length },
@@ -886,7 +866,7 @@ export default function StudentPortalPage() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
+                    className={`px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id
                         ? 'border-[#6264A7] text-[#6264A7]'
                         : 'border-transparent text-slate-500 hover:text-slate-700'
                       }`}
@@ -901,7 +881,7 @@ export default function StudentPortalPage() {
               </div>
             </div>
 
-            <div className="p-4">
+            <div className="p-3 sm:p-4">
               {/* ── Assignments ── */}
               {activeTab === "assignments" && (
                 <div className="space-y-3">
@@ -929,18 +909,18 @@ export default function StudentPortalPage() {
                         animate={{ opacity: 1, y: 0 }}
                         whileHover={{ y: -1 }}
                         onClick={() => { setActiveAssignment(a); setView("assignment"); }}
-                        className="bg-[#F8FAFC] hover:bg-[#F0F2F5] rounded-lg p-4 border border-slate-200/60 cursor-pointer transition-all"
+                        className="bg-[#F8FAFC] hover:bg-[#F0F2F5] rounded-lg p-3 sm:p-4 border border-slate-200/60 cursor-pointer transition-all"
                       >
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full shrink-0" style={{ background: statusColor }} />
-                              <h3 className="font-semibold text-slate-900 truncate">{a.title}</h3>
+                              <h3 className="font-semibold text-slate-900 text-sm sm:text-base truncate">{a.title}</h3>
                             </div>
                             {a.description && (
-                              <p className="text-sm text-slate-500 truncate mt-0.5 pl-4">{a.description}</p>
+                              <p className="text-xs sm:text-sm text-slate-500 truncate mt-0.5 pl-4">{a.description}</p>
                             )}
-                            <div className="flex flex-wrap gap-3 mt-2 pl-4">
+                            <div className="flex flex-wrap gap-2 sm:gap-3 mt-2 pl-4">
                               {dl && (
                                 <span className="text-xs font-medium flex items-center gap-1" style={{ color: dl.color }}>
                                   <Icons.Clock /> {dl.text}
@@ -958,11 +938,11 @@ export default function StudentPortalPage() {
                               )}
                             </div>
                           </div>
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: statusColor + '15', color: statusColor }}>
+                          <div className="flex sm:flex-col items-end gap-2 sm:gap-1 shrink-0">
+                            <span className="text-xs font-bold px-2.5 sm:px-3 py-1 rounded-full whitespace-nowrap" style={{ background: statusColor + '15', color: statusColor }}>
                               {statusLabel}
                             </span>
-                            <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <span className="text-xs text-slate-400 hidden sm:flex items-center gap-1">
                               View <Icons.ChevronRight />
                             </span>
                           </div>
@@ -975,7 +955,7 @@ export default function StudentPortalPage() {
 
               {/* ── Announcements ── */}
               {activeTab === "announcements" && (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {announcements.length === 0 && (
                     <div className="text-center py-12">
                       <div className="text-5xl mb-4">📢</div>
@@ -988,21 +968,21 @@ export default function StudentPortalPage() {
                       key={ann.id}
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`rounded-lg p-4 border ${ann.is_pinned ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200/60'}`}
+                      className={`rounded-lg p-3 sm:p-4 border ${ann.is_pinned ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200/60'}`}
                     >
                       <div className="flex items-start gap-3">
                         {ann.is_pinned && (
-                          <span className="text-amber-500 mt-0.5"><Icons.Pin /></span>
+                          <span className="text-amber-500 mt-0.5 shrink-0"><Icons.Pin /></span>
                         )}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                          <h3 className="font-semibold text-slate-900 text-sm sm:text-base flex items-center gap-2 flex-wrap">
                             {ann.title}
                             {ann.is_pinned && (
                               <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">Pinned</span>
                             )}
                           </h3>
                           {ann.content && (
-                            <p className="text-sm text-slate-600 mt-1 leading-relaxed">{ann.content}</p>
+                            <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
                           )}
                           <p className="text-xs text-slate-400 mt-2">{fmtDate(ann.created_at)}</p>
                         </div>
@@ -1017,7 +997,7 @@ export default function StudentPortalPage() {
           )}
 
           {/* Status bar */}
-          <div className="mt-4 flex items-center justify-between text-xs text-slate-400 border-t border-slate-200 pt-3">
+          <div className="mt-4 flex items-center justify-between text-xs text-slate-400 border-t border-slate-200 pt-3 flex-wrap gap-2">
             <span>a4ai Classroom · v2.0</span>
             <span>
               {assignments.length} assignment{assignments.length !== 1 ? "s" : ""} ·{" "}

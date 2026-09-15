@@ -48,13 +48,14 @@ export function useInstituteTeacher(userId: string | undefined): InstituteTeache
 
     try {
       // 1. Check if teacher is part of any institute
-      const { data: memberData } = await supabase
+      const { data: memberList } = await supabase
         .from("institute_members")
         .select("institute_id, role, institutes(name, join_code)")
         .eq("user_id", userId)
         .eq("status", "active")
-        .eq("role", "teacher")
-        .single();
+        .limit(1);
+
+      const memberData = memberList && memberList.length > 0 ? memberList[0] : null;
 
       if (!memberData) {
         setMembership(null);

@@ -17,7 +17,6 @@ import BulkStudentUpload from "@/components/institute/BulkStudentUpload";
 import BatchManagementPanel from "@/components/admin/BatchManagementPanel";
 import HODAttendanceDashboard from "@/components/attendance/HODAttendanceDashboard";
 
-// Lazy load attendance view for better initial load performance
 const InstituteAttendanceView = lazy(() => import("@/components/attendance/InstituteAttendanceView"));
 
 
@@ -105,29 +104,16 @@ const customStyles = `
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 100px; }
 
-  /* ── Responsive Attendance Grid ── */
-  .attendance-grid {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: 1fr;
-  }
-  @media (min-width: 640px) {
-    .attendance-grid { grid-template-columns: repeat(2, 1fr); }
-  }
-  @media (min-width: 1024px) {
-    .attendance-grid { grid-template-columns: repeat(3, 1fr); }
-  }
-  @media (min-width: 1280px) {
-    .attendance-grid { grid-template-columns: repeat(4, 1fr); }
-  }
+  .attendance-grid { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .attendance-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1024px) { .attendance-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 1280px) { .attendance-grid { grid-template-columns: repeat(4, 1fr); } }
 
-  /* ── Touch-friendly sizing ── */
   @media (max-width: 640px) {
     .touch-target { min-height: 48px; min-width: 48px; }
     .field, .field-soft { font-size: 16px; padding: 14px 16px; }
   }
 
-  /* ── Animations ── */
   @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
   @keyframes fadeInUp { from { opacity:0; transform:translateY(16px);} to { opacity:1; transform:translateY(0);} }
   @keyframes scaleIn  { from { opacity:0; transform:scale(0.96);}       to { opacity:1; transform:scale(1);} }
@@ -149,10 +135,8 @@ const customStyles = `
   .anim-row:nth-child(7) { animation-delay: 0.21s; }
   .anim-row:nth-child(8) { animation-delay: 0.24s; }
 
-  /* Dept card accent bar */
   .dept-accent { position: absolute; top:0; left:0; right:0; height: 3px; background: #FF7043; }
 
-  /* DARK MODE */
   .dashboard-root.dark-mode { background-color: #0F1420; color: #E8EDF5; }
   .dark-mode .bg-white { background-color: #171D2B !important; }
   .dark-mode .bg-slate-50 { background-color: #1B2231 !important; }
@@ -330,6 +314,8 @@ export default function InstituteDashboardPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creatingInstitute, setCreatingInstitute] = useState(false);
+  const [newInstituteName, setNewInstituteName] = useState("");
 
   const [showAddBatch, setShowAddBatch] = useState(false);
   const [showAddStudent, setShowAddStudent] = useState(false);
@@ -360,10 +346,6 @@ export default function InstituteDashboardPage() {
   const [deptFilter, setDeptFilter] = useState<string>("");
   const [sectionFilter, setSectionFilter] = useState<string>("");
 
-  const [newInstituteName, setNewInstituteName] = useState("");
-  const [creatingInstitute, setCreatingInstitute] = useState(false);
-
-  // ── Logo & Banner ──
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -371,11 +353,9 @@ export default function InstituteDashboardPage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Name Editing ──
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
 
-  // ── Performance: Debounced search ──
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -401,26 +381,58 @@ export default function InstituteDashboardPage() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  // ── Auto-fetch attendance when tab switches ──
   useEffect(() => {
     if (activeTab === "attendance" && institute) {
       fetchAttendance(attendanceDateFilter);
     }
   }, [activeTab, institute]);
 
-  const fetchData = async () => {
+  /* ─────────────────────────────────────────────────────────────
+     FIXED: fetchData
+     - Optional `id` param: agar diya gaya, to seedha usi institute ko load karo
+     - Warna: pehle institutes (owner) check karo, phir institute_members
+     ───────────────────────────────────────────────────────────── */
+  const fetchData = async (explicitId?: string) => {
     setLoading(true);
     try {
-      const { data: m } = await supabase
-        .from("institute_members")
-        .select("institute_id, role")
-        .eq("user_id", user?.id)
-        .eq("role", "admin")
-        .eq("status", "active")
-        .single();
+      let id: string | null = explicitId || null;
 
-      if (!m) { setLoading(false); return; }
-      const id = m.institute_id;
+      if (!id) {
+        // 1. Owner check (institutes table)
+        const { data: ownerData, error: ownerErr } = await supabase
+          .from("institutes")
+          .select("id")
+          .eq("owner_id", user?.id)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (!ownerErr && ownerData && ownerData.length > 0) {
+          id = ownerData[0].id;
+        } else {
+          // 2. Member check (institute_members table)
+          const { data: mData, error: memberError } = await supabase
+            .from("institute_members")
+            .select("institute_id, role, department_id")
+            .eq("user_id", user?.id)
+            .limit(1);
+
+          if (memberError) console.error("Member lookup error:", memberError);
+
+          if (mData && mData.length > 0) {
+            id = mData[0].institute_id;
+            if (mData[0].role === "hod" && mData[0].department_id) {
+              setIsHod(true);
+              setHodDeptId(mData[0].department_id);
+            }
+          }
+        }
+      }
+
+      if (!id) {
+        setInstitute(null);
+        setLoading(false);
+        return;
+      }
 
       const [a, b, c, d, e, f] = await Promise.all([
         supabase.from("institutes").select("*").eq("id", id).single(),
@@ -457,7 +469,6 @@ export default function InstituteDashboardPage() {
       if (e.data) setDepartments(e.data as Department[]);
       if (f.data) setSections(f.data as Section[]);
 
-      // Fetch teacher-batch assignments
       const { data: tbData } = await supabase
         .from("teacher_batches")
         .select("teacher_id, batch_id")
@@ -475,15 +486,43 @@ export default function InstituteDashboardPage() {
     setLoading(false);
   };
 
+  /* ─────────────────────────────────────────────────────────────
+     FIXED: handleCreateInstitute
+     - RPC ka return value (UUID) seedha use karta hai
+     - Success ke baad fetchData(newId) call karta hai — page reload ki zarurat nahi
+     - Duplicate slug error ko friendly message mein convert karta hai
+     ───────────────────────────────────────────────────────────── */
   const handleCreateInstitute = async () => {
-    if (!newInstituteName.trim() || !user) return;
+    if (!newInstituteName.trim() || !user || creatingInstitute) return;
     setCreatingInstitute(true);
     try {
-      const { error } = await supabase.rpc("create_institute", { p_name: newInstituteName.trim() });
-      if (error) throw error;
+      const { data: newId, error } = await supabase.rpc("create_institute", {
+        p_name: newInstituteName.trim(),
+      });
+
+      if (error) {
+        const msg = (error.message || "").toLowerCase();
+        if (msg.includes("duplicate") || msg.includes("slug") || msg.includes("unique")) {
+          toast.error("This name is already taken. Please try a different name.");
+        } else {
+          toast.error(error.message || "Failed to create institute");
+        }
+        setCreatingInstitute(false);
+        return;
+      }
+
       toast.success("Institute created!");
-      await fetchData();
-    } catch (e: any) { toast.error(e.message || "Failed to create institute"); }
+
+      // Agar RPC ne naya institute ID return kiya, usi ko load karo
+      if (newId && typeof newId === "string") {
+        await fetchData(newId);
+      } else {
+        // Fallback: normal fetch
+        await fetchData();
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to create institute");
+    }
     setCreatingInstitute(false);
   };
 
@@ -539,9 +578,7 @@ export default function InstituteDashboardPage() {
 
   const removeStudent = async (id: string) => {
     if (!confirm("Remove this student? Their attendance and submissions will also be deleted.")) return;
-    // Remove access codes
     await supabase.from("student_access_codes").delete().eq("student_id", id);
-    // Hard delete student
     const { error } = await supabase.from("students").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Student removed");
@@ -550,9 +587,7 @@ export default function InstituteDashboardPage() {
 
   const removeTeacher = async (id: string, userId?: string) => {
     if (!confirm("Remove this teacher from the institute? This cannot be undone.")) return;
-    // Remove batch assignments first
     if (userId) await supabase.from("teacher_batches").delete().eq("teacher_id", userId);
-    // Hard delete from institute
     const { error } = await supabase.from("institute_members").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Teacher removed");
@@ -630,7 +665,6 @@ export default function InstituteDashboardPage() {
         .eq("date", dateStr);
 
       if (data) {
-        // Enrich with batch names and teacher names
         const enriched = data.map((a: any) => {
           const batch = batches.find(b => b.id === a.batch_id);
           const teacher = teachers.find(t => t.user_id === a.marked_by);
@@ -653,7 +687,6 @@ export default function InstituteDashboardPage() {
     setAttendanceLoading(false);
   };
 
-  // 5. CSV download for access codes
   const downloadAccessCodesCSV = async () => {
     if (!institute) return;
     try {
@@ -975,9 +1008,16 @@ export default function InstituteDashboardPage() {
             onChange={e => setNewInstituteName(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleCreateInstitute()}
           />
-          <button className="btn-orange w-full py-3.5 rounded-xl" onClick={handleCreateInstitute} disabled={creatingInstitute || !newInstituteName.trim()}>
+          <button
+            className="btn-orange w-full py-3.5 rounded-xl"
+            onClick={handleCreateInstitute}
+            disabled={creatingInstitute || !newInstituteName.trim()}
+          >
             {creatingInstitute ? <><Icons.Loader /> Creating...</> : <>Create Institute</>}
           </button>
+          <p className="text-[11px] text-slate-400 font-medium mt-4">
+          Tip: if you already have an institute, don't create another with the same name — use a different name.
+          </p>
         </div>
       </div>
     );
@@ -1105,7 +1145,6 @@ export default function InstituteDashboardPage() {
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <div className={`px-4 sm:px-6 lg:px-8 py-6 sm:py-8 mx-auto w-full ${activeTab === "attendance" ? "max-w-7xl" : "max-w-5xl"}`}>
 
-          {/* ── Mobile top bar ── */}
           <div className="flex items-center gap-2 mb-4 lg:hidden">
             <button className="p-2 -ml-2 text-slate-500 touch-target" onClick={() => setMobileMenuOpen(true)}><Icons.Menu /></button>
             <button onClick={goHome} title="Back to home" className="p-2 rounded-lg bg-[#FFF5F2] text-[#FF7043]"><Icons.Home /></button>
@@ -1115,7 +1154,6 @@ export default function InstituteDashboardPage() {
           {/* ── OVERVIEW TAB ── */}
           {activeTab === "overview" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
-              {/* ═══ INSTITUTE PROFILE CARD ─── */}
               <div className="bg-white rounded-3xl card-shadow border border-slate-50 overflow-hidden mb-6">
                 <div
                   className="relative h-40 sm:h-48 bg-gradient-to-br from-[#FF7043] via-[#FF8A65] to-[#FFAB91] group cursor-pointer"
@@ -1188,7 +1226,6 @@ export default function InstituteDashboardPage() {
                 </div>
               </div>
 
-              {/* ═══ SEARCH BAR ─── */}
               <div className="flex items-center bg-white px-4 py-3 rounded-xl card-shadow border border-slate-100 mb-6">
                 <span className="text-slate-400 mr-2"><Icons.Search /></span>
                 <input
@@ -1201,7 +1238,6 @@ export default function InstituteDashboardPage() {
                 {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600 p-1"><Icons.X /></button>}
               </div>
 
-              {/* ═══ STAT CARDS ─── */}
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
                 {[
                   { label: "Departments", value: totalDepartments, cap: 0, pct: totalDepartments ? Math.min(totalDepartments / 10, 1) : 0, tint: "bg-teal-100 text-teal-600", bar: "#14B8A6", Icon: Icons.Building, tab: "departments" },
@@ -1229,7 +1265,6 @@ export default function InstituteDashboardPage() {
                 ))}
               </div>
 
-              {/* ═══ ENROLLMENT CHART ─── */}
               <div className="w-full bg-white rounded-2xl card-shadow border border-slate-50 p-4 sm:p-6 mb-6 sm:mb-8">
                 <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                   <div>
@@ -1254,7 +1289,6 @@ export default function InstituteDashboardPage() {
                 )}
               </div>
 
-              {/* ═══ LATEST STUDENTS ─── */}
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-[16px] font-bold text-slate-800">Latest Students</h3>
@@ -1460,7 +1494,7 @@ export default function InstituteDashboardPage() {
                 <div className="space-y-3">
                   {filteredTeachers.map(t => (
                     <React.Fragment key={t.id}>
-                    <div className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row" onClick={() => navigate(`/institute/students/${t.user_id}`)} style={{cursor:"pointer"}} onMouseEnter={e=>(e.currentTarget.style.boxShadow="0 2px 8px rgba(59,130,246,0.15)")} onMouseLeave={e=>(e.currentTarget.style.boxShadow="")}>
+                    <div className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.role === "hod" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-500"}`}>
                         {t.role === "hod" ? <Icons.Crown /> : <Icons.User />}
                       </div>
@@ -1661,7 +1695,6 @@ export default function InstituteDashboardPage() {
                 {batchChart.length > 0 ? <BatchBars data={batchChart} /> : <div className="h-40 flex items-center justify-center text-sm text-slate-500 font-medium">No batches yet</div>}
               </div>
 
-              {/* ═══ BATCH MANAGEMENT PANEL ═══ */}
               <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
                 <h3 className="text-[16px] font-bold text-slate-800 mb-4">Batch Settings</h3>
                 <BatchManagementPanel instituteId={institute.id} />
@@ -1894,7 +1927,6 @@ export default function InstituteDashboardPage() {
         />
       )}
 
-      {/* Assign Batches to Teacher Modal */}
       {assignTeacherBatches && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAssignTeacherBatches(null)}>
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>

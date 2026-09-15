@@ -1,6 +1,8 @@
 // src/components/institute/InstituteTeacherPanel.tsx
 // Shows teacher's institute info — name, role, department, batches, student count
 // Fixes: #1 prominent card, #2 teacher name, #3 department display, #7 join prompt
+// Fix (current): removed misleading "all institute batches" fallback for unassigned
+//                teachers. Now unassigned teachers see a proper empty state.
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -26,7 +28,7 @@ type BatchInfo = {
   student_count?: number;
 };
 
-export default function InstituteTeacherPanel({ userId }: { userId?: string }) {
+export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: string; userEmail?: string }) {
   const navigate = useNavigate();
   const [loading, setLoading]       = useState(true);
   const [institute, setInstitute]   = useState<InstituteInfo | null>(null);
@@ -35,76 +37,135 @@ export default function InstituteTeacherPanel({ userId }: { userId?: string }) {
   const [totalStudents, setTotalStudents] = useState(0);
   const [logoUrl, setLogoUrl]       = useState<string | null>(null);
 
-  useEffect(() => { if (userId) load(); }, [userId]);
+  useEffect(() => { if (userId || userEmail) load(); }, [userId, userEmail]);
 
   async function load() {
     setLoading(true);
     try {
-      // 1. Get institute membership
-      const { data: mem } = await supabase
+      let instId: string | null = null;
+      let memberRole = "teacher";
+      let memberStatus = "active";
+      let departmentId: string | null = null;
+
+      // 1. Get institute membership from institute_members (by user_id)
+      let { data: memData } = await supabase
         .from("institute_members")
-        .select("institute_id, role, status, department_id, user_name, user_email")
+        .select("id, institute_id, role, status, department_id, user_id")
         .eq("user_id", userId)
-        .eq("status", "active")
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (!mem) { setLoading(false); return; }
+      // 1b. Fallback: search by user_email if not found by user_id
+      if ((!memData || memData.length === 0) && userEmail) {
+        const { data: emailMem } = await supabase
+          .from("institute_members")
+          .select("id, institute_id, role, status, department_id, user_id")
+          .eq("user_email", userEmail)
+          .limit(1);
 
-      // 2. Get institute details
+        if (emailMem && emailMem.length > 0) {
+          memData = emailMem;
+          // Auto-link user_id for future fast lookups
+          if (!emailMem[0].user_id && userId) {
+            await supabase
+              .from("institute_members")
+              .update({ user_id: userId })
+              .eq("id", emailMem[0].id);
+          }
+        }
+      }
+
+      if (memData && memData.length > 0) {
+        instId = memData[0].institute_id;
+        memberRole = memData[0].role || "teacher";
+        memberStatus = memData[0].status || "active";
+        departmentId = memData[0].department_id || null;
+      } else {
+        // 2. Check if user is the owner of an institute directly
+        const { data: ownerInst } = await supabase
+          .from("institutes")
+          .select("id")
+          .eq("owner_id", userId)
+          .limit(1);
+
+        if (ownerInst && ownerInst.length > 0) {
+          instId = ownerInst[0].id;
+          memberRole = "admin";
+          memberStatus = "active";
+        }
+      }
+
+      if (!instId) { setLoading(false); return; }
+
+      // 3. Get institute details
       const { data: inst } = await supabase
         .from("institutes")
         .select("id, name")
-        .eq("id", mem.institute_id)
+        .eq("id", instId)
         .single();
 
       if (!inst) { setLoading(false); return; }
       setInstitute(inst);
 
-      // 3. Get department name if assigned
+      // 4. Get department name if assigned
       let deptName = "";
-      if (mem.department_id) {
+      if (departmentId) {
         const { data: dept } = await supabase
           .from("departments")
           .select("name")
-          .eq("id", mem.department_id)
+          .eq("id", departmentId)
           .single();
         if (dept) deptName = dept.name;
       }
 
       setMember({
-        role: mem.role,
-        status: mem.status,
+        role: memberRole,
+        status: memberStatus,
         department_name: deptName || undefined,
-        department_id: mem.department_id,
+        department_id: departmentId,
       });
 
-      // 4. Get assigned batches from teacher_batches table
-      const { data: tb } = await supabase
-        .from("teacher_batches").select("batch_id")
-        .eq("teacher_id", userId).eq("institute_id", mem.institute_id);
-
+      // 5. Get assigned batches
+      //    Priority 1: explicit teacher_batches rows (true assignment)
+      //    Priority 2: department batches (only if department is assigned)
+      //    Otherwise: empty — do NOT fall back to all institute batches.
       let batchRows: any[] = [];
+
+      const { data: tb } = await supabase
+        .from("teacher_batches")
+        .select("batch_id")
+        .eq("teacher_id", userId)
+        .eq("institute_id", instId);
+
       if (tb && tb.length > 0) {
         const { data: bRows } = await supabase
-          .from("batches").select("id, name, class_level")
-          .in("id", tb.map(t => t.batch_id)).eq("is_active", true).order("name");
+          .from("batches")
+          .select("id, name, class_level")
+          .in("id", tb.map(t => t.batch_id))
+          .eq("is_active", true)
+          .order("name");
         batchRows = bRows || [];
-      } else if (mem.department_id) {
+      } else if (departmentId) {
         // Fallback: department batches
         const { data: bRows } = await supabase
-          .from("batches").select("id, name, class_level")
-          .eq("institute_id", mem.institute_id).eq("department_id", mem.department_id)
-          .eq("is_active", true).order("name");
+          .from("batches")
+          .select("id, name, class_level")
+          .eq("institute_id", instId)
+          .eq("department_id", departmentId)
+          .eq("is_active", true)
+          .order("name");
         batchRows = bRows || [];
       }
+      // No explicit teacher_batches row and no department assigned:
+      // show a true empty state instead of every batch in the institute.
+      // (Previously this fell back to ALL institute batches, which made
+      // unassigned teachers/proctors look like they already had a batch.)
 
       if (batchRows && batchRows.length > 0) {
         // Get student counts per batch
         const { data: stuCounts } = await supabase
           .from("students")
           .select("batch_id")
-          .eq("institute_id", mem.institute_id)
+          .eq("institute_id", instId)
           .eq("is_active", true)
           .in("batch_id", batchRows.map(b => b.id));
 
@@ -121,7 +182,7 @@ export default function InstituteTeacherPanel({ userId }: { userId?: string }) {
         setTotalStudents(Object.values(countMap).reduce((a, b) => a + b, 0));
       }
 
-      // 5. Try logo
+      // 6. Try logo
       try {
         const { data: logoData } = supabase.storage
           .from("institute-assets")
@@ -180,7 +241,6 @@ export default function InstituteTeacherPanel({ userId }: { userId?: string }) {
   if (!institute || !member) return null;
 
   const roleLabel = member.role === "hod" ? "HOD" : member.role === "admin" ? "Administrator" : "Teacher";
-  const roleColor = member.role === "hod" ? "#8B5CF6" : member.role === "admin" ? "#FF7043" : "#3B82F6";
 
   // ── Main Card ─────────────────────────────────────────────────
   return (

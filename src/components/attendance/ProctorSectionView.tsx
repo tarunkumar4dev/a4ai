@@ -1,660 +1,406 @@
 // src/components/attendance/ProctorSectionView.tsx
-// ──────────────────────────────────────────────────────────────────────
-// Proctor (class teacher) dashboard — auto-appears in teacher
-// dashboard when logged-in user is proctor of a section (batch).
+// Mobile-first proctor dashboard — today's marking status, monthly table, edit, Excel export
 //
-// Features:
-//   1. Today's marking status — which subjects marked, which pending
-//   2. Monthly attendance table — per student × per subject (real %)
-//   3. Edit attendance within 2-day window (auto-audit logged)
-//   4. One-click Excel (.xlsx) export (college-ready format)
-//
-// Usage in teacher dashboard:
-//   import ProctorSectionView from "@/components/attendance/ProctorSectionView";
-//   ...
-//   {activeTab === "section" && <ProctorSectionView />}
-//
-// To auto-detect proctor status (for showing/hiding the tab):
-//   import { useProctorCheck } from "@/components/attendance/ProctorSectionView";
-//   const { isProctor, proctorBatches } = useProctorCheck();
-//   {isProctor && <Tab>My Section</Tab>}
-// ──────────────────────────────────────────────────────────────────────
+// Export: { default: ProctorSectionView, useProctorCheck }
 
-import React, {
-  useState,
-  useMemo,
-  useCallback,
-  useEffect,
-  memo,
-} from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
-import * as XLSX from "xlsx";
 
 /* ───── TYPES ───── */
-type Status = "present" | "absent" | "late" | "leave";
+type Status = "present" | "absent" | "leave";
 
-interface ProctorBatch {
-  id: string;
-  name: string;
-  departmentName?: string;
-  studentCount: number;
-}
+interface ProctorBatch { id: string; name: string; studentCount: number }
 
 interface SessionStatus {
-  sessionId: string;
-  subjectName: string;
-  subjectCode: string;
-  teacherName: string;
-  startTime?: string;
-  status: string;
-  isMarked: boolean;
-  presentCount: number;
-  absentCount: number;
-  totalStudents: number;
+  sessionId: string; subjectName: string; subjectCode: string;
+  teacherName: string; startTime?: string; isMarked: boolean;
+  presentCount: number; absentCount: number; totalStudents: number;
 }
 
+interface MonthlyCell { totalHeld: number; totalPresent: number; percentage: number }
 interface MonthlyRow {
-  studentId: string;
-  studentName: string;
-  rollNo: string;
-  subjectName: string;
-  subjectCode: string;
-  totalHeld: number;
-  totalPresent: number;
-  totalAbsent: number;
-  totalLate: number;
-  totalLeave: number;
-  percentage: number;
+  studentId: string; studentName: string; rollNo: string;
+  subjects: Record<string, MonthlyCell>; // keyed by subjectCode
+  overallHeld: number; overallPresent: number; overallPct: number;
 }
-
-interface EditingCell {
-  sessionId: string;
-  studentId: string;
-  studentName: string;
-  currentStatus: Status;
-}
-
-/* ───── CONSTANTS ───── */
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /* ───── ICONS ───── */
-const I = {
-  Check: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>,
-  Clock: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
-  Download: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg>,
-  Users: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
-  Edit: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>,
-  Shield: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
-  Alert: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>,
-  ChevL: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>,
-  ChevR: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>,
-  Spinner: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>,
-  X: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
+const Icon = {
+  Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  Clock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  Download: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  Alert: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  ChevD: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
+  Spin: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
 };
 
-/* ───── TOAST ───── */
-type Toast = { id: number; message: string; type?: string };
-function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
-  if (!toasts.length) return null;
-  return (
-    <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, pointerEvents: "none" }}>
-      {toasts.map(t => (
-        <div key={t.id} onClick={() => onDismiss(t.id)}
-          style={{ background: t.type === "error" ? "#7F1D1D" : "#1E293B", color: "#fff", borderRadius: 12, padding: "10px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", cursor: "pointer", pointerEvents: "all", maxWidth: 340, display: "flex", alignItems: "center", gap: 8 }}>
-          <span>{t.type === "error" ? "⚠️" : t.type === "info" ? "ℹ️" : "✅"}</span>{t.message}
-        </div>
-      ))}
-    </div>
-  );
-}
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const css = `
+  @keyframes popIn{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:none}}
+  @keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  .glass{background:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .dark .glass{background:rgba(15,23,42,.65);border-color:rgba(255,255,255,.06)}
+  .pill{background:rgba(0,0,0,.04)}.dark .pill{background:rgba(255,255,255,.06)}
+  .atbl{border-collapse:separate;border-spacing:0}
+  .atbl th,.atbl td{border-bottom:1px solid rgba(0,0,0,.06);padding:8px 10px;text-align:center;font-size:12px;white-space:nowrap}
+  .dark .atbl th,.dark .atbl td{border-color:rgba(255,255,255,.06)}
+  .atbl th{position:sticky;top:0;z-index:2;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8}
+  .atbl th{background:rgba(248,250,252,.95)}.dark .atbl th{background:rgba(15,23,42,.95)}
+  .atbl td:first-child,.atbl th:first-child{position:sticky;left:0;z-index:3;text-align:left}
+  .atbl th:first-child{z-index:4}
+  .atbl td:first-child{background:rgba(255,255,255,.9);font-weight:700;color:#334155}
+  .dark .atbl td:first-child{background:rgba(15,23,42,.9);color:#e2e8f0}
+`;
 
-/* ───── PROCTOR CHECK HOOK ───── */
-// Use in parent to conditionally render the "My Section" tab
+/* ═══ useProctorCheck HOOK ═══ */
 export function useProctorCheck() {
   const { user } = useAuth();
+  const [isProctor, setIsProctor] = useState(false);
   const [proctorBatches, setProctorBatches] = useState<ProctorBatch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [instId, setInstId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function check() {
-      if (!user?.id) { setLoading(false); return; }
-      // Simple query — no join, no is_active filter
-      // departments join was causing 400 errors (FK not in Supabase schema cache)
-      const { data, error } = await supabase
-        .from("batches")
-        .select("id, name, department_id")
-        .eq("proctor_id", user.id);
-
-      console.log("[useProctorCheck] data:", data, "error:", error);
-
-      if (data && data.length > 0) {
-        // Get student counts
-        const batchIds = data.map((b: any) => b.id);
-        const { data: stuCounts } = await supabase
-          .from("students").select("batch_id")
-          .in("batch_id", batchIds).eq("is_active", true);
-        const countMap: Record<string, number> = {};
-        stuCounts?.forEach((s: any) => { countMap[s.batch_id] = (countMap[s.batch_id] || 0) + 1; });
-
-        setProctorBatches(data.map((b: any) => ({
-          id: b.id,
-          name: b.name,
-          departmentName: undefined, // join removed — fetch separately if needed
-          studentCount: countMap[b.id] || 0,
-        })));
-      }
-      setLoading(false);
-    }
-    check();
+    if (!user?.id) return;
+    (async () => {
+      try {
+        const { data: mem } = await supabase.from("institute_members").select("institute_id")
+          .eq("user_id", user.id).eq("status", "active").limit(1).single();
+        if (!mem) return;
+        setInstId(mem.institute_id);
+        const { data: b } = await supabase.from("batches").select("id, name")
+          .eq("proctor_id", user.id).neq("is_active", false);
+        if (b && b.length > 0) {
+          // get student counts
+          const batches: ProctorBatch[] = [];
+          for (const batch of b) {
+            const { count } = await supabase.from("students").select("id", { count: "exact", head: true })
+              .eq("batch_id", batch.id).eq("is_active", true);
+            batches.push({ id: batch.id, name: batch.name, studentCount: count || 0 });
+          }
+          setProctorBatches(batches);
+          setIsProctor(true);
+        }
+      } catch (e) { console.error("useProctorCheck:", e); }
+    })();
   }, [user?.id]);
 
-  return { isProctor: proctorBatches.length > 0, proctorBatches, loading };
+  return { isProctor, proctorBatches, instId };
 }
 
-
-/* ═══════════════════════════════════════════════════════════
-   MAIN COMPONENT
-═══════════════════════════════════════════════════════════ */
+/* ═══ MAIN COMPONENT ═══ */
 export default function ProctorSectionView() {
   const { user } = useAuth();
-  const { proctorBatches, loading: loadingCheck } = useProctorCheck();
-  const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Proctor";
+  const { proctorBatches, instId } = useProctorCheck();
 
-  const [activeBatch, setActiveBatch] = useState<ProctorBatch | null>(null);
+  const [selBatch, setSelBatch] = useState<ProctorBatch | null>(null);
   const [todayStatus, setTodayStatus] = useState<SessionStatus[]>([]);
-  const [monthlyData, setMonthlyData] = useState<MonthlyRow[]>([]);
-  const [loadingToday, setLoadingToday] = useState(false);
-  const [loadingMonthly, setLoadingMonthly] = useState(false);
-  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
-  const [reportYear, setReportYear] = useState(new Date().getFullYear());
-
-  // Edit state
-  const [editing, setEditing] = useState<EditingCell | null>(null);
-  const [editNewStatus, setEditNewStatus] = useState<Status>("present");
-  const [editSaving, setEditSaving] = useState(false);
-
-  // Toast
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastIdRef = React.useRef(0);
-  const addToast = useCallback((message: string, type: Toast["type"] = "success") => {
-    const id = ++toastIdRef.current;
-    setToasts(prev => [...prev.slice(-4), { id, message, type }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3200);
-  }, []);
+  const [monthlyRows, setMonthlyRows] = useState<MonthlyRow[]>([]);
+  const [subjectCodes, setSubjectCodes] = useState<string[]>([]);
+  const [subjectNames, setSubjectNames] = useState<Record<string, string>>({});
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [view, setView] = useState<"today" | "monthly">("today");
 
   // Auto-select first batch
   useEffect(() => {
-    if (proctorBatches.length > 0 && !activeBatch) {
-      setActiveBatch(proctorBatches[0]);
-    }
-  }, [proctorBatches, activeBatch]);
+    if (proctorBatches.length > 0 && !selBatch) setSelBatch(proctorBatches[0]);
+  }, [proctorBatches, selBatch]);
 
-  // ── Load today's session status ──
-  const loadTodayStatus = useCallback(async () => {
-    if (!activeBatch) return;
-    setLoadingToday(true);
+  // Load today's status
+  const loadToday = useCallback(async () => {
+    if (!selBatch || !instId) return;
+    setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("get_proctor_section_status", {
-        p_batch_id: activeBatch.id,
-      });
-      if (error) throw error;
+      const { data } = await supabase.rpc("get_proctor_section_status", { p_batch_id: selBatch.id });
       setTodayStatus((data || []).map((r: any): SessionStatus => ({
-        sessionId: r.session_id,
-        subjectName: r.subject_name,
-        subjectCode: r.subject_code,
-        teacherName: r.teacher_name,
+        sessionId: r.session_id, subjectName: r.subject_name, subjectCode: r.subject_code,
+        teacherName: r.teacher_name || "—",
         startTime: r.start_time ? String(r.start_time).slice(0, 5) : undefined,
-        status: r.status,
         isMarked: r.is_marked,
-        presentCount: Number(r.present_count),
-        absentCount: Number(r.absent_count),
-        totalStudents: Number(r.total_students),
+        presentCount: Number(r.present_count) || 0, absentCount: Number(r.absent_count) || 0,
+        totalStudents: Number(r.total_students) || 0,
       })));
-    } catch (e: any) {
-      console.error(e);
-      addToast("Failed to load today's status", "error");
-    }
-    setLoadingToday(false);
-  }, [activeBatch, addToast]);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  }, [selBatch, instId]);
 
-  useEffect(() => { loadTodayStatus(); }, [loadTodayStatus]);
-
-  // ── Load monthly attendance report ──
-  const loadMonthlyReport = useCallback(async () => {
-    if (!activeBatch) return;
-    setLoadingMonthly(true);
+  // Load monthly report
+  const loadMonthly = useCallback(async () => {
+    if (!selBatch) return;
+    setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("get_monthly_attendance", {
-        p_batch_id: activeBatch.id,
-        p_month: reportMonth,
-        p_year: reportYear,
+      const { data } = await supabase.rpc("get_monthly_attendance", {
+        p_batch_id: selBatch.id, p_month: month, p_year: year,
       });
-      if (error) throw error;
-      setMonthlyData((data || []).map((r: any): MonthlyRow => ({
-        studentId: r.student_id,
-        studentName: r.student_name,
-        rollNo: r.roll_no || "",
-        subjectName: r.subject_name,
-        subjectCode: r.subject_code,
-        totalHeld: Number(r.total_held),
-        totalPresent: Number(r.total_present),
-        totalAbsent: Number(r.total_absent),
-        totalLate: Number(r.total_late),
-        totalLeave: Number(r.total_leave),
-        percentage: Number(r.percentage),
-      })));
-    } catch (e: any) {
-      console.error(e);
-      addToast("Failed to load monthly report", "error");
-    }
-    setLoadingMonthly(false);
-  }, [activeBatch, reportMonth, reportYear, addToast]);
+      if (!data?.length) { setMonthlyRows([]); setSubjectCodes([]); setLoading(false); return; }
 
-  useEffect(() => { loadMonthlyReport(); }, [loadMonthlyReport]);
+      const codes = new Set<string>();
+      const names: Record<string, string> = {};
+      const map = new Map<string, MonthlyRow>();
 
-  // ── Pivot monthly data: rows = students, columns = subjects ──
-  const pivotData = useMemo(() => {
-    const subjects = [...new Map(monthlyData.map(r => [r.subjectCode, { name: r.subjectName, code: r.subjectCode }])).values()];
-    const students = [...new Map(monthlyData.map(r => [r.studentId, { id: r.studentId, name: r.studentName, rollNo: r.rollNo }])).values()];
-    // Sort by roll number
-    students.sort((a, b) => (a.rollNo || "").localeCompare(b.rollNo || "", undefined, { numeric: true }));
+      for (const r of data as any[]) {
+        codes.add(r.subject_code);
+        names[r.subject_code] = r.subject_name;
+        if (!map.has(r.student_id)) {
+          map.set(r.student_id, {
+            studentId: r.student_id, studentName: r.student_name, rollNo: r.roll_no || "—",
+            subjects: {}, overallHeld: 0, overallPresent: 0, overallPct: 0,
+          });
+        }
+        const row = map.get(r.student_id)!;
+        row.subjects[r.subject_code] = {
+          totalHeld: Number(r.total_held) || 0,
+          totalPresent: Number(r.total_present) || 0,
+          percentage: Number(r.percentage) || 0,
+        };
+        row.overallHeld += Number(r.total_held) || 0;
+        row.overallPresent += Number(r.total_present) || 0;
+      }
 
-    const map = new Map<string, MonthlyRow>();
-    monthlyData.forEach(r => map.set(`${r.studentId}_${r.subjectCode}`, r));
+      const rows = Array.from(map.values()).map(r => ({
+        ...r,
+        overallPct: r.overallHeld > 0 ? Math.round((r.overallPresent / r.overallHeld) * 100) : 0,
+      }));
+      rows.sort((a, b) => a.rollNo.localeCompare(b.rollNo, undefined, { numeric: true }));
 
-    return { subjects, students, map };
-  }, [monthlyData]);
+      setMonthlyRows(rows);
+      setSubjectCodes(Array.from(codes).sort());
+      setSubjectNames(names);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  }, [selBatch, month, year]);
 
-  // ── Edit attendance ──
-  const startEdit = useCallback((sessionId: string, studentId: string, studentName: string, currentStatus: Status) => {
-    setEditing({ sessionId, studentId, studentName, currentStatus });
-    setEditNewStatus(currentStatus);
-  }, []);
+  useEffect(() => { if (view === "today") loadToday(); }, [view, loadToday]);
+  useEffect(() => { if (view === "monthly") loadMonthly(); }, [view, loadMonthly]);
 
-  const submitEdit = useCallback(async () => {
-    if (!editing) return;
-    if (editNewStatus === editing.currentStatus) { setEditing(null); return; }
-    setEditSaving(true);
+  // Excel export
+  const exportExcel = useCallback(async () => {
+    setExporting(true);
     try {
-      const { data, error } = await supabase.rpc("edit_attendance", {
-        p_session_id: editing.sessionId,
-        p_student_id: editing.studentId,
-        p_new_status: editNewStatus,
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      addToast(`Updated ${editing.studentName}: ${editing.currentStatus} → ${editNewStatus}`);
-      setEditing(null);
-      // Refresh data
-      loadTodayStatus();
-      loadMonthlyReport();
-    } catch (e: any) {
-      addToast(e.message || "Edit failed", "error");
-    }
-    setEditSaving(false);
-  }, [editing, editNewStatus, addToast, loadTodayStatus, loadMonthlyReport]);
+      const XLSX = await import("xlsx");
+      const headers = ["S.No", "Roll No", "Student Name"];
+      subjectCodes.forEach(c => { headers.push(`${c} H`, `${c} A`); });
+      headers.push("Total H", "Total A", "%", "Sign");
 
-  // ── Excel export ──
-  const exportExcel = useCallback(() => {
-    if (!activeBatch || pivotData.students.length === 0) {
-      addToast("No data to export", "info");
-      return;
-    }
-
-    const { subjects, students, map } = pivotData;
-
-    // ── Row 1: Section info header (matches MSIT format) ──
-    const sectionInfo = [
-      `${activeBatch.name}   ${MONTHS[reportMonth - 1]} ${reportYear}`,
-    ];
-
-    // ── Row 2: Column headers ──
-    // Format: S.No | Roll No | Name | [SubjectCode H | A] per subject | Grand Total H | Grand Total A | % | Sign
-    // Matches ECE-I 4th Sem attendance Excel exactly
-    const headerRow1: string[] = ["S. No", "Roll no", "Name of the student"];
-    const headerRow2: string[] = ["", "", ""];  // subject names row
-    const headerRow3: string[] = ["", "", ""];  // H / A labels row
-
-    subjects.forEach(sub => {
-      const label = sub.code || sub.name; // prefer code (like BS-02, EEC-206)
-      headerRow1.push(label, "");          // merged cell — subject code spans H+A
-      headerRow2.push(sub.name.slice(0, 20), "");
-      headerRow3.push("H", "A");
-    });
-    headerRow1.push("Grand Total", "", "%", "Sign");
-    headerRow2.push("", "", "", "");
-    headerRow3.push("Total H", "Total A", "", "");
-
-    // ── Data rows ──
-    // H = sessions held (conducted), A = sessions absent
-    // Late → mapped to H (attended) per MSIT convention
-    const rows = students.map((stu, idx) => {
-      const row: (string | number)[] = [idx + 1, stu.rollNo, stu.name];
-      let grandH = 0, grandA = 0;
-
-      subjects.forEach(sub => {
-        const d = map.get(`${stu.id}_${sub.code}`);
-        const held = d?.totalHeld ?? 0;
-        // Absent = only pure absents (Late is treated as H/attended per college norm)
-        const absent = d?.totalAbsent ?? 0;
-        row.push(held, absent);
-        grandH += held;
-        grandA += absent;
+      const wsData = [headers];
+      monthlyRows.forEach((r, i) => {
+        const row: (string | number)[] = [i + 1, r.rollNo, r.studentName];
+        subjectCodes.forEach(c => {
+          const cell = r.subjects[c];
+          row.push(cell?.totalHeld ?? 0, cell?.totalHeld ? (cell.totalHeld - cell.totalPresent) : 0);
+        });
+        row.push(r.overallHeld, r.overallHeld - r.overallPresent, r.overallPct, "");
+        wsData.push(row);
       });
 
-      const pct = grandH > 0
-        ? parseFloat(((grandH - grandA) / grandH * 100).toFixed(2))
-        : 0;
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-      row.push(grandH, grandA, pct, "");
-      return row;
-    });
+      // Column widths
+      const colWidths = headers.map((h, i) => ({ wch: i <= 2 ? (i === 2 ? 24 : 8) : 6 }));
+      ws["!cols"] = colWidths;
 
-    // ── Build sheet ──
-    const aoa = [sectionInfo, headerRow1, headerRow2, headerRow3, ...rows];
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
+      XLSX.utils.book_append_sheet(wb, ws, `${selBatch?.name || "Section"} ${MONTHS[month - 1]} ${year}`);
+      XLSX.writeFile(wb, `${selBatch?.name || "Section"}_Attendance_${MONTHS[month - 1]}_${year}.xlsx`);
+    } catch (e) { console.error("Export failed:", e); }
+    setExporting(false);
+  }, [monthlyRows, subjectCodes, selBatch, month, year]);
 
-    // Column widths
-    const colWidths: { wch: number }[] = [
-      { wch: 6 },  // S.No
-      { wch: 14 }, // Roll No
-      { wch: 26 }, // Name
-    ];
-    subjects.forEach(() => { colWidths.push({ wch: 6 }, { wch: 6 }); }); // H, A per subject
-    colWidths.push({ wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 14 }); // Grand H, A, %, Sign
-    ws["!cols"] = colWidths;
-
-    // Merge section info across all columns
-    const totalCols = 3 + subjects.length * 2 + 4;
-    if (!ws["!merges"]) ws["!merges"] = [];
-    ws["!merges"].push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } }); // section header
-
-    const wb = XLSX.utils.book_new();
-    const sheetName = `${activeBatch.name} ${MONTHS_SHORT[reportMonth - 1]} ${reportYear}`.slice(0, 31);
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-    XLSX.writeFile(wb, `Attendance_${activeBatch.name}_${MONTHS_SHORT[reportMonth - 1]}_${reportYear}.xlsx`);
-    addToast(`Excel exported — matches MSIT proctor format`);
-  }, [activeBatch, pivotData, reportMonth, reportYear, addToast]);
-
-  // ── Today's summary counts ──
-  const todaySummary = useMemo(() => {
-    const total = todayStatus.length;
-    const marked = todayStatus.filter(s => s.isMarked).length;
-    const pending = total - marked;
-    return { total, marked, pending };
-  }, [todayStatus]);
-
-  /* ═══════════════════════════════════════════════════════════
-     RENDER
-  ═══════════════════════════════════════════════════════════ */
-  if (loadingCheck) return <p className="text-center py-10 text-slate-400 font-semibold">Checking proctor status…</p>;
-  if (proctorBatches.length === 0) return <p className="text-center py-10 text-slate-400 font-semibold">You are not assigned as proctor for any section.</p>;
+  const markedCount = todayStatus.filter(s => s.isMarked).length;
 
   return (
     <>
-      <ToastStack toasts={toasts} onDismiss={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          @keyframes popIn { from { opacity:0; transform:scale(0.96) translateY(6px); } to { opacity:1; transform:scale(1) translateY(0); } }
-          @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-          @media (prefers-reduced-motion: reduce) { [class*="animate-"] { animation: none !important; } }
-        `
-      }} />
+      <style>{css}</style>
+      <div className="space-y-4 sm:space-y-6 animate-[popIn_.3s_ease-out]">
 
-      {/* Edit Modal */}
-      {editing && (
-        <div className="fixed inset-0 z-[250] flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-[popIn_0.28s_cubic-bezier(0.16,1,0.3,1)]">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Edit Attendance</h3>
-              <button onClick={() => setEditing(null)} className="p-1 text-slate-400 hover:text-slate-600"><I.X /></button>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-1"><strong>{editing.studentName}</strong></p>
-            <p className="text-xs text-slate-400 mb-4">Current: <span className="font-bold capitalize">{editing.currentStatus}</span></p>
-            <div className="flex gap-2 mb-5">
-              {(["present", "absent", "leave"] as Status[]).map(s => (
-                <button key={s} onClick={() => setEditNewStatus(s)}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                    editNewStatus === s
-                      ? s === "present" ? "bg-emerald-500 text-white ring-2 ring-emerald-400"
-                        : s === "absent" ? "bg-red-500 text-white ring-2 ring-red-400"
-                        : "bg-blue-500 text-white ring-2 ring-blue-400"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                  }`}>
-                  {s === "present" ? "Present" : s === "absent" ? "Absent" : "Leave"}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
-              <button onClick={submitEdit} disabled={editSaving || editNewStatus === editing.currentStatus}
-                className="px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all"
-                style={{ background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }}>
-                {editSaving ? "Saving…" : "Save change"}
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-3 flex items-center gap-1"><I.Alert /> Change will be logged in audit trail</p>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-5 sm:space-y-8 animate-[popIn_0.35s_cubic-bezier(0.16,1,0.3,1)]">
-
-        {/* ── Header ── */}
-        <div className="glass-panel rounded-[28px] sm:rounded-[40px] lg:rounded-[48px] p-5 sm:p-7 lg:p-8">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-white shadow-md"
-              style={{ background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }}>
-              <I.Shield />
-            </div>
-            <div>
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">My Section</h2>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium">Proctor: {displayName}</p>
-            </div>
-          </div>
-
-          {/* Batch selector (if proctor of multiple) */}
-          {proctorBatches.length > 1 ? (
-            <div className="flex gap-2 flex-wrap">
+        {/* Batch selector (if multiple batches) */}
+        {proctorBatches.length > 1 && (
+          <div className="glass rounded-2xl p-3 sm:p-4">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Section</label>
+            <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
               {proctorBatches.map(b => (
-                <button key={b.id} onClick={() => setActiveBatch(b)}
-                  className={`px-4 py-2 rounded-2xl text-sm font-bold transition-all ${activeBatch?.id === b.id ? "text-white shadow-sm" : "inset-pill border-none text-slate-600 dark:text-slate-300"}`}
-                  style={activeBatch?.id === b.id ? { background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" } : undefined}>
-                  {b.name} ({b.studentCount})
+                <button key={b.id} onClick={() => setSelBatch(b)}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap shrink-0 active:scale-95 touch-manipulation ${
+                    selBatch?.id === b.id ? "text-white shadow-sm" : "pill text-slate-600 dark:text-slate-300"
+                  }`}
+                  style={selBatch?.id === b.id ? { background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" } : undefined}>
+                  {b.name} <span className="text-xs opacity-70">({b.studentCount})</span>
                 </button>
               ))}
             </div>
-          ) : activeBatch && (
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="inset-pill border-none rounded-2xl px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200">{activeBatch.name}</span>
-              <span className="text-xs text-slate-400 font-medium flex items-center gap-1"><I.Users /> {activeBatch.studentCount} students</span>
-              {activeBatch.departmentName && (
-                <span className="text-xs text-slate-400 font-medium">{activeBatch.departmentName}</span>
-              )}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* ── Today's Status ── */}
-        <div className="glass-panel rounded-[28px] sm:rounded-[40px] lg:rounded-[48px] p-5 sm:p-7 lg:p-8">
-          <div className="flex items-center justify-between mb-4 sm:mb-6">
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Today's marking status</h3>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${todaySummary.pending > 0 ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700" : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700"}`}>
-                {todaySummary.pending > 0 ? `${todaySummary.pending} pending` : "All marked ✓"}
-              </span>
-              <span className="text-[11px] font-bold text-slate-400">{todaySummary.marked}/{todaySummary.total}</span>
+        {/* Section header */}
+        {selBatch && (
+          <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">{selBatch.name}</h3>
+                <p className="text-xs text-slate-500 font-medium">{selBatch.studentCount} students · Proctor view</p>
+              </div>
+            </div>
+
+            {/* Tabs: Today / Monthly */}
+            <div className="flex gap-1 pill rounded-xl p-1">
+              {(["today", "monthly"] as const).map(v => (
+                <button key={v} onClick={() => setView(v)}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all active:scale-[0.97] touch-manipulation ${
+                    view === v ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" : "text-slate-500"
+                  }`}>{v === "today" ? "Today" : "Monthly"}</button>
+              ))}
             </div>
           </div>
+        )}
 
-          {loadingToday ? (
-            <p className="text-center py-6 text-slate-400 font-semibold flex items-center justify-center gap-2"><I.Spinner /> Loading…</p>
-          ) : todayStatus.length === 0 ? (
-            <p className="text-center py-6 text-slate-400 font-semibold text-sm">No classes scheduled today for this section.</p>
-          ) : (
-            <div className="space-y-2.5">
-              {todayStatus.map((sess) => {
-                const pct = sess.totalStudents > 0 ? Math.round((sess.presentCount / sess.totalStudents) * 100) : 0;
-                return (
-                  <div key={sess.sessionId}
-                    className={`rounded-2xl p-4 border transition-colors ${sess.isMarked ? "border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-900/10" : "border-amber-200 dark:border-amber-800/40 bg-amber-50/50 dark:bg-amber-900/10"}`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-slate-800 dark:text-white truncate">{sess.subjectName}</h4>
-                          <span className="text-[10px] font-bold text-slate-400">{sess.subjectCode}</span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {sess.teacherName}
-                          {sess.startTime && <span className="ml-2 inline-flex items-center gap-0.5"><I.Clock /> {sess.startTime}</span>}
-                        </p>
+        {/* TODAY view */}
+        {view === "today" && selBatch && (
+          <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-base font-bold text-slate-800 dark:text-white">Marking status</h4>
+              <span className="text-xs font-bold pill px-3 py-1.5 rounded-full text-slate-500">
+                {markedCount}/{todayStatus.length} done
+              </span>
+            </div>
+
+            {loading ? <p className="py-6 text-center text-slate-400 text-sm">Loading…</p>
+            : todayStatus.length === 0 ? <p className="py-4 text-center text-slate-400 text-sm">No sessions scheduled today.</p>
+            : (
+              <div className="space-y-2">
+                {todayStatus.map(s => {
+                  const pct = s.totalStudents > 0 && s.isMarked ? Math.round((s.presentCount / s.totalStudents) * 100) : 0;
+                  return (
+                    <div key={s.sessionId} className={`rounded-2xl p-3.5 border transition-colors ${
+                      s.isMarked ? "border-emerald-200/60 dark:border-emerald-800/30 bg-emerald-50/40 dark:bg-emerald-950/10"
+                        : "border-amber-200/60 dark:border-amber-800/30 bg-amber-50/40 dark:bg-amber-950/10"
+                    }`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-sm text-slate-800 dark:text-white">{s.subjectName}</span>
+                        {s.isMarked
+                          ? <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><Icon.Check /> {pct}%</span>
+                          : <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1"><Icon.Clock /> Pending</span>}
                       </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        {sess.isMarked && (
-                          <div className="text-right">
-                            <span className={`text-sm font-black ${pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-600"}`}>{pct}%</span>
-                            <p className="text-[10px] text-slate-400">{sess.presentCount}/{sess.totalStudents}</p>
-                          </div>
-                        )}
-                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${sess.isMarked ? "text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30" : "text-amber-600 bg-amber-100 dark:bg-amber-900/30"}`}>
-                          {sess.isMarked ? <><I.Check /> Done</> : "Pending"}
-                        </span>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
+                        <span>{s.teacherName}</span>
+                        {s.startTime && <span>{s.startTime}</span>}
+                        {s.isMarked && <span>{s.presentCount}P / {s.absentCount}A</span>}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── Monthly Report ── */}
-        <div className="glass-panel rounded-[28px] sm:rounded-[40px] lg:rounded-[48px] p-5 sm:p-7 lg:p-8">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5 sm:mb-6">
-            <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">Monthly attendance report</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Month selector */}
-              <div className="flex items-center gap-1">
-                <button onClick={() => { if (reportMonth === 1) { setReportMonth(12); setReportYear(y => y - 1); } else setReportMonth(m => m - 1); }}
-                  className="p-1.5 rounded-lg inset-pill border-none text-slate-500 active:scale-95 touch-manipulation"><I.ChevL /></button>
-                <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 min-w-[100px] text-center">
-                  {MONTHS[reportMonth - 1]} {reportYear}
-                </span>
-                <button onClick={() => { if (reportMonth === 12) { setReportMonth(1); setReportYear(y => y + 1); } else setReportMonth(m => m + 1); }}
-                  className="p-1.5 rounded-lg inset-pill border-none text-slate-500 active:scale-95 touch-manipulation"><I.ChevR /></button>
+                  );
+                })}
               </div>
-              {/* Export button */}
-              <button onClick={exportExcel}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold text-white active:scale-95 transition-all touch-manipulation"
-                style={{ background: "linear-gradient(135deg, var(--theme-start), var(--theme-end))" }}>
-                <I.Download /> Export Excel
+            )}
+
+            {/* Progress bar */}
+            {todayStatus.length > 0 && (
+              <div className="mt-4">
+                <div className="w-full h-2 pill rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full transition-[width] duration-500"
+                    style={{ width: `${(markedCount / todayStatus.length) * 100}%` }} />
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium mt-1.5 text-center">
+                  {markedCount === todayStatus.length ? "All classes marked ✅" : `${todayStatus.length - markedCount} pending`}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MONTHLY view */}
+        {view === "monthly" && selBatch && (
+          <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
+            {/* Month/year picker */}
+            <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <select value={month} onChange={e => setMonth(Number(e.target.value))}
+                  className="pill rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none">
+                  {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                </select>
+                <select value={year} onChange={e => setYear(Number(e.target.value))}
+                  className="pill rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none">
+                  {[2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <button onClick={exportExcel} disabled={!monthlyRows.length || exporting}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 active:scale-95 touch-manipulation"
+                style={{ background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }}>
+                {exporting ? <Icon.Spin /> : <Icon.Download />}{exporting ? "Exporting…" : "Excel"}
               </button>
             </div>
-          </div>
 
-          {loadingMonthly ? (
-            <p className="text-center py-8 text-slate-400 font-semibold flex items-center justify-center gap-2"><I.Spinner /> Loading report…</p>
-          ) : pivotData.students.length === 0 ? (
-            <p className="text-center py-8 text-slate-400 font-semibold text-sm">No attendance data for {MONTHS[reportMonth - 1]} {reportYear}.</p>
-          ) : (
-            <div className="overflow-x-auto -mx-2 px-2">
-              <table className="w-full min-w-[600px]">
-                <thead>
-                  <tr>
-                    <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest pb-2.5 pl-2 w-8">#</th>
-                    <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-widest pb-2.5">Student</th>
-                    {pivotData.subjects.map(sub => (
-                      <th key={sub.code} className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest pb-2.5 px-1">
-                        <span className="block">{sub.code}</span>
-                        <span className="block text-[8px] font-medium normal-case text-slate-300">{sub.name.slice(0, 12)}</span>
-                      </th>
-                    ))}
-                    <th className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest pb-2.5 px-1">
-                      <span className="block">OVERALL</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pivotData.students.map((stu, idx) => {
-                    let totalHeld = 0, totalPresent = 0;
-                    return (
-                      <tr key={stu.id} className="border-t border-slate-100/80 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                        <td className="py-2 pl-2 text-xs font-bold text-slate-400">{idx + 1}</td>
-                        <td className="py-2">
-                          <span className="font-bold text-[13px] text-slate-800 dark:text-white block truncate max-w-[160px]">{stu.name}</span>
-                          {stu.rollNo && <span className="text-[10px] text-slate-400">{stu.rollNo}</span>}
-                        </td>
-                        {pivotData.subjects.map(sub => {
-                          const d = pivotData.map.get(`${stu.id}_${sub.code}`);
-                          const pct = d?.percentage ?? 0;
-                          totalHeld += d?.totalHeld ?? 0;
-                          totalPresent += d?.totalPresent ?? 0;
-                          return (
-                            <td key={sub.code} className="py-2 text-center px-1">
-                              <span className={`text-xs font-extrabold ${pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : pct > 0 ? "text-red-600" : "text-slate-300"}`}>
-                                {d && d.totalHeld > 0 ? `${pct}%` : "—"}
-                              </span>
-                              {d && d.totalHeld > 0 && (
-                                <span className="block text-[9px] text-slate-400">{d.totalPresent}/{d.totalHeld}</span>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="py-2 text-center px-1">
-                          {(() => {
-                            const overallPct = totalHeld > 0 ? Math.round((totalPresent / totalHeld) * 100) : 0;
-                            return (
-                              <>
-                                <span className={`text-xs font-black ${overallPct >= 75 ? "text-emerald-600" : overallPct >= 50 ? "text-amber-600" : overallPct > 0 ? "text-red-600" : "text-slate-300"}`}>
-                                  {totalHeld > 0 ? `${overallPct}%` : "—"}
-                                </span>
-                                {totalHeld > 0 && (
-                                  <span className="block text-[9px] text-slate-400">{totalPresent}/{totalHeld}</span>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </td>
+            {loading ? <p className="py-8 text-center text-slate-400 text-sm">Loading report…</p>
+            : monthlyRows.length === 0 ? <p className="py-6 text-center text-slate-400 text-sm">No attendance data for this month.</p>
+            : (
+              <>
+                {/* Scrollable table */}
+                <div className="overflow-auto -mx-2 px-2 max-h-[60vh] rounded-xl border border-slate-200/60 dark:border-white/5">
+                  <table className="atbl w-full">
+                    <thead>
+                      <tr>
+                        <th className="min-w-[140px]">Student</th>
+                        {subjectCodes.map(c => (
+                          <th key={c} className="min-w-[60px]" title={subjectNames[c]}>{c}</th>
+                        ))}
+                        <th className="min-w-[50px]">Overall</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {monthlyRows.map(r => (
+                        <tr key={r.studentId}>
+                          <td>
+                            <div className="min-w-0">
+                              <p className="font-bold text-[12px] text-slate-700 dark:text-slate-200 truncate max-w-[130px]">{r.studentName}</p>
+                              <p className="text-[10px] text-slate-400">{r.rollNo}</p>
+                            </div>
+                          </td>
+                          {subjectCodes.map(c => {
+                            const cell = r.subjects[c];
+                            if (!cell || cell.totalHeld === 0) return <td key={c} className="text-slate-300">—</td>;
+                            return (
+                              <td key={c}>
+                                <span className={`font-bold ${cell.percentage >= 75 ? "text-emerald-600" : cell.percentage >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                                  {cell.percentage}%
+                                </span>
+                                <span className="block text-[9px] text-slate-400">{cell.totalPresent}/{cell.totalHeld}</span>
+                              </td>
+                            );
+                          })}
+                          <td>
+                            <span className={`font-black text-sm ${r.overallPct >= 75 ? "text-emerald-600" : r.overallPct >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                              {r.overallPct}%
+                            </span>
+                            <span className="block text-[9px] text-slate-400">{r.overallPresent}/{r.overallHeld}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Low attendance warning */}
-              {(() => {
-                const lowAttendance = pivotData.students.filter(stu => {
-                  let held = 0, present = 0;
-                  pivotData.subjects.forEach(sub => {
-                    const d = pivotData.map.get(`${stu.id}_${sub.code}`);
-                    held += d?.totalHeld ?? 0;
-                    present += d?.totalPresent ?? 0;
-                  });
-                  return held > 0 && (present / held) * 100 < 75;
-                });
-                if (lowAttendance.length === 0) return null;
-                return (
-                  <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40">
-                    <p className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5 mb-1"><I.Alert /> Below 75% overall attendance</p>
-                    <p className="text-[11px] text-red-600 dark:text-red-400/80">
-                      {lowAttendance.map(s => s.name).join(", ")}
-                    </p>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </div>
+                {/* Below-75% warning */}
+                {(() => {
+                  const low = monthlyRows.filter(r => r.overallPct < 75 && r.overallHeld > 0);
+                  if (!low.length) return null;
+                  return (
+                    <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40">
+                      <p className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5 mb-1"><Icon.Alert /> Below 75% overall</p>
+                      <p className="text-[11px] text-red-600 dark:text-red-400/80">{low.map(s => s.studentName).join(", ")}</p>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+          </div>
+        )}
 
-        {/* ── Footer info ── */}
-        <div className="text-center pb-4">
-          <p className="text-[10px] sm:text-xs text-slate-400 font-medium">
-            Edit window: 2 days from session date · All edits are logged in the audit trail
-          </p>
-        </div>
+        {/* Footer */}
+        <p className="text-center text-[10px] text-slate-400 font-medium pb-2">
+          Edit window: 2 days · All edits audited
+        </p>
       </div>
     </>
   );

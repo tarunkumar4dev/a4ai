@@ -1,6 +1,6 @@
 // TeacherDashboardPage.tsx - Updated (removed batch-settings from navItems)
 import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
-import TeacherAttendanceView from "@/components/attendance/TeacherAttendanceView";
+import AttendancePage from "@/components/attendance/AttendancePage";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -1612,7 +1612,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
             {activeTab === "dashboard" && (
               <div className="space-y-6 sm:space-y-8">
                 <div className="scroll-reveal" style={{ transitionDelay: "0ms" }}>
-                  <InstituteTeacherPanel userId={user?.id} />
+                  <InstituteTeacherPanel userId={user?.id} userEmail={user?.email} />
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8 scroll-reveal" style={{ transitionDelay: "60ms" }}>
@@ -1796,7 +1796,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
             {/* ===== STUDENTS TAB ===== */}
             {activeTab === "students" && (
               <div className="space-y-6 sm:space-y-8 animate-pop">
-                <InstituteTeacherPanel userId={user?.id} />
+                <InstituteTeacherPanel userId={user?.id} userEmail={user?.email} />
               </div>
             )}
 
@@ -1813,7 +1813,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
             {/* ===== ATTENDANCE TAB ===== */}
             {activeTab === "attendance" && (
               <div className="space-y-6 sm:space-y-8 animate-pop">
-                <TeacherAttendanceView />
+                <AttendancePage />
               </div>
             )}
 

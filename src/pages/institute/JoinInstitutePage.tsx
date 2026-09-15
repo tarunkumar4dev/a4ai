@@ -106,30 +106,93 @@ export default function JoinInstitutePage() {
   const [error, setError] = useState<string | null>(null);
 
   const handleJoin = async () => {
-    const trimmed = code.trim().toLowerCase();
-    if (!trimmed || !user) return;
+    const rawInput = code.trim();
+    if (!rawInput || !user) return;
 
     setJoining(true);
     setError(null);
 
     try {
+      // 1. Try RPC first
       const { data, error: rpcError } = await supabase.rpc("join_institute_by_code", {
-        p_join_code: trimmed,
+        p_join_code: rawInput.toLowerCase(),
       });
 
-      if (rpcError) throw rpcError;
-
-      const result = typeof data === "string" ? JSON.parse(data) : data;
-
-      if (result.success) {
-        setSuccess(result.institute_name);
-        toast.success(`Joined ${result.institute_name}!`);
-        setTimeout(() => navigate("/teacher/dashboard"), 2000);
-      } else {
-        setError(result.error || "Invalid code");
+      if (!rpcError && data) {
+        const result = typeof data === "string" ? JSON.parse(data) : data;
+        if (result.success) {
+          setSuccess(result.institute_name || "Institute");
+          toast.success(`Joined ${result.institute_name || "Institute"}!`);
+          setTimeout(() => navigate("/teacher/dashboard"), 1500);
+          setJoining(false);
+          return;
+        }
       }
+
+      // 2. Direct Fallback: Check institutes table by join_code
+      const { data: instList } = await supabase
+        .from("institutes")
+        .select("id, name, join_code")
+        .ilike("join_code", rawInput);
+
+      let targetInst = instList && instList.length > 0 ? instList[0] : null;
+      let targetDeptId: string | null = null;
+
+      // 3. Check departments table by teacher_code
+      if (!targetInst) {
+        const { data: deptList } = await supabase
+          .from("departments")
+          .select("id, name, institute_id, teacher_code, institutes(id, name)")
+          .ilike("teacher_code", rawInput);
+
+        if (deptList && deptList.length > 0) {
+          const d = deptList[0];
+          targetDeptId = d.id;
+          targetInst = (d.institutes as any) || null;
+        }
+      }
+
+      if (!targetInst) {
+        setError("Invalid code. Please check your join code and try again.");
+        setJoining(false);
+        return;
+      }
+
+      // 4. Insert or update membership in institute_members
+      const { error: insertErr } = await supabase
+        .from("institute_members")
+        .upsert({
+          institute_id: targetInst.id,
+          user_id: user.id,
+          role: "teacher",
+          status: "active",
+          department_id: targetDeptId,
+          user_email: user.email,
+          user_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Teacher",
+        }, { onConflict: "institute_id,user_id" });
+
+      if (insertErr) {
+        // Fallback for single insert
+        await supabase
+          .from("institute_members")
+          .insert({
+            institute_id: targetInst.id,
+            user_id: user.id,
+            role: "teacher",
+            status: "active",
+            department_id: targetDeptId,
+            user_email: user.email,
+            user_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Teacher",
+          });
+      }
+
+      setSuccess(targetInst.name);
+      toast.success(`Joined ${targetInst.name}!`);
+      setTimeout(() => navigate("/teacher/dashboard"), 1500);
+
     } catch (e: any) {
-      setError(e.message || "Something went wrong");
+      console.error("Join error:", e);
+      setError(e.message || "Failed to join institute. Please try again.");
     }
     setJoining(false);
   };
@@ -160,18 +223,18 @@ export default function JoinInstitutePage() {
                 Join an Institute
               </h1>
               <p className="text-[13px] text-zinc-500 text-center mb-6">
-                Enter the 8-character code your institute admin shared with you.
+                Enter the code your institute admin shared with you.
               </p>
 
               {/* Code input */}
               <div className="mb-4">
                 <input
-                  className="code-input"
-                  placeholder="abc12def"
-                  maxLength={8}
+                  className="code-input text-base sm:text-lg uppercase"
+                  placeholder="Enter join code"
+                  maxLength={30}
                   value={code}
                   onChange={(e) => {
-                    setCode(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""));
+                    setCode(e.target.value);
                     setError(null);
                   }}
                   onKeyDown={(e) => e.key === "Enter" && handleJoin()}
@@ -190,7 +253,7 @@ export default function JoinInstitutePage() {
               <button
                 className="join-btn"
                 onClick={handleJoin}
-                disabled={joining || code.trim().length < 4}
+                disabled={joining || code.trim().length < 3}
               >
                 {joining ? (
                   <>
