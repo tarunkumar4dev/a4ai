@@ -608,6 +608,13 @@ export default function TestBuilderPage() {
   const [libraryQuestions, setLibraryQuestions] = useState<NCERTQuestion[]>([]);
   const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
   const [examTitle, setExamTitle] = useState("Untitled Test");
+  const [templateTier, setTemplateTier] = useState<"standard" | "premium">("standard");
+  const [colorTheme, setColorTheme] = useState<"teal" | "navy" | "dark_green" | "orange">("teal");
+  const [instituteName, setInstituteName] = useState("");
+  const [teacherName, setTeacherName] = useState("");
+  const [duration, setDuration] = useState("");
+  const [topic, setTopic] = useState("");
+  const [includeExplanations, setIncludeExplanations] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
 
@@ -785,11 +792,14 @@ export default function TestBuilderPage() {
     }
   };
 
-  // ── Export ────────────────────────────────────────────────────
+  // ── Export test paper (question paper — no answers) ──────────────
   const handleExport = async (format: "pdf" | "docx") => {
-    if (testQuestions.length === 0) return;
-    setExporting(true);
+    if (testQuestions.length === 0) {
+      alert("Add questions to the test paper first!");
+      return;
+    }
 
+    setExporting(true);
     try {
       const payload = {
         examTitle,
@@ -797,9 +807,14 @@ export default function TestBuilderPage() {
         classGrade: `Class ${classGrade}`,
         subject,
         format,
-        includeAnswers: true,
+        includeAnswers: false,
         includeExplanations: false,
-        template: "modern",
+        template: templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
+        teacher_name: teacherName || undefined,
+        institute_name: instituteName || undefined,
+        duration: duration || undefined,
+        topic: topic || selectedChapter || (testQuestions[0]?.chapter) || undefined,
+        paperDate: new Date().toLocaleDateString("en-GB"),
         questions: testQuestions.map((q) => ({
           id: String(q.id),
           text: q.question_text,
@@ -809,12 +824,13 @@ export default function TestBuilderPage() {
           marks: q.marks,
           difficulty: q.difficulty,
           chapter: q.chapter,
-          format: q.options?.length > 0 ? "mcq" : "short_answer",
+          format: q.options && q.options.length > 0 ? "mcq" : "short_answer",
           section: q.section,
+          subParts: (q as any).subParts || (q as any).sub_parts || undefined,
+          image_url: q.image_url || undefined,
+          question_table: q.question_table || undefined,
           isManual: false,
           validationStatus: "valid",
-          questionTable: q.question_table || null,
-          figureRef: q.figure_ref || null,
         })),
       };
 
@@ -830,16 +846,77 @@ export default function TestBuilderPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${examTitle
-        .replace(/[^a-zA-Z0-9_\-\s]/g, "")
-        .replace(/\s+/g, "_")}.${format}`;
+      a.download = `${examTitle.replace(/\s+/g, "_")}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Export error:", err);
       alert("Export failed. Please try again.");
+    } finally {
+      setExporting(false);
     }
-    setExporting(false);
+  };
+
+  // ── Export answer key (separate PDF/DOCX file) ──────────────────
+  const handleExportAnswerKey = async (format: "pdf" | "docx") => {
+    if (testQuestions.length === 0) {
+      alert("Add questions to the test paper first!");
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const payload = {
+        examTitle,
+        board: "CBSE",
+        classGrade: `Class ${classGrade}`,
+        subject,
+        format,
+        includeExplanations,
+        template: templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
+        teacher_name: teacherName || undefined,
+        institute_name: instituteName || undefined,
+        duration: duration || undefined,
+        topic: topic || selectedChapter || (testQuestions[0]?.chapter) || undefined,
+        paperDate: new Date().toLocaleDateString("en-GB"),
+        questions: testQuestions.map((q) => ({
+          id: String(q.id),
+          text: q.question_text,
+          options: q.options || [],
+          correctAnswer: q.answer || "",
+          explanation: "",
+          marks: q.marks,
+          difficulty: q.difficulty,
+          chapter: q.chapter,
+          format: q.options && q.options.length > 0 ? "mcq" : "short_answer",
+          section: q.section,
+          subParts: (q as any).subParts || (q as any).sub_parts || undefined,
+          image_url: q.image_url || undefined,
+          question_table: q.question_table || undefined,
+        })),
+      };
+
+      const res = await fetch(`${API_BASE}${API_PREFIX}/test-generator/export-answer-key`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Answer key export failed");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${examTitle.replace(/\s+/g, "_")}_AnswerKey.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Answer key export error:", err);
+      alert("Answer key export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   // ── Computed ──────────────────────────────────────────────────
@@ -877,95 +954,187 @@ export default function TestBuilderPage() {
           </p>
         </div>
 
-        {/* Filters */}
-        <div
-          style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}
-        >
+        {/* Class & Subject selectors */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
           <div>
-            <label
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                color: "#64748b",
-                display: "block",
-                marginBottom: 3,
-              }}
-            >
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
               Class
             </label>
             <select
               value={classGrade}
               onChange={(e) => setClassGrade(e.target.value)}
               style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #e2e8f0",
-                fontSize: 13,
-                minWidth: 90,
+                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
+                fontSize: 13, minWidth: 80,
               }}
             >
-              {CLASS_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  Class {c}
-                </option>
-              ))}
+              {CLASS_OPTIONS.map((c) => <option key={c} value={c}>Class {c}</option>)}
             </select>
           </div>
           <div>
-            <label
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                color: "#64748b",
-                display: "block",
-                marginBottom: 3,
-              }}
-            >
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
               Subject
             </label>
             <select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #e2e8f0",
-                fontSize: 13,
-                minWidth: 140,
+                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
+                fontSize: 13, minWidth: 140,
               }}
             >
-              {SUBJECT_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
+              {SUBJECT_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <label
-              style={{
-                fontSize: 11,
-                fontWeight: 500,
-                color: "#64748b",
-                display: "block",
-                marginBottom: 3,
-              }}
-            >
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
               Test Title
             </label>
             <input
               value={examTitle}
               onChange={(e) => setExamTitle(e.target.value)}
-              placeholder="Enter test title…"
+              placeholder="Enter test title..."
               style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #e2e8f0",
-                fontSize: 13,
-                width: "100%",
-                boxSizing: "border-box",
+                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
+                fontSize: 13, width: "100%", boxSizing: "border-box",
               }}
             />
+          </div>
+        </div>
+
+        {/* Institute + Teacher + Duration */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
+              Institute / Coaching Name
+            </label>
+            <input
+              value={instituteName}
+              onChange={(e) => setInstituteName(e.target.value)}
+              placeholder="e.g., DeepJyoti Coaching Institute"
+              style={{
+                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
+                fontSize: 13, width: "100%", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
+              Teacher Name
+            </label>
+            <input
+              value={teacherName}
+              onChange={(e) => setTeacherName(e.target.value)}
+              placeholder="e.g., Mr. Sharma"
+              style={{
+                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
+                fontSize: 13, width: "100%", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div style={{ minWidth: 120 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
+              Duration
+            </label>
+            <input
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              placeholder="e.g., 1 hr"
+              style={{
+                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
+                fontSize: 13, width: "100%", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
+              Topic / Chapter Subtitle
+            </label>
+            <input
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder={selectedChapter ? `e.g., ${selectedChapter}` : "e.g., Unit 1: Kinematics"}
+              style={{
+                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
+                fontSize: 13, width: "100%", boxSizing: "border-box",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Template Tier: Standard / Premium */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 6 }}>
+            Paper Template
+          </label>
+          <div style={{ display: "flex", gap: 0, borderRadius: 10, overflow: "hidden", border: "1px solid #e2e8f0", width: "fit-content" }}>
+            {[
+              { id: "standard" as const, label: "⚡ Standard", desc: "CBSE sections, MCQ layout" },
+              { id: "premium" as const, label: "✨ Premium", desc: "Case-study, sub-parts" },
+            ].map((tier) => (
+              <button
+                key={tier.id}
+                onClick={() => setTemplateTier(tier.id)}
+                style={{
+                  padding: "10px 24px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  background: templateTier === tier.id ? "#111827" : "#fff",
+                  color: templateTier === tier.id ? "#fff" : "#374151",
+                  transition: "all 0.15s",
+                }}
+              >
+                {tier.label}
+                <span style={{
+                  display: "block",
+                  fontSize: 10,
+                  fontWeight: 400,
+                  marginTop: 2,
+                  color: templateTier === tier.id ? "#d1d5db" : "#9ca3af",
+                }}>
+                  {tier.desc}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Color theme picker */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 6 }}>
+            Paper Color
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {[
+              { id: "teal" as const, label: "Teal", color: "#0f766e" },
+              { id: "navy" as const, label: "Navy Blue", color: "#1e3a8a" },
+              { id: "dark_green" as const, label: "Dark Green", color: "#166534" },
+              { id: "orange" as const, label: "Orange", color: "#c2410c" },
+            ].map((theme) => (
+              <button
+                key={theme.id}
+                onClick={() => setColorTheme(theme.id)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "6px 14px", borderRadius: 8,
+                  border: colorTheme === theme.id ? `2px solid ${theme.color}` : "1px solid #e2e8f0",
+                  background: colorTheme === theme.id ? `${theme.color}10` : "#fff",
+                  cursor: "pointer",
+                  fontSize: 13, fontWeight: 500,
+                  color: colorTheme === theme.id ? theme.color : "#334155",
+                  transition: "all 0.15s",
+                }}
+              >
+                <span style={{
+                  width: 14, height: 14, borderRadius: "50%",
+                  background: theme.color,
+                  border: "1px solid rgba(0,0,0,0.1)",
+                }} />
+                {theme.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -1332,56 +1501,107 @@ export default function TestBuilderPage() {
               )}
             </div>
 
+            {/* Action buttons */}
             {testQuestions.length > 0 && (
-              <div
-                style={{
-                  padding: "10px 16px",
-                  borderTop: "1px solid #e2e8f0",
-                  background: "#f8fafc",
-                  display: "flex",
-                  gap: 8,
-                  justifyContent: "flex-end",
-                  alignItems: "center",
-                }}
-              >
-                {exporting && (
-                  <span style={{ fontSize: 12, color: "#6366f1" }}>
-                    Generating…
-                  </span>
-                )}
-                <button
-                  onClick={() => handleExport("pdf")}
-                  disabled={exporting}
-                  style={{
-                    background: exporting ? "#a5b4fc" : "#6366f1",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 8,
-                    padding: "8px 20px",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: exporting ? "wait" : "pointer",
-                  }}
-                >
-                  PDF
-                </button>
-                <button
-                  onClick={() => handleExport("docx")}
-                  disabled={exporting}
-                  style={{
-                    background: "#fff",
-                    color: "#6366f1",
-                    border: "1px solid #6366f1",
-                    borderRadius: 8,
-                    padding: "8px 20px",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: exporting ? "wait" : "pointer",
-                    opacity: exporting ? 0.6 : 1,
-                  }}
-                >
-                  DOCX
-                </button>
+              <div style={{
+                padding: "12px 16px", borderTop: "1px solid #e2e8f0",
+                background: "#f8fafc",
+              }}>
+                {/* Question Paper downloads */}
+                <div style={{ marginBottom: 10 }}>
+                  <p style={{
+                    fontSize: 11, fontWeight: 600, color: "#64748b",
+                    margin: "0 0 6px", textTransform: "uppercase", letterSpacing: 0.5,
+                  }}>
+                    Question Paper
+                  </p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => handleExport("pdf")}
+                      disabled={exporting}
+                      style={{
+                        background: "#111827", color: "#fff", border: "none",
+                        borderRadius: 8, padding: "8px 20px", fontSize: 13,
+                        fontWeight: 500, cursor: exporting ? "not-allowed" : "pointer",
+                        opacity: exporting ? 0.6 : 1,
+                        flex: 1,
+                      }}
+                    >
+                      📄 Download PDF
+                    </button>
+                    <button
+                      onClick={() => handleExport("docx")}
+                      disabled={exporting}
+                      style={{
+                        background: "#fff", color: "#111827", border: "1px solid #111827",
+                        borderRadius: 8, padding: "8px 20px", fontSize: 13,
+                        fontWeight: 500, cursor: exporting ? "not-allowed" : "pointer",
+                        opacity: exporting ? 0.6 : 1,
+                        flex: 1,
+                      }}
+                    >
+                      📄 Download DOCX
+                    </button>
+                  </div>
+                </div>
+
+                {/* Answer Key downloads */}
+                <div style={{
+                  borderTop: "1px dashed #e2e8f0",
+                  paddingTop: 10, marginTop: 4,
+                }}>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between",
+                    alignItems: "center", marginBottom: 6,
+                  }}>
+                    <p style={{
+                      fontSize: 11, fontWeight: 600, color: "#64748b",
+                      margin: 0, textTransform: "uppercase", letterSpacing: 0.5,
+                    }}>
+                      Answer Key (separate file)
+                    </p>
+                    <label style={{
+                      display: "flex", items: "center", gap: 4,
+                      fontSize: 11, color: "#64748b", cursor: "pointer",
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={includeExplanations}
+                        onChange={(e) => setIncludeExplanations(e.target.checked)}
+                        style={{ cursor: "pointer" }}
+                      />
+                      Include explanations
+                    </label>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => handleExportAnswerKey("pdf")}
+                      disabled={exporting}
+                      style={{
+                        background: "#059669", color: "#fff", border: "none",
+                        borderRadius: 8, padding: "8px 20px", fontSize: 13,
+                        fontWeight: 500, cursor: exporting ? "not-allowed" : "pointer",
+                        opacity: exporting ? 0.6 : 1,
+                        flex: 1,
+                      }}
+                    >
+                      🔑 Answer Key (PDF)
+                    </button>
+                    <button
+                      onClick={() => handleExportAnswerKey("docx")}
+                      disabled={exporting}
+                      style={{
+                        background: "#fff", color: "#059669", border: "1px solid #059669",
+                        borderRadius: 8, padding: "8px 20px", fontSize: 13,
+                        fontWeight: 500, cursor: exporting ? "not-allowed" : "pointer",
+                        opacity: exporting ? 0.6 : 1,
+                        flex: 1,
+                      }}
+                    >
+                      🔑 Answer Key (DOCX)
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

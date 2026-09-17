@@ -327,9 +327,11 @@ export default function InstituteDashboardPage() {
   const [hodDeptId, setHodDeptId] = useState<string | null>(null);
   const [assignTeacherBatches, setAssignTeacherBatches] = useState<{ teacherId: string; teacherName: string } | null>(null);
   const [teacherBatchMap, setTeacherBatchMap] = useState<Record<string, string[]>>({});
+  const [subjects, setSubjects] = useState<{ id: string; name: string; code: string; department_id?: string | null }[]>([]);
+  const [teacherSubjectMap, setTeacherSubjectMap] = useState<Record<string, { batch_id: string; subject_id: string }[]>>({});
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [attendanceDateFilter, setAttendanceDateFilter] = useState(new Date().toISOString().slice(0,10));
+  const [attendanceDateFilter, setAttendanceDateFilter] = useState(new Date().toISOString().slice(0, 10));
   const [assignHodDept, setAssignHodDept] = useState<Department | null>(null);
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
 
@@ -479,6 +481,27 @@ export default function InstituteDashboardPage() {
         tbMap[tb.teacher_id].push(tb.batch_id);
       });
       setTeacherBatchMap(tbMap);
+
+      // Subjects list
+      const { data: subjData } = await supabase
+        .from("subjects")
+        .select("id, name, code, department_id")
+        .eq("institute_id", id)
+        .order("code");
+      setSubjects(subjData || []);
+
+      // Teaching assignments (subject-level)
+      const { data: taData } = await supabase
+        .from("teaching_assignments")
+        .select("teacher_id, batch_id, subject_id")
+        .eq("institute_id", id)
+        .eq("is_active", true);
+      const taMap: Record<string, { batch_id: string; subject_id: string }[]> = {};
+      taData?.forEach((ta: any) => {
+        if (!taMap[ta.teacher_id]) taMap[ta.teacher_id] = [];
+        taMap[ta.teacher_id].push({ batch_id: ta.batch_id, subject_id: ta.subject_id });
+      });
+      setTeacherSubjectMap(taMap);
     } catch (err) {
       console.error("Data load error:", err);
       toast.error("Couldn't load your institute data");
@@ -643,6 +666,32 @@ export default function InstituteDashboardPage() {
     fetchData();
   };
 
+  const assignSubjectToTeacher = async (teacherUserId: string, batchId: string, subjectId: string) => {
+    if (!institute) return;
+    const { error } = await supabase.from("teaching_assignments").insert({
+      institute_id: institute.id,
+      teacher_id: teacherUserId,
+      batch_id: batchId,
+      subject_id: subjectId,
+    });
+    if (error && error.code !== "23505") return toast.error(error.message);
+    toast.success("Subject assigned!");
+    fetchData();
+  };
+
+  const removeSubjectFromTeacher = async (teacherUserId: string, batchId: string, subjectId: string) => {
+    if (!institute) return;
+    const { error } = await supabase.from("teaching_assignments")
+      .delete()
+      .eq("teacher_id", teacherUserId)
+      .eq("batch_id", batchId)
+      .eq("subject_id", subjectId)
+      .eq("institute_id", institute.id);
+    if (error) return toast.error(error.message);
+    toast.success("Subject removed");
+    fetchData();
+  };
+
   const removeBatchFromTeacher = async (teacherUserId: string, batchId: string) => {
     if (!institute) return;
     const { error } = await supabase.from("teacher_batches")
@@ -723,7 +772,7 @@ export default function InstituteDashboardPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `student_access_codes_${new Date().toISOString().slice(0,10)}.csv`;
+      a.download = `student_access_codes_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success("CSV downloaded!");
@@ -1016,7 +1065,7 @@ export default function InstituteDashboardPage() {
             {creatingInstitute ? <><Icons.Loader /> Creating...</> : <>Create Institute</>}
           </button>
           <p className="text-[11px] text-slate-400 font-medium mt-4">
-          Tip: if you already have an institute, don't create another with the same name — use a different name.
+            Tip: if you already have an institute, don't create another with the same name — use a different name.
           </p>
         </div>
       </div>
@@ -1494,53 +1543,81 @@ export default function InstituteDashboardPage() {
                 <div className="space-y-3">
                   {filteredTeachers.map(t => (
                     <React.Fragment key={t.id}>
-                    <div className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.role === "hod" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-500"}`}>
-                        {t.role === "hod" ? <Icons.Crown /> : <Icons.User />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[13px] font-bold text-slate-800 truncate">{t.user_name || t.user_email || `Teacher ${t.user_id.slice(0, 8)}`}</p>
-                          {t.role === "hod" && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 inline-flex items-center gap-1"><Icons.Crown /> HOD</span>}
-                          {t.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(t.department_id)}</span>}
+                      <div className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.role === "hod" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-500"}`}>
+                          {t.role === "hod" ? <Icons.Crown /> : <Icons.User />}
                         </div>
-                        <p className="text-[11px] font-medium text-slate-400">{t.joined_at ? `Joined ${fmtDate(t.joined_at)}` : "Pending"}</p>
-                      </div>
-                      {departments.length > 0 && (
-                        <select
-                          value={t.department_id || ""}
-                          onChange={e => { e.stopPropagation(); setTeacherDept(t.id, e.target.value || null); }}
-                          className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:border-[#FF7043]"
-                          title="Change department"
-                          onClick={e => e.stopPropagation()}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-[13px] font-bold text-slate-800 truncate">{t.user_name || t.user_email || `Teacher ${t.user_id.slice(0, 8)}`}</p>
+                            {t.role === "hod" && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 inline-flex items-center gap-1"><Icons.Crown /> HOD</span>}
+                            {t.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(t.department_id)}</span>}
+                          </div>
+                          <p className="text-[11px] font-medium text-slate-400">{t.joined_at ? `Joined ${fmtDate(t.joined_at)}` : "Pending"}</p>
+                        </div>
+                        {departments.length > 0 && (
+                          <select
+                            value={t.department_id || ""}
+                            onChange={e => { e.stopPropagation(); setTeacherDept(t.id, e.target.value || null); }}
+                            className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:border-[#FF7043]"
+                            title="Change department"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <option value="">No dept</option>
+                            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                          </select>
+                        )}
+                        <button
+                          onClick={e => { e.stopPropagation(); setAssignTeacherBatches({ teacherId: t.user_id, teacherName: t.user_name || t.user_email || "Teacher" }); }}
+                          className="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                          title="Assign batches to this teacher"
                         >
-                          <option value="">No dept</option>
-                          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                        </select>
-                      )}
-                      <button
-                        onClick={e => { e.stopPropagation(); setAssignTeacherBatches({ teacherId: t.user_id, teacherName: t.user_name || t.user_email || "Teacher" }); }}
-                        className="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
-                        title="Assign batches to this teacher"
-                      >
-                        📚 Batches ({(teacherBatchMap[t.user_id] || []).length})
-                      </button>
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${t.status === "active" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>{t.status}</span>
-                      <button onClick={e => { e.stopPropagation(); removeTeacher(t.id, t.user_id); }} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
-                    </div>
-                    {(teacherBatchMap[t.user_id] || []).length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 px-4 pb-2 -mt-2">
-                        {(teacherBatchMap[t.user_id] || []).map(bid => {
-                          const b = batches.find(x => x.id === bid);
-                          return b ? (
-                            <span key={bid} className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              📚 {b.name}
-                              <button onClick={() => removeBatchFromTeacher(t.user_id, bid)} className="text-indigo-400 hover:text-red-500 ml-0.5">×</button>
-                            </span>
-                          ) : null;
-                        })}
+                          📚 Batches ({(teacherBatchMap[t.user_id] || []).length})
+                        </button>
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${t.status === "active" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>{t.status}</span>
+                        <button onClick={e => { e.stopPropagation(); removeTeacher(t.id, t.user_id); }} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                       </div>
-                    )}
+                      {(teacherBatchMap[t.user_id] || []).length > 0 && (
+                        <div className="px-4 pb-2 -mt-2 space-y-1.5">
+                          {(teacherBatchMap[t.user_id] || []).map(bid => {
+                            const b = batches.find(x => x.id === bid);
+                            if (!b) return null;
+                            const assignedSubjects = (teacherSubjectMap[t.user_id] || []).filter(a => a.batch_id === bid);
+                            const batchDeptId = b.department_id;
+                            const availableSubjects = subjects.filter(s =>
+                              (!batchDeptId || s.department_id === batchDeptId || !s.department_id) &&
+                              !assignedSubjects.some(a => a.subject_id === s.id)
+                            );
+                            return (
+                              <div key={bid} className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  📚 {b.name}
+                                  <button onClick={() => removeBatchFromTeacher(t.user_id, bid)} className="text-indigo-400 hover:text-red-500 ml-0.5">×</button>
+                                </span>
+                                {assignedSubjects.map(a => {
+                                  const subj = subjects.find(s => s.id === a.subject_id);
+                                  return subj ? (
+                                    <span key={a.subject_id} className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                      📖 {subj.name}
+                                      <button onClick={() => removeSubjectFromTeacher(t.user_id, bid, a.subject_id)} className="text-emerald-400 hover:text-red-500 ml-0.5">×</button>
+                                    </span>
+                                  ) : null;
+                                })}
+                                {availableSubjects.length > 0 && (
+                                  <select
+                                    value=""
+                                    onChange={e => { if (e.target.value) assignSubjectToTeacher(t.user_id, bid, e.target.value); }}
+                                    className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 outline-none cursor-pointer hover:border-emerald-400"
+                                  >
+                                    <option value="">+ Subject</option>
+                                    {availableSubjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                                  </select>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </React.Fragment>
                   ))}
                 </div>

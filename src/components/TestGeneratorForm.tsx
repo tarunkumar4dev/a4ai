@@ -379,7 +379,7 @@ export default function TestGeneratorForm({
   const [activeTab, setActiveTab] = useState<"Simple" | "Blueprint" | "Matrix" | "Buckets">("Simple");
   const [showPreview, setShowPreview] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
-  const [cbsePattern, setCbsePattern] = useState(true);
+  const [cbsePattern, setCbsePattern] = useState(false);
 
   const { generate, isLoading, result, error, reset } = useTestGenerator();
   const { user } = useAuth();
