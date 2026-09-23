@@ -9,6 +9,7 @@ import { Search, Menu, X, ArrowRight, User, Settings, LayoutDashboard, LogOut, C
 
 const navItems = [
   { name: "Home", path: "/" },
+  { name: "AI Tools", path: "/#ai-tools" },
   { name: "Features", path: "/features" },
   { name: "Pricing", path: "/pricing" },
   { name: "Resources", path: "/resources" },
@@ -251,7 +252,16 @@ export default function Navbar() {
                 const active = activeName === item.name;
                 return (
                   <motion.div key={item.name} variants={dockItem}>
-                    <Link to={item.path} className="relative px-3 py-2">
+                    <Link
+                      to={item.path}
+                      onClick={(e) => {
+                        if (item.path.includes("#ai-tools") && pathname === "/") {
+                          e.preventDefault();
+                          document.getElementById("ai-tools")?.scrollIntoView({ behavior: "smooth" });
+                        }
+                      }}
+                      className="relative px-3 py-2"
+                    >
                       <span
                         className="text-sm font-medium transition-colors duration-200"
                         style={{ color: active ? activeColor : mutedColor }}
@@ -444,7 +454,13 @@ export default function Navbar() {
                   <Link
                     key={item.name}
                     to={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={(e) => {
+                      setMobileMenuOpen(false);
+                      if (item.path.includes("#ai-tools") && pathname === "/") {
+                        e.preventDefault();
+                        document.getElementById("ai-tools")?.scrollIntoView({ behavior: "smooth" });
+                      }
+                    }}
                     className="block rounded-xl px-3 py-2.5 text-base font-medium transition-colors"
                     style={{
                       color: active ? activeColor : mutedColor,

@@ -17,7 +17,13 @@ import {
   ShieldCheck, 
   Zap, 
   Lock, 
-  SlidersHorizontal 
+  SlidersHorizontal,
+  Brain,
+  Youtube,
+  Grid,
+  BookOpen,
+  Search,
+  Wand2
 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 
@@ -327,6 +333,10 @@ export default function LandingPage() {
           </Suspense>
         </Safe>
 
+        <Safe label="AiToolsSuite">
+          <AiToolsSuite />
+        </Safe>
+
         <Safe label="HowItWorks">
           <HowItWorks />
         </Safe>
@@ -350,6 +360,162 @@ export default function LandingPage() {
     </div>
   );
 }
+
+/* ── AI TOOLS SUITE ── */
+const AI_TOOLS_DATA = [
+  {
+    icon: Wand2,
+    badge: "MAGICAL AI",
+    badgeColor: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
+    title: "AI Paper Checker",
+    tagline: "Instant answer sheet & assignment grading",
+    desc: "Magically scan and auto-grade student handwritten copies and tests with question-by-question scoring and rubric feedback.",
+    cta: "Check Papers",
+    href: "/dashboard/test-checker",
+    highlights: ["Handwritten copies supported", "Rubric & step-wise grading", "Instant student analysis"],
+    isHighlight: true,
+  },
+  {
+    icon: Brain,
+    badge: "1 LAKH+ NCERT",
+    badgeColor: "bg-blue-50 text-blue-700 border border-blue-200",
+    title: "Test Generator",
+    tagline: "CBSE & State Board papers in < 2 mins",
+    desc: "Pick subject, chapters, and question types. Generates a balanced, print-ready PDF or Word doc with complete answer keys.",
+    cta: "Create Test",
+    href: "/dashboard/test-generator",
+    highlights: ["Bloom's taxonomy spread", "Bilingual English/Hindi", "1-click PDF/DOCX export"],
+    isHighlight: false,
+  },
+  {
+    icon: Youtube,
+    badge: "POPULAR",
+    badgeColor: "bg-rose-50 text-rose-600 border border-rose-200",
+    title: "Video to Live Quiz",
+    tagline: "Turn YouTube lessons into quizzes",
+    desc: "Paste any educational YouTube URL. AI extracts the core concepts, generates timed MCQs, and launches a live contest.",
+    cta: "Create Quiz",
+    href: "/teacher/community-quiz/new",
+    highlights: ["Automatic video transcripts", "Multiplayer live contest", "Instant leaderboards"],
+    isHighlight: false,
+  },
+  {
+    icon: Grid,
+    badge: "PRACTICE",
+    badgeColor: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    title: "Worksheet Studio",
+    tagline: "Custom homework & drill sheets",
+    desc: "Design structured practice worksheets with diagrams, step spaces, and formulas tailored to your classroom syllabus.",
+    cta: "Open Studio",
+    href: "/dashboard",
+    highlights: ["Curriculum aligned", "Formatted for print", "Difficulty progression"],
+    isHighlight: false,
+  },
+  {
+    icon: BookOpen,
+    badge: "ACTIVE RECALL",
+    badgeColor: "bg-purple-50 text-purple-700 border border-purple-200",
+    title: "Smart Flashcards",
+    tagline: "High-retention study cards",
+    desc: "Convert lengthy textbook chapters and complex formulas into active-recall digital flashcards for high-retention revision.",
+    cta: "Explore Cards",
+    href: "/dashboard/flashcards",
+    highlights: ["Spaced repetition", "Chapter summaries", "Mobile-friendly revision"],
+    isHighlight: false,
+  },
+  {
+    icon: Search,
+    badge: "EXAM BANK",
+    badgeColor: "bg-indigo-50 text-indigo-700 border border-indigo-200",
+    title: "PYQ Question Bank",
+    tagline: "Past 10-year board questions",
+    desc: "Search, filter, and assign verified Previous Year Questions with official marking rubrics and step-by-step solutions.",
+    cta: "Browse PYQs",
+    href: "/practice/zone",
+    highlights: ["CBSE past 10 years", "Chapter-wise breakdown", "Marking scheme included"],
+    isHighlight: false,
+  },
+];
+
+const AiToolsSuite = memo(function AiToolsSuite() {
+  const navigate = useNavigate();
+  return (
+    <section id="ai-tools" className="relative py-20 bg-slate-50/70 border-y border-slate-200/80 scroll-mt-20">
+      <div className="relative mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
+        <div className="mb-12 text-center">
+          <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs">
+            <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+            Practical AI Tools for Indian Education
+          </div>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
+            Magical AI Tools for <span className="nlm-text">Modern Teachers</span>
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-base sm:text-lg text-slate-600 font-medium">
+            From checking handwritten answer sheets to generating curriculum-perfect test papers — everything in one unified dashboard.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+          {AI_TOOLS_DATA.map((tool) => {
+            const Icon = tool.icon;
+            return (
+              <div
+                key={tool.title}
+                className={`group relative rounded-[24px] p-6 sm:p-8 bg-white border transition-all duration-300 hover:-translate-y-1.5 flex flex-col justify-between ${
+                  tool.isHighlight
+                    ? "border-amber-300/80 shadow-md ring-1 ring-amber-400/20"
+                    : "border-slate-200/90 shadow-xs hover:shadow-xl hover:border-blue-300"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-5">
+                    <div className="h-12 w-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    {tool.badge && (
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full shadow-xs ${tool.badgeColor}`}>
+                        {tool.badge}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                    {tool.title}
+                  </h3>
+                  <p className="text-xs font-bold text-blue-600 mt-1 mb-3">
+                    {tool.tagline}
+                  </p>
+                  <p className="text-sm text-slate-600 font-medium leading-relaxed mb-6">
+                    {tool.desc}
+                  </p>
+
+                  <div className="space-y-2 mb-6">
+                    {tool.highlights.map((h) => (
+                      <div key={h} className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                        <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <span>{h}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100">
+                  <button
+                    onClick={() => navigate(tool.href)}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold bg-slate-900 hover:bg-blue-600 text-white transition-all shadow-sm group-hover:shadow-md cursor-pointer"
+                  >
+                    <span>{tool.cta}</span>
+                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+});
 
 /* ── HOW IT WORKS ── */
 const HowItWorks = memo(function HowItWorks() {

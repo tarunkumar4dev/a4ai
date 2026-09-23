@@ -416,7 +416,7 @@ const COLOR_SCHEMES = {
 };
 
 /* ------------------- REUSABLE COMPONENTS ------------------- */
-const SidebarButton = ({ active, Icon, label, colorClass, onClick }: any) => (
+const SidebarButton = ({ active, Icon, label, colorClass, badge, onClick }: any) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 active:scale-95 ${active
@@ -424,13 +424,18 @@ const SidebarButton = ({ active, Icon, label, colorClass, onClick }: any) => (
       : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60"
       }`}
   >
-    <div className="flex items-center gap-3 sm:gap-4">
+    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
       <div className={`${active ? "scale-110" : ""} transition-transform shrink-0 ${colorClass}`}>
         <Icon />
       </div>
       <span className="truncate tracking-wide">{label}</span>
+      {badge && (
+        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs shrink-0">
+          {badge}
+        </span>
+      )}
     </div>
-    <div className="text-slate-300 dark:text-slate-600">
+    <div className="text-slate-300 dark:text-slate-600 shrink-0">
       <Icons.ChevronDown />
     </div>
   </button>
@@ -2141,6 +2146,7 @@ TONE & FORMATTING GUIDELINES:
 
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid, label: "Dashboard", color: "text-blue-500" },
+    { id: "ai-tools", Icon: Icons.Sparkles, label: "AI Tools", color: "text-amber-500", badge: "MAGICAL" },
     { id: "calendar", Icon: Icons.Calendar, label: "Calendar", color: "text-indigo-500" },
     { id: "assignments", Icon: Icons.FileText, label: "Assignments" },
     { id: "attendance", Icon: Icons.Clock, label: "Attendance", color: "text-violet-500" },
@@ -2148,7 +2154,6 @@ TONE & FORMATTING GUIDELINES:
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
-    { id: "ai-tools", Icon: Icons.Brain, label: "AI Tools", color: "text-sky-500" },
   ];
 
   // My Section only for proctors
@@ -2235,6 +2240,7 @@ TONE & FORMATTING GUIDELINES:
                       Icon={ItemIcon}
                       label={item.label}
                       colorClass={item.color}
+                      badge={(item as any).badge}
                       onClick={() => {
                         if (item.id === "dashboard") {
                           navigate("/dashboard");
@@ -2617,6 +2623,140 @@ TONE & FORMATTING GUIDELINES:
                       </div>
                     );
                   })}
+                </div>
+
+                {/* ===== AI TOOLS QUICK SECTION ===== */}
+                <div
+                  className="glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 scroll-reveal"
+                  style={{ transitionDelay: "150ms" }}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs">
+                          ✨ AI SUPERPOWERS
+                        </span>
+                      </div>
+                      <h3 className="font-black text-slate-900 dark:text-white text-xl sm:text-3xl tracking-tight">
+                        AI Teaching Tools
+                      </h3>
+                      <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+                        Automate grading, test creation, and interactive learning in seconds.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab("ai-tools")}
+                      className="inset-pill text-slate-800 dark:text-slate-200 px-4 sm:px-6 py-2.5 sm:py-3 rounded-[20px] sm:rounded-[24px] font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors border-none self-start sm:self-auto flex items-center gap-1.5 cursor-pointer"
+                    >
+                      Explore All Tools <Icons.ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {[
+                      {
+                        Icon: Icons.Sparkles,
+                        title: "AI Paper Checker",
+                        desc: "Magically check & auto-grade handwritten answer sheets, test papers & assignments with instant scoring and line-by-line feedback.",
+                        action: () => navigate("/dashboard/test-checker"),
+                        badge: "MAGICAL AI",
+                        badgeClass: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
+                        btnLabel: "Check Papers",
+                        highlight: true,
+                      },
+                      {
+                        Icon: Icons.Brain,
+                        title: "Test Generator",
+                        desc: "Create complete CBSE & state board test papers from 1 Lakh+ NCERT questions in 30 seconds with ready answer keys.",
+                        action: () => navigate("/dashboard/test-generator"),
+                        badge: "PRO",
+                        badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20",
+                        btnLabel: "Create Test",
+                      },
+                      {
+                        Icon: Icons.Youtube,
+                        title: "Video to Quiz",
+                        desc: "Turn any educational YouTube video into an interactive live community quiz instantly.",
+                        action: () => navigate("/teacher/community-quiz/new"),
+                        badge: "NEW",
+                        badgeClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20",
+                        btnLabel: "Create Quiz",
+                      },
+                      {
+                        Icon: Icons.Grid,
+                        title: "Worksheet Studio",
+                        desc: "Design structured practice worksheets and homework drill sheets tailored to your curriculum.",
+                        action: () => {
+                          setAssignmentsSubTab("worksheet");
+                          setActiveTab("assignments");
+                        },
+                        badge: "PRACTICE",
+                        badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
+                        btnLabel: "Open Studio",
+                      },
+                      {
+                        Icon: Icons.Book,
+                        title: "Smart Flashcards",
+                        desc: "Convert textbook chapters and class notes into high-retention active recall study flashcards.",
+                        action: () => navigate("/dashboard/flashcards"),
+                        badge: "STUDY",
+                        badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20",
+                        btnLabel: "Explore Cards",
+                      },
+                      {
+                        Icon: Icons.Search,
+                        title: "PYQ Question Bank",
+                        desc: "Search, filter & assign verified Previous Year Questions with step-by-step marking rubrics.",
+                        action: () => navigate("/practice/zone"),
+                        badge: "10 YRS",
+                        badgeClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
+                        btnLabel: "Browse PYQs",
+                      },
+                    ].map((tool, idx) => {
+                      const ToolIcon = tool.Icon;
+                      return (
+                        <div
+                          key={idx}
+                          onClick={tool.action}
+                          className={`glass-panel p-5 sm:p-7 rounded-[24px] sm:rounded-[36px] flex flex-col justify-between hover:-translate-y-1 transition-all duration-300 cursor-pointer group hover:shadow-xl border ${
+                            tool.highlight
+                              ? "border-amber-400/50 bg-amber-500/5 dark:bg-amber-500/10"
+                              : "hover:border-blue-500/30"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2 mb-4">
+                              <div
+                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-[16px] sm:rounded-[20px] inset-pill border-none flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform"
+                                style={{ color: "var(--theme-start)" }}
+                              >
+                                <ToolIcon />
+                              </div>
+                              {tool.badge && (
+                                <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-xs ${tool.badgeClass}`}>
+                                  {tool.badge}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                              {tool.title}
+                            </h4>
+                            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-1.5 leading-relaxed line-clamp-2">
+                              {tool.desc}
+                            </p>
+                          </div>
+                          <div className="mt-5 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">
+                              {tool.btnLabel}
+                            </span>
+                            <div className="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all">
+                              <Icons.ChevronRight className="w-4 h-4" />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div
