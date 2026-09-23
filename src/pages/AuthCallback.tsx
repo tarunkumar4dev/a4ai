@@ -74,18 +74,25 @@ export default function AuthCallback() {
 
         // 7. Check for redirect URL after successful auth
         const redirectUrl = localStorage.getItem("a4ai_redirect_after_login");
-        if (redirectUrl) {
-          localStorage.removeItem("a4ai_redirect_after_login");
+        localStorage.removeItem("a4ai_redirect_after_login");
+
+        const targetRole = (finalRole || "teacher").toLowerCase().trim();
+        const fallbackDashboard = `/${targetRole}/dashboard`;
+
+        if (
+          redirectUrl &&
+          redirectUrl !== "/" &&
+          !redirectUrl.startsWith("/login") &&
+          !redirectUrl.startsWith("/signup") &&
+          !redirectUrl.startsWith("/select-role") &&
+          !redirectUrl.startsWith("/auth")
+        ) {
           navigate(redirectUrl, { replace: true });
           return;
         }
 
-        // 8. Redirect based on role (only if no redirect URL was present)
-        if (finalRole && ["student", "teacher", "institute"].includes(finalRole)) {
-          navigate(`/${finalRole}/dashboard`, { replace: true });
-        } else {
-          navigate("/select-role", { replace: true });
-        }
+        // 8. Always redirect straight to dashboard
+        navigate(fallbackDashboard, { replace: true });
       } catch (error: any) {
         console.error("OAuth callback error:", error);
         toast({

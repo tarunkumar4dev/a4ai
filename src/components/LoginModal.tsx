@@ -116,13 +116,17 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
     setIsLoading(true);
     try {
       localStorage.setItem("a4ai_pending_role", "teacher");
-      // Store current URL so we come back here after OAuth
-      localStorage.setItem("a4ai_redirect_after_login", window.location.pathname + window.location.search);
+      // Store current URL only if not the home page so OAuth directs to dashboard
+      if (window.location.pathname && window.location.pathname !== "/") {
+        localStorage.setItem("a4ai_redirect_after_login", window.location.pathname + window.location.search);
+      } else {
+        localStorage.removeItem("a4ai_redirect_after_login");
+      }
 
       const { error: googleError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(window.location.pathname)}`,
+          redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: { access_type: "offline", prompt: "consent" },
         },
       });

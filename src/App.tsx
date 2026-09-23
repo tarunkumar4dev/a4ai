@@ -204,8 +204,10 @@ const NotFound = () => (
 function AuthGateForAuthPages({ children }: { children: ReactNode }) {
   const { loading, session, role } = useAuth();
   if (loading) return <LoadingScreen />;
-  if (session && role) return <Navigate to={`/${role}/dashboard`} replace />;
-  if (session && !role) return <Navigate to="/select-role" replace />;
+  if (session) {
+    const targetRole = (role || "teacher").toLowerCase().trim();
+    return <Navigate to={`/${targetRole}/dashboard`} replace />;
+  }
   return <>{children}</>;
 }
 
@@ -215,13 +217,12 @@ function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowed
 
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
-  if (!role) return <Navigate to="/select-role" replace />;
 
-  const userRole = (role || "").toLowerCase().trim();
+  const userRole = (role || "teacher").toLowerCase().trim();
   const normalizedAllowed = allowedRoles.map((r) => r.toLowerCase().trim());
   if (userRole !== "admin" && !normalizedAllowed.includes(userRole)) {
-    toast.error(`Access denied. You are registered as a ${role}.`);
-    return <Navigate to={`/${role}/dashboard`} replace />;
+    toast.error(`Access denied. You are registered as a ${role || "teacher"}.`);
+    return <Navigate to={`/${userRole}/dashboard`} replace />;
   }
 
   return <>{children}</>;
@@ -232,8 +233,8 @@ function DashboardRedirect() {
   const { loading, session, role } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
-  if (!role) return <Navigate to="/select-role" replace />;
-  return <Navigate to={`/${role}/dashboard`} replace />;
+  const targetRole = (role || "teacher").toLowerCase().trim();
+  return <Navigate to={`/${targetRole}/dashboard`} replace />;
 }
 
 /* ---------- Idle Logout ---------- */

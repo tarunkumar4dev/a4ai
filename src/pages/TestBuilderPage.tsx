@@ -256,20 +256,16 @@ function QuestionTableView({ table }: { table: QuestionTable }) {
 
 // ── Constants ───────────────────────────────────────────────────
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
-const SUBJECT_OPTIONS = [
-  "Science",
-  "Mathematics",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "English",
-  "History",
-  "Geography",
-  "Political Science",
-  "Economics",
-  "Accountancy",
-  "Business Studies",
-];
+
+const SUBJECTS_BY_CLASS: Record<string, string[]> = {
+  "6":  ["Science", "Mathematics"],
+  "7":  ["Mathematics"],
+  "8":  ["Science", "Mathematics"],
+  "9":  ["Science", "Mathematics", "English", "Economics", "Geography", "History", "Political Science"],
+  "10": ["Science", "Mathematics", "English", "Economics", "Geography", "History", "Political Science"],
+  "11": ["Accountancy", "Physics", "Chemistry", "Biology", "Mathematics", "Economics", "History", "Political Science"],
+  "12": ["Accountancy", "Physics", "Chemistry", "Biology", "Mathematics", "Economics", "English", "History", "Political Science"],
+};
 
 const TYPE_LABELS: Record<string, string> = {
   all: "All",
@@ -1194,6 +1190,19 @@ export default function TestBuilderPage() {
   // Filters
   const [classGrade, setClassGrade] = useState("10");
   const [subject, setSubject] = useState("Science");
+
+  const availableSubjects = useMemo(() => {
+    return SUBJECTS_BY_CLASS[classGrade] || ["Science", "Mathematics"];
+  }, [classGrade]);
+
+  // When class changes, ensure selected subject is valid for the new class
+  useEffect(() => {
+    const valid = SUBJECTS_BY_CLASS[classGrade] || [];
+    if (valid.length > 0 && !valid.includes(subject)) {
+      setSubject(valid[0]);
+    }
+  }, [classGrade, subject]);
+
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [questionType, setQuestionType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1459,15 +1468,15 @@ export default function TestBuilderPage() {
       if (!testErr) {
         const qRows = testQuestions.map((q, idx) => ({
           test_id: testId,
-          text: q.text || "",
+          text: q.question_text || (q as any).text || "",
           options: Array.isArray(q.options) ? q.options : [],
-          correct_answer: q.correctAnswer || q.solution || "",
-          explanation: q.solution || "",
+          correct_answer: q.answer || (q as any).correctAnswer || (q as any).solution || "",
+          explanation: (q as any).solution || (q as any).explanation || "",
           marks: q.marks || 1,
           difficulty: q.difficulty || "medium",
           chapter: q.chapter || selectedChapter || "",
           topic: q.topic || "",
-          format: q.format || "mcq",
+          format: q.format || (q.options && q.options.length > 0 ? "mcq" : "short_answer"),
           position: idx + 1,
         }));
         await supabase.from("questions").insert(qRows);
@@ -2629,7 +2638,7 @@ export default function TestBuilderPage() {
                 minHeight: isMobile ? 44 : "auto",
               }}
             >
-              {SUBJECT_OPTIONS.map((s) => (
+              {availableSubjects.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>

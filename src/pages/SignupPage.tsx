@@ -96,10 +96,11 @@ export default function SignupPage() {
 
   // If already logged in with role, redirect
   useEffect(() => {
-    if (session && existingRole) {
-      navigate(`/${existingRole}/dashboard`, { replace: true });
+    if (session) {
+      const targetRole = (existingRole || selectedRole || "teacher").toLowerCase().trim();
+      navigate(`/${targetRole}/dashboard`, { replace: true });
     }
-  }, [session, existingRole, navigate]);
+  }, [session, existingRole, selectedRole, navigate]);
 
   useEffect(() => {
     if (location.state?.role) setSelectedRole(location.state.role);
@@ -250,12 +251,8 @@ export default function SignupPage() {
 
   // ---------- Redirect after login ----------
   const redirectAfterLogin = (userRole: string | null | undefined) => {
-    const finalRole = userRole || selectedRole;
-    if (finalRole && ["student", "teacher", "institute"].includes(finalRole)) {
-      setShowScratchCard(true);
-    } else {
-      navigate("/select-role", { replace: true });
-    }
+    const finalRole = (userRole || selectedRole || existingRole || "teacher").toLowerCase().trim();
+    navigate(`/${finalRole}/dashboard`, { replace: true });
   };
 
   // ---------- Submit (Email or Phone OTP) ----------
@@ -342,7 +339,8 @@ export default function SignupPage() {
         if (error) throw error;
         if (data.session) {
           RiskEngine.recordSuccess(identifier);
-          setShowScratchCard(true);
+          const finalRole = (currentRole || "teacher").toLowerCase().trim();
+          navigate(`/${finalRole}/dashboard`, { replace: true });
         } else {
           setEmailVerificationSent(true);
           toast({
@@ -383,11 +381,8 @@ export default function SignupPage() {
   };
 
   const goToDashboard = () => {
-    if (selectedRole) {
-      navigate(`/${selectedRole}/dashboard`, { replace: true });
-    } else {
-      navigate("/select-role", { replace: true });
-    }
+    const target = (selectedRole || existingRole || "teacher").toLowerCase().trim();
+    navigate(`/${target}/dashboard`, { replace: true });
   };
 
   const roles = [

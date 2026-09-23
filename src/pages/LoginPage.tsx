@@ -83,10 +83,9 @@ export default function LoginPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    if (session && role) {
-      navigate(`/${role}/dashboard`, { replace: true });
-    } else if (session && !role) {
-      navigate("/select-role", { replace: true });
+    if (session) {
+      const targetRole = (role || "teacher").toLowerCase().trim();
+      navigate(`/${targetRole}/dashboard`, { replace: true });
     }
   }, [session, role, navigate]);
 
@@ -232,10 +231,11 @@ export default function LoginPage() {
   };
 
   const redirectAfterLogin = (userRole: string | null | undefined) => {
-    if (userRole && ["student", "teacher", "institute"].includes(userRole)) {
-      navigate(`/${userRole}/dashboard`, { replace: true });
+    const targetRole = (userRole || role || "teacher").toLowerCase().trim();
+    if (["student", "teacher", "institute"].includes(targetRole)) {
+      navigate(`/${targetRole}/dashboard`, { replace: true });
     } else {
-      navigate("/select-role", { replace: true });
+      navigate("/teacher/dashboard", { replace: true });
     }
   };
 

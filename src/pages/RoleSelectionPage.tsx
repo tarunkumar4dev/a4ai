@@ -15,17 +15,14 @@ export default function RoleSelectionPage() {
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // If not logged in, go to login
-  if (!session) {
-    navigate("/login", { replace: true });
-    return null;
-  }
-
-  // If role already exists, redirect to dashboard
-  if (existingRole) {
-    navigate(`/${existingRole}/dashboard`, { replace: true });
-    return null;
-  }
+  // If not logged in, go to login; if role exists, go to dashboard
+  useEffect(() => {
+    if (!session) {
+      navigate("/login", { replace: true });
+    } else if (existingRole) {
+      navigate(`/${existingRole}/dashboard`, { replace: true });
+    }
+  }, [session, existingRole, navigate]);
 
   const roles = [
     {
