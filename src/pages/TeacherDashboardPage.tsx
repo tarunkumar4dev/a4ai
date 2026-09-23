@@ -32,7 +32,7 @@ const safeStorage = {
 
 
 /* ------------------- SCROLL REVEAL HOOK ------------------- */
-function useScrollReveal() {
+function useScrollReveal(dependency?: any) {
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -40,12 +40,22 @@ function useScrollReveal() {
           if (entry.isIntersecting) entry.target.classList.add("is-visible");
         });
       },
-      { threshold: 0.06, rootMargin: "0px 0px -48px 0px" }
+      { threshold: 0.01, rootMargin: "60px" }
     );
-    const els = document.querySelectorAll(".scroll-reveal");
-    els.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
+    const update = () => {
+      const els = document.querySelectorAll(".scroll-reveal");
+      els.forEach((el) => {
+        el.classList.add("is-visible");
+        observer.observe(el);
+      });
+    };
+    update();
+    const timer = setTimeout(update, 60);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [dependency]);
 }
 
 /* ------------------- STYLES ------------------- */
@@ -120,10 +130,10 @@ const customStyles = `
 
   /* ── Scroll-reveal ── */
   .scroll-reveal {
-    opacity: 0;
-    transform: translateY(30px);
-    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-                transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .scroll-reveal.is-visible {
     opacity: 1;
@@ -1687,7 +1697,7 @@ export default function TeacherDashboardPage() {
   const [assignmentsSubTab, setAssignmentsSubTab] = useState<'assignments' | 'worksheet'>('assignments');
   const [downloadingRecentId, setDownloadingRecentId] = useState<string | null>(null);
 
-  useScrollReveal();
+  useScrollReveal(activeTab);
 
   useEffect(() => {
     if (!user) return;
@@ -2919,75 +2929,100 @@ TONE & FORMATTING GUIDELINES:
 
             {/* ===== AI TOOLS TAB ===== */}
             {activeTab === "ai-tools" && (
-              <div className="space-y-6 sm:space-y-8 animate-pop">
-                <div className="glass-panel rounded-[28px] sm:rounded-[40px] p-5 sm:p-8 scroll-reveal" style={{ transitionDelay: "0ms" }}>
-                  <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-                    AI Utilities
-                  </h2>
-                  <p className="text-sm sm:text-base text-slate-500 font-medium mt-1 sm:mt-2">
-                    Supercharge your teaching workflow.
-                  </p>
+              <div className="space-y-6 sm:space-y-8 animate-entrance">
+                <div className="glass-panel rounded-[28px] sm:rounded-[40px] p-6 sm:p-10 relative overflow-hidden">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs mb-3">
+                        <Icons.Sparkles className="w-3.5 h-3.5" />
+                        AI TEACHING SUPERPOWERS
+                      </div>
+                      <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
+                        Magical AI Teaching Tools
+                      </h2>
+                      <p className="text-sm sm:text-base lg:text-lg text-slate-600 dark:text-slate-400 font-medium mt-2 max-w-2xl">
+                        Scan & auto-grade answer sheets, generate board exam test papers, convert YouTube lectures into live quizzes, and create worksheets in seconds.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
                   {[
                     {
                       Icon: Icons.Sparkles,
                       title: "AI Paper Checker",
-                      desc: "Magically check & auto-grade handwritten answer sheets, test papers & assignments with instant scoring and line-by-line feedback.",
+                      tagline: "Instant answer sheet & test grading",
+                      desc: "Magically scan and auto-grade handwritten student answer sheets & test papers with question-by-question scoring and rubric feedback.",
                       action: () => navigate("/dashboard/test-checker"),
-                      isNew: true,
-                      primary: true,
                       badge: "MAGICAL AI",
+                      badgeClass: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
                       btnLabel: "Check Papers",
+                      highlights: ["Handwritten copies supported", "Rubric & step-wise scoring", "Instant student analysis"],
+                      highlight: true,
                     },
                     {
                       Icon: Icons.Brain,
                       title: "Test Generator",
-                      desc: "Create complete CBSE & state board test papers from NCERT in 30 seconds with ready answer keys.",
+                      tagline: "CBSE & State Board papers in < 2 mins",
+                      desc: "Pick chapters, set marks spread, and generate balanced test papers from 1 Lakh+ NCERT questions with complete answer keys.",
                       action: () => navigate("/dashboard/test-generator"),
-                      isNew: false,
-                      primary: false,
+                      badge: "1 LAKH+ NCERT",
+                      badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20",
                       btnLabel: "Create Test",
+                      highlights: ["Bloom's taxonomy spread", "Bilingual English / Hindi", "1-click PDF / DOCX export"],
+                      highlight: false,
                     },
                     {
                       Icon: Icons.Youtube,
-                      title: "Video to Quiz",
-                      desc: "Turn any educational YouTube video into an interactive live community quiz instantly.",
+                      title: "Video to Live Quiz",
+                      tagline: "Turn YouTube lessons into quizzes",
+                      desc: "Paste any educational YouTube URL. AI extracts concepts, generates timed MCQs, and launches a real-time live contest.",
                       action: () => navigate("/teacher/community-quiz/new"),
-                      isNew: true,
-                      primary: false,
-                      badge: "NEW",
+                      badge: "POPULAR",
+                      badgeClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20",
                       btnLabel: "Create Quiz",
+                      highlights: ["Automatic video transcripts", "Multiplayer live contest", "Instant leaderboards"],
+                      highlight: false,
                     },
                     {
                       Icon: Icons.Grid,
                       title: "Worksheet Studio",
-                      desc: "Design structured practice worksheets and homework drill sheets tailored to your curriculum.",
+                      tagline: "Custom homework & drill sheets",
+                      desc: "Design structured practice worksheets with diagrams, step spaces, and formulas tailored to your classroom syllabus.",
                       action: () => {
                         setAssignmentsSubTab("worksheet");
                         setActiveTab("assignments");
                       },
-                      isNew: false,
-                      primary: false,
+                      badge: "PRACTICE",
+                      badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
                       btnLabel: "Open Studio",
+                      highlights: ["Curriculum aligned", "Formatted for A4 print", "Difficulty progression"],
+                      highlight: false,
                     },
                     {
                       Icon: Icons.Book,
                       title: "Smart Flashcards",
-                      desc: "Convert textbook chapters and class notes into high-retention active recall study flashcards.",
+                      tagline: "High-retention study cards",
+                      desc: "Convert lengthy textbook chapters and complex formulas into active-recall digital flashcards for high-retention revision.",
                       action: () => navigate("/dashboard/flashcards"),
-                      isNew: false,
-                      primary: false,
+                      badge: "ACTIVE RECALL",
+                      badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20",
                       btnLabel: "Explore Cards",
+                      highlights: ["Spaced repetition", "Chapter summaries", "Mobile-friendly revision"],
+                      highlight: false,
                     },
                     {
                       Icon: Icons.Search,
                       title: "PYQ Question Bank",
-                      desc: "Search, filter & assign verified Previous Year Questions with step-by-step marking rubrics.",
+                      tagline: "Past 10-year board questions",
+                      desc: "Search, filter, and assign verified Previous Year Questions with official marking rubrics and step-by-step solutions.",
                       action: () => navigate("/practice/zone"),
-                      isNew: false,
-                      primary: false,
+                      badge: "EXAM BANK",
+                      badgeClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
                       btnLabel: "Browse PYQs",
+                      highlights: ["CBSE past 10 years", "Chapter-wise breakdown", "Marking scheme included"],
+                      highlight: false,
                     },
                   ].map((tool, i) => {
                     const ToolIcon = tool.Icon;
@@ -2995,42 +3030,63 @@ TONE & FORMATTING GUIDELINES:
                       <div
                         key={i}
                         onClick={tool.action}
-                        className="glass-panel p-6 sm:p-10 rounded-[28px] sm:rounded-[48px] flex flex-col justify-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all relative overflow-hidden group scroll-reveal cursor-pointer hover:shadow-2xl hover:border-blue-500/40"
-                        style={{ transitionDelay: `${60 + i * 50}ms` }}
+                        className={`glass-panel p-6 sm:p-8 rounded-[28px] sm:rounded-[36px] flex flex-col justify-between hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden group cursor-pointer hover:shadow-2xl ${
+                          tool.highlight
+                            ? "border-amber-400/60 ring-1 ring-amber-400/20 bg-amber-500/[0.03] dark:bg-amber-500/[0.08]"
+                            : "hover:border-blue-500/40"
+                        }`}
                       >
-                        {tool.isNew && (
-                          <div className="absolute top-3 right-3">
-                            <span className="new-badge btn-glossy-theme text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-lg">
-                              {tool.badge || "NEW"}
-                            </span>
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-5">
+                            <div
+                              className="w-12 h-12 rounded-[18px] inset-pill border-none flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"
+                              style={{ color: "var(--theme-start)" }}
+                            >
+                              <ToolIcon className="w-6 h-6" />
+                            </div>
+                            {tool.badge && (
+                              <span className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-xs ${tool.badgeClass}`}>
+                                {tool.badge}
+                              </span>
+                            )}
                           </div>
-                        )}
-                        <div
-                          className="w-14 h-14 sm:w-20 sm:h-20 inset-pill border-none rounded-[20px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shrink-0"
-                          style={{ color: "var(--theme-start)" }}
-                        >
-                          <ToolIcon />
+
+                          <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                            {tool.title}
+                          </h3>
+                          <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1 mb-3">
+                            {tool.tagline}
+                          </p>
+                          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-medium leading-relaxed mb-6">
+                            {tool.desc}
+                          </p>
+
+                          <div className="space-y-2 mb-6">
+                            {tool.highlights.map((h, hIdx) => (
+                              <div key={hIdx} className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                <Icons.Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                                <span>{h}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <h3
-                          className={`text-lg sm:text-2xl font-black text-slate-900 dark:text-white mb-2 sm:mb-3 tracking-tight ${tool.isNew ? "shimmer-text" : ""
+
+                        <div className="pt-4 border-t border-slate-100 dark:border-white/5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              tool.action();
+                            }}
+                            className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded-[20px] text-xs sm:text-sm font-bold transition-all shadow-sm group-hover:shadow-md cursor-pointer ${
+                              tool.highlight
+                                ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:brightness-110"
+                                : "bg-slate-900 dark:bg-white dark:text-slate-900 text-white hover:bg-blue-600 dark:hover:bg-blue-500 dark:hover:text-white"
                             }`}
-                        >
-                          {tool.title}
-                        </h3>
-                        <p className="text-xs sm:text-base text-slate-500 mb-4 sm:mb-8 font-medium">
-                          {tool.desc}
-                        </p>
-                        <GlossyButton
-                          label={tool.btnLabel || (tool.isNew ? "Try Now" : "Launch")}
-                          fullWidth
-                          small
-                          onClick={(e) => {
-                            e?.stopPropagation?.();
-                            tool.action();
-                          }}
-                          showNewBadge={tool.isNew}
-                          isStartupsStyle={tool.primary}
-                        />
+                          >
+                            <span>{tool.btnLabel}</span>
+                            <Icons.ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
