@@ -144,7 +144,13 @@ export function useTestGenerator(): UseTestGeneratorReturn {
       console.error("Generation error:", err);
 
       if (err instanceof ApiError) {
-        if (err.status === 403) {
+        if (err.status === 401) {
+          const detail = typeof err.detail === "object" ? err.detail : {};
+          setError(
+            detail.message ||
+              "Please sign in to generate test papers."
+          );
+        } else if (err.status === 403) {
           // Usage limit reached
           const detail = typeof err.detail === "object" ? err.detail : {};
           setError(
