@@ -5,8 +5,8 @@ import { Moon, Sun } from "lucide-react";
 const getInitialTheme = (): "light" | "dark" => {
   const saved = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
   if (saved === "dark" || saved === "light") return saved as "dark" | "light";
-  const prefersDark = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  return prefersDark ? "dark" : "light";
+  // Always default to light
+  return "light";
 };
 
 export default function ThemeToggle() {

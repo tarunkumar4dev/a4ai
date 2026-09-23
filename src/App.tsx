@@ -2,11 +2,6 @@ import { useEffect, Suspense, lazy } from "react";
 import type { ReactNode } from "react";
 import "./styles/globals.css";
 
-/* -------- Core Imports -------- */
-import JoinContestPageAurora from "@/pages/JoinContestPageAurora";
-import Rules from "@/pages/Rules";
-
-
 import {
   BrowserRouter,
   Routes,
@@ -15,36 +10,30 @@ import {
   useLocation,
 } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
-import StudentProfilePage from "./pages/StudentProfilePage";
-import TestBuilderPage from "./pages/TestBuilderPage";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PrivateRoute from "@/components/PrivateRoute";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { CoinProvider } from "@/context/CoinContext";
-import LandingDemo from "@/components/LandingDemo";
-import FAQ from "@/components/FAQ";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import StudentPortalPage from "./pages/StudentPortalPage";
 
 /* ---------- Vercel Analytics ---------- */
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 
-/* ---------- Lazy Loading Configuration ---------- */
-const LAZY_LOADING_DELAY = 1000;
-
 /* ---------- Lazy Marketing Pages ---------- */
-const LandingPage = lazy(() =>
-  Promise.all([
-    import("./pages/LandingPage"),
-    new Promise(resolve => setTimeout(resolve, LAZY_LOADING_DELAY))
-  ]).then(([module]) => module)
-);
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const JoinContestPageAurora = lazy(() => import("@/pages/JoinContestPageAurora"));
+const Rules = lazy(() => import("@/pages/Rules"));
+const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage"));
+const TestBuilderPage = lazy(() => import("./pages/TestBuilderPage"));
+const LandingDemo = lazy(() => import("@/components/LandingDemo"));
+const FAQ = lazy(() => import("@/components/FAQ"));
+const StudentPortalPage = lazy(() => import("./pages/StudentPortalPage"));
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
 const MyCommunityQuizzesPage = lazy(() => import("./pages/teacher/MyCommunityQuizzesPage"));
@@ -228,7 +217,9 @@ function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowed
   if (!session) return <Navigate to="/login" replace />;
   if (!role) return <Navigate to="/select-role" replace />;
 
-  if (!allowedRoles.includes(role)) {
+  const userRole = (role || "").toLowerCase().trim();
+  const normalizedAllowed = allowedRoles.map((r) => r.toLowerCase().trim());
+  if (userRole !== "admin" && !normalizedAllowed.includes(userRole)) {
     toast.error(`Access denied. You are registered as a ${role}.`);
     return <Navigate to={`/${role}/dashboard`} replace />;
   }
@@ -265,7 +256,14 @@ function IdleLogoutEnabled() {
 
 const App = () => {
   useEffect(() => {
-    // Prefetch logic...
+    // Warm up critical routes in background during idle time
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      window.requestIdleCallback(() => {
+        import("./pages/LandingPage");
+        import("./pages/LoginPage");
+        import("./pages/DashboardPage");
+      });
+    }
   }, []);
 
   return (
@@ -379,7 +377,7 @@ const App = () => {
                       
                       {/* ── Answer Sheet Checker (teacher + institute only) ── */}
                       <Route path="/dashboard/test-checker" element={
-                        <RoleAuthGate allowedRoles={["teacher", "institute"]}>
+                        <RoleAuthGate allowedRoles={["teacher", "institute", "admin"]}>
                           <TestChecker />
                         </RoleAuthGate>
                       } />

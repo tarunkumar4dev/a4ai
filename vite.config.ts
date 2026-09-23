@@ -31,9 +31,39 @@ export default defineConfig(({ mode }): UserConfig => {
       },
     },
     build: {
+      target: "es2020",
       sourcemap: mode === "development",
       minify: mode === "production" ? "esbuild" : false,
-      chunkSizeWarningLimit: 1600,
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules")) {
+              if (id.includes("react-dom") || id.includes("react-router-dom") || id.includes("/react/")) {
+                return "vendor-react";
+              }
+              if (id.includes("@dnd-kit")) {
+                return "vendor-dnd";
+              }
+              if (id.includes("katex") || id.includes("react-katex")) {
+                return "vendor-katex";
+              }
+              if (id.includes("jspdf") || id.includes("html2canvas")) {
+                return "vendor-pdf";
+              }
+              if (id.includes("framer-motion")) {
+                return "vendor-motion";
+              }
+              if (id.includes("lucide-react")) {
+                return "vendor-icons";
+              }
+              if (id.includes("@supabase") || id.includes("@tanstack")) {
+                return "vendor-data";
+              }
+            }
+          },
+        },
+      },
     },
     define: {
       __APP_ENV__: JSON.stringify(env.APP_ENV ?? "dev"),

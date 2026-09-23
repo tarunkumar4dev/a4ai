@@ -6,7 +6,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-const navigate = useNavigate();
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,6 +73,7 @@ function cn(...cls: Array<string | false | null | undefined>) {
    Main Component
 ===================================================================== */
 export default function StudentsPage() {
+  const navigate = useNavigate();
   // ---------------------------- local state ----------------------------
   const [rawQuery, setRawQuery] = useState("");
   const [query, setQuery] = useState("");

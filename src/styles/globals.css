@@ -8,36 +8,11 @@
   --dark-surface-gradient: linear-gradient(180deg, rgba(30, 41, 59, 0.78), rgba(15, 23, 42, 0.70));
 }
 
-/* 2. Unified Selector: Handles both System Pref and Manual .dark class */
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    --stroke: rgba(51, 65, 85, 0.5);
-    --muted-700: rgb(203, 213, 225);
-    --ink-800: rgb(226, 232, 240);
-    --muted-600: rgb(148, 163, 184);
-  }
-}
-
 .dark {
   --stroke: rgba(51, 65, 85, 0.5);
   --muted-700: rgb(203, 213, 225);
   --ink-800: rgb(226, 232, 240);
   --muted-600: rgb(148, 163, 184);
-}
-
-/* 3. The "Force Fix" for Inline Styles */
-/* We use shorter selectors to avoid "Exact Match" failures */
-
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) .hero-headline {
-    background-image: var(--dark-hero-gradient) !important;
-  }
-  
-  /* Matches any inline background containing a white rgba gradient */
-  :root:not(.light) [style*="background"][style*="255,255,255"],
-  :root:not(.light) [style*="background"][style*="255, 255, 255"] {
-    background: var(--dark-surface-gradient) !important;
-  }
 }
 
 .dark .hero-headline {

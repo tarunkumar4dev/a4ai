@@ -31,10 +31,7 @@ const SUBJECTS_BY_CLASS: Record<string, string[]> = {
 };
 
 const ALL_BOARDS = [
-  { value: "CBSE",  label: "CBSE",  enabled: true },
-  { value: "ICSE",  label: "ICSE",  enabled: false },
-  { value: "IGCSE", label: "IGCSE", enabled: false },
-  { value: "IB",    label: "IB",    enabled: false },
+  { value: "CBSE", label: "CBSE (NCERT)" },
 ];
 
 const CLASS_OPTIONS = ["Class 9", "Class 10", "Class 11", "Class 12"];
@@ -216,7 +213,7 @@ const PremiumInput = ({ label, name, placeholder, register }: any) => (
   </div>
 );
 
-const BoardSelect = ({ register, value }: { register: any; value: string }) => (
+const BoardSelect = ({ register }: { register: any; value?: string }) => (
   <div className="space-y-1.5 sm:space-y-2 group">
     <label className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1 flex items-center gap-1.5 group-focus-within:text-gray-800 transition-colors">
       <Library size={11} /> Board
@@ -231,8 +228,8 @@ const BoardSelect = ({ register, value }: { register: any; value: string }) => (
         cursor-pointer hover:border-gray-300"
       >
         {ALL_BOARDS.map((b) => (
-          <option key={b.value} value={b.value} disabled={!b.enabled}>
-            {b.label}{!b.enabled ? " — Coming Soon" : ""}
+          <option key={b.value} value={b.value}>
+            {b.label}
           </option>
         ))}
       </select>
@@ -306,59 +303,6 @@ const CBSE_SECTIONS = [
   { sec: "E", q: 3,  m: 4, type: "Case Study", color: "bg-rose-50 text-rose-700 border-rose-200" },
 ];
 
-const CBSEPatternToggle = ({ enabled, onToggle }: { enabled: boolean; onToggle: (v: boolean) => void }) => (
-  <div className={`rounded-xl sm:rounded-2xl border transition-all duration-200 ${enabled ? "bg-gradient-to-r from-[#111827]/5 to-[#1F2937]/5 border-[#111827]/20" : "bg-white border-[#E5E7EB]"}`}>
-    <div className="p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition-all flex-shrink-0 ${enabled ? "bg-[#111827] text-white" : "bg-gray-100 text-gray-400"}`}>
-            <FileText size={14} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[13px] sm:text-sm font-bold text-[#111827] truncate">CBSE Pattern Paper</p>
-            <p className="text-[9px] sm:text-[10px] text-gray-400 font-medium">Sections A–E · 38 Q · 80 marks</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => onToggle(!enabled)}
-          className={`relative w-11 h-[26px] sm:w-12 sm:h-7 rounded-full transition-all duration-200 flex-shrink-0 ${enabled ? "bg-[#111827]" : "bg-gray-200"}`}
-          style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
-        >
-          <div className={`absolute top-[3px] w-5 h-5 sm:w-6 sm:h-6 bg-white rounded-full shadow-md transition-all duration-200 ${enabled ? "left-[21px] sm:left-[22px]" : "left-[3px] sm:left-0.5"}`} />
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {enabled && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-2">
-                {CBSE_SECTIONS.map((s) => (
-                  <div key={s.sec} className={`rounded-lg sm:rounded-xl border p-2 sm:p-2.5 text-center ${s.color}`}>
-                    <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-60">Sec {s.sec}</p>
-                    <p className="text-[13px] sm:text-sm font-black mt-0.5">{s.q}×{s.m}m</p>
-                    <p className="text-[8px] sm:text-[9px] font-semibold mt-0.5 opacity-70 truncate">{s.type}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[9px] sm:text-[10px] text-gray-400 mt-2.5 sm:mt-3 text-center font-medium">
-                Chapters distributed across all sections
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  </div>
-);
-
 // ═══════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
@@ -376,7 +320,6 @@ export default function TestGeneratorForm({
   onBlocked,
   onGenerated,
 }: TestGeneratorFormProps) {
-  const [activeTab, setActiveTab] = useState<"Simple" | "Blueprint" | "Matrix" | "Buckets">("Simple");
   const [showPreview, setShowPreview] = useState(false);
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [cbsePattern, setCbsePattern] = useState(false);
@@ -515,42 +458,37 @@ export default function TestGeneratorForm({
           </div>
         </motion.div>
 
-        {/* 1.5. CBSE PATTERN TOGGLE */}
-        <motion.div variants={itemVariants}>
-          <CBSEPatternToggle enabled={cbsePattern} onToggle={setCbsePattern} />
-        </motion.div>
+        {/* 2. MODE SELECTOR & ROW EDITOR */}
+        <motion.div variants={itemVariants} className="space-y-4">
+          <TabBar
+            activeMode={cbsePattern ? "cbse" : "custom"}
+            onModeChange={(mode) => setCbsePattern(mode === "cbse")}
+          />
 
-        {/* 2. TABBED EDITOR SECTION */}
-        <motion.div variants={itemVariants}>
-          {!cbsePattern && (
-            <>
-              <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={activeTab}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <TestRowEditor activeMode={activeTab} />
-                </motion.div>
-              </AnimatePresence>
-            </>
-          )}
+          {cbsePattern ? (
+            <div className="space-y-4">
+              {/* CBSE Sections Preview Banner */}
+              <div className="bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-[#E5E7EB]">
+                <div className="mb-3">
+                  <h3 className="text-xs sm:text-sm font-bold text-[#111827]">CBSE Standard Pattern (38 Questions · 80 Marks)</h3>
+                  <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">Pick chapters below — questions are automatically distributed across Sections A–E.</p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {CBSE_SECTIONS.map((s) => (
+                    <div key={s.sec} className={`rounded-xl border p-2 sm:p-2.5 text-center ${s.color}`}>
+                      <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider opacity-70">Sec {s.sec}</p>
+                      <p className="text-xs sm:text-sm font-black mt-0.5">{s.q} × {s.m}m</p>
+                      <p className="text-[8px] sm:text-[9px] font-semibold mt-0.5 opacity-80 truncate">{s.type}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-          {cbsePattern && (
-            <div className="bg-white rounded-2xl sm:rounded-[24px] p-4 sm:p-6 md:p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)] sm:shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-white/50">
-              <div className="text-center space-y-1 sm:space-y-2">
-                <p className="text-[13px] sm:text-sm font-bold text-[#111827]">Chapter Selection</p>
-                <p className="text-[11px] sm:text-xs text-gray-400">
-                  Select chapters — questions auto-distributed across CBSE sections
-                </p>
-              </div>
-              <div className="mt-3 sm:mt-4">
-                <TestRowEditor activeMode={activeTab} />
-              </div>
+              {/* CBSE Chapter Row Editor */}
+              <TestRowEditor isCbseMode={true} />
             </div>
+          ) : (
+            <TestRowEditor isCbseMode={false} />
           )}
         </motion.div>
 

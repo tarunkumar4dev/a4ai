@@ -9,7 +9,11 @@ import {
   FileImage, Target, Zap, BookMarked, FlaskConical
 } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE ||
+  'http://localhost:8000'
+).replace(/\/+$/, '');
 
 // ─── Topic colors (cycle through) ───
 const TOPIC_COLORS = [
@@ -120,8 +124,7 @@ const ModulesPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => fetchModules(), 800);
-    return () => clearTimeout(timer);
+    fetchModules();
   }, [fetchModules]);
 
   const toggleTopicExpand = (moduleId: string, idx: number) => {

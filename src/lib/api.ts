@@ -4,6 +4,22 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
+export interface SubPart {
+  label: string;
+  text: string;
+  marks?: number;
+  answer?: string;
+  correctAnswer?: string;
+  correct_answer?: string;
+  options?: string[];
+}
+
+export interface MarkingStep {
+  step: string;
+  marks: number;
+  description?: string;
+}
+
 export interface GeneratedQuestion {
   id: string;
   text: string;
@@ -18,6 +34,18 @@ export interface GeneratedQuestion {
   format: string;
   validationStatus: string;
   section: string | null;
+  // Rich answer fields from backend RAG pipeline
+  modelAnswer?: string | null;
+  model_answer?: string | null;
+  markingScheme?: MarkingStep[] | null;
+  marking_scheme?: MarkingStep[] | null;
+  commonMistakes?: string[] | null;
+  common_mistakes?: string[] | null;
+  acceptableAlternatives?: string[] | null;
+  acceptable_alternatives?: string[] | null;
+  subParts?: SubPart[] | null;
+  sub_parts?: SubPart[] | null;
+  _is_or?: boolean;
   // Manual question fields
   isManual?: boolean;
   imageUrl?: string | null;
@@ -260,7 +288,15 @@ export const api = {
     includeAnswers: boolean;
     includeExplanations: boolean;
     format: "pdf" | "docx";
+    template?: string;
     logoBase64?: string | null;
+    teacher_name?: string | null;
+    institute_name?: string | null;
+    duration?: string | null;
+    topic?: string | null;
+    teacherName?: string | null;
+    instituteName?: string | null;
+    templateTier?: "standard" | "premium";
   }): Promise<Blob> {
     const url = `${API_BASE}/api/v1/test-generator/export`;
     const res = await fetch(url, {
@@ -270,6 +306,46 @@ export const api = {
     });
     if (!res.ok) {
       let detail = "Export failed";
+      try {
+        const errBody = await res.json();
+        detail = errBody.detail || detail;
+      } catch {}
+      throw new ApiError(res.status, detail);
+    }
+    return res.blob();
+  },
+
+  /**
+   * Export standalone Answer Key as PDF or DOCX.
+   * POST /api/v1/test-generator/export-answer-key
+   */
+  async exportAnswerKey(payload: {
+    examTitle: string;
+    paperDate?: string;
+    board: string;
+    classGrade: string;
+    subject: string;
+    questions: any[];
+    includeExplanations: boolean;
+    format: "pdf" | "docx";
+    template?: string;
+    logoBase64?: string | null;
+    teacher_name?: string | null;
+    institute_name?: string | null;
+    duration?: string | null;
+    topic?: string | null;
+    teacherName?: string | null;
+    instituteName?: string | null;
+    templateTier?: "standard" | "premium";
+  }): Promise<Blob> {
+    const url = `${API_BASE}/api/v1/test-generator/export-answer-key`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      let detail = "Answer key export failed";
       try {
         const errBody = await res.json();
         detail = errBody.detail || detail;

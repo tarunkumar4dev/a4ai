@@ -11,6 +11,9 @@ import TeacherAssignmentsTab from "@/components/teacher/TeacherAssignmentsTab";
 import WorksheetGenerator from "@/components/teacher/WorksheetGenerator";
 import TeacherCalendarTab from "@/components/teacher/TeacherCalendarTab";
 import ProctorSectionView, { useProctorCheck } from "@/components/attendance/ProctorSectionView";
+import TeacherAnalyticsTab from "@/components/teacher/TeacherAnalyticsTab";
+import { downloadTestDocument, fetchQuestionsForTest, type TestQuestionData } from "@/utils/testPdfExporter";
+import { toast } from "sonner";
 
 
 /* ------------------- SAFE STORAGE ------------------- */
@@ -540,6 +543,7 @@ function SearchBar({
     { type: "nav", label: "Test History", sub: "All your tests", Icon: Icons.History, action: () => onNavChange("tests") },
     { type: "nav", label: "Analytics", sub: "Performance graphs", Icon: Icons.Chart, action: () => onNavChange("analytics") },
     { type: "nav", label: "AI Tools", sub: "Teaching utilities", Icon: Icons.Brain, action: () => onNavChange("ai-tools") },
+    { type: "tool", label: "AI Paper Checker", sub: "Grade answer sheets & tests", Icon: Icons.Sparkles, action: () => navigate("/dashboard/test-checker") },
     { type: "tool", label: "Community Quiz", sub: "From YouTube video", Icon: Icons.Youtube, action: () => navigate("/teacher/community-quiz/new") },
     { type: "tool", label: "Create Test", sub: "Test generator", Icon: Icons.Zap, action: () => navigate("/dashboard/test-generator") },
     { type: "tool", label: "Host Contest", sub: "Live competition", Icon: Icons.Trophy, action: () => navigate("/contests") },
@@ -645,11 +649,11 @@ function SearchBar({
 }
 
 /* ------------------- SUBSCRIPTION & HELP WIDGETS ------------------- */
-function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
+function SubscriptionSidebarWidget({ navigate, testsCount = 0 }: { navigate: any; testsCount?: number }) {
   const { status } = useSubscription();
 
   const isPro = status?.plan_slug === "pro";
-  const used = status?.tests_used || 0;
+  const used = Math.max(status?.tests_used || 0, testsCount);
   const limit = status?.test_limit || 10;
   const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
 
@@ -745,98 +749,794 @@ function TestHistory({
   onCreateNew,
   tests,
   loading,
+  user,
 }: {
   onCreateNew: () => void;
   tests: SavedTest[];
   loading: boolean;
+  user: any;
 }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "saved" | "draft">("all");
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingType, setDownloadingType] = useState<"paper" | "key" | "docx" | null>(null);
+
+  // Preview Modal State
+  const [previewTest, setPreviewTest] = useState<SavedTest | null>(null);
+  const [previewQuestions, setPreviewQuestions] = useState<TestQuestionData[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewTab, setPreviewTab] = useState<"paper" | "key">("paper");
+
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return "Recent";
     const d = new Date(dateStr);
-    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   };
 
   const statusColor = (status: string) => {
     if (status === "saved")
-      return "bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-700/60 dark:text-slate-200 dark:border-slate-600";
+      return "bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700/60";
     if (status === "draft")
-      return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400 dark:border-slate-700";
-    return "bg-slate-100 text-slate-600 border-slate-200";
+      return "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700/60";
+    return "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400";
   };
+
+  const handleDownload = async (
+    t: SavedTest,
+    format: "pdf" | "docx",
+    isAnswerKey: boolean
+  ) => {
+    setDownloadingId(t.id);
+    setDownloadingType(isAnswerKey ? "key" : format === "docx" ? "docx" : "paper");
+    try {
+      await downloadTestDocument({
+        test: {
+          id: t.id,
+          exam_title: t.exam_title,
+          board: t.board,
+          class_grade: t.class_grade,
+          subject: t.subject,
+          status: t.status,
+          total_questions: t.total_questions,
+          total_marks: t.total_marks,
+          created_at: t.created_at,
+          teacher_name: user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher",
+        },
+        format,
+        isAnswerKey,
+        teacherId: user?.id,
+      });
+    } catch (err) {
+      console.error("Download failed:", err);
+      toast.error("Failed to download document. Please try again.");
+    } finally {
+      setDownloadingId(null);
+      setDownloadingType(null);
+    }
+  };
+
+  const handleOpenPreview = async (t: SavedTest) => {
+    setPreviewTest(t);
+    setPreviewLoading(true);
+    setPreviewTab("paper");
+    try {
+      const qs = await fetchQuestionsForTest(t.id, user?.id);
+      setPreviewQuestions(qs);
+    } catch (err) {
+      console.error("Preview load error:", err);
+      setPreviewQuestions([]);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  // Filter tests by status & search query
+  const filteredTests = useMemo(() => {
+    return tests.filter((t) => {
+      if (statusFilter === "saved" && t.status !== "saved") return false;
+      if (statusFilter === "draft" && t.status !== "draft") return false;
+
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        (t.exam_title || "").toLowerCase().includes(q) ||
+        (t.subject || "").toLowerCase().includes(q) ||
+        (t.class_grade || "").toLowerCase().includes(q) ||
+        (t.board || "").toLowerCase().includes(q)
+      );
+    });
+  }, [tests, statusFilter, searchQuery]);
+
+  const savedCount = useMemo(() => tests.filter((t) => t.status === "saved").length, [tests]);
+  const draftCount = useMemo(() => tests.filter((t) => t.status === "draft").length, [tests]);
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-pop">
       <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-10">
+        {/* Top Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div>
-            <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-              Test History
-            </h2>
-            <p className="text-sm text-slate-500 font-medium mt-1">{tests.length} tests found</p>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+                Test History
+              </h2>
+              <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                {tests.length} Total
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 font-medium mt-1">
+              Access, preview, and download your generated question papers and answer keys anytime.
+            </p>
           </div>
           <GlossyButton label="Create Test" icon={Icons.Zap} small onClick={onCreateNew} isStartupsStyle />
         </div>
 
+        {/* Search & Filter Bar */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mb-6 p-2 rounded-[22px] bg-slate-50/80 dark:bg-slate-900/50 border border-black/5 dark:border-white/5">
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-[220px]">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <Icons.Search />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by test title, subject, or class..."
+              className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+              >
+                <Icons.X />
+              </button>
+            )}
+          </div>
+
+          {/* Filter Chips */}
+          <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold shadow-sm overflow-x-auto">
+            <button
+              onClick={() => setStatusFilter("all")}
+              className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${statusFilter === "all"
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                }`}
+            >
+              All Tests ({tests.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter("saved")}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all whitespace-nowrap ${statusFilter === "saved"
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400"
+                }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === "saved" ? "bg-white" : "bg-emerald-500"}`} />
+              PDF Ready ({savedCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter("draft")}
+              className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${statusFilter === "draft"
+                  ? "bg-amber-600 text-white shadow-sm"
+                  : "text-slate-500 hover:text-amber-600 dark:hover:text-amber-400"
+                }`}
+            >
+              Drafts ({draftCount})
+            </button>
+          </div>
+        </div>
+
+        {/* Tests List */}
         {loading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="animate-pulse h-20 bg-black/5 dark:bg-white/5 rounded-[20px]" />
+              <div key={i} className="animate-pulse h-24 bg-black/5 dark:bg-white/5 rounded-[24px]" />
             ))}
           </div>
-        ) : tests.length === 0 ? (
+        ) : filteredTests.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 inset-pill border-none text-slate-400 rounded-[24px] flex items-center justify-center mx-auto mb-4">
               <Icons.FileText />
             </div>
-            <p className="text-slate-500 font-bold text-lg">No tests yet</p>
-            <p className="text-slate-400 text-sm font-medium mt-1">Generate your first test to see it here</p>
-            <div className="mt-6 flex justify-center">
-              <GlossyButton label="Create First Test" icon={Icons.Zap} small onClick={onCreateNew} isStartupsStyle />
-            </div>
+            <p className="text-slate-500 font-bold text-lg">
+              {tests.length === 0 ? "No tests yet" : "No matching tests found"}
+            </p>
+            <p className="text-slate-400 text-sm font-medium mt-1">
+              {tests.length === 0
+                ? "Generate or build your first test paper to download PDFs and answer keys."
+                : "Try clearing your search query or switching filters."}
+            </p>
+            {tests.length === 0 ? (
+              <div className="mt-6 flex justify-center">
+                <GlossyButton label="Create First Test" icon={Icons.Zap} small onClick={onCreateNew} isStartupsStyle />
+              </div>
+            ) : (
+              <button
+                onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}
+                className="mt-4 px-4 py-2 text-xs font-bold text-indigo-600 hover:underline"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3 sm:space-y-4">
-            {tests.map((t) => (
+            {filteredTests.map((t) => (
               <div
                 key={t.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-black/5 dark:border-white/10 hover:bg-white/80 dark:hover:bg-slate-800/60 transition-all group gap-3"
+                className="flex flex-col xl:flex-row xl:items-center justify-between p-4 sm:p-6 rounded-[24px] sm:rounded-[32px] bg-white/50 dark:bg-slate-800/40 border border-black/5 dark:border-white/10 hover:bg-white/90 dark:hover:bg-slate-800/70 transition-all group gap-4 shadow-sm hover:shadow-md"
               >
-                <div className="flex items-center gap-3 sm:gap-5 min-w-0">
-                  <div className="p-3 sm:p-4 rounded-[16px] sm:rounded-[24px] inset-pill border-none text-slate-800 dark:text-white shadow-inner shrink-0" style={{ color: "var(--theme-start)" }}>
+                {/* Left: Test Info */}
+                <div className="flex items-start sm:items-center gap-3 sm:gap-5 min-w-0">
+                  <div
+                    className="p-3 sm:p-4 rounded-[18px] sm:rounded-[24px] inset-pill border-none text-slate-800 dark:text-white shadow-inner shrink-0"
+                    style={{ color: "var(--theme-start)" }}
+                  >
                     <Icons.FileText />
                   </div>
                   <div className="min-w-0">
-                    <h4 className="font-extrabold text-slate-900 dark:text-white text-base sm:text-lg transition-colors truncate">
-                      {t.exam_title || "Untitled Test"}
-                    </h4>
-                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h4 className="font-extrabold text-slate-900 dark:text-white text-base sm:text-lg transition-colors truncate">
+                        {t.exam_title || "Untitled Test Paper"}
+                      </h4>
+                      {t.status === "saved" ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60 shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          PDF Saved & Ready
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-extrabold uppercase tracking-wider border ${statusColor(t.status)}`}>
+                          {t.status}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
                       Class {t.class_grade} · {t.subject} · {t.board} · {formatDate(t.created_at)}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 sm:gap-4 ml-auto sm:ml-0 flex-shrink-0">
+
+                {/* Right: Badges & Action Buttons */}
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap xl:flex-nowrap shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100 dark:border-slate-700/50 justify-between sm:justify-start">
                   {t.total_questions > 0 && (
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300 inset-pill border-none px-3 py-1.5 rounded-[16px]">
                       {t.total_questions}Q · {t.total_marks}M
                     </span>
                   )}
-                  <span className={`text-[10px] px-3 py-1.5 rounded-[16px] font-extrabold uppercase tracking-wider border ${statusColor(t.status)}`}>
-                    {t.status}
-                  </span>
+
+                  {/* Preview Button */}
+                  <button
+                    onClick={() => handleOpenPreview(t)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95 cursor-pointer shadow-xs"
+                    title="Preview Test Questions"
+                  >
+                    <span className="text-sm">👁️</span>
+                    <span>Preview</span>
+                  </button>
+
+                  {/* Paper PDF Button */}
+                  <button
+                    onClick={() => handleDownload(t, "pdf", false)}
+                    disabled={downloadingId === t.id}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 hover:border-indigo-300 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                    title="Download Question Paper PDF"
+                  >
+                    {downloadingId === t.id && downloadingType === "paper" ? (
+                      <div className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="text-sm">📄</span>
+                    )}
+                    <span>Paper PDF</span>
+                  </button>
+
+                  {/* Answer Key Button */}
+                  <button
+                    onClick={() => handleDownload(t, "pdf", true)}
+                    disabled={downloadingId === t.id}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 hover:border-emerald-300 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                    title="Download Official Answer Key & Solutions PDF"
+                  >
+                    {downloadingId === t.id && downloadingType === "key" ? (
+                      <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="text-sm">🔑</span>
+                    )}
+                    <span>Answer Key</span>
+                  </button>
+
+                  {/* Word (DOCX) Button */}
+                  <button
+                    onClick={() => handleDownload(t, "docx", false)}
+                    disabled={downloadingId === t.id}
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                    title="Download in Word (DOCX) format"
+                  >
+                    {downloadingId === t.id && downloadingType === "docx" ? (
+                      <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="text-xs">📝</span>
+                    )}
+                    <span>DOCX</span>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* ================= PREVIEW MODAL ================= */}
+      <AnimatePresence>
+        {previewTest && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-slate-900 rounded-[28px] sm:rounded-[36px] w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border border-black/10 dark:border-white/10 overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white truncate">
+                      {previewTest.exam_title || "Test Paper Preview"}
+                    </h3>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                      Class {previewTest.class_grade}
+                    </span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {previewTest.subject}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Board: {previewTest.board} · Date: {formatDate(previewTest.created_at)} · Max Marks: {previewTest.total_marks}M
+                  </p>
+                </div>
+
+                {/* Modal Header Action Buttons */}
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                  <button
+                    onClick={() => handleDownload(previewTest, "pdf", false)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+                  >
+                    <span>📄</span>
+                    <span>Paper PDF</span>
+                  </button>
+                  <button
+                    onClick={() => handleDownload(previewTest, "pdf", true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                  >
+                    <span>🔑</span>
+                    <span>Answer Key</span>
+                  </button>
+                  <button
+                    onClick={() => setPreviewTest(null)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1"
+                  >
+                    <Icons.X />
+                  </button>
+                </div>
+              </div>
+
+              {/* View Tabs */}
+              <div className="flex border-b border-slate-100 dark:border-slate-800 px-6 bg-white dark:bg-slate-900">
+                <button
+                  onClick={() => setPreviewTab("paper")}
+                  className={`py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all ${previewTab === "paper"
+                      ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
+                      : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                >
+                  📄 Question Paper ({previewQuestions.length}Q)
+                </button>
+                <button
+                  onClick={() => setPreviewTab("key")}
+                  className={`py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-all ${previewTab === "key"
+                      ? "border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
+                      : "border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                    }`}
+                >
+                  🔑 Answer Key & Step-by-Step Solutions
+                </button>
+              </div>
+
+              {/* Scrollable Questions Content */}
+              <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
+                {previewLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="animate-pulse h-28 bg-slate-100 dark:bg-slate-800 rounded-2xl" />
+                    ))}
+                  </div>
+                ) : previewQuestions.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-slate-500 font-bold">No individual question rows found for this record.</p>
+                    <p className="text-slate-400 text-xs mt-1">You can still generate and download the complete PDF using the buttons above.</p>
+                  </div>
+                ) : (
+                  previewQuestions.map((q, idx) => {
+                    const qMarks = q.marks || 1;
+                    const options = Array.isArray(q.options)
+                      ? q.options
+                      : typeof q.options === "string"
+                        ? JSON.parse(q.options || "[]")
+                        : [];
+
+                    return (
+                      <div
+                        key={idx}
+                        className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 space-y-3"
+                      >
+                        {/* Question Header */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-black text-xs flex items-center justify-center">
+                              Q{idx + 1}
+                            </span>
+                            {q.format && (
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                {q.format}
+                              </span>
+                            )}
+                            {q.difficulty && (
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400">
+                                {q.difficulty}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                            [{qMarks} Mark{qMarks > 1 ? "s" : ""}]
+                          </span>
+                        </div>
+
+                        {/* Question Text */}
+                        <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white leading-relaxed">
+                          {q.text || q.question_text || q.questionText}
+                        </p>
+
+                        {/* Options if MCQ */}
+                        {options.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            {options.map((opt: string, optIdx: number) => {
+                              const letters = ["A", "B", "C", "D", "E"];
+                              const letter = letters[optIdx] || String(optIdx + 1);
+                              const isCorrect = previewTab === "key" && (
+                                q.correct_answer === opt ||
+                                q.correct_answer === letter ||
+                                q.correctAnswer === opt
+                              );
+
+                              return (
+                                <div
+                                  key={optIdx}
+                                  className={`p-2.5 rounded-xl border text-xs sm:text-sm font-medium flex items-center gap-2 ${isCorrect
+                                      ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-400 text-emerald-900 dark:text-emerald-200 font-bold"
+                                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                                    }`}
+                                >
+                                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${isCorrect
+                                      ? "bg-emerald-600 text-white"
+                                      : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                                    }`}>
+                                    {letter}
+                                  </span>
+                                  <span>{opt}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Answer Key Details */}
+                        {previewTab === "key" && (
+                          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs sm:text-sm">
+                              <span className="font-extrabold text-emerald-800 dark:text-emerald-300">
+                                Correct Answer:{" "}
+                              </span>
+                              <span className="font-medium text-emerald-900 dark:text-emerald-200">
+                                {q.correct_answer || q.correctAnswer || "Refer to explanation"}
+                              </span>
+                            </div>
+                            {(q.explanation || q.solution) && (
+                              <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/50 text-xs sm:text-sm text-blue-900 dark:text-blue-200">
+                                <span className="font-extrabold block mb-0.5 text-blue-800 dark:text-blue-300">
+                                  Step-by-Step Explanation:
+                                </span>
+                                <span className="font-normal leading-relaxed">
+                                  {q.explanation || q.solution}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 /* ------------------- CHATBOT TYPE ------------------- */
+interface ChatAction {
+  label: string;
+  icon?: string;
+  tab?: string;
+  path?: string;
+  action?: () => void;
+}
+
 interface Message {
   role: "user" | "assistant" | "system";
   content: string;
   suggestions?: string[];
+  actions?: ChatAction[];
+}
+
+function FormattedChatMessage({ content }: { content: string }) {
+  const lines = content.split("\n");
+
+  return (
+    <div className="space-y-1.5 leading-relaxed">
+      {lines.map((line, lIdx) => {
+        if (!line.trim()) {
+          return <div key={lIdx} className="h-1" />;
+        }
+
+        const isBullet = line.trim().startsWith("•") || line.trim().startsWith("- ") || line.trim().startsWith("* ");
+        const textToProcess = isBullet ? line.trim().replace(/^[•\-\*]\s*/, "") : line;
+
+        const parts = textToProcess.split(/(\*\*[^*]+\*\*)/g);
+        const rendered = parts.map((part, pIdx) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={pIdx} className="font-bold text-slate-900 dark:text-white">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          return part;
+        });
+
+        if (isBullet) {
+          return (
+            <div key={lIdx} className="flex items-start gap-1.5 pl-1 text-[13px]">
+              <span className="text-slate-400 dark:text-slate-500 font-bold shrink-0 leading-5">•</span>
+              <span className="flex-1">{rendered}</span>
+            </div>
+          );
+        }
+
+        return (
+          <div key={lIdx} className="text-[13px]">
+            {rendered}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function getChatMeta(userText: string, replyText: string) {
+  const combined = `${userText} ${replyText}`.toLowerCase();
+  const actions: ChatAction[] = [];
+  const suggestions: string[] = [];
+
+  // Test Creation / Papers / Blueprints
+  if (
+    combined.includes("test paper") ||
+    combined.includes("create test") ||
+    combined.includes("generate test") ||
+    combined.includes("question paper") ||
+    combined.includes("ncert question") ||
+    combined.includes("blueprint") ||
+    combined.includes("test builder")
+  ) {
+    actions.push({
+      label: "Open Test Builder",
+      icon: "✨",
+      path: "/dashboard/create-test",
+    });
+    suggestions.push(
+      "How to add school logo?",
+      "Show 10th Science blueprint",
+      "Can I export to Word / DOCX?"
+    );
+  }
+
+  // AI Test / Paper Checker
+  if (
+    combined.includes("checker") ||
+    combined.includes("check") ||
+    combined.includes("grading") ||
+    combined.includes("answer sheet") ||
+    combined.includes("copy check") ||
+    combined.includes("handwriting") ||
+    combined.includes("marksheet")
+  ) {
+    actions.push({
+      label: "Open AI Paper Checker",
+      icon: "🪄",
+      path: "/dashboard/test-checker",
+    });
+    suggestions.push(
+      "Can it check handwritten copies?",
+      "How does rubric grading work?",
+      "Grade a student batch"
+    );
+  }
+
+  // Attendance / Analytics
+  if (
+    combined.includes("attendance") ||
+    combined.includes("marks") ||
+    combined.includes("analytics") ||
+    combined.includes("defaulter") ||
+    combined.includes("leaderboard") ||
+    combined.includes("report")
+  ) {
+    actions.push({
+      label: "View Analytics & Attendance",
+      icon: "📊",
+      tab: "analytics",
+    });
+    suggestions.push(
+      "Identify defaulters (<75%)",
+      "Export Excel attendance report",
+      "How to mark daily attendance?"
+    );
+  }
+
+  // Pricing / Plans / Upgrade
+  if (
+    combined.includes("price") ||
+    combined.includes("pricing") ||
+    combined.includes("plan") ||
+    combined.includes("upgrade") ||
+    combined.includes("starter") ||
+    combined.includes("pro plan") ||
+    combined.includes("subscription") ||
+    combined.includes("₹")
+  ) {
+    actions.push({
+      label: "View Plans & Upgrade",
+      icon: "💎",
+      path: "/pricing",
+    });
+    suggestions.push(
+      "Starter vs Pro plan details",
+      "What is included in Free plan?",
+      "How does UPI payment work?"
+    );
+  }
+
+  // Assignments / Homework
+  if (
+    combined.includes("assignment") ||
+    combined.includes("homework") ||
+    combined.includes("student portal") ||
+    combined.includes("join code")
+  ) {
+    actions.push({
+      label: "Go to Assignments",
+      icon: "📋",
+      tab: "assignments",
+    });
+    suggestions.push(
+      "How do students join?",
+      "Generate Worksheet for homework",
+      "Inline grading feedback"
+    );
+  }
+
+  // Fallback suggestions if none detected
+  if (suggestions.length === 0) {
+    if (
+      combined.includes("math") ||
+      combined.includes("science") ||
+      combined.includes("physics") ||
+      combined.includes("chemistry") ||
+      combined.includes("biology")
+    ) {
+      suggestions.push(
+        "Give 3 HOTS questions on this",
+        "How to explain this to students?",
+        "Create a 15-minute quick test"
+      );
+    } else {
+      suggestions.push(
+        "How to create a test paper?",
+        "Try AI Paper Checker",
+        "Explain a concept for Class 10",
+        "What are the pricing plans?"
+      );
+    }
+  }
+
+  return { actions, suggestions: suggestions.slice(0, 3) };
+}
+
+function getOfflinePedagogicalFallback(userText: string): {
+  content: string;
+  actions: ChatAction[];
+  suggestions: string[];
+} {
+  const q = userText.toLowerCase();
+
+  if (q.includes("test") || q.includes("paper") || q.includes("generate") || q.includes("question")) {
+    return {
+      content: `Aap a4ai par 30 seconds ke andar high-quality test paper bana sakte hain:
+
+• **1 Lakh+ NCERT Questions**: Class 6-12 ke chapters se MCQs, Short, Long, Assertion-Reason aur Numericals select karein.
+• **Instant Auto-Generate**: Class, Subject aur Chapters chunein — balanced paper turant ready ho jata hai.
+• **Institute Branding**: Apna school/coaching logo aur header lagakar PDF ya Word (.docx) mein download karein.
+• **Ready Answer Key**: Checking ke liye step-by-step solutions sath mein milte hain.`,
+      actions: [{ label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" }],
+      suggestions: ["Class 10 Science blueprint", "How to add school logo?", "Pricing plans"]
+    };
+  }
+
+  if (q.includes("check") || q.includes("copy") || q.includes("grading") || q.includes("sheet")) {
+    return {
+      content: `Humara **AI Paper Checker** teachers ka ghanto ka samay bachata hai:
+
+• **Handwritten Copies Support**: Students ki answer sheets ki photo upload karein — AI handwriting read karke automatically marks evaluate karta hai.
+• **Smart Rubric Scoring**: Question-by-question marks aur partial grading transparently hoti hai.
+• **Student Feedback**: Har student ko unki mistakes aur improvement areas par feedback milta hai.`,
+      actions: [{ label: "Open AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" }],
+      suggestions: ["How to upload student copies?", "Can it check handwritten copies?", "Generate Test Paper"]
+    };
+  }
+
+  if (q.includes("attendance") || q.includes("marks") || q.includes("analytics") || q.includes("defaulter")) {
+    return {
+      content: `Aapke Dashboard par complete **Teacher Analytics** available hai:
+
+• **Marks Analytics**: Class average, highest/lowest scores, pass percentage aur top performers leaderboard.
+• **Attendance Analytics**: Daily batch attendance, 75% se kam attendance wale **Defaulters ki Watchlist**.
+• **One-Click Export**: PTM aur school records ke liye poora data Excel/CSV mein download karein.`,
+      actions: [{ label: "View Analytics & Attendance", icon: "📊", tab: "analytics" }],
+      suggestions: ["Identify defaulters (<75%)", "Export Excel attendance report", "How to mark daily attendance?"]
+    };
+  }
+
+  if (q.includes("price") || q.includes("pricing") || q.includes("plan") || q.includes("free") || q.includes("starter") || q.includes("pro")) {
+    return {
+      content: `a4ai ke plans simple aur teacher-friendly hain:
+
+• **Free Plan (₹0)**: 2 test papers har mahine, full NCERT questions access.
+• **Starter Plan (₹149/month)**: 10 tests/month, 2 free student contests, no watermark (~₹5/day).
+• **Pro Plan (₹299/month)**: Unlimited tests, unlimited contests, aapka school logo har paper par, aur priority AI support (~₹10/day).`,
+      actions: [{ label: "View Subscription Plans", icon: "💎", path: "/pricing" }],
+      suggestions: ["Upgrade with UPI", "Starter vs Pro difference", "How to create test?"]
+    };
+  }
+
+  return {
+    content: `Main AI Sarthi hoon, aapka 24x7 teaching buddy.
+
+Aap mujhse:
+• **Test Paper Generation** (1 lakh+ NCERT questions, blueprints)
+• **AI Paper Checker** (handwritten copies & assignment evaluation)
+• **Academic Doubts & Concept Explanations** (Maths, Science, SST, etc. for Classes 1-12)
+• **Lesson Planning & Classroom Tips** ke baare mein kuch bhi pooch sakte hain.
+
+Bataiye, kis topic ya feature mein help karoon?`,
+    actions: [
+      { label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" },
+      { label: "Open AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" }
+    ],
+    suggestions: ["How to create a test paper?", "Try AI Paper Checker", "Explain a concept", "What are the pricing plans?"]
+  };
 }
 
 /* ------------------- MODULES TAB COMPONENT ------------------- */
@@ -848,28 +1548,31 @@ function ModulesTab() {
     </Suspense>
   );
 }
-function AssignmentsWithWorksheet() {
-  const [subTab, setSubTab] = React.useState<'assignments' | 'worksheet'>('assignments');
+function AssignmentsWithWorksheet({ initialSubTab = 'assignments' }: { initialSubTab?: 'assignments' | 'worksheet' }) {
+  const [subTab, setSubTab] = React.useState<'assignments' | 'worksheet'>(initialSubTab);
+
+  React.useEffect(() => {
+    if (initialSubTab) setSubTab(initialSubTab);
+  }, [initialSubTab]);
+
   return (
     <div className="space-y-4 animate-pop">
       <div className="flex gap-1.5 bg-white dark:bg-slate-800 rounded-xl p-1 border border-gray-200 dark:border-slate-700 w-fit shadow-sm">
         <button
           onClick={() => setSubTab('assignments')}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-            subTab === 'assignments'
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${subTab === 'assignments'
               ? 'bg-indigo-500 text-white shadow-sm'
               : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-          }`}
+            }`}
         >
           📋 Assignments
         </button>
         <button
           onClick={() => setSubTab('worksheet')}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-            subTab === 'worksheet'
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${subTab === 'worksheet'
               ? 'bg-violet-500 text-white shadow-sm'
               : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-          }`}
+            }`}
         >
           📝 Worksheet Generator
         </button>
@@ -903,8 +1606,9 @@ export default function TeacherDashboardPage() {
   const notifRef = useRef<HTMLDivElement>(null);
 
   const chatOptions = [
-    "Explain me a4ai",
     "How to Generate Test Paper",
+    "Try AI Paper Checker",
+    "Explain me a4ai",
     "What are the pricing",
     "Learn any topic",
     "Solve Any doubt 24x7"
@@ -915,8 +1619,18 @@ export default function TeacherDashboardPage() {
     {
       role: "assistant",
       content:
-        "Namaste! Main AI Sarthi hoon — aapka a4ai assistant. Test paper banana ho, pricing samajhni ho, ya koi doubt solve karna ho, main yahin hoon. Kahaan se shuru karein?",
-      suggestions: chatOptions
+        "Namaste! Main AI Sarthi hoon — aapka a4ai teaching co-pilot. 1 Lakh+ NCERT questions se test banana ho, student answer copies check karni ho, ya koi concept samajhna ho — main 24x7 yahin hoon. Aaj kya karna chahenge?",
+      suggestions: [
+        "How to Generate Test Paper",
+        "Try AI Paper Checker",
+        "Explain me a4ai",
+        "What are the pricing",
+      ],
+      actions: [
+        { label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" },
+        { label: "AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" },
+        { label: "View Analytics", icon: "📊", tab: "analytics" },
+      ],
     }
   ]);
   const [inputMessage, setInputMessage] = useState("");
@@ -965,6 +1679,8 @@ export default function TeacherDashboardPage() {
 
   const [allTests, setAllTests] = useState<SavedTest[]>([]);
   const [testsLoading, setTestsLoading] = useState(true);
+  const [assignmentsSubTab, setAssignmentsSubTab] = useState<'assignments' | 'worksheet'>('assignments');
+  const [downloadingRecentId, setDownloadingRecentId] = useState<string | null>(null);
 
   useScrollReveal();
 
@@ -990,6 +1706,17 @@ export default function TeacherDashboardPage() {
   }, []);
 
   const recentTests = allTests.slice(0, 3);
+
+  const currentMonthTestsCount = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return allTests.filter((t) => {
+      if (!t.created_at) return true;
+      const d = new Date(t.created_at);
+      return !isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    }).length;
+  }, [allTests]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -1093,141 +1820,300 @@ export default function TeacherDashboardPage() {
 
     if (!overrideMsg) setInputMessage("");
 
-    const exactMatchResponses: Record<string, string> = {
-      "Explain me a4ai":
-        "Namaste! a4ai is built for teachers like you — so the hours you'd spend setting question papers can go back into actual teaching.\n\n• Pick a class, subject, and chapters — a4ai generates a full test paper from NCERT content in under 30 seconds.\n• Every paper comes with a ready answer key, so checking is faster too.\n• Export to PDF or Word, add your institute's logo, and share directly with your students.\n\nThink of it as an assistant that handles the paper-setting grind for you. Want me to walk you through making your first test?",
+    const exactMatchResponses: Record<
+      string,
+      { content: string; actions?: ChatAction[]; suggestions?: string[] }
+    > = {
+      "Explain me a4ai": {
+        content: `**Namaste!** a4ai is India's leading AI co-pilot built exclusively for teachers and educators:
 
-      "How to Generate Test Paper":
-        "Sure, let's make your test paper together — it takes about a minute:\n\n1. Go to your Dashboard and tap Create Test.\n2. Choose the Class, Subject, and Board.\n3. Pick the chapters you want questions from.\n4. (Optional) Upload your institute's logo.\n5. Choose a test pattern or build a Custom one.\n6. Hit Generate — your paper with answer key is ready in seconds.\n\nStuck at any step? Tell me where, and I'll guide you through it.",
-      "What are the pricing":
-        "Here's how a4ai's plans work — pick whichever fits your teaching load:\n\n• Free Plan — ₹0, forever. 2 tests/month, all question formats.\n• Starter Plan — ₹149/month (~₹5/day). 10 tests/month, 2 free contests, no watermark.\n• Pro Plan — ₹299/month (~₹10/day). Unlimited tests & contests, your school's logo on every paper.\n\nUPI, cards, and net banking all work, and upgrades apply instantly. Want help picking the right plan for your class size?",
-      "Learn any topic":
-        "Happy to help — Maths, Science, English, anything on the NCERT syllabus. Just tell me the topic and class, and I'll explain it clearly, with examples if that helps.",
+• **1 Lakh+ NCERT Questions**: Verified question repository with solutions across Classes 6–12 in Science, Maths, SST, and English.
+• **Instant Test Builder**: Create balanced question papers in 30 seconds with answer keys. Export to PDF and editable Word (.docx) with your school logo.
+• **AI Paper Checker**: Upload handwritten student answer copies — AI automatically checks answers, applies rubrics, and grades them with constructive student feedback.
+• **Attendance & Marks Analytics**: Monitor daily batch attendance, track attendance defaulters (<75%), and view student score trends with 1-click Excel export.
+• **Student Portal**: 6-character access codes for students to submit homework and view tests with zero friction.`,
+        actions: [
+          { label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" },
+          { label: "Try AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" },
+          { label: "View Analytics", icon: "📊", tab: "analytics" },
+        ],
+        suggestions: ["How to Generate Test Paper", "Try AI Paper Checker", "What are the pricing", "Explain a concept"],
+      },
 
-      "Solve Any doubt 24x7":
-        "I'm here round the clock — go ahead and share your doubt. Type it out (or use the mic icon), and I'll walk you through it step by step, the way I would with a student."
+      "How to Generate Test Paper": {
+        content: `Aap a4ai par sirf 1 minute me complete test paper bana sakte hain:
+
+1. **Test Builder Kholein**: Dashboard par **Create Test** button dabayein.
+2. **Class & Subject Chunein**: Class (6–12), Subject aur specific Chapters select karein.
+3. **Question Types**: MCQ, Short Answer, Long Answer, Assertion-Reason ya Case-Based select karein ya auto-select hone dein.
+4. **School Branding**: Apna institute name aur logo add karein.
+5. **Download**: Ek click me **PDF** ya editable **Word (DOCX)** format me answer key ke sath download karein!`,
+        actions: [
+          { label: "Launch Test Builder", icon: "✨", path: "/dashboard/create-test" },
+        ],
+        suggestions: ["How to add school logo?", "Can I edit questions?", "What are the pricing"],
+      },
+
+      "Try AI Paper Checker": {
+        content: `**AI Paper Checker** teachers ke copy checking ka bojh 90% kam kar deta hai:
+
+• **Handwritten Copies**: Students ke handwritten papers ya copies ki photo upload karein — AI writing read karke answers evaluate karta hai.
+• **Rubric-Based Marking**: Question-by-question step marks aur transparent scoring.
+• **Personalized Student Feedback**: Har student ko unki specific mistakes aur tips milti hain.
+• **Batch Checking**: Ek sath poori class ki copies check karke marks record karein.`,
+        actions: [
+          { label: "Launch AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" },
+        ],
+        suggestions: ["How to upload student copies?", "Can it check handwritten copies?", "How to Generate Test Paper"],
+      },
+
+      "What are the pricing": {
+        content: `a4ai ke plans transparent aur affordable hain:
+
+• **Free Plan — ₹0 (Lifetime)**: 2 test papers/month, 1 lakh+ NCERT questions access.
+• **Starter Plan — ₹149/month (~₹5/day)**: 10 tests/month, 2 free student contests, no watermark, fast generation.
+• **Pro Plan — ₹299/month (~₹10/day)**: Unlimited tests, unlimited contests, aapke school ka watermark/logo, priority AI processing.
+
+Upgrades UPI, Cards aur Net Banking se instantly activate ho jaate hain.`,
+        actions: [
+          { label: "Explore Subscription Plans", icon: "💎", path: "/pricing" },
+        ],
+        suggestions: ["Starter vs Pro plan details", "How to pay via UPI?", "How to Generate Test Paper"],
+      },
+
+      "Learn any topic": {
+        content: `**Happy to help!** 
+
+Main Class 1 se 12 tak ke kisi bhi topic ko aasan bhasha me explain kar sakta hoon — **Maths, Physics, Chemistry, Biology, Social Science, English**.
+
+Aap topic aur class likhiye (jaise *"Class 10 Trigonometry basics"* ya *"Class 9 Cell Structure"*), aur main aapko:
+• Simple real-life analogies
+• Blackboard explanation points
+• Key formulas & definitions
+• Practice questions for students
+turant de doonga!`,
+        suggestions: ["Explain Photosynthesis Class 10", "Derive Quadratic Formula Class 10", "Newton's 3 Laws with examples"],
+      },
+
+      "Solve Any doubt 24x7": {
+        content: `Main aapka 24x7 academic buddy hoon. Aap mujhse:
+
+• Kisi bhi difficult question ka step-by-step solution
+• Class test ke liye 3-4 tricky HOTS questions
+• Weak students ko engage karne ki pedagogical tips
+• Parent notices aur WhatsApp announcements ka draft
+bina kisi jhijhak pooch sakte hain. Type karein ya mic dabakar boliye!`,
+        suggestions: ["Give 3 HOTS questions for Class 10 Math", "Draft parent notice for unit test", "How to help slow learners?"],
+      },
     };
 
     if (exactMatchResponses[textToSend]) {
       setIsChatLoading(true);
       setTimeout(() => {
+        const item = exactMatchResponses[textToSend];
         setChatMessages((prev) => [
           ...prev,
-          { role: "assistant", content: exactMatchResponses[textToSend], suggestions: chatOptions }
+          {
+            role: "assistant",
+            content: item.content,
+            actions: item.actions,
+            suggestions: item.suggestions || chatOptions,
+          },
         ]);
         setIsChatLoading(false);
-      }, 400);
+      }, 350);
       return;
     }
 
     setIsChatLoading(true);
 
     const isHindi = /[\u0900-\u097F]/.test(textToSend);
-    const isHinglish = !isHindi && /\b(kya|hai|hain|ho|kar|karo|mujhe|mera|meri|aap|bhi|nahi|toh|kaise|chahiye|batao|dekho|abhi|agar|lekin|aur|se|pe|ko|ka|ki|ke|hoga|krna|bnao|samjhao)\b/i.test(textToSend);
+    const isHinglish =
+      !isHindi &&
+      /\b(kya|hai|hain|ho|kar|karo|mujhe|mera|meri|aap|bhi|nahi|toh|kaise|chahiye|batao|dekho|abhi|agar|lekin|aur|se|pe|ko|ka|ki|ke|hoga|krna|bnao|samjhao|bataiye|dijiye)\b/i.test(
+        textToSend
+      );
     const langInstruction = isHindi
-      ? "IMPORTANT: User ne Hindi (Devanagari) mein likha hai. Poora reply Hindi Devanagari mein do. Simple aur clear Hindi use karo."
+      ? "LANGUAGE: User ne Hindi (Devanagari) mein likha hai. Poora reply polite aur clear Devanagari Hindi mein do."
       : isHinglish
-        ? "IMPORTANT: User ne Hinglish mein likha hai. Reply natural Hinglish mein do — jaise user ne likha, waise hi mix karo Hindi aur English. Force mat karo."
-        : "IMPORTANT: User wrote in English. Reply in clear English only. No Hindi unless user switches.";
+        ? "LANGUAGE: User ne Hinglish mein likha hai. Natural, conversational Hinglish (Hindi-English mix) mein reply do — jaise Indian teachers baat karte hain."
+        : "LANGUAGE: User wrote in English. Reply in clear, professional English.";
 
-    const systemPromptText = `You are AI Sarthi, the smart teaching assistant built into a4ai — India's fastest test generation platform for teachers. You are a knowledgeable, patient colleague. Always write "a4ai" in lowercase.
+    const systemPromptText = `You are "AI Sarthi", the brilliant, warm, and highly capable AI Teaching Co-Pilot for a4ai (always write "a4ai" in lowercase).
+Founded by Tarun Pathak (B.Tech ECE, passionate educator & edtech founder).
 
 ${langInstruction}
 
-Tone:
-- Warm, direct — like a senior teacher colleague who respects time
-- Natural sentences first, then bullets/numbered steps for clarity
-- Short replies (3-5 lines) unless step-by-step is needed
-- End with one genuine next step or clarifying question
-- Never push upgrades unprompted — mention pricing only when asked
+WHO YOU ARE & YOUR MISSION:
+You are an expert educator, curriculum designer, and supportive colleague for teachers across India (Tuition teachers, Coaching institutes, and K-12 School teachers). You are knowledgeable, empathetic, fast, and practical.
 
-a4ai features you can help with:
-- Test generation: 30 seconds from NCERT content, MCQ/Short/Long/A&R/Cloze, PDF & DOCX export
-- Attendance: Mark batch-wise daily attendance, per-student tracking
-- Assignments: Teacher creates PDF assignments, students submit via code portal, teacher grades inline with feedback
-- Student Portal: 6-char access code (no signup needed), students see assignments + announcements
-- Pricing: Free (2 tests/mo), Starter ₹149/mo (10 tests + contests), Pro ₹299/mo (unlimited)
+YOUR EXTENSIVE CAPABILITIES:
+1. SUBJECT & ACADEMIC EXPERTISE (Classes 1–12):
+   - You can explain ANY concept across Mathematics, Physics, Chemistry, Biology, Social Science, English, Hindi, and Computer Science.
+   - Explain topics using simple real-world analogies, intuitive steps, blackboard-ready summaries, and formulas.
+   - Draft practice questions on demand: MCQs, Short Answers, Long Answers, Numerical Problems, Assertion-Reason, and HOTS (Higher Order Thinking Skills) with complete answer keys.
 
-STRICT RULES — follow always:
-- NEVER use LaTeX, $formula$, dollar signs for math, or markdown math syntax. Write math in plain text only.
-- NEVER use ** bold ** or markdown formatting in responses — plain text only.
-- If asked anything NOT related to a4ai platform, redirect warmly in 1 sentence.
-- a4ai was founded by Tarun Pathak, B.Tech ECE graduate and experienced teacher turned edtech founder.
-- Do NOT ask "Want me to guide you through creating a test?" or "Want me to walk you through..." unless the user explicitly asks for help with test creation.
-- Do NOT repeat the "Go to Dashboard → Create Test → Select Class/Subject → Generate" instruction in every response. Only mention it if the user specifically asks how to create a test.
-- Keep responses concise and helpful. No unnecessary upsells or repeated instructions.
+2. a4ai PLATFORM MASTERY:
+   - 1 Lakh+ NCERT Question Bank: Over 100,000+ verified NCERT questions with answers and solutions across all chapters.
+   - Instant Test Builder: Generates custom question papers in under 30 seconds. Teachers can customize marks, sections, add school logo/watermark, and export to PDF or editable Word (.docx).
+   - AI Paper / Test Checker (/dashboard/test-checker): Magical AI tool that scans and grades student answer sheets (including handwritten copies!), calculates scores question-by-question with rubrics, and generates student feedback.
+   - Attendance & Marks Analytics: Daily batch attendance, Defaulters Watchlist (< 75%), Marks distribution, Top rankers, and Excel/CSV export.
+   - Student Portal: Frictionless 6-character access codes for students to submit homework and view tests.
+   - Pricing: Free Plan (₹0, 2 tests/mo), Starter Plan (₹149/mo, 10 tests + contests), Pro Plan (₹299/mo, unlimited tests & logo).
 
-Be genuinely helpful. Teacher should feel like they asked a colleague, not a chatbot.`;
+3. PEDAGOGY & CLASSROOM TIPS:
+   - Blueprint design, unit test mark weightage distribution.
+   - Advice on engaging slow learners, handling class discipline, and parent communication (PTM circulars, test notices).
 
-    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+TONE & FORMATTING GUIDELINES:
+- Warm, respectful, and colleague-like ("Namaste Sir/Ma'am" or friendly teacher peer tone).
+- Use **bold** for key concepts and terms.
+- Use bullet points (•) and numbered lists for readability.
+- Keep responses focused, structured, and easy to read on mobile or desktop.
+- End with an encouraging next step or question.`;
+
+    const resolveChatApiUrl = () => {
+      const raw = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").trim().replace(/\/+$/, "");
+      if (raw.endsWith("/api/v1")) return `${raw}/chat`;
+      if (raw.endsWith("/api")) return `${raw}/v1/chat`;
+      return `${raw}/api/v1/chat`;
+    };
+
+    const backendUrl = resolveChatApiUrl();
+    const groqKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
+    const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined;
+
+    // Slice recent messages to adhere to backend limits (max 20)
+    const contextHistory = chatMessages
+      .filter((m) => m.role !== "system")
+      .slice(-12)
+      .map((m) => ({ role: m.role, content: m.content }));
 
     const groqMessages = [
       { role: "system", content: systemPromptText },
-      ...chatMessages
-        .filter((m) => m.role !== "system")
-        .map((m) => ({ role: m.role, content: m.content })),
+      ...contextHistory,
       { role: userMsg.role, content: userMsg.content },
     ];
 
+    let replyText = "";
+
+    // TIER 1: Backend /api/v1/chat
     try {
-      const res = await fetch(`${apiBase}/chat`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const res = await fetch(backendUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: groqMessages }),
+        signal: controller.signal,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Backend error");
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.content, suggestions: chatOptions }
-      ]);
-    } catch (err: any) {
-      // Fallback: OpenRouter API
-      try {
-        const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-        if (!openRouterKey) {
-          throw new Error("OpenRouter API key not found");
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.content) {
+          replyText = data.content;
+        } else if (data.answer) {
+          replyText = data.answer;
         }
+      }
+    } catch (backendErr) {
+      console.warn("Backend chat failed or timed out, trying Groq direct...", backendErr);
+    }
+
+    // TIER 2: Direct Groq Cloud API (qwen/qwen3.8-27b)
+    if (!replyText && groqKey) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${groqKey}`,
+          },
+          body: JSON.stringify({
+            model: "qwen/qwen3.8-27b",
+            messages: groqMessages,
+            temperature: 0.7,
+            max_tokens: 800,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (groqRes.ok) {
+          const groqData = await groqRes.json();
+          replyText = groqData.choices?.[0]?.message?.content || "";
+        }
+      } catch (groqErr) {
+        console.warn("Groq direct chat failed or timed out, trying OpenRouter...", groqErr);
+      }
+    }
+
+    // TIER 3: Direct OpenRouter API (deepseek/deepseek-chat)
+    if (!replyText && openRouterKey) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${openRouterKey}`,
+            Authorization: `Bearer ${openRouterKey}`,
             "HTTP-Referer": window.location.origin,
-            "X-Title": "a4ai"
+            "X-Title": "a4ai AI Sarthi",
           },
           body: JSON.stringify({
             model: "deepseek/deepseek-chat",
             messages: groqMessages,
             temperature: 0.7,
-            max_tokens: 500,
-          })
+            max_tokens: 800,
+          }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
-        if (!openRouterRes.ok) {
-          const errData = await openRouterRes.json();
-          throw new Error(errData.error?.message || "OpenRouter API error");
+        if (openRouterRes.ok) {
+          const orData = await openRouterRes.json();
+          replyText = orData.choices?.[0]?.message?.content || "";
         }
-
-        const openRouterData = await openRouterRes.json();
-        const reply = openRouterData.choices?.[0]?.message?.content || "Sorry, I couldn't generate a response.";
-        setChatMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: reply, suggestions: chatOptions }
-        ]);
-      } catch (fallbackErr: any) {
-        const errorMsg = fallbackErr.message?.includes("API key")
-          ? "⚠️ OpenRouter API key missing. Please add VITE_OPENROUTER_API_KEY to your .env file."
-          : `⚠️ ${fallbackErr.message || "Something went wrong. Please try again."}`;
-        setChatMessages((prev) => [...prev, {
-          role: "assistant",
-          content: errorMsg,
-          suggestions: chatOptions
-        }]);
+      } catch (orErr) {
+        console.warn("OpenRouter chat failed or timed out...", orErr);
       }
     }
 
+    // TIER 4: Offline Smart Pedagogical AI Engine (Guaranteed Fallback)
+    if (!replyText) {
+      const fallbackResult = getOfflinePedagogicalFallback(textToSend);
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: fallbackResult.content,
+          actions: fallbackResult.actions,
+          suggestions: fallbackResult.suggestions,
+        },
+      ]);
+      setIsChatLoading(false);
+      return;
+    }
+
+    // Contextual actions and dynamic suggestions based on conversation
+    const meta = getChatMeta(textToSend, replyText);
+
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: replyText,
+        actions: meta.actions,
+        suggestions: meta.suggestions,
+      },
+    ]);
     setIsChatLoading(false);
   };
 
@@ -1364,7 +2250,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
           </div>
 
           <div className="mt-auto px-5 pb-4 animate-entrance" style={{ animationDelay: "300ms" }}>
-            <SubscriptionSidebarWidget navigate={navigate} />
+            <SubscriptionSidebarWidget navigate={navigate} testsCount={currentMonthTestsCount} />
             <SidebarHelpWidget />
           </div>
         </aside>
@@ -1651,6 +2537,15 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                     </div>
                     <div className="space-y-3 sm:space-y-4">
                       <GlossyButton
+                        label="AI Paper Checker"
+                        subLabel="Magical Answer Sheet Grader"
+                        icon={Icons.Sparkles}
+                        fullWidth
+                        showNewBadge
+                        isStartupsStyle
+                        onClick={() => navigate("/dashboard/test-checker")}
+                      />
+                      <GlossyButton
                         label="Community Quiz"
                         subLabel="From any YouTube video"
                         icon={Icons.Youtube}
@@ -1755,9 +2650,12 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                       {recentTests.map((test) => (
                         <div
                           key={test.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-black/5 dark:border-white/10 hover:bg-white/80 dark:hover:bg-slate-800/60 transition-all duration-300 cursor-pointer group gap-3"
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-6 rounded-[20px] sm:rounded-[32px] bg-white/40 dark:bg-slate-800/30 border border-black/5 dark:border-white/10 hover:bg-white/80 dark:hover:bg-slate-800/60 transition-all duration-300 group gap-3"
                         >
-                          <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+                          <div
+                            onClick={() => setActiveTab("tests")}
+                            className="flex items-center gap-3 sm:gap-5 min-w-0 cursor-pointer flex-1"
+                          >
                             <div className="p-3 sm:p-4 rounded-[16px] sm:rounded-[24px] inset-pill border-none shadow-inner shrink-0" style={{ color: "var(--theme-start)" }}>
                               <Icons.FileText />
                             </div>
@@ -1770,16 +2668,56 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 sm:gap-6">
+                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap shrink-0">
                             {test.total_questions > 0 && (
                               <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 inset-pill border-none px-3 sm:px-4 py-1.5 sm:py-2 rounded-[16px] sm:rounded-[20px]">
-                                {test.total_questions}Q
+                                {test.total_questions}Q · {test.total_marks}M
                               </span>
                             )}
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setDownloadingRecentId(test.id + "_paper");
+                                try {
+                                  await downloadTestDocument({ test, format: "pdf", isAnswerKey: false, teacherId: user?.id });
+                                } finally {
+                                  setDownloadingRecentId(null);
+                                }
+                              }}
+                              disabled={downloadingRecentId === test.id + "_paper"}
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 hover:bg-indigo-100 transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                              title="Download Question Paper PDF"
+                            >
+                              {downloadingRecentId === test.id + "_paper" ? (
+                                <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                "📄 PDF"
+                              )}
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setDownloadingRecentId(test.id + "_key");
+                                try {
+                                  await downloadTestDocument({ test, format: "pdf", isAnswerKey: true, teacherId: user?.id });
+                                } finally {
+                                  setDownloadingRecentId(null);
+                                }
+                              }}
+                              disabled={downloadingRecentId === test.id + "_key"}
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                              title="Download Answer Key PDF"
+                            >
+                              {downloadingRecentId === test.id + "_key" ? (
+                                <div className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                "🔑 Key"
+                              )}
+                            </button>
                             <span
                               className={`text-[10px] px-3 py-1.5 rounded-[16px] font-extrabold uppercase border ${test.status === "saved"
-                                ? "bg-slate-200 text-slate-800 border-slate-300 dark:bg-slate-700/60 dark:text-slate-200"
-                                : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400"
+                                  ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                  : "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/60 dark:text-slate-400"
                                 }`}
                             >
                               {test.status}
@@ -1808,7 +2746,7 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
 
             {activeTab === "calendar" && <TeacherCalendarTab />}
             {activeTab === "modules" && <ModulesTab />}
-            {activeTab === "assignments" && <AssignmentsWithWorksheet />}
+            {activeTab === "assignments" && <AssignmentsWithWorksheet initialSubTab={assignmentsSubTab} />}
 
             {/* ===== ATTENDANCE TAB ===== */}
             {activeTab === "attendance" && (
@@ -1823,24 +2761,20 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                 onCreateNew={() => navigate("/dashboard/test-generator")}
                 tests={allTests}
                 loading={testsLoading}
+                user={user}
               />
             )}
 
             {/* ===== ANALYTICS TAB ===== */}
             {activeTab === "analytics" && (
-              <div className="space-y-6 sm:space-y-8 animate-pop">
-                <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-8 sm:p-10 min-h-[300px] sm:min-h-[500px] flex flex-col justify-center items-center text-center">
-                  <div className="w-16 h-16 sm:w-24 sm:h-24 inset-pill border-none rounded-full flex items-center justify-center mb-6 sm:mb-8" style={{ color: "var(--theme-start)" }}>
-                    <Icons.Chart />
-                  </div>
-                  <h3 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white mb-3 sm:mb-4 tracking-tight">
-                    Performance Trends
-                  </h3>
-                  <p className="text-slate-500 font-medium max-w-sm text-sm sm:text-lg">
-                    Graphs will appear after 5 tests are completed.
-                  </p>
-                </div>
-              </div>
+              <TeacherAnalyticsTab
+                user={user}
+                allTests={allTests}
+                onNavigateTab={(tab) => {
+                  if (tab === "dashboard") navigate("/dashboard");
+                  setActiveTab(tab);
+                }}
+              />
             )}
 
             {/* ===== AI TOOLS TAB ===== */}
@@ -1856,25 +2790,78 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
                   {[
-                    { Icon: Icons.Youtube, title: "Community Quiz", desc: "Generate quizzes from any YouTube video.", action: () => navigate("/teacher/community-quiz/new"), isNew: true, primary: true },
-                    { Icon: Icons.Brain, title: "Test Generator", desc: "Create test papers from NCERT content.", action: () => navigate("/dashboard/test-generator"), isNew: false, primary: false },
-                    { Icon: Icons.FileText, title: "Auto-Grade", desc: "AI-analyze long-form answers instantly.", isNew: false, primary: false },
-                    { Icon: Icons.Book, title: "Study Guides", desc: "Convert notes into smart flashcards.", isNew: false, primary: false },
-                    { Icon: Icons.Search, title: "Plagiarism Check", desc: "Scan against web and AI datasets.", isNew: false, primary: false },
-                    { Icon: Icons.Grid, title: "Smart Rubrics", desc: "Generate standard-aligned rubrics.", isNew: false, primary: false },
-                    { Icon: Icons.Clock, title: "Lesson Planner", desc: "Plan lessons by pacing & standard.", isNew: false, primary: false },
+                    {
+                      Icon: Icons.Sparkles,
+                      title: "AI Paper Checker",
+                      desc: "Magically check & auto-grade handwritten answer sheets, test papers & assignments with instant scoring and line-by-line feedback.",
+                      action: () => navigate("/dashboard/test-checker"),
+                      isNew: true,
+                      primary: true,
+                      badge: "MAGICAL AI",
+                      btnLabel: "Check Papers",
+                    },
+                    {
+                      Icon: Icons.Brain,
+                      title: "Test Generator",
+                      desc: "Create complete CBSE & state board test papers from NCERT in 30 seconds with ready answer keys.",
+                      action: () => navigate("/dashboard/test-generator"),
+                      isNew: false,
+                      primary: false,
+                      btnLabel: "Create Test",
+                    },
+                    {
+                      Icon: Icons.Youtube,
+                      title: "Video to Quiz",
+                      desc: "Turn any educational YouTube video into an interactive live community quiz instantly.",
+                      action: () => navigate("/teacher/community-quiz/new"),
+                      isNew: true,
+                      primary: false,
+                      badge: "NEW",
+                      btnLabel: "Create Quiz",
+                    },
+                    {
+                      Icon: Icons.Grid,
+                      title: "Worksheet Studio",
+                      desc: "Design structured practice worksheets and homework drill sheets tailored to your curriculum.",
+                      action: () => {
+                        setAssignmentsSubTab("worksheet");
+                        setActiveTab("assignments");
+                      },
+                      isNew: false,
+                      primary: false,
+                      btnLabel: "Open Studio",
+                    },
+                    {
+                      Icon: Icons.Book,
+                      title: "Smart Flashcards",
+                      desc: "Convert textbook chapters and class notes into high-retention active recall study flashcards.",
+                      action: () => navigate("/dashboard/flashcards"),
+                      isNew: false,
+                      primary: false,
+                      btnLabel: "Explore Cards",
+                    },
+                    {
+                      Icon: Icons.Search,
+                      title: "PYQ Question Bank",
+                      desc: "Search, filter & assign verified Previous Year Questions with step-by-step marking rubrics.",
+                      action: () => navigate("/practice/zone"),
+                      isNew: false,
+                      primary: false,
+                      btnLabel: "Browse PYQs",
+                    },
                   ].map((tool, i) => {
                     const ToolIcon = tool.Icon;
                     return (
                       <div
                         key={i}
-                        className="glass-panel p-6 sm:p-10 rounded-[28px] sm:rounded-[48px] flex flex-col justify-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all relative overflow-hidden group scroll-reveal"
+                        onClick={tool.action}
+                        className="glass-panel p-6 sm:p-10 rounded-[28px] sm:rounded-[48px] flex flex-col justify-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all relative overflow-hidden group scroll-reveal cursor-pointer hover:shadow-2xl hover:border-blue-500/40"
                         style={{ transitionDelay: `${60 + i * 50}ms` }}
                       >
                         {tool.isNew && (
                           <div className="absolute top-3 right-3">
                             <span className="new-badge btn-glossy-theme text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shadow-lg">
-                              NEW
+                              {tool.badge || "NEW"}
                             </span>
                           </div>
                         )}
@@ -1894,10 +2881,13 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                           {tool.desc}
                         </p>
                         <GlossyButton
-                          label={tool.isNew ? "Try Now" : tool.primary ? "Create Test" : "Launch"}
+                          label={tool.btnLabel || (tool.isNew ? "Try Now" : "Launch")}
                           fullWidth
                           small
-                          onClick={tool.action || (() => { })}
+                          onClick={(e) => {
+                            e?.stopPropagation?.();
+                            tool.action();
+                          }}
                           showNewBadge={tool.isNew}
                           isStartupsStyle={tool.primary}
                         />
@@ -1988,23 +2978,52 @@ Be genuinely helpful. Teacher should feel like they asked a colleague, not a cha
                       <div className={`flex items-end gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                         {msg.role === "assistant" && <RobotMascot size={26} />}
                         <div
-                          className={`p-3 rounded-2xl max-w-[80%] text-[13px] font-medium whitespace-pre-wrap ${msg.role === "user"
-                            ? "text-white rounded-br-md"
-                            : "bg-white dark:bg-black/60 text-slate-800 dark:text-white rounded-bl-md border border-black/5 dark:border-white/10"
+                          className={`p-3 rounded-2xl max-w-[85%] text-[13px] font-medium ${msg.role === "user"
+                            ? "text-white rounded-br-md whitespace-pre-wrap"
+                            : "bg-white dark:bg-black/60 text-slate-800 dark:text-white rounded-bl-md border border-black/5 dark:border-white/10 shadow-xs"
                             }`}
                           style={msg.role === "user" ? { background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` } : {}}
                         >
-                          {msg.content}
+                          {msg.role === "assistant" ? (
+                            <FormattedChatMessage content={msg.content} />
+                          ) : (
+                            msg.content
+                          )}
                         </div>
                       </div>
 
+                      {/* Interactive Action Shortcuts */}
+                      {msg.role === "assistant" && msg.actions && msg.actions.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pl-8 pt-0.5">
+                          {msg.actions.map((act, actIdx) => (
+                            <button
+                              key={actIdx}
+                              onClick={() => {
+                                if (act.action) act.action();
+                                else if (act.path) navigate(act.path);
+                                else if (act.tab) {
+                                  setActiveTab(act.tab);
+                                  setIsChatOpen(false);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                              style={{ background: `linear-gradient(135deg, var(--theme-start), var(--theme-end))` }}
+                            >
+                              {act.icon && <span>{act.icon}</span>}
+                              <span>{act.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Contextual Suggestions */}
                       {msg.role === "assistant" && msg.suggestions && msg.suggestions.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pl-8">
+                        <div className="flex flex-wrap gap-1.5 pl-8 pt-0.5">
                           {msg.suggestions.map((opt, i) => (
                             <button
                               key={i}
                               onClick={() => handleSendMessage(opt)}
-                              className="text-[12px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-black/40 hover:border-slate-300 border border-black/5 dark:border-white/10 px-3 py-1.5 rounded-full transition-all text-left"
+                              className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 bg-white/90 dark:bg-black/50 hover:bg-slate-50 dark:hover:bg-black/70 hover:border-slate-300 border border-black/10 dark:border-white/15 px-3 py-1 rounded-full transition-all text-left shadow-2xs hover:scale-[1.02] cursor-pointer"
                             >
                               {opt}
                             </button>

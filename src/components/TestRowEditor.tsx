@@ -27,10 +27,10 @@
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useRef, memo, useCallback, forwardRef, useState, useEffect } from "react";
-import { useFieldArray, useFormContext, Controller, UseFormSetValue, UseFormWatch, FieldValues } from "react-hook-form";
+import { useFieldArray, useFormContext, Controller } from "react-hook-form";
 import {
-  GripVertical, Paperclip, Trash2, PlusCircle, Check, FileText, BookOpen,
-  AlignLeft, ListChecks, ArrowLeftRight, Loader2, AlertCircle, ChevronDown,
+  GripVertical, Trash2, PlusCircle, FileText, BookOpen,
+  AlignLeft, ListChecks, ArrowLeftRight, Loader2, AlertCircle, ChevronDown, Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -43,13 +43,6 @@ interface SimpleRowData {
   marks: number;
   difficulty: "Easy" | "Medium" | "Hard" | "Mixed";
   format: "MCQ" | "Short" | "Long" | "Essay" | "JournalEntry" | "Ledger" | "TrialBalance";
-  refFile?: File;
-}
-
-interface RefUploadButtonProps {
-  index: number;
-  setValue: UseFormSetValue<FieldValues>;
-  watch: UseFormWatch<FieldValues>;
 }
 
 interface ChapterGroup {
@@ -67,6 +60,7 @@ interface RowProps {
   subtopicsMap: Record<string, string[]>;
   chaptersLoading: boolean;
   remove: (index: number) => void;
+  isCbseMode?: boolean;
 }
 
 interface FormValues {
@@ -601,61 +595,6 @@ function renderChapterOptions(
   ));
 }
 
-// ==================== FILE UPLOAD HANDLER ====================
-const RefUploadButton: React.FC<RefUploadButtonProps & { fullWidth?: boolean }> = memo(
-  ({ index, setValue, watch, fullWidth }) => {
-    const fileRef = useRef<HTMLInputElement>(null);
-    const file = watch(`simpleData.${index}.refFile`);
-
-    const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-      const f = e.target.files?.[0];
-      if (fileRef.current) fileRef.current.value = "";
-      setValue(`simpleData.${index}.refFile`, f ?? undefined);
-    }, [index, setValue]);
-
-    const handleClearFile = useCallback((e: React.MouseEvent) => {
-      e.stopPropagation();
-      setValue(`simpleData.${index}.refFile`, undefined);
-    }, [index, setValue]);
-
-    return (
-      <div className={`relative ${fullWidth ? "w-full" : ""}`}>
-        <input
-          type="file"
-          ref={fileRef}
-          className="hidden"
-          onChange={handleFileChange}
-          accept=".pdf,.doc,.docx,.txt,.md"
-        />
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className={`${fullWidth ? "w-full justify-center" : ""} min-h-[44px] px-3 py-2.5 rounded-xl transition-all border shadow-sm flex items-center gap-2 ${
-            file ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-500 border-[#E5E7EB]"
-          }`}
-          style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
-        >
-          {file ? <Check size={16} /> : <Paperclip size={16} />}
-          <span className="text-xs font-semibold">
-            {file ? (file.name.length > 16 ? `${file.name.substring(0, 14)}...` : file.name) : "Add Reference"}
-          </span>
-        </motion.button>
-        {file && (
-          <button
-            type="button"
-            onClick={handleClearFile}
-            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
-          >
-            ×
-          </button>
-        )}
-      </div>
-    );
-  },
-);
-RefUploadButton.displayName = "RefUploadButton";
-
 // ==================== FORMAT SELECTOR ====================
 const FormatSelector = memo(({ index, subject }: { index: number; subject: string }) => {
   const { watch, setValue } = useFormContext();
@@ -698,7 +637,7 @@ FormatSelector.displayName = "FormatSelector";
 // MOBILE: Card Row
 // ═══════════════════════════════════════════════════════════════════════
 const MobileCard = memo(({
-  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
+  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove, isCbseMode,
 }: RowProps) => {
   const { control, watch, setValue } = useFormContext<FormValues>();
 
@@ -793,77 +732,83 @@ const MobileCard = memo(({
         />
       </div>
 
-      {/* ✅ v9: Quantity + Marks — Controller (no snap-back on mobile) */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={labelClass}>Quantity</label>
-          <Controller
-            name={`simpleData.${index}.quantity`}
-            control={control}
-            render={({ field: f }) => (
-              <select
-                value={f.value ?? 5}
-                onChange={(e) => f.onChange(Number(e.target.value))}
-                onBlur={f.onBlur}
-                className={inputClass}
-              >
-                {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-            )}
-          />
+      {isCbseMode ? (
+        <div className="py-2.5 px-3 bg-blue-50/70 border border-blue-100 rounded-xl flex items-center justify-between text-xs text-blue-700">
+          <div className="flex items-center gap-1.5">
+            <Sparkles size={14} className="text-blue-500" />
+            <span className="font-semibold">CBSE Pattern Distribution</span>
+          </div>
+          <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">Auto (Sec A–E)</span>
         </div>
-        <div>
-          <label className={labelClass}>Marks each</label>
-          <Controller
-            name={`simpleData.${index}.marks`}
-            control={control}
-            render={({ field: f }) => (
-              <select
-                value={f.value ?? 1}
-                onChange={(e) => f.onChange(Number(e.target.value))}
-                onBlur={f.onBlur}
-                className={inputClass}
-              >
-                {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n} marks</option>)}
-              </select>
-            )}
-          />
-        </div>
-      </div>
+      ) : (
+        <>
+          {/* ✅ v9: Quantity + Marks — Controller (no snap-back on mobile) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Quantity</label>
+              <Controller
+                name={`simpleData.${index}.quantity`}
+                control={control}
+                render={({ field: f }) => (
+                  <select
+                    value={f.value ?? 5}
+                    onChange={(e) => f.onChange(Number(e.target.value))}
+                    onBlur={f.onBlur}
+                    className={inputClass}
+                  >
+                    {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                )}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Marks each</label>
+              <Controller
+                name={`simpleData.${index}.marks`}
+                control={control}
+                render={({ field: f }) => (
+                  <select
+                    value={f.value ?? 1}
+                    onChange={(e) => f.onChange(Number(e.target.value))}
+                    onBlur={f.onBlur}
+                    className={inputClass}
+                  >
+                    {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n} marks</option>)}
+                  </select>
+                )}
+              />
+            </div>
+          </div>
 
-      {/* ✅ v9: Difficulty — Controller */}
-      <div>
-        <label className={labelClass}>Difficulty</label>
-        <Controller
-          name={`simpleData.${index}.difficulty`}
-          control={control}
-          render={({ field: f }) => (
-            <select
-              value={f.value ?? "Medium"}
-              onChange={(e) => f.onChange(e.target.value)}
-              onBlur={f.onBlur}
-              className={inputClass}
-            >
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Hard">Hard</option>
-              <option value="Mixed">Mixed</option>
-            </select>
-          )}
-        />
-      </div>
+          {/* ✅ v9: Difficulty — Controller */}
+          <div>
+            <label className={labelClass}>Difficulty</label>
+            <Controller
+              name={`simpleData.${index}.difficulty`}
+              control={control}
+              render={({ field: f }) => (
+                <select
+                  value={f.value ?? "Medium"}
+                  onChange={(e) => f.onChange(e.target.value)}
+                  onBlur={f.onBlur}
+                  className={inputClass}
+                >
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Hard">Hard</option>
+                  <option value="Mixed">Mixed</option>
+                </select>
+              )}
+            />
+          </div>
 
-      {/* Format */}
-      <div>
-        <label className={labelClass}>Question Type</label>
-        <FormatSelector index={index} subject={subject} />
-      </div>
-
-      {/* Reference */}
-      <div>
-        <label className={labelClass}>Reference (optional)</label>
-        <RefUploadButton index={index} setValue={setValue} watch={watch} fullWidth />
-      </div>
+          {/* Format */}
+          <div>
+            <label className={labelClass}>Question Type</label>
+            <FormatSelector index={index} subject={subject} />
+          </div>
+        </>
+      )}
     </motion.div>
   );
 });
@@ -873,7 +818,7 @@ MobileCard.displayName = "MobileCard";
 // DESKTOP: Table Row
 // ═══════════════════════════════════════════════════════════════════════
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
-  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove,
+  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove, isCbseMode,
 }, ref) => {
   const { control, watch, setValue } = useFormContext<FormValues>();
 
@@ -949,70 +894,77 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
         </div>
       </td>
 
-      {/* ✅ v9: Quantity — Controller */}
-      <td className="py-3 px-4 text-center">
-        <Controller
-          name={`simpleData.${index}.quantity`}
-          control={control}
-          render={({ field: f }) => (
-            <select
-              value={f.value ?? 5}
-              onChange={(e) => f.onChange(Number(e.target.value))}
-              onBlur={f.onBlur}
-              className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
-            >
-              {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          )}
-        />
-      </td>
+      {isCbseMode ? (
+        <td colSpan={4} className="py-3 px-4 text-center">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-100">
+            <Sparkles size={13} className="text-blue-500" />
+            <span>Auto-distributed into Sections A–E (38 Qs, 80 Marks)</span>
+          </div>
+        </td>
+      ) : (
+        <>
+          {/* ✅ v9: Quantity — Controller */}
+          <td className="py-3 px-4 text-center">
+            <Controller
+              name={`simpleData.${index}.quantity`}
+              control={control}
+              render={({ field: f }) => (
+                <select
+                  value={f.value ?? 5}
+                  onChange={(e) => f.onChange(Number(e.target.value))}
+                  onBlur={f.onBlur}
+                  className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
+                >
+                  {[1,2,3,4,5,6,7,8,9,10,15,20].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              )}
+            />
+          </td>
 
-      {/* ✅ v9: Marks — Controller */}
-      <td className="py-3 px-4 text-center">
-        <Controller
-          name={`simpleData.${index}.marks`}
-          control={control}
-          render={({ field: f }) => (
-            <select
-              value={f.value ?? 1}
-              onChange={(e) => f.onChange(Number(e.target.value))}
-              onBlur={f.onBlur}
-              className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
-            >
-              {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n}m</option>)}
-            </select>
-          )}
-        />
-      </td>
+          {/* ✅ v9: Marks — Controller */}
+          <td className="py-3 px-4 text-center">
+            <Controller
+              name={`simpleData.${index}.marks`}
+              control={control}
+              render={({ field: f }) => (
+                <select
+                  value={f.value ?? 1}
+                  onChange={(e) => f.onChange(Number(e.target.value))}
+                  onBlur={f.onBlur}
+                  className="w-16 bg-[#F3F4F6] border-none rounded-xl py-2 text-center text-xs font-bold text-[#111827] focus:ring-2 focus:ring-gray-400/20 outline-none appearance-none"
+                >
+                  {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>{n}m</option>)}
+                </select>
+              )}
+            />
+          </td>
 
-      {/* ✅ v9: Difficulty — Controller */}
-      <td className="py-3 px-4">
-        <Controller
-          name={`simpleData.${index}.difficulty`}
-          control={control}
-          render={({ field: f }) => (
-            <select
-              value={f.value ?? "Medium"}
-              onChange={(e) => f.onChange(e.target.value)}
-              onBlur={f.onBlur}
-              className="w-full bg-white border border-[#E5E7EB] text-xs font-bold text-gray-600 rounded-xl py-2 px-3 outline-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm appearance-none"
-            >
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Hard">Hard</option>
-              <option value="Mixed">Mixed</option>
-            </select>
-          )}
-        />
-      </td>
+          {/* ✅ v9: Difficulty — Controller */}
+          <td className="py-3 px-4">
+            <Controller
+              name={`simpleData.${index}.difficulty`}
+              control={control}
+              render={({ field: f }) => (
+                <select
+                  value={f.value ?? "Medium"}
+                  onChange={(e) => f.onChange(e.target.value)}
+                  onBlur={f.onBlur}
+                  className="w-full bg-white border border-[#E5E7EB] text-xs font-bold text-gray-600 rounded-xl py-2 px-3 outline-none cursor-pointer hover:border-gray-400 transition-colors shadow-sm appearance-none"
+                >
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Hard">Hard</option>
+                  <option value="Mixed">Mixed</option>
+                </select>
+              )}
+            />
+          </td>
 
-      <td className="py-3 px-4">
-        <FormatSelector index={index} subject={subject} />
-      </td>
-
-      <td className="py-3 px-4 text-center">
-        <RefUploadButton index={index} setValue={setValue} watch={watch} />
-      </td>
+          <td className="py-3 px-4">
+            <FormatSelector index={index} subject={subject} />
+          </td>
+        </>
+      )}
 
       <td className="py-3 px-4 text-center">
         <motion.button
@@ -1031,7 +983,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
 TableRow.displayName = "TableRow";
 
 // ==================== SIMPLE MODE VIEW ====================
-const SimpleModeView: React.FC = () => {
+const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false }) => {
   const { control, watch, setValue: setFormValue } = useFormContext<FormValues>();
   const { fields, append, remove } = useFieldArray({ control, name: "simpleData" });
 
@@ -1154,6 +1106,7 @@ const SimpleModeView: React.FC = () => {
                   subtopicsMap={subtopicsMap}
                   chaptersLoading={chaptersLoading}
                   remove={remove}
+                  isCbseMode={isCbseMode}
                 />
               ))}
             </AnimatePresence>
@@ -1164,16 +1117,24 @@ const SimpleModeView: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <caption className="sr-only">Test configuration table</caption>
               <thead>
-                <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
-                  <th className="py-4 px-6 w-12 text-center" />
-                  <th className="py-4 px-4">Chapter & Topics</th>
-                  <th className="py-4 px-4 w-20 text-center">Quantity</th>
-                  <th className="py-4 px-4 w-20 text-center">Marks</th>
-                  <th className="py-4 px-4 w-32">Difficulty</th>
-                  <th className="py-4 px-4 w-48">Question Type</th>
-                  <th className="py-4 px-4 w-20 text-center">Reference</th>
-                  <th className="py-4 px-4 w-12 text-center" />
-                </tr>
+                {isCbseMode ? (
+                  <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
+                    <th className="py-4 px-6 w-12 text-center" />
+                    <th className="py-4 px-4">Chapter & Topics</th>
+                    <th colSpan={4} className="py-4 px-4 text-center">Question Distribution</th>
+                    <th className="py-4 px-4 w-12 text-center" />
+                  </tr>
+                ) : (
+                  <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#F3F4F6]">
+                    <th className="py-4 px-6 w-12 text-center" />
+                    <th className="py-4 px-4">Chapter & Topics</th>
+                    <th className="py-4 px-4 w-20 text-center">Quantity</th>
+                    <th className="py-4 px-4 w-20 text-center">Marks</th>
+                    <th className="py-4 px-4 w-32">Difficulty</th>
+                    <th className="py-4 px-4 w-48">Question Type</th>
+                    <th className="py-4 px-4 w-12 text-center" />
+                  </tr>
+                )}
               </thead>
               <tbody className="divide-y divide-gray-50">
                 <AnimatePresence>
@@ -1187,6 +1148,7 @@ const SimpleModeView: React.FC = () => {
                       subtopicsMap={subtopicsMap}
                       chaptersLoading={chaptersLoading}
                       remove={remove}
+                      isCbseMode={isCbseMode}
                     />
                   ))}
                 </AnimatePresence>
@@ -1202,7 +1164,7 @@ const SimpleModeView: React.FC = () => {
             style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
           >
             <PlusCircle size={18} className="group-hover:scale-110 transition-transform" />
-            Add Chapter Section
+            {isCbseMode ? "Add Chapter for Pattern" : "Add Chapter Section"}
           </motion.button>
         </>
       )}
@@ -1211,15 +1173,14 @@ const SimpleModeView: React.FC = () => {
 };
 
 // ==================== MAIN EXPORT ====================
-export const TestRowEditor = ({ activeMode }: { activeMode: string }) => {
-  if (activeMode !== "Simple") {
-    return (
-      <div className="p-10 sm:p-16 text-center text-gray-400 font-bold bg-white rounded-2xl sm:rounded-[24px] border border-white shadow-sm">
-        Coming Soon
-      </div>
-    );
-  }
-  return <SimpleModeView />;
+export const TestRowEditor = ({
+  activeMode = "Simple",
+  isCbseMode = false,
+}: {
+  activeMode?: string;
+  isCbseMode?: boolean;
+}) => {
+  return <SimpleModeView isCbseMode={isCbseMode} />;
 };
 
 export const FORMAT_MAP: Record<string, string> = {

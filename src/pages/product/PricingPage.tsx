@@ -1,5 +1,5 @@
 // src/pages/product/PricingPage.tsx
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   Check,
@@ -21,7 +21,7 @@ type PeriodKey = "monthly" | "yearly";
 
 const hx = {
   fontFamily:
-    "'Halenoir Expanded DemiBold','Halenoir Expanded','Halenoir','Inter',system-ui,sans-serif",
+    "'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   fontWeight: 600,
 } as const;
 
@@ -37,35 +37,39 @@ const GlobalStyles = () => {
 
     const s = document.createElement("style");
     s.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
       .lp-pricing-wrapper, .lp-pricing-wrapper * {
+        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         color-scheme: light only !important;
         forced-color-adjust: none !important;
+        -webkit-font-smoothing: antialiased;
       }
 
       .force-light-dock {
-        background-color: rgba(255, 255, 255, 0.45) !important;
-        background: rgba(255, 255, 255, 0.45) !important;
+        background-color: rgba(255, 255, 255, 0.7) !important;
+        background: rgba(255, 255, 255, 0.7) !important;
         backdrop-filter: blur(24px) saturate(180%) !important;
         -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.5) !important;
-        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 32px rgba(0, 0, 0, 0.03) !important;
+        border: 1px solid rgba(226, 232, 240, 0.8) !important;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 32px rgba(0, 0, 0, 0.04) !important;
       }
 
       .pricing-card {
-        border-radius: 22px;
+        border-radius: 24px;
         transition: transform 0.22s cubic-bezier(.16,1,.3,1), box-shadow 0.22s cubic-bezier(.16,1,.3,1);
         position: relative;
-        background: rgba(255, 255, 255, 0.9) !important;
-        border: 1px solid rgba(0, 0, 0, 0.08) !important;
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
         backdrop-filter: blur(30px) saturate(170%) !important;
         -webkit-backdrop-filter: blur(30px) saturate(170%) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 14px 36px -12px rgba(2,6,23,0.12) !important;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.02) !important;
       }
 
       @media (hover: hover) {
         .pricing-card:hover {
           transform: translateY(-4px) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 18px 44px -10px rgba(2,6,23,0.18) !important;
+          box-shadow: 0 20px 40px -12px rgba(59, 130, 246, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
         }
       }
 
@@ -73,68 +77,59 @@ const GlobalStyles = () => {
         background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 85%) !important;
         color: #ffffff !important;
         border: 1px solid #60a5fa !important;
-        box-shadow: 0 8px 20px rgba(59, 130, 246, 0.2) !important;
-        transition: filter 0.2s;
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25) !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
       }
-      .btn-blue-gradient * { color: #ffffff !important; }
-      @media (hover: hover) { .btn-blue-gradient:hover { filter: brightness(1.06); } }
+      .btn-blue-gradient * { color: #ffffff !important; stroke: #ffffff !important; }
+      @media (hover: hover) { 
+        .btn-blue-gradient:hover { 
+          filter: brightness(1.05); 
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.38) !important; 
+        } 
+      }
 
-      .btn-green-gradient {
-        background: linear-gradient(180deg, #a7f3d0 0%, #10b981 85%) !important;
-        color: #ffffff !important;
-        border: 1px solid #34d399 !important;
-        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.15) !important;
-        transition: filter 0.2s;
+      .btn-white-action {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
       }
-      .btn-green-gradient * { color: #ffffff !important; }
-      @media (hover: hover) { .btn-green-gradient:hover { filter: brightness(1.06); } }
-
-      .btn-orange-gradient {
-        background: linear-gradient(180deg, #fdba74 0%, #f97316 85%) !important;
-        color: #ffffff !important;
-        border: 1px solid #fb923c !important;
-        box-shadow: 0 8px 20px rgba(249, 115, 22, 0.2) !important;
-        transition: filter 0.2s;
+      .btn-white-action * { color: #0f172a !important; stroke: #0f172a !important; }
+      @media (hover: hover) {
+        .btn-white-action:hover {
+          background: #f8fafc !important;
+          border-color: #cbd5e1 !important;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07) !important;
+        }
       }
-      .btn-orange-gradient * { color: #ffffff !important; }
-      @media (hover: hover) { .btn-orange-gradient:hover { filter: brightness(1.06); } }
-
-      .btn-purple-gradient {
-        background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 85%) !important;
-        color: #ffffff !important;
-        border: 1px solid #a78bfa !important;
-        box-shadow: 0 8px 20px rgba(139, 92, 246, 0.2) !important;
-        transition: filter 0.2s;
-      }
-      .btn-purple-gradient * { color: #ffffff !important; }
-      @media (hover: hover) { .btn-purple-gradient:hover { filter: brightness(1.06); } }
 
       .per-student-pill {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        background: linear-gradient(135deg, #eff6ff, #f0fdf4);
-        border: 1px solid #bfdbfe;
+        gap: 5px;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
         color: #1d4ed8;
         font-size: 11px;
         font-weight: 600;
         padding: 3px 10px;
         border-radius: 999px;
-        margin-top: 4px;
       }
 
       .sales-badge {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: linear-gradient(135deg, #fef3c7, #fde68a);
-        border: 1px solid #f59e0b;
+        background: #fef3c7;
+        border: 1px solid #fde68a;
         color: #92400e;
         font-size: 11px;
-        font-weight: 700;
-        padding: 4px 14px;
+        font-weight: 600;
+        padding: 3px 10px;
         border-radius: 999px;
-        margin-top: 6px;
       }
     `;
     document.head.appendChild(s);
@@ -299,7 +294,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
         "Calendar & scheduling",
         "Email + chat support",
       ],
-      buttonGradient: "btn-purple-gradient",
+      buttonGradient: "btn-blue-gradient",
     },
     {
       name: "Plus",
@@ -320,7 +315,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
         "Priority phone support",
       ],
       popular: true,
-      buttonGradient: "btn-orange-gradient",
+      buttonGradient: "btn-blue-gradient",
     },
     {
       name: "Enterprise",
@@ -692,21 +687,63 @@ export default function PricingPage() {
         </div>
 
         {/* ── PRICING SUMMARY TABLE ── */}
-        <div className="mt-14 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
-            <h3 className="text-lg font-bold text-slate-900" style={hx}>
-              Pricing Summary — Institutes &amp; Colleges
-            </h3>
+        <div className="mt-16 pricing-card p-6 sm:p-8 bg-white/95 rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-100 gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100 mb-2">
+                <Building size={13} /> Institutional Plans Comparison
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight" style={hx}>
+                Pricing Summary — Institutes &amp; Colleges
+              </h3>
+              <p className="text-sm text-slate-500 mt-1 max-w-2xl">
+                Compare student limits, teacher accounts, and per-student rates side-by-side. Transparent pricing with zero hidden fees.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 self-start sm:self-center">
+              <span className="text-xs font-medium text-slate-400">Billing:</span>
+              <button
+                type="button"
+                onClick={() => setBillingPeriod("monthly")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  billingPeriod === "monthly"
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+                style={hx}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingPeriod("yearly")}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                  billingPeriod === "yearly"
+                    ? "bg-slate-900 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+                style={hx}
+              >
+                Yearly
+                <span className="rounded-full bg-emerald-500 text-white px-1.5 py-0.2 text-[10px]">
+                  FREE 2mo
+                </span>
+              </button>
+            </div>
           </div>
-          <div className="overflow-x-auto">
+
+          <div className="overflow-x-auto mt-4 -mx-6 sm:mx-0">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50/50">
-                <tr>
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/60">
                   {["Plan", "Students", "Teachers", "Monthly", "Yearly", "Per Student", ""].map(
                     (h, i) => (
                       <th
                         key={i}
-                        className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap"
+                        className={`px-4 py-3.5 text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap ${
+                          i === 6 ? "text-right" : "text-left"
+                        }`}
+                        style={hx}
                       >
                         {h}
                       </th>
@@ -716,78 +753,131 @@ export default function PricingPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {summaryRows.map((r, i) => {
-                  const isCollege = r.section === "college";
                   const isSales = r.action === "sales";
-                  const borderClass =
-                    i === 3
-                      ? "border-t-2 border-slate-300"
-                      : "";
+                  const showSubheader = i === 0 || i === 3;
+                  const subheaderTitle =
+                    i === 0
+                      ? "Coaching Centres & Institutes (Up to 500 Students)"
+                      : "Colleges & Schools (1,000+ Students)";
 
                   return (
-                    <tr
-                      key={i}
-                      className={`${r.highlight ? "bg-blue-50/30" : ""} ${borderClass} ${isSales ? "bg-amber-50/30" : ""}`}
-                    >
-                      <td
-                        className={`px-4 py-3 font-bold whitespace-nowrap ${
-                          isSales ? "text-amber-700" : isCollege ? "text-purple-700" : "text-slate-800"
+                    <React.Fragment key={i}>
+                      {showSubheader && (
+                        <tr className="bg-slate-50/80 border-t border-slate-100">
+                          <td
+                            colSpan={7}
+                            className="px-4 py-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider"
+                            style={hx}
+                          >
+                            {subheaderTitle}
+                          </td>
+                        </tr>
+                      )}
+                      <tr
+                        className={`transition-colors duration-150 ${
+                          r.highlight
+                            ? "bg-blue-50/30 hover:bg-blue-50/50"
+                            : isSales
+                            ? "bg-amber-50/20 hover:bg-amber-50/40"
+                            : "hover:bg-slate-50/60"
                         }`}
                       >
-                        {r.plan}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.students}</td>
-                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.teachers}</td>
-                      <td
-                        className={`px-4 py-3 font-bold whitespace-nowrap ${
-                          isSales ? "text-amber-700" : isCollege ? "text-purple-700" : "text-slate-800"
-                        }`}
-                      >
-                        {r.monthly}
-                      </td>
-                      <td
-                        className={`px-4 py-3 font-bold whitespace-nowrap ${
-                          isSales ? "text-amber-700" : isCollege ? "text-purple-700" : "text-slate-800"
-                        }`}
-                      >
-                        {r.yearly}
-                      </td>
-                      <td className={`px-4 py-3 font-semibold whitespace-nowrap ${
-                        isSales ? "text-amber-700" : "text-blue-700"
-                      }`}>
-                        {r.perStudent}/mo
-                      </td>
-                      <td className="px-4 py-3">
-                        {r.action === "popular" ? (
-                          <button
-                            onClick={() => navigate("/payment")}
-                            className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:bg-blue-700 transition-colors"
-                          >
-                            Popular
-                          </button>
-                        ) : r.action === "sales" ? (
-                          <button
-                            onClick={handleSalesClick}
-                            className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer hover:bg-blue-700 transition-colors"
-                          >
-                            Contact Sales
-                          </button>
-                        ) : r.action === "contact" ? (
-                          <button
-                            onClick={() => navigate("/contact")}
-                            className="text-purple-600 font-bold text-xs hover:underline cursor-pointer"
-                          >
-                            Contact
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => navigate("/payment")}
-                            className="text-blue-600 font-bold text-xs hover:underline cursor-pointer"
-                          >
-                            Get Started
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                        {/* Plan */}
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-[14px] text-slate-900" style={hx}>
+                              {r.plan}
+                            </span>
+                            {r.highlight && (
+                              <span
+                                className="rounded-full bg-blue-600 text-white text-[10px] font-semibold px-2 py-0.5 shadow-xs"
+                                style={hx}
+                              >
+                                Popular
+                              </span>
+                            )}
+                            {isSales && (
+                              <span
+                                className="rounded-full bg-amber-100 text-amber-800 text-[10px] font-semibold px-2 py-0.5 border border-amber-200"
+                                style={hx}
+                              >
+                                Enterprise
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Students */}
+                        <td className="px-4 py-3.5 text-slate-600 text-[13px] font-medium whitespace-nowrap">
+                          {r.students}
+                        </td>
+
+                        {/* Teachers */}
+                        <td className="px-4 py-3.5 text-slate-600 text-[13px] font-medium whitespace-nowrap">
+                          {r.teachers}
+                        </td>
+
+                        {/* Monthly */}
+                        <td className="px-4 py-3.5 text-slate-900 text-[14px] font-bold whitespace-nowrap" style={hx}>
+                          {r.monthly}
+                        </td>
+
+                        {/* Yearly */}
+                        <td className="px-4 py-3.5 text-slate-900 text-[14px] font-bold whitespace-nowrap" style={hx}>
+                          {r.yearly}
+                        </td>
+
+                        {/* Per Student */}
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          {isSales ? (
+                            <span className="sales-badge">
+                              <Mail size={11} /> Custom/mo
+                            </span>
+                          ) : (
+                            <span className="per-student-pill">
+                              <UserCheck size={11} /> {r.perStudent}/mo
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Action CTA */}
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                          {r.action === "popular" ? (
+                            <button
+                              onClick={() => navigate("/payment")}
+                              className="btn-blue-gradient h-8 px-3.5 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
+                              style={hx}
+                            >
+                              Popular <ArrowRight size={12} />
+                            </button>
+                          ) : r.action === "sales" ? (
+                            <button
+                              onClick={handleSalesClick}
+                              className="bg-slate-900 hover:bg-slate-800 text-white h-8 px-3.5 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm transition-colors"
+                              style={hx}
+                            >
+                              Talk to Sales <Mail size={12} />
+                            </button>
+                          ) : r.action === "contact" ? (
+                            <button
+                              onClick={() => navigate("/contact")}
+                              className="btn-white-action h-8 px-3.5 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
+                              style={hx}
+                            >
+                              Contact <ArrowRight size={12} />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => navigate("/payment")}
+                              className="btn-white-action h-8 px-3.5 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
+                              style={hx}
+                            >
+                              Get Started <ArrowRight size={12} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

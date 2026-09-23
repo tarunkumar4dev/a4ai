@@ -1,29 +1,33 @@
 /**
- * TestBuilderPage.tsx — NCERT Drag & Drop Test Builder (Production v2.1)
+ * TestBuilderPage.tsx — NCERT Drag & Drop Test Builder (Production v4.1 — God Level)
  *
- * FIXES from v1:
- *   - API_BASE from env (no trailing /api/v1)
- *   - API_PREFIX constant to avoid double /api/v1
- *   - KaTeX error boundary (malformed LaTeX won't crash page)
- *   - Search debounce (300ms)
- *   - Pagination with "Load More"
- *   - Auth token in all API calls
- *   - Table rendering for Statistics/Accountancy questions
- *   - Diagram badge with figure reference
- *   - Export loading state
- *   - Options JSON parsing safety
- *   - Empty/error states
+ * Combines:
+ *   - Mobile-first slide-up Chapter Bottom Sheet with search autofocus & ESC listener
+ *   - Sticky bottom bar in clean light mode with sleek BLACK "View Paper" button
+ *   - Both mobile reorder methods: Touch drag handle (⠿) + Quick ▲/▼ buttons
+ *   - Export buttons with animated loading spinner (<Spinner />)
+ *   - Smooth requestAnimationFrame useIsMobile hook
+ *   - Full-width question cards on mobile, 2-panel split on desktop
+ *   - Full KaTeX math, diagram badge, and responsive table support
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   DndContext,
   closestCenter,
   DragOverlay,
   useSensor,
   useSensors,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   KeyboardSensor,
+  useDroppable,
+  defaultDropAnimation,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -36,19 +40,19 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import "katex/dist/katex.min.css";
 import { InlineMath, BlockMath } from "react-katex";
+import { supabase } from "@/lib/supabaseClient";
+import { generateTestPaperPdf, generateAnswerKeyPdf } from "@/utils/testPdfExporter";
+import { toast } from "sonner";
 
 // ── Config ──────────────────────────────────────────────────────
-// NOTE: VITE_API_URL must NOT include /api/v1 — prefix is added below.
-// Example: VITE_API_URL=https://rag-backend-kappa-three.vercel.app
 const API_BASE = (
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE ||
   "http://localhost:8000"
 ).replace(/\/+$/, "");
-
 const API_PREFIX = "/api/v1";
-
 const PAGE_SIZE = 30;
+const MOBILE_BREAKPOINT = 1024;
 
 // ── Types ───────────────────────────────────────────────────────
 interface NCERTQuestion {
@@ -87,9 +91,10 @@ interface ChapterStat {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
-
 function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   try {
     const raw = localStorage.getItem("sb-dcmnzvjftmdbywrjkust-auth-token");
     if (raw) {
@@ -98,7 +103,7 @@ function getAuthHeaders(): Record<string, string> {
       if (token) headers["Authorization"] = `Bearer ${token}`;
     }
   } catch {
-    /* no auth token available */
+    /* no auth token */
   }
   return headers;
 }
@@ -125,13 +130,31 @@ function useDebounce<T>(value: T, ms: number): T {
   return debounced;
 }
 
-// ── Safe LaTeX Renderer ─────────────────────────────────────────
+function useIsMobile(breakpoint = MOBILE_BREAKPOINT): boolean {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < breakpoint : false
+  );
+  useEffect(() => {
+    let raf = 0;
+    const handleResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() =>
+        setIsMobile(window.innerWidth < breakpoint)
+      );
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(raf);
+    };
+  }, [breakpoint]);
+  return isMobile;
+}
 
+// ── Safe LaTeX Renderer ─────────────────────────────────────────
 function renderMathText(text: string): React.ReactNode {
   if (!text) return null;
-
   const parts = text.split(/(\$\$[\s\S]+?\$\$|\$[^$]+?\$)/g);
-
   return (
     <>
       {parts.map((part, i) => {
@@ -156,19 +179,24 @@ function renderMathText(text: string): React.ReactNode {
 }
 
 // ── Table Renderer ──────────────────────────────────────────────
-
 function QuestionTableView({ table }: { table: QuestionTable }) {
   if (!table?.headers?.length) return null;
-
   return (
-    <div style={{ overflowX: "auto", margin: "8px 0" }}>
+    <div
+      style={{
+        overflowX: "auto",
+        margin: "8px 0",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
       <table
         style={{
           borderCollapse: "collapse",
           fontSize: 12,
           width: "100%",
           border: "1px solid #e2e8f0",
-          borderRadius: 4,
+          borderRadius: 6,
+          overflow: "hidden",
         }}
       >
         <thead>
@@ -184,7 +212,9 @@ function QuestionTableView({ table }: { table: QuestionTable }) {
                   color: "#334155",
                   fontSize: 11,
                   borderRight:
-                    i < table.headers.length - 1 ? "1px solid #e2e8f0" : "none",
+                    i < table.headers.length - 1
+                      ? "1px solid #e2e8f0"
+                      : "none",
                 }}
               >
                 {renderMathText(h)}
@@ -194,7 +224,10 @@ function QuestionTableView({ table }: { table: QuestionTable }) {
         </thead>
         <tbody>
           {table.rows.map((row, ri) => (
-            <tr key={ri} style={{ background: ri % 2 === 0 ? "#fff" : "#fafbfc" }}>
+            <tr
+              key={ri}
+              style={{ background: ri % 2 === 0 ? "#fff" : "#fafbfc" }}
+            >
               {row.map((cell, ci) => (
                 <td
                   key={ci}
@@ -202,9 +235,12 @@ function QuestionTableView({ table }: { table: QuestionTable }) {
                     padding: "5px 10px",
                     textAlign: "center",
                     color: "#475569",
-                    borderRight: ci < row.length - 1 ? "1px solid #e2e8f0" : "none",
+                    borderRight:
+                      ci < row.length - 1 ? "1px solid #e2e8f0" : "none",
                     borderBottom:
-                      ri < table.rows.length - 1 ? "1px solid #f1f5f9" : "none",
+                      ri < table.rows.length - 1
+                        ? "1px solid #f1f5f9"
+                        : "none",
                   }}
                 >
                   {renderMathText(cell)}
@@ -218,7 +254,7 @@ function QuestionTableView({ table }: { table: QuestionTable }) {
   );
 }
 
-// ── Subjects & Classes ──────────────────────────────────────────
+// ── Constants ───────────────────────────────────────────────────
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
 const SUBJECT_OPTIONS = [
   "Science",
@@ -252,7 +288,6 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 };
 
 // ── Diagram Badge ───────────────────────────────────────────────
-
 function DiagramBadge({ figRef }: { figRef?: string | null }) {
   return (
     <span
@@ -275,8 +310,32 @@ function DiagramBadge({ figRef }: { figRef?: string | null }) {
   );
 }
 
-// ── Question Content (shared) ───────────────────────────────────
+// ── Spinner ─────────────────────────────────────────────────────
+function Spinner({
+  size = 14,
+  color = "#fff",
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: size,
+        height: size,
+        border: `2px solid ${color}40`,
+        borderTopColor: color,
+        borderRadius: "50%",
+        animation: "tbspin 0.7s linear infinite",
+        verticalAlign: "-2px",
+        marginRight: 6,
+      }}
+    />
+  );
+}
 
+// ── Question Content ────────────────────────────────────────────
 function QuestionContent({
   question,
   truncateAt,
@@ -312,10 +371,11 @@ function QuestionContent({
           src={question.image_url}
           alt="Question diagram"
           style={{
-            maxWidth: 280,
+            maxWidth: "100%",
             maxHeight: 200,
+            objectFit: "contain",
             marginTop: 6,
-            borderRadius: 4,
+            borderRadius: 6,
             border: "1px solid #e2e8f0",
           }}
           loading="lazy"
@@ -325,44 +385,74 @@ function QuestionContent({
   );
 }
 
-// ── Draggable Question Card (Library) ───────────────────────────
-
+// ── Library Question Card ───────────────────────────────────────
 function DraggableQuestion({
   question,
   onAdd,
   isAdded,
+  isMobile,
 }: {
   question: NCERTQuestion;
   onAdd: (q: NCERTQuestion) => void;
   isAdded: boolean;
+  isMobile: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useSortable({ id: `lib-${question.id}` });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    opacity: isDragging ? 0.4 : isAdded ? 0.55 : 1,
-    padding: "10px 12px",
-    marginBottom: 6,
+    opacity: isDragging ? 0.35 : isAdded ? 0.55 : 1,
+    padding: isMobile ? "12px 14px" : "10px 12px",
+    marginBottom: 8,
     background: isAdded ? "#f8fafc" : "#fff",
-    border: `1px solid ${isAdded ? "#cbd5e1" : "#e2e8f0"}`,
-    borderRadius: 8,
-    cursor: isAdded ? "default" : "grab",
+    border: `1px solid ${
+      isAdded ? "#cbd5e1" : isDragging ? "#6366f1" : "#e2e8f0"
+    }`,
+    borderRadius: 10,
     fontSize: 13,
     lineHeight: 1.55,
-    transition: "opacity 0.15s, box-shadow 0.15s",
+    boxShadow: isDragging
+      ? "0 8px 20px rgba(99,102,241,0.2)"
+      : "0 1px 2px rgba(0,0,0,0.03)",
+    transition: "opacity 0.15s, box-shadow 0.15s, border-color 0.15s",
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div ref={setNodeRef} style={style} {...attributes}>
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          gap: 8,
+          gap: 10,
         }}
       >
+        {/* Desktop Drag Handle */}
+        {!isAdded && !isMobile && (
+          <div
+            {...listeners}
+            style={{
+              touchAction: "none",
+              cursor: "grab",
+              padding: "4px 7px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#94a3b8",
+              userSelect: "none",
+              borderRadius: 6,
+              background: "#f1f5f9",
+              marginTop: 2,
+              flexShrink: 0,
+            }}
+            title="Drag to add to test paper"
+            aria-label="Drag question"
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>⠿</span>
+          </div>
+        )}
+
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
@@ -377,9 +467,9 @@ function DraggableQuestion({
               style={{
                 fontSize: 10,
                 fontWeight: 600,
-                color: "#6366f1",
+                color: "#4f46e5",
                 background: "#eef2ff",
-                padding: "1px 6px",
+                padding: "2px 6px",
                 borderRadius: 4,
               }}
             >
@@ -391,7 +481,7 @@ function DraggableQuestion({
                   fontSize: 10,
                   color: "#64748b",
                   background: "#f1f5f9",
-                  padding: "1px 6px",
+                  padding: "2px 6px",
                   borderRadius: 4,
                 }}
               >
@@ -403,9 +493,13 @@ function DraggableQuestion({
             )}
           </div>
 
-          <QuestionContent question={question} truncateAt={200} />
+          <QuestionContent
+            question={question}
+            truncateAt={isMobile ? 150 : 220}
+          />
         </div>
 
+        {/* Tap-to-add action button */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -415,13 +509,20 @@ function DraggableQuestion({
           style={{
             flexShrink: 0,
             border: "none",
-            borderRadius: 6,
-            padding: "4px 10px",
+            borderRadius: 8,
+            padding: isMobile ? "8px 16px" : "5px 14px",
             fontSize: 12,
-            fontWeight: 500,
+            fontWeight: 600,
             cursor: isAdded ? "default" : "pointer",
-            background: isAdded ? "#e2e8f0" : "#6366f1",
+            background: isAdded ? "#e2e8f0" : "#4f46e5",
             color: isAdded ? "#94a3b8" : "#fff",
+            transition: "all 0.15s ease",
+            minWidth: isMobile ? 70 : "auto",
+            minHeight: isMobile ? 42 : "auto",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: isAdded ? "none" : "0 2px 4px rgba(79, 70, 229, 0.2)",
           }}
         >
           {isAdded ? "✓ Added" : "+ Add"}
@@ -432,9 +533,11 @@ function DraggableQuestion({
         style={{
           display: "flex",
           gap: 8,
-          marginTop: 6,
+          marginTop: 8,
           fontSize: 11,
           color: "#94a3b8",
+          flexWrap: "wrap",
+          alignItems: "center",
         }}
       >
         <span
@@ -448,7 +551,9 @@ function DraggableQuestion({
         <span>·</span>
         <span>{question.marks}m</span>
         <span>·</span>
-        <span>{TYPE_LABELS[question.question_type] || question.question_type}</span>
+        <span>
+          {TYPE_LABELS[question.question_type] || question.question_type}
+        </span>
         {parseOptions(question.options).length > 0 && (
           <>
             <span>·</span>
@@ -460,33 +565,49 @@ function DraggableQuestion({
   );
 }
 
-// ── Sortable Test Question (Paper Panel) ────────────────────────
-
+// ── Sortable Test Question (Paper Panel) ─────────────────────────
 function SortableTestQuestion({
   question,
   index,
+  totalCount,
   onRemove,
   onEditMarks,
+  onMoveUp,
+  onMoveDown,
+  isMobile,
 }: {
   question: TestQuestion;
   index: number;
+  totalCount: number;
   onRemove: (paperId: string) => void;
   onEditMarks: (paperId: string, marks: number) => void;
+  onMoveUp: (paperId: string) => void;
+  onMoveDown: (paperId: string) => void;
+  isMobile: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: question.paperId });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: question.paperId });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
-    padding: "10px 12px",
-    marginBottom: 6,
+    padding: isMobile ? "12px 14px" : "10px 12px",
+    marginBottom: 8,
     background: isDragging ? "#eef2ff" : "#fff",
     border: `1px solid ${isDragging ? "#6366f1" : "#e2e8f0"}`,
-    borderRadius: 8,
+    borderRadius: 10,
     fontSize: 13,
     lineHeight: 1.55,
+    boxShadow: isDragging
+      ? "0 8px 20px rgba(99,102,241,0.2)"
+      : "0 1px 2px rgba(0,0,0,0.03)",
   };
 
   return (
@@ -508,25 +629,42 @@ function SortableTestQuestion({
             minWidth: 0,
           }}
         >
-          <span
+          {/* Touch Drag Handle: Supported on BOTH mobile & desktop */}
+          <div
             {...listeners}
             style={{
+              touchAction: "none",
               cursor: "grab",
-              color: "#94a3b8",
-              fontSize: 16,
+              padding: isMobile ? "6px 8px" : "4px 8px",
+              background: "#f1f5f9",
+              borderRadius: 6,
+              color: "#64748b",
+              fontSize: isMobile ? 18 : 16,
               marginTop: 2,
               flexShrink: 0,
               userSelect: "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minWidth: isMobile ? 32 : "auto",
+              minHeight: isMobile ? 32 : "auto",
             }}
-            title="Drag to reorder"
+            title="Drag to reorder question in paper"
+            aria-label="Drag to reorder"
           >
             ⠿
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <span style={{ fontWeight: 600, color: "#6366f1", fontSize: 12 }}>
+          </div>
+
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <span
+              style={{ fontWeight: 600, color: "#4f46e5", fontSize: 12 }}
+            >
               Q{index + 1}.
             </span>{" "}
-            <QuestionContent question={question} truncateAt={250} />
+            <QuestionContent
+              question={question}
+              truncateAt={isMobile ? 160 : 250}
+            />
             {question.question_type === "diagram" && (
               <DiagramBadge figRef={question.figure_ref} />
             )}
@@ -534,18 +672,73 @@ function SortableTestQuestion({
         </div>
 
         <div
-          style={{ display: "flex", gap: 4, flexShrink: 0, alignItems: "center" }}
+          style={{
+            display: "flex",
+            gap: 4,
+            flexShrink: 0,
+            alignItems: "center",
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
         >
+          {/* Quick-nudge buttons for mobile single-tap reorder */}
+          {isMobile && (
+            <div style={{ display: "flex", gap: 3 }}>
+              <button
+                onClick={() => onMoveUp(question.paperId)}
+                disabled={index === 0}
+                style={{
+                  background: index === 0 ? "#f8fafc" : "#f1f5f9",
+                  color: index === 0 ? "#cbd5e1" : "#475569",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  cursor: index === 0 ? "not-allowed" : "pointer",
+                  minHeight: 34,
+                }}
+                aria-label="Move up"
+                title="Move up"
+              >
+                ▲
+              </button>
+              <button
+                onClick={() => onMoveDown(question.paperId)}
+                disabled={index === totalCount - 1}
+                style={{
+                  background:
+                    index === totalCount - 1 ? "#f8fafc" : "#f1f5f9",
+                  color: index === totalCount - 1 ? "#cbd5e1" : "#475569",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  cursor:
+                    index === totalCount - 1 ? "not-allowed" : "pointer",
+                  minHeight: 34,
+                }}
+                aria-label="Move down"
+                title="Move down"
+              >
+                ▼
+              </button>
+            </div>
+          )}
+
           <select
             value={question.marks}
-            onChange={(e) => onEditMarks(question.paperId, Number(e.target.value))}
+            onChange={(e) =>
+              onEditMarks(question.paperId, Number(e.target.value))
+            }
             style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 4,
-              padding: "2px 4px",
+              border: "1px solid #cbd5e1",
+              borderRadius: 6,
+              padding: isMobile ? "6px 8px" : "2px 4px",
               fontSize: 11,
               cursor: "pointer",
               background: "#fff",
+              fontWeight: 500,
+              minHeight: isMobile ? 36 : "auto",
             }}
           >
             {[1, 2, 3, 4, 5, 6].map((m) => (
@@ -554,17 +747,21 @@ function SortableTestQuestion({
               </option>
             ))}
           </select>
+
           <button
             onClick={() => onRemove(question.paperId)}
             style={{
               background: "#fee2e2",
               color: "#dc2626",
               border: "none",
-              borderRadius: 4,
-              padding: "2px 8px",
+              borderRadius: 6,
+              padding: isMobile ? "6px 10px" : "2px 8px",
               fontSize: 11,
               cursor: "pointer",
+              fontWeight: 600,
+              minHeight: isMobile ? 36 : "auto",
             }}
+            aria-label="Remove question"
           >
             ✕
           </button>
@@ -576,9 +773,10 @@ function SortableTestQuestion({
           display: "flex",
           gap: 6,
           marginTop: 4,
-          marginLeft: 28,
+          marginLeft: isMobile ? 0 : 28,
           fontSize: 11,
           color: "#94a3b8",
+          flexWrap: "wrap",
         }}
       >
         <span>{question.chapter}</span>
@@ -588,6 +786,404 @@ function SortableTestQuestion({
         >
           {question.difficulty}
         </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Droppable Paper Zone ────────────────────────────────────────
+function PaperDropZone({
+  children,
+  isDragging,
+  isMobile,
+}: {
+  children: React.ReactNode;
+  isDragging: boolean;
+  isMobile: boolean;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: "paper-dropzone" });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        padding: 10,
+        minHeight: isMobile ? 240 : 480,
+        maxHeight: isMobile ? "none" : 650,
+        overflowY: "auto",
+        WebkitOverflowScrolling: "touch",
+        borderRadius: 8,
+        transition: "all 0.2s ease",
+        background: isOver
+          ? "#eef2ff"
+          : isDragging
+          ? "#f8fafc"
+          : "transparent",
+        border: isOver
+          ? "2px dashed #4f46e5"
+          : isDragging
+          ? "2px dashed #cbd5e1"
+          : "2px dashed transparent",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── Mobile Bottom Bar (with Black "View Paper" Button) ──────────
+function MobileBottomBar({
+  questionCount,
+  totalMarks,
+  onViewPaper,
+  onOpenLibrary,
+  activeScreen,
+}: {
+  questionCount: number;
+  totalMarks: number;
+  onViewPaper: () => void;
+  onOpenLibrary: () => void;
+  activeScreen: "library" | "paper";
+}) {
+  const isPaperScreen = activeScreen === "paper";
+
+  return (
+    <div
+      className="lg:hidden"
+      style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 40,
+        background: "#ffffff",
+        borderTop: "1px solid #e2e8f0",
+        color: "#0f172a",
+        padding: "12px 16px",
+        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+        boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.08)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p
+          style={{
+            margin: 0,
+            fontWeight: 700,
+            fontSize: 13,
+            color: "#1e293b",
+          }}
+        >
+          📝 {questionCount} Questions · {totalMarks} Marks
+        </p>
+        <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>
+          {questionCount === 0
+            ? "Tap + Add on questions to build paper"
+            : isPaperScreen
+            ? "Ready to review and export"
+            : "Tap to review test paper"}
+        </p>
+      </div>
+
+      {isPaperScreen ? (
+        <button
+          onClick={onOpenLibrary}
+          style={{
+            background: "#4f46e5",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: 10,
+            padding: "10px 18px",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            flexShrink: 0,
+            minHeight: 44,
+            boxShadow: "0 2px 8px rgba(79, 70, 229, 0.25)",
+          }}
+        >
+          + Add More
+        </button>
+      ) : (
+        /* Black View Paper button as explicitly requested */
+        <button
+          onClick={onViewPaper}
+          disabled={questionCount === 0}
+          style={{
+            background: questionCount === 0 ? "#cbd5e1" : "#0f172a",
+            color: questionCount === 0 ? "#94a3b8" : "#ffffff",
+            border: "none",
+            borderRadius: 10,
+            padding: "10px 18px",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: questionCount === 0 ? "not-allowed" : "pointer",
+            flexShrink: 0,
+            minHeight: 44,
+            boxShadow:
+              questionCount === 0
+                ? "none"
+                : "0 2px 8px rgba(15, 23, 42, 0.3)",
+          }}
+        >
+          View Paper ({questionCount}) →
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Chapter Bottom Sheet ────────────────────────────────────────
+function ChapterBottomSheet({
+  open,
+  onClose,
+  chapterStats,
+  selectedChapter,
+  onSelect,
+  statsLoading,
+  subject,
+  classGrade,
+}: {
+  open: boolean;
+  onClose: () => void;
+  chapterStats: ChapterStat[];
+  selectedChapter: string | null;
+  onSelect: (chapter: string) => void;
+  statsLoading: boolean;
+  subject: string;
+  classGrade: string;
+}) {
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(
+    () =>
+      chapterStats.filter((c) =>
+        c.chapter.toLowerCase().includes(search.toLowerCase())
+      ),
+    [chapterStats, search]
+  );
+
+  // Close on ESC key
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        background: "rgba(15, 23, 42, 0.4)",
+        display: "flex",
+        alignItems: "flex-end",
+        animation: "tbfade 0.15s ease",
+      }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Select chapter"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxHeight: "85vh",
+          background: "#ffffff",
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          animation: "tbslide 0.2s ease",
+          boxShadow: "0 -8px 30px rgba(0, 0, 0, 0.12)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            padding: "10px 0 6px",
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 4,
+              borderRadius: 2,
+              background: "#cbd5e1",
+            }}
+          />
+        </div>
+
+        <div
+          style={{
+            padding: "8px 16px 12px",
+            borderBottom: "1px solid #e2e8f0",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 10,
+            }}
+          >
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "#0f172a",
+                }}
+              >
+                Select Chapter
+              </h2>
+              <p
+                style={{
+                  margin: "2px 0 0",
+                  fontSize: 12,
+                  color: "#64748b",
+                }}
+              >
+                {subject} · Class {classGrade} ({chapterStats.length} Chapters)
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                background: "#f1f5f9",
+                border: "none",
+                borderRadius: 8,
+                width: 36,
+                height: 36,
+                fontSize: 16,
+                cursor: "pointer",
+                color: "#64748b",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search chapters…"
+            autoFocus
+            style={{
+              width: "100%",
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #cbd5e1",
+              fontSize: 13,
+              boxSizing: "border-box",
+              outline: "none",
+              background: "#f8fafc",
+            }}
+          />
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            padding: "4px 0",
+          }}
+        >
+          {statsLoading ? (
+            <p
+              style={{ padding: 24, textAlign: "center", color: "#94a3b8" }}
+            >
+              Loading chapters…
+            </p>
+          ) : filtered.length === 0 ? (
+            <p
+              style={{ padding: 24, textAlign: "center", color: "#94a3b8" }}
+            >
+              No chapters found.
+            </p>
+          ) : (
+            filtered.map((ch) => {
+              const isSelected = selectedChapter === ch.chapter;
+              return (
+                <button
+                  key={ch.chapter}
+                  onClick={() => {
+                    onSelect(ch.chapter);
+                    onClose();
+                  }}
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 18px",
+                    border: "none",
+                    background: isSelected ? "#eef2ff" : "transparent",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    borderLeft: isSelected
+                      ? "4px solid #4f46e5"
+                      : "4px solid transparent",
+                    transition: "background 0.15s ease",
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1, paddingRight: 10 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: isSelected ? 700 : 500,
+                        color: isSelected ? "#4338ca" : "#1e293b",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {ch.chapter}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "#64748b",
+                        marginTop: 2,
+                      }}
+                    >
+                      {ch.total} questions
+                      {ch.sections.length > 0 &&
+                        ` · ${ch.sections.length} sections`}
+                    </div>
+                  </div>
+                  {isSelected && (
+                    <span
+                      style={{
+                        color: "#4f46e5",
+                        fontSize: 18,
+                        fontWeight: 700,
+                        marginLeft: 8,
+                      }}
+                    >
+                      ✓
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );
@@ -603,13 +1199,23 @@ export default function TestBuilderPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 300);
 
+  // Mobile screen state
+  const [mobileScreen, setMobileScreen] = useState<"library" | "paper">(
+    "library"
+  );
+  const [showChapterSheet, setShowChapterSheet] = useState(false);
+
   // Data
   const [chapterStats, setChapterStats] = useState<ChapterStat[]>([]);
   const [libraryQuestions, setLibraryQuestions] = useState<NCERTQuestion[]>([]);
   const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
   const [examTitle, setExamTitle] = useState("Untitled Test");
-  const [templateTier, setTemplateTier] = useState<"standard" | "premium">("standard");
-  const [colorTheme, setColorTheme] = useState<"teal" | "navy" | "dark_green" | "orange">("teal");
+  const [templateTier, setTemplateTier] = useState<"standard" | "premium">(
+    "standard"
+  );
+  const [colorTheme, setColorTheme] = useState<
+    "teal" | "navy" | "dark_green" | "orange"
+  >("teal");
   const [instituteName, setInstituteName] = useState("");
   const [teacherName, setTeacherName] = useState("");
   const [duration, setDuration] = useState("");
@@ -625,15 +1231,20 @@ export default function TestBuilderPage() {
   const [exporting, setExporting] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Track added question IDs
+  const isMobile = useIsMobile();
+
   const addedIds = useMemo(
     () => new Set(testQuestions.map((q) => q.id)),
     [testQuestions]
   );
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor)
   );
 
@@ -653,8 +1264,13 @@ export default function TestBuilderPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled && data.ok) {
-          setChapterStats(data.chapters || []);
-          setSelectedChapter(null);
+          const chs = data.chapters || [];
+          setChapterStats(chs);
+          setSelectedChapter((prev) => {
+            if (prev && chs.some((c: ChapterStat) => c.chapter === prev))
+              return prev;
+            return chs.length > 0 ? chs[0].chapter : null;
+          });
           setLibraryQuestions([]);
           setOffset(0);
         }
@@ -675,7 +1291,6 @@ export default function TestBuilderPage() {
   const fetchQuestions = useCallback(
     async (append = false) => {
       if (!selectedChapter) return;
-
       const currentOffset = append ? offset : 0;
       if (append) setLoadingMore(true);
       else setLoading(true);
@@ -704,12 +1319,8 @@ export default function TestBuilderPage() {
             ...q,
             options: parseOptions(q.options),
           }));
-
-          if (append) {
-            setLibraryQuestions((prev) => [...prev, ...questions]);
-          } else {
-            setLibraryQuestions(questions);
-          }
+          if (append) setLibraryQuestions((prev) => [...prev, ...questions]);
+          else setLibraryQuestions(questions);
           setHasMore(data.hasMore || false);
           setOffset(currentOffset + questions.length);
         }
@@ -730,7 +1341,6 @@ export default function TestBuilderPage() {
     ]
   );
 
-  // Reset and fetch on filter change
   useEffect(() => {
     if (selectedChapter) {
       setOffset(0);
@@ -740,7 +1350,7 @@ export default function TestBuilderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChapter, questionType, debouncedSearch]);
 
-  // ── Add / Remove / Edit ───────────────────────────────────────
+  // ── Add / Remove / Edit / Move ────────────────────────────────
   const addToTest = useCallback(
     (q: NCERTQuestion) => {
       if (addedIds.has(q.id)) return;
@@ -764,6 +1374,16 @@ export default function TestBuilderPage() {
     );
   }, []);
 
+  const moveQuestion = useCallback((paperId: string, direction: -1 | 1) => {
+    setTestQuestions((prev) => {
+      const idx = prev.findIndex((q) => q.paperId === paperId);
+      if (idx === -1) return prev;
+      const target = idx + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      return arrayMove(prev, idx, target);
+    });
+  }, []);
+
   // ── Drag handlers ────────────────────────────────────────────
   const handleDragStart = (event: DragStartEvent) =>
     setActiveId(event.active.id as string);
@@ -776,7 +1396,10 @@ export default function TestBuilderPage() {
     const activeStr = String(active.id);
     const overStr = String(over.id);
 
-    if (activeStr.startsWith("lib-") && overStr.startsWith("paper-")) {
+    if (
+      activeStr.startsWith("lib-") &&
+      (overStr === "paper-dropzone" || overStr.startsWith("paper-"))
+    ) {
       const libId = Number(activeStr.replace("lib-", ""));
       const q = libraryQuestions.find((q) => q.id === libId);
       if (q) addToTest(q);
@@ -792,14 +1415,78 @@ export default function TestBuilderPage() {
     }
   };
 
-  // ── Export test paper (question paper — no answers) ──────────────
+  // ── Export ────────────────────────────────────────────────────
+  const buildQuestionsPayload = (includeAnswers: boolean) =>
+    testQuestions.map((q) => ({
+      id: String(q.id),
+      text: q.question_text,
+      options: q.options || [],
+      correctAnswer: includeAnswers ? q.answer || "" : "",
+      explanation: "",
+      marks: q.marks,
+      difficulty: q.difficulty,
+      chapter: q.chapter,
+      format: q.options && q.options.length > 0 ? "mcq" : "short_answer",
+      section: q.section,
+      subParts: (q as any).subParts || (q as any).sub_parts || undefined,
+      image_url: q.image_url || undefined,
+      question_table: q.question_table || undefined,
+      isManual: false,
+      validationStatus: "valid",
+    }));
+
+  const autoSaveTestToHistory = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) return;
+
+      const testId = crypto.randomUUID();
+      const { error: testErr } = await supabase.from("tests").insert({
+        id: testId,
+        teacher_id: user.id,
+        exam_title: examTitle || "Custom NCERT Test Paper",
+        board: "CBSE",
+        class_grade: `Class ${classGrade}`,
+        subject: subject,
+        status: "saved",
+        total_questions: testQuestions.length,
+        total_marks: totalMarks,
+        created_at: new Date().toISOString(),
+        paper_date: new Date().toLocaleDateString("en-GB"),
+        cbse_pattern: false,
+      });
+
+      if (!testErr) {
+        const qRows = testQuestions.map((q, idx) => ({
+          test_id: testId,
+          text: q.text || "",
+          options: Array.isArray(q.options) ? q.options : [],
+          correct_answer: q.correctAnswer || q.solution || "",
+          explanation: q.solution || "",
+          marks: q.marks || 1,
+          difficulty: q.difficulty || "medium",
+          chapter: q.chapter || selectedChapter || "",
+          topic: q.topic || "",
+          format: q.format || "mcq",
+          position: idx + 1,
+        }));
+        await supabase.from("questions").insert(qRows);
+        console.log("[TestBuilder] Test auto-saved to history:", testId);
+      }
+    } catch (saveErr) {
+      console.warn("[TestBuilder] Could not auto-save test to history:", saveErr);
+    }
+  };
+
   const handleExport = async (format: "pdf" | "docx") => {
     if (testQuestions.length === 0) {
       alert("Add questions to the test paper first!");
       return;
     }
-
     setExporting(true);
+    // Auto-save test so it appears in Test History
+    autoSaveTestToHistory();
+
     try {
       const payload = {
         examTitle,
@@ -809,39 +1496,28 @@ export default function TestBuilderPage() {
         format,
         includeAnswers: false,
         includeExplanations: false,
-        template: templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
+        template:
+          templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
         teacher_name: teacherName || undefined,
         institute_name: instituteName || undefined,
         duration: duration || undefined,
-        topic: topic || selectedChapter || (testQuestions[0]?.chapter) || undefined,
+        topic:
+          topic ||
+          selectedChapter ||
+          testQuestions[0]?.chapter ||
+          undefined,
         paperDate: new Date().toLocaleDateString("en-GB"),
-        questions: testQuestions.map((q) => ({
-          id: String(q.id),
-          text: q.question_text,
-          options: q.options || [],
-          correctAnswer: q.answer || "",
-          explanation: "",
-          marks: q.marks,
-          difficulty: q.difficulty,
-          chapter: q.chapter,
-          format: q.options && q.options.length > 0 ? "mcq" : "short_answer",
-          section: q.section,
-          subParts: (q as any).subParts || (q as any).sub_parts || undefined,
-          image_url: q.image_url || undefined,
-          question_table: q.question_table || undefined,
-          isManual: false,
-          validationStatus: "valid",
-        })),
+        questions: buildQuestionsPayload(false),
       };
-
-      const res = await fetch(`${API_BASE}${API_PREFIX}/test-generator/export`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
+      const res = await fetch(
+        `${API_BASE}${API_PREFIX}/test-generator/export`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload),
+        }
+      );
       if (!res.ok) throw new Error("Export failed");
-
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -849,22 +1525,54 @@ export default function TestBuilderPage() {
       a.download = `${examTitle.replace(/\s+/g, "_")}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success("Test paper exported successfully!");
     } catch (err) {
-      console.error("Export error:", err);
+      console.warn("Backend export error, attempting client-side generator:", err);
+      if (format === "pdf") {
+        try {
+          await generateTestPaperPdf(
+            {
+              id: "temp",
+              exam_title: examTitle || "Custom NCERT Test Paper",
+              board: "CBSE",
+              class_grade: `Class ${classGrade}`,
+              subject,
+              total_questions: testQuestions.length,
+              total_marks: totalMarks,
+              teacher_name: teacherName,
+              institute_name: instituteName,
+              duration,
+            },
+            testQuestions.map((q, idx) => ({
+              position: idx + 1,
+              text: q.text,
+              marks: q.marks,
+              options: q.options,
+              correct_answer: q.correctAnswer,
+              explanation: q.solution,
+            }))
+          );
+          toast.success("Generated Question Paper PDF in browser!");
+          return;
+        } catch (pdfErr) {
+          console.error("Client PDF generation error:", pdfErr);
+        }
+      }
       alert("Export failed. Please try again.");
     } finally {
       setExporting(false);
     }
   };
 
-  // ── Export answer key (separate PDF/DOCX file) ──────────────────
   const handleExportAnswerKey = async (format: "pdf" | "docx") => {
     if (testQuestions.length === 0) {
       alert("Add questions to the test paper first!");
       return;
     }
-
     setExporting(true);
+    // Auto-save test so it appears in Test History
+    autoSaveTestToHistory();
+
     try {
       const payload = {
         examTitle,
@@ -873,37 +1581,28 @@ export default function TestBuilderPage() {
         subject,
         format,
         includeExplanations,
-        template: templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
+        template:
+          templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
         teacher_name: teacherName || undefined,
         institute_name: instituteName || undefined,
         duration: duration || undefined,
-        topic: topic || selectedChapter || (testQuestions[0]?.chapter) || undefined,
+        topic:
+          topic ||
+          selectedChapter ||
+          testQuestions[0]?.chapter ||
+          undefined,
         paperDate: new Date().toLocaleDateString("en-GB"),
-        questions: testQuestions.map((q) => ({
-          id: String(q.id),
-          text: q.question_text,
-          options: q.options || [],
-          correctAnswer: q.answer || "",
-          explanation: "",
-          marks: q.marks,
-          difficulty: q.difficulty,
-          chapter: q.chapter,
-          format: q.options && q.options.length > 0 ? "mcq" : "short_answer",
-          section: q.section,
-          subParts: (q as any).subParts || (q as any).sub_parts || undefined,
-          image_url: q.image_url || undefined,
-          question_table: q.question_table || undefined,
-        })),
+        questions: buildQuestionsPayload(true),
       };
-
-      const res = await fetch(`${API_BASE}${API_PREFIX}/test-generator/export-answer-key`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
+      const res = await fetch(
+        `${API_BASE}${API_PREFIX}/test-generator/export-answer-key`,
+        {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload),
+        }
+      );
       if (!res.ok) throw new Error("Answer key export failed");
-
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -911,8 +1610,39 @@ export default function TestBuilderPage() {
       a.download = `${examTitle.replace(/\s+/g, "_")}_AnswerKey.${format}`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success("Answer key exported successfully!");
     } catch (err) {
-      console.error("Answer key export error:", err);
+      console.warn("Backend answer key error, attempting client-side generator:", err);
+      if (format === "pdf") {
+        try {
+          await generateAnswerKeyPdf(
+            {
+              id: "temp",
+              exam_title: examTitle || "Custom NCERT Test Paper",
+              board: "CBSE",
+              class_grade: `Class ${classGrade}`,
+              subject,
+              total_questions: testQuestions.length,
+              total_marks: totalMarks,
+              teacher_name: teacherName,
+              institute_name: instituteName,
+              duration,
+            },
+            testQuestions.map((q, idx) => ({
+              position: idx + 1,
+              text: q.text,
+              marks: q.marks,
+              options: q.options,
+              correct_answer: q.correctAnswer,
+              explanation: q.solution,
+            }))
+          );
+          toast.success("Generated Answer Key PDF in browser!");
+          return;
+        } catch (pdfErr) {
+          console.error("Client PDF generation error:", pdfErr);
+        }
+      }
       alert("Answer key export failed. Please try again.");
     } finally {
       setExporting(false);
@@ -921,12 +1651,870 @@ export default function TestBuilderPage() {
 
   // ── Computed ──────────────────────────────────────────────────
   const totalMarks = testQuestions.reduce((sum, q) => sum + q.marks, 0);
-  const totalChapterQuestions = chapterStats.reduce(
-    (sum, ch) => sum + ch.total,
-    0
+
+  // ── Render: Library Questions List ────────────────────────────
+  const renderLibraryList = () => (
+    <>
+      {loading ? (
+        <p
+          style={{
+            color: "#94a3b8",
+            fontSize: 13,
+            textAlign: "center",
+            paddingTop: 40,
+          }}
+        >
+          Loading questions…
+        </p>
+      ) : libraryQuestions.length === 0 ? (
+        <div
+          style={{
+            textAlign: "center",
+            paddingTop: 40,
+            color: "#94a3b8",
+          }}
+        >
+          <p style={{ fontSize: 28, marginBottom: 8 }}>📖</p>
+          <p style={{ fontSize: 13 }}>No questions match this filter.</p>
+        </div>
+      ) : (
+        <>
+          <SortableContext
+            items={libraryQuestions.map((q) => `lib-${q.id}`)}
+            strategy={verticalListSortingStrategy}
+          >
+            {libraryQuestions.map((q) => (
+              <DraggableQuestion
+                key={q.id}
+                question={q}
+                onAdd={addToTest}
+                isAdded={addedIds.has(q.id)}
+                isMobile={isMobile}
+              />
+            ))}
+          </SortableContext>
+
+          {hasMore && (
+            <button
+              onClick={() => fetchQuestions(true)}
+              disabled={loadingMore}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "12px",
+                marginTop: 8,
+                background: "#f1f5f9",
+                border: "1px solid #e2e8f0",
+                borderRadius: 10,
+                fontSize: 13,
+                color: "#4f46e5",
+                cursor: loadingMore ? "wait" : "pointer",
+                fontWeight: 600,
+                minHeight: 44,
+              }}
+            >
+              {loadingMore ? "Loading more…" : "Load more questions"}
+            </button>
+          )}
+        </>
+      )}
+    </>
   );
 
-  // ── Render ────────────────────────────────────────────────────
+  // ── Render: Mobile Library Screen ─────────────────────────────
+  const renderMobileLibrary = () => (
+    <div style={{ paddingBottom: 100 }}>
+      {/* Chapter Trigger Card */}
+      <button
+        onClick={() => setShowChapterSheet(true)}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 14px",
+          background: "#ffffff",
+          border: "1px solid #cbd5e1",
+          borderRadius: 12,
+          marginBottom: 10,
+          cursor: "pointer",
+          textAlign: "left",
+          minHeight: 56,
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: 10,
+              color: "#64748b",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+            }}
+          >
+            Chapter
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#1e293b",
+              marginTop: 2,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {selectedChapter || "Select a chapter…"}
+          </div>
+        </div>
+        <span
+          style={{
+            color: "#4f46e5",
+            fontSize: 12,
+            fontWeight: 700,
+            background: "#eef2ff",
+            padding: "4px 10px",
+            borderRadius: 6,
+            marginLeft: 8,
+          }}
+        >
+          Change ▾
+        </span>
+      </button>
+
+      {/* Search & Filter */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search questions in chapter…"
+          style={{
+            flex: 1,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #cbd5e1",
+            fontSize: 13,
+            outline: "none",
+            boxSizing: "border-box",
+            minHeight: 44,
+            background: "#fff",
+          }}
+        />
+        <select
+          value={questionType}
+          onChange={(e) => setQuestionType(e.target.value)}
+          style={{
+            padding: "10px 12px",
+            borderRadius: 10,
+            border: "1px solid #cbd5e1",
+            fontSize: 13,
+            background: "#fff",
+            fontWeight: 500,
+            minHeight: 44,
+          }}
+        >
+          {Object.entries(TYPE_LABELS).map(([val, label]) => (
+            <option key={val} value={val}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {renderLibraryList()}
+    </div>
+  );
+
+  // ── Render: Mobile Paper Screen ───────────────────────────────
+  const renderMobilePaper = () => (
+    <div style={{ paddingBottom: 100 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 10,
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>
+          Questions ({testQuestions.length}) · {totalMarks} Marks
+        </div>
+        {testQuestions.length > 0 && (
+          <button
+            onClick={() => {
+              if (confirm("Remove all questions from paper?"))
+                setTestQuestions([]);
+            }}
+            style={{
+              background: "#fee2e2",
+              border: "none",
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: 11,
+              color: "#dc2626",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            Reset All
+          </button>
+        )}
+      </div>
+
+      <PaperDropZone isDragging={Boolean(activeId)} isMobile>
+        {testQuestions.length === 0 ? (
+          <div
+            style={{
+              border: "2px dashed #cbd5e1",
+              borderRadius: 12,
+              padding: "50px 20px",
+              textAlign: "center",
+              color: "#94a3b8",
+              background: "#fafbfc",
+            }}
+          >
+            <p style={{ fontSize: 32, marginBottom: 8 }}>📄</p>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "#475569" }}>
+              Your test paper is empty
+            </p>
+            <p style={{ fontSize: 12, marginTop: 4, color: "#94a3b8" }}>
+              Tap "+ Add More" below or switch to Library tab
+            </p>
+          </div>
+        ) : (
+          <SortableContext
+            items={testQuestions.map((q) => q.paperId)}
+            strategy={verticalListSortingStrategy}
+          >
+            {testQuestions.map((q, i) => (
+              <SortableTestQuestion
+                key={q.paperId}
+                question={q}
+                index={i}
+                totalCount={testQuestions.length}
+                onRemove={removeFromTest}
+                onEditMarks={editMarks}
+                onMoveUp={(id) => moveQuestion(id, -1)}
+                onMoveDown={(id) => moveQuestion(id, 1)}
+                isMobile={isMobile}
+              />
+            ))}
+          </SortableContext>
+        )}
+      </PaperDropZone>
+
+      {/* Export Section */}
+      {testQuestions.length > 0 && (
+        <div
+          style={{
+            marginTop: 16,
+            background: "#f8fafc",
+            borderRadius: 12,
+            border: "1px solid #e2e8f0",
+            padding: 14,
+          }}
+        >
+          <div style={{ marginBottom: 12 }}>
+            <p
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                margin: "0 0 8px",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
+              Question Paper
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => handleExport("pdf")}
+                disabled={exporting}
+                style={{
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: exporting ? "not-allowed" : "pointer",
+                  opacity: exporting ? 0.6 : 1,
+                  flex: 1,
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {exporting && <Spinner />}
+                📄 PDF
+              </button>
+              <button
+                onClick={() => handleExport("docx")}
+                disabled={exporting}
+                style={{
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: exporting ? "not-allowed" : "pointer",
+                  opacity: exporting ? 0.6 : 1,
+                  flex: 1,
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {exporting && <Spinner color="#0f172a" />}
+                📄 DOCX
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              borderTop: "1px dashed #e2e8f0",
+              paddingTop: 12,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#64748b",
+                  margin: 0,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                Answer Key
+              </p>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 12,
+                  color: "#64748b",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={includeExplanations}
+                  onChange={(e) => setIncludeExplanations(e.target.checked)}
+                  style={{ cursor: "pointer", width: 16, height: 16 }}
+                />
+                Explanations
+              </label>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => handleExportAnswerKey("pdf")}
+                disabled={exporting}
+                style={{
+                  background: "#059669",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: exporting ? "not-allowed" : "pointer",
+                  opacity: exporting ? 0.6 : 1,
+                  flex: 1,
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {exporting && <Spinner />}
+                🔑 PDF
+              </button>
+              <button
+                onClick={() => handleExportAnswerKey("docx")}
+                disabled={exporting}
+                style={{
+                  background: "#ffffff",
+                  color: "#059669",
+                  border: "1px solid #059669",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: exporting ? "not-allowed" : "pointer",
+                  opacity: exporting ? 0.6 : 1,
+                  flex: 1,
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {exporting && <Spinner color="#059669" />}
+                🔑 DOCX
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Render: Desktop 2-Panel ───────────────────────────────────
+  const renderDesktop = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      {/* LEFT: NCERT Question Library */}
+      <div
+        style={{
+          border: "1px solid #e2e8f0",
+          borderRadius: 12,
+          background: "#fafbfc",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "12px 16px",
+            borderBottom: "1px solid #e2e8f0",
+            background: "#f8fafc",
+            fontWeight: 600,
+            fontSize: 14,
+            color: "#0f172a",
+          }}
+        >
+          NCERT Question Library
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "220px 1fr",
+            minHeight: 500,
+          }}
+        >
+          {/* Chapter sidebar */}
+          <div
+            style={{
+              borderRight: "1px solid #e2e8f0",
+              padding: "6px 0",
+              maxHeight: 600,
+              overflowY: "auto",
+              background: "#f1f5f9",
+            }}
+          >
+            {statsLoading ? (
+              <p style={{ padding: 12, color: "#94a3b8", fontSize: 13 }}>
+                Loading…
+              </p>
+            ) : chapterStats.length === 0 ? (
+              <p
+                style={{
+                  padding: 12,
+                  color: "#94a3b8",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}
+              >
+                No questions found for {subject} Class {classGrade}.
+              </p>
+            ) : (
+              chapterStats.map((ch) => (
+                <button
+                  key={ch.chapter}
+                  onClick={() => {
+                    setSelectedChapter(ch.chapter);
+                    setQuestionType("all");
+                    setSearchQuery("");
+                    setOffset(0);
+                  }}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "7px 12px",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    lineHeight: 1.4,
+                    background:
+                      selectedChapter === ch.chapter
+                        ? "#e0e7ff"
+                        : "transparent",
+                    color:
+                      selectedChapter === ch.chapter ? "#4338ca" : "#334155",
+                    fontWeight: selectedChapter === ch.chapter ? 600 : 400,
+                    borderLeft:
+                      selectedChapter === ch.chapter
+                        ? "3px solid #6366f1"
+                        : "3px solid transparent",
+                  }}
+                >
+                  {ch.chapter}
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: 10,
+                      color:
+                        selectedChapter === ch.chapter
+                          ? "#6366f1"
+                          : "#94a3b8",
+                    }}
+                  >
+                    {ch.total} questions
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Question List */}
+          <div
+            style={{
+              padding: 12,
+              maxHeight: 600,
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
+            {selectedChapter ? (
+              <>
+                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search questions…"
+                    style={{
+                      flex: 1,
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      border: "1px solid #cbd5e1",
+                      fontSize: 12,
+                      background: "#fff",
+                    }}
+                  />
+                  <select
+                    value={questionType}
+                    onChange={(e) => setQuestionType(e.target.value)}
+                    style={{
+                      padding: "6px 8px",
+                      borderRadius: 8,
+                      border: "1px solid #cbd5e1",
+                      fontSize: 12,
+                      background: "#fff",
+                    }}
+                  >
+                    {Object.entries(TYPE_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {renderLibraryList()}
+              </>
+            ) : (
+              <div
+                style={{
+                  textAlign: "center",
+                  paddingTop: 60,
+                  color: "#94a3b8",
+                }}
+              >
+                <p style={{ fontSize: 28, marginBottom: 8 }}>📖</p>
+                <p style={{ fontSize: 13 }}>
+                  Select a chapter to browse questions
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT: Test Paper */}
+      <div
+        style={{
+          border: "1px solid #e2e8f0",
+          borderRadius: 12,
+          background: "#fafbfc",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "12px 16px",
+            borderBottom: "1px solid #e2e8f0",
+            background: "#f8fafc",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <span
+              style={{ fontWeight: 600, fontSize: 14, color: "#0f172a" }}
+            >
+              Your Test Paper
+            </span>
+            <span
+              style={{ fontSize: 12, color: "#64748b", marginLeft: 8 }}
+            >
+              {testQuestions.length} questions · {totalMarks} marks
+            </span>
+          </div>
+          {testQuestions.length > 0 && (
+            <button
+              onClick={() => {
+                if (confirm("Remove all questions from paper?"))
+                  setTestQuestions([]);
+              }}
+              style={{
+                background: "none",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: "4px 10px",
+                fontSize: 11,
+                color: "#64748b",
+                cursor: "pointer",
+              }}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
+        <PaperDropZone isDragging={Boolean(activeId)} isMobile={false}>
+          {testQuestions.length === 0 ? (
+            <div
+              style={{
+                border: "2px dashed #cbd5e1",
+                borderRadius: 12,
+                padding: "60px 20px",
+                textAlign: "center",
+                color: "#94a3b8",
+                minHeight: 300,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <p style={{ fontSize: 28, marginBottom: 8 }}>📄</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#475569" }}>
+                Drop questions here to build your test
+              </p>
+              <p style={{ fontSize: 12, marginTop: 4, color: "#94a3b8" }}>
+                Or click "+ Add" on any question
+              </p>
+            </div>
+          ) : (
+            <SortableContext
+              items={testQuestions.map((q) => q.paperId)}
+              strategy={verticalListSortingStrategy}
+            >
+              {testQuestions.map((q, i) => (
+                <SortableTestQuestion
+                  key={q.paperId}
+                  question={q}
+                  index={i}
+                  totalCount={testQuestions.length}
+                  onRemove={removeFromTest}
+                  onEditMarks={editMarks}
+                  onMoveUp={(id) => moveQuestion(id, -1)}
+                  onMoveDown={(id) => moveQuestion(id, 1)}
+                  isMobile={false}
+                />
+              ))}
+            </SortableContext>
+          )}
+        </PaperDropZone>
+
+        {testQuestions.length > 0 && (
+          <div
+            style={{
+              padding: "12px 16px",
+              borderTop: "1px solid #e2e8f0",
+              background: "#f8fafc",
+            }}
+          >
+            <div style={{ marginBottom: 10 }}>
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#64748b",
+                  margin: "0 0 6px",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                Question Paper
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => handleExport("pdf")}
+                  disabled={exporting}
+                  style={{
+                    background: "#0f172a",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "8px 20px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: exporting ? "not-allowed" : "pointer",
+                    opacity: exporting ? 0.6 : 1,
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {exporting && <Spinner />}
+                  📄 Download PDF
+                </button>
+                <button
+                  onClick={() => handleExport("docx")}
+                  disabled={exporting}
+                  style={{
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    padding: "8px 20px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: exporting ? "not-allowed" : "pointer",
+                    opacity: exporting ? 0.6 : 1,
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {exporting && <Spinner color="#0f172a" />}
+                  📄 Download DOCX
+                </button>
+              </div>
+            </div>
+
+            <div
+              style={{
+                borderTop: "1px dashed #e2e8f0",
+                paddingTop: 10,
+                marginTop: 4,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 6,
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#64748b",
+                    margin: 0,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  Answer Key (separate file)
+                </p>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    fontSize: 11,
+                    color: "#64748b",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={includeExplanations}
+                    onChange={(e) => setIncludeExplanations(e.target.checked)}
+                    style={{ cursor: "pointer" }}
+                  />
+                  Include explanations
+                </label>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => handleExportAnswerKey("pdf")}
+                  disabled={exporting}
+                  style={{
+                    background: "#059669",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "8px 20px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: exporting ? "not-allowed" : "pointer",
+                    opacity: exporting ? 0.6 : 1,
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {exporting && <Spinner />}
+                  🔑 Answer Key (PDF)
+                </button>
+                <button
+                  onClick={() => handleExportAnswerKey("docx")}
+                  disabled={exporting}
+                  style={{
+                    background: "#ffffff",
+                    color: "#059669",
+                    border: "1px solid #059669",
+                    borderRadius: 8,
+                    padding: "8px 20px",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: exporting ? "not-allowed" : "pointer",
+                    opacity: exporting ? 0.6 : 1,
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {exporting && <Spinner color="#059669" />}
+                  🔑 Answer Key (DOCX)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Main Render ───────────────────────────────────────────────
   return (
     <DndContext
       sensors={sensors}
@@ -934,694 +2522,673 @@ export default function TestBuilderPage() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "20px 16px" }}>
+      <style>{`
+        @keyframes tbfade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes tbslide { from { transform: translateY(100%) } to { transform: translateY(0) } }
+        @keyframes tbspin { to { transform: rotate(360deg) } }
+      `}</style>
+
+      <div
+        style={{
+          maxWidth: 1400,
+          margin: "0 auto",
+          padding: isMobile ? "16px 14px 100px" : "20px 16px",
+        }}
+      >
         {/* Header */}
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: isMobile ? 12 : 16 }}>
           <h1
             style={{
-              fontSize: 20,
-              fontWeight: 600,
+              fontSize: isMobile ? 18 : 22,
+              fontWeight: 700,
               color: "#0f172a",
               margin: 0,
             }}
           >
-            Test Builder
+            {isMobile && mobileScreen === "paper"
+              ? "Your Test Paper"
+              : "NCERT Test Builder"}
           </h1>
-          <p style={{ color: "#64748b", fontSize: 13, margin: "4px 0 0" }}>
-            Browse {totalChapterQuestions.toLocaleString()} NCERT questions across{" "}
-            {chapterStats.length} chapters — drag or click to build your test
-            paper.
+          <p style={{ color: "#64748b", fontSize: isMobile ? 12 : 13, margin: "4px 0 0" }}>
+            Browse over 1,00,000 NCERT questions across 1,000 chapters — drag or
+            click to build your test paper.
           </p>
         </div>
 
-        {/* Class & Subject selectors */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        {/* Primary Selectors: Class, Subject, Title */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr 1fr" : "100px 160px 1fr",
+            gap: 10,
+            marginBottom: 12,
+            alignItems: "flex-end",
+          }}
+        >
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
+            <label
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                display: "block",
+                marginBottom: 4,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
               Class
             </label>
             <select
               value={classGrade}
               onChange={(e) => setClassGrade(e.target.value)}
               style={{
-                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
-                fontSize: 13, minWidth: 80,
+                padding: isMobile ? "10px 12px" : "7px 12px",
+                borderRadius: 10,
+                border: "1px solid #cbd5e1",
+                fontSize: 13,
+                width: "100%",
+                background: "#fff",
+                fontWeight: 500,
+                minHeight: isMobile ? 44 : "auto",
               }}
             >
-              {CLASS_OPTIONS.map((c) => <option key={c} value={c}>Class {c}</option>)}
+              {CLASS_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  Class {c}
+                </option>
+              ))}
             </select>
           </div>
+
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
+            <label
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                display: "block",
+                marginBottom: 4,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
               Subject
             </label>
             <select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               style={{
-                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
-                fontSize: 13, minWidth: 140,
+                padding: isMobile ? "10px 12px" : "7px 12px",
+                borderRadius: 10,
+                border: "1px solid #cbd5e1",
+                fontSize: 13,
+                width: "100%",
+                background: "#fff",
+                fontWeight: 500,
+                minHeight: isMobile ? 44 : "auto",
               }}
             >
-              {SUBJECT_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              {SUBJECT_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
           </div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
+
+          {/* Title on desktop */}
+          {!isMobile && (
+            <div>
+              <label
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#64748b",
+                  display: "block",
+                  marginBottom: 4,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                Test Title
+              </label>
+              <input
+                value={examTitle}
+                onChange={(e) => setExamTitle(e.target.value)}
+                placeholder="Enter test title…"
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #cbd5e1",
+                  fontSize: 13,
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: "#fff",
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Title on mobile */}
+        {isMobile && (
+          <div style={{ marginBottom: 12 }}>
+            <label
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                display: "block",
+                marginBottom: 4,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+              }}
+            >
               Test Title
             </label>
             <input
               value={examTitle}
               onChange={(e) => setExamTitle(e.target.value)}
-              placeholder="Enter test title..."
+              placeholder="e.g. Unit Test 1…"
               style={{
-                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
-                fontSize: 13, width: "100%", boxSizing: "border-box",
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "1px solid #cbd5e1",
+                fontSize: 13,
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#fff",
+                minHeight: 44,
               }}
             />
           </div>
-        </div>
+        )}
 
-        {/* Institute + Teacher + Duration */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
-              Institute / Coaching Name
-            </label>
-            <input
-              value={instituteName}
-              onChange={(e) => setInstituteName(e.target.value)}
-              placeholder="e.g., DeepJyoti Coaching Institute"
-              style={{
-                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
-                fontSize: 13, width: "100%", boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
-              Teacher Name
-            </label>
-            <input
-              value={teacherName}
-              onChange={(e) => setTeacherName(e.target.value)}
-              placeholder="e.g., Mr. Sharma"
-              style={{
-                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
-                fontSize: 13, width: "100%", boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ minWidth: 120 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
-              Duration
-            </label>
-            <input
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              placeholder="e.g., 1 hr"
-              style={{
-                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
-                fontSize: 13, width: "100%", boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>
-              Topic / Chapter Subtitle
-            </label>
-            <input
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder={selectedChapter ? `e.g., ${selectedChapter}` : "e.g., Unit 1: Kinematics"}
-              style={{
-                padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0",
-                fontSize: 13, width: "100%", boxSizing: "border-box",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Template Tier: Standard / Premium */}
+        {/* Settings toggle */}
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 6 }}>
-            Paper Template
-          </label>
-          <div style={{ display: "flex", gap: 0, borderRadius: 10, overflow: "hidden", border: "1px solid #e2e8f0", width: "fit-content" }}>
-            {[
-              { id: "standard" as const, label: "⚡ Standard", desc: "CBSE sections, MCQ layout" },
-              { id: "premium" as const, label: "✨ Premium", desc: "Case-study, sub-parts" },
-            ].map((tier) => (
-              <button
-                key={tier.id}
-                onClick={() => setTemplateTier(tier.id)}
-                style={{
-                  padding: "10px 24px",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  background: templateTier === tier.id ? "#111827" : "#fff",
-                  color: templateTier === tier.id ? "#fff" : "#374151",
-                  transition: "all 0.15s",
-                }}
-              >
-                {tier.label}
-                <span style={{
-                  display: "block",
-                  fontSize: 10,
-                  fontWeight: 400,
-                  marginTop: 2,
-                  color: templateTier === tier.id ? "#d1d5db" : "#9ca3af",
-                }}>
-                  {tier.desc}
-                </span>
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowSettings(!showSettings)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              padding: "12px 14px",
+              background: "#f1f5f9",
+              color: "#334155",
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 10,
+              border: "1px solid #e2e8f0",
+              cursor: "pointer",
+              minHeight: 44,
+            }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span>⚙️</span>
+              {isMobile
+                ? "Paper Details & Template (Optional)"
+                : "More Paper Details (Institute, Teacher, Template, Color)"}
+            </span>
+            <span style={{ color: "#4f46e5", fontWeight: 700 }}>
+              {showSettings ? "▲ Hide" : "▼ Edit"}
+            </span>
+          </button>
         </div>
 
-        {/* Color theme picker */}
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 6 }}>
-            Paper Color
-          </label>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {[
-              { id: "teal" as const, label: "Teal", color: "#0f766e" },
-              { id: "navy" as const, label: "Navy Blue", color: "#1e3a8a" },
-              { id: "dark_green" as const, label: "Dark Green", color: "#166534" },
-              { id: "orange" as const, label: "Orange", color: "#c2410c" },
-            ].map((theme) => (
-              <button
-                key={theme.id}
-                onClick={() => setColorTheme(theme.id)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 14px", borderRadius: 8,
-                  border: colorTheme === theme.id ? `2px solid ${theme.color}` : "1px solid #e2e8f0",
-                  background: colorTheme === theme.id ? `${theme.color}10` : "#fff",
-                  cursor: "pointer",
-                  fontSize: 13, fontWeight: 500,
-                  color: colorTheme === theme.id ? theme.color : "#334155",
-                  transition: "all 0.15s",
-                }}
-              >
-                <span style={{
-                  width: 14, height: 14, borderRadius: "50%",
-                  background: theme.color,
-                  border: "1px solid rgba(0,0,0,0.1)",
-                }} />
-                {theme.label}
-              </button>
-            ))}
+        {/* Collapsible settings */}
+        {showSettings && (
+          <div
+            style={{
+              marginBottom: 16,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: 12,
+              padding: 14,
+            }}
+          >
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: isMobile ? "100%" : 180 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Institute / Coaching Name
+                </label>
+                <input
+                  value={instituteName}
+                  onChange={(e) => setInstituteName(e.target.value)}
+                  placeholder="e.g., DeepJyoti Coaching Institute"
+                  style={{
+                    padding: isMobile ? "10px 12px" : "6px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                    fontSize: 13,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#fff",
+                    minHeight: isMobile ? 44 : "auto",
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: isMobile ? "100%" : 140 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Teacher Name
+                </label>
+                <input
+                  value={teacherName}
+                  onChange={(e) => setTeacherName(e.target.value)}
+                  placeholder="e.g., Mr. Sharma"
+                  style={{
+                    padding: isMobile ? "10px 12px" : "6px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                    fontSize: 13,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#fff",
+                    minHeight: isMobile ? 44 : "auto",
+                  }}
+                />
+              </div>
+              <div style={{ minWidth: isMobile ? "100%" : 100 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Duration
+                </label>
+                <input
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  placeholder="e.g., 1 hr"
+                  style={{
+                    padding: isMobile ? "10px 12px" : "6px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                    fontSize: 13,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#fff",
+                    minHeight: isMobile ? 44 : "auto",
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: isMobile ? "100%" : 160 }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Topic / Subtitle
+                </label>
+                <input
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder={
+                    selectedChapter
+                      ? `e.g., ${selectedChapter}`
+                      : "e.g., Unit 1"
+                  }
+                  style={{
+                    padding: isMobile ? "10px 12px" : "6px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                    fontSize: 13,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#fff",
+                    minHeight: isMobile ? 44 : "auto",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 20,
+                flexWrap: "wrap",
+                alignItems: "flex-start",
+                marginTop: 14,
+              }}
+            >
+              <div style={{ flex: isMobile ? "1 1 100%" : "0 0 auto" }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  Paper Template
+                </label>
+                <div
+                  style={{
+                    display: "flex",
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    border: "1px solid #cbd5e1",
+                    width: "100%",
+                  }}
+                >
+                  {[
+                    { id: "standard" as const, label: "⚡ Standard" },
+                    { id: "premium" as const, label: "✨ Premium" },
+                  ].map((tier) => (
+                    <button
+                      key={tier.id}
+                      onClick={() => setTemplateTier(tier.id)}
+                      style={{
+                        flex: 1,
+                        padding: isMobile ? "10px 8px" : "8px 18px",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        background:
+                          templateTier === tier.id ? "#0f172a" : "#fff",
+                        color:
+                          templateTier === tier.id ? "#fff" : "#374151",
+                        transition: "all 0.15s",
+                        minHeight: isMobile ? 44 : "auto",
+                      }}
+                    >
+                      {tier.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ flex: isMobile ? "1 1 100%" : "0 0 auto" }}>
+                <label
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "#64748b",
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  Paper Color
+                </label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[
+                    { id: "teal" as const, label: "Teal", color: "#0f766e" },
+                    {
+                      id: "navy" as const,
+                      label: "Navy",
+                      color: "#1e3a8a",
+                    },
+                    {
+                      id: "dark_green" as const,
+                      label: "Green",
+                      color: "#166534",
+                    },
+                    {
+                      id: "orange" as const,
+                      label: "Orange",
+                      color: "#c2410c",
+                    },
+                  ].map((theme) => (
+                    <button
+                      key={theme.id}
+                      onClick={() => setColorTheme(theme.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: isMobile ? "8px 12px" : "6px 14px",
+                        borderRadius: 10,
+                        border:
+                          colorTheme === theme.id
+                            ? `2px solid ${theme.color}`
+                            : "1px solid #cbd5e1",
+                        background:
+                          colorTheme === theme.id
+                            ? `${theme.color}15`
+                            : "#fff",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color:
+                          colorTheme === theme.id ? theme.color : "#334155",
+                        transition: "all 0.15s",
+                        minHeight: isMobile ? 42 : "auto",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: "50%",
+                          background: theme.color,
+                          border: "1px solid rgba(0,0,0,0.1)",
+                        }}
+                      />
+                      {theme.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Error banner */}
         {error && (
           <div
             style={{
-              padding: "8px 14px",
+              padding: "10px 14px",
               marginBottom: 12,
               background: "#fef2f2",
               border: "1px solid #fecaca",
-              borderRadius: 8,
+              borderRadius: 10,
               color: "#dc2626",
               fontSize: 13,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 8,
             }}
           >
-            {error}
+            <span style={{ flex: 1 }}>{error}</span>
             <button
               onClick={() => setError(null)}
               style={{
-                float: "right",
                 background: "none",
                 border: "none",
                 color: "#dc2626",
                 cursor: "pointer",
-                fontWeight: 600,
+                fontWeight: 700,
+                fontSize: 16,
+                padding: 4,
+                flexShrink: 0,
               }}
+              aria-label="Dismiss"
             >
               ✕
             </button>
           </div>
         )}
 
-        {/* Two-panel layout */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 16,
-            alignItems: "start",
-          }}
-        >
-          {/* ── LEFT: NCERT Library ─────────────────────────── */}
+        {/* Mobile Tab Switcher */}
+        {isMobile && (
           <div
             style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 10,
-              background: "#fafbfc",
-              overflow: "hidden",
+              display: "flex",
+              background: "#f1f5f9",
+              padding: 4,
+              borderRadius: 12,
+              marginBottom: 14,
+              gap: 4,
             }}
           >
-            <div
+            <button
+              onClick={() => setMobileScreen("library")}
               style={{
-                padding: "10px 16px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#f8fafc",
+                flex: 1,
+                padding: "10px 12px",
+                fontSize: 13,
                 fontWeight: 600,
-                fontSize: 14,
-                color: "#0f172a",
+                borderRadius: 10,
+                border: "none",
+                cursor: "pointer",
+                background:
+                  mobileScreen === "library" ? "#ffffff" : "transparent",
+                color:
+                  mobileScreen === "library" ? "#4f46e5" : "#64748b",
+                boxShadow:
+                  mobileScreen === "library"
+                    ? "0 2px 6px rgba(0,0,0,0.06)"
+                    : "none",
+                transition: "all 0.15s ease",
+                minHeight: 44,
               }}
             >
-              NCERT Question Library
-            </div>
-
-            <div
+              📚 Question Library
+            </button>
+            <button
+              onClick={() => setMobileScreen("paper")}
               style={{
-                display: "grid",
-                gridTemplateColumns: "200px 1fr",
-                minHeight: 500,
+                flex: 1,
+                padding: "10px 12px",
+                fontSize: 13,
+                fontWeight: 600,
+                borderRadius: 10,
+                border: "none",
+                cursor: "pointer",
+                background:
+                  mobileScreen === "paper" ? "#ffffff" : "transparent",
+                color:
+                  mobileScreen === "paper" ? "#4f46e5" : "#64748b",
+                boxShadow:
+                  mobileScreen === "paper"
+                    ? "0 2px 6px rgba(0,0,0,0.06)"
+                    : "none",
+                transition: "all 0.15s ease",
+                minHeight: 44,
               }}
             >
-              {/* Chapter sidebar */}
-              <div
-                style={{
-                  borderRight: "1px solid #e2e8f0",
-                  padding: "6px 0",
-                  maxHeight: 600,
-                  overflowY: "auto",
-                  background: "#f1f5f9",
-                }}
-              >
-                {statsLoading ? (
-                  <p style={{ padding: 12, color: "#94a3b8", fontSize: 13 }}>
-                    Loading…
-                  </p>
-                ) : chapterStats.length === 0 ? (
-                  <p
-                    style={{
-                      padding: 12,
-                      color: "#94a3b8",
-                      fontSize: 12,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    No questions found for {subject} Class {classGrade}. Run
-                    extraction script first.
-                  </p>
-                ) : (
-                  chapterStats.map((ch) => (
-                    <button
-                      key={ch.chapter}
-                      onClick={() => {
-                        setSelectedChapter(ch.chapter);
-                        setQuestionType("all");
-                        setSearchQuery("");
-                        setOffset(0);
-                      }}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "7px 12px",
-                        border: "none",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        lineHeight: 1.4,
-                        background:
-                          selectedChapter === ch.chapter
-                            ? "#e0e7ff"
-                            : "transparent",
-                        color:
-                          selectedChapter === ch.chapter ? "#4338ca" : "#334155",
-                        fontWeight:
-                          selectedChapter === ch.chapter ? 600 : 400,
-                        borderLeft:
-                          selectedChapter === ch.chapter
-                            ? "3px solid #6366f1"
-                            : "3px solid transparent",
-                      }}
-                    >
-                      {ch.chapter}
-                      <span
-                        style={{
-                          display: "block",
-                          fontSize: 10,
-                          color:
-                            selectedChapter === ch.chapter
-                              ? "#6366f1"
-                              : "#94a3b8",
-                        }}
-                      >
-                        {ch.total} questions
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-
-              {/* Questions list */}
-              <div style={{ padding: 10, maxHeight: 600, overflowY: "auto" }}>
-                {selectedChapter ? (
-                  <>
-                    <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                      <input
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search questions…"
-                        style={{
-                          flex: 1,
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          border: "1px solid #e2e8f0",
-                          fontSize: 12,
-                        }}
-                      />
-                      <select
-                        value={questionType}
-                        onChange={(e) => setQuestionType(e.target.value)}
-                        style={{
-                          padding: "6px 8px",
-                          borderRadius: 6,
-                          border: "1px solid #e2e8f0",
-                          fontSize: 12,
-                        }}
-                      >
-                        {Object.entries(TYPE_LABELS).map(([val, label]) => (
-                          <option key={val} value={val}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {loading ? (
-                      <p
-                        style={{
-                          color: "#94a3b8",
-                          fontSize: 13,
-                          textAlign: "center",
-                          paddingTop: 40,
-                        }}
-                      >
-                        Loading questions…
-                      </p>
-                    ) : libraryQuestions.length === 0 ? (
-                      <p
-                        style={{
-                          color: "#94a3b8",
-                          fontSize: 13,
-                          textAlign: "center",
-                          paddingTop: 40,
-                        }}
-                      >
-                        No questions match this filter.
-                      </p>
-                    ) : (
-                      <>
-                        <SortableContext
-                          items={libraryQuestions.map((q) => `lib-${q.id}`)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {libraryQuestions.map((q) => (
-                            <DraggableQuestion
-                              key={q.id}
-                              question={q}
-                              onAdd={addToTest}
-                              isAdded={addedIds.has(q.id)}
-                            />
-                          ))}
-                        </SortableContext>
-
-                        {hasMore && (
-                          <button
-                            onClick={() => fetchQuestions(true)}
-                            disabled={loadingMore}
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              padding: "8px",
-                              marginTop: 8,
-                              background: "#f1f5f9",
-                              border: "1px solid #e2e8f0",
-                              borderRadius: 6,
-                              fontSize: 12,
-                              color: "#6366f1",
-                              cursor: loadingMore ? "wait" : "pointer",
-                              fontWeight: 500,
-                            }}
-                          >
-                            {loadingMore
-                              ? "Loading…"
-                              : "Load more questions"}
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      paddingTop: 60,
-                      color: "#94a3b8",
-                    }}
-                  >
-                    <p style={{ fontSize: 28, marginBottom: 8 }}>📖</p>
-                    <p style={{ fontSize: 13 }}>
-                      Select a chapter to browse questions
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+              📝 Test Paper ({testQuestions.length})
+            </button>
           </div>
+        )}
 
-          {/* ── RIGHT: Test Paper ───────────────────────────── */}
-          <div
-            style={{
-              border: "1px solid #e2e8f0",
-              borderRadius: 10,
-              background: "#fafbfc",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                padding: "10px 16px",
-                borderBottom: "1px solid #e2e8f0",
-                background: "#f8fafc",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <span
-                  style={{ fontWeight: 600, fontSize: 14, color: "#0f172a" }}
-                >
-                  Your Test Paper
-                </span>
-                <span
-                  style={{ fontSize: 12, color: "#64748b", marginLeft: 8 }}
-                >
-                  {testQuestions.length} questions · {totalMarks} marks
-                </span>
-              </div>
-              {testQuestions.length > 0 && (
-                <button
-                  onClick={() => {
-                    if (confirm("Remove all questions from paper?"))
-                      setTestQuestions([]);
-                  }}
-                  style={{
-                    background: "none",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: 6,
-                    padding: "4px 10px",
-                    fontSize: 11,
-                    color: "#64748b",
-                    cursor: "pointer",
-                  }}
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-
-            <div
-              style={{
-                padding: 10,
-                minHeight: 500,
-                maxHeight: 600,
-                overflowY: "auto",
-              }}
-            >
-              {testQuestions.length === 0 ? (
-                <div
-                  style={{
-                    border: "2px dashed #e2e8f0",
-                    borderRadius: 10,
-                    padding: "60px 20px",
-                    textAlign: "center",
-                    color: "#94a3b8",
-                    minHeight: 300,
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <p style={{ fontSize: 28, marginBottom: 8 }}>📄</p>
-                  <p style={{ fontSize: 14, fontWeight: 500 }}>
-                    Drop questions here to build your test
-                  </p>
-                  <p style={{ fontSize: 12, marginTop: 4 }}>
-                    Or click "+ Add" on any question
-                  </p>
-                </div>
-              ) : (
-                <SortableContext
-                  items={testQuestions.map((q) => q.paperId)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {testQuestions.map((q, i) => (
-                    <SortableTestQuestion
-                      key={q.paperId}
-                      question={q}
-                      index={i}
-                      onRemove={removeFromTest}
-                      onEditMarks={editMarks}
-                    />
-                  ))}
-                </SortableContext>
-              )}
-            </div>
-
-            {/* Action buttons */}
-            {testQuestions.length > 0 && (
-              <div style={{
-                padding: "12px 16px", borderTop: "1px solid #e2e8f0",
-                background: "#f8fafc",
-              }}>
-                {/* Question Paper downloads */}
-                <div style={{ marginBottom: 10 }}>
-                  <p style={{
-                    fontSize: 11, fontWeight: 600, color: "#64748b",
-                    margin: "0 0 6px", textTransform: "uppercase", letterSpacing: 0.5,
-                  }}>
-                    Question Paper
-                  </p>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => handleExport("pdf")}
-                      disabled={exporting}
-                      style={{
-                        background: "#111827", color: "#fff", border: "none",
-                        borderRadius: 8, padding: "8px 20px", fontSize: 13,
-                        fontWeight: 500, cursor: exporting ? "not-allowed" : "pointer",
-                        opacity: exporting ? 0.6 : 1,
-                        flex: 1,
-                      }}
-                    >
-                      📄 Download PDF
-                    </button>
-                    <button
-                      onClick={() => handleExport("docx")}
-                      disabled={exporting}
-                      style={{
-                        background: "#fff", color: "#111827", border: "1px solid #111827",
-                        borderRadius: 8, padding: "8px 20px", fontSize: 13,
-                        fontWeight: 500, cursor: exporting ? "not-allowed" : "pointer",
-                        opacity: exporting ? 0.6 : 1,
-                        flex: 1,
-                      }}
-                    >
-                      📄 Download DOCX
-                    </button>
-                  </div>
-                </div>
-
-                {/* Answer Key downloads */}
-                <div style={{
-                  borderTop: "1px dashed #e2e8f0",
-                  paddingTop: 10, marginTop: 4,
-                }}>
-                  <div style={{
-                    display: "flex", justifyContent: "space-between",
-                    alignItems: "center", marginBottom: 6,
-                  }}>
-                    <p style={{
-                      fontSize: 11, fontWeight: 600, color: "#64748b",
-                      margin: 0, textTransform: "uppercase", letterSpacing: 0.5,
-                    }}>
-                      Answer Key (separate file)
-                    </p>
-                    <label style={{
-                      display: "flex", items: "center", gap: 4,
-                      fontSize: 11, color: "#64748b", cursor: "pointer",
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={includeExplanations}
-                        onChange={(e) => setIncludeExplanations(e.target.checked)}
-                        style={{ cursor: "pointer" }}
-                      />
-                      Include explanations
-                    </label>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => handleExportAnswerKey("pdf")}
-                      disabled={exporting}
-                      style={{
-                        background: "#059669", color: "#fff", border: "none",
-                        borderRadius: 8, padding: "8px 20px", fontSize: 13,
-                        fontWeight: 500, cursor: exporting ? "not-allowed" : "pointer",
-                        opacity: exporting ? 0.6 : 1,
-                        flex: 1,
-                      }}
-                    >
-                      🔑 Answer Key (PDF)
-                    </button>
-                    <button
-                      onClick={() => handleExportAnswerKey("docx")}
-                      disabled={exporting}
-                      style={{
-                        background: "#fff", color: "#059669", border: "1px solid #059669",
-                        borderRadius: 8, padding: "8px 20px", fontSize: 13,
-                        fontWeight: 500, cursor: exporting ? "not-allowed" : "pointer",
-                        opacity: exporting ? 0.6 : 1,
-                        flex: 1,
-                      }}
-                    >
-                      🔑 Answer Key (DOCX)
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Main Content Area */}
+        {isMobile
+          ? mobileScreen === "paper"
+            ? renderMobilePaper()
+            : renderMobileLibrary()
+          : renderDesktop()}
       </div>
 
-      <DragOverlay>
+      {/* Mobile Sticky Bottom Bar */}
+      {isMobile && (
+        <MobileBottomBar
+          questionCount={testQuestions.length}
+          totalMarks={totalMarks}
+          onViewPaper={() => setMobileScreen("paper")}
+          onOpenLibrary={() => setMobileScreen("library")}
+          activeScreen={mobileScreen}
+        />
+      )}
+
+      {/* Mobile Chapter Bottom Sheet */}
+      <ChapterBottomSheet
+        open={showChapterSheet}
+        onClose={() => setShowChapterSheet(false)}
+        chapterStats={chapterStats}
+        selectedChapter={selectedChapter}
+        onSelect={(chapter) => {
+          setSelectedChapter(chapter);
+          setQuestionType("all");
+          setSearchQuery("");
+          setOffset(0);
+        }}
+        statsLoading={statsLoading}
+        subject={subject}
+        classGrade={classGrade}
+      />
+
+      <DragOverlay dropAnimation={defaultDropAnimation}>
         {activeId ? (
           <div
             style={{
-              padding: "8px 12px",
-              background: "#eef2ff",
-              border: "1px solid #6366f1",
-              borderRadius: 8,
-              fontSize: 12,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-              maxWidth: 300,
+              padding: "10px 14px",
+              background: "#ffffff",
+              border: "2px solid #4f46e5",
+              borderRadius: 10,
+              fontSize: 13,
+              boxShadow: "0 12px 28px rgba(0,0,0,0.18)",
+              maxWidth: 320,
+              cursor: "grabbing",
+              touchAction: "none",
             }}
           >
-            Dragging question…
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginBottom: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#4f46e5",
+                  background: "#eef2ff",
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                }}
+              >
+                Dragging Question
+              </span>
+            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                color: "#1e293b",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {activeId.startsWith("lib-")
+                ? libraryQuestions.find((q) => `lib-${q.id}` === activeId)
+                    ?.question_text || "Question"
+                : testQuestions.find((q) => q.paperId === activeId)
+                    ?.question_text || "Question"}
+            </p>
           </div>
         ) : null}
       </DragOverlay>

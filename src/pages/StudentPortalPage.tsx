@@ -55,8 +55,11 @@ type Announcement = {
 type ChatMessage = {
   id: string;
   sender: string;
+  sender_id?: string;
+  sender_role?: "student" | "teacher" | "system";
   text: string;
   time: string;
+  created_at?: string;
   isStudent: boolean;
 };
 
@@ -323,8 +326,9 @@ export default function StudentPortalPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sideView, setSideView] = useState<"dashboard" | "calendar" | "activity" | "chat" | "files" | "tasks">("dashboard");
   const [expandedCourse, setExpandedCourse] = useState(true);
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   /* New Interactive State for Files, Tasks, & Chat */
   const [fileSearchQuery, setFileSearchQuery] = useState("");
@@ -334,6 +338,120 @@ export default function StudentPortalPage() {
   const [newChatMessage, setNewChatMessage] = useState("");
 
   const t = themeTokens[theme];
+
+  // Load & Subscribe to Realtime Chat Messages
+  useEffect(() => {
+    if (!student?.batch_id) return;
+    const batchId = student.batch_id;
+
+    async function loadChat() {
+      // 1. Check Supabase table batch_messages
+      try {
+        const { data, error } = await supabase
+          .from("batch_messages")
+          .select("*")
+          .eq("batch_id", batchId)
+          .order("created_at", { ascending: true })
+          .limit(100);
+
+        if (!error && data && data.length > 0) {
+          const msgs: ChatMessage[] = data.map((m: any) => ({
+            id: String(m.id),
+            sender: m.sender_name || (m.sender_role === "teacher" ? "Teacher" : "Student"),
+            sender_id: m.sender_id,
+            sender_role: m.sender_role || "student",
+            text: m.message || m.text || "",
+            time: new Date(m.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+            created_at: m.created_at,
+            isStudent: m.sender_id === student?.id || m.sender_role === "student",
+          }));
+          setChatMessages(msgs);
+          localStorage.setItem(`a4ai_chat_${batchId}`, JSON.stringify(msgs));
+          return;
+        }
+      } catch (e) {
+        // graceful fallback to localStorage
+      }
+
+      // 2. Fallback to localStorage
+      const local = localStorage.getItem(`a4ai_chat_${batchId}`);
+      if (local) {
+        try {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setChatMessages(parsed);
+            return;
+          }
+        } catch {}
+      }
+
+      // 3. Default welcome message
+      const defaultMsg: ChatMessage[] = [
+        {
+          id: "welcome-1",
+          sender: "Teacher / Class Notice",
+          sender_role: "system",
+          text: `Welcome to ${student?.batch_name || "your batch"}! Use this General Chat space to discuss class topics, ask questions, and share study notes.`,
+          time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+          isStudent: false,
+        }
+      ];
+      setChatMessages(defaultMsg);
+      localStorage.setItem(`a4ai_chat_${batchId}`, JSON.stringify(defaultMsg));
+    }
+
+    loadChat();
+
+    // Subscribe to real-time inserts on batch_messages
+    const channel = supabase
+      .channel(`batch-chat-${batchId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "batch_messages",
+          filter: `batch_id=eq.${batchId}`,
+        },
+        (payload) => {
+          const newRow = payload.new as any;
+          if (newRow) {
+            const incoming: ChatMessage = {
+              id: String(newRow.id),
+              sender: newRow.sender_name || (newRow.sender_role === "teacher" ? "Teacher" : "Student"),
+              sender_id: newRow.sender_id,
+              sender_role: newRow.sender_role || "student",
+              text: newRow.message || newRow.text || "",
+              time: new Date(newRow.created_at || Date.now()).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+              created_at: newRow.created_at,
+              isStudent: newRow.sender_id === student?.id,
+            };
+            setChatMessages((prev) => {
+              if (prev.some((m) => m.id === incoming.id)) return prev;
+              const updated = [...prev, incoming];
+              localStorage.setItem(`a4ai_chat_${batchId}`, JSON.stringify(updated));
+              return updated;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [student?.batch_id, student?.id, student?.batch_name]);
+
+  // Auto-scroll to bottom of chat
+  useEffect(() => {
+    if (sideView === "chat" && chatScrollRef.current) {
+      setTimeout(() => {
+        if (chatScrollRef.current) {
+          chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+        }
+      }, 50);
+    }
+  }, [chatMessages, sideView]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("a4ai_theme") as Theme | null;
@@ -427,18 +545,6 @@ export default function StudentPortalPage() {
         .eq("access_code", clean);
 
       await loadDashboard(s);
-
-      // Initialize initial batch chat
-      setChatMessages([
-        {
-          id: "welcome-1",
-          sender: "Teacher / Class Notice",
-          text: `Welcome to ${batchName}! Use this General Chat space to discuss class topics, ask questions, and share study notes.`,
-          time: fmtDate(new Date().toISOString()),
-          isStudent: false,
-        }
-      ]);
-
       setView("dashboard");
     } catch (e) {
       setError("Something went wrong. Please try again.");
@@ -512,19 +618,6 @@ export default function StudentPortalPage() {
       alert("Upload failed: " + (e.message || "Unknown error"));
     }
     setUploading(false);
-  }
-
-  function handleSendChatMessage() {
-    if (!newChatMessage.trim() || !student) return;
-    const msg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sender: student.name,
-      text: newChatMessage.trim(),
-      time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
-      isStudent: true,
-    };
-    setChatMessages(prev => [...prev, msg]);
-    setNewChatMessage("");
   }
 
   function logout() {
@@ -601,7 +694,6 @@ export default function StudentPortalPage() {
     { id: 'tasks', icon: <Icons.Tasks />, label: 'Tasks' },
     { id: 'files', icon: <Icons.Files />, label: 'Files' },
     { id: 'calendar', icon: <Icons.Calendar />, label: 'Calendar' },
-    { id: 'chat', icon: <Icons.Chat />, label: 'Discussion' },
     { id: 'activity', icon: <Icons.Activity />, label: 'Activity' },
   ];
 
@@ -858,7 +950,6 @@ export default function StudentPortalPage() {
 
   const channels = [
     { id: 'announcements', name: 'Announcements', icon: <Icons.Bell /> },
-    { id: 'general', name: 'General Chat', icon: <Icons.Hash /> },
     { id: 'assignments', name: 'Assignments & Tasks', icon: <Icons.Tasks /> },
     { id: 'live', name: 'Live Lectures', icon: <Icons.MonitorPlay /> },
   ];
@@ -1292,75 +1383,7 @@ export default function StudentPortalPage() {
               </div>
             )}
 
-            {/* Batch Discussion / Chat View */}
-            {sideView === "chat" && (
-              <div className="space-y-4">
-                <div>
-                  <h1 className="text-xl sm:text-2xl font-bold" style={{ color: t.textPrimary }}>Batch Discussion & Noticeboard</h1>
-                  <p className="text-sm mt-1" style={{ color: t.textSecondary }}>Connect with your class, ask questions, and discuss assignments</p>
-                </div>
 
-                <div className="rounded-xl border overflow-hidden flex flex-col h-[520px]" style={{ background: t.surface, borderColor: t.border }}>
-                  {/* Discussion Header */}
-                  <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: t.border, background: t.bg }}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                      <span className="font-semibold text-sm" style={{ color: t.textPrimary }}>#{student.batch_name} — General Q&A</span>
-                    </div>
-                    <span className="text-xs" style={{ color: t.textMuted }}>{chatMessages.length} message{chatMessages.length !== 1 ? "s" : ""}</span>
-                  </div>
-
-                  {/* Messages Feed */}
-                  <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                    {chatMessages.map(msg => (
-                      <div
-                        key={msg.id}
-                        className={`flex flex-col ${msg.isStudent ? "items-end" : "items-start"}`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-bold" style={{ color: msg.isStudent ? t.accent : t.teal }}>{msg.sender}</span>
-                          <span className="text-[10px]" style={{ color: t.textMuted }}>{msg.time}</span>
-                        </div>
-                        <div
-                          className="max-w-md p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words border"
-                          style={{
-                            background: msg.isStudent ? t.accentBg : t.bg,
-                            borderColor: msg.isStudent ? `${t.accent}30` : t.border,
-                            color: t.textPrimary,
-                            borderBottomRightRadius: msg.isStudent ? 2 : 16,
-                            borderBottomLeftRadius: msg.isStudent ? 16 : 2,
-                          }}
-                        >
-                          {msg.text}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Message Input Box */}
-                  <div className="p-3 border-t flex items-center gap-2" style={{ borderColor: t.border, background: t.bg }}>
-                    <input
-                      type="text"
-                      value={newChatMessage}
-                      onChange={e => setNewChatMessage(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && handleSendChatMessage()}
-                      placeholder="Type a message or question for your batch..."
-                      className="flex-1 px-4 py-2.5 rounded-xl text-sm outline-none transition-all"
-                      style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.textPrimary }}
-                    />
-                    <button
-                      onClick={handleSendChatMessage}
-                      disabled={!newChatMessage.trim()}
-                      className="p-2.5 rounded-xl text-white font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={{ background: `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}
-                      title="Send Message"
-                    >
-                      <Icons.Send />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Dashboard View */}
             {sideView === "dashboard" && (

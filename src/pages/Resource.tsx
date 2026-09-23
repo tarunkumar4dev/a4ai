@@ -1,13 +1,12 @@
+// src/pages/Resource.tsx — Unified UI Pattern matching FeaturesPage
 import React, { useRef, useEffect, useState } from "react";
 import {
   motion,
-  useInView,
   useMotionValue,
   useTransform,
   useMotionTemplate,
-  useReducedMotion,
+  AnimatePresence,
 } from "framer-motion";
-import { useTheme } from "@/context/ThemeContext";
 import {
   BookOpen,
   Bookmark,
@@ -23,16 +22,18 @@ import {
   CalendarDays,
   Puzzle,
   DownloadCloud,
-  Stars,
   ArrowRight,
   Code2,
   Cpu,
   Lightbulb,
   Search,
+  Sparkles,
+  Check,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 /* ──────────────────────────────────────────────────────────────
-   BRAND STYLES & GLOBAL INJECTION
+   BRAND STYLES & GLOBAL INJECTION (Forced Light Only)
    ────────────────────────────────────────────────────────────── */
 const BRAND_GRADIENT =
   "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
@@ -40,35 +41,80 @@ const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradie
 
 const GlobalStyles = () => {
   useEffect(() => {
+    document.documentElement.style.background = "#ffffff";
+    document.documentElement.style.backgroundColor = "#ffffff";
+    document.documentElement.style.colorScheme = "light only";
+    document.documentElement.classList.remove("dark");
+
     const s = document.createElement("style");
     s.textContent = `
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
 
-      .lp {
-        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      .lp-resources-wrapper, .lp-resources-wrapper * {
+        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
         -webkit-font-smoothing: antialiased;
       }
-      .ag-card {
-        border-radius: 18px;
-        transition: transform 0.2s cubic-bezier(.16,1,.3,1), box-shadow 0.2s cubic-bezier(.16,1,.3,1);
+      
+      html, body, #root, main, section { background: #ffffff !important; background-color: #ffffff !important; }
+
+      .resource-card {
+        border-radius: 24px;
+        transition: transform 0.22s cubic-bezier(.16,1,.3,1), box-shadow 0.22s cubic-bezier(.16,1,.3,1), border-color 0.22s ease;
         position: relative;
-        overflow: hidden;
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        backdrop-filter: blur(30px) saturate(170%) !important;
+        -webkit-backdrop-filter: blur(30px) saturate(170%) !important;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.02) !important;
       }
-      @media (min-width: 640px) { .ag-card { border-radius: 20px; } }
-      .ag-card-light {
-        background: rgba(255,255,255,0.78);
-        border: 1px solid rgba(0,0,0,0.08);
-        backdrop-filter: blur(24px) saturate(160%);
-        -webkit-backdrop-filter: blur(24px) saturate(160%);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(59,130,246,0.07), 0 2px 6px rgba(0,0,0,0.05);
+
+      @media (hover: hover) {
+        .resource-card:hover {
+          transform: translateY(-4px) !important;
+          border-color: rgba(147, 197, 253, 0.9) !important;
+          box-shadow: 0 20px 40px -12px rgba(59, 130, 246, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+        }
       }
-      .ag-card-dark {
-        background: rgba(20,25,40,0.65);
-        border: 1px solid rgba(255,255,255,0.09);
-        backdrop-filter: blur(24px) saturate(160%);
-        -webkit-backdrop-filter: blur(24px) saturate(160%);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 6px 24px rgba(0,0,0,0.45);
+
+      .btn-blue-gradient {
+        background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 85%) !important;
+        color: #ffffff !important;
+        border: 1px solid #60a5fa !important;
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25) !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        border-radius: 14px;
+        font-weight: 700;
       }
+      .btn-blue-gradient * { color: #ffffff !important; stroke: #ffffff !important; }
+      @media (hover: hover) { 
+        .btn-blue-gradient:hover { 
+          filter: brightness(1.05); 
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.38) !important; 
+        } 
+      }
+
+      .btn-white-action {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        border-radius: 14px;
+        font-weight: 700;
+      }
+      .btn-white-action * { color: #0f172a !important; stroke: #0f172a !important; }
+      @media (hover: hover) {
+        .btn-white-action:hover {
+          background: #f8fafc !important;
+          border-color: #cbd5e1 !important;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07) !important;
+        }
+      }
+
       @keyframes fast-gradient {
         0% { background-position: 0% center; }
         100% { background-position: -200% center; }
@@ -81,56 +127,45 @@ const GlobalStyles = () => {
         background-clip: text;
         animation: fast-gradient 4s linear infinite;
       }
-      .btn-blk {
-        position:relative; overflow:hidden;
-        background: linear-gradient(180deg,#202124 0%,#111111 100%);
-        border: 1px solid rgba(255,255,255,0.14);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
-        color: white;
-        font-weight: 700;
-        border-radius: 14px;
-        transition: transform 0.2s, box-shadow 0.2s;
-        -webkit-tap-highlight-color: transparent;
+
+      .force-light-dock {
+        background-color: rgba(255, 255, 255, 0.7) !important;
+        background: rgba(255, 255, 255, 0.7) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        border: 1px solid rgba(226, 232, 240, 0.8) !important;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 32px rgba(0, 0, 0, 0.04) !important;
       }
-      .btn-glass-light {
-        position:relative; overflow:hidden;
-        background: rgba(235, 235, 240, 0.85);
-        border: 1px solid rgba(0,0,0,0.12);
-        backdrop-filter: blur(20px) saturate(160%);
-        border-radius: 14px;
+
+      .per-student-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
+        color: #1d4ed8;
+        font-size: 11px;
         font-weight: 700;
-        transition: transform 0.2s;
+        padding: 3px 10px;
+        border-radius: 999px;
       }
-      .btn-glass-dark {
-        position:relative; overflow:hidden;
-        background: rgba(60, 60, 65, 0.7);
-        border: 1px solid rgba(255,255,255,0.15);
-        backdrop-filter: blur(20px) saturate(160%);
-        border-radius: 14px;
-        font-weight: 700;
-        transition: transform 0.2s;
-      }
+
       .nlm-pill {
-        display:inline-flex; align-items:center; gap:5px;
-        padding:4px 12px; border-radius:999px;
-        font-size:12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 14px;
+        border-radius: 999px;
+        font-size: 13px;
         font-weight: 700;
+        background: rgba(59,130,246,0.06);
+        color: #1d4ed8;
+        border: 1px solid rgba(59,130,246,0.14);
       }
-      .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(50px); }
-      
-      /* Typography fixes */
-      .heading-hero {
-        font-weight: 900;
-        letter-spacing: -0.02em;
-      }
-      .heading-section {
-        font-weight: 800;
-        letter-spacing: -0.01em;
-      }
-      .body-text {
-        font-weight: 500;
-        line-height: 1.6;
-      }
+      .sorb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(70px); }
+      @media (min-width: 640px) { .sorb { filter: blur(100px); } }
     `;
     document.head.appendChild(s);
     return () => {
@@ -140,373 +175,621 @@ const GlobalStyles = () => {
   return null;
 };
 
-const cardTheme = (isDark: boolean) => `ag-card ${isDark ? "ag-card-dark" : "ag-card-light"}`;
-const pillProps = (isDark: boolean) => ({
-  className: "nlm-pill inline-flex items-center gap-1.5",
-  style: {
-    background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)",
-    color: isDark ? "#60a5fa" : "#1d4ed8",
-    border: isDark ? "1px solid rgba(59,130,246,0.22)" : "1px solid rgba(59,130,246,0.16)",
-  },
-});
-const muted = (isDark: boolean) => (isDark ? "#8a9bb0" : "#5f6368");
-const head = (isDark: boolean) => (isDark ? "#f1f5f9" : "#111111");
-const accent = (isDark: boolean) => (isDark ? "#60a5fa" : "#3b82f6");
+/* --- Light Visual Design Tokens --- */
+const txtMuted = "#5f6368";
+const txtHead = "#111111";
+const accentColor = "#3b82f6";
 
-const EASE: [number, number, number, number] = [0.25, 0.1, 0.25, 1];
 const fadeUp = {
   initial: { opacity: 0, y: 18 },
   whileInView: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
 } as const;
-const sectionX = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
 
 // --------------------------- Types ---------------------------
 
-type Resource = {
+export type Resource = {
   id: string;
   title: string;
   description: string;
+  category: "docs" | "tutorials" | "projects" | "community" | "trust";
   href?: string;
   tags: string[];
   icon: React.ElementType;
+  bullets: string[];
+  tag?: string;
   cta?: string;
 };
 
 // --------------------------- Data ---------------------------
 
-const QUICK_LINKS: Resource[] = [
-  { id: "docs", title: "Developer Docs", description: "All endpoints, SDKs, guides, and best practices for a4ai.", href: "/docs", tags: ["docs"], icon: BookOpen, cta: "Read docs" },
-  { id: "api", title: "API Overview", description: "Base URL, auth, rate limits, and examples.", href: "/api", tags: ["api"], icon: Code2, cta: "Explore API" },
-  { id: "changelog", title: "Changelog", description: "All notable changes, improvements, and fixes.", href: "/changelog", tags: ["updates"], icon: CalendarDays, cta: "See updates" },
-  { id: "status", title: "Status", description: "Live service health, incidents, and uptime.", href: "/status", tags: ["status"], icon: ShieldCheck, cta: "View status" },
+const ALL_RESOURCES: Resource[] = [
+  // Docs & API
+  {
+    id: "docs",
+    title: "Developer Documentation",
+    category: "docs",
+    description: "Complete guide to integrating a4ai into your school portal or LMS.",
+    href: "/docs",
+    tags: ["REST", "SDK", "Guides"],
+    icon: BookOpen,
+    bullets: ["Endpoints for test creation & grading", "Python & TypeScript official SDKs", "Webhook triggers & event schemas"],
+    tag: "Docs",
+    cta: "Read Docs",
+  },
+  {
+    id: "api",
+    title: "API Reference & Specs",
+    category: "docs",
+    description: "Low-latency REST endpoints for test generator and contest engine.",
+    href: "/api",
+    tags: ["API", "Auth", "JSON"],
+    icon: Code2,
+    bullets: ["API key management & JWT auth", "Deterministic blueprint schema", "Rate limits & status codes"],
+    tag: "API",
+    cta: "Explore API",
+  },
+  {
+    id: "changelog",
+    title: "Platform Changelog",
+    category: "docs",
+    description: "Track all recent updates, new question types, and feature releases.",
+    href: "/changelog",
+    tags: ["Updates", "Release"],
+    icon: CalendarDays,
+    bullets: ["Weekly feature drops", "Model improvements & speedups", "CBSE syllabus alignment updates"],
+    tag: "Weekly",
+    cta: "See Updates",
+  },
+  {
+    id: "status",
+    title: "Live System Status",
+    category: "docs",
+    description: "Real-time service health, server uptime, and incident logs.",
+    href: "/status",
+    tags: ["Uptime", "Health"],
+    icon: ShieldCheck,
+    bullets: ["99.9% uptime SLA track record", "Global response latency metrics", "Incident history & postmortems"],
+    tag: "Live",
+    cta: "View Status",
+  },
+
+  // Tutorials & Guides
+  {
+    id: "qs-test",
+    title: "Quickstart: Create First Test",
+    category: "tutorials",
+    description: "Generate a Class 10 Science paper in 10 seconds and export to PDF.",
+    href: "/guides/quickstart-test",
+    tags: ["Quickstart", "CBSE"],
+    icon: Rocket,
+    bullets: ["Curated from 1 Lakh+ NCERT questions", "Section-wise marks & Bloom levels", "Print-ready CBSE paper with answer key"],
+    tag: "Popular",
+    cta: "Start Guide",
+  },
+  {
+    id: "contest",
+    title: "Host a Proctored Contest",
+    category: "tutorials",
+    description: "Run live, fair online tests with anti-cheat camera proctoring.",
+    href: "/guides/host-contest",
+    tags: ["Contest", "Proctoring"],
+    icon: LifeBuoy,
+    bullets: ["WhatsApp contest link sharing", "Tab-switch & camera monitoring", "Instant MCQ auto-grading & rankings"],
+    tag: "Guide",
+    cta: "Host Contest",
+  },
+  {
+    id: "webhooks",
+    title: "Automate with Webhooks",
+    category: "tutorials",
+    description: "Receive instant notifications when students complete tests or cheat.",
+    href: "/guides/webhooks",
+    tags: ["Webhooks", "Automation"],
+    icon: Puzzle,
+    bullets: ["Automated grading callbacks", "Tamper-proof HMAC signature checks", "Zero server polling required"],
+    tag: "Tutorial",
+    cta: "Set Up",
+  },
+  {
+    id: "analytics",
+    title: "Teacher Analytics & Reports",
+    category: "tutorials",
+    description: "Turn classroom test scores into actionable student growth insights.",
+    href: "/guides/analytics",
+    tags: ["Analytics", "Report Cards"],
+    icon: Cpu,
+    bullets: ["Chapter-wise weakness heatmaps", "1-click CBSE report card PDF generation", "Class vs student benchmark curves"],
+    tag: "Pro",
+    cta: "View Guide",
+  },
+
+  // Sample Projects & Starter Kits
+  {
+    id: "next-starter",
+    title: "Next.js School Portal Starter",
+    category: "projects",
+    description: "Production-ready web portal with auth, student dashboards, and tests.",
+    href: "https://github.com/a4ai/examples/next-starter",
+    tags: ["Next.js", "TypeScript", "Tailwind"],
+    icon: FileCode2,
+    bullets: ["Integrated Tailwind CSS & Shadcn UI", "Supabase authentication pre-configured", "Responsive desktop and mobile view"],
+    tag: "Open Source",
+    cta: "View GitHub",
+  },
+  {
+    id: "edge-fn",
+    title: "Supabase Edge Functions",
+    category: "projects",
+    description: "Securely generate tests from your syllabus via serverless edge workers.",
+    href: "https://github.com/a4ai/examples/supabase-edge",
+    tags: ["Serverless", "Deno"],
+    icon: FileCode2,
+    bullets: ["Zero cold-start global deployment", "Safe API key protection in backend", "Streaming AI response parser"],
+    tag: "Starter",
+    cta: "Clone Repo",
+  },
+  {
+    id: "contest-admin",
+    title: "Contest Invigilator Panel",
+    category: "projects",
+    description: "Admin dashboard to monitor live contests and handle anomalies.",
+    href: "https://github.com/a4ai/examples/contest-admin",
+    tags: ["React", "Dashboard"],
+    icon: FileCode2,
+    bullets: ["Live student camera gallery", "Anomaly warning log & live feed", "One-click CSV result export"],
+    tag: "Template",
+    cta: "Inspect Code",
+  },
+
+  // Community & Trust
+  {
+    id: "discord",
+    title: "Educator & Dev Community",
+    category: "community",
+    description: "Join 1,000+ teachers, coaching directors, and EdTech developers.",
+    href: "https://discord.gg/a4ai",
+    tags: ["Discord", "Support"],
+    icon: MessageSquare,
+    bullets: ["Direct chat with a4ai core founders", "Share test paper blueprints & prompts", "Early beta invites & feature requests"],
+    tag: "Community",
+    cta: "Join Discord",
+  },
+  {
+    id: "github",
+    title: "GitHub Repository",
+    category: "community",
+    description: "Star our open-source templates, report bugs, and view examples.",
+    href: "https://github.com/a4ai",
+    tags: ["GitHub", "Code"],
+    icon: Github,
+    bullets: ["Community contributions welcome", "Fully tested example apps", "Continuous releases & issue tracking"],
+    tag: "Code",
+    cta: "Star on GitHub",
+  },
+  {
+    id: "security",
+    title: "Security & Privacy Whitepaper",
+    category: "trust",
+    description: "How we protect student records, test questions, and exam integrity.",
+    href: "/security",
+    tags: ["Security", "Compliance"],
+    icon: ShieldCheck,
+    bullets: ["End-to-end data encryption in transit & rest", "No student data selling or advertising", "Strict role-based teacher permissions"],
+    tag: "Trust",
+    cta: "Read Security",
+  },
+  {
+    id: "brand",
+    title: "Official Brand Kit",
+    category: "trust",
+    description: "Download approved high-res logos, badge assets, and color standards.",
+    href: "/brand",
+    tags: ["Assets", "Logos"],
+    icon: DownloadCloud,
+    bullets: ["High-res SVG and PNG logos", "Color codes & official typography", "Co-branding guidelines for institutes"],
+    tag: "Media",
+    cta: "Download Assets",
+  },
 ];
 
-const TUTORIALS: Resource[] = [
-  { id: "qs-test", title: "Quickstart: Generate your first test", description: "Create a Class 10 Science paper in minutes using the SDK.", href: "/guides/quickstart-test", tags: ["quickstart", "tests"], icon: Rocket, cta: "Start now" },
-  { id: "contest", title: "Host a proctored contest", description: "Schedule, invite, and proctor a live contest end‑to‑end.", href: "/guides/host-contest", tags: ["contests", "proctoring"], icon: LifeBuoy, cta: "Guide" },
-  { id: "webhooks", title: "Webhooks in 10 minutes", description: "Receive proctor alerts and test‑ready notifications.", href: "/guides/webhooks", tags: ["webhooks"], icon: Puzzle, cta: "Set up" },
-  { id: "analytics", title: "Student analytics dashboard", description: "Track progress and outcomes with the analytics API.", href: "/guides/analytics", tags: ["analytics"], icon: Cpu, cta: "Build it" },
-];
+const CATEGORIES = [
+  { key: "all", label: "All Resources" },
+  { key: "docs", label: "Docs & API" },
+  { key: "tutorials", label: "Tutorials & Guides" },
+  { key: "projects", label: "Sample Projects" },
+  { key: "community", label: "Community & Trust" },
+] as const;
 
-const SAMPLE_APPS: Resource[] = [
-  { id: "next-starter", title: "Next.js Starter (TS)", description: "Auth, API routes, and UI for tests + contests.", href: "https://github.com/a4ai/examples/next-starter", tags: ["starter", "nextjs", "typescript"], icon: FileCode2, cta: "Open repo" },
-  { id: "edge-fn", title: "Supabase Edge Function", description: "Call multi‑LLM generation securely from the edge.", href: "https://github.com/a4ai/examples/supabase-edge", tags: ["supabase", "serverless"], icon: FileCode2, cta: "Open repo" },
-  { id: "contest-admin", title: "Contest Admin Panel", description: "Manage contests, proctoring alerts, and results.", href: "https://github.com/a4ai/examples/contest-admin", tags: ["react", "dashboard"], icon: FileCode2, cta: "Open repo" },
-];
-
-const COMMUNITY: Resource[] = [
-  { id: "discord", title: "Community", description: "Join discussions, share feedback, and get help.", href: "https://discord.gg/a4ai", tags: ["community"], icon: MessageSquare, cta: "Join" },
-  { id: "github", title: "GitHub", description: "Track issues, star examples, and contribute.", href: "https://github.com/a4ai", tags: ["code"], icon: Github, cta: "Visit" },
-  { id: "newsletter", title: "Newsletter", description: "Monthly updates on features and case studies.", href: "/newsletter", tags: ["updates"], icon: Newspaper, cta: "Subscribe" },
-];
-
-const TRUST: Resource[] = [
-  { id: "security", title: "Security & Privacy", description: "Encryption, data retention, and responsible AI practices.", href: "/security", tags: ["security"], icon: ShieldCheck, cta: "Learn more" },
-  { id: "sla", title: "SLA & Support", description: "Support tiers, SLAs, and escalation paths.", href: "/sla", tags: ["support"], icon: LifeBuoy, cta: "View" },
-  { id: "brand", title: "Brand Kit", description: "Logos, colors, and media assets for press.", href: "/brand", tags: ["brand"], icon: DownloadCloud, cta: "Download" },
-];
-
-const VIDEOS: Resource[] = [
-  { id: "demo", title: "Product Demo (3 min)", description: "End‑to‑end test generation and export.", href: "/videos/demo", tags: ["video"], icon: PlayCircle, cta: "Watch" },
-  { id: "api-walk", title: "API Walkthrough", description: "From API key to first contest.", href: "/videos/api", tags: ["video"], icon: PlayCircle, cta: "Watch" },
-];
-
-// --------------------------- Helpers ---------------------------
-
-const allTags = Array.from(
-  new Set(
-    [...QUICK_LINKS, ...TUTORIALS, ...SAMPLE_APPS, ...COMMUNITY, ...TRUST, ...VIDEOS]
-      .flatMap((r) => r.tags)
-  )
-).sort();
-
-function match(q: string, r: Resource) {
-  const s = (q || "").toLowerCase().trim();
-  if (!s) return true;
-  return (
-    r.title.toLowerCase().includes(s) ||
-    r.description.toLowerCase().includes(s) ||
-    r.tags.some((t) => t.toLowerCase().includes(s))
-  );
-}
+type CategoryKey = (typeof CATEGORIES)[number]["key"];
 
 // --------------------------- Component ---------------------------
 
 export default function ResourcesPage() {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-  const prefersReducedMotion = useReducedMotion();
-
+  const [activeCategory, setActiveCategory] = useState<CategoryKey>("all");
   const [query, setQuery] = useState("");
-  const [activeTags, setActiveTags] = useState<string[]>([]);
 
-  // Ambient glow follows cursor
   const mx = useMotionValue(360);
   const my = useMotionValue(180);
+  const rafId = useRef<number | null>(null);
+
   const onMove = (e: React.MouseEvent<HTMLElement>) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    mx.set(e.clientX - r.left);
-    my.set(e.clientY - r.top);
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    const currentTarget = e.currentTarget;
+    if (rafId.current) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      if (!currentTarget) return;
+      const r = currentTarget.getBoundingClientRect();
+      mx.set(clientX - r.left);
+      my.set(clientY - r.top);
+    });
   };
 
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
+
   const bgGlow = useMotionTemplate`
-    radial-gradient(1000px 520px at ${mx}px ${my}px, ${isDark ? "rgba(59,130,246,0.06)" : "rgba(59,130,246,0.04)"}, transparent 70%),
-    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), ${isDark ? "rgba(96,165,250,0.06)" : "rgba(96,165,250,0.04)"}, transparent 70%),
-    radial-gradient(1000px 520px at calc(${mx}px - 260px) calc(${my}px + 220px), ${isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)"}, transparent 70%)
+    radial-gradient(1000px 520px at ${mx}px ${my}px, rgba(59,130,246,0.04), transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), rgba(96,165,250,0.04), transparent 70%),
+    radial-gradient(1000px 520px at calc(${mx}px - 260px) calc(${my}px + 220px), rgba(129,140,248,0.03), transparent 70%)
   `;
 
-  const filter = (list: Resource[]) =>
-    list.filter((r) => match(query, r) && (activeTags.length ? r.tags.some((t) => activeTags.includes(t)) : true));
+  // Filter logic
+  const filtered = ALL_RESOURCES.filter((r) => {
+    const matchesCat =
+      activeCategory === "all"
+        ? true
+        : activeCategory === "community"
+        ? r.category === "community" || r.category === "trust"
+        : r.category === activeCategory;
 
-  const toggleTag = (t: string) =>
-    setActiveTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+    const q = query.toLowerCase().trim();
+    const matchesQuery =
+      !q ||
+      r.title.toLowerCase().includes(q) ||
+      r.description.toLowerCase().includes(q) ||
+      r.tags.some((t) => t.toLowerCase().includes(q)) ||
+      r.bullets.some((b) => b.toLowerCase().includes(q));
+
+    return matchesCat && matchesQuery;
+  });
 
   return (
-    <div onMouseMove={onMove} className="lp min-h-screen relative overflow-hidden transition-colors duration-300" style={{ background: isDark ? "#07090f" : "#ffffff" }}>
+    <div onMouseMove={onMove} className="lp-resources-wrapper min-h-screen relative overflow-hidden bg-white">
       <GlobalStyles />
 
       {/* Background Orbs */}
       <div className="hidden sm:block">
-        <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: isDark ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)" }} />
-        <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)" }} />
+        <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: "rgba(59,130,246,0.03)" }} />
+        <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: "rgba(129,140,248,0.03)" }} />
       </div>
 
       {/* Grid Overlay */}
       <div
         className="absolute inset-0 -z-20 pointer-events-none"
         style={{
-          opacity: isDark ? 0.02 : 0.035,
-          backgroundImage: `linear-gradient(to right, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px), linear-gradient(to bottom, ${isDark ? "#ffffff" : "#000000"} 1px, transparent 1px)`,
+          opacity: 0.015,
+          backgroundImage: `linear-gradient(to right, #000000 1px, transparent 1px), linear-gradient(to bottom, #000000 1px, transparent 1px)`,
           backgroundSize: "48px 48px",
         }}
       />
-      
-      {!prefersReducedMotion && (
-        <motion.div
-          aria-hidden
-          className="pointer-events-none fixed inset-0 -z-10 opacity-100"
-          style={{ backgroundImage: bgGlow as any }}
-        />
-      )}
 
-      {/* HERO */}
-      <section className="relative z-10 py-24 md:py-28">
-        <div className={sectionX}>
-          <div className="flex flex-col items-center text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center justify-center mb-6"
-            >
-              <span {...pillProps(isDark)}><Stars className="h-3.5 w-3.5"/> a4ai Resources Hub</span>
-            </motion.div>
+      <motion.div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-10 opacity-100"
+        style={{ backgroundImage: bgGlow as any }}
+      />
 
-            <motion.h1
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: EASE }}
-              className="text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-black tracking-tight"
-              style={{ color: head(isDark) }}
-            >
-              Everything you need to <span className="nlm-text">build & learn</span>
-            </motion.h1>
-
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
-              className="mt-6 max-w-2xl text-lg md:text-xl font-medium"
-              style={{ color: muted(isDark) }}
-            >
-              Guides, examples, videos, and community links to help you ship faster with a4ai—whether you're a solo learner or an institute admin.
-            </motion.p>
-          </div>
-
-          {/* Search + Tags */}
-          <motion.div 
-            initial={{ opacity: 0, y: 14 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            transition={{ delay: 0.2, duration: 0.6, ease: EASE }}
-            className="mx-auto mt-12 max-w-4xl"
-          >
-            <div className={`flex items-center px-4 py-2 ${cardTheme(isDark)}`}>
-              <Search className="h-5 w-5 mr-3" style={{ color: muted(isDark) }} />
-              <input
-                type="text"
-                placeholder="Search guides, examples, docs…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-transparent border-none outline-none text-base font-medium"
-                style={{ color: head(isDark) }}
+      {/* ── FLOATING TOP NAVIGATION DOCK BAR (Unified with FeaturesPage & PricingPage) ── */}
+      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
+        <nav className="mx-auto max-w-7xl rounded-2xl border transition-all duration-300 relative overflow-hidden force-light-dock">
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6">
+            <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-bold tracking-tight transition-opacity active:opacity-90">
+              <img
+                src="/ICON.ico"
+                alt="a4ai Logo"
+                className="h-6 w-6 object-contain rounded transition-transform duration-200 group-hover:scale-105"
               />
-            </div>
+              <span style={{ color: txtHead }}>
+                a4ai <span className="text-xs font-medium opacity-60 ml-1">Resources</span>
+              </span>
+            </Link>
 
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {allTags.slice(0, 10).map((t) => {
-                const isActive = activeTags.includes(t);
-                return (
-                  <button
-                    key={t}
-                    onClick={() => toggleTag(t)}
-                    className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all duration-200 ${isActive ? "btn-blk" : (isDark ? "btn-glass-dark" : "btn-glass-light")}`}
-                    style={{ color: isActive ? "#fff" : head(isDark) }}
-                  >
-                    {t}
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      <div className="relative z-10 space-y-10 pb-16">
-        <Section icon={<Bookmark />} title="Quick links" subtitle="Start with the most‑visited resources" isDark={isDark}>
-          <CardsGrid items={filter(QUICK_LINKS)} isDark={isDark} />
-        </Section>
-
-        <Section icon={<GraduationCap />} title="Step‑by‑step tutorials" subtitle="From quickstarts to deeper integrations" isDark={isDark}>
-          <CardsGrid items={filter(TUTORIALS)} isDark={isDark} />
-        </Section>
-
-        <Section icon={<FileCode2 />} title="Sample projects" subtitle="Clone, run, and customize for your needs" isDark={isDark}>
-          <CardsGrid items={filter(SAMPLE_APPS)} isDark={isDark} />
-        </Section>
-
-        <Section icon={<PlayCircle />} title="Videos" subtitle="Short walkthroughs to see it in action" isDark={isDark}>
-          <CardsGrid items={filter(VIDEOS)} isDark={isDark} />
-        </Section>
-
-        <Section icon={<MessageSquare />} title="Community & updates" subtitle="Ask questions, share feedback, and stay in the loop" isDark={isDark}>
-          <CardsGrid items={filter(COMMUNITY)} isDark={isDark} />
-        </Section>
-
-        <Section icon={<ShieldCheck />} title="Trust & brand" subtitle="Security, SLAs, and brand assets" isDark={isDark}>
-          <CardsGrid items={filter(TRUST)} isDark={isDark} />
-        </Section>
-      </div>
-
-      {/* CTA Band */}
-      <section className="relative z-10 pb-24 pt-10">
-        <div className={sectionX}>
-          <motion.div {...fadeUp} viewport={{ once: true }} className="rounded-2xl p-[1px] shadow-lg overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
-            <div className="flex flex-col items-center justify-between gap-6 rounded-2xl px-8 py-12 md:flex-row md:py-16 text-center md:text-left relative" style={{ background: isDark ? "rgba(10,14,24,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(24px) saturate(160%)" }}>
-              <div>
-                <motion.h3 initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-2xl font-extrabold tracking-tight" style={{ color: head(isDark) }}>
-                  Can't find what you need?
-                </motion.h3>
-                <motion.p initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="mt-2 text-lg font-medium" style={{ color: muted(isDark) }}>
-                  Tell us what you're building—we'll point you to the right examples or create a new guide.
-                </motion.p>
-              </div>
-              <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.2 }} className="flex flex-col sm:flex-row gap-4 shrink-0">
-                <button className="btn-blk px-6 py-3 text-base font-bold">
-                  <span className="relative z-10 flex items-center justify-center gap-2"><LifeBuoy className="h-4 w-4" /> Contact support</span>
-                </button>
-                <button className={`px-6 py-3 text-base font-bold ${isDark ? "btn-glass-dark" : "btn-glass-light"}`} style={{ color: isDark ? "#e8eaed" : "#202124" }}>
-                  <span className="relative z-10 flex items-center gap-2"><Lightbulb className="h-4 w-4" /> Request a guide</span>
-                </button>
-              </motion.div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// --------------------------- Components ---------------------------
-
-function Section({ icon, title, subtitle, isDark, children }: { icon: React.ReactNode; title: string; subtitle?: string; isDark: boolean; children: React.ReactNode }) {
-  return (
-    <section className={sectionX}>
-      <div className="mb-8 flex items-start gap-4">
-        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: isDark ? "rgba(59,130,246,0.12)" : "rgba(59,130,246,0.08)", border: isDark ? "1px solid rgba(59,130,246,0.18)" : "1px solid rgba(59,130,246,0.12)", color: accent(isDark) }}>
-          {React.cloneElement(icon as React.ReactElement, { className: "h-5 w-5" })}
-        </div>
-        <div>
-          <h2 className="text-2xl font-extrabold tracking-tight" style={{ color: head(isDark) }}>{title}</h2>
-          {subtitle && <p className="mt-1 text-base font-medium" style={{ color: muted(isDark) }}>{subtitle}</p>}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function CardsGrid({ items, isDark }: { items: Resource[], isDark: boolean }) {
-  if (!items.length) return null;
-  return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((r, idx) => (
-        <ResourceCard key={r.id} resource={r} index={idx} isDark={isDark} />
-      ))}
-    </div>
-  );
-}
-
-function ResourceCard({ resource, index, isDark }: { resource: Resource; index: number; isDark: boolean }) {
-  const mx = useMotionValue(160);
-  const my = useMotionValue(120);
-
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    mx.set(e.clientX - rect.left);
-    my.set(e.clientY - rect.top);
-  };
-
-  const onLeave = () => {
-    mx.set(160);
-    my.set(120);
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-10% 0px" }}
-      transition={{ duration: 0.45, delay: 0.05 * index, ease: EASE }}
-      className="relative h-full flex flex-col"
-    >
-      <div onMouseMove={onMove} onMouseLeave={onLeave} className="group cursor-pointer h-full flex flex-col">
-        <div className={`relative h-full p-6 transition-all duration-300 flex flex-col ${cardTheme(isDark)}`}>
-          
-          <motion.span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            style={{ background: useMotionTemplate`radial-gradient(200px 160px at ${mx}px ${my}px, ${isDark ? "rgba(96,165,250,0.12)" : "rgba(59,130,246,0.08)"}, transparent 80%)` }}
-          />
-          
-          <div className="relative z-10 flex flex-col h-full">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]" style={{ background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)" }}>
-                <resource.icon className="h-5 w-5" style={{ color: head(isDark) }} />
-              </div>
-              <h3 className="text-lg font-extrabold tracking-tight" style={{ color: head(isDark) }}>{resource.title}</h3>
-            </div>
-            
-            <p className="text-sm font-medium leading-relaxed mb-5 flex-grow" style={{ color: muted(isDark) }}>
-              {resource.description}
-            </p>
-            
-            <div className="mt-auto">
-              <div className="flex flex-wrap gap-2 mb-5">
-                {resource.tags.map((t) => (
-                  <span key={t} className="px-2.5 py-1 text-xs font-bold rounded-md" style={{ background: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)", color: muted(isDark) }}>
-                    {t}
-                  </span>
-                ))}
-              </div>
-              
-              <a href={resource.href || "#"} className="inline-flex items-center text-sm font-bold transition-colors" style={{ color: accent(isDark) }}>
-                {resource.cta || "Open"}
-                <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </a>
+            <div className="flex items-center gap-3">
+              <Link
+                to="/features"
+                className="text-xs sm:text-sm font-semibold text-neutral-600 hover:text-neutral-900 transition-colors"
+              >
+                Features
+              </Link>
+              <Link
+                to="/pricing"
+                className="text-xs sm:text-sm font-semibold text-neutral-600 hover:text-neutral-900 transition-colors"
+              >
+                Pricing
+              </Link>
+              <Link
+                to="/about"
+                className="text-xs sm:text-sm font-semibold text-neutral-600 hover:text-neutral-900 transition-colors"
+              >
+                About
+              </Link>
             </div>
           </div>
-        </div>
+        </nav>
       </div>
-    </motion.div>
+
+      {/* ── MAIN CONTENT ── */}
+      <div className="pt-24 relative z-10 bg-white">
+        {/* Hero Section */}
+        <section className="pt-12 pb-6 md:pt-16 md:pb-8 bg-white">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <motion.div className="text-center" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+              <div className="mx-auto mb-6 inline-flex justify-center">
+                <span className="per-student-pill text-xs px-3.5 py-1.5 font-bold">
+                  <Sparkles className="h-3.5 w-3.5 mr-1" />
+                  Documentation &amp; Learning Hub
+                </span>
+              </div>
+
+              <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-slate-900 leading-[1.15]">
+                Everything you need to{" "}
+                <br className="hidden sm:block" />
+                <span className="nlm-text">build, teach &amp; learn</span>
+              </h1>
+
+              <p className="mx-auto mt-4 max-w-2xl text-base sm:text-lg text-slate-600 font-medium">
+                Guides, SDK documentation, starter apps, and community resources to help you create better assessments in minutes.
+              </p>
+
+              {/* Search input with clean glass aesthetic */}
+              <div className="mx-auto mt-8 max-w-2xl relative">
+                <div className="resource-card flex items-center px-4 py-3.5 bg-white/95 border border-slate-200/90 shadow-sm rounded-2xl">
+                  <Search className="h-5 w-5 text-slate-400 mr-3 flex-shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Search guides, tutorials, SDK endpoints, topics…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="w-full bg-transparent border-none outline-none text-sm sm:text-base font-medium text-slate-800 placeholder-slate-400"
+                  />
+                  {query && (
+                    <button
+                      onClick={() => setQuery("")}
+                      className="text-xs text-slate-400 hover:text-slate-600 font-semibold px-2 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Category Filter Selector matching PricingPage audience toggle */}
+              <div className="mt-8 flex justify-center">
+                <div className="inline-flex flex-wrap items-center justify-center gap-1 rounded-2xl border px-1.5 py-1.5 shadow-sm backdrop-blur bg-white/90 border-slate-200">
+                  {CATEGORIES.map((cat) => {
+                    const active = activeCategory === cat.key;
+                    return (
+                      <button
+                        key={cat.key}
+                        onClick={() => setActiveCategory(cat.key)}
+                        className={
+                          "flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold transition " +
+                          (active
+                            ? "bg-slate-900 text-white shadow-sm ring-1 ring-black/5"
+                            : "text-slate-700 hover:bg-slate-100/70 ring-1 ring-transparent")
+                        }
+                      >
+                        {cat.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ── RESOURCE CARDS GRID (Unified FeatureCard Pattern) ── */}
+        <section className="relative z-10 py-8 bg-white">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {filtered.length === 0 ? (
+              <div className="text-center py-20 bg-white">
+                <p className="text-slate-400 font-medium text-base">No resources found matching "{query}".</p>
+                <button
+                  onClick={() => { setQuery(""); setActiveCategory("all"); }}
+                  className="mt-3 text-sm text-blue-600 font-bold hover:underline cursor-pointer"
+                >
+                  Reset search &amp; filters
+                </button>
+              </div>
+            ) : (
+              <motion.div layout className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 items-stretch">
+                <AnimatePresence>
+                  {filtered.map((item, i) => (
+                    <motion.div
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, y: 18 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ delay: Math.min(i * 0.05, 0.3), duration: 0.4 }}
+                    >
+                      <ResourceFeatureCard item={item} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </div>
+        </section>
+
+        {/* ── STATS SUMMARY PANEL (Matching FeaturesPage) ── */}
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-12">
+          <motion.div {...fadeUp} viewport={{ once: true }} className="rounded-2xl p-[1px] shadow-sm overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+            <div className="rounded-2xl px-6 py-8 relative bg-white/95 backdrop-blur-md">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center relative z-10">
+                <div>
+                  <div className="text-3xl font-black tracking-tight text-neutral-900">1 Lakh+</div>
+                  <div className="mt-1 text-sm font-medium" style={{ color: txtMuted }}>NCERT Question Bank</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-black tracking-tight text-neutral-900">&lt; 10s</div>
+                  <div className="mt-1 text-sm font-medium" style={{ color: txtMuted }}>Test Generation Time</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-black tracking-tight text-neutral-900">100%</div>
+                  <div className="mt-1 text-sm font-medium" style={{ color: txtMuted }}>CBSE Pattern Aligned</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-black tracking-tight text-neutral-900">99.9%</div>
+                  <div className="mt-1 text-sm font-medium" style={{ color: txtMuted }}>Service Uptime</div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* ── BOTTOM CTA BANNER (Unified with FeaturesPage) ── */}
+        <section className="relative z-10 pb-24 pt-16 bg-white">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <motion.div {...fadeUp} viewport={{ once: true }} className="rounded-2xl p-[1px] shadow-sm overflow-hidden" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }}>
+              <div className="flex flex-col items-center justify-between gap-6 rounded-2xl px-8 py-12 md:flex-row md:py-16 text-center md:text-left relative bg-white/95 backdrop-blur-md">
+                <div>
+                  <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-neutral-900">
+                    Need a custom guide or school integration?
+                  </h3>
+                  <p className="mt-2 text-base md:text-lg font-medium text-neutral-500 max-w-xl">
+                    Tell us what you're building. Our engineering team will help you connect your LMS or provide sample code.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+                  <a href="mailto:support@a4ai.in" className="btn-blue-gradient px-6 py-3 text-sm font-bold inline-flex items-center justify-center gap-2">
+                    <LifeBuoy className="h-4 w-4" /> Contact Support
+                  </a>
+                  <Link to="/features" className="btn-white-action px-6 py-3 text-sm font-bold inline-flex items-center justify-center gap-2">
+                    <Lightbulb className="h-4 w-4" /> Explore Features
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+   UNIFIED FEATURE CARD COMPONENT (Matching FeaturesPage & PricingPage)
+   ────────────────────────────────────────────────────────────── */
+function ResourceFeatureCard({ item }: { item: Resource }) {
+  const mx = useMotionValue(120);
+  const my = useMotionValue(90);
+  const rotateX = useTransform(my, [0, 180], [7, -7]);
+  const rotateY = useTransform(mx, [0, 260], [-8, 8]);
+  const Icon = item.icon;
+  const rafId = useRef<number | null>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    const currentTarget = e.currentTarget;
+    if (rafId.current) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      if (!currentTarget) return;
+      const r = currentTarget.getBoundingClientRect();
+      mx.set(clientX - r.left);
+      my.set(clientY - r.top);
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
+
+  return (
+    <div
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => { mx.set(120); my.set(90); }}
+      style={{ perspective: 1000 }}
+      className="group h-full flex flex-col"
+    >
+      <motion.div
+        style={{ rotateX, rotateY, willChange: "transform" }}
+        className="resource-card p-6 flex flex-col h-full relative"
+      >
+        {item.tag && (
+          <div className="absolute -top-3 right-4 rounded-full bg-blue-600 px-3 py-0.5 text-xs font-bold text-white shadow z-10">
+            {item.tag}
+          </div>
+        )}
+
+        {/* Radial cursor hover sheen */}
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
+        />
+
+        <div className="relative z-10 flex flex-col h-full">
+          {/* Card Top: Icon Box + Title */}
+          <div className="flex items-center gap-3.5 mb-4">
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/70 border border-blue-100 flex-shrink-0 text-blue-600 shadow-xs">
+              <Icon className="h-6 w-6 text-blue-600" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight leading-snug">
+              {item.title}
+            </h3>
+          </div>
+
+          {/* Description */}
+          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-4">
+            {item.description}
+          </p>
+
+          {/* Checklist Bullets */}
+          <ul className="space-y-2.5 mb-6 flex-grow">
+            {item.bullets.map((b, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm font-medium">
+                <div className="h-5 w-5 rounded-full bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shrink-0 mt-0.5">
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                </div>
+                <span className="text-slate-700 font-semibold leading-snug">{b}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* Card Footer: Tags & Action Link */}
+          <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {item.tags.map((t) => (
+                <span
+                  key={t}
+                  className="px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-200/60"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+
+            <Link
+              to={item.href || "#"}
+              className="inline-flex items-center text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors group-hover:translate-x-0.5 flex-shrink-0"
+            >
+              {item.cta || "Open"}
+              <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      </motion.div>
+    </div>
   );
 }

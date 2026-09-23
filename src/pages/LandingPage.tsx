@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, memo, useState, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import LandingHero from "@/components/LandingHero";
-const OptimizedDemo = lazy(() => import(/* webpackPrefetch: true */ "@/components/OptimizedDemo"));
+const LandingDemo = lazy(() => import(/* webpackPrefetch: true */ "@/components/LandingDemo"));
 import Footer from "@/components/Footer";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
@@ -51,7 +51,7 @@ const seg = (p: number, a: number, b: number) => clamp((p - a) / (b - a || 1), 0
 /* ── Data ── */
 const HOW_STEPS = Object.freeze([
   { title: "Set Your Paper", desc: "Pick subject, class, chapters, marks distribution, and question types.", Icon: Settings },
-  { title: "Generate from NCERT", desc: "Questions are pulled directly from NCERT content — chapter-accurate, Bloom's-tagged.", Icon: FileText },
+  { title: "Generate from 1 Lakh+ NCERT", desc: "Questions are pulled directly from our bank of 1 Lakh+ NCERT questions — chapter-accurate, Bloom's-tagged.", Icon: FileText },
   { title: "Download & Print", desc: "Get a CBSE-pattern PDF or DOCX with sections, marks, and answer key.", Icon: Download },
 ]);
 const TRUST_FEATURES = Object.freeze([
@@ -61,7 +61,7 @@ const TRUST_FEATURES = Object.freeze([
   { title: "Controls", desc: "Role-based access, per-class sharing, and one-click export.", Icon: SlidersHorizontal },
 ]);
 const OUTCOME_STATS = Object.freeze([
-  { value: "6+", label: "Question Formats", description: "MCQ, Short, Long, A&R, Cloze…" },
+  { value: "1 Lakh+", label: "NCERT Questions", description: "Classes 6–12 CBSE curriculum aligned" },
   { value: "PDF & Word", label: "Export Options", description: "Print-ready or share digitally" },
   { value: "<2 min", label: "Per Paper", description: "Full CBSE-pattern test paper" },
 ]);
@@ -106,8 +106,11 @@ const GlobalStyles = () => {
 
     const s = document.createElement("style");
     s.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
-      .lp { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; background-color: #ffffff !important; }
+      .lp { 
+        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+        -webkit-font-smoothing: antialiased; 
+        background-color: #ffffff !important; 
+      }
       
       html, body, #root, main, section { background: #ffffff !important; background-color: #ffffff !important; }
 
@@ -192,11 +195,29 @@ const GlobalStyles = () => {
         background-clip: text; animation: fast-gradient 4s linear infinite;
       }
 
-      @keyframes marquee-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-      .marquee-track { display: flex; width: max-content; animation: marquee-scroll 38s linear infinite; }
+      @keyframes marquee-scroll { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
+      .marquee-track { 
+        display: flex; 
+        width: max-content; 
+        animation: marquee-scroll 38s linear infinite; 
+        will-change: transform;
+        transform: translate3d(0, 0, 0);
+        backface-visibility: hidden;
+      }
       .marquee-track:hover { animation-play-state: paused; }
 
-      .hero-shrink { transform-origin: 50% 22%; overflow: hidden; will-change: transform, opacity; background: #ffffff !important; }
+      .hero-shrink { 
+        transform-origin: 50% 22%; 
+        overflow: hidden; 
+        will-change: transform, opacity; 
+        contain: layout paint;
+        background: #ffffff !important; 
+      }
+
+      .content-auto {
+        content-visibility: auto;
+        contain-intrinsic-size: 0 500px;
+      }
     `;
     document.head.appendChild(s);
     return () => document.head.removeChild(s);
@@ -245,6 +266,12 @@ const ScrollShrinkHero = memo(function ScrollShrinkHero() {
       const r = outer.getBoundingClientRect();
       const denom = r.height || 1;
       const p = clamp(-r.top / denom, 0, 1);
+      if (p >= 1) {
+        inner.style.opacity = "0";
+        inner.style.pointerEvents = "none";
+        return;
+      }
+      inner.style.pointerEvents = "auto";
       const eIn = p * p; 
       const scale = 1 - eIn * 0.62; 
       const ty = -eIn * 64;
@@ -268,7 +295,7 @@ const ScrollShrinkHero = memo(function ScrollShrinkHero() {
   }, []);
 
   return (
-    <div ref={outerRef} className="relative bg-white">
+    <div ref={outerRef} className="relative bg-white" style={{ contain: "layout paint" }}>
       <motion.div
         initial={{ opacity: 0, y: 26, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -292,10 +319,10 @@ export default function LandingPage() {
           <ScrollShrinkHero />
         </Safe>
 
-        <Safe label="OptimizedDemo">
+        <Safe label="LandingDemo">
           <Suspense fallback={<div className="h-48 sm:h-96 bg-white" />}>
             <LazySection>
-              <OptimizedDemo />
+              <LandingDemo videoSrcMp4="/demo.mp4" />
             </LazySection>
           </Suspense>
         </Safe>
@@ -439,7 +466,7 @@ const UpgradedCTA = memo(function UpgradedCTA() {
                     Pick your chapters, set difficulty and marks — get a complete CBSE-pattern paper with answer key, ready to print.
                   </p>
                   <div className="mb-8 flex flex-wrap justify-center gap-4">
-                    {["NCERT content only", "Section-wise layout", "Answer key included"].map((f) => (
+                    {["1 Lakh+ NCERT questions", "Section-wise layout", "Answer key included"].map((f) => (
                       <div key={f} className="flex items-center gap-2 text-sm text-neutral-600">
                         <div className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-white shadow-sm">
                           <Check className="h-3 w-3" />
@@ -474,7 +501,7 @@ const UpgradedCTA = memo(function UpgradedCTA() {
 /* ── TRUST & SECURITY ── */
 const TrustSecurity = memo(function TrustSecurity() {
   return (
-    <section className="relative py-20 bg-white">
+    <section className="relative py-20 bg-white content-auto">
       <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="mb-14 text-center">
           <span className="nlm-pill">🛡️ Built for Schools</span>
@@ -504,7 +531,7 @@ const TrustSecurity = memo(function TrustSecurity() {
 /* ── OUTCOMES STATS SECTION ── */
 const Outcomes = memo(function Outcomes() {
   return (
-    <section className="relative py-20 bg-white">
+    <section className="relative py-20 bg-white content-auto">
       <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="mb-14 text-center">
           <motion.div variants={stackItem} className="mx-auto mb-5 h-[3px] w-12 rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }} />
@@ -533,7 +560,7 @@ const Outcomes = memo(function Outcomes() {
 const Testimonials = memo(function Testimonials() {
   const loop = [...TESTIMONIALS, ...TESTIMONIALS, ...TESTIMONIALS, ...TESTIMONIALS];
   return (
-    <section className="relative py-20 overflow-hidden bg-white">
+    <section className="relative py-20 overflow-hidden bg-white content-auto">
       <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
         <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="mb-14 text-center">
           <span className="nlm-pill">💬 Community</span>
@@ -584,7 +611,7 @@ const FinalCTA = memo(function FinalCTA() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative overflow-hidden py-24 bg-white">
+    <section className="relative overflow-hidden py-24 bg-white content-auto">
       <div className="relative mx-auto max-w-4xl px-5 text-center">
         <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }}>
           <motion.div variants={stackItem} className="mx-auto mb-5 h-[3px] w-12 rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }} />

@@ -5,8 +5,11 @@ import {
   X, FileDown, Loader2, Upload, Image as ImageIcon,
   CheckCircle, FileText, Trash2, Sparkles
 } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE ||
+  'http://localhost:8000'
+).replace(/\/+$/, '');
 
 interface WorksheetModalProps {
   moduleId: string;

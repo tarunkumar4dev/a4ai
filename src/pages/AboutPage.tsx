@@ -21,6 +21,8 @@ import {
   Gauge,
   Shield,
   BookOpen,
+  Check,
+  HeartHandshake,
 } from "lucide-react";
 import { useNavigate, Link } from "react-router-dom";
 
@@ -43,28 +45,71 @@ const GlobalStyles = () => {
     s.textContent = `
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
 
-      .lp {
-        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        -webkit-font-smoothing: antialiased;
-        background-color: #ffffff !important;
-      }
-      html, body, #root, main, section { background: #ffffff !important; background-color: #ffffff !important; }
-      
-      .ag-card {
-        border-radius: 18px;
-        transition: transform 0.22s cubic-bezier(.16,1,.3,1), box-shadow 0.22s cubic-bezier(.16,1,.3,1);
-        position: relative;
-        overflow: hidden;
-        background: rgba(255, 255, 255, 0.85) !important;
-        border: 1px solid rgba(0, 0, 0, 0.07) !important;
-        backdrop-filter: blur(30px) saturate(170%) !important;
-        -webkit-backdrop-filter: blur(30px) saturate(170%) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(59,130,246,0.03), 0 2px 6px rgba(0,0,0,0.02) !important;
+      .lp-about-wrapper, .lp-about-wrapper * {
+        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         color-scheme: light only !important;
         forced-color-adjust: none !important;
+        -webkit-font-smoothing: antialiased;
       }
-      @media (min-width: 640px) { .ag-card { border-radius: 20px; } }
       
+      html, body, #root, main, section { background: #ffffff !important; background-color: #ffffff !important; }
+
+      .about-card {
+        border-radius: 24px;
+        transition: transform 0.22s cubic-bezier(.16,1,.3,1), box-shadow 0.22s cubic-bezier(.16,1,.3,1), border-color 0.22s ease;
+        position: relative;
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 1px solid rgba(226, 232, 240, 0.9) !important;
+        backdrop-filter: blur(30px) saturate(170%) !important;
+        -webkit-backdrop-filter: blur(30px) saturate(170%) !important;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.02) !important;
+      }
+
+      @media (hover: hover) {
+        .about-card:hover {
+          transform: translateY(-4px) !important;
+          border-color: rgba(147, 197, 253, 0.9) !important;
+          box-shadow: 0 20px 40px -12px rgba(59, 130, 246, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+        }
+      }
+
+      .btn-blue-gradient {
+        background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 85%) !important;
+        color: #ffffff !important;
+        border: 1px solid #60a5fa !important;
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25) !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        border-radius: 14px;
+        font-weight: 700;
+      }
+      .btn-blue-gradient * { color: #ffffff !important; stroke: #ffffff !important; }
+      @media (hover: hover) { 
+        .btn-blue-gradient:hover { 
+          filter: brightness(1.05); 
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.38) !important; 
+        } 
+      }
+
+      .btn-white-action {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        border-radius: 14px;
+        font-weight: 700;
+      }
+      .btn-white-action * { color: #0f172a !important; stroke: #0f172a !important; }
+      @media (hover: hover) {
+        .btn-white-action:hover {
+          background: #f8fafc !important;
+          border-color: #cbd5e1 !important;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07) !important;
+        }
+      }
+
       @keyframes fast-gradient {
         0% { background-position: 0% center; }
         100% { background-position: -200% center; }
@@ -78,91 +123,50 @@ const GlobalStyles = () => {
         animation: fast-gradient 4s linear infinite;
       }
 
-      /* Immutable Protected Black Glossy Button Engine */
-      .btn-blk {
-        position:relative; overflow:hidden;
-        background: linear-gradient(180deg, #252629 0%, #0d0d0e 100%) !important;
-        background-color: #0d0d0e !important;
-        border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 14px rgba(0,0,0,0.3) !important;
-        color: #ffffff !important;
-        font-weight: 700;
-        border-radius: 14px;
-        transition: transform 0.2s, box-shadow 0.2s;
-        -webkit-tap-highlight-color: transparent;
-        color-scheme: light only !important;
-        forced-color-adjust: none !important;
-      }
-      .btn-blk * {
-        color: #ffffff !important;
-        stroke: #ffffff !important;
-      }
-      @media (hover: hover) {
-        .btn-blk:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 20px rgba(0,0,0,0.4) !important; }
-      }
-      .btn-blk:active { transform: scale(0.96); }
-
-      /* Immutable White Frosted Secondary Button */
-      .btn-glass-light {
-        position:relative; overflow:hidden;
-        background: rgba(255, 255, 255, 0.75) !important;
-        background-color: rgba(255, 255, 255, 0.75) !important;
-        border: 1px solid #e5e7eb !important;
-        backdrop-filter: blur(12px) !important;
-        -webkit-backdrop-filter: blur(12px) !important;
-        border-radius: 14px;
-        font-weight: 700;
-        transition: transform 0.2s;
-        color: #202124 !important;
-        color-scheme: light only !important;
-        forced-color-adjust: none !important;
-        box-shadow: inset 0 1px 0 #ffffff, 0 2px 8px rgba(0,0,0,0.04) !important;
-      }
-      @media (hover: hover) {
-        .btn-glass-light:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 #ffffff, 0 4px 14px rgba(0,0,0,0.08) !important; }
-      }
-
       /* Clean Frosted Transparent Custom Tab Navigation Bar Dock */
       .force-light-dock {
-        background-color: rgba(255, 255, 255, 0.45) !important;
-        background: rgba(255, 255, 255, 0.45) !important;
+        background-color: rgba(255, 255, 255, 0.7) !important;
+        background: rgba(255, 255, 255, 0.7) !important;
         backdrop-filter: blur(24px) saturate(180%) !important;
         -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.5) !important;
-        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 32px rgba(0, 0, 0, 0.03) !important;
+        border: 1px solid rgba(226, 232, 240, 0.8) !important;
+        color-scheme: light only !important;
+        forced-color-adjust: none !important;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 32px rgba(0, 0, 0, 0.04) !important;
+      }
+
+      .per-student-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #eff6ff;
+        border: 1px solid #dbeafe;
+        color: #1d4ed8;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 999px;
       }
 
       .nlm-pill {
-        display:inline-flex; align-items:center; gap:5px;
-        padding:5px 14px; border-radius:999px;
-        font-size:13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 14px;
+        border-radius: 999px;
+        font-size: 13px;
         font-weight: 700;
-        background: rgba(59,130,246,0.06); color: #1d4ed8; border: 1px solid rgba(59,130,246,0.14);
+        background: rgba(59,130,246,0.06);
+        color: #1d4ed8;
+        border: 1px solid rgba(59,130,246,0.14);
       }
-      .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(70px); }
+      .sorb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(70px); }
       @media (min-width: 640px) { .sorb { filter: blur(100px); } }
 
-      /* Hardcoded Metric Font Colors (Forces Deep Obsidian Black Counter Text) */
       .stat-n-forced {
-        color: #111111 !important;
+        color: #0f172a !important;
         font-weight: 900 !important;
         letter-spacing: -0.02em !important;
-        color-scheme: light only !important;
-        forced-color-adjust: none !important;
-      }
-      
-      /* Typography fixes */
-      .heading-hero {
-        font-weight: 900;
-        letter-spacing: -0.02em;
-      }
-      .heading-section {
-        font-weight: 800;
-        letter-spacing: -0.01em;
-      }
-      .body-text {
-        font-weight: 500;
-        line-height: 1.6;
       }
     `;
     document.head.appendChild(s);
@@ -207,21 +211,21 @@ function AboutSubTabNav({ value, onChange }: { value: AboutTabKey; onChange: (v:
   ];
 
   return (
-    <div className="inline-flex rounded-xl p-1 bg-white/60 border border-neutral-200 shadow-sm backdrop-blur">
+    <div className="inline-flex rounded-2xl p-1.5 bg-white/90 border border-slate-200 shadow-sm backdrop-blur">
       {tabs.map((t) => {
         const active = value === t.id;
         return (
           <button
             key={t.id}
             onClick={() => onChange(t.id as AboutTabKey)}
-            className={`relative rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-bold transition-colors duration-200 ${
-              active ? "text-slate-900" : "text-slate-500 hover:text-slate-900"
-            }`}
+            className={
+              "flex items-center gap-2 rounded-xl px-4 py-2 text-xs sm:text-sm font-bold transition " +
+              (active
+                ? "bg-slate-900 text-white shadow-sm ring-1 ring-black/5"
+                : "text-slate-700 hover:bg-slate-100/70 ring-1 ring-transparent")
+            }
           >
-            {active && (
-              <span className="absolute inset-0 rounded-lg bg-blue-500/10" />
-            )}
-            <span className="relative z-10">{t.label}</span>
+            {t.label}
           </button>
         );
       })}
@@ -236,11 +240,102 @@ const team = [
   { name: "Aakash Singh", role: "Co-Founder", description: "Cloud · Infra · Frontend", image: "/images/aakash_a4ai.jpg" },
 ];
 
-const values = [
-  { icon: Target, k: "Outcomes > Outputs", v: "We obsess over student learning gains and teacher time saved." },
-  { icon: ShieldCheck, k: "Trust by design", v: "Privacy‑first data handling with clear controls and audit trails." },
-  { icon: BookOpenCheck, k: "Pedagogy‑aware AI", v: "Questions that align to curriculum, not just prompt magic." },
-  { icon: Bolt, k: "Speed with dignity", v: "From prompt to paper in under 2 min—without cutting corners." },
+export interface ValueItem {
+  icon: React.ElementType;
+  title: string;
+  tag?: string;
+  description: string;
+  bullets: string[];
+  tags: string[];
+  cta?: string;
+  href?: string;
+}
+
+const values: ValueItem[] = [
+  {
+    icon: Target,
+    title: "Outcomes Over Outputs",
+    tag: "Core Focus",
+    description: "We obsess over genuine student learning gains and teacher hours saved, not vanity paper counts or bloated metric dashboards.",
+    bullets: [
+      "Obsess over measurable learning improvements",
+      "Save 6–10 hours of manual test prep weekly",
+      "Actionable chapter-level weakness analytics",
+    ],
+    tags: ["Pedagogy", "Impact"],
+    cta: "See Impact",
+    href: "/features",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Trust & Privacy By Design",
+    tag: "Security",
+    description: "Indian classroom data belongs strictly to teachers and institutions. Never monetized, sold, or used to train public AI models.",
+    bullets: [
+      "Zero student profiling or advertising",
+      "End-to-end encrypted storage & audit trails",
+      "Strict role-based teacher permissions",
+    ],
+    tags: ["Privacy", "Security"],
+    cta: "Read Security",
+    href: "/resources",
+  },
+  {
+    icon: BookOpenCheck,
+    title: "Curriculum-Aware Intelligence",
+    tag: "Pedagogy",
+    description: "Every question is grounded in official NCERT/CBSE syllabi and Bloom's Taxonomy, eliminating generic internet hallucinations.",
+    bullets: [
+      "1 Lakh+ verified NCERT question library",
+      "Precise cognitive depth & difficulty spread",
+      "Step-by-step marking schemes & rationales",
+    ],
+    tags: ["NCERT", "CBSE"],
+    cta: "Curriculum",
+    href: "/features",
+  },
+  {
+    icon: Bolt,
+    title: "Speed With Academic Dignity",
+    tag: "Efficiency",
+    description: "From concept prompt to a print-ready test paper in under 2 minutes—preserving formatting, mathematical formulas, and diagrams.",
+    bullets: [
+      "Instant bilingual (English/Hindi) papers",
+      "Print-ready PDF layout with school branding",
+      "1-click answer key & teacher solution sheets",
+    ],
+    tags: ["Workflow", "Speed"],
+    cta: "Generator",
+    href: "/features",
+  },
+  {
+    icon: Shield,
+    title: "Humane & Fair Proctoring",
+    tag: "Integrity",
+    description: "Anti-cheat safeguards designed to deter dishonest practices without inducing student anxiety or overwhelming invigilators.",
+    bullets: [
+      "Non-intrusive tab & camera anomaly flags",
+      "Actionable teacher review logs (no false alarms)",
+      "Zero invasive software installs needed",
+    ],
+    tags: ["Proctoring", "Fairness"],
+    cta: "Contest Engine",
+    href: "/features",
+  },
+  {
+    icon: HeartHandshake,
+    title: "Accessible To Every School",
+    tag: "Inclusion",
+    description: "Engineered lightweight and mobile-first so individual tutors, state board schools, and large university networks alike can thrive.",
+    bullets: [
+      "Instant WhatsApp & QR test distribution",
+      "Works reliably even on 3G & low bandwidth",
+      "Generous free tier for individual educators",
+    ],
+    tags: ["Accessibility", "Schools"],
+    cta: "Community",
+    href: "/resources",
+  },
 ];
 
 const milestones = [
@@ -303,11 +398,27 @@ export default function AboutPage() {
 
   const mx = useMotionValue(360);
   const my = useMotionValue(180);
+  const rafId = useRef<number | null>(null);
+
   const onMove = (e: React.MouseEvent<HTMLElement>) => {
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    mx.set(e.clientX - r.left);
-    my.set(e.clientY - r.top);
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    const currentTarget = e.currentTarget;
+    if (rafId.current) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      if (!currentTarget) return;
+      const r = currentTarget.getBoundingClientRect();
+      mx.set(clientX - r.left);
+      my.set(clientY - r.top);
+    });
   };
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
 
   const bgGlow = useMotionTemplate`
     radial-gradient(1000px 520px at ${mx}px ${my}px, rgba(59,130,246,0.04), transparent 70%),
@@ -337,7 +448,7 @@ export default function AboutPage() {
         <meta property="og:type" content="website" />
       </Helmet>
 
-      <div onMouseMove={onMove} className="lp min-h-screen relative overflow-hidden bg-white">
+      <div onMouseMove={onMove} className="lp-about-wrapper min-h-screen relative overflow-hidden bg-white">
         <GlobalStyles />
 
         {/* Background Orbs */}
@@ -393,17 +504,17 @@ export default function AboutPage() {
           {/* HERO BANNER SECTION */}
           <section className="relative z-10 py-16 md:py-20 bg-white">
             <div className={sectionX}>
-              <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-                <span className="nlm-pill"><Sparkles className="h-3.5 w-3.5"/> Founded 2025</span>
-                <span className="nlm-pill"><Rocket className="h-3.5 w-3.5"/> Contest engine live</span>
-                <span className="nlm-pill"><ShieldCheck className="h-3.5 w-3.5"/> Privacy‑first</span>
+              <div className="flex flex-wrap items-center justify-center gap-2.5 mb-8">
+                <span className="per-student-pill text-xs px-3.5 py-1.5 font-bold"><Sparkles className="h-3.5 w-3.5 mr-1"/> Founded 2025</span>
+                <span className="per-student-pill text-xs px-3.5 py-1.5 font-bold"><Rocket className="h-3.5 w-3.5 mr-1"/> Contest engine live</span>
+                <span className="per-student-pill text-xs px-3.5 py-1.5 font-bold"><ShieldCheck className="h-3.5 w-3.5 mr-1"/> Privacy‑first</span>
               </div>
 
               <motion.h1
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, ease: EASE }}
-                className="text-center text-[34px] md:text-5xl lg:text-6xl leading-[1.15] font-black tracking-tight text-neutral-900"
+                className="text-center text-4xl sm:text-5xl lg:text-6xl leading-[1.15] font-black tracking-tight text-slate-900"
               >
                 About <span className="nlm-text">a4ai</span>
               </motion.h1>
@@ -412,8 +523,7 @@ export default function AboutPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15, duration: 0.6, ease: EASE }}
-                className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl font-medium"
-                style={{ color: txtMuted }}
+                className="mx-auto mt-6 max-w-3xl text-center text-lg md:text-xl font-medium text-slate-600"
               >
                 Building the assessment stack for Indian classrooms—fast, fair, and aligned to how teachers actually teach.
               </motion.p>
@@ -432,10 +542,10 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, ease: "easeOut" }}
-                    className="p-6 text-center ag-card bg-white"
+                    className="p-6 text-center about-card bg-white"
                   >
-                    <div className="text-2xl md:text-3xl font-black tracking-tight stat-n-forced">{s.v}</div>
-                    <div className="mt-1 text-sm font-medium" style={{ color: txtMuted }}>{s.k}</div>
+                    <div className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">{s.v}</div>
+                    <div className="mt-1.5 text-sm font-semibold text-slate-500">{s.k}</div>
                   </motion.div>
                 ))}
               </div>
@@ -451,21 +561,21 @@ export default function AboutPage() {
                 transition={{ duration: 0.6 }}
                 className="[&_h2]:tracking-tight bg-transparent"
               >
-                <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-900">Our mission</h2>
-                <p className="mt-6 text-lg font-medium leading-relaxed" style={{ color: txtMuted }}>
+                <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">Our mission</h2>
+                <p className="mt-6 text-lg font-medium leading-relaxed text-slate-600">
                   Give teachers superpowers with AI that respects context and curriculum. Save hours weekly and return that time to students.
                 </p>
-                <p className="mt-4 text-lg font-medium leading-relaxed" style={{ color: txtMuted }}>
+                <p className="mt-4 text-lg font-medium leading-relaxed text-slate-600">
                   We combine multi‑LLM generation with rubric checks, plagiarism guards,
                   and contest‑grade proctoring to ensure quality from day one.
                 </p>
 
                 <div className="mt-8 flex flex-wrap gap-4">
-                  <button onClick={() => navigate("/features")} className="btn-blk px-8 py-3.5 text-base sm:text-lg font-bold">
-                    <span className="relative z-10 flex items-center justify-center gap-2">See how it works</span>
+                  <button onClick={() => navigate("/features")} className="btn-blue-gradient px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
+                    <span>See how it works</span>
                   </button>
-                  <button onClick={() => navigate("/contact")} className="btn-glass-light px-8 py-3.5 text-base sm:text-lg font-bold">
-                    <span className="relative z-10 flex items-center justify-center gap-2">Talk to us</span>
+                  <button onClick={() => navigate("/contact")} className="btn-white-action px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
+                    <span>Talk to us</span>
                   </button>
                 </div>
 
@@ -475,19 +585,21 @@ export default function AboutPage() {
                     { icon: Shield, title: "Safer data", copy: "Privacy-first storage, clear consent, audit trails." },
                     { icon: BookOpen, title: "Better pedagogy", copy: "Curriculum mapping + rubric checks by default." },
                   ].map((item) => (
-                    <div key={item.title} className="p-5 ag-card bg-white">
-                      <div className="flex items-center gap-2 font-bold text-neutral-800">
-                        <item.icon className="h-4 w-4" style={{ color: accentColor }} />
+                    <div key={item.title} className="p-5 about-card bg-white">
+                      <div className="flex items-center gap-2.5 font-bold text-slate-900">
+                        <div className="h-7 w-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                          <item.icon className="h-4 w-4" />
+                        </div>
                         {item.title}
                       </div>
-                      <p className="mt-2 text-sm font-medium leading-relaxed" style={{ color: txtMuted }}>{item.copy}</p>
+                      <p className="mt-2.5 text-sm font-medium leading-relaxed text-slate-600">{item.copy}</p>
                     </div>
                   ))}
                 </div>
               </motion.div>
 
               <motion.div initial={{ opacity: 0, x: 40 }} animate={missionInView ? { opacity: 1, x: 0 } : {}} transition={{ duration: 0.6 }}>
-                <div className="overflow-hidden p-0 ag-card bg-white shadow-sm border border-neutral-200/60">
+                <div className="overflow-hidden p-0 about-card bg-white shadow-sm border border-slate-200/90">
                   <img
                     src="/images/bg.jpg"
                     alt="Educators using a4ai"
@@ -503,27 +615,23 @@ export default function AboutPage() {
           <section ref={valuesRef} className="relative z-10 py-16 scroll-mt-28 bg-white">
             <div className={sectionX}>
               <div className="mb-12 text-center bg-transparent">
-                <h3 className="text-3xl font-extrabold tracking-tight text-neutral-900">What we value</h3>
-                <p className="mt-3 text-neutral-500 font-medium">Principles that steer product and policy.</p>
+                <div className="mx-auto mb-4 inline-flex justify-center">
+                  <span className="per-student-pill text-xs px-3.5 py-1.5 font-bold">
+                    <Sparkles className="h-3.5 w-3.5 mr-1" />
+                    Our Core Philosophy
+                  </span>
+                </div>
+                <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
+                  What we <span className="nlm-text">value & build for</span>
+                </h3>
+                <p className="mt-3 text-slate-600 font-medium max-w-2xl mx-auto text-base sm:text-lg">
+                  Uncompromising pedagogical principles that steer our AI product architecture and school policies.
+                </p>
               </div>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
+
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-7xl mx-auto items-stretch">
                 {values.map((x, i) => (
-                  <motion.div
-                    key={x.k}
-                    initial={{ opacity: 0, y: 18 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.05 * i, duration: 0.5, ease: "easeOut" }}
-                    className="p-6 ag-card bg-white"
-                  >
-                    <div className="flex items-center gap-3 mb-4 bg-transparent">
-                      <div className="relative flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0 bg-blue-50 border border-blue-100">
-                        <x.icon className="h-5 w-5" style={{ color: accentColor }} />
-                      </div>
-                      <div className="font-extrabold text-neutral-800">{x.k}</div>
-                    </div>
-                    <p className="text-sm font-medium leading-relaxed text-neutral-500">{x.v}</p>
-                  </motion.div>
+                  <ValueFeatureCard key={x.title} item={x} index={i} />
                 ))}
               </div>
             </div>
@@ -532,8 +640,22 @@ export default function AboutPage() {
           {/* MILESTONES TIMELINE BLOCK */}
           <section className="relative z-10 py-16 bg-white">
             <div className="mx-auto max-w-5xl px-4 bg-transparent">
-              <h3 className="text-3xl font-extrabold tracking-tight text-center text-neutral-900">Milestones</h3>
-              <div className="mt-12 space-y-6 bg-transparent">
+              <div className="text-center mb-12">
+                <div className="mx-auto mb-4 inline-flex justify-center">
+                  <span className="per-student-pill text-xs px-3.5 py-1.5 font-bold">
+                    <Rocket className="h-3.5 w-3.5 mr-1" />
+                    Our Journey
+                  </span>
+                </div>
+                <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
+                  Milestones & <span className="nlm-text">Progress</span>
+                </h3>
+                <p className="mt-3 text-slate-600 font-medium max-w-2xl mx-auto text-base sm:text-lg">
+                  From testing with our first 50 teachers to powering campus examinations.
+                </p>
+              </div>
+
+              <div className="space-y-6 bg-transparent">
                 {milestones.map((m, i) => (
                   <motion.div
                     key={m.title}
@@ -541,12 +663,12 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, ease: "easeOut" }}
-                    className="grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] ag-card bg-white"
+                    className="grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] about-card bg-white"
                   >
-                    <div className="text-sm font-bold mt-1 text-blue-600">{m.date}</div>
+                    <div className="text-sm font-extrabold mt-1 text-blue-600">{m.date}</div>
                     <div>
-                      <div className="text-lg font-extrabold text-neutral-900">{m.title}</div>
-                      <div className="mt-2 text-sm font-medium leading-relaxed text-neutral-500">{m.detail}</div>
+                      <div className="text-lg font-extrabold text-slate-900">{m.title}</div>
+                      <div className="mt-2 text-sm font-medium leading-relaxed text-slate-600">{m.detail}</div>
                     </div>
                   </motion.div>
                 ))}
@@ -558,7 +680,13 @@ export default function AboutPage() {
           <section ref={teamRef} className="relative z-10 py-16 scroll-mt-28 bg-white">
             <div className={sectionX}>
               <div className="text-center bg-transparent">
-                <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold tracking-tight mb-6 text-neutral-900">
+                <div className="mx-auto mb-4 inline-flex justify-center">
+                  <span className="per-student-pill text-xs px-3.5 py-1.5 font-bold">
+                    <HeartHandshake className="h-3.5 w-3.5 mr-1" />
+                    Leadership & Team
+                  </span>
+                </div>
+                <motion.h2 {...fadeUp} className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3 text-slate-900">
                   Team Behind a4ai
                 </motion.h2>
                 <motion.p
@@ -566,7 +694,7 @@ export default function AboutPage() {
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
                   transition={{ delay: 0.15, duration: 0.5 }}
-                  className="mx-auto max-w-3xl text-lg font-medium text-neutral-500"
+                  className="mx-auto max-w-3xl text-lg font-medium text-slate-600"
                 >
                   A small team building a4ai — step by step, every day.
                 </motion.p>
@@ -578,7 +706,7 @@ export default function AboutPage() {
                 ))}
               </div>
 
-              <p className="mt-12 text-center text-sm font-bold text-neutral-400">
+              <p className="mt-12 text-center text-sm font-semibold text-slate-400">
                 …and many more people who quietly help shape a4ai every moment.
               </p>
             </div>
@@ -588,13 +716,13 @@ export default function AboutPage() {
           <section className="relative z-10 py-16 bg-white">
             <div className="mx-auto max-w-6xl px-4 bg-transparent">
               <div className="text-center bg-transparent">
-                <h3 className="text-3xl font-extrabold tracking-tight text-neutral-900">Schools & partners</h3>
-                <p className="mt-3 text-neutral-500 font-medium">Pilots and early adopters we're grateful for.</p>
+                <h3 className="text-3xl font-extrabold tracking-tight text-slate-900">Schools & partners</h3>
+                <p className="mt-3 text-slate-600 font-medium">Pilots and early adopters we're grateful for.</p>
               </div>
               <div className="mt-12 grid grid-cols-2 items-center gap-6 sm:grid-cols-4 bg-transparent">
                 {partners.map((p) => (
-                  <div key={p.name} className="flex items-center justify-center p-8 ag-card bg-white border border-neutral-100 shadow-sm">
-                    <span className="text-sm font-bold tracking-wide text-neutral-700 hover:text-neutral-900 transition-colors">
+                  <div key={p.name} className="flex items-center justify-center p-8 about-card bg-white">
+                    <span className="text-sm font-bold tracking-wide text-slate-800 hover:text-blue-600 transition-colors">
                       {p.name}
                     </span>
                   </div>
@@ -614,13 +742,13 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, delay: 0.05 * i, ease: "easeOut" }}
-                    className="relative p-8 ag-card bg-white border border-neutral-100 shadow-sm flex flex-col"
+                    className="relative p-8 about-card bg-white flex flex-col"
                   >
                     <Quote className="absolute -top-3 -left-3 h-8 w-8 text-neutral-200/50" />
-                    <p className="text-base font-medium leading-relaxed italic text-neutral-800">"{t.quote}"</p>
+                    <p className="text-base font-semibold leading-relaxed italic text-slate-800">"{t.quote}"</p>
                     <footer className="mt-6 text-sm bg-transparent">
-                      <span className="font-bold text-neutral-800">{t.name}</span>,{" "}
-                      <span className="font-medium" style={{ color: txtMuted }}>{t.title}</span>
+                      <span className="font-extrabold text-slate-900">{t.name}</span>,{" "}
+                      <span className="font-medium text-slate-500">{t.title}</span>
                     </footer>
                   </motion.blockquote>
                 ))}
@@ -638,7 +766,7 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5 }}
-                    className="text-3xl md:text-4xl font-extrabold tracking-tight text-neutral-900"
+                    className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900"
                   >
                     Ready to transform your assessments?
                   </motion.h2>
@@ -647,7 +775,7 @@ export default function AboutPage() {
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.15, duration: 0.5 }}
-                    className="mx-auto mt-4 max-w-2xl text-lg font-medium text-neutral-500"
+                    className="mx-auto mt-4 max-w-2xl text-lg font-medium text-slate-600"
                   >
                     Join educators using a4ai to save time and improve outcomes.
                   </motion.p>
@@ -658,13 +786,11 @@ export default function AboutPage() {
                     transition={{ delay: 0.25, duration: 0.5 }}
                     className="mt-8 flex flex-col sm:flex-row justify-center gap-4 bg-transparent"
                   >
-                    <button onClick={() => navigate("/")} className="btn-blk px-8 py-3.5 text-base sm:text-lg font-bold">
-                      <span className="relative z-10 flex items-center justify-center gap-2">
-                        Get started for free
-                      </span>
+                    <button onClick={() => navigate("/")} className="btn-blue-gradient px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
+                      <span>Get started for free</span>
                     </button>
-                    <button onClick={() => navigate("/contact")} className="btn-glass-light px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
-                      <span className="relative z-10 flex items-center gap-2">Book a demo <ArrowRight className="h-5 w-5" /></span>
+                    <button onClick={() => navigate("/contact")} className="btn-white-action px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
+                      <span>Book a demo <ArrowRight className="h-5 w-5" /></span>
                     </button>
                   </motion.div>
                 </div>
@@ -675,6 +801,123 @@ export default function AboutPage() {
         </div>
       </div>
     </>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────
+   UNIFIED VALUE FEATURE CARD COMPONENT (Matching FeaturesPage Pattern)
+   ────────────────────────────────────────────────────────────── */
+function ValueFeatureCard({ item, index }: { item: ValueItem; index: number }) {
+  const mx = useMotionValue(120);
+  const my = useMotionValue(90);
+  const rotateX = useTransform(my, [0, 180], [7, -7]);
+  const rotateY = useTransform(mx, [0, 260], [-8, 8]);
+  const Icon = item.icon;
+  const rafId = useRef<number | null>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    const currentTarget = e.currentTarget;
+    if (rafId.current) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      if (!currentTarget) return;
+      const r = currentTarget.getBoundingClientRect();
+      mx.set(clientX - r.left);
+      my.set(clientY - r.top);
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay: 0.06 * index, duration: 0.5, ease: "easeOut" }}
+      className="h-full flex flex-col"
+    >
+      <div
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => { mx.set(120); my.set(90); }}
+        style={{ perspective: 1000 }}
+        className="group h-full flex flex-col cursor-pointer"
+      >
+        <motion.div
+          style={{ rotateX, rotateY, willChange: "transform" }}
+          className="relative h-full p-6 transition-all duration-300 about-card bg-white flex flex-col"
+        >
+          {/* Radial cursor hover sheen */}
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
+          />
+
+          <div className="relative z-10 flex flex-col h-full">
+            {/* Card Top: Icon Box + Title */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 border border-blue-100 flex-shrink-0">
+                <Icon className="h-6 w-6 text-blue-600" />
+                {item.tag && (
+                  <span
+                    className="absolute -right-2 -top-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200/80 shadow-xs"
+                  >
+                    {item.tag}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-900 tracking-tight leading-snug">{item.title}</h3>
+            </div>
+
+            {/* Description */}
+            <p className="text-sm font-medium leading-relaxed mb-5 text-slate-600">
+              {item.description}
+            </p>
+
+            {/* Checklist Bullets */}
+            <ul className="space-y-3 mb-6 flex-grow">
+              {item.bullets.map((b, i) => (
+                <li key={i} className="flex items-start gap-2.5 text-sm font-medium">
+                  <div className="h-5 w-5 rounded-full bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shrink-0 mt-0.5">
+                    <Check size={12} strokeWidth={3} />
+                  </div>
+                  <span className="text-slate-700 font-semibold leading-snug">{b}</span>
+                </li>
+              ))}
+            </ul>
+
+            {/* Card Footer: Tags & Action Link */}
+            <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-1.5">
+                {item.tags.map((t) => (
+                  <span
+                    key={t}
+                    className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-slate-100 text-slate-700 border border-slate-200/60"
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+
+              <Link
+                to={item.href || "/features"}
+                className="inline-flex items-center text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors group-hover:translate-x-0.5 flex-shrink-0"
+              >
+                {item.cta || "Explore"}
+                <ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -690,6 +933,27 @@ function TeamCard({
   const my = useMotionValue(120);
   const rotateX = useTransform(my, [0, 260], [8, -8]);
   const rotateY = useTransform(mx, [0, 300], [-10, 10]);
+  const rafId = useRef<number | null>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    const currentTarget = e.currentTarget;
+    if (rafId.current) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      if (!currentTarget) return;
+      const r = currentTarget.getBoundingClientRect();
+      mx.set(clientX - r.left);
+      my.set(clientY - r.top);
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
 
   return (
     <motion.div
@@ -700,18 +964,14 @@ function TeamCard({
       className="relative bg-white"
     >
       <div 
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          mx.set(e.clientX - rect.left);
-          my.set(e.clientY - rect.top);
-        }} 
+        onMouseMove={handleMouseMove} 
         onMouseLeave={() => { mx.set(160); my.set(120); }} 
         style={{ perspective: 1000 }} 
         className="group cursor-pointer h-full"
       >
         <motion.div
-          style={{ rotateX, rotateY }}
-          className="relative h-full p-6 transition-all duration-300 ag-card bg-white"
+          style={{ rotateX, rotateY, willChange: "transform" }}
+          className="relative h-full p-6 transition-all duration-300 about-card bg-white"
         >
           <motion.span
             aria-hidden
@@ -719,16 +979,16 @@ function TeamCard({
             style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
           />
           <div className="relative z-10 text-center bg-transparent">
-            <Avatar className="mx-auto mb-4 h-28 w-28 ring-2 ring-neutral-100 border border-neutral-200/50">
+            <Avatar className="mx-auto mb-4 h-28 w-28 ring-4 ring-blue-50 border border-slate-200/80 shadow-xs">
               <AvatarImage src={member.image} alt={member.name} className="object-cover" />
-              <AvatarFallback className="text-xl font-extrabold bg-neutral-50 text-neutral-800">
+              <AvatarFallback className="text-xl font-extrabold bg-blue-50 text-blue-700">
                 {member.name.substring(0, 2)}
               </AvatarFallback>
             </Avatar>
 
-            <h3 className="text-xl font-extrabold tracking-tight text-neutral-900">{member.name}</h3>
+            <h3 className="text-xl font-extrabold tracking-tight text-slate-900">{member.name}</h3>
             <p className="mt-1 text-sm font-bold text-blue-600">{member.role}</p>
-            <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500">{member.description}</p>
+            <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">{member.description}</p>
           </div>
         </motion.div>
       </div>

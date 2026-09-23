@@ -35,19 +35,27 @@ export function useTestGenerator(): UseTestGeneratorReturn {
       // Step 1: Validate form
       setProgress("Validating form data...");
 
-      const totalQuestions = formData.simpleData.reduce(
-        (sum, row) => sum + (row.quantity || 0),
-        0
-      );
+      const isCbse = formData.cbsePattern ?? false;
+      const validRows = formData.simpleData.filter((row) => row.topic && row.topic.trim());
 
-      if (totalQuestions === 0) {
-        throw new Error("Add at least one chapter with questions");
+      if (validRows.length === 0) {
+        throw new Error("Please select at least one chapter.");
       }
 
-      if (totalQuestions > 50) {
-        throw new Error(
-          `Too many questions (${totalQuestions}). Maximum 50 per test for best quality.`
-        );
+      const totalQuestions = isCbse
+        ? 38
+        : validRows.reduce((sum, row) => sum + (row.quantity || 0), 0);
+
+      if (!isCbse) {
+        if (totalQuestions === 0) {
+          throw new Error("Add at least one chapter with questions");
+        }
+
+        if (totalQuestions > 50) {
+          throw new Error(
+            `Too many questions (${totalQuestions}). Maximum 50 per test for best quality.`
+          );
+        }
       }
 
       // Step 2: Transform form data → API payload

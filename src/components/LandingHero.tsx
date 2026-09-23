@@ -2,10 +2,10 @@
 import { Link } from "react-router-dom";
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
 import { ArrowRight, Crown, Sparkles } from "lucide-react";
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 
 const features = [
-  { text: "NCERT-Aligned" },
+  { text: "1 Lakh+ NCERT Bank" },
   { text: "CBSE Pattern Ready" },
   { text: "PDF & DOCX Export" },
   { text: "Answer Key Included" },
@@ -74,12 +74,21 @@ export default function LandingHero() {
 
   const noMagnet = isTouch || reduce;
 
+  const rafId = useRef<number | null>(null);
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (noMagnet) return;
-      const r = e.currentTarget.getBoundingClientRect();
-      mx.set(e.clientX - r.left);
-      my.set(e.clientY - r.top);
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      const currentTarget = e.currentTarget;
+      if (rafId.current) return;
+      rafId.current = requestAnimationFrame(() => {
+        rafId.current = null;
+        if (!currentTarget) return;
+        const r = currentTarget.getBoundingClientRect();
+        mx.set(clientX - r.left);
+        my.set(clientY - r.top);
+      });
     },
     [noMagnet, mx, my]
   );
@@ -87,6 +96,9 @@ export default function LandingHero() {
   useEffect(() => {
     mx.set(CENTER_X);
     my.set(CENTER_Y);
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
   }, []);
 
   return (
@@ -162,10 +174,10 @@ export default function LandingHero() {
         <motion.div className="flex justify-center w-full" {...rise(0.05)}>
           <motion.div
             className="mb-5 sm:mb-7 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 sm:px-4 sm:py-2 border bg-white/80 border-neutral-200 shadow-sm backdrop-blur-md"
-            style={{ x: noMagnet ? 0 : badgeX, y: noMagnet ? 0 : badgeY }}
+            style={{ x: noMagnet ? 0 : badgeX, y: noMagnet ? 0 : badgeY, willChange: "transform" }}
           >
             <Sparkles className="h-3.5 w-3.5" style={{ color: festive ? "#FF9933" : "#14b8a6" }} />
-            <span className="text-xs sm:text-sm font-medium text-neutral-700">15,000+ NCERT Questions Ready</span>
+            <span className="text-xs sm:text-sm font-medium text-neutral-700">1 Lakh+ NCERT Questions Ready</span>
           </motion.div>
         </motion.div>
 
@@ -201,7 +213,7 @@ export default function LandingHero() {
             style={{ fontSize: "clamp(0.85rem, 1.3vw, 1.1rem)" }}
             {...rise(0.28)}
           >
-            Drag &amp; drop from 15,000+ NCERT questions — paper ready in 10 seconds.
+            Drag &amp; drop from 1 Lakh+ NCERT questions — paper ready in 10 seconds.
             Or let AI build it — done in under 2 minutes. Section-wise, with answer keys, ready to print.
           </motion.p>
 

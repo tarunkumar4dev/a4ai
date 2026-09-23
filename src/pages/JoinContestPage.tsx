@@ -38,7 +38,7 @@ const Page = styled.div`
   position: relative;
   overflow: hidden;
 
-  @media (prefers-color-scheme: dark) {
+  .dark & {
     background:
       radial-gradient(1100px 560px at 12% -10%, rgba(109,94,252,.14), transparent 60%),
       radial-gradient(1100px 560px at 88% -6%, rgba(34,193,253,.12), transparent 60%),
@@ -90,7 +90,7 @@ const Card = styled(motion.section) <{ glass?: boolean }>`
     background: linear-gradient(90deg, transparent, rgba(109, 94, 252, 0.45), rgba(34,193,253,.45), transparent);
   }
 
-  @media (prefers-color-scheme: dark) {
+  .dark & {
     background: ${({ glass }) => (glass ? "rgba(12,14,25,.72)" : "#0f1221")};
     border-color: rgba(255,255,255,.08);
     box-shadow: 0 12px 32px rgba(0,0,0,.38);
@@ -131,7 +131,7 @@ const Subtitle = styled(motion.p)`
   color: ${BRAND.muted};
   margin: 8px 0 18px;
   font-size: 15.5px;
-  @media (prefers-color-scheme: dark) { color: #9aa6d1; }
+  .dark & { color: #9aa6d1; }
 `;
 
 /* ================= PIlls (grade filters visual only) ================= */
@@ -181,7 +181,7 @@ const PrefixField = styled(motion.div) <{ invalid?: boolean }>`
     &:focus { outline: none; border-color: #6d5efc; box-shadow: 0 0 0 5px ${BRAND.ring}; }
   }
 
-  @media (prefers-color-scheme: dark) {
+  .dark & {
     input { background: #0b0e1b; color: #e9ecff; border-color: rgba(255,255,255,.08); }
     input::placeholder { color: #63709a; }
   }
@@ -203,7 +203,7 @@ const Ghost = styled(motion.button)`
   border: 1px dashed rgba(109,94,252,.30);
   background: #fff; color: #5b63d6; font-size: 13px;
   &:hover { background: rgba(99,102,241,.06); transform: translateY(-1px); border-color: rgba(99,102,241,.45); }
-  @media (prefers-color-scheme: dark) { background: #0b0e1b; color: #c9cfff; }
+  .dark & { background: #0b0e1b; color: #c9cfff; }
 `;
 
 const Primary = styled(motion.button)`
@@ -226,7 +226,7 @@ const ListHeader = styled(motion.div)`
 
 const ListTitle = styled.h3`
   margin: 0; color: #2d3150; font-size: 18px; font-weight: 900;
-  @media (prefers-color-scheme: dark) { color: #e6e9ff; }
+  .dark & { color: #e6e9ff; }
 `;
 
 const Search = styled(motion.input)`
@@ -235,7 +235,7 @@ const Search = styled(motion.input)`
   &::placeholder { color: #9aa3b2; }
   &:focus { outline: none; box-shadow: 0 0 0 5px ${BRAND.ring}; border-color: #6d5efc; }
   @media (max-width: 520px) { width: 100%; }
-  @media (prefers-color-scheme: dark) { background: #0b0e1b; color: #e6e9ff; border-color: rgba(255,255,255,.08); }
+  .dark & { background: #0b0e1b; color: #e6e9ff; border-color: rgba(255,255,255,.08); }
 `;
 
 const Item = styled(motion.div)`
@@ -251,18 +251,18 @@ const Item = styled(motion.div)`
   &:not(:last-child){ margin-bottom: 10px; }
   &:hover{ transform: translateY(-2px); border-color: rgba(99,102,241,.26); box-shadow: 0 12px 26px rgba(99,102,241,.10); &::before{opacity:1;} }
 
-  @media (prefers-color-scheme: dark) { background: #0b0e1b; border-color: rgba(255,255,255,.06); }
+  .dark & { background: #0b0e1b; border-color: rgba(255,255,255,.06); }
 `;
 
 const Name = styled.div`
   color: #303659; font-weight: 900; font-size: 16px; margin-bottom: 4px;
-  @media (prefers-color-scheme: dark) { color: #e6e9ff; }
+  .dark & { color: #e6e9ff; }
 `;
 
 const Meta = styled.div`
   display: flex; gap: 10px; flex-wrap: wrap; align-items: center; color: ${BRAND.muted}; font-size: 13.5px;
   & > .dot { width: 4px; height: 4px; border-radius: 999px; background: #ccd1de; display: inline-block; }
-  @media (prefers-color-scheme: dark) { color: #9aa3c9; & > .dot { background: #2a3050; } }
+  .dark & { color: #9aa3c9; & > .dot { background: #2a3050; } }
 `;
 
 const Chip = styled(motion.span) <{ tone?: "green" | "amber" }>`
@@ -280,14 +280,14 @@ const Outline = styled(motion.button)`
   height: 40px; padding: 0 14px; border-radius: 12px;
   border: 1px solid rgba(99,102,241,.35); background: #fff; color: #5b63d6;
   &:hover { background: rgba(99,102,241,.06); transform: translateY(-1px); border-color: rgba(99,102,241,.48); }
-  @media (prefers-color-scheme: dark) { background: #0b0e1b; color: #c9cfff; border-color: rgba(255,255,255,.10); }
+  .dark & { background: #0b0e1b; color: #c9cfff; border-color: rgba(255,255,255,.10); }
 `;
 
 /* ================= Skeleton Loader ================= */
 const Skeleton = styled(motion.div)`
   background: linear-gradient(90deg, #f1f3ff 25%, #e5e9ff 50%, #f1f3ff 75%);
   background-size: 200% 100%; animation: ${shimmer} 1.5s infinite; border-radius: 12px;
-  @media (prefers-color-scheme: dark) {
+  .dark & {
     background: linear-gradient(90deg, #1a1d2e 25%, #25293f 50%, #1a1d2e 75%); background-size: 200% 100%;
   }
 `;

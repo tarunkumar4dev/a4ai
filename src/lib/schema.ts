@@ -24,19 +24,9 @@ export const simpleRowSchema = z.object({
     marks: z.number().min(1).max(10).default(1),
     difficulty: difficultyEnum.default("Medium"),
     format: z.string().default("MCQ"),
-    refFile: z.any().optional(),
 });
 
-// 2. Blueprint Mode Row
-export const blueprintItemSchema = z.object({
-  id: z.string(),
-  lo: z.string().optional(),
-  bloom: bloomEnum.default("Apply"),
-  weight: z.number().optional(),
-  chapter: z.string().optional(),
-});
-
-// 3. Main Form Schema
+// 2. Main Form Schema
 export const formSchema = z.object({
   // Metadata
   examTitle: z.string().min(3, "Exam title is required"),
@@ -49,7 +39,7 @@ export const formSchema = z.object({
   paperDate: z.string().default(todayISO()),
 
   // Global Settings
-  mode: z.enum(["Simple", "Blueprint", "Matrix", "Buckets"]).default("Simple"),
+  mode: z.string().default("Simple"),
   enableWatermark: z.boolean().default(true),
   shuffleQuestions: z.boolean().default(false),
 
@@ -58,7 +48,6 @@ export const formSchema = z.object({
 
   // Data Arrays
   simpleData: z.array(simpleRowSchema),
-  blueprintData: z.array(blueprintItemSchema).optional(),
 
   // NCERT FIELDS
   useNCERT: z.boolean().default(true),

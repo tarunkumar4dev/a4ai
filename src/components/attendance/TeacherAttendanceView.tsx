@@ -380,9 +380,9 @@ export default function TeacherAttendanceView() {
                 <span className="text-slate-400"><Icon.Calendar /></span> {MONTHS[calM]} {calY}
               </span>
               <div className="flex items-center gap-1">
-                <button onClick={() => { calM === 0 ? (setCalM(11), setCalY(calY - 1)) : setCalM(calM - 1); }}
+                <button onClick={() => { if (calM === 0) { setCalM(11); setCalY(calY - 1); } else { setCalM(calM - 1); } }}
                   className="p-2 rounded-xl pill active:scale-90 touch-manipulation"><Icon.ChevL /></button>
-                <button onClick={() => { calM === 11 ? (setCalM(0), setCalY(calY + 1)) : setCalM(calM + 1); }}
+                <button onClick={() => { if (calM === 11) { setCalM(0); setCalY(calY + 1); } else { setCalM(calM + 1); } }}
                   className="p-2 rounded-xl pill active:scale-90 touch-manipulation"><Icon.ChevR /></button>
                 <button onClick={() => { setCalM(new Date().getMonth()); setCalY(new Date().getFullYear()); setDate(new Date()); }}
                   className="ml-1 px-2.5 py-1.5 rounded-lg pill text-[11px] font-bold text-slate-500 active:scale-95 touch-manipulation">Today</button>
@@ -494,11 +494,11 @@ export default function TeacherAttendanceView() {
             </div>
           </div>
           {/* Action buttons — horizontal scroll on mobile */}
-          <div className="flex items-center gap-1.5 mt-2 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
-            <button onClick={undo} disabled={!dirty} className="flex items-center gap-1 px-3 py-2 rounded-xl pill font-bold text-xs text-slate-600 dark:text-slate-300 disabled:opacity-30 active:scale-95 touch-manipulation shrink-0"><Icon.Undo /><span className="hidden xs:inline">Undo</span></button>
-            <button onClick={markAll} className="flex items-center gap-1 px-3 py-2 rounded-xl pill font-bold text-xs text-slate-600 dark:text-slate-300 active:scale-95 touch-manipulation shrink-0"><Icon.Check /><span className="hidden xs:inline">All P</span></button>
+          <div className="flex items-center justify-between sm:justify-start gap-1.5 mt-3 sm:mt-2 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
+            <button onClick={undo} disabled={!dirty} className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:py-2 rounded-xl pill font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 disabled:opacity-30 active:scale-95 touch-manipulation"><Icon.Undo /><span>Undo</span></button>
+            <button onClick={markAll} className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:py-2 rounded-xl pill font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 active:scale-95 touch-manipulation"><Icon.Check /><span>All P</span></button>
             <button onClick={save} disabled={!dirty || saving}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs text-white disabled:opacity-30 active:scale-95 touch-manipulation shrink-0 ml-auto"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 sm:py-2 rounded-xl font-bold text-xs sm:text-sm text-white disabled:opacity-30 active:scale-95 touch-manipulation sm:ml-auto"
               style={{ background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }}>
               {saving ? <Icon.Spin /> : <Icon.Save />}{saving ? "Saving…" : "Save"}
             </button>

@@ -6,7 +6,11 @@ import { supabase } from '@/lib/supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
 
 // Backend API URL — local dev mein localhost, production mein Vercel URL
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE ||
+  'http://localhost:8000'
+).replace(/\/+$/, '');
 
 interface ModuleCreatorProps {
   onModuleCreated?: (module: any) => void;

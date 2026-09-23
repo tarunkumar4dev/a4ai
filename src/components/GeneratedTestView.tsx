@@ -40,17 +40,21 @@ import { toast } from "sonner";
 type QuestionStatus = "pending" | "approved" | "rejected" | "editing";
 
 // v10: Export template options (must match backend TEMPLATE_PRESETS keys)
-type ExportTemplate = "modern" | "classic" | "compact" | "colorful";
+type ExportTemplate = "teal" | "navy" | "dark_green" | "orange" | "modern" | "classic" | "compact" | "colorful";
 
 const TEMPLATE_OPTIONS: { id: ExportTemplate; label: string }[] = [
+  { id: "teal", label: "Teal (CBSE)" },
+  { id: "navy", label: "Navy (CBSE)" },
+  { id: "dark_green", label: "Dark Green" },
+  { id: "orange", label: "Orange" },
   { id: "modern", label: "Modern" },
   { id: "classic", label: "Classic" },
   { id: "compact", label: "Compact" },
   { id: "colorful", label: "Colorful" },
 ];
 
-// v14: which templates use the institute_paper layout (need extra details)
-const INSTITUTE_TEMPLATES: ExportTemplate[] = ["colorful"];
+// Templates that support institute-paper layout / custom metadata
+const INSTITUTE_TEMPLATES: ExportTemplate[] = ["colorful", "teal", "navy", "dark_green", "orange"];
 
 // v14: institute-paper meta collected at export time (only for institute layout)
 interface InstituteDetails {
@@ -423,7 +427,14 @@ const QuestionCard = ({
     : question.text;
   const editingDisplayText = questionTable && ed.text
     ? stripMarkdownTable(ed.text)
-    : (ed.text || question.text);
+    : ed.text;
+  // Rich fields from backend
+  const subParts = (question as any).sub_parts || (question as any).subParts || null;
+  const modelAnswer = (question as any).model_answer || (question as any).modelAnswer || null;
+  const markingScheme = (question as any).marking_scheme || (question as any).markingScheme || null;
+  const commonMistakes = (question as any).common_mistakes || (question as any).commonMistakes || null;
+  const acceptableAlternatives = (question as any).acceptable_alternatives || (question as any).acceptableAlternatives || null;
+  const isOr = (question as any)._is_or || (question as any).isOr || false;
 
   return (
     <motion.div
@@ -433,6 +444,17 @@ const QuestionCard = ({
       transition={{ delay: index * 0.04, type: "spring", stiffness: 120, damping: 20 }}
       className={`rounded-2xl border-2 shadow-sm transition-all duration-300 overflow-hidden ${statusBorder[question.status]}`}
     >
+      {/* OR Badge Divider if question is an alternative choice */}
+      {isOr && (
+        <div className="bg-amber-50 border-b border-amber-200/80 px-5 py-2 flex items-center justify-between">
+          <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            OR — Alternative Option
+          </span>
+          <span className="text-[10px] font-semibold text-amber-700">Internal Choice</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="p-5 pb-3">
         <div className="flex items-start justify-between gap-3 mb-3">
@@ -491,6 +513,49 @@ const QuestionCard = ({
       {/* Always visible — it's PART of the question, not the answer */}
       {questionTable && (
         <QuestionTableView table={questionTable} />
+      )}
+
+      {/* Sub-parts Rendering (Case Study / Multi-part questions) */}
+      {subParts && subParts.length > 0 && (
+        <div className="px-5 pb-3 space-y-2">
+          {subParts.map((sp: any, spIdx: number) => (
+            <div key={spIdx} className="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2 flex-1">
+                  <span className="font-bold text-xs text-indigo-700 bg-indigo-100/70 px-1.5 py-0.5 rounded shrink-0">
+                    {sp.label || `(${spIdx + 1})`}
+                  </span>
+                  <div className="text-sm font-medium text-slate-800">
+                    <MathText text={sp.text} />
+                  </div>
+                </div>
+                {sp.marks && (
+                  <span className="text-[11px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                    {sp.marks}m
+                  </span>
+                )}
+              </div>
+              {/* Sub-part MCQ options */}
+              {sp.options && sp.options.length > 0 && (
+                <div className="mt-2 pl-6 space-y-1">
+                  {sp.options.map((opt: string, optI: number) => (
+                    <div key={optI} className="text-xs text-slate-600 flex items-center gap-1.5">
+                      <span className="font-semibold text-slate-400">{labels[optI] || optI + 1}.</span>
+                      <MathText text={opt} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Sub-part answer if showAnswer is on */}
+              {showAnswer && (sp.answer || sp.correctAnswer || sp.correct_answer) && (
+                <div className="mt-2 pl-2 text-xs font-semibold text-emerald-800 bg-emerald-50/90 p-2 rounded-lg border border-emerald-200">
+                  <span className="font-bold text-emerald-700">Ans: </span>
+                  <MathText text={sp.answer || sp.correctAnswer || sp.correct_answer || ""} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Manual question image */}
@@ -562,6 +627,7 @@ const QuestionCard = ({
       {/* Fix 3: Show answer for Short/Long/non-MCQ questions */}
       {showAnswer
         && (!question.options || question.options.length === 0)
+        && (!subParts || subParts.length === 0)
         && !answerTable
         && question.correctAnswer && (
           <div className="px-5 pb-3">
@@ -575,6 +641,78 @@ const QuestionCard = ({
             </div>
           </div>
         )}
+
+      {/* Model Answer (Short/Long Answer questions) */}
+      {showAnswer && modelAnswer && (
+        <div className="px-5 pb-3">
+          <div className="rounded-xl bg-blue-50/80 border border-blue-200 p-3.5">
+            <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1">
+              Model Answer
+            </p>
+            <div className="text-sm font-medium text-slate-800 leading-relaxed">
+              <MathText text={modelAnswer} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step-by-Step Marking Scheme */}
+      {showAnswer && markingScheme && markingScheme.length > 0 && (
+        <div className="px-5 pb-3">
+          <div className="rounded-xl bg-purple-50/70 border border-purple-200 p-3.5">
+            <p className="text-[10px] font-bold text-purple-700 uppercase tracking-wider mb-2">
+              Marking Scheme
+            </p>
+            <div className="space-y-1.5">
+              {markingScheme.map((ms: any, msIdx: number) => (
+                <div key={msIdx} className="flex items-start justify-between gap-2 text-xs text-purple-950">
+                  <div className="flex items-start gap-1.5 flex-1">
+                    <span className="font-bold text-purple-600 shrink-0">•</span>
+                    <span>
+                      <span className="font-semibold">{ms.step}</span>
+                      {ms.description && <span className="text-purple-700">: {ms.description}</span>}
+                    </span>
+                  </div>
+                  <span className="font-bold text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded shrink-0">
+                    +{ms.marks}m
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Common Mistakes & Acceptable Alternatives */}
+      {showAnswer && commonMistakes && commonMistakes.length > 0 && (
+        <div className="px-5 pb-3">
+          <div className="rounded-xl bg-amber-50/70 border border-amber-200 p-3 text-xs text-amber-900">
+            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1">
+              Common Student Mistakes to Avoid
+            </p>
+            <ul className="list-disc list-inside space-y-0.5 text-amber-800">
+              {commonMistakes.map((cm: string, cmI: number) => (
+                <li key={cmI}>{cm}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {showAnswer && acceptableAlternatives && acceptableAlternatives.length > 0 && (
+        <div className="px-5 pb-3">
+          <div className="rounded-xl bg-teal-50/70 border border-teal-200 p-3 text-xs text-teal-900">
+            <p className="text-[10px] font-bold text-teal-700 uppercase tracking-wider mb-1">
+              Acceptable Alternative Methods / Answers
+            </p>
+            <ul className="list-disc list-inside space-y-0.5 text-teal-800">
+              {acceptableAlternatives.map((alt: string, altI: number) => (
+                <li key={altI}>{alt}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* v7: Answer Table (Accountancy — Journal Entry / Ledger / Trial Balance) */}
       {showAnswer && answerTable && (
@@ -617,10 +755,11 @@ async function downloadFile(
   questions: GeneratedQuestion[],
   meta: { examTitle: string; board: string; classGrade: string; subject: string; paperDate?: string },
   format: "pdf" | "docx",
-  mode: "student" | "answers" | "teacher",
+  mode: "student" | "answers" | "teacher" | "standalone_answer_key",
   template: ExportTemplate,   // v10: which visual template to render
   logoBase64?: string | null,
   institute?: InstituteDetails,   // v14: institute-paper meta (only used by "colorful")
+  templateTier?: "standard" | "premium",
 ) {
   // v14: trim helper — send null (not empty string) so the backend uses its
   // own fallbacks ("______" / exam title) instead of rendering blanks.
@@ -634,16 +773,13 @@ async function downloadFile(
     subject: meta.subject,
     questions,
     includeAnswers: mode !== "student",
-    includeExplanations: mode === "teacher",
+    includeExplanations: mode === "teacher" || mode === "standalone_answer_key",
     format,
     template,   // v10: sent through to backend ExportRequest.template
+    templateTier: templateTier || "standard",
     logoBase64: logoBase64 || null,
 
-    // v14: institute-paper meta. Only the "colorful" (institute_paper)
-    // layout renders these; other templates accept-and-ignore them on the
-    // backend. Sent in snake_case (primary) AND camelCase (hedge) so it
-    // matches ExportRequest regardless of its field casing — Pydantic
-    // ignores whichever keys don't match.
+    // v14: institute-paper meta.
     teacher_name: clean(institute?.teacherName),
     institute_name: clean(institute?.instituteName),
     duration: clean(institute?.duration),
@@ -653,7 +789,11 @@ async function downloadFile(
   };
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
-  const res = await fetch(`${API_BASE}/api/v1/test-generator/export`, {
+  const endpoint = mode === "standalone_answer_key"
+    ? `${API_BASE}/api/v1/test-generator/export-answer-key`
+    : `${API_BASE}/api/v1/test-generator/export`;
+
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -665,7 +805,8 @@ async function downloadFile(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${meta.examTitle.replace(/\s+/g, "_")}_${mode}.${format}`;
+  const suffix = mode === "standalone_answer_key" ? "AnswerKey" : mode;
+  a.download = `${meta.examTitle.replace(/\s+/g, "_")}_${suffix}.${format}`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -787,7 +928,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   }, []);
 
   // ── Download handler with guest check ─────────────────────────────────
-  const handleDownload = (format: "pdf" | "docx", mode: "student" | "answers" | "teacher") => {
+  const handleDownload = (format: "pdf" | "docx", mode: "student" | "answers" | "teacher" | "standalone_answer_key") => {
     // 🚩 FIX: Block download if nothing approved
     if (activeQuestions.length === 0) {
       toast.warning("Please approve at least one question before downloading");
@@ -959,7 +1100,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   // 🚩 FIX: Only approved questions go to PDF/Contest/Copy
   const activeQuestions = questions.filter((q) => q.status === "approved");
 
-  const handleExport = async (format: "pdf" | "docx", mode: "student" | "answers" | "teacher") => {
+  const handleExport = async (format: "pdf" | "docx", mode: "student" | "answers" | "teacher" | "standalone_answer_key") => {
     setIsExporting(true);
     setShowDownloadMenu(false);
     try {
@@ -1134,7 +1275,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                         </div>
                       </div>
 
-                      {/* v14: Institute-paper details — only for the institute layout ("colorful") */}
+                      {/* v14: Institute-paper details — for institute layout */}
                       {isInstituteTemplate && (
                         <div className="px-3 pb-2.5 mb-1 border-b border-gray-100 space-y-1.5">
                           <div className="text-[10px] font-bold text-gray-400 uppercase pt-1">
@@ -1174,25 +1315,31 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                       )}
 
                       <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">PDF</div>
-                      <button onClick={() => handleDownload("pdf", "student")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                      <button onClick={() => handleDownload("pdf", "student")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[40px]">
                         <FileText size={14} className="text-red-500 flex-shrink-0" /> Student Copy
                       </button>
-                      <button onClick={() => handleDownload("pdf", "answers")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                      <button onClick={() => handleDownload("pdf", "answers")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[40px]">
                         <FileText size={14} className="text-orange-500 flex-shrink-0" /> With Answer Key
                       </button>
-                      <button onClick={() => handleDownload("pdf", "teacher")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                      <button onClick={() => handleDownload("pdf", "teacher")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[40px]">
                         <FileText size={14} className="text-emerald-500 flex-shrink-0" /> Teacher Copy (+ explanations)
+                      </button>
+                      <button onClick={() => handleDownload("pdf", "standalone_answer_key")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[40px]">
+                        <FileText size={14} className="text-indigo-600 flex-shrink-0" /> Separate Answer Key PDF
                       </button>
                       <div className="border-t border-gray-100 my-1" />
                       <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">DOCX</div>
-                      <button onClick={() => handleDownload("docx", "student")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                      <button onClick={() => handleDownload("docx", "student")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[40px]">
                         <FileDown size={14} className="text-blue-500 flex-shrink-0" /> Student Copy
                       </button>
-                      <button onClick={() => handleDownload("docx", "answers")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                      <button onClick={() => handleDownload("docx", "answers")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[40px]">
                         <FileDown size={14} className="text-orange-500 flex-shrink-0" /> With Answer Key
                       </button>
-                      <button onClick={() => handleDownload("docx", "teacher")} className="w-full px-4 py-3 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[44px]">
+                      <button onClick={() => handleDownload("docx", "teacher")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[40px]">
                         <FileDown size={14} className="text-emerald-500 flex-shrink-0" /> Teacher Copy (+ explanations)
+                      </button>
+                      <button onClick={() => handleDownload("docx", "standalone_answer_key")} className="w-full px-4 py-2.5 text-xs text-left hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors min-h-[40px]">
+                        <FileDown size={14} className="text-indigo-600 flex-shrink-0" /> Separate Answer Key DOCX
                       </button>
                     </motion.div>
                   )}

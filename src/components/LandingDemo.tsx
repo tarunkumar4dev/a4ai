@@ -25,9 +25,8 @@ type Props = {
 
 export default function LandingDemo({
   bgImage = "/showcase-bg.png",
-  videoSrcMp4,
+  videoSrcMp4 = "/demo.mp4",
   videoSrcWebm,
-  // FIX: default matches your actual file
   poster = "/demo-poster.png",
   showControls = false,
   showHud = true,
@@ -105,12 +104,27 @@ export default function LandingDemo({
     else el.pause();
   }, [inView]);
 
+  const rafId = useRef<number | null>(null);
   const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isReady || isCoarsePointer) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    rawX.set(e.clientX - rect.left);
-    rawY.set(e.clientY - rect.top);
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+    const currentTarget = e.currentTarget;
+    if (rafId.current) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      if (!currentTarget) return;
+      const rect = currentTarget.getBoundingClientRect();
+      rawX.set(clientX - rect.left);
+      rawY.set(clientY - rect.top);
+    });
   };
+
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
 
   return (
     <section
@@ -187,7 +201,7 @@ export default function LandingDemo({
           className="mx-auto mt-4 max-w-2xl text-center text-lg"
           style={{ color: "var(--muted-600, #5D6B7B)" }}
         >
-          Generate, host, and analyze assessments — end-to-end in minutes.
+          Explore 1 Lakh+ NCERT questions — generate, host, and analyze assessments in minutes.
         </motion.p>
 
         {/* SHOWCASE CARD */}
@@ -337,8 +351,8 @@ function FloatingHint() {
         transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       >
         <div className="flex items-center gap-2 relative z-10">
-          <Sparkles className="h-4 w-4" />
-          Keep scrolling
+          <Sparkles className="h-4 w-4 text-emerald-600" />
+          1 Lakh+ NCERT Questions Bank
         </div>
         <div aria-hidden className="absolute inset-0 rounded-full" style={{ boxShadow: "0 0 80px 20px rgba(120,140,160,0.15)" }} />
       </motion.div>

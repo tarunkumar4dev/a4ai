@@ -51,11 +51,47 @@ export function useSubscription() {
   const fetchStatus = useCallback(async () => {
     if (!user) return;
     try {
-      const { data, error } = await supabase.rpc("get_user_plan_status", {
-        p_user_id: user.id,
-      });
-      if (!error && data) {
-        setStatus(data as PlanStatus);
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+      const [rpcRes, testsRes] = await Promise.all([
+        supabase.rpc("get_user_plan_status", { p_user_id: user.id }),
+        supabase
+          .from("tests")
+          .select("id", { count: "exact", head: true })
+          .eq("teacher_id", user.id)
+          .gte("created_at", startOfMonth),
+      ]);
+
+      const actualTestsCount = testsRes.count || 0;
+
+      if (!rpcRes.error && rpcRes.data) {
+        const planStatus = rpcRes.data as PlanStatus;
+        const effectiveUsed = Math.max(planStatus.tests_used || 0, actualTestsCount);
+        const effectiveLimit = planStatus.test_limit;
+        const effectiveRemaining =
+          effectiveLimit === -1
+            ? -1
+            : Math.max(0, effectiveLimit - effectiveUsed);
+
+        setStatus({
+          ...planStatus,
+          tests_used: effectiveUsed,
+          tests_remaining: effectiveRemaining,
+        });
+      } else if (actualTestsCount >= 0) {
+        setStatus((prev) =>
+          prev
+            ? {
+                ...prev,
+                tests_used: Math.max(prev.tests_used || 0, actualTestsCount),
+                tests_remaining:
+                  prev.test_limit === -1
+                    ? -1
+                    : Math.max(0, prev.test_limit - actualTestsCount),
+              }
+            : null
+        );
       }
     } catch (err) {
       console.warn("[useSubscription] fetchStatus error:", err);
