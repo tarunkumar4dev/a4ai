@@ -244,12 +244,9 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
 
   // ── Main Card ─────────────────────────────────────────────────
   return (
-    <div style={{
-      background: "#fff",
-      borderRadius: 20,
-      boxShadow: "0 2px 16px rgba(0,0,0,0.07)",
-      overflow: "hidden",
-    }}>
+    <div
+      className="bg-white dark:bg-slate-900 rounded-[20px] shadow-sm border border-slate-100 dark:border-white/10 overflow-hidden"
+    >
       {/* Header stripe */}
       <div style={{
         background: "linear-gradient(135deg, #FF7043, #F4511E)",
@@ -317,19 +314,15 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {batches.map(b => (
-              <div key={b.id} style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "10px 14px", background: "#F8FAFC", borderRadius: 12,
-                border: "1px solid #F1F5F9",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "#FFF5F2", display: "flex", alignItems: "center", justifyContent: "center", color: "#FF7043", fontSize: 14 }}>📚</div>
+              <div key={b.id} className="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-white/5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#FFF5F2] dark:bg-orange-500/10 flex items-center justify-center text-[#FF7043] text-sm shrink-0">📚</div>
                   <div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#1E293B" }}>{b.name}</p>
-                    {b.class_level && <p style={{ margin: 0, fontSize: 11, color: "#94A3B8" }}>Class {b.class_level}</p>}
+                    <p className="m-0 text-[13px] font-bold text-slate-800 dark:text-white">{b.name}</p>
+                    {b.class_level && <p className="m-0 text-[11px] text-slate-400 font-medium">Class {b.class_level}</p>}
                   </div>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#64748B", background: "#E2E8F0", padding: "3px 10px", borderRadius: 20 }}>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-200/70 dark:bg-slate-700/60 px-2.5 py-0.5 rounded-full shrink-0">
                   {b.student_count} student{b.student_count !== 1 ? "s" : ""}
                 </span>
               </div>

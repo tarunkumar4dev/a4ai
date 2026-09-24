@@ -10,6 +10,7 @@ import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel"
 import TeacherAssignmentsTab from "@/components/teacher/TeacherAssignmentsTab";
 import WorksheetGenerator from "@/components/teacher/WorksheetGenerator";
 import TeacherCalendarTab from "@/components/teacher/TeacherCalendarTab";
+import TeacherStudentsTab from "@/components/teacher/TeacherStudentsTab";
 import ProctorSectionView, { useProctorCheck } from "@/components/attendance/ProctorSectionView";
 import TeacherAnalyticsTab from "@/components/teacher/TeacherAnalyticsTab";
 import { downloadTestDocument, fetchQuestionsForTest, type TestQuestionData } from "@/utils/testPdfExporter";
@@ -2885,6 +2886,11 @@ TONE & FORMATTING GUIDELINES:
             {activeTab === "students" && (
               <div className="space-y-6 sm:space-y-8 animate-pop">
                 <InstituteTeacherPanel userId={user?.id} userEmail={user?.email} />
+                <TeacherStudentsTab
+                  userId={user?.id}
+                  userEmail={user?.email}
+                  onNavigateTab={(tab) => setActiveTab(tab)}
+                />
               </div>
             )}
 
