@@ -284,7 +284,34 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 };
 
 // ── Diagram Badge ───────────────────────────────────────────────
-function DiagramBadge({ figRef }: { figRef?: string | null }) {
+function DiagramBadge({
+  figRef,
+  hasImage,
+}: {
+  figRef?: string | null;
+  hasImage?: boolean;
+}) {
+  if (hasImage) {
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 3,
+          fontSize: 10,
+          fontWeight: 600,
+          color: "#047857",
+          background: "#d1fae5",
+          padding: "2px 8px",
+          borderRadius: 4,
+          marginLeft: 6,
+          border: "1px solid #a7f3d0",
+        }}
+      >
+        📷 {figRef ? `${figRef}` : "Diagram Included"}
+      </span>
+    );
+  }
   return (
     <span
       style={{
@@ -484,8 +511,8 @@ function DraggableQuestion({
                 {question.section}
               </span>
             )}
-            {question.question_type === "diagram" && (
-              <DiagramBadge figRef={question.figure_ref} />
+            {(question.question_type === "diagram" || !!question.image_url) && (
+              <DiagramBadge figRef={question.figure_ref} hasImage={!!question.image_url} />
             )}
           </div>
 
@@ -661,8 +688,8 @@ function SortableTestQuestion({
               question={question}
               truncateAt={isMobile ? 160 : 250}
             />
-            {question.question_type === "diagram" && (
-              <DiagramBadge figRef={question.figure_ref} />
+            {(question.question_type === "diagram" || !!question.image_url) && (
+              <DiagramBadge figRef={question.figure_ref} hasImage={!!question.image_url} />
             )}
           </div>
         </div>
