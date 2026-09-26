@@ -1768,7 +1768,15 @@ export default function InstituteDashboardPage() {
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-800">Attendance</h2>
                 <p className="text-sm text-slate-400 mt-1">Monitor teacher marking status and export monthly reports</p>
               </div>
-              <HODAttendanceDashboard instituteId={institute.id} />
+              <HODAttendanceDashboard
+                instituteId={institute.id}
+                isHod={isHod}
+                hodDeptId={hodDeptId}
+                teachers={teachers}
+                batches={batches}
+                departments={departments}
+                subjects={subjects}
+              />
             </div>
           )}
 
