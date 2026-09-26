@@ -2,15 +2,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
-// Mock useAuth since we don't have the actual AuthContext
-const useAuth = () => {
-  return { 
-    user: { 
-      id: 'mock-user-id', 
-      email: 'user@example.com' 
-    } 
-  };
-};
+import { useAuth } from '@/providers/AuthProvider';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isValidUUID = (id?: string | null): boolean => !!id && UUID_REGEX.test(id);
+
 
 interface CoinTransaction {
   id: string;
@@ -253,7 +249,12 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
   }, [user]);
 
   const loadCoinData = async () => {
-    if (!user) return;
+    if (!user || !isValidUUID(user.id)) {
+      setCoins(100);
+      setTotalEarned(100);
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const { data: profile, error } = await supabase
@@ -261,6 +262,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
         .select('coins, total_coins_earned')
         .eq('id', user.id)
         .single();
+
 
       if (error) {
         console.log('No profile found, using default coins');
@@ -299,7 +301,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
   };
 
   const addCoins = async (amount: number, description: string, contestId?: string) => {
-    if (!user) return;
+    if (!user || !isValidUUID(user.id)) return;
 
     try {
       const newCoinBalance = coins + amount;
@@ -350,7 +352,8 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
   };
 
   const spendCoins = async (amount: number, description: string): Promise<boolean> => {
-    if (!user || coins < amount) return false;
+    if (!user || !isValidUUID(user.id) || coins < amount) return false;
+
 
     try {
       const newCoinBalance = coins - amount;

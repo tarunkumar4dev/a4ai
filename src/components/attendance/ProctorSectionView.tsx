@@ -27,12 +27,12 @@ interface MonthlyRow {
 
 /* ───── ICONS ───── */
 const Icon = {
-  Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
-  Clock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-  Download: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-  Alert: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
-  ChevD: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
-  Spin: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+  Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>,
+  Clock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
+  Download: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>,
+  Alert: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>,
+  ChevD: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>,
+  Spin: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>,
 };
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -66,17 +66,17 @@ export function useProctorCheck() {
     (async () => {
       try {
         const { data: mem } = await supabase.from("institute_members").select("institute_id")
-          .eq("user_id", user.id).eq("status", "active").limit(1).single();
+          .eq("user_id", user.id).limit(1).single();
         if (!mem) return;
         setInstId(mem.institute_id);
         const { data: b } = await supabase.from("batches").select("id, name")
-          .eq("proctor_id", user.id).neq("is_active", false);
+          .eq("proctor_id", user.id);
         if (b && b.length > 0) {
           // get student counts
           const batches: ProctorBatch[] = [];
           for (const batch of b) {
             const { count } = await supabase.from("students").select("id", { count: "exact", head: true })
-              .eq("batch_id", batch.id).eq("is_active", true);
+              .eq("batch_id", batch.id);
             batches.push({ id: batch.id, name: batch.name, studentCount: count || 0 });
           }
           setProctorBatches(batches);
@@ -224,9 +224,8 @@ export default function ProctorSectionView() {
             <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
               {proctorBatches.map(b => (
                 <button key={b.id} onClick={() => setSelBatch(b)}
-                  className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap shrink-0 active:scale-95 touch-manipulation ${
-                    selBatch?.id === b.id ? "text-white shadow-sm" : "pill text-slate-600 dark:text-slate-300"
-                  }`}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap shrink-0 active:scale-95 touch-manipulation ${selBatch?.id === b.id ? "text-white shadow-sm" : "pill text-slate-600 dark:text-slate-300"
+                    }`}
                   style={selBatch?.id === b.id ? { background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" } : undefined}>
                   {b.name} <span className="text-xs opacity-70">({b.studentCount})</span>
                 </button>
@@ -249,9 +248,8 @@ export default function ProctorSectionView() {
             <div className="flex gap-1 pill rounded-xl p-1">
               {(["today", "monthly"] as const).map(v => (
                 <button key={v} onClick={() => setView(v)}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all active:scale-[0.97] touch-manipulation ${
-                    view === v ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" : "text-slate-500"
-                  }`}>{v === "today" ? "Today" : "Monthly"}</button>
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all active:scale-[0.97] touch-manipulation ${view === v ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm" : "text-slate-500"
+                    }`}>{v === "today" ? "Today" : "Monthly"}</button>
               ))}
             </div>
           </div>
@@ -268,32 +266,31 @@ export default function ProctorSectionView() {
             </div>
 
             {loading ? <p className="py-6 text-center text-slate-400 text-sm">Loading…</p>
-            : todayStatus.length === 0 ? <p className="py-4 text-center text-slate-400 text-sm">No sessions scheduled today.</p>
-            : (
-              <div className="space-y-2">
-                {todayStatus.map(s => {
-                  const pct = s.totalStudents > 0 && s.isMarked ? Math.round((s.presentCount / s.totalStudents) * 100) : 0;
-                  return (
-                    <div key={s.sessionId} className={`rounded-2xl p-3.5 border transition-colors ${
-                      s.isMarked ? "border-emerald-200/60 dark:border-emerald-800/30 bg-emerald-50/40 dark:bg-emerald-950/10"
-                        : "border-amber-200/60 dark:border-amber-800/30 bg-amber-50/40 dark:bg-amber-950/10"
-                    }`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-sm text-slate-800 dark:text-white">{s.subjectName}</span>
-                        {s.isMarked
-                          ? <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><Icon.Check /> {pct}%</span>
-                          : <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1"><Icon.Clock /> Pending</span>}
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
-                        <span>{s.teacherName}</span>
-                        {s.startTime && <span>{s.startTime}</span>}
-                        {s.isMarked && <span>{s.presentCount}P / {s.absentCount}A</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              : todayStatus.length === 0 ? <p className="py-4 text-center text-slate-400 text-sm">No sessions scheduled today.</p>
+                : (
+                  <div className="space-y-2">
+                    {todayStatus.map(s => {
+                      const pct = s.totalStudents > 0 && s.isMarked ? Math.round((s.presentCount / s.totalStudents) * 100) : 0;
+                      return (
+                        <div key={s.sessionId} className={`rounded-2xl p-3.5 border transition-colors ${s.isMarked ? "border-emerald-200/60 dark:border-emerald-800/30 bg-emerald-50/40 dark:bg-emerald-950/10"
+                            : "border-amber-200/60 dark:border-amber-800/30 bg-amber-50/40 dark:bg-amber-950/10"
+                          }`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-sm text-slate-800 dark:text-white">{s.subjectName}</span>
+                            {s.isMarked
+                              ? <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><Icon.Check /> {pct}%</span>
+                              : <span className="text-[10px] font-bold text-amber-600 flex items-center gap-1"><Icon.Clock /> Pending</span>}
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
+                            <span>{s.teacherName}</span>
+                            {s.startTime && <span>{s.startTime}</span>}
+                            {s.isMarked && <span>{s.presentCount}P / {s.absentCount}A</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
             {/* Progress bar */}
             {todayStatus.length > 0 && (
@@ -333,67 +330,67 @@ export default function ProctorSectionView() {
             </div>
 
             {loading ? <p className="py-8 text-center text-slate-400 text-sm">Loading report…</p>
-            : monthlyRows.length === 0 ? <p className="py-6 text-center text-slate-400 text-sm">No attendance data for this month.</p>
-            : (
-              <>
-                {/* Scrollable table */}
-                <div className="overflow-auto -mx-2 px-2 max-h-[60vh] rounded-xl border border-slate-200/60 dark:border-white/5">
-                  <table className="atbl w-full">
-                    <thead>
-                      <tr>
-                        <th className="min-w-[140px]">Student</th>
-                        {subjectCodes.map(c => (
-                          <th key={c} className="min-w-[60px]" title={subjectNames[c]}>{c}</th>
-                        ))}
-                        <th className="min-w-[50px]">Overall</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {monthlyRows.map(r => (
-                        <tr key={r.studentId}>
-                          <td>
-                            <div className="min-w-0">
-                              <p className="font-bold text-[12px] text-slate-700 dark:text-slate-200 truncate max-w-[130px]">{r.studentName}</p>
-                              <p className="text-[10px] text-slate-400">{r.rollNo}</p>
-                            </div>
-                          </td>
-                          {subjectCodes.map(c => {
-                            const cell = r.subjects[c];
-                            if (!cell || cell.totalHeld === 0) return <td key={c} className="text-slate-300">—</td>;
-                            return (
-                              <td key={c}>
-                                <span className={`font-bold ${cell.percentage >= 75 ? "text-emerald-600" : cell.percentage >= 50 ? "text-amber-600" : "text-red-600"}`}>
-                                  {cell.percentage}%
-                                </span>
-                                <span className="block text-[9px] text-slate-400">{cell.totalPresent}/{cell.totalHeld}</span>
+              : monthlyRows.length === 0 ? <p className="py-6 text-center text-slate-400 text-sm">No attendance data for this month.</p>
+                : (
+                  <>
+                    {/* Scrollable table */}
+                    <div className="overflow-auto -mx-2 px-2 max-h-[60vh] rounded-xl border border-slate-200/60 dark:border-white/5">
+                      <table className="atbl w-full">
+                        <thead>
+                          <tr>
+                            <th className="min-w-[140px]">Student</th>
+                            {subjectCodes.map(c => (
+                              <th key={c} className="min-w-[60px]" title={subjectNames[c]}>{c}</th>
+                            ))}
+                            <th className="min-w-[50px]">Overall</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {monthlyRows.map(r => (
+                            <tr key={r.studentId}>
+                              <td>
+                                <div className="min-w-0">
+                                  <p className="font-bold text-[12px] text-slate-700 dark:text-slate-200 truncate max-w-[130px]">{r.studentName}</p>
+                                  <p className="text-[10px] text-slate-400">{r.rollNo}</p>
+                                </div>
                               </td>
-                            );
-                          })}
-                          <td>
-                            <span className={`font-black text-sm ${r.overallPct >= 75 ? "text-emerald-600" : r.overallPct >= 50 ? "text-amber-600" : "text-red-600"}`}>
-                              {r.overallPct}%
-                            </span>
-                            <span className="block text-[9px] text-slate-400">{r.overallPresent}/{r.overallHeld}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Below-75% warning */}
-                {(() => {
-                  const low = monthlyRows.filter(r => r.overallPct < 75 && r.overallHeld > 0);
-                  if (!low.length) return null;
-                  return (
-                    <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40">
-                      <p className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5 mb-1"><Icon.Alert /> Below 75% overall</p>
-                      <p className="text-[11px] text-red-600 dark:text-red-400/80">{low.map(s => s.studentName).join(", ")}</p>
+                              {subjectCodes.map(c => {
+                                const cell = r.subjects[c];
+                                if (!cell || cell.totalHeld === 0) return <td key={c} className="text-slate-300">—</td>;
+                                return (
+                                  <td key={c}>
+                                    <span className={`font-bold ${cell.percentage >= 75 ? "text-emerald-600" : cell.percentage >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                                      {cell.percentage}%
+                                    </span>
+                                    <span className="block text-[9px] text-slate-400">{cell.totalPresent}/{cell.totalHeld}</span>
+                                  </td>
+                                );
+                              })}
+                              <td>
+                                <span className={`font-black text-sm ${r.overallPct >= 75 ? "text-emerald-600" : r.overallPct >= 50 ? "text-amber-600" : "text-red-600"}`}>
+                                  {r.overallPct}%
+                                </span>
+                                <span className="block text-[9px] text-slate-400">{r.overallPresent}/{r.overallHeld}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  );
-                })()}
-              </>
-            )}
+
+                    {/* Below-75% warning */}
+                    {(() => {
+                      const low = monthlyRows.filter(r => r.overallPct < 75 && r.overallHeld > 0);
+                      if (!low.length) return null;
+                      return (
+                        <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40">
+                          <p className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5 mb-1"><Icon.Alert /> Below 75% overall</p>
+                          <p className="text-[11px] text-red-600 dark:text-red-400/80">{low.map(s => s.studentName).join(", ")}</p>
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
           </div>
         )}
 

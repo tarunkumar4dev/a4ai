@@ -562,6 +562,25 @@ export default function InstituteDashboardPage() {
         section_id: newBatch.section_id || null,
       });
       if (error) throw error;
+
+      if (newBatch.subject?.trim()) {
+        const subName = newBatch.subject.trim();
+        const code = subName.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() + "101";
+        const exists = subjects.some(s =>
+          s.name.toLowerCase() === subName.toLowerCase() &&
+          (!newBatch.department_id || s.department_id === newBatch.department_id)
+        );
+        if (!exists) {
+          await supabase.from("subjects").insert({
+            institute_id: institute.id,
+            name: subName,
+            code,
+            department_id: newBatch.department_id || null,
+            is_active: true,
+          });
+        }
+      }
+
       toast.success("Batch created!");
       setShowAddBatch(false);
       setNewBatch({ name: "", class_level: "", subject: "", description: "", department_id: "", section_id: "" });
@@ -1583,11 +1602,15 @@ export default function InstituteDashboardPage() {
                             const b = batches.find(x => x.id === bid);
                             if (!b) return null;
                             const assignedSubjects = (teacherSubjectMap[t.user_id] || []).filter(a => a.batch_id === bid);
-                            const batchDeptId = b.department_id;
-                            const availableSubjects = subjects.filter(s =>
-                              (!batchDeptId || s.department_id === batchDeptId || !s.department_id) &&
-                              !assignedSubjects.some(a => a.subject_id === s.id)
-                            );
+                            const targetDeptId = b.department_id || t.department_id;
+                            const availableSubjects = subjects.filter(s => {
+                              if (assignedSubjects.some(a => a.subject_id === s.id)) return false;
+                              // If target department is known, ONLY show subjects belonging to that department
+                              if (targetDeptId) {
+                                return s.department_id === targetDeptId;
+                              }
+                              return true;
+                            });
                             return (
                               <div key={bid} className="flex flex-wrap items-center gap-1.5">
                                 <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full flex items-center gap-1">

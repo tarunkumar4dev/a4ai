@@ -1466,6 +1466,7 @@ export default function TestBuilderPage() {
       section: q.section,
       subParts: (q as any).subParts || (q as any).sub_parts || undefined,
       image_url: q.image_url || undefined,
+      imageUrl: q.image_url || undefined,
       question_table: q.question_table || undefined,
       isManual: false,
       validationStatus: "valid",
@@ -1505,6 +1506,7 @@ export default function TestBuilderPage() {
           topic: q.topic || "",
           format: q.format || (q.options && q.options.length > 0 ? "mcq" : "short_answer"),
           position: idx + 1,
+          image_url: q.image_url || undefined,
         }));
         await supabase.from("questions").insert(qRows);
         console.log("[TestBuilder] Test auto-saved to history:", testId);
@@ -1581,11 +1583,13 @@ export default function TestBuilderPage() {
             },
             testQuestions.map((q, idx) => ({
               position: idx + 1,
-              text: q.text,
+              text: q.question_text || (q as any).text || "",
               marks: q.marks,
               options: q.options,
-              correct_answer: q.correctAnswer,
-              explanation: q.solution,
+              correct_answer: q.answer || (q as any).correctAnswer || (q as any).solution || "",
+              explanation: (q as any).solution || (q as any).explanation || "",
+              image_url: q.image_url || undefined,
+              imageUrl: q.image_url || undefined,
             }))
           );
           toast.success("Generated Question Paper PDF in browser!");
@@ -1666,11 +1670,13 @@ export default function TestBuilderPage() {
             },
             testQuestions.map((q, idx) => ({
               position: idx + 1,
-              text: q.text,
+              text: q.question_text || (q as any).text || "",
               marks: q.marks,
               options: q.options,
-              correct_answer: q.correctAnswer,
-              explanation: q.solution,
+              correct_answer: q.answer || (q as any).correctAnswer || (q as any).solution || "",
+              explanation: (q as any).solution || (q as any).explanation || "",
+              image_url: q.image_url || undefined,
+              imageUrl: q.image_url || undefined,
             }))
           );
           toast.success("Generated Answer Key PDF in browser!");

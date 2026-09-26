@@ -2157,20 +2157,18 @@ TONE & FORMATTING GUIDELINES:
 
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid, label: "Dashboard", color: "text-blue-500" },
-    { id: "ai-tools", Icon: Icons.Sparkles, label: "AI Tools", color: "text-amber-500", badge: "MAGICAL" },
     { id: "calendar", Icon: Icons.Calendar, label: "Calendar", color: "text-indigo-500" },
     { id: "assignments", Icon: Icons.FileText, label: "Assignments" },
     { id: "attendance", Icon: Icons.Clock, label: "Attendance", color: "text-violet-500" },
     { id: "students", Icon: Icons.Users, label: "Students", color: "text-orange-500" },
+    ...(isProctor ? [{ id: "section", Icon: Icons.Grid, label: "My Section", color: "text-teal-500" }] : []),
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
+    { id: "ai-tools", Icon: Icons.Sparkles, label: "AI Tools", color: "text-amber-500", badge: "MAGICAL" },
   ];
 
-  // My Section only for proctors
-  const finalNavItems = isProctor
-    ? [...navItems, { id: "section", Icon: Icons.Grid, label: "My Section", color: "text-teal-500" }]
-    : navItems;
+  const finalNavItems = navItems;
 
   return (
     <div

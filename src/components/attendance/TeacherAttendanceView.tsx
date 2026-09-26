@@ -185,30 +185,168 @@ export default function TeacherAttendanceView() {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const { data: mem } = await supabase.from("institute_members").select("institute_id")
-        .eq("user_id", user.id).eq("status", "active").limit(1).single();
-      if (!mem) { setLoading(false); return; }
-      setInstId(mem.institute_id);
+      let targetInstId: string | null = null;
+      let userRole = "teacher";
+      let userDeptId: string | null = null;
+
+      const { data: mem } = await supabase.from("institute_members")
+        .select("institute_id, role, department_id")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (mem?.institute_id) {
+        targetInstId = mem.institute_id;
+        userRole = mem.role || "teacher";
+        userDeptId = mem.department_id || null;
+      } else {
+        const { data: ownedInst } = await supabase.from("institutes")
+          .select("id")
+          .eq("owner_id", user.id)
+          .limit(1)
+          .maybeSingle();
+        if (ownedInst?.id) {
+          targetInstId = ownedInst.id;
+          userRole = "admin";
+        }
+      }
+
+      if (!targetInstId) {
+        setLoading(false);
+        return;
+      }
+      setInstId(targetInstId);
       const ds = toDateStr(date);
 
-      const { data: sess } = await supabase.rpc("get_teacher_today_sessions", { p_institute_id: mem.institute_id, p_date: ds });
-      setSessions((sess || []).map((r: any): SessionTarget => ({
-        batchId: r.batch_id, batchName: r.batch_name, subjectId: r.subject_id,
-        subjectName: r.subject_name, subjectCode: r.subject_code,
-        timetableSlotId: r.timetable_slot_id, sessionId: r.session_id,
-        studentCount: Number(r.student_count) || 0,
-        timeSlot: r.start_time ? String(r.start_time).slice(0, 5) : undefined,
-        room: r.room || undefined, isMarked: r.is_marked,
-      })));
+      // 1. Timetable sessions for today
+      try {
+        const { data: sess } = await supabase.rpc("get_teacher_today_sessions", { p_institute_id: targetInstId, p_date: ds });
+        setSessions((sess || []).map((r: any): SessionTarget => ({
+          batchId: r.batch_id, batchName: r.batch_name, subjectId: r.subject_id,
+          subjectName: r.subject_name, subjectCode: r.subject_code,
+          timetableSlotId: r.timetable_slot_id, sessionId: r.session_id,
+          studentCount: Number(r.student_count) || 0,
+          timeSlot: r.start_time ? String(r.start_time).slice(0, 5) : undefined,
+          room: r.room || undefined, isMarked: r.is_marked,
+        })));
+      } catch {
+        setSessions([]);
+      }
 
-      const { data: ta } = await supabase.from("teaching_assignments")
-        .select("batch_id, subject_id, batches(name), subjects(name, code)")
-        .eq("teacher_id", user.id).eq("institute_id", mem.institute_id).eq("is_active", true);
-      setAssigns((ta || []).map((r: any): SessionTarget => ({
-        batchId: r.batch_id, batchName: r.batches?.name || "Batch",
-        subjectId: r.subject_id, subjectName: r.subjects?.name || "Subject",
-        subjectCode: r.subjects?.code,
-      })));
+      // 2. Fetch batches, subjects, teacher assignments
+      const [bRes, sRes, tbRes, taRes] = await Promise.all([
+        supabase.from("batches")
+          .select("id, name, department_id, class_level, subject")
+          .eq("institute_id", targetInstId)
+          .eq("is_active", true)
+          .order("name"),
+        supabase.from("subjects")
+          .select("id, name, code, department_id")
+          .eq("institute_id", targetInstId)
+          .eq("is_active", true)
+          .order("name"),
+        supabase.from("teacher_batches")
+          .select("batch_id")
+          .eq("teacher_id", user.id)
+          .eq("institute_id", targetInstId),
+        supabase.from("teaching_assignments")
+          .select("batch_id, subject_id, batches(name), subjects(name, code)")
+          .eq("teacher_id", user.id)
+          .eq("institute_id", targetInstId)
+          .eq("is_active", true),
+      ]);
+
+      const allBatches = bRes.data || [];
+      const allSubjects = sRes.data || [];
+      const assignedBatchIds = new Set((tbRes.data || []).map((r: any) => r.batch_id));
+      const directAssigns = taRes.data || [];
+
+      // Determine which batches are relevant to this user
+      let relevantBatches = allBatches.filter(b => assignedBatchIds.has(b.id));
+
+      // Fallback: if teacher has no explicitly assigned batches in teacher_batches,
+      // or if user is admin / hod, show department batches or all institute batches
+      if (relevantBatches.length === 0) {
+        if (userDeptId) {
+          relevantBatches = allBatches.filter(b => b.department_id === userDeptId);
+        }
+        if (relevantBatches.length === 0 || userRole === "admin") {
+          relevantBatches = allBatches;
+        }
+      }
+
+      // Build target assigns list
+      const targets: SessionTarget[] = [];
+      const seen = new Set<string>();
+
+      // A. Include explicit teaching_assignments
+      directAssigns.forEach((r: any) => {
+        const key = `${r.batch_id}_${r.subject_id}`;
+        seen.add(key);
+        targets.push({
+          batchId: r.batch_id,
+          batchName: r.batches?.name || "Batch",
+          subjectId: r.subject_id,
+          subjectName: r.subjects?.name || "Subject",
+          subjectCode: r.subjects?.code,
+        });
+      });
+
+      // B. For each relevant batch, link its subjects
+      relevantBatches.forEach(b => {
+        // Subjects matching this batch's department
+        const matchingSubjects = allSubjects.filter(s =>
+          b.department_id ? s.department_id === b.department_id : true
+        );
+
+        // Find if batch.subject matches a subject
+        const namedMatch = allSubjects.find(s =>
+          s.name.toLowerCase() === (b.subject || "").trim().toLowerCase() ||
+          s.code.toLowerCase() === (b.subject || "").trim().toLowerCase()
+        );
+
+        if (namedMatch) {
+          const key = `${b.id}_${namedMatch.id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            targets.push({
+              batchId: b.id,
+              batchName: b.name,
+              subjectId: namedMatch.id,
+              subjectName: namedMatch.name,
+              subjectCode: namedMatch.code,
+            });
+          }
+        }
+
+        matchingSubjects.forEach(s => {
+          const key = `${b.id}_${s.id}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            targets.push({
+              batchId: b.id,
+              batchName: b.name,
+              subjectId: s.id,
+              subjectName: s.name,
+              subjectCode: s.code,
+            });
+          }
+        });
+
+        // If no subjects found at all, create a virtual subject entry using batch subject/name
+        const batchHasAny = targets.some(t => t.batchId === b.id);
+        if (!batchHasAny) {
+          targets.push({
+            batchId: b.id,
+            batchName: b.name,
+            subjectId: b.id,
+            subjectName: b.subject || b.name,
+            subjectCode: b.class_level || undefined,
+          });
+        }
+      });
+
+      setAssigns(targets);
     } catch (e) { console.error(e); toast("Failed to load", "error"); }
     setLoading(false);
   }, [user?.id, date, toast]);
@@ -222,6 +360,13 @@ export default function TeacherAttendanceView() {
   }, [assigns]);
 
   const subjects = useMemo(() => assigns.filter(a => a.batchId === pickBatch), [assigns, pickBatch]);
+
+  // Auto-select subject if batch only has one subject
+  useEffect(() => {
+    if (pickBatch && subjects.length === 1 && (!pickSubj || pickSubj !== subjects[0].subjectId)) {
+      setPickSubj(subjects[0].subjectId);
+    }
+  }, [pickBatch, subjects, pickSubj]);
 
   // ── Open session ──
   const open = useCallback(async (t: SessionTarget) => {
@@ -289,18 +434,81 @@ export default function TeacherAttendanceView() {
     setSaving(true);
     try {
       const recs = students.map(s => ({ student_id: s.id, status: s.status }));
-      const { data, error } = await supabase.rpc("mark_attendance", {
-        p_institute_id: instId, p_batch_id: selected.batchId, p_subject_id: selected.subjectId,
-        p_session_date: toDateStr(date), p_timetable_slot_id: selected.timetableSlotId ?? null, p_topic: null, p_records: recs,
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const ds = toDateStr(date);
+      let savedOk = false;
+
+      // 1. Try mark_attendance RPC first
+      try {
+        const { data, error } = await supabase.rpc("mark_attendance", {
+          p_institute_id: instId,
+          p_batch_id: selected.batchId,
+          p_subject_id: selected.subjectId,
+          p_session_date: ds,
+          p_timetable_slot_id: selected.timetableSlotId ?? null,
+          p_topic: null,
+          p_records: recs,
+        });
+        if (!error && !data?.error) {
+          savedOk = true;
+        }
+      } catch {
+        savedOk = false;
+      }
+
+      // 2. Direct fallback to class_sessions + attendance_records
+      if (!savedOk) {
+        let sid = selected.sessionId ?? null;
+        if (!sid) {
+          const { data: s } = await supabase.from("class_sessions").select("id")
+            .eq("batch_id", selected.batchId).eq("session_date", ds)
+            .order("created_at", { ascending: false }).limit(1).maybeSingle();
+          sid = s?.id ?? null;
+        }
+
+        if (!sid) {
+          let validSubjId = selected.subjectId;
+          const { data: validSubj } = await supabase.from("subjects").select("id").eq("id", validSubjId).maybeSingle();
+          if (!validSubj) {
+            const { data: fallbackSubj } = await supabase.from("subjects").select("id").eq("institute_id", instId).limit(1).maybeSingle();
+            if (fallbackSubj) validSubjId = fallbackSubj.id;
+          }
+
+          const { data: newSess, error: sErr } = await supabase.from("class_sessions").insert({
+            institute_id: instId,
+            batch_id: selected.batchId,
+            subject_id: validSubjId,
+            teacher_id: user?.id,
+            session_date: ds,
+            status: "conducted",
+            marked_by: user?.id,
+          }).select("id").single();
+          if (sErr) throw sErr;
+          sid = newSess.id;
+        }
+
+        if (sid) {
+          const records = students.map(s => ({
+            institute_id: instId,
+            session_id: sid,
+            student_id: s.id,
+            status: s.status,
+            marked_by: user?.id,
+          }));
+          await supabase.from("attendance_records").delete().eq("session_id", sid);
+          const { error: rErr } = await supabase.from("attendance_records").insert(records);
+          if (rErr) throw rErr;
+          savedOk = true;
+        }
+      }
+
+      if (!savedOk) throw new Error("Could not record attendance");
+
       setOriginal(JSON.parse(JSON.stringify(students))); setDirty(false);
       setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
       toast(`Saved — ${selected.subjectName} · ${selected.batchName}`);
     } catch (e: any) { toast(e.message || "Save failed", "error"); }
     setSaving(false);
-  }, [students, selected, instId, date, toast]);
+  }, [students, selected, instId, date, user?.id, toast]);
 
   // Keyboard shortcuts
   useEffect(() => {

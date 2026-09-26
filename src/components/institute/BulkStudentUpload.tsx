@@ -96,7 +96,7 @@ export default function BulkStudentUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const requiredFields = ["name"];
-  const allFields = ["name", "roll_no", "class_level", "parent_name", "parent_phone"];
+  const allFields = ["name", "roll_no", "class_level", "parent_name", "parent_phone", "email", "batch"];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -136,19 +136,29 @@ export default function BulkStudentUpload({
         const headers = Object.keys(jsonData[0]);
         const autoMapping: Record<string, string> = {};
         const fieldMap: Record<string, string[]> = {
-          name: ["name", "student name", "student_name", "full name", "fullname"],
-          roll_no: ["roll", "roll no", "roll_no", "roll number", "rollnumber"],
-          class_level: ["class", "class level", "class_level", "grade", "standard"],
-          parent_name: ["parent", "parent name", "parent_name", "father", "mother", "guardian"],
-          parent_phone: ["phone", "parent phone", "parent_phone", "mobile", "contact"],
+          name: ["name", "student name", "student_name", "full name", "fullname", "studentsname", "candidate name", "student"],
+          roll_no: ["roll", "roll no", "roll_no", "roll number", "rollnumber", "rollno", "enrollment", "enrollment no", "enrollment number", "adm no", "admission no", "id"],
+          class_level: ["class", "class level", "class_level", "grade", "standard", "year", "sem", "semester", "branch"],
+          parent_name: ["parent", "parent name", "parent_name", "father", "father name", "father's name", "fathers name", "mother", "guardian"],
+          parent_phone: ["phone", "parent phone", "parent_phone", "mobile", "contact", "student phone", "phone number", "mobile number", "mobile no", "contact no", "whatsapp"],
+          email: ["email", "student email", "email id", "mail", "email address"],
+          batch: ["batch", "batch name", "section", "group", "class batch"]
         };
 
         headers.forEach((header) => {
-          const lower = header.toLowerCase().trim();
+          const cleanHeader = header.toLowerCase().trim();
+          const strippedHeader = cleanHeader.replace(/[^a-z0-9]/g, "");
           for (const [field, aliases] of Object.entries(fieldMap)) {
-            if (aliases.includes(lower) && !autoMapping[field]) {
-              autoMapping[field] = header;
-              break;
+            if (!autoMapping[field]) {
+              const match = aliases.some(alias => {
+                const cleanAlias = alias.toLowerCase().trim();
+                const strippedAlias = cleanAlias.replace(/[^a-z0-9]/g, "");
+                return cleanHeader === cleanAlias || strippedHeader === strippedAlias || strippedHeader.includes(strippedAlias);
+              });
+              if (match) {
+                autoMapping[field] = header;
+                break;
+              }
             }
           }
         });
@@ -168,13 +178,13 @@ export default function BulkStudentUpload({
 
   const getMappedValue = (row: any, field: string): string => {
     const colName = mapping[field];
-    return colName ? (row[colName] || "").toString().trim() : "";
+    return colName ? (row[colName] ?? "").toString().trim() : "";
   };
 
   const validateRow = (row: any, index: number): string | null => {
     const name = getMappedValue(row, "name");
     if (!name) {
-      return `Row ${index + 2}: Name is required`;
+      return `Row ${index + 2}: Student name is required`;
     }
     return null;
   };
@@ -197,79 +207,143 @@ export default function BulkStudentUpload({
   };
 
   const uploadStudents = async () => {
-    if (!selectedBatch) {
-      toast.error("Please select a batch before uploading.");
-      return;
+    const hasBatchColumn = Boolean(mapping["batch"]);
+    let targetBatch = selectedBatch;
+
+    // If no batch is selected and no batch in column, check if there's only 1 batch
+    if (!targetBatch && !hasBatchColumn) {
+      if (batches.length === 1) {
+        targetBatch = batches[0].id;
+        setSelectedBatch(targetBatch);
+      } else if (batches.length > 1) {
+        toast.error("Please select a Batch for the students from the dropdown.");
+        setStep("preview");
+        return;
+      }
     }
+
     setUploading(true);
     let successCount = 0;
     let failCount = 0;
+    let lastErrorMsg = "";
 
     try {
+      const preparedRecords: any[] = [];
+
       for (let i = 0; i < previewData.length; i++) {
         const row = previewData[i];
-        const studentData = {
+        const studentName = getMappedValue(row, "name");
+        if (!studentName) continue;
+
+        // Resolve batch
+        let rowBatchId = targetBatch || null;
+        if (hasBatchColumn) {
+          const rowBatchName = getMappedValue(row, "batch");
+          if (rowBatchName) {
+            const foundBatch = batches.find(b =>
+              b.name.toLowerCase().trim() === rowBatchName.toLowerCase().trim() ||
+              b.name.toLowerCase().includes(rowBatchName.toLowerCase().trim())
+            );
+            if (foundBatch) rowBatchId = foundBatch.id;
+          }
+        }
+
+        // Parent phone / mobile number (note: database table has parent_phone, not phone)
+        const phoneVal = getMappedValue(row, "parent_phone") || null;
+
+        preparedRecords.push({
           institute_id: instituteId,
-          name: getMappedValue(row, "name"),
+          name: studentName,
           roll_no: getMappedValue(row, "roll_no") || null,
           class_level: getMappedValue(row, "class_level") || null,
           parent_name: getMappedValue(row, "parent_name") || null,
-          parent_phone: getMappedValue(row, "parent_phone") || null,
-          phone: getMappedValue(row, "phone") || null,
+          parent_phone: phoneVal,
           email: getMappedValue(row, "email") || null,
-          batch_id: selectedBatch || null,
+          batch_id: rowBatchId,
           department_id: selectedDepartment || null,
           section_id: selectedSection || null,
           is_active: true,
-        };
+        });
+      }
 
-        const { error } = await supabase
+      if (preparedRecords.length === 0) {
+        toast.error("No valid student rows found to upload.");
+        setStep("preview");
+        setUploading(false);
+        return;
+      }
+
+      // Bulk insert in chunks of 50
+      const CHUNK_SIZE = 50;
+      for (let i = 0; i < preparedRecords.length; i += CHUNK_SIZE) {
+        const chunk = preparedRecords.slice(i, i + CHUNK_SIZE);
+        const { data, error } = await supabase
           .from("students")
-          .insert(studentData);
+          .insert(chunk)
+          .select("id");
 
         if (error) {
-          failCount++;
+          console.error("Batch insert error, falling back to per-row insert:", error);
+          lastErrorMsg = error.message;
+          // Fallback to row-by-row insert for this chunk so one invalid row doesn't break others
+          for (const item of chunk) {
+            const { error: rowErr } = await supabase.from("students").insert(item);
+            if (rowErr) {
+              console.error("Row insert error:", rowErr, item);
+              failCount++;
+              lastErrorMsg = rowErr.message;
+            } else {
+              successCount++;
+            }
+          }
         } else {
-          successCount++;
+          successCount += (data?.length || chunk.length);
         }
       }
 
       if (successCount > 0) {
-        toast.success(`Uploaded ${successCount} students${failCount > 0 ? `, ${failCount} failed` : ""}`);
+        toast.success(`Successfully uploaded ${successCount} student${successCount !== 1 ? "s" : ""}!${failCount > 0 ? ` (${failCount} failed)` : ""}`);
         // Auto-generate access codes for newly uploaded students
         try {
           await supabase.rpc("generate_student_access_codes", { p_institute_id: instituteId });
-          toast.success("Access codes generated for all students!");
-        } catch { /* codes will be generated later */ }
-      } else {
-        toast.error(`Failed to upload any students.`);
-      }
+          toast.success("Access codes generated!");
+        } catch { /* codes can be generated later */ }
 
-      onUploadComplete();
-      onClose();
+        onUploadComplete();
+        onClose();
+      } else {
+        toast.error(`Upload failed: ${lastErrorMsg || "Could not insert students into database"}`);
+        setStep("preview");
+      }
     } catch (error: any) {
-      toast.error(`Upload failed: ${error.message}`);
+      console.error("Upload process error:", error);
+      toast.error(`Upload failed: ${error.message || "An unexpected error occurred"}`);
+      setStep("preview");
     } finally {
       setUploading(false);
     }
   };
 
   const downloadTemplate = () => {
-    const headers = ["name", "roll_no", "class_level", "parent_name", "parent_phone"];
+    const defaultBatchName = batches[0]?.name || "CSE - 1";
     const exampleData = [
       {
-        name: "John Doe",
-        roll_no: "001",
-        class_level: "10",
-        parent_name: "Jane Doe",
-        parent_phone: "9876543210",
+        "Student Name": "Aarav Sharma",
+        "Roll No": "101",
+        "Class Level": "BTECH",
+        "Parent Name": "Rajesh Sharma",
+        "Mobile Number": "9876543210",
+        "Email": "aarav@example.com",
+        "Batch": defaultBatchName,
       },
       {
-        name: "Jane Smith",
-        roll_no: "002",
-        class_level: "10",
-        parent_name: "John Smith",
-        parent_phone: "9876543211",
+        "Student Name": "Priya Verma",
+        "Roll No": "102",
+        "Class Level": "BTECH",
+        "Parent Name": "Suresh Verma",
+        "Mobile Number": "9876543211",
+        "Email": "priya@example.com",
+        "Batch": defaultBatchName,
       },
     ];
 
@@ -428,16 +502,19 @@ export default function BulkStudentUpload({
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Batch <span className="text-red-500">*</span></label>
+                <label className="text-xs font-bold text-slate-500 block mb-1">
+                  Batch {mapping["batch"] ? <span className="text-slate-400 font-normal">(Auto-mapped from file, or select override)</span> : <span className="text-red-500">*</span>}
+                </label>
                 <select
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-[#FF7043] focus:ring-2 focus:ring-[#FF7043]/20"
                   value={selectedBatch}
                   onChange={(e) => setSelectedBatch(e.target.value)}
                 >
-                  <option value="">None</option>
-                  {batches
-                    .filter((b: any) => !selectedDepartment || b.department_id === selectedDepartment)
-                    .map((b) => (
+                  <option value="">{mapping["batch"] ? "Use 'Batch' from Excel" : "Select a Batch..."}</option>
+                  {(selectedDepartment && batches.some((b: any) => b.department_id === selectedDepartment)
+                    ? batches.filter((b: any) => !b.department_id || b.department_id === selectedDepartment)
+                    : batches
+                  ).map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
