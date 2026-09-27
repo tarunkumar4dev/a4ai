@@ -134,113 +134,201 @@ export default function TeacherAssignmentsTab() {
   const [bulkFeedback, setBulkFeedback] = useState("");
   const [bulkGrading, setBulkGrading] = useState(false);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+  }, [user?.id, user?.email]);
 
   // ── Real-time subscription: refresh on any submission change ──
   useEffect(() => {
-    if (!instituteId) return;
+    if (!instituteId && !user?.id) return;
+    const channelKey = `teacher-assignments-${instituteId || user?.id}`;
     const channel = supabase
-      .channel(`teacher-assignments-${instituteId}`)
+      .channel(channelKey)
       .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => loadData())
       .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => loadData())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [instituteId]);
+  }, [instituteId, user?.id]);
 
   async function loadData() {
     setLoading(true);
     try {
-      const { data: member } = await supabase
-        .from("institute_members")
-        .select("institute_id")
-        .eq("user_id", user?.id)
-        .eq("status", "active")
-        .limit(1)
-        .single();
+      let instId: string | null = null;
 
-      if (!member) { setLoading(false); return; }
-      const instId = member.institute_id;
-      setInstituteId(instId);
+      if (user?.id) {
+        // 1. Look up by user_id in institute_members
+        const { data: member } = await supabase
+          .from("institute_members")
+          .select("institute_id")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle();
 
-      // Get assigned batches (teacher_batches) or fallback to department
-      const { data: tb } = await supabase
-        .from("teacher_batches").select("batch_id")
-        .eq("teacher_id", user?.id).eq("institute_id", instId);
+        if (member?.institute_id) {
+          instId = member.institute_id;
+        } else if (user?.email) {
+          // 1b. Look up by user_email in institute_members
+          const { data: emailMember } = await supabase
+            .from("institute_members")
+            .select("id, institute_id, user_id")
+            .eq("user_email", user.email)
+            .limit(1)
+            .maybeSingle();
 
-      let batchRows: any[] = [];
-      if (tb && tb.length > 0) {
+          if (emailMember?.institute_id) {
+            instId = emailMember.institute_id;
+            if (!emailMember.user_id) {
+              await supabase
+                .from("institute_members")
+                .update({ user_id: user.id })
+                .eq("id", emailMember.id);
+            }
+          }
+        }
+
+        // 2. Check if owner of an institute directly
+        if (!instId) {
+          const { data: ownerInst } = await supabase
+            .from("institutes")
+            .select("id")
+            .eq("owner_id", user.id)
+            .limit(1)
+            .maybeSingle();
+
+          if (ownerInst?.id) {
+            instId = ownerInst.id;
+          }
+        }
+      }
+
+      if (instId) {
+        setInstituteId(instId);
+      }
+
+      // Fetch assignments: query either by institute_id OR created_by = user.id
+      let asgnQuery = supabase.from("assignments").select("*");
+      if (instId && user?.id) {
+        asgnQuery = asgnQuery.or(`institute_id.eq.${instId},created_by.eq.${user.id}`);
+      } else if (instId) {
+        asgnQuery = asgnQuery.eq("institute_id", instId);
+      } else if (user?.id) {
+        asgnQuery = asgnQuery.eq("created_by", user.id);
+      }
+      const { data: asgns, error: asgnsErr } = await asgnQuery.order("created_at", { ascending: false });
+
+      if (asgnsErr) {
+        console.error("Error fetching assignments:", asgnsErr);
+      }
+
+      // 1. Fetch institute batches
+      let batchRows: Batch[] = [];
+      if (instId) {
         const { data: bRows } = await supabase
-          .from("batches").select("id, name, class_level")
-          .in("id", tb.map(t => t.batch_id)).eq("is_active", true).order("name");
-        batchRows = bRows || [];
-      } else {
-        // Fallback: all batches in institute
-        const { data: bRows } = await supabase
-          .from("batches").select("id, name, class_level")
-          .eq("institute_id", instId).eq("is_active", true).order("name");
+          .from("batches")
+          .select("id, name, class_level")
+          .eq("institute_id", instId)
+          .order("name");
         batchRows = bRows || [];
       }
+
+      // 2. Ensure any batch_id referenced in existing assignments is included
+      const foundBatchIds = new Set(batchRows.map(b => b.id));
+      const missingBatchIds = (asgns || [])
+        .map(a => a.batch_id)
+        .filter(id => id && !foundBatchIds.has(id));
+
+      if (missingBatchIds.length > 0) {
+        const { data: moreBatches } = await supabase
+          .from("batches")
+          .select("id, name, class_level")
+          .in("id", missingBatchIds);
+
+        if (moreBatches) {
+          moreBatches.forEach(b => {
+            if (!foundBatchIds.has(b.id)) {
+              batchRows.push(b);
+              foundBatchIds.add(b.id);
+            }
+          });
+        }
+      }
+
       setBatches(batchRows);
 
-      const { data: asgns } = await supabase
-        .from("assignments")
-        .select("*")
-        .eq("institute_id", instId)
-        .order("created_at", { ascending: false });
+      const batchMap: Record<string, string> = {};
+      batchRows.forEach(b => {
+        batchMap[b.id] = b.name;
+      });
 
-      if (asgns && batchRows) {
-        const batchMap: Record<string, string> = {};
-        batchRows.forEach(b => batchMap[b.id] = b.name);
+      const asgIds = (asgns || []).map(a => a.id);
+      const countMap: Record<string, { submitted: number; graded: number; late: number }> = {};
 
-        const asgIds = asgns.map(a => a.id);
+      if (asgIds.length > 0) {
         const { data: subs } = await supabase
           .from("submissions")
           .select("assignment_id, status, submitted_at")
-          .in("assignment_id", asgIds.length > 0 ? asgIds : ["_"]);
+          .in("assignment_id", asgIds);
 
-        const countMap: Record<string, { submitted: number; graded: number; late: number }> = {};
-        if (subs) subs.forEach(s => {
-          if (!countMap[s.assignment_id]) countMap[s.assignment_id] = { submitted: 0, graded: 0, late: 0 };
-          countMap[s.assignment_id].submitted++;
-          if (s.status === "graded") countMap[s.assignment_id].graded++;
-          // Check if late
-          const asgn = asgns.find(a => a.id === s.assignment_id);
-          if (asgn?.deadline && new Date(s.submitted_at) > new Date(asgn.deadline)) {
-            countMap[s.assignment_id].late++;
-          }
-        });
+        if (subs) {
+          subs.forEach(s => {
+            if (!countMap[s.assignment_id]) {
+              countMap[s.assignment_id] = { submitted: 0, graded: 0, late: 0 };
+            }
+            countMap[s.assignment_id].submitted++;
+            if (s.status === "graded") countMap[s.assignment_id].graded++;
+            const asgn = asgns?.find(a => a.id === s.assignment_id);
+            if (asgn?.deadline && new Date(s.submitted_at) > new Date(asgn.deadline)) {
+              countMap[s.assignment_id].late++;
+            }
+          });
+        }
+      }
 
+      const batchStudentCount: Record<string, number> = {};
+      if (instId) {
         const { data: studentCounts } = await supabase
           .from("students")
           .select("batch_id")
           .eq("institute_id", instId)
           .eq("is_active", true);
-        const batchStudentCount: Record<string, number> = {};
-        if (studentCounts) studentCounts.forEach(s => {
-          if (s.batch_id) batchStudentCount[s.batch_id] = (batchStudentCount[s.batch_id] || 0) + 1;
-        });
 
-        setAssignments(asgns.map(a => ({
+        if (studentCounts) {
+          studentCounts.forEach(s => {
+            if (s.batch_id) {
+              batchStudentCount[s.batch_id] = (batchStudentCount[s.batch_id] || 0) + 1;
+            }
+          });
+        }
+      }
+
+      setAssignments(
+        (asgns || []).map(a => ({
           ...a,
-          batch_name: batchMap[a.batch_id] || "—",
+          batch_name: batchMap[a.batch_id] || "Batch",
           submission_count: countMap[a.id]?.submitted || 0,
           graded_count: countMap[a.id]?.graded || 0,
           late_count: countMap[a.id]?.late || 0,
           total_students: batchStudentCount[a.batch_id] || 0,
-        })));
-      }
-    } catch (e) { console.error(e); }
+        }))
+      );
+    } catch (e) {
+      console.error("loadData error in TeacherAssignmentsTab:", e);
+    }
     setLoading(false);
   }
 
   /* ── Create / Update Assignment ── */
   async function handleSave() {
-    if (!form.title.trim() || !form.batch_id || !user || !instituteId) return;
+    if (!form.title.trim() || !form.batch_id || !user) {
+      toast.error("Please fill in title and select a batch.");
+      return;
+    }
     setCreating(true);
     try {
       let fileUrl = null, fileName = null;
       if (form.file) {
-        const path = `${instituteId}/${Date.now()}_${form.file.name}`;
+        const path = `${instituteId || user.id}/${Date.now()}_${form.file.name}`;
         const { error: upErr } = await supabase.storage
           .from("assignments")
           .upload(path, form.file, { contentType: "application/pdf" });
@@ -265,7 +353,7 @@ export default function TeacherAssignmentsTab() {
       } else {
         const { error } = await supabase.from("assignments").insert({
           ...payload,
-          institute_id: instituteId,
+          institute_id: instituteId || null,
           batch_id: form.batch_id,
           created_by: user.id,
           status: "active",
