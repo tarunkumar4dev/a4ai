@@ -1,11 +1,29 @@
 // src/components/ModuleCreator.tsx
+// ──────────────────────────────────────────────────────────────────────
+// a4ai — AI Module Creator
+// Clean, reliable & modern UI for generating AI modules from PDF/DOCX
+// ──────────────────────────────────────────────────────────────────────
+
 import React, { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, FileText, Loader2, CheckCircle, AlertCircle, BookOpen, Sparkles, X, Layers, Hash, BookCheck } from 'lucide-react';
+import {
+  Upload,
+  FileText,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  Sparkles,
+  X,
+  BookOpen,
+  GraduationCap,
+  BookCheck,
+  Layers,
+  Hash,
+  Zap,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
 
-// Backend API URL — local dev mein localhost, production mein Vercel URL
 const API_URL = (
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE ||
@@ -18,6 +36,42 @@ interface ModuleCreatorProps {
 
 type ProcessingStatus = 'idle' | 'uploading' | 'creating' | 'processing' | 'ready' | 'failed';
 
+const SUBJECTS = [
+  'Mathematics',
+  'Physics',
+  'Chemistry',
+  'Biology',
+  'Science',
+  'English',
+  'Hindi',
+  'Social Science',
+  'Computer Science',
+  'Economics',
+  'Accountancy',
+  'Business Studies',
+];
+
+const SCHOOL_LEVELS = [
+  { value: 'Less than 9th', label: 'Less than 9th' },
+  { value: '9', label: 'Class 9' },
+  { value: '10', label: 'Class 10' },
+  { value: '11', label: 'Class 11' },
+  { value: '12', label: 'Class 12' },
+];
+
+const DEGREE_LEVELS = [
+  'B.Tech',
+  'BCA',
+  'B.Sc',
+  'B.A',
+  'B.Com',
+  'BBA',
+  'M.Tech',
+  'MCA',
+  'MBA',
+  'Other',
+];
+
 export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated }) => {
   const [file, setFile] = useState<File | null>(null);
   const [subject, setSubject] = useState('');
@@ -28,19 +82,26 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
   const [moduleData, setModuleData] = useState<any>(null);
   const [error, setError] = useState('');
 
+  const isSubmitting = status === 'uploading' || status === 'creating' || status === 'processing';
+  const resolvedSubject = subject === 'Other' ? customSubject.trim() : subject;
+  const canSubmit = Boolean(file && resolvedSubject && classLevel) && !isSubmitting;
+
+  /* ── Dropzone ── */
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
     },
     maxFiles: 1,
-    maxSize: 50 * 1024 * 1024, // 50MB
+    maxSize: 50 * 1024 * 1024,
+    disabled: isSubmitting,
     onDrop: (acceptedFiles) => {
       if (acceptedFiles.length > 0) {
         setFile(acceptedFiles[0]);
         setError('');
         setModuleData(null);
         setStatus('idle');
+        setStatusMessage('');
       }
     },
     onDropRejected: (rejections) => {
@@ -49,10 +110,11 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
     },
   });
 
+  /* ── Submit Pipeline ── */
   const handleSubmit = async () => {
     const finalSubject = subject === 'Other' && customSubject.trim() ? customSubject.trim() : subject;
     if (!file || !finalSubject || !classLevel) {
-      setError('Please fill all fields and upload a document');
+      setError('Please select subject, class/level, and upload a document.');
       return;
     }
 
@@ -60,16 +122,16 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
     setModuleData(null);
 
     try {
-      // ── Step 1: Get teacher_id from Supabase auth ──
+      // 1. Get teacher_id from Supabase auth
       const { data: sessionData } = await supabase.auth.getSession();
       const teacherId = sessionData?.session?.user?.id;
       if (!teacherId) {
-        setError('Please login first');
+        setError('Please login first to create modules.');
         return;
       }
       const accessToken = sessionData?.session?.access_token || '';
 
-      // ── Step 2: Upload file to Supabase Storage ──
+      // 2. Upload file to Supabase Storage
       setStatus('uploading');
       setStatusMessage('Uploading document to secure storage...');
 
@@ -79,16 +141,13 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
 
       const { error: uploadError } = await supabase.storage
         .from('Modules')
-        .upload(storagePath, file, {
-          contentType: file.type,
-          upsert: false,
-        });
+        .upload(storagePath, file, { contentType: file.type, upsert: false });
 
       if (uploadError) {
         throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
-      // ── Step 3: Create module row in backend ──
+      // 3. Create module row in backend
       setStatus('creating');
       setStatusMessage('Registering module in database...');
 
@@ -96,12 +155,12 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           storage_path: storagePath,
           original_filename: file.name,
-          subject: subject === 'Other' && customSubject.trim() ? customSubject.trim() : subject,
+          subject: finalSubject,
           class_level: classLevel,
           teacher_id: teacherId,
           file_type: fileExt,
@@ -116,25 +175,25 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
 
       const moduleId = createData.module_id;
 
-      // ── Step 4: Process module (extract + summarize + chunk) ──
+      // 4. Process module (extract + summarize + chunk)
       setStatus('processing');
-      setStatusMessage('Analyzing document with AI (extracting topics, concepts & formulas)...');
+      setStatusMessage('AI is analyzing the document (extracting topics, formulas & concepts)...');
 
       const processRes = await fetch(`${API_URL}/modules/process`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ module_id: moduleId }),
       });
 
       const processData = await processRes.json();
       if (!processData.success) {
-        throw new Error(processData.error || processData.detail || 'Processing failed');
+        throw new Error(processData.error || processData.detail || 'AI processing failed');
       }
 
-      // ── Done! ──
+      // Done
       setStatus('ready');
       setStatusMessage('Module created and indexed successfully!');
       setModuleData(processData);
@@ -143,277 +202,265 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
         onModuleCreated(processData);
       }
 
-      // Reset form
+      // Reset input form
       setFile(null);
       setSubject('');
       setCustomSubject('');
       setClassLevel('');
-
     } catch (err: any) {
       console.error('Module creation error:', err);
       setStatus('failed');
-      setError(err.message || 'Something went wrong');
+      setError(err.message || 'Something went wrong while generating the module.');
       setStatusMessage('');
     }
   };
 
-  const isSubmitting = status !== 'idle' && status !== 'failed';
+  const resetAll = () => {
+    setFile(null);
+    setSubject('');
+    setCustomSubject('');
+    setClassLevel('');
+    setStatus('idle');
+    setStatusMessage('');
+    setModuleData(null);
+    setError('');
+  };
 
   return (
-    <div className="glass-panel rounded-3xl sm:rounded-[32px] p-5 sm:p-7 border border-slate-200/60 dark:border-white/10 shadow-sm relative overflow-hidden backdrop-blur-xl">
-      {/* Background ambient gradient glow */}
-      <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-indigo-500/10 via-blue-500/5 to-transparent rounded-full filter blur-3xl pointer-events-none" />
-
+    <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-200/60 dark:border-white/5 relative z-10">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white shrink-0">
-            <BookOpen className="w-5 h-5" />
+      <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+            <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                Create New Module
-              </h2>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/40 uppercase tracking-wider">
-                <Sparkles className="w-3 h-3 text-indigo-500" />
-                Module Generator
-              </span>
-            </div>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-              Transform textbook chapters & notes into interactive learning modules
+            <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+              Create AI Module
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              Upload textbook chapter, notes, or PDF to extract smart study notes
             </p>
           </div>
         </div>
       </div>
 
-      {/* Subject & Class Selectors */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 relative z-10">
-        <div>
-          <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-            Subject
-          </label>
-          <div className="relative">
+      {/* Form Fields */}
+      <div className="space-y-4">
+        {/* Subject & Class Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {/* Subject Dropdown */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+              <BookCheck className="w-3.5 h-3.5 text-orange-500" />
+              <span>Subject</span>
+            </label>
             <select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               disabled={isSubmitting}
-              className="w-full bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-100 rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold shadow-xs outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all cursor-pointer disabled:opacity-60"
+              className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-orange-500/20 cursor-pointer disabled:opacity-60"
             >
-              <option value="">Select Subject</option>
-              <option value="Mathematics">Mathematics</option>
-              <option value="Physics">Physics</option>
-              <option value="Chemistry">Chemistry</option>
-              <option value="Biology">Biology</option>
-              <option value="Science">Science</option>
-              <option value="English">English</option>
-              <option value="Hindi">Hindi</option>
-              <option value="Social Science">Social Science</option>
-              <option value="Computer Science">Computer Science</option>
-              <option value="Economics">Economics</option>
-              <option value="Accountancy">Accountancy</option>
-              <option value="Business Studies">Business Studies</option>
+              <option value="">Select subject...</option>
+              {SUBJECTS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
               <option value="Other">Other (Custom Subject)</option>
             </select>
-          </div>
-          {subject === 'Other' && (
-            <input
-              type="text"
-              placeholder="e.g. Operating Systems, DSA..."
-              value={customSubject}
-              onChange={(e) => setCustomSubject(e.target.value)}
-              disabled={isSubmitting}
-              className="w-full mt-2 bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-100 rounded-2xl px-3.5 py-2 text-xs sm:text-sm font-semibold shadow-xs outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all placeholder:text-slate-400"
-            />
-          )}
-        </div>
 
-        <div>
-          <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-            Class / Degree
-          </label>
-          <div className="relative">
+            {subject === 'Other' && (
+              <input
+                type="text"
+                placeholder="e.g. Operating Systems, Data Structures..."
+                value={customSubject}
+                onChange={(e) => setCustomSubject(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full mt-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-orange-500/20"
+              />
+            )}
+          </div>
+
+          {/* Class / Degree Dropdown */}
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+              <GraduationCap className="w-3.5 h-3.5 text-orange-500" />
+              <span>Class / Degree</span>
+            </label>
             <select
               value={classLevel}
               onChange={(e) => setClassLevel(e.target.value)}
               disabled={isSubmitting}
-              className="w-full bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/80 text-slate-800 dark:text-slate-100 rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold shadow-xs outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all cursor-pointer disabled:opacity-60"
+              className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-orange-500/20 cursor-pointer disabled:opacity-60"
             >
-              <option value="">Select Class / Level</option>
-              <option value="Less than 9th">Less than 9th</option>
-              <option value="9">Class 9</option>
-              <option value="10">Class 10</option>
-              <option value="11">Class 11</option>
-              <option value="12">Class 12</option>
+              <option value="">Select class or degree...</option>
+              <optgroup label="School">
+                {SCHOOL_LEVELS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </optgroup>
               <optgroup label="Higher Education / Degree">
-                <option value="B.Tech">B.Tech</option>
-                <option value="BCA">BCA</option>
-                <option value="B.Sc">B.Sc</option>
-                <option value="B.A">B.A</option>
-                <option value="B.Com">B.Com</option>
-                <option value="BBA">BBA</option>
-                <option value="M.Tech">M.Tech</option>
-                <option value="MCA">MCA</option>
-                <option value="MBA">MBA</option>
-                <option value="Other">Other</option>
+                {DEGREE_LEVELS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
               </optgroup>
             </select>
           </div>
         </div>
-      </div>
 
-      {/* File Dropzone */}
-      <div className="relative z-10 mb-4">
-        <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-          Document File (PDF / DOCX)
-        </label>
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-2xl sm:rounded-3xl p-6 sm:p-7 text-center cursor-pointer transition-all duration-300 relative group overflow-hidden ${
-            file
-              ? 'border-emerald-500/80 bg-emerald-500/5 dark:bg-emerald-950/20 shadow-xs'
-              : isDragActive
-              ? 'border-indigo-500 bg-indigo-500/10'
-              : 'border-slate-200 dark:border-slate-700/80 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/70 dark:bg-slate-900/40 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20'
-          } ${isSubmitting ? 'pointer-events-none opacity-60' : ''}`}
+        {/* File Dropzone */}
+        <div>
+          <label className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+            <Upload className="w-3.5 h-3.5 text-orange-500" />
+            <span>Document (PDF / DOCX)</span>
+          </label>
+
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+              file
+                ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                : isDragActive
+                ? 'border-orange-500 bg-orange-50/40 dark:bg-orange-950/20'
+                : 'border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 hover:border-orange-400 hover:bg-orange-50/20'
+            } ${isSubmitting ? 'pointer-events-none opacity-60' : ''}`}
+          >
+            <input {...getInputProps()} />
+
+            {file ? (
+              <div className="flex items-center justify-between gap-3 text-left">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-black text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate">
+                      {file.name}
+                    </p>
+                    <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB • Ready to analyze
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFile(null);
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
+                  title="Remove file"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-2">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/50 text-orange-600 flex items-center justify-center mb-2">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <p className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200">
+                  {isDragActive ? 'Drop your document here' : 'Click or drag & drop textbook chapter'}
+                </p>
+                <p className="text-[11px] text-slate-400 font-medium mt-1">
+                  Supports PDF or DOCX (up to 50 MB)
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Generate Button */}
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          className="w-full py-3.5 px-5 rounded-xl font-black text-xs sm:text-sm text-white transition-all shadow-md active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+          style={{ background: 'linear-gradient(135deg, #FF7043, #E64A19)' }}
         >
-          <input {...getInputProps()} />
-          {file ? (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-2">
-              <div className="flex items-center gap-3 text-left">
-                <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="font-extrabold text-sm text-slate-800 dark:text-slate-100 truncate max-w-[200px] sm:max-w-[280px]">
-                    {file.name}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    {(file.size / 1024 / 1024).toFixed(2)} MB • Ready to analyze
-                  </p>
-                </div>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              <span>{statusMessage || 'Processing document with AI...'}</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4" />
+              <span>Generate AI Module</span>
+            </>
+          )}
+        </button>
+
+        {/* Status indicator while loading */}
+        {isSubmitting && (
+          <div className="p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 rounded-xl flex items-center gap-2 text-xs font-bold text-orange-800 dark:text-orange-300 animate-pulse">
+            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-orange-600" />
+            <span>{statusMessage}</span>
+          </div>
+        )}
+
+        {/* Error Alert */}
+        {error && (
+          <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl flex items-start gap-2.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-black">Creation Failed</p>
+              <p className="mt-0.5">{error}</p>
+            </div>
+            <button
+              onClick={() => setError('')}
+              className="p-1 hover:bg-rose-100 rounded text-rose-400 hover:text-rose-600"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        {/* Success Card */}
+        {moduleData && status === 'ready' && (
+          <div className="p-4 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/60 dark:bg-emerald-950/30 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <h4 className="font-black text-xs sm:text-sm text-emerald-900 dark:text-emerald-200">
+                  {moduleData.title || 'Module Generated Successfully!'}
+                </h4>
               </div>
               <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFile(null);
-                }}
-                className="p-1.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                title="Remove file"
+                onClick={resetAll}
+                className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                + New Module
               </button>
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-2">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-3 shadow-inner group-hover:scale-105 transition-transform border border-indigo-100 dark:border-indigo-900/40">
-                <Upload className="w-6 h-6" />
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-white/80 dark:bg-slate-900/80 p-2 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                <p className="text-[10px] font-bold uppercase text-slate-400">Pages</p>
+                <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                  {moduleData.page_count ?? '—'}
+                </p>
               </div>
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                Drag & drop your document here, or <span className="text-indigo-600 dark:text-indigo-400 underline decoration-indigo-400/40">browse</span>
-              </p>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">
-                  PDF
-                </span>
-                <span className="px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">
-                  DOCX
-                </span>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-                  Up to 50MB
-                </span>
+              <div className="bg-white/80 dark:bg-slate-900/80 p-2 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                <p className="text-[10px] font-bold uppercase text-slate-400">Topics</p>
+                <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                  {moduleData.topics_count ?? '—'}
+                </p>
+              </div>
+              <div className="bg-white/80 dark:bg-slate-900/80 p-2 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                <p className="text-[10px] font-bold uppercase text-slate-400">Chunks</p>
+                <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                  {moduleData.chunks_count ?? '—'}
+                </p>
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Submit Button */}
-      <button
-        onClick={handleSubmit}
-        disabled={!file || !(subject === 'Other' ? customSubject.trim() : subject) || !classLevel || isSubmitting}
-        className={`w-full py-3.5 px-6 rounded-2xl font-black text-sm tracking-wide transition-all shadow-md active:scale-[0.99] flex items-center justify-center gap-2 ${
-          !file || !(subject === 'Other' ? customSubject.trim() : subject) || !classLevel || isSubmitting
-            ? 'bg-slate-200 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600 cursor-not-allowed shadow-none'
-            : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 text-white shadow-indigo-500/25 hover:shadow-indigo-500/35 hover:-translate-y-0.5 cursor-pointer'
-        }`}
-      >
-        {!isSubmitting ? (
-          <>
-            <Sparkles className="w-4 h-4" />
-            <span>Generate AI Module</span>
-          </>
-        ) : (
-          <span className="flex items-center justify-center gap-2.5">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>{status === 'uploading' ? 'Uploading...' : status === 'creating' ? 'Saving...' : 'Processing with AI...'}</span>
-          </span>
+          </div>
         )}
-      </button>
-
-      {/* Status Progress Pill */}
-      {statusMessage && (
-        <div
-          className={`mt-4 p-3 rounded-2xl flex items-center gap-2.5 text-xs sm:text-sm font-bold border transition-all ${
-            status === 'ready'
-              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50'
-              : status === 'failed'
-              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50'
-              : 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/50'
-          }`}
-        >
-          {status === 'ready' ? (
-            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-          ) : status === 'failed' ? (
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-          ) : (
-            <Loader2 className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />
-          )}
-          <span className="truncate">{statusMessage}</span>
-        </div>
-      )}
-
-      {/* Error Alert */}
-      {error && (
-        <div className="mt-4 p-3.5 bg-rose-500/10 border border-rose-200 dark:border-rose-900/40 rounded-2xl flex items-start gap-2.5 text-xs sm:text-sm font-semibold text-rose-700 dark:text-rose-300">
-          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Success Analytics Card */}
-      {moduleData && status === 'ready' && (
-        <div className="mt-5 p-4 sm:p-5 rounded-2xl border border-emerald-300/80 dark:border-emerald-800/50 bg-emerald-500/10 dark:bg-emerald-950/20 shadow-xs">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            <h4 className="font-extrabold text-sm sm:text-base text-emerald-900 dark:text-emerald-200">
-              Module Ready: {moduleData.title || 'Processed Document'}
-            </h4>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2.5 mt-3 pt-3 border-t border-emerald-200/60 dark:border-emerald-800/40">
-            <div className="p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-emerald-100 dark:border-emerald-900/30 text-center">
-              <p className="text-[10px] font-bold uppercase text-slate-400">Pages</p>
-              <p className="text-base font-black text-slate-800 dark:text-slate-100 mt-0.5">
-                {moduleData.page_count ?? '—'}
-              </p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-emerald-100 dark:border-emerald-900/30 text-center">
-              <p className="text-[10px] font-bold uppercase text-slate-400">Topics</p>
-              <p className="text-base font-black text-slate-800 dark:text-slate-100 mt-0.5">
-                {moduleData.topics_count ?? '—'}
-              </p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-emerald-100 dark:border-emerald-900/30 text-center">
-              <p className="text-[10px] font-bold uppercase text-slate-400">Chunks</p>
-              <p className="text-base font-black text-slate-800 dark:text-slate-100 mt-0.5">
-                {moduleData.chunks_count ?? '—'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };

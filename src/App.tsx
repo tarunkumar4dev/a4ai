@@ -19,6 +19,7 @@ import { CoinProvider } from "@/context/CoinContext";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
+import HODDashboardPage from "@/pages/hod/HODDashboardPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 /* ---------- Vercel Analytics ---------- */
@@ -292,6 +293,10 @@ const App = () => {
                           <MyCommunityQuizzesPage />
                         </RoleAuthGate>
                       } />
+                        
+
+                      <Route path="/hod-dashboard" element={<HODDashboardPage />} />
+                      <Route path="/admin" element={<AdminDashboardPage />} /> 
                       <Route path="/q/:slug" element={<CommunityQuizPlayPage />} />
                       <Route path="/institute/students/:studentId" element={<StudentProfilePage />} />
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />

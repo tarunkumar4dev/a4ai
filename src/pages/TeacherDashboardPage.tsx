@@ -1573,24 +1573,26 @@ function AssignmentsWithWorksheet({ initialSubTab = 'assignments' }: { initialSu
 
   return (
     <div className="space-y-4 animate-pop">
-      <div className="flex gap-1.5 bg-white dark:bg-slate-800 rounded-xl p-1 border border-gray-200 dark:border-slate-700 w-fit shadow-sm">
+      <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-2xl p-1.5 border border-slate-200/80 dark:border-slate-700 w-fit shadow-xs mb-2">
         <button
           onClick={() => setSubTab('assignments')}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${subTab === 'assignments'
-              ? 'bg-indigo-500 text-white shadow-sm'
-              : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-            }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+            subTab === 'assignments'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
         >
-          📋 Assignments
+          <span>📋 Assignments</span>
         </button>
         <button
           onClick={() => setSubTab('worksheet')}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${subTab === 'worksheet'
-              ? 'bg-violet-500 text-white shadow-sm'
-              : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 hover:bg-gray-50 dark:hover:bg-slate-700'
-            }`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer ${
+            subTab === 'worksheet'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          }`}
         >
-          📝 Worksheet Generator
+          <span>📝 Worksheet Generator</span>
         </button>
       </div>
       {subTab === 'assignments' && <TeacherAssignmentsTab />}
