@@ -33,10 +33,10 @@ function CaseCard({ c }: { c: typeof cases[0] }) {
 
         <div className="relative z-10 flex flex-col h-full bg-transparent">
           <h3 className="text-lg font-bold mb-1 text-neutral-900">{c.org}</h3>
-          <p className="text-sm font-bold mb-3 text-emerald-600">{c.result}</p>
+          <p className="text-sm font-bold mb-3" style={{ color: "#f75961" }}>{c.result}</p>
           <p className="text-sm leading-relaxed mb-6 flex-grow text-neutral-500">{c.blurb}</p>
           
-          <button className="flex items-center gap-1.5 text-sm font-semibold transition-colors mt-auto w-fit text-blue-600 hover:text-blue-700 bg-transparent">
+          <button className="flex items-center gap-1.5 text-sm font-semibold transition-colors mt-auto w-fit text-[#f75961] hover:text-[#e8454d] bg-transparent cursor-pointer">
             View case study <ArrowRight className="h-4 w-4" />
           </button>
         </div>

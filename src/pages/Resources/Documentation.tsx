@@ -4,8 +4,7 @@ import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
 import { Link } from "react-router-dom";
 import { BookOpen, Search, Server, Rocket, FileText, TerminalSquare } from "lucide-react";
 
-const BRAND_GRADIENT =
-  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
+const BRAND_GRADIENT = "#f75961";
 
 const SECTIONS = [
   {
@@ -90,17 +89,10 @@ const GlobalStyles = () => {
         forced-color-adjust: none !important;
       }
 
-      @keyframes fast-gradient {
-        0% { background-position: 0% center; }
-        100% { background-position: -200% center; }
-      }
       .running-gradient-text {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: fast-gradient 4s linear infinite;
+        color: #f75961 !important;
+        background: none !important;
+        -webkit-text-fill-color: #f75961 !important;
         display: inline-block;
         forced-color-adjust: none !important;
       }
@@ -187,8 +179,8 @@ export default function Documentation() {
           {filteredSections.map((s, idx) => (
             <motion.div key={s.title} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }} className="ag-card p-6 bg-white">
               <div className="flex items-center gap-3 mb-3 bg-transparent">
-                <div className="p-2 rounded-lg" style={{ background: "rgba(59,130,246,0.08)" }}>
-                  <s.icon className="h-5 w-5" style={{ color: "#3b82f6" }} />
+                <div className="p-2 rounded-lg" style={{ background: "#fff0f1", border: "1px solid #fecdd3" }}>
+                  <s.icon className="h-5 w-5" style={{ color: "#f75961" }} />
                 </div>
                 <h3 className="text-lg font-bold" style={{ color: "#111111" }}>{s.title}</h3>
               </div>
@@ -196,7 +188,7 @@ export default function Documentation() {
               <ul className="space-y-3.5 bg-transparent">
                 {s.items.map((i) => (
                   <li key={i.t} className="group bg-transparent">
-                    <Link to={i.to} className="flex items-center text-sm font-semibold transition-colors duration-150 text-blue-600 hover:text-blue-700 bg-transparent">
+                    <Link to={i.to} className="flex items-center text-sm font-semibold transition-colors duration-150 text-[#f75961] hover:text-[#e8454d] bg-transparent">
                       <FileText className="mr-2 h-4 w-4 opacity-60" />
                       {i.t}
                     </Link>

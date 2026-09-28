@@ -86,7 +86,7 @@ const GlobalStyles = () => {
 /* --- Light Visual Design Tokens --- */
 const txtMuted = "#5f6368";
 const txtHead = "#111111";
-const accentColor = "#3b82f6";
+const accentColor = "#f75961";
 
 function ResourceHubCard({ c }: { c: typeof cards[0] }) {
   const mx = useMotionValue(120);
@@ -107,10 +107,10 @@ function ResourceHubCard({ c }: { c: typeof cards[0] }) {
       <motion.span
         aria-hidden
         className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-        style={{ background: useMotionTemplate`radial-gradient(200px 160px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
+        style={{ background: useMotionTemplate`radial-gradient(200px 160px at ${mx}px ${my}px, rgba(247,89,97,0.06), transparent 80%)` }}
       />
       <div className="relative z-10 flex flex-col h-full bg-transparent">
-        <div className="relative flex h-12 w-12 items-center justify-center rounded-xl mb-4 bg-blue-50 border border-blue-100">
+        <div className="relative flex h-12 w-12 items-center justify-center rounded-xl mb-4 bg-[#fff0f1] border border-[#fecdd3]">
           <Icon className="h-6 w-6" style={{ color: accentColor }} />
         </div>
         <h3 className="text-lg font-bold mb-2" style={{ color: txtHead }}>{c.title}</h3>

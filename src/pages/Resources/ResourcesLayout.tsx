@@ -3,8 +3,7 @@ import React, { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, useMotionTemplate, useMotionValue, useReducedMotion } from "framer-motion";
 
-const BRAND_GRADIENT =
-  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
+const BRAND_GRADIENT = "#f75961";
 
 export default function ResourcesLayout({
   title,
@@ -27,17 +26,10 @@ export default function ResourcesLayout({
 
     const s = document.createElement("style");
     s.textContent = `
-      @keyframes fast-gradient {
-        0% { background-position: 0% center; }
-        100% { background-position: -200% center; }
-      }
       .running-gradient-text {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: fast-gradient 4s linear infinite;
+        color: #f75961 !important;
+        -webkit-text-fill-color: #f75961 !important;
+        background: none !important;
         display: inline-block;
         forced-color-adjust: none !important;
       }
@@ -60,9 +52,9 @@ export default function ResourcesLayout({
 
       /* Active Link Navigation Pill State */
       .active-pill-forced {
-        background: rgba(59, 130, 246, 0.1) !important;
-        border-color: rgba(59, 130, 246, 0.25) !important;
-        color: #1d4ed8 !important;
+        background: #fff0f1 !important;
+        border-color: #fecdd3 !important;
+        color: #f75961 !important;
       }
     `;
     document.head.appendChild(s);

@@ -69,40 +69,62 @@ const GlobalStyles = () => {
       @media (hover: hover) {
         .pricing-card:hover {
           transform: translateY(-4px) !important;
-          box-shadow: 0 20px 40px -12px rgba(59, 130, 246, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+          border-color: rgba(247, 89, 97, 0.4) !important;
+          box-shadow: 0 20px 40px -12px rgba(247, 89, 97, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
         }
       }
 
-      .btn-blue-gradient {
-        background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 85%) !important;
+      .btn-black-action {
+        background: #000000 !important;
         color: #ffffff !important;
-        border: 1px solid #60a5fa !important;
-        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25) !important;
+        border: 1px solid #000000 !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
       }
-      .btn-blue-gradient * { color: #ffffff !important; stroke: #ffffff !important; }
+      .btn-black-action * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) { 
-        .btn-blue-gradient:hover { 
-          filter: brightness(1.05); 
+        .btn-black-action:hover { 
+          background: #262626 !important; 
           transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.38) !important; 
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important; 
         } 
       }
 
+      .btn-peach-action {
+        background: #f75961 !important;
+        color: #ffffff !important;
+        border: 1px solid #f75961 !important;
+        box-shadow: 0 4px 14px rgba(247, 89, 97, 0.25) !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
+      }
+      .btn-peach-action * { color: #ffffff !important; stroke: #ffffff !important; }
+      @media (hover: hover) {
+        .btn-peach-action:hover {
+          background: #e8454d !important;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(247, 89, 97, 0.35) !important;
+        }
+      }
+
       .btn-white-action {
-        background: #ffffff !important;
-        color: #0f172a !important;
-        border: 1px solid #e2e8f0 !important;
+        background: #000000 !important;
+        color: #ffffff !important;
+        border: 1px solid #000000 !important;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
       }
-      .btn-white-action * { color: #0f172a !important; stroke: #0f172a !important; }
+      .btn-white-action * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) {
         .btn-white-action:hover {
-          background: #f8fafc !important;
-          border-color: #cbd5e1 !important;
+          background: #262626 !important;
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07) !important;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
         }
       }
 
@@ -110,11 +132,11 @@ const GlobalStyles = () => {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        background: #eff6ff;
-        border: 1px solid #dbeafe;
-        color: #1d4ed8;
+        background: #fff0f1;
+        border: 1px solid #fecdd3;
+        color: #f75961;
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 700;
         padding: 3px 10px;
         border-radius: 999px;
       }
@@ -294,7 +316,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
         "Calendar & scheduling",
         "Email + chat support",
       ],
-      buttonGradient: "btn-blue-gradient",
+      buttonGradient: "btn-black-action",
     },
     {
       name: "Plus",
@@ -315,7 +337,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
         "Priority phone support",
       ],
       popular: true,
-      buttonGradient: "btn-blue-gradient",
+      buttonGradient: "btn-black-action",
     },
     {
       name: "Enterprise",
@@ -337,7 +359,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
         "White-label branding",
         "Data migration assistance",
       ],
-      buttonGradient: "btn-blue-gradient",
+      buttonGradient: "btn-black-action",
       buttonLabel: { normal: "Talk to Sales", popular: "Talk to Sales" },
       isSales: true,
     },
@@ -417,11 +439,11 @@ export default function PricingPage() {
           <div className="mt-4 space-y-2">
             <p className="text-[15px] text-slate-600" style={hx}>
               Drag &amp; drop NCERT questions —{" "}
-              <span className="text-blue-600 font-semibold">paper ready in 10 sec.</span>
+              <span className="text-[#f75961] font-semibold">paper ready in 10 sec.</span>
             </p>
             <p className="text-[15px] text-slate-600" style={hx}>
               Let AI build it for you —{" "}
-              <span className="text-blue-600 font-semibold">done in under 2 minutes.</span>
+              <span className="text-[#f75961] font-semibold">done in under 2 minutes.</span>
             </p>
           </div>
 
@@ -470,7 +492,7 @@ export default function PricingPage() {
               role="switch"
               aria-checked={billingPeriod === "yearly"}
               onClick={() => setBillingPeriod((p) => (p === "monthly" ? "yearly" : "monthly"))}
-              className="relative h-6 w-12 rounded-full bg-[linear-gradient(90deg,#93c5fd,#3b82f6)] p-0 appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0 shadow-inner cursor-pointer"
+              className="relative h-6 w-12 rounded-full bg-[#f75961] p-0 appearance-none border-0 outline-none ring-0 focus:outline-none focus:ring-0 shadow-inner cursor-pointer"
             >
               <span
                 className={`absolute top-[4px] left-[4px] h-4 w-4 rounded-full bg-white shadow transition-transform duration-300 ${
@@ -484,7 +506,7 @@ export default function PricingPage() {
             >
               Yearly
             </span>
-            <span className="ml-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">
+            <span className="ml-1 rounded-full bg-[#fff0f1] px-2 py-0.5 text-[11px] font-bold text-[#f75961] border border-[#fecdd3]">
               2 months FREE
             </span>
           </div>
@@ -496,7 +518,7 @@ export default function PricingPage() {
             const price = plan.price[billingPeriod];
             const note = plan.priceNote?.[billingPeriod] || "";
             const isFree = plan.free;
-            const buttonGradient = plan.buttonGradient || "btn-blue-gradient";
+            const buttonGradient = plan.popular ? "btn-peach-action" : (plan.buttonGradient || "btn-black-action");
             const isSales = plan.isSales || false;
 
             /* per-day badge for yearly billing */
@@ -512,12 +534,12 @@ export default function PricingPage() {
               <div
                 key={i}
                 className={`pricing-card p-6 flex flex-col ${
-                  plan.popular ? "outline outline-2 outline-blue-300/60" : ""
+                  plan.popular ? "outline outline-2 outline-[#f75961]" : ""
                 } ${isSales ? "border-2 border-amber-300/60" : ""}`}
               >
                 {plan.popular && !isSales && (
                   <div
-                    className="absolute -top-3 right-4 rounded-full bg-blue-600/90 px-3 py-1 text-xs text-white shadow z-10"
+                    className="absolute -top-3 right-4 rounded-full bg-[#f75961] px-3 py-1 text-xs font-bold text-white shadow z-10"
                     style={hx}
                   >
                     Popular
@@ -525,7 +547,7 @@ export default function PricingPage() {
                 )}
                 {isSales && (
                   <div
-                    className="absolute -top-3 right-4 rounded-full bg-blue-600/90 px-3 py-1 text-xs text-white shadow z-10 flex items-center gap-1"
+                    className="absolute -top-3 right-4 rounded-full bg-black px-3 py-1 text-xs font-bold text-white shadow z-10 flex items-center gap-1"
                     style={hx}
                   >
                     <Phone size={12} /> Talk to Sales
@@ -533,7 +555,7 @@ export default function PricingPage() {
                 )}
                 {isFree && (
                   <div
-                    className="absolute -top-3 right-4 rounded-full bg-emerald-600/90 px-3 py-1 text-xs text-white shadow flex items-center gap-1 z-10"
+                    className="absolute -top-3 right-4 rounded-full bg-[#f75961] px-3 py-1 text-xs font-bold text-white shadow flex items-center gap-1 z-10"
                     style={hx}
                   >
                     <Gift size={11} /> Free Forever
@@ -603,7 +625,7 @@ export default function PricingPage() {
                       navigate("/payment");
                     }
                   }}
-                  className={`mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl px-4 text-[14px] cursor-pointer ${buttonGradient}`}
+                  className={`mt-3 inline-flex h-11 w-full items-center justify-center rounded-[14px] font-bold px-4 text-[14px] cursor-pointer ${buttonGradient}`}
                   style={hx}
                 >
                   {isSales
@@ -628,10 +650,10 @@ export default function PricingPage() {
                       <span className={`mt-[2px] flex-shrink-0 rounded-full p-1 ring-1 ${
                         isSales 
                           ? "bg-amber-50 ring-amber-200" 
-                          : "bg-sky-50 ring-sky-100"
+                          : "bg-[#fff0f1] ring-[#fecdd3]"
                       }`}>
                         <Check className={`h-3.5 w-3.5 ${
-                          isSales ? "text-amber-600" : "text-sky-600"
+                          isSales ? "text-amber-600" : "text-[#f75961]"
                         }`} />
                       </span>
                       <span className="text-[14px] text-slate-700">{f}</span>
@@ -690,7 +712,7 @@ export default function PricingPage() {
         <div className="mt-16 pricing-card p-6 sm:p-8 bg-white/95 rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-100 gap-4">
             <div>
-              <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100 mb-2">
+              <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-[#fff0f1] text-[#f75961] border border-[#fecdd3] mb-2">
                 <Building size={13} /> Institutional Plans Comparison
               </div>
               <h3 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight" style={hx}>
@@ -725,7 +747,7 @@ export default function PricingPage() {
                 style={hx}
               >
                 Yearly
-                <span className="rounded-full bg-emerald-500 text-white px-1.5 py-0.2 text-[10px]">
+                <span className="rounded-full bg-[#f75961] text-white px-1.5 py-0.2 text-[10px]">
                   FREE 2mo
                 </span>
               </button>
@@ -776,7 +798,7 @@ export default function PricingPage() {
                       <tr
                         className={`transition-colors duration-150 ${
                           r.highlight
-                            ? "bg-blue-50/30 hover:bg-blue-50/50"
+                            ? "bg-[#fff0f1]/40 hover:bg-[#fff0f1]/60"
                             : isSales
                             ? "bg-amber-50/20 hover:bg-amber-50/40"
                             : "hover:bg-slate-50/60"
@@ -790,7 +812,7 @@ export default function PricingPage() {
                             </span>
                             {r.highlight && (
                               <span
-                                className="rounded-full bg-blue-600 text-white text-[10px] font-semibold px-2 py-0.5 shadow-xs"
+                                className="rounded-full bg-[#f75961] text-white text-[10px] font-semibold px-2 py-0.5 shadow-xs"
                                 style={hx}
                               >
                                 Popular
@@ -845,7 +867,7 @@ export default function PricingPage() {
                           {r.action === "popular" ? (
                             <button
                               onClick={() => navigate("/payment")}
-                              className="btn-blue-gradient h-8 px-3.5 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
+                              className="btn-peach-action h-8 px-3.5 rounded-[12px] text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
                               style={hx}
                             >
                               Popular <ArrowRight size={12} />
@@ -853,7 +875,7 @@ export default function PricingPage() {
                           ) : r.action === "sales" ? (
                             <button
                               onClick={handleSalesClick}
-                              className="bg-slate-900 hover:bg-slate-800 text-white h-8 px-3.5 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm transition-colors"
+                              className="bg-slate-900 hover:bg-slate-800 text-white h-8 px-3.5 rounded-[12px] text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm transition-colors"
                               style={hx}
                             >
                               Talk to Sales <Mail size={12} />
@@ -861,7 +883,7 @@ export default function PricingPage() {
                           ) : r.action === "contact" ? (
                             <button
                               onClick={() => navigate("/contact")}
-                              className="btn-white-action h-8 px-3.5 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
+                              className="btn-black-action h-8 px-3.5 rounded-[12px] text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
                               style={hx}
                             >
                               Contact <ArrowRight size={12} />
@@ -869,7 +891,7 @@ export default function PricingPage() {
                           ) : (
                             <button
                               onClick={() => navigate("/payment")}
-                              className="btn-white-action h-8 px-3.5 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
+                              className="btn-peach-action h-8 px-3.5 rounded-[12px] text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
                               style={hx}
                             >
                               Get Started <ArrowRight size={12} />
@@ -934,7 +956,7 @@ export default function PricingPage() {
           </p>
           <button
             onClick={() => navigate("/signup")}
-            className="inline-flex items-center gap-2 rounded-xl px-8 py-3.5 text-[15px] btn-blue-gradient cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-[14px] px-8 py-3.5 text-[15px] font-bold btn-peach-action cursor-pointer shadow-md"
             style={hx}
           >
             <Sparkles size={16} />

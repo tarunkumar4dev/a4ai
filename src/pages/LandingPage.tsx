@@ -1,22 +1,21 @@
-import React, { lazy, Suspense, memo, useState, useEffect, useRef } from "react";
+import React, { lazy, Suspense, memo } from "react";
 import Navbar from "@/components/Navbar";
 import LandingHero from "@/components/LandingHero";
 const LandingDemo = lazy(() => import(/* webpackPrefetch: true */ "@/components/LandingDemo"));
 import Footer from "@/components/Footer";
-import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
-import { 
-  ArrowRight, 
-  Check, 
-  Sparkles, 
-  FileText, 
-  Download, 
-  Settings, 
-  User, 
-  Crown, 
-  ShieldCheck, 
-  Zap, 
-  Lock, 
+import {
+  ArrowRight,
+  Check,
+  Sparkles,
+  FileText,
+  Download,
+  Settings,
+  User,
+  Crown,
+  ShieldCheck,
+  Zap,
+  Lock,
   SlidersHorizontal,
   Brain,
   Youtube,
@@ -26,33 +25,6 @@ import {
   Wand2
 } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
-
-/* ──────────────────────────────────────────────────────────────
-   BRAND GRADIENT — green → cyan → blue → purple (Tests.Ever)
-   ────────────────────────────────────────────────────────────── */
-const BRAND_GRADIENT =
-  "linear-gradient(90deg, #34d399, #22d3ee, #818cf8, #c084fc, #34d399, #22d3ee, #818cf8, #c084fc)";
-const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
-
-/* ── Motion presets ── */
-const stackContainer = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.09, delayChildren: 0.05 } },
-};
-const stackItem = {
-  hidden: { opacity: 0, y: 26, scale: 0.94 },
-  show: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: { type: "spring", stiffness: 140, damping: 16, mass: 0.7 },
-  },
-};
-
-/* ── Math helpers ── */
-const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
-const smooth = (t: number) => t * t * (3 - 2 * t);
-const seg = (p: number, a: number, b: number) => clamp((p - a) / (b - a || 1), 0, 1);
 
 /* ── Data ── */
 const HOW_STEPS = Object.freeze([
@@ -100,236 +72,22 @@ class Safe extends React.Component<
   }
 }
 
-/* ══════════════════════════════════════════════
-   GLOBAL LIGHT ENGINE STYLES
-   ══════════════════════════════════════════════ */
-const GlobalStyles = () => {
-  useEffect(() => {
-    document.documentElement.style.background = "#ffffff";
-    document.documentElement.style.backgroundColor = "#ffffff";
-    document.documentElement.style.colorScheme = "light only";
-    document.documentElement.classList.remove("dark");
-
-    const s = document.createElement("style");
-    s.textContent = `
-      .lp { 
-        font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-        -webkit-font-smoothing: antialiased; 
-        background-color: #ffffff !important; 
-      }
-      
-      html, body, #root, main, section { background: #ffffff !important; background-color: #ffffff !important; }
-
-      .ag-card {
-        border-radius: 18px;
-        transition: transform 0.22s cubic-bezier(.16,1,.3,1), box-shadow 0.22s cubic-bezier(.16,1,.3,1);
-        position: relative; overflow: hidden;
-        background: rgba(255, 255, 255, 0.85) !important;
-        border: 1px solid rgba(0, 0, 0, 0.07) !important;
-        backdrop-filter: blur(30px) saturate(170%);
-        -webkit-backdrop-filter: blur(30px) saturate(170%);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(16,185,129,0.03), 0 2px 6px rgba(0,0,0,0.02);
-      }
-      @media (min-width: 640px) { 
-        .ag-card { 
-          border-radius: 20px; 
-          box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 6px 24px rgba(16,185,129,0.04), 0 2px 8px rgba(0,0,0,0.03);
-        } 
-      }
-      @media (hover: hover) {
-        .ag-card:hover { 
-          transform: translateY(-4px); 
-          box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 14px 38px rgba(16,185,129,0.09), 0 6px 16px rgba(0,0,0,0.04);
-        }
-      }
-
-      @keyframes fast-gradient {
-        0% { background-position: 0% center; }
-        100% { background-position: -200% center; }
-      }
-
-      .nlm-text {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        background-clip: text; animation: fast-gradient 4s linear infinite;
-      }
-
-      .btn-grad {
-        position:relative !important; overflow:hidden !important;
-        background: linear-gradient(180deg, #252629 0%, #0d0d0e 100%) !important;
-        background-color: #0d0d0e !important;
-        border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 14px rgba(0,0,0,0.3) !important;
-        color: #ffffff !important; font-weight:600 !important; border-radius: 14px !important;
-        transition: transform 0.2s, box-shadow 0.2s; -webkit-tap-highlight-color: transparent;
-        color-scheme: light only !important;
-        forced-color-adjust: none !important;
-      }
-      .btn-grad * { color: #ffffff !important; stroke: #ffffff !important; }
-      @media (hover: hover) {
-        .btn-grad:hover { transform:translateY(-2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 6px 20px rgba(0,0,0,0.45) !important; }
-      }
-
-      .btn-glass-light {
-        position:relative; overflow:hidden;
-        background: rgba(255, 255, 255, 0.75) !important;
-        background-color: rgba(255, 255, 255, 0.75) !important;
-        border: 1px solid #e5e7eb !important;
-        backdrop-filter: blur(12px) !important;
-        -webkit-backdrop-filter: blur(12px) !important;
-        border-radius: 14px; font-weight:600; transition: transform 0.2s; color: #202124 !important;
-        color-scheme: light only !important;
-        forced-color-adjust: none !important;
-        box-shadow: inset 0 1px 0 #ffffff, 0 2px 8px rgba(0,0,0,0.04) !important;
-      }
-      .btn-glass-light * { color: #202124 !important; stroke: #202124 !important; }
-
-      .nlm-pill {
-        display:inline-flex; align-items:center; gap:5px;
-        padding:5px 14px; border-radius:999px; font-size:13px; font-weight:500;
-        background: rgba(16,185,129,0.06); color: #047857; border: 1px solid rgba(16,185,129,0.14);
-      }
-
-      .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(70px); }
-      @media (min-width: 640px) { .sorb { filter: blur(100px); } }
-
-      .stat-n {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        background-clip: text; animation: fast-gradient 4s linear infinite;
-      }
-
-      @keyframes marquee-scroll { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
-      .marquee-track { 
-        display: flex; 
-        width: max-content; 
-        animation: marquee-scroll 38s linear infinite; 
-        will-change: transform;
-        transform: translate3d(0, 0, 0);
-        backface-visibility: hidden;
-      }
-      .marquee-track:hover { animation-play-state: paused; }
-
-      .hero-shrink { 
-        transform-origin: 50% 22%; 
-        overflow: hidden; 
-        will-change: transform, opacity; 
-        contain: layout paint;
-        background: #ffffff !important; 
-      }
-
-      .content-auto {
-        content-visibility: auto;
-        contain-intrinsic-size: 0 500px;
-      }
-    `;
-    document.head.appendChild(s);
-    return () => document.head.removeChild(s);
-  }, []);
-  return null;
-};
-
 const txtMuted = "#5f6368";
 const txtHead = "#111111";
-const accentColor = "#047857";
-
-const useInView = () => {
-  const [ref, setRef] = useState<HTMLDivElement | null>(null);
-  const [inView, setInView] = useState(false);
-  useEffect(() => {
-    if (!ref) return;
-    const obs = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) {
-        setInView(true);
-        obs.unobserve(ref);
-      }
-    }, { threshold: 0.01, rootMargin: "200px 0px" });
-    obs.observe(ref);
-    return () => obs.disconnect();
-  }, [ref]);
-  return [setRef, inView] as const;
-};
-
-const LazySection = memo(({ children }: { children: React.ReactNode }) => {
-  const [setRef, inView] = useInView();
-  return <div ref={setRef} className="bg-white">{inView ? children : <div className="h-48 bg-white" />}</div>;
-});
-
-/* ── SCROLL-SHRINK HERO ── */
-const ScrollShrinkHero = memo(function ScrollShrinkHero() {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const outer = outerRef.current;
-      const inner = innerRef.current;
-      if (!outer || !inner) return;
-      const r = outer.getBoundingClientRect();
-      const denom = r.height || 1;
-      const p = clamp(-r.top / denom, 0, 1);
-      if (p >= 1) {
-        inner.style.opacity = "0";
-        inner.style.pointerEvents = "none";
-        return;
-      }
-      inner.style.pointerEvents = "auto";
-      const eIn = p * p; 
-      const scale = 1 - eIn * 0.62; 
-      const ty = -eIn * 64;
-      const radius = eIn * 36;
-      const opacity = clamp(1 - seg(p, 0.55, 1), 0, 1);
-      inner.style.transform = `translate3d(0, ${ty}px, 0) scale(${scale})`;
-      inner.style.opacity = String(opacity);
-      inner.style.borderRadius = `${radius}px`;
-    };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  return (
-    <div ref={outerRef} className="relative bg-white" style={{ contain: "layout paint" }}>
-      <motion.div
-        initial={{ opacity: 0, y: 26, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: "spring", stiffness: 90, damping: 18, delay: 0.1 }}
-      >
-        <div ref={innerRef} className="hero-shrink bg-white">
-          <LandingHero />
-        </div>
-      </motion.div>
-    </div>
-  );
-});
+const accentColor = "#f75961";
 
 export default function LandingPage() {
   return (
-    <div className="lp flex min-h-screen flex-col bg-white">
-      <GlobalStyles />
+    <div className="flex min-h-screen flex-col bg-white" style={{ fontFamily: "'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
       <Navbar />
       <main className="flex-grow bg-white">
         <Safe label="Hero" fallback={<LandingHero />}>
-          <ScrollShrinkHero />
+          <LandingHero />
         </Safe>
 
         <Safe label="LandingDemo">
           <Suspense fallback={<div className="h-48 sm:h-96 bg-white" />}>
-            <LazySection>
-              <LandingDemo videoSrcMp4="/demo.mp4" />
-            </LazySection>
+            <LandingDemo videoSrcMp4="/demo.mp4" />
           </Suspense>
         </Safe>
 
@@ -366,7 +124,7 @@ const AI_TOOLS_DATA = [
   {
     icon: Wand2,
     badge: "MAGICAL AI",
-    badgeColor: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
+    badgeColor: "bg-amber-100 text-amber-900 border border-amber-200",
     title: "AI Paper Checker",
     tagline: "Instant answer sheet & assignment grading",
     desc: "Magically scan and auto-grade student handwritten copies and tests with question-by-question scoring and rubric feedback.",
@@ -378,7 +136,7 @@ const AI_TOOLS_DATA = [
   {
     icon: Brain,
     badge: "1 LAKH+ NCERT",
-    badgeColor: "bg-blue-50 text-blue-700 border border-blue-200",
+    badgeColor: "bg-[#fff0f1] text-[#f75961] border border-[#fecdd3]",
     title: "Test Generator",
     tagline: "CBSE & State Board papers in < 2 mins",
     desc: "Pick subject, chapters, and question types. Generates a balanced, print-ready PDF or Word doc with complete answer keys.",
@@ -402,7 +160,7 @@ const AI_TOOLS_DATA = [
   {
     icon: Grid,
     badge: "PRACTICE",
-    badgeColor: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    badgeColor: "bg-[#fff0f1] text-[#f75961] border border-[#fecdd3]",
     title: "Worksheet Studio",
     tagline: "Custom homework & drill sheets",
     desc: "Design structured practice worksheets with diagrams, step spaces, and formulas tailored to your classroom syllabus.",
@@ -426,7 +184,7 @@ const AI_TOOLS_DATA = [
   {
     icon: Search,
     badge: "EXAM BANK",
-    badgeColor: "bg-indigo-50 text-indigo-700 border border-indigo-200",
+    badgeColor: "bg-[#fff0f1] text-[#f75961] border border-[#fecdd3]",
     title: "PYQ Question Bank",
     tagline: "Past 10-year board questions",
     desc: "Search, filter, and assign verified Previous Year Questions with official marking rubrics and step-by-step solutions.",
@@ -440,17 +198,17 @@ const AI_TOOLS_DATA = [
 const AiToolsSuite = memo(function AiToolsSuite() {
   const navigate = useNavigate();
   return (
-    <section id="ai-tools" className="relative py-20 bg-slate-50/70 border-y border-slate-200/80 scroll-mt-20">
-      <div className="relative mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
+    <section id="ai-tools" className="relative py-20 bg-gray-50 border-y border-gray-200 scroll-mt-20">
+      <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
         <div className="mb-12 text-center">
-          <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs">
-            <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+          <div className="mx-auto mb-4 inline-flex items-center gap-2 rounded-[10px] px-3.5 py-1.5 text-xs font-bold bg-[#fff0f1] text-[#f75961] border border-[#fecdd3]">
+            <Sparkles className="h-3.5 w-3.5 text-[#f75961]" />
             Practical AI Tools for Indian Education
           </div>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
-            Magical AI Tools for <span className="nlm-text">Modern Teachers</span>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 tracking-tight">
+            Magical AI Tools for <span className="text-[#f75961]" style={{ color: "#f75961" }}>Modern Teachers</span>
           </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base sm:text-lg text-slate-600 font-medium">
+          <p className="mx-auto mt-4 max-w-2xl text-base sm:text-lg text-gray-600 font-medium">
             From checking handwritten answer sheets to generating curriculum-perfect test papers — everything in one unified dashboard.
           </p>
         </div>
@@ -461,51 +219,51 @@ const AiToolsSuite = memo(function AiToolsSuite() {
             return (
               <div
                 key={tool.title}
-                className={`group relative rounded-[24px] p-6 sm:p-8 bg-white border transition-all duration-300 hover:-translate-y-1.5 flex flex-col justify-between ${
+                className={`relative rounded-2xl p-6 sm:p-8 bg-white border flex flex-col justify-between ${
                   tool.isHighlight
-                    ? "border-amber-300/80 shadow-md ring-1 ring-amber-400/20"
-                    : "border-slate-200/90 shadow-xs hover:shadow-xl hover:border-blue-300"
+                    ? "border-amber-300 shadow-md"
+                    : "border-gray-200 shadow-sm"
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-5">
-                    <div className="h-12 w-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                    <div className="h-12 w-12 rounded-[14px] bg-[#fff0f1] border border-[#fecdd3] flex items-center justify-center text-[#f75961]">
                       <Icon className="h-6 w-6" />
                     </div>
                     {tool.badge && (
-                      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full shadow-xs ${tool.badgeColor}`}>
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-[8px] ${tool.badgeColor}`}>
                         {tool.badge}
                       </span>
                     )}
                   </div>
 
-                  <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                  <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">
                     {tool.title}
                   </h3>
-                  <p className="text-xs font-bold text-blue-600 mt-1 mb-3">
+                  <p className="text-xs font-bold text-[#f75961] mt-1 mb-3">
                     {tool.tagline}
                   </p>
-                  <p className="text-sm text-slate-600 font-medium leading-relaxed mb-6">
+                  <p className="text-sm text-gray-600 font-medium leading-relaxed mb-6">
                     {tool.desc}
                   </p>
 
                   <div className="space-y-2 mb-6">
                     {tool.highlights.map((h) => (
-                      <div key={h} className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                        <Check className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      <div key={h} className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                        <Check className="h-3.5 w-3.5 text-[#f75961] shrink-0" />
                         <span>{h}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100">
+                <div className="pt-4 border-t border-gray-100">
                   <button
                     onClick={() => navigate(tool.href)}
-                    className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold bg-slate-900 hover:bg-blue-600 text-white transition-all shadow-sm group-hover:shadow-md cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-[14px] text-sm font-bold bg-black text-white hover:bg-neutral-800 cursor-pointer"
                   >
                     <span>{tool.cta}</span>
-                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
               </div>
@@ -519,89 +277,40 @@ const AiToolsSuite = memo(function AiToolsSuite() {
 
 /* ── HOW IT WORKS ── */
 const HowItWorks = memo(function HowItWorks() {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const headRef = useRef<HTMLDivElement>(null);
-  const card0 = useRef<HTMLDivElement>(null);
-  const card1 = useRef<HTMLDivElement>(null);
-  const card2 = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const cards = [card0.current, card1.current, card2.current];
-    const ranges: [number, number][] = [[0.14, 0.34], [0.3, 0.5], [0.46, 0.66]];
-    let raf = 0;
-    
-    const update = () => {
-      raf = 0;
-      const track = trackRef.current;
-      if (!track) return;
-      const r = track.getBoundingClientRect();
-      const vh = window.innerHeight || 1;
-      const denom = r.height - vh;
-      const p = denom > 0 ? clamp(-r.top / denom, 0, 1) : 0;
-
-      if (headRef.current) {
-        const t = smooth(seg(p, 0, 0.12));
-        headRef.current.style.opacity = String(t);
-        headRef.current.style.transform = `translate3d(0, ${(1 - t) * 40}px, 0)`;
-      }
-      cards.forEach((el, i) => {
-        if (!el) return;
-        const t = smooth(seg(p, ranges[i][0], ranges[i][1]));
-        el.style.opacity = String(t);
-        el.style.transform = `translate3d(0, ${(1 - t) * 90}px, 0) scale(${0.9 + 0.1 * t})`;
-      });
-    };
-    
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
   return (
-    <section ref={trackRef} className="relative bg-white" style={{ height: "240vh" }}>
-      <div className="sticky top-0 flex min-h-screen flex-col justify-center overflow-hidden py-16 bg-white">
-        <div className="relative mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
-          <div ref={headRef} className="hiw-head mb-10 text-center" style={{ opacity: 0, transform: "translate3d(0,40px,0)" }}>
-            <span className="nlm-pill"><Sparkles className="h-3.5 w-3.5" />3 Steps, 2 Minutes</span>
-            <h2 className="mt-4 text-3xl sm:text-4xl font-bold md:text-5xl" style={{ color: txtHead }}>
-              How It <span className="nlm-text">Works</span>
-            </h2>
-            <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg" style={{ color: txtMuted }}>
-              Pick chapters, set marks — get a print-ready CBSE paper
-            </p>
-          </div>
+    <section className="relative bg-white py-20">
+      <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
+        <div className="mb-10 text-center">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] text-xs font-bold bg-[#fff0f1] text-[#f75961] border border-[#fecdd3]">
+            <Sparkles className="h-3.5 w-3.5 text-[#f75961]" />3 Steps, 2 Minutes
+          </span>
+          <h2 className="mt-4 text-3xl sm:text-4xl font-bold md:text-5xl" style={{ color: txtHead }}>
+            How It <span className="text-[#f75961]" style={{ color: "#f75961" }}>Works</span>
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg" style={{ color: txtMuted }}>
+            Pick chapters, set marks — get a print-ready CBSE paper
+          </p>
+        </div>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
-            {HOW_STEPS.map(({ title, desc, Icon }, i) => (
-              <div
-                key={title}
-                ref={i === 0 ? card0 : i === 1 ? card1 : card2}
-                className="hiw-card ag-card p-6 sm:p-8 bg-white"
-                style={{ opacity: 0, transform: "translate3d(0,90px,0) scale(0.9)" }}
-              >
-                <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "linear-gradient(135deg, #2c2c2c 0%, #000000 100%)" }}>
-                    {i + 1}
-                  </div>
-                  <div className="h-px flex-1" style={{ background: "linear-gradient(90deg,rgba(16,185,129,0.2),transparent)" }} />
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 border border-emerald-100">
-                    <Icon className="h-4 w-4" style={{ color: accentColor }} />
-                  </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
+          {HOW_STEPS.map(({ title, desc, Icon }, i) => (
+            <div
+              key={title}
+              className="rounded-2xl p-6 sm:p-8 bg-white border border-gray-200 shadow-sm"
+            >
+              <div className="mb-5 flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-[10px] text-sm font-bold text-white bg-black">
+                  {i + 1}
                 </div>
-                <h3 className="mb-2 text-base sm:text-lg font-semibold text-neutral-900">{title}</h3>
-                <p className="text-sm leading-relaxed text-neutral-500">{desc}</p>
+                <div className="h-px flex-1 bg-gray-200" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#fff0f1] border border-[#fecdd3]">
+                  <Icon className="h-4 w-4" style={{ color: accentColor }} />
+                </div>
               </div>
-            ))}
-          </div>
+              <h3 className="mb-2 text-base sm:text-lg font-semibold text-gray-900">{title}</h3>
+              <p className="text-sm leading-relaxed text-gray-500">{desc}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -614,51 +323,49 @@ const UpgradedCTA = memo(function UpgradedCTA() {
   const navigate = useNavigate();
   return (
     <section className="relative py-16 bg-white">
-      <div className="relative mx-auto max-w-4xl px-5 sm:px-6 lg:px-8">
-        <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }}>
-          <motion.div variants={stackItem}>
-            <div className="p-px rounded-3xl" style={{ background: "linear-gradient(135deg,rgba(52,211,153,0.25),rgba(34,211,238,0.2),rgba(129,140,248,0.25))" }}>
-              <div className="rounded-3xl p-6 sm:p-10 text-center relative overflow-hidden bg-white shadow-sm">
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-neutral-50 to-transparent" />
-                <div className="relative z-10">
-                  <div className="mb-4 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200 shadow-sm">
-                    <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
-                    2 free papers every month
-                  </div>
-                  <h3 className="mb-4 text-2xl sm:text-3xl font-bold text-neutral-900">
-                    Create Your First Paper <span className="nlm-text">in Minutes</span>
-                  </h3>
-                  <p className="mb-6 text-sm sm:text-base text-neutral-500 max-w-xl mx-auto">
-                    Pick your chapters, set difficulty and marks — get a complete CBSE-pattern paper with answer key, ready to print.
-                  </p>
-                  <div className="mb-8 flex flex-wrap justify-center gap-4">
-                    {["1 Lakh+ NCERT questions", "Section-wise layout", "Answer key included"].map((f) => (
-                      <div key={f} className="flex items-center gap-2 text-sm text-neutral-600">
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-white shadow-sm">
-                          <Check className="h-3 w-3" />
-                        </div>
-                        {f}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-                    <button onClick={() => navigate("/dashboard/test-generator")} className="btn-grad px-8 py-3.5 text-sm sm:text-base w-full sm:w-auto">
-                       Try Free — No Login Needed <ArrowRight className="ml-2 h-4 w-4 inline" />
-                    </button>
-                    <Link to={session ? "/dashboard/test-generator" : "/signup"} className="w-full sm:w-auto">
-                      <button className="btn-glass-light px-8 py-3.5 text-sm sm:text-base w-full">Sign Up Free</button>
-                    </Link>
-                    <Link to="/pricing" className="w-full sm:w-auto">
-                      <button className="btn-glass-light px-8 py-3.5 text-sm sm:text-base w-full flex items-center justify-center gap-2">
-                        <Crown className="h-4 w-4 text-amber-500" /> View Pricing
-                      </button>
-                    </Link>
-                  </div>
+      <div className="mx-auto max-w-4xl px-5 sm:px-6 lg:px-8">
+        <div className="rounded-2xl p-6 sm:p-10 text-center bg-white border border-gray-200 shadow-sm">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-[10px] px-4 py-1.5 text-xs font-bold bg-[#fff0f1] text-[#f75961] border border-[#fecdd3]">
+            <Sparkles className="h-3.5 w-3.5 text-[#f75961]" />
+            2 free papers every month
+          </div>
+          <h3 className="mb-4 text-2xl sm:text-3xl font-bold text-gray-900">
+            Create Your First Paper <span className="text-[#f75961]" style={{ color: "#f75961" }}>in Minutes</span>
+          </h3>
+          <p className="mb-6 text-sm sm:text-base text-gray-500 max-w-xl mx-auto">
+            Pick your chapters, set difficulty and marks — get a complete CBSE-pattern paper with answer key, ready to print.
+          </p>
+          <div className="mb-8 flex flex-wrap justify-center gap-4">
+            {["1 Lakh+ NCERT questions", "Section-wise layout", "Answer key included"].map((f) => (
+              <div key={f} className="flex items-center gap-2 text-sm text-gray-600 font-medium">
+                <div className="flex h-5 w-5 items-center justify-center rounded-[6px] bg-black text-white">
+                  <Check className="h-3 w-3" />
                 </div>
+                {f}
               </div>
-            </div>
-          </motion.div>
-        </motion.div>
+            ))}
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={() => navigate("/dashboard/test-generator")}
+              className="bg-black text-white px-8 py-3.5 rounded-[14px] text-sm sm:text-base font-bold w-full sm:w-auto flex items-center justify-center gap-2 hover:bg-neutral-800 cursor-pointer"
+            >
+              <span>Try Free — No Login Needed</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            <Link to={session ? "/dashboard/test-generator" : "/signup"} className="w-full sm:w-auto">
+              <button className="bg-black text-white px-8 py-3.5 rounded-[14px] text-sm sm:text-base font-bold w-full flex items-center justify-center hover:bg-neutral-800 cursor-pointer">
+                Sign Up Free
+              </button>
+            </Link>
+            <Link to="/pricing" className="w-full sm:w-auto">
+              <button className="bg-[#f75961] hover:bg-[#e8454d] text-white px-8 py-3.5 rounded-[14px] text-sm sm:text-base font-bold w-full flex items-center justify-center gap-2 transition-colors cursor-pointer border border-[#f75961]">
+                <Crown className="h-4 w-4 text-white" />
+                <span>View Pricing</span>
+              </button>
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -667,28 +374,30 @@ const UpgradedCTA = memo(function UpgradedCTA() {
 /* ── TRUST & SECURITY ── */
 const TrustSecurity = memo(function TrustSecurity() {
   return (
-    <section className="relative py-20 bg-white content-auto">
-      <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-        <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="mb-14 text-center">
-          <span className="nlm-pill">🛡️ Built for Schools</span>
-          <h2 className="mt-4 text-3xl sm:text-4xl font-bold md:text-5xl text-neutral-900">
-            Trusted by <span className="nlm-text">Educators</span>
+    <section className="relative py-20 bg-white">
+      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+        <div className="mb-14 text-center">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] text-xs font-bold bg-[#fff0f1] text-[#f75961] border border-[#fecdd3]">
+            🛡️ Built for Schools
+          </span>
+          <h2 className="mt-4 text-3xl sm:text-4xl font-bold md:text-5xl text-gray-900">
+            Trusted by <span className="text-[#f75961]" style={{ color: "#f75961" }}>Educators</span>
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-neutral-500">
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-gray-500">
             Secure, reliable, and built specifically for Indian schools and coaching centres
           </p>
-        </motion.div>
-        <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        </div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {TRUST_FEATURES.map((f) => (
-            <motion.div key={f.title} variants={stackItem} className="ag-card p-6 text-center bg-white border border-neutral-100 shadow-sm">
-              <div className="mb-4 flex h-10 w-10 mx-auto items-center justify-center rounded-xl bg-emerald-50 border border-emerald-100 relative z-10">
-                <f.Icon className="h-5 w-5 text-emerald-600" />
+            <div key={f.title} className="rounded-2xl p-6 text-center bg-white border border-gray-200 shadow-sm">
+              <div className="mb-4 flex h-10 w-10 mx-auto items-center justify-center rounded-[10px] bg-[#fff0f1] border border-[#fecdd3]">
+                <f.Icon className="h-5 w-5 text-[#f75961]" />
               </div>
-              <h3 className="mb-2 text-base font-semibold text-neutral-900 relative z-10">{f.title}</h3>
-              <p className="text-xs sm:text-sm text-neutral-500 relative z-10 leading-relaxed">{f.desc}</p>
-            </motion.div>
+              <h3 className="mb-2 text-base font-semibold text-gray-900">{f.title}</h3>
+              <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">{f.desc}</p>
+            </div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   );
@@ -697,26 +406,26 @@ const TrustSecurity = memo(function TrustSecurity() {
 /* ── OUTCOMES STATS SECTION ── */
 const Outcomes = memo(function Outcomes() {
   return (
-    <section className="relative py-20 bg-white content-auto">
-      <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-        <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="mb-14 text-center">
-          <motion.div variants={stackItem} className="mx-auto mb-5 h-[3px] w-12 rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }} />
-          <h2 className="text-3xl sm:text-4xl font-bold md:text-5xl text-neutral-900">
-            What You <span className="nlm-text">Get</span>
+    <section className="relative py-20 bg-white">
+      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+        <div className="mb-14 text-center">
+          <div className="mx-auto mb-5 h-[3px] w-12 rounded-full bg-[#f75961]" />
+          <h2 className="text-3xl sm:text-4xl font-bold md:text-5xl text-gray-900">
+            What You <span className="text-[#f75961]" style={{ color: "#f75961" }}>Get</span>
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-neutral-500">
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-gray-500">
             Less paper-setting busywork. More teaching time. Better test papers.
           </p>
-        </motion.div>
-        <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }} className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+        </div>
+        <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
           {OUTCOME_STATS.map((s) => (
-            <motion.div key={s.label} variants={stackItem} className="text-center">
-              <div className="mb-2 text-5xl sm:text-6xl font-extrabold stat-n md:text-7xl">{s.value}</div>
-              <h3 className="mb-1 text-base sm:text-lg font-semibold text-neutral-900">{s.label}</h3>
-              <p className="text-xs sm:text-sm text-neutral-500 px-4">{s.description}</p>
-            </motion.div>
+            <div key={s.label} className="text-center">
+              <div className="mb-2 text-5xl sm:text-6xl font-extrabold text-[#f75961] md:text-7xl">{s.value}</div>
+              <h3 className="mb-1 text-base sm:text-lg font-semibold text-gray-900">{s.label}</h3>
+              <p className="text-xs sm:text-sm text-gray-500 px-4">{s.description}</p>
+            </div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   );
@@ -724,27 +433,26 @@ const Outcomes = memo(function Outcomes() {
 
 /* ── TESTIMONIALS ── */
 const Testimonials = memo(function Testimonials() {
-  const loop = [...TESTIMONIALS, ...TESTIMONIALS, ...TESTIMONIALS, ...TESTIMONIALS];
   return (
-    <section className="relative py-20 overflow-hidden bg-white content-auto">
-      <div className="relative mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-        <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }} className="mb-14 text-center">
-          <span className="nlm-pill">💬 Community</span>
-          <h2 className="mt-4 text-3xl sm:text-4xl font-bold md:text-5xl text-neutral-900">
-            What <span className="nlm-text">Teachers</span> Say
+    <section className="relative py-20 bg-white">
+      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+        <div className="mb-14 text-center">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] text-xs font-bold bg-[#fff0f1] text-[#f75961] border border-[#fecdd3]">
+            💬 Community
+          </span>
+          <h2 className="mt-4 text-3xl sm:text-4xl font-bold md:text-5xl text-gray-900">
+            What <span className="text-[#f75961]" style={{ color: "#f75961" }}>Teachers</span> Say
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-neutral-500">
+          <p className="mx-auto mt-4 max-w-xl text-base sm:text-lg text-gray-500">
             Used by teachers across CBSE schools and coaching centres.
           </p>
-        </motion.div>
+        </div>
       </div>
 
-      <div className="relative bg-white py-4">
-        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-24 z-10 bg-gradient-to-r from-white to-transparent" />
-        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-24 z-10 bg-gradient-to-l from-white to-transparent" />
-        <div className="marquee-track">
-          {loop.map((t, i) => (
-            <div key={`${t.name}-${i}`} className="ag-card p-6 relative flex-shrink-0 mx-3 bg-white border border-neutral-100 shadow-sm" style={{ width: 340, minHeight: 180 }}>
+      <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {TESTIMONIALS.map((t) => (
+            <div key={t.name} className="rounded-2xl p-6 bg-white border border-gray-200 shadow-sm relative flex flex-col justify-between" style={{ minHeight: 180 }}>
               <TestimonialContent t={t} />
             </div>
           ))}
@@ -757,55 +465,60 @@ const Testimonials = memo(function Testimonials() {
 const TestimonialContent = memo(function TestimonialContent({ t }: { t: (typeof TESTIMONIALS)[number] }) {
   return (
     <>
-      <div className="absolute top-2 left-4 text-6xl font-serif leading-none text-emerald-500 opacity-20">"</div>
-      <p className="relative mt-6 mb-6 text-sm leading-relaxed text-neutral-600 z-10">{t.quote}</p>
-      <div className="flex items-center gap-3 relative z-10 mt-auto">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 border border-neutral-200">
-          <User className="h-4 w-4 text-neutral-500" />
+      <div className="absolute top-2 left-4 text-6xl font-serif leading-none text-[#f75961] opacity-20">"</div>
+      <p className="relative mt-6 mb-6 text-sm leading-relaxed text-gray-600 font-medium">{t.quote}</p>
+      <div className="flex items-center gap-3 mt-auto">
+        <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-gray-100 border border-gray-200">
+          <User className="h-4 w-4 text-gray-500" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-neutral-800">{t.name}</p>
-          <p className="text-xs text-neutral-400">{t.role}</p>
+          <p className="text-sm font-bold text-gray-900">{t.name}</p>
+          <p className="text-xs font-medium text-gray-500">{t.role}</p>
         </div>
       </div>
     </>
   );
 });
 
-/* ── FINAL CTA (Email Field Blocks Fully Removed) ── */
+/* ── FINAL CTA ── */
 const FinalCTA = memo(function FinalCTA() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative overflow-hidden py-24 bg-white content-auto">
-      <div className="relative mx-auto max-w-4xl px-5 text-center">
-        <motion.div variants={stackContainer} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-80px" }}>
-          <motion.div variants={stackItem} className="mx-auto mb-5 h-[3px] w-12 rounded-full" style={{ background: BRAND_GRADIENT, ...gradientAnimStyle }} />
-          <motion.h2 variants={stackItem} className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight text-neutral-900">
-            Stop Spending
-            <br className="hidden sm:block" /> Evenings on <span className="nlm-text">Paper-Setting</span>
-          </motion.h2>
-          <motion.p variants={stackItem} className="mx-auto mt-6 max-w-xl text-base sm:text-lg text-neutral-500 leading-relaxed">
-            Join teachers across India who create better test papers in minutes, not hours.
-          </motion.p>
+    <section className="relative py-24 bg-white">
+      <div className="mx-auto max-w-4xl px-5 text-center">
+        <div className="mx-auto mb-5 h-[3px] w-12 rounded-full bg-[#f75961]" />
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight text-gray-900">
+          Stop Spending
+          <br className="hidden sm:block" /> Evenings on <span className="text-[#f75961]" style={{ color: "#f75961" }}>Paper-Setting</span>
+        </h2>
+        <p className="mx-auto mt-6 max-w-xl text-base sm:text-lg text-gray-500 leading-relaxed font-medium">
+          Join teachers across India who create better test papers in minutes, not hours.
+        </p>
 
-          <motion.div variants={stackItem} className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            <button onClick={() => navigate("/dashboard/test-generator")} className="btn-grad px-10 py-4 text-sm sm:text-base w-full sm:w-auto">
-               Try Free — No Login Needed <ArrowRight className="ml-2 h-4 w-4 inline" />
+        <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+          <button
+            onClick={() => navigate("/dashboard/test-generator")}
+            className="bg-black text-white px-10 py-4 rounded-[14px] text-sm sm:text-base font-bold w-full sm:w-auto flex items-center justify-center gap-2 hover:bg-neutral-800 cursor-pointer"
+          >
+            <span>Try Free — No Login Needed</span>
+            <ArrowRight className="h-4 w-4" />
+          </button>
+          <Link to="/signup" className="w-full sm:w-auto">
+            <button className="bg-black text-white px-10 py-4 rounded-[14px] text-sm sm:text-base font-bold w-full flex items-center justify-center hover:bg-neutral-800 cursor-pointer">
+              Sign Up Free
             </button>
-            <Link to="/signup" className="w-full sm:w-auto">
-              <button className="btn-glass-light px-10 py-4 text-sm sm:text-base w-full">Sign Up Free</button>
-            </Link>
-            <Link to="/pricing" className="w-full sm:w-auto">
-              <button className="btn-glass-light px-10 py-4 text-sm sm:text-base w-full flex items-center justify-center gap-2">
-                <Crown className="h-4 w-4 text-amber-500" /> View Pricing
-              </button>
-            </Link>
-          </motion.div>
-          <motion.p variants={stackItem} className="mt-4 text-xs sm:text-sm text-neutral-400">
-            2 free papers every month · No credit card needed
-          </motion.p>
-        </motion.div>
+          </Link>
+          <Link to="/pricing" className="w-full sm:w-auto">
+            <button className="bg-[#f75961] hover:bg-[#e8454d] text-white px-10 py-4 rounded-[14px] text-sm sm:text-base font-bold w-full flex items-center justify-center gap-2 transition-colors cursor-pointer border border-[#f75961]">
+              <Crown className="h-4 w-4 text-white" />
+              <span>View Pricing</span>
+            </button>
+          </Link>
+        </div>
+        <p className="mt-4 text-xs sm:text-sm font-semibold text-gray-400">
+          2 free papers every month · No credit card needed
+        </p>
       </div>
     </section>
   );
