@@ -1,13 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  motion,
-  useInView,
-  useMotionTemplate,
-  useMotionValue,
-  useSpring,
-  useTransform,
-} from "framer-motion";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Sparkles } from "lucide-react";
+
+/* ---------- Simple useInView hook (IntersectionObserver) ---------- */
+function useInView(
+  ref: React.RefObject<HTMLElement | null>,
+  options?: { rootMargin?: string }
+): boolean {
+  const [isInView, setIsInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsInView(entry.isIntersecting),
+      { rootMargin: options?.rootMargin ?? "0px" }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, options?.rootMargin]);
+
+  return isInView;
+}
 
 type Props = {
   /** Fallback image when no video is provided */
@@ -32,32 +47,7 @@ export default function LandingDemo({
   showHud = true,
 }: Props) {
   const sectionRef = useRef<HTMLDivElement | null>(null);
-  const inView = useInView(sectionRef, { once: false, margin: "-20% 0px" });
-
-  // disable tilt on touch
-  const isCoarsePointer = useMemo(
-    () => (typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)")?.matches) ?? false,
-    []
-  );
-
-  // tilt
-  const rawX = useMotionValue(300);
-  const rawY = useMotionValue(160);
-  const mx = useSpring(rawX, { stiffness: 140, damping: 18, mass: 0.5 });
-  const my = useSpring(rawY, { stiffness: 140, damping: 18, mass: 0.5 });
-  const rotateX = useSpring(useTransform(my, [0, 320], [3, -3]), {
-    stiffness: 120,
-    damping: 16,
-    mass: 0.5,
-  });
-  const rotateY = useSpring(useTransform(mx, [0, 640], [-4, 4]), {
-    stiffness: 120,
-    damping: 16,
-    mass: 0.5,
-  });
-
-  const glowX = useTransform(mx, (v) => v);
-  const glowY = useTransform(my, (v) => v);
+  const inView = useInView(sectionRef, { rootMargin: "-20% 0px" });
 
   const [isReady, setReady] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -104,126 +94,34 @@ export default function LandingDemo({
     else el.pause();
   }, [inView]);
 
-  const rafId = useRef<number | null>(null);
-  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isReady || isCoarsePointer) return;
-    const clientX = e.clientX;
-    const clientY = e.clientY;
-    const currentTarget = e.currentTarget;
-    if (rafId.current) return;
-    rafId.current = requestAnimationFrame(() => {
-      rafId.current = null;
-      if (!currentTarget) return;
-      const rect = currentTarget.getBoundingClientRect();
-      rawX.set(clientX - rect.left);
-      rawY.set(clientY - rect.top);
-    });
-  };
-
-  useEffect(() => {
-    return () => {
-      if (rafId.current) cancelAnimationFrame(rafId.current);
-    };
-  }, []);
-
   return (
     <section
       ref={sectionRef}
       className="relative overflow-hidden py-24"
-      onMouseMove={onMouseMove}
     >
-      {/* BACKDROP */}
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-20"
-        style={{
-          background:
-            "radial-gradient(80% 60% at 50% 8%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.76) 40%, rgba(247,249,252,0.82) 60%, rgba(238,243,248,0.92) 100%)",
-        }}
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-20 opacity-70"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.0) 0%, rgba(255,255,255,0.6) 45%, rgba(255,255,255,0.0) 100%)",
-        }}
-      />
-
-      {/* BLOBS */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -top-28 -left-40 h-[42rem] w-[42rem] rounded-full blur-3xl"
-        style={{ opacity: inView ? 0.25 : 0 }}
-      >
-        <motion.div
-          className="h-full w-full"
-          animate={{ scale: [1, 1.05, 1], rotate: [0, 6, 0] }}
-          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-          style={{ background: "radial-gradient(closest-side, rgba(110,124,142,0.22), transparent 70%)" }}
-        />
-      </motion.div>
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -bottom-32 -right-40 h-[38rem] w-[38rem] rounded-full blur-3xl"
-        style={{ opacity: inView ? 0.2 : 0 }}
-      >
-        <motion.div
-          className="h-full w-full"
-          animate={{ scale: [1.02, 0.98, 1.02] }}
-          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-          style={{ background: "radial-gradient(closest-side, rgba(173,184,199,0.20), transparent 70%)" }}
-        />
-      </motion.div>
-
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         {/* Title */}
-        <motion.h2
-          initial={{ opacity: 0, y: 10 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="text-center text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight"
-          style={{
-            background: "linear-gradient(90deg,#5D6B7B 0%,#6E7C8E 50%,#8B98A9 100%)",
-            WebkitBackgroundClip: "text",
-            color: "transparent",
-            backgroundSize: "200% 100%",
-            animation: "bg-pan 10s linear infinite",
-          }}
+        <h2
+          className="text-center text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-gray-900"
         >
           See a4ai in Action
-        </motion.h2>
+        </h2>
 
-        <motion.p
-          initial={{ opacity: 0, y: 8 }}
-          animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+        <p
           className="mx-auto mt-4 max-w-2xl text-center text-lg"
           style={{ color: "var(--muted-600, #5D6B7B)" }}
         >
           Explore 1 Lakh+ NCERT questions — generate, host, and analyze assessments in minutes.
-        </motion.p>
+        </p>
 
         {/* SHOWCASE CARD */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.985, y: 18 }}
-          animate={inView ? { opacity: 1, scale: 1, y: 0 } : {}}
-          transition={{ delay: 0.15, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        <div
           className="relative mx-auto mt-12 w-full max-w-5xl"
-          style={{ perspective: 1200 }}
         >
-          <motion.div
-            className="relative aspect-video overflow-hidden rounded-2xl shadow-2xl bg-neutral-900"
+          <div
+            className="relative aspect-video overflow-hidden rounded-2xl shadow-lg bg-neutral-900"
             style={{
-              rotateX: isCoarsePointer ? 0 : (rotateX as any),
-              rotateY: isCoarsePointer ? 0 : (rotateY as any),
-              transformStyle: "preserve-3d",
               border: "1px solid var(--stroke, #E4E9F0)",
-            }}
-            onMouseLeave={() => {
-              if (isCoarsePointer) return;
-              rawX.set(300);
-              rawY.set(160);
             }}
           >
             {/* MEDIA */}
@@ -269,53 +167,10 @@ export default function LandingDemo({
               />
             )}
 
-            {/* sheen */}
-            <div
-              aria-hidden
-              className="absolute inset-0 rounded-2xl"
-              style={{
-                background:
-                  "linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.18) 100%)",
-                pointerEvents: "none",
-                zIndex: 1,
-              }}
-            />
-
-            {/* cursor glow */}
-            <motion.div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-2xl"
-              style={{
-                background: useMotionTemplate`
-                  radial-gradient(230px 230px at ${glowX}px ${glowY}px, rgba(255,255,255,0.12), transparent 70%)
-                `,
-                opacity: isReady && !isCoarsePointer ? 1 : 0,
-                transition: "opacity 220ms ease",
-                zIndex: 2,
-              }}
-            />
-
-            {/* gradient border mask */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 rounded-2xl"
-              style={{
-                border: "1px solid transparent",
-                borderRadius: "1rem",
-                background:
-                  "linear-gradient(90deg, rgba(93,107,123,.45), rgba(175,186,199,.45)) border-box",
-                WebkitMask:
-                  "linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0)",
-                WebkitMaskComposite: "xor",
-                maskComposite: "exclude",
-                zIndex: 3,
-              }}
-            />
-
             {/* HUD */}
             <FloatingHint />
             {showHud && <BottomHud />}
-          </motion.div>
+          </div>
 
           {mediaError && (
             <p className="mt-2 text-center text-sm text-red-500">
@@ -325,7 +180,7 @@ export default function LandingDemo({
               </a>
             </p>
           )}
-        </motion.div>
+        </div>
       </div>
     </section>
   );
@@ -334,40 +189,31 @@ export default function LandingDemo({
 /* ---------- Floating hint pill ---------- */
 function FloatingHint() {
   return (
-    <motion.div
+    <div
       className="absolute left-1/2 top-[7%] z-40 -translate-x-1/2"
-      initial={{ opacity: 0, y: -8, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ delay: 0.6, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
     >
-      <motion.div
-        className="relative rounded-full backdrop-blur-md px-4 py-2 text-sm font-medium shadow"
+      <div
+        className="relative rounded-full px-4 py-2 text-sm font-medium shadow"
         style={{
           color: "#263244",
-          background: "rgba(255,255,255,0.9)",
+          background: "#ffffff",
           border: "1px solid rgba(210,220,232,0.9)",
         }}
-        animate={{ y: [0, 4, 0] }}
-        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
       >
         <div className="flex items-center gap-2 relative z-10">
-          <Sparkles className="h-4 w-4 text-emerald-600" />
+          <Sparkles className="h-4 w-4" style={{ color: "#f75961" }} />
           1 Lakh+ NCERT Questions Bank
         </div>
-        <div aria-hidden className="absolute inset-0 rounded-full" style={{ boxShadow: "0 0 80px 20px rgba(120,140,160,0.15)" }} />
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
 /* ---------- Bottom HUD pills ---------- */
 function BottomHud() {
   return (
-    <motion.div
+    <div
       className="absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2 gap-2 px-2"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.9, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
     />
   );
 }

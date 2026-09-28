@@ -35,9 +35,8 @@ import { Link } from "react-router-dom";
 /* ──────────────────────────────────────────────────────────────
    BRAND STYLES & GLOBAL INJECTION (Forced Light Only)
    ────────────────────────────────────────────────────────────── */
-const BRAND_GRADIENT =
-  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
-const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
+const BRAND_GRADIENT = "#f75961";
+const gradientAnimStyle = {};
 
 const GlobalStyles = () => {
   useEffect(() => {
@@ -73,59 +72,49 @@ const GlobalStyles = () => {
       @media (hover: hover) {
         .resource-card:hover {
           transform: translateY(-4px) !important;
-          border-color: rgba(147, 197, 253, 0.9) !important;
-          box-shadow: 0 20px 40px -12px rgba(59, 130, 246, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+          border-color: rgba(247, 89, 97, 0.4) !important;
+          box-shadow: 0 20px 40px -12px rgba(247, 89, 97, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
         }
       }
 
-      .btn-blue-gradient {
-        background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 85%) !important;
+      .btn-black-action {
+        background: #000000 !important;
         color: #ffffff !important;
-        border: 1px solid #60a5fa !important;
-        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25) !important;
+        border: 1px solid #000000 !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        border-radius: 14px;
-        font-weight: 700;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
       }
-      .btn-blue-gradient * { color: #ffffff !important; stroke: #ffffff !important; }
+      .btn-black-action * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) { 
-        .btn-blue-gradient:hover { 
-          filter: brightness(1.05); 
+        .btn-black-action:hover { 
+          background: #262626 !important; 
           transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.38) !important; 
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important; 
         } 
       }
 
       .btn-white-action {
-        background: #ffffff !important;
-        color: #0f172a !important;
-        border: 1px solid #e2e8f0 !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        background: #f75961 !important;
+        color: #ffffff !important;
+        border: 1px solid #f75961 !important;
+        box-shadow: 0 4px 14px rgba(247, 89, 97, 0.25) !important;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        border-radius: 14px;
-        font-weight: 700;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
       }
-      .btn-white-action * { color: #0f172a !important; stroke: #0f172a !important; }
+      .btn-white-action * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) {
         .btn-white-action:hover {
-          background: #f8fafc !important;
-          border-color: #cbd5e1 !important;
+          background: #e8454d !important;
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07) !important;
+          box-shadow: 0 6px 20px rgba(247, 89, 97, 0.35) !important;
         }
       }
 
-      @keyframes fast-gradient {
-        0% { background-position: 0% center; }
-        100% { background-position: -200% center; }
-      }
       .nlm-text {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: fast-gradient 4s linear infinite;
+        color: #f75961 !important;
       }
 
       .force-light-dock {
@@ -143,9 +132,9 @@ const GlobalStyles = () => {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        background: #eff6ff;
-        border: 1px solid #dbeafe;
-        color: #1d4ed8;
+        background: #fff0f1;
+        border: 1px solid #fecdd3;
+        color: #f75961;
         font-size: 11px;
         font-weight: 700;
         padding: 3px 10px;
@@ -160,9 +149,9 @@ const GlobalStyles = () => {
         border-radius: 999px;
         font-size: 13px;
         font-weight: 700;
-        background: rgba(59,130,246,0.06);
-        color: #1d4ed8;
-        border: 1px solid rgba(59,130,246,0.14);
+        background: #fff0f1;
+        color: #f75961;
+        border: 1px solid #fecdd3;
       }
       .sorb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(70px); }
       @media (min-width: 640px) { .sorb { filter: blur(100px); } }
@@ -602,7 +591,7 @@ export default function ResourcesPage() {
                 <p className="text-slate-400 font-medium text-base">No resources found matching "{query}".</p>
                 <button
                   onClick={() => { setQuery(""); setActiveCategory("all"); }}
-                  className="mt-3 text-sm text-blue-600 font-bold hover:underline cursor-pointer"
+                  className="mt-3 text-sm text-[#f75961] font-bold hover:underline cursor-pointer"
                 >
                   Reset search &amp; filters
                 </button>
@@ -668,7 +657,7 @@ export default function ResourcesPage() {
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-                  <a href="mailto:support@a4ai.in" className="btn-blue-gradient px-6 py-3 text-sm font-bold inline-flex items-center justify-center gap-2">
+                  <a href="mailto:support@a4ai.in" className="btn-black-action px-6 py-3 text-sm font-bold inline-flex items-center justify-center gap-2">
                     <LifeBuoy className="h-4 w-4" /> Contact Support
                   </a>
                   <Link to="/features" className="btn-white-action px-6 py-3 text-sm font-bold inline-flex items-center justify-center gap-2">
@@ -727,7 +716,7 @@ function ResourceFeatureCard({ item }: { item: Resource }) {
         className="resource-card p-6 flex flex-col h-full relative"
       >
         {item.tag && (
-          <div className="absolute -top-3 right-4 rounded-full bg-blue-600 px-3 py-0.5 text-xs font-bold text-white shadow z-10">
+          <div className="absolute -top-3 right-4 rounded-full bg-[#f75961] px-3 py-0.5 text-xs font-bold text-white shadow z-10">
             {item.tag}
           </div>
         )}
@@ -736,14 +725,14 @@ function ResourceFeatureCard({ item }: { item: Resource }) {
         <motion.span
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
+          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(247,89,97,0.08), transparent 80%)` }}
         />
 
         <div className="relative z-10 flex flex-col h-full">
           {/* Card Top: Icon Box + Title */}
           <div className="flex items-center gap-3.5 mb-4">
-            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/70 border border-blue-100 flex-shrink-0 text-blue-600 shadow-xs">
-              <Icon className="h-6 w-6 text-blue-600" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff0f1] border border-[#fecdd3] flex-shrink-0 text-[#f75961] shadow-xs">
+              <Icon className="h-6 w-6 text-[#f75961]" />
             </div>
             <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight leading-snug">
               {item.title}
@@ -759,7 +748,7 @@ function ResourceFeatureCard({ item }: { item: Resource }) {
           <ul className="space-y-2.5 mb-6 flex-grow">
             {item.bullets.map((b, i) => (
               <li key={i} className="flex items-start gap-2.5 text-sm font-medium">
-                <div className="h-5 w-5 rounded-full bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shrink-0 mt-0.5">
+                <div className="h-5 w-5 rounded-full bg-[#fff0f1] border border-[#fecdd3] flex items-center justify-center text-[#f75961] shrink-0 mt-0.5">
                   <Check className="h-3 w-3" strokeWidth={3} />
                 </div>
                 <span className="text-slate-700 font-semibold leading-snug">{b}</span>
@@ -782,7 +771,7 @@ function ResourceFeatureCard({ item }: { item: Resource }) {
 
             <Link
               to={item.href || "#"}
-              className="inline-flex items-center text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors group-hover:translate-x-0.5 flex-shrink-0"
+              className="inline-flex items-center text-xs sm:text-sm font-bold text-[#f75961] hover:text-[#e8454d] transition-colors group-hover:translate-x-0.5 flex-shrink-0"
             >
               {item.cta || "Open"}
               <ArrowRight className="ml-1 h-3.5 w-3.5" />

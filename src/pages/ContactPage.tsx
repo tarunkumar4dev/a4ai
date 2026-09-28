@@ -28,9 +28,8 @@ export default function ContactPage() {
   const mx = useMotionValue(320);
   const my = useMotionValue(140);
   const bg = useMotionTemplate`
-    radial-gradient(1200px 600px at ${mx}px ${my}px, rgba(99,102,241,0.12), transparent 70%),
-    radial-gradient(1000px 500px at calc(${mx}px + 240px) calc(${my}px + 160px), rgba(59,130,246,0.10), transparent 70%),
-    radial-gradient(800px 420px at calc(${mx}px - 220px) calc(${my}px - 120px), rgba(34,197,94,0.08), transparent 70%)
+    radial-gradient(1200px 600px at ${mx}px ${my}px, rgba(247,89,97,0.08), transparent 70%),
+    radial-gradient(1000px 500px at calc(${mx}px + 240px) calc(${my}px + 160px), rgba(247,89,97,0.05), transparent 70%)
   `;
   const onMove = (e: React.MouseEvent<HTMLElement>) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -207,7 +206,7 @@ export default function ContactPage() {
                   value={form.organization}
                   onChange={onChange("organization")}
                   placeholder="e.g., Delhi Public School"
-                  className="h-11 rounded-lg border-gray-300 bg-white/90 text-gray-900 placeholder:text-gray-400 focus-visible:ring-indigo-500 dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100"
+                  className="h-11 rounded-lg border-gray-300 bg-white/90 text-gray-900 placeholder:text-gray-400 focus-visible:ring-[#f75961] dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100"
                   required
                 />
                 <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
@@ -226,7 +225,7 @@ export default function ContactPage() {
                     id="organizationType"
                     value={form.organizationType}
                     onChange={onChange("organizationType")}
-                    className="flex h-11 w-full rounded-lg border border-gray-300 bg-white/90 px-3 py-2 text-sm text-gray-900 focus-visible:ring-indigo-500 dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100"
+                    className="flex h-11 w-full rounded-lg border border-gray-300 bg-white/90 px-3 py-2 text-sm text-gray-900 focus-visible:ring-[#f75961] dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100"
                     required
                   >
                     {organizationTypes.map((t) => (
@@ -258,7 +257,7 @@ export default function ContactPage() {
                         type="checkbox"
                         checked={form.requirements.includes(r)}
                         onChange={() => toggleReq(r)}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600"
+                        className="h-4 w-4 rounded border-gray-300 text-[#f75961] focus:ring-[#f75961] accent-[#f75961] dark:border-gray-600"
                       />
                       <span className="text-sm text-gray-800 dark:text-gray-200">{r}</span>
                     </label>
@@ -276,12 +275,12 @@ export default function ContactPage() {
                   value={form.message}
                   onChange={onChange("message")}
                   placeholder="Tell us about your specific needs, preferred features, or any custom requirements..."
-                  className="rounded-lg border-gray-300 bg-white/90 text-gray-900 placeholder:text-gray-400 focus-visible:ring-indigo-500 dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100"
+                  className="rounded-lg border-gray-300 bg-white/90 text-gray-900 placeholder:text-gray-400 focus-visible:ring-[#f75961] dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100"
                 />
               </div>
 
               <div className="flex items-start gap-3 rounded-xl border border-black/10 bg-white/70 p-3 text-xs text-gray-700 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-300">
-                <ShieldCheck className="mt-0.5 h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                <ShieldCheck className="mt-0.5 h-4 w-4 text-[#f75961]" />
                 <div>
                   <p className="font-medium">What you'll get:</p>
                   <ul className="mt-1 space-y-1">
@@ -298,7 +297,7 @@ export default function ContactPage() {
                 <Button
                   type="submit"
                   disabled={submitting}
-                  className="group relative inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 px-6 py-3 text-base font-semibold text-white shadow-md transition hover:from-indigo-700 hover:to-sky-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-transparent"
+                  className="group relative inline-flex items-center justify-center gap-2 rounded-[14px] bg-[#f75961] hover:bg-[#e8454d] px-7 py-3 text-base font-bold text-white shadow-md transition focus-visible:ring-2 focus-visible:ring-[#f75961] focus-visible:ring-offset-2"
                 >
                   {submitting ? (
                     <>
@@ -332,7 +331,7 @@ export default function ContactPage() {
 
             <div className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.06]">
               <div className="flex items-center gap-2">
-                <Globe className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <Globe className="h-5 w-5 text-[#f75961]" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Your FREE Domain Format</h3>
               </div>
               <div className="mt-4 space-y-3">
@@ -350,19 +349,19 @@ export default function ContactPage() {
 
             <div className="rounded-2xl border border-black/10 bg-white/80 p-6 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.06]">
               <div className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <MapPin className="h-5 w-5 text-[#f75961]" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Quick Support</h3>
               </div>
               <div className="mt-4 space-y-3">
                 <div className="flex items-center gap-3">
                   <Mail className="h-4 w-4 text-gray-500" />
-                  <a href="mailto:a4ai.team@gmail.com" className="text-sm text-indigo-600 hover:underline dark:text-indigo-400">
+                  <a href="mailto:a4ai.team@gmail.com" className="text-sm text-[#f75961] hover:underline">
                     a4ai.team@gmail.com
                   </a>
                 </div>
                 <div className="flex items-center gap-3">
                   <Phone className="h-4 w-4 text-gray-500" />
-                  <a href="tel:+919310200167" className="text-sm text-indigo-600 hover:underline dark:text-indigo-400">
+                  <a href="tel:+919310200167" className="text-sm text-[#f75961] hover:underline">
                     +91 9310200167
                   </a>
                 </div>
@@ -397,7 +396,7 @@ function Field({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="h-11 rounded-lg border-gray-300 bg-white/90 text-gray-900 placeholder:text-gray-400 focus-visible:ring-indigo-500 dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100"
+        className="h-11 rounded-lg border-gray-300 bg-white/90 text-gray-900 placeholder:text-gray-400 focus-visible:ring-[#f75961] dark:border-gray-700 dark:bg-gray-950/60 dark:text-gray-100"
         required={/\*/.test(label)}
       />
     </div>
@@ -415,7 +414,7 @@ function InfoCard({
 }) {
   const Wrapper = ({ children }: { children: React.ReactNode }) =>
     href ? (
-      <a href={href} className="block focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-2xl">
+      <a href={href} className="block focus:outline-none focus:ring-2 focus:ring-[#f75961] rounded-2xl">
         {children}
       </a>
     ) : (
@@ -425,7 +424,7 @@ function InfoCard({
   return (
     <Wrapper>
       <div className="group relative overflow-hidden rounded-2xl border border-black/10 bg-white/80 p-5 shadow-sm transition-all hover:shadow-md backdrop-blur dark:border-white/10 dark:bg-white/[0.06]">
-        <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition group-hover:opacity-100 [background:linear-gradient(white,white)_padding-box,linear-gradient(90deg,rgba(99,102,241,.35),rgba(59,130,246,.35))_border-box] [border:1px_solid_transparent]" />
+        <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition group-hover:opacity-100 [background:linear-gradient(white,white)_padding-box,linear-gradient(90deg,rgba(247,89,97,.35),rgba(247,89,97,.20))_border-box] [border:1px_solid_transparent]" />
         <div className="relative z-10 flex items-start gap-3">
           <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-lg bg-black/5 text-gray-900 dark:bg-white/10 dark:text-white">
             {icon}

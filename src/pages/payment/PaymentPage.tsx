@@ -35,8 +35,7 @@ const YEARLY_DISCOUNT = 0.20;
 /* ──────────────────────────────────────────────────────────────
    BRAND STYLES & GLOBAL INJECTION
    ────────────────────────────────────────────────────────────── */
-const BRAND_GRADIENT =
-  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
+const BRAND_GRADIENT = "#f75961";
 
 const GlobalStyles = () => {
   useEffect(() => {
@@ -55,7 +54,7 @@ const GlobalStyles = () => {
         border: 1px solid rgba(0,0,0,0.08);
         backdrop-filter: blur(24px) saturate(160%);
         -webkit-backdrop-filter: blur(24px) saturate(160%);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(59,130,246,0.07), 0 2px 6px rgba(0,0,0,0.05);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 4px 20px rgba(247,89,97,0.05), 0 2px 6px rgba(0,0,0,0.05);
       }
       .ag-card-dark {
         background: rgba(20,25,40,0.65);
@@ -64,28 +63,22 @@ const GlobalStyles = () => {
         -webkit-backdrop-filter: blur(24px) saturate(160%);
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 6px 24px rgba(0,0,0,0.45);
       }
-      @keyframes fast-gradient {
-        0% { background-position: 0% center; }
-        100% { background-position: -200% center; }
-      }
       .nlm-text {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: fast-gradient 4s linear infinite;
+        color: #f75961 !important;
+        -webkit-text-fill-color: #f75961 !important;
+        background: none !important;
       }
       .btn-blk {
         position:relative; overflow:hidden;
-        background: linear-gradient(180deg,#202124 0%,#111111 100%);
-        border: 1px solid rgba(255,255,255,0.14);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -1px 0 rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.2);
-        color: white; font-weight:600;
+        background: #000000;
+        border: 1px solid #000000;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+        color: white; font-weight:700;
         border-radius: 14px;
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: transform 0.2s, background-color 0.2s;
         -webkit-tap-highlight-color: transparent;
       }
+      .btn-blk:hover { background: #262626; }
       .btn-blk:active { transform: scale(0.98); }
       .sorb { position:absolute; border-radius:50%; pointer-events:none; filter: blur(50px); }
     `;
@@ -100,7 +93,7 @@ const GlobalStyles = () => {
 const card = (isDark: boolean) => `ag-card ${isDark ? "ag-card-dark" : "ag-card-light"}`;
 const muted = (isDark: boolean) => (isDark ? "#8a9bb0" : "#5f6368");
 const head = (isDark: boolean) => (isDark ? "#f1f5f9" : "#111111");
-const accent = (isDark: boolean) => (isDark ? "#60a5fa" : "#3b82f6");
+const accent = (_isDark: boolean) => "#f75961";
 
 // ═══════════════════════════════════════════════════════════
 // PLAN CONFIG (must match PricingPage + DB)
@@ -316,9 +309,9 @@ export default function PaymentPage() {
             initial={{ scale: 0 }} animate={{ scale: 1 }}
             transition={{ type: "spring", delay: 0.2 }}
             className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
-            style={{ background: isDark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.1)" }}
+            style={{ background: "#fff0f1", border: "1px solid #fecdd3" }}
           >
-            <CheckCircle className="h-9 w-9 text-green-500" />
+            <CheckCircle className="h-9 w-9 text-[#f75961]" />
           </motion.div>
           <h1 className="text-2xl font-extrabold mb-2" style={{ color: head(isDark) }}>You're all set!</h1>
           <p className="mb-1" style={{ color: muted(isDark) }}>
@@ -330,7 +323,7 @@ export default function PaymentPage() {
           </p>
           <button
             onClick={() => navigate("/dashboard")}
-            className="btn-blk w-full py-3.5"
+            className="btn-blk w-full py-3.5 cursor-pointer"
           >
             Go to Dashboard
           </button>
@@ -357,8 +350,8 @@ export default function PaymentPage() {
 
       {/* Background Orbs */}
       <div className="hidden sm:block">
-        <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: isDark ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)" }} />
-        <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: isDark ? "rgba(129,140,248,0.05)" : "rgba(129,140,248,0.03)" }} />
+        <div className="sorb" style={{ width: 600, height: 600, right: -150, top: -100, background: "rgba(247,89,97,0.03)" }} />
+        <div className="sorb" style={{ width: 500, height: 500, left: -100, bottom: "20%", background: "rgba(247,89,97,0.03)" }} />
       </div>
 
       {/* Grid Overlay */}
@@ -384,7 +377,7 @@ export default function PaymentPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button 
             onClick={() => navigate("/pricing")} 
-            className="p-2 rounded-lg transition-colors"
+            className="p-2 rounded-lg transition-colors cursor-pointer"
             style={{ color: muted(isDark), background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)" }}
           >
             <ArrowLeft className="h-5 w-5" />
@@ -411,10 +404,10 @@ export default function PaymentPage() {
                     <button
                       key={c}
                       onClick={() => setBillingCycle(c)}
-                      className="relative p-4 rounded-xl border text-left transition-all"
+                      className="relative p-4 rounded-xl border text-left transition-all cursor-pointer"
                       style={{
                         borderColor: active ? accent(isDark) : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"),
-                        background: active ? (isDark ? "rgba(59,130,246,0.1)" : "rgba(59,130,246,0.05)") : "transparent"
+                        background: active ? "rgba(247,89,97,0.08)" : "transparent"
                       }}
                     >
                       <p className="text-sm font-bold capitalize" style={{ color: head(isDark) }}>{c}</p>
@@ -424,7 +417,7 @@ export default function PaymentPage() {
                           : `${fmt(getPrice(plan.monthlyPaise, "yearly"))}/year`}
                       </p>
                       {c === "yearly" && (
-                        <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: isDark ? "rgba(34,197,94,0.2)" : "rgba(34,197,94,0.1)", color: isDark ? "#4ade80" : "#166534" }}>
+                        <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#fff0f1", color: "#f75961", border: "1px solid #fecdd3" }}>
                           -20%
                         </span>
                       )}
@@ -445,10 +438,10 @@ export default function PaymentPage() {
                     <button
                       key={m.id}
                       onClick={() => setSelectedMethod(m.id)}
-                      className="w-full flex items-center gap-4 p-3.5 rounded-xl border transition-all text-left"
+                      className="w-full flex items-center gap-4 p-3.5 rounded-xl border transition-all text-left cursor-pointer"
                       style={{
                         borderColor: active ? accent(isDark) : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"),
-                        background: active ? (isDark ? "rgba(59,130,246,0.1)" : "rgba(59,130,246,0.05)") : "transparent"
+                        background: active ? "rgba(247,89,97,0.08)" : "transparent"
                       }}
                     >
                       <div className="p-2 rounded-lg" style={{ background: active ? accent(isDark) : (isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"), color: active ? "#fff" : muted(isDark) }}>
@@ -471,9 +464,9 @@ export default function PaymentPage() {
             </div>
 
             {/* Security */}
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: isDark ? "rgba(59,130,246,0.08)" : "rgba(59,130,246,0.05)", borderColor: isDark ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.1)" }}>
-              <Shield className="h-4 w-4 flex-shrink-0" style={{ color: accent(isDark) }} />
-              <p className="text-xs" style={{ color: isDark ? "#93c5fd" : "#2563eb" }}>
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border" style={{ background: "#fff0f1", borderColor: "#fecdd3" }}>
+              <Shield className="h-4 w-4 flex-shrink-0" style={{ color: "#f75961" }} />
+              <p className="text-xs" style={{ color: "#f75961" }}>
                 <strong>256-bit encrypted</strong> · Powered by Razorpay · We never store card details
               </p>
             </div>
@@ -506,7 +499,7 @@ export default function PaymentPage() {
                   </span>
                 </div>
                 {billingCycle === "yearly" && (
-                  <div className="flex justify-between" style={{ color: isDark ? "#4ade80" : "#16a34a" }}>
+                  <div className="flex justify-between" style={{ color: "#f75961" }}>
                     <span>Annual discount (20%)</span>
                     <span className="font-medium">-{fmt(savings)}</span>
                   </div>
@@ -544,7 +537,7 @@ export default function PaymentPage() {
               <button
                 onClick={handlePay}
                 disabled={isProcessing}
-                className="btn-blk w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="btn-blk w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {isProcessing ? (
                   <>
@@ -569,7 +562,7 @@ export default function PaymentPage() {
                 <ul className="space-y-1.5">
                   {plan.features.map((f, i) => (
                     <li key={i} className="flex items-center gap-2 text-xs" style={{ color: head(isDark) }}>
-                      <Check className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isDark ? "#4ade80" : "#22c55e" }} /> {f}
+                      <Check className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "#f75961" }} /> {f}
                     </li>
                   ))}
                 </ul>

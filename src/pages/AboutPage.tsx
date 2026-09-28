@@ -29,9 +29,8 @@ import { useNavigate, Link } from "react-router-dom";
 /* ──────────────────────────────────────────────────────────────
    BRAND STYLES & GLOBAL INJECTION (Forced Light Only)
    ────────────────────────────────────────────────────────────── */
-const BRAND_GRADIENT =
-  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
-const gradientAnimStyle = { backgroundSize: "200% auto", animation: "fast-gradient 4s linear infinite" };
+const BRAND_GRADIENT = "#f75961";
+const gradientAnimStyle = { background: "#f75961" };
 
 const GlobalStyles = () => {
   useEffect(() => {
@@ -68,59 +67,51 @@ const GlobalStyles = () => {
       @media (hover: hover) {
         .about-card:hover {
           transform: translateY(-4px) !important;
-          border-color: rgba(147, 197, 253, 0.9) !important;
-          box-shadow: 0 20px 40px -12px rgba(59, 130, 246, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+          border-color: rgba(247, 89, 97, 0.4) !important;
+          box-shadow: 0 20px 40px -12px rgba(247, 89, 97, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
         }
       }
 
-      .btn-blue-gradient {
-        background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 85%) !important;
+      .btn-black-action {
+        background: #000000 !important;
         color: #ffffff !important;
-        border: 1px solid #60a5fa !important;
-        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25) !important;
+        border: 1px solid #000000 !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        border-radius: 14px;
-        font-weight: 700;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
       }
-      .btn-blue-gradient * { color: #ffffff !important; stroke: #ffffff !important; }
+      .btn-black-action * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) { 
-        .btn-blue-gradient:hover { 
-          filter: brightness(1.05); 
+        .btn-black-action:hover { 
+          background: #262626 !important; 
           transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.38) !important; 
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important; 
         } 
       }
 
       .btn-white-action {
-        background: #ffffff !important;
-        color: #0f172a !important;
-        border: 1px solid #e2e8f0 !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        background: #f75961 !important;
+        color: #ffffff !important;
+        border: 1px solid #f75961 !important;
+        box-shadow: 0 4px 14px rgba(247, 89, 97, 0.25) !important;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        border-radius: 14px;
-        font-weight: 700;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
       }
-      .btn-white-action * { color: #0f172a !important; stroke: #0f172a !important; }
+      .btn-white-action * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) {
         .btn-white-action:hover {
-          background: #f8fafc !important;
-          border-color: #cbd5e1 !important;
+          background: #e8454d !important;
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07) !important;
+          box-shadow: 0 6px 20px rgba(247, 89, 97, 0.35) !important;
         }
       }
 
-      @keyframes fast-gradient {
-        0% { background-position: 0% center; }
-        100% { background-position: -200% center; }
-      }
       .nlm-text {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: fast-gradient 4s linear infinite;
+        color: #f75961 !important;
+        -webkit-text-fill-color: #f75961 !important;
+        background: none !important;
       }
 
       /* Clean Frosted Transparent Custom Tab Navigation Bar Dock */
@@ -139,9 +130,9 @@ const GlobalStyles = () => {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        background: #eff6ff;
-        border: 1px solid #dbeafe;
-        color: #1d4ed8;
+        background: #fff0f1;
+        border: 1px solid #fecdd3;
+        color: #f75961;
         font-size: 11px;
         font-weight: 700;
         padding: 3px 10px;
@@ -156,9 +147,9 @@ const GlobalStyles = () => {
         border-radius: 999px;
         font-size: 13px;
         font-weight: 700;
-        background: rgba(59,130,246,0.06);
-        color: #1d4ed8;
-        border: 1px solid rgba(59,130,246,0.14);
+        background: #fff0f1;
+        color: #f75961;
+        border: 1px solid #fecdd3;
       }
       .sorb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(70px); }
       @media (min-width: 640px) { .sorb { filter: blur(100px); } }
@@ -180,7 +171,7 @@ const GlobalStyles = () => {
 /* --- Light Visual Design Tokens --- */
 const txtMuted = "#5f6368";
 const txtHead = "#111111";
-const accentColor = "#3b82f6";
+const accentColor = "#f75961";
 
 /* ──────────────────────────────────────────────────────────────
    ROBUST VECTOR FALLBACK LOGO
@@ -191,8 +182,8 @@ const InlineVectorLogo = () => (
     <path d="M12 6L5 19H19L12 6Z" fill="#ffffff" opacity="0.2" />
     <defs>
       <linearGradient id="about-logo-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#10b981" />
-        <stop offset="100%" stopColor="#0ea5e9" />
+        <stop offset="0%" stopColor="#f75961" />
+        <stop offset="100%" stopColor="#e8454d" />
       </linearGradient>
     </defs>
   </svg>
@@ -478,7 +469,7 @@ export default function AboutPage() {
           <nav className="mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-all duration-300 force-light-dock">
             <div className="flex items-center justify-between px-4 py-3 sm:px-6 bg-transparent">
               <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-extrabold tracking-tight transition-opacity active:opacity-90">
-                <div className="h-6 w-6 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20 overflow-hidden">
+                <div className="h-6 w-6 flex items-center justify-center rounded bg-[#fff0f1] border border-[#fecdd3] overflow-hidden">
                   {!logoFailed ? (
                     <img 
                       src="/ICON.ico" 
@@ -571,7 +562,7 @@ export default function AboutPage() {
                 </p>
 
                 <div className="mt-8 flex flex-wrap gap-4">
-                  <button onClick={() => navigate("/features")} className="btn-blue-gradient px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
+                  <button onClick={() => navigate("/features")} className="btn-black-action px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
                     <span>See how it works</span>
                   </button>
                   <button onClick={() => navigate("/contact")} className="btn-white-action px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
@@ -587,7 +578,7 @@ export default function AboutPage() {
                   ].map((item) => (
                     <div key={item.title} className="p-5 about-card bg-white">
                       <div className="flex items-center gap-2.5 font-bold text-slate-900">
-                        <div className="h-7 w-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                        <div className="h-7 w-7 rounded-lg bg-[#fff0f1] border border-[#fecdd3] flex items-center justify-center text-[#f75961] shrink-0">
                           <item.icon className="h-4 w-4" />
                         </div>
                         {item.title}
@@ -665,7 +656,7 @@ export default function AboutPage() {
                     transition={{ duration: 0.5, ease: "easeOut" }}
                     className="grid grid-cols-1 gap-4 p-6 md:grid-cols-[140px_1fr] about-card bg-white"
                   >
-                    <div className="text-sm font-extrabold mt-1 text-blue-600">{m.date}</div>
+                    <div className="text-sm font-extrabold mt-1 text-[#f75961]">{m.date}</div>
                     <div>
                       <div className="text-lg font-extrabold text-slate-900">{m.title}</div>
                       <div className="mt-2 text-sm font-medium leading-relaxed text-slate-600">{m.detail}</div>
@@ -722,7 +713,7 @@ export default function AboutPage() {
               <div className="mt-12 grid grid-cols-2 items-center gap-6 sm:grid-cols-4 bg-transparent">
                 {partners.map((p) => (
                   <div key={p.name} className="flex items-center justify-center p-8 about-card bg-white">
-                    <span className="text-sm font-bold tracking-wide text-slate-800 hover:text-blue-600 transition-colors">
+                    <span className="text-sm font-bold tracking-wide text-slate-800 hover:text-[#f75961] transition-colors">
                       {p.name}
                     </span>
                   </div>
@@ -786,7 +777,7 @@ export default function AboutPage() {
                     transition={{ delay: 0.25, duration: 0.5 }}
                     className="mt-8 flex flex-col sm:flex-row justify-center gap-4 bg-transparent"
                   >
-                    <button onClick={() => navigate("/")} className="btn-blue-gradient px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
+                    <button onClick={() => navigate("/")} className="btn-black-action px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
                       <span>Get started for free</span>
                     </button>
                     <button onClick={() => navigate("/contact")} className="btn-white-action px-8 py-3.5 text-base sm:text-lg font-bold flex items-center justify-center gap-2">
@@ -857,17 +848,17 @@ function ValueFeatureCard({ item, index }: { item: ValueItem; index: number }) {
           <motion.span
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
+            style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(247,89,97,0.08), transparent 80%)` }}
           />
 
           <div className="relative z-10 flex flex-col h-full">
             {/* Card Top: Icon Box + Title */}
             <div className="flex items-center gap-3 mb-4">
-              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 border border-blue-100 flex-shrink-0">
-                <Icon className="h-6 w-6 text-blue-600" />
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff0f1] border border-[#fecdd3] flex-shrink-0">
+                <Icon className="h-6 w-6 text-[#f75961]" />
                 {item.tag && (
                   <span
-                    className="absolute -right-2 -top-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-blue-700 bg-blue-50 border border-blue-200/80 shadow-xs"
+                    className="absolute -right-2 -top-2 rounded-full px-2 py-0.5 text-[10px] font-extrabold text-[#f75961] bg-[#fff0f1] border border-[#fecdd3] shadow-xs"
                   >
                     {item.tag}
                   </span>
@@ -885,7 +876,7 @@ function ValueFeatureCard({ item, index }: { item: ValueItem; index: number }) {
             <ul className="space-y-3 mb-6 flex-grow">
               {item.bullets.map((b, i) => (
                 <li key={i} className="flex items-start gap-2.5 text-sm font-medium">
-                  <div className="h-5 w-5 rounded-full bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shrink-0 mt-0.5">
+                  <div className="h-5 w-5 rounded-full bg-[#fff0f1] border border-[#fecdd3] flex items-center justify-center text-[#f75961] shrink-0 mt-0.5">
                     <Check size={12} strokeWidth={3} />
                   </div>
                   <span className="text-slate-700 font-semibold leading-snug">{b}</span>
@@ -908,7 +899,7 @@ function ValueFeatureCard({ item, index }: { item: ValueItem; index: number }) {
 
               <Link
                 to={item.href || "/features"}
-                className="inline-flex items-center text-xs sm:text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors group-hover:translate-x-0.5 flex-shrink-0"
+                className="inline-flex items-center text-xs sm:text-sm font-bold text-[#f75961] hover:text-[#e8454d] transition-colors group-hover:translate-x-0.5 flex-shrink-0"
               >
                 {item.cta || "Explore"}
                 <ArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -976,18 +967,18 @@ function TeamCard({
           <motion.span
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
+            style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(247,89,97,0.08), transparent 80%)` }}
           />
           <div className="relative z-10 text-center bg-transparent">
-            <Avatar className="mx-auto mb-4 h-28 w-28 ring-4 ring-blue-50 border border-slate-200/80 shadow-xs">
+            <Avatar className="mx-auto mb-4 h-28 w-28 ring-4 ring-[#fff0f1] border border-slate-200/80 shadow-xs">
               <AvatarImage src={member.image} alt={member.name} className="object-cover" />
-              <AvatarFallback className="text-xl font-extrabold bg-blue-50 text-blue-700">
+              <AvatarFallback className="text-xl font-extrabold bg-[#fff0f1] text-[#f75961]">
                 {member.name.substring(0, 2)}
               </AvatarFallback>
             </Avatar>
 
             <h3 className="text-xl font-extrabold tracking-tight text-slate-900">{member.name}</h3>
-            <p className="mt-1 text-sm font-bold text-blue-600">{member.role}</p>
+            <p className="mt-1 text-sm font-bold text-[#f75961]">{member.role}</p>
             <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">{member.description}</p>
           </div>
         </motion.div>
