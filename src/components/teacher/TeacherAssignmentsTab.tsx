@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import { toast } from "sonner";
+import { useMyScope } from "@/hooks/useMyScope";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -134,9 +135,13 @@ export default function TeacherAssignmentsTab() {
   const [bulkFeedback, setBulkFeedback] = useState("");
   const [bulkGrading, setBulkGrading] = useState(false);
 
+  // Batches + institute come from useMyScope (teaching + proctor sections; admin: all). Never teacher_batches.
+  const scope = useMyScope();
+
   useEffect(() => {
-    loadData();
-  }, [user?.id, user?.email]);
+    if (!scope.loading) loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, user?.id]);
 
   // ── Real-time subscription: refresh on any submission change ──
   useEffect(() => {
@@ -144,114 +149,36 @@ export default function TeacherAssignmentsTab() {
     const channelKey = `teacher-assignments-${instituteId || user?.id}`;
     const channel = supabase
       .channel(channelKey)
-      .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => loadData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => loadData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => loadDataRef.current())
+      .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => loadDataRef.current())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [instituteId, user?.id]);
 
+  // Realtime callbacks must call the latest loadData (with the loaded scope), not the first render's closure
+  const loadDataRef = useRef<() => Promise<void>>(async () => {});
+  loadDataRef.current = loadData;
+
   async function loadData() {
     setLoading(true);
     try {
-      let instId: string | null = null;
+      const instId = scope.instituteId;
+      if (instId) setInstituteId(instId);
 
-      if (user?.id) {
-        // 1. Look up by user_id in institute_members
-        const { data: member } = await supabase
-          .from("institute_members")
-          .select("institute_id")
-          .eq("user_id", user.id)
-          .eq("status", "active")
-          .limit(1)
-          .maybeSingle();
+      // Batches = my scope only (the dropdown can't offer a batch the teacher doesn't teach)
+      const batchRows: Batch[] = scope.batches.map(b => ({ id: b.id, name: b.name, class_level: b.class_level || "" }));
+      const scopeIds = batchRows.map(b => b.id);
 
-        if (member?.institute_id) {
-          instId = member.institute_id;
-        } else if (user?.email) {
-          // 1b. Look up by user_email in institute_members
-          const { data: emailMember } = await supabase
-            .from("institute_members")
-            .select("id, institute_id, user_id")
-            .eq("user_email", user.email)
-            .limit(1)
-            .maybeSingle();
-
-          if (emailMember?.institute_id) {
-            instId = emailMember.institute_id;
-            if (!emailMember.user_id) {
-              await supabase
-                .from("institute_members")
-                .update({ user_id: user.id })
-                .eq("id", emailMember.id);
-            }
-          }
-        }
-
-        // 2. Check if owner of an institute directly
-        if (!instId) {
-          const { data: ownerInst } = await supabase
-            .from("institutes")
-            .select("id")
-            .eq("owner_id", user.id)
-            .limit(1)
-            .maybeSingle();
-
-          if (ownerInst?.id) {
-            instId = ownerInst.id;
-          }
-        }
-      }
-
-      if (instId) {
-        setInstituteId(instId);
-      }
-
-      // Fetch assignments: query either by institute_id OR created_by = user.id
-      let asgnQuery = supabase.from("assignments").select("*");
-      if (instId && user?.id) {
-        asgnQuery = asgnQuery.or(`institute_id.eq.${instId},created_by.eq.${user.id}`);
-      } else if (instId) {
-        asgnQuery = asgnQuery.eq("institute_id", instId);
-      } else if (user?.id) {
-        asgnQuery = asgnQuery.eq("created_by", user.id);
-      }
-      const { data: asgns, error: asgnsErr } = await asgnQuery.order("created_at", { ascending: false });
-
-      if (asgnsErr) {
-        console.error("Error fetching assignments:", asgnsErr);
-      }
-
-      // 1. Fetch institute batches
-      let batchRows: Batch[] = [];
-      if (instId) {
-        const { data: bRows } = await supabase
-          .from("batches")
-          .select("id, name, class_level")
-          .eq("institute_id", instId)
-          .order("name");
-        batchRows = bRows || [];
-      }
-
-      // 2. Ensure any batch_id referenced in existing assignments is included
-      const foundBatchIds = new Set(batchRows.map(b => b.id));
-      const missingBatchIds = (asgns || [])
-        .map(a => a.batch_id)
-        .filter(id => id && !foundBatchIds.has(id));
-
-      if (missingBatchIds.length > 0) {
-        const { data: moreBatches } = await supabase
-          .from("batches")
-          .select("id, name, class_level")
-          .in("id", missingBatchIds);
-
-        if (moreBatches) {
-          moreBatches.forEach(b => {
-            if (!foundBatchIds.has(b.id)) {
-              batchRows.push(b);
-              foundBatchIds.add(b.id);
-            }
-          });
-        }
+      // Assignments of my batches only
+      let asgns: any[] = [];
+      if (scopeIds.length > 0) {
+        let asgnQuery = supabase.from("assignments").select("*");
+        asgnQuery = scope.isAdmin && instId
+          ? asgnQuery.eq("institute_id", instId)
+          : asgnQuery.in("batch_id", scopeIds);
+        const { data, error: asgnsErr } = await asgnQuery.order("created_at", { ascending: false });
+        if (asgnsErr) console.error("Error fetching assignments:", asgnsErr);
+        asgns = data || [];
       }
 
       setBatches(batchRows);
@@ -286,12 +213,14 @@ export default function TeacherAssignmentsTab() {
       }
 
       const batchStudentCount: Record<string, number> = {};
-      if (instId) {
-        const { data: studentCounts } = await supabase
+      if (instId && scopeIds.length > 0) {
+        let countQuery = supabase
           .from("students")
           .select("batch_id")
           .eq("institute_id", instId)
           .eq("is_active", true);
+        if (!scope.isAdmin) countQuery = countQuery.in("batch_id", scopeIds);
+        const { data: studentCounts } = await countQuery;
 
         if (studentCounts) {
           studentCounts.forEach(s => {

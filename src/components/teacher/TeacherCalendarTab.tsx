@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import { toast } from "sonner";
+import { useMyScope } from "@/hooks/useMyScope";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -109,9 +110,17 @@ export default function TeacherCalendarTab() {
   // Detail view
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
+  // Institute + batches from useMyScope (teaching + proctor sections; admin: all). Never teacher_batches.
+  const scope = useMyScope();
+
   useEffect(() => {
-    loadData();
-  }, [user]);
+    if (!scope.loading) loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, user?.id]);
+
+  // Realtime callbacks must call the latest loadData (with the loaded scope), not the first render's closure
+  const loadDataRef = React.useRef<() => Promise<void>>(async () => {});
+  loadDataRef.current = loadData;
 
   // Realtime
   useEffect(() => {
@@ -121,12 +130,12 @@ export default function TeacherCalendarTab() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "calendar_events" },
-        () => loadData()
+        () => loadDataRef.current()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "assignments" },
-        () => loadData()
+        () => loadDataRef.current()
       )
       .subscribe();
     return () => {
@@ -137,45 +146,42 @@ export default function TeacherCalendarTab() {
   async function loadData() {
     setLoading(true);
     try {
-      const { data: member } = await supabase
-        .from("institute_members")
-        .select("institute_id")
-        .eq("user_id", user?.id)
-        .eq("status", "active")
-        .limit(1)
-        .single();
-
-      if (!member) {
+      // No institute_members .single() lookup (breaks for multi-row members) — institute comes from get_my_access()
+      const instId = scope.instituteId;
+      if (!instId) {
         setLoading(false);
         return;
       }
-      setInstituteId(member.institute_id);
+      setInstituteId(instId);
 
-      const { data: bRows } = await supabase
-        .from("batches")
-        .select("id, name")
-        .eq("institute_id", member.institute_id)
-        .eq("is_active", true)
-        .order("name");
-
-      if (bRows) setBatches(bRows);
+      const bRows: Batch[] = scope.batches.map((b) => ({ id: b.id, name: b.name }));
+      setBatches(bRows);
       const batchMap: Record<string, string> = {};
-      bRows?.forEach((b) => (batchMap[b.id] = b.name));
+      bRows.forEach((b) => (batchMap[b.id] = b.name));
+      const scopeIds = bRows.map((b) => b.id);
 
-      // Fetch calendar events
-      const { data: evts } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .eq("institute_id", member.institute_id)
-        .order("start_time");
+      // Events: my batches + institute-wide ones (batch_id null). Admin: everything in the institute.
+      let evtQuery = supabase.from("calendar_events").select("*").eq("institute_id", instId);
+      if (!scope.isAdmin) {
+        evtQuery = scopeIds.length
+          ? evtQuery.or(`batch_id.is.null,batch_id.in.(${scopeIds.join(",")})`)
+          : evtQuery.is("batch_id", null);
+      }
+      const { data: evts } = await evtQuery.order("start_time");
 
-      // Fetch assignments with deadlines (auto-show as calendar events)
-      const { data: asgns } = await supabase
-        .from("assignments")
-        .select("id, title, batch_id, deadline, max_marks")
-        .eq("institute_id", member.institute_id)
-        .eq("status", "active")
-        .not("deadline", "is", null);
+      // Assignment deadlines of my batches (auto-show as calendar events)
+      let asgns: any[] = [];
+      if (scope.isAdmin || scopeIds.length) {
+        let asgQuery = supabase
+          .from("assignments")
+          .select("id, title, batch_id, deadline, max_marks")
+          .eq("institute_id", instId)
+          .eq("status", "active")
+          .not("deadline", "is", null);
+        if (!scope.isAdmin) asgQuery = asgQuery.in("batch_id", scopeIds);
+        const { data } = await asgQuery;
+        asgns = data || [];
+      }
 
       const calEvents: CalendarEvent[] = [];
 
@@ -232,7 +238,8 @@ export default function TeacherCalendarTab() {
       end_time: "",
       all_day: false,
       meeting_link: "",
-      batch_id: "",
+      // Non-admins can't post institute-wide events (RLS cal_insert) → default to their first batch
+      batch_id: scope.isAdmin ? "" : batches[0]?.id || "",
       color: "#6366F1",
     });
     setShowCreate(true);
@@ -240,6 +247,10 @@ export default function TeacherCalendarTab() {
 
   async function handleCreate() {
     if (!form.title.trim() || !form.start_time || !instituteId || !user) return;
+    if (!scope.isAdmin && !form.batch_id) {
+      toast.error("Aapko abhi koi batch assign nahi hua — event sirf apni batch ke liye bana sakte hain.");
+      return;
+    }
     setSaving(true);
     try {
       const { error } = await supabase.from("calendar_events").insert({
@@ -488,7 +499,7 @@ export default function TeacherCalendarTab() {
                     onChange={(e) => setForm({ ...form, batch_id: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-white/10 text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="">All Batches (Public)</option>
+                    {scope.isAdmin && <option value="">All Batches (Public)</option>}
                     {batches.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.name}

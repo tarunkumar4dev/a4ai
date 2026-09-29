@@ -333,7 +333,7 @@ const App = () => {
                       <Route path="/hod-dashboard" element={<Navigate to="/hod" replace />} />
                       <Route path="/hod/dashboard" element={<Navigate to="/hod" replace />} /> 
                       <Route path="/q/:slug" element={<CommunityQuizPlayPage />} />
-                      <Route path="/institute/students/:studentId" element={<StudentProfilePage />} />
+                      <Route path="/institute/students/:studentId" element={<RoleRoute allow={['admin', 'hod', 'proctor', 'teacher']}><StudentProfilePage /></RoleRoute>} />
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/student" element={<StudentPortalPage />} />

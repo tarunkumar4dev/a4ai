@@ -7,18 +7,16 @@
 // Backward compatible: dept/section nullable, works without them
 // ──────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
-import AssignTeacherModal from "@/components/institute/AssignTeacherModal";
 import BulkStudentUpload from "@/components/institute/BulkStudentUpload";
 import BatchManagementPanel from "@/components/admin/BatchManagementPanel";
 import HODAttendanceDashboard from "@/components/attendance/HODAttendanceDashboard";
 import { customStyles, Icons } from "@/pages/institute/dashboardTheme";
 
-const InstituteAttendanceView = lazy(() => import("@/components/attendance/InstituteAttendanceView"));
 
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -141,7 +139,6 @@ export default function InstituteDashboardPage() {
   const [showAddDept, setShowAddDept] = useState(false);
   const [showAddSection, setShowAddSection] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [assignBatch, setAssignBatch] = useState<{ id: string; name: string } | null>(null);
   const [isHod, setIsHod] = useState(false);
   const [hodDeptId, setHodDeptId] = useState<string | null>(null);
   const [assignTeacherBatches, setAssignTeacherBatches] = useState<{ teacherId: string; teacherName: string } | null>(null);
@@ -290,17 +287,6 @@ export default function InstituteDashboardPage() {
       if (e.data) setDepartments(e.data as Department[]);
       if (f.data) setSections(f.data as Section[]);
 
-      const { data: tbData } = await supabase
-        .from("teacher_batches")
-        .select("teacher_id, batch_id")
-        .eq("institute_id", id);
-      const tbMap: Record<string, string[]> = {};
-      tbData?.forEach((tb: any) => {
-        if (!tbMap[tb.teacher_id]) tbMap[tb.teacher_id] = [];
-        tbMap[tb.teacher_id].push(tb.batch_id);
-      });
-      setTeacherBatchMap(tbMap);
-
       // Subjects list
       const { data: subjData } = await supabase
         .from("subjects")
@@ -316,11 +302,16 @@ export default function InstituteDashboardPage() {
         .eq("institute_id", id)
         .eq("is_active", true);
       const taMap: Record<string, { batch_id: string; subject_id: string }[]> = {};
+      // Teacher → batches is derived from teaching_assignments (legacy teacher_batches is no longer read or written)
+      const tbMap: Record<string, string[]> = {};
       taData?.forEach((ta: any) => {
         if (!taMap[ta.teacher_id]) taMap[ta.teacher_id] = [];
         taMap[ta.teacher_id].push({ batch_id: ta.batch_id, subject_id: ta.subject_id });
+        if (!tbMap[ta.teacher_id]) tbMap[ta.teacher_id] = [];
+        if (!tbMap[ta.teacher_id].includes(ta.batch_id)) tbMap[ta.teacher_id].push(ta.batch_id);
       });
       setTeacherSubjectMap(taMap);
+      setTeacherBatchMap(tbMap);
     } catch (err) {
       console.error("Data load error:", err);
       toast.error("Couldn't load your institute data");
@@ -448,6 +439,7 @@ export default function InstituteDashboardPage() {
 
   const removeTeacher = async (id: string, userId?: string) => {
     if (!confirm("Remove this teacher from the institute? This cannot be undone.")) return;
+    // Legacy cleanup only — teacher_batches is never written anymore
     if (userId) await supabase.from("teacher_batches").delete().eq("teacher_id", userId);
     const { error } = await supabase.from("institute_members").delete().eq("id", id);
     if (error) return toast.error(error.message);
@@ -492,18 +484,6 @@ export default function InstituteDashboardPage() {
     fetchData();
   };
 
-  const assignBatchToTeacher = async (teacherUserId: string, batchId: string) => {
-    if (!institute) return;
-    const { error } = await supabase.from("teacher_batches").insert({
-      teacher_id: teacherUserId,
-      batch_id: batchId,
-      institute_id: institute.id,
-    });
-    if (error && error.code !== "23505") return toast.error(error.message);
-    toast.success("Batch assigned!");
-    fetchData();
-  };
-
   const assignSubjectToTeacher = async (teacherUserId: string, batchId: string, subjectId: string) => {
     if (!institute) return;
     const { error } = await supabase.from("teaching_assignments").insert({
@@ -530,12 +510,14 @@ export default function InstituteDashboardPage() {
     fetchData();
   };
 
+  /** Removes every subject this teacher teaches in this batch (teaching_assignments). */
   const removeBatchFromTeacher = async (teacherUserId: string, batchId: string) => {
     if (!institute) return;
-    const { error } = await supabase.from("teacher_batches")
+    const { error } = await supabase.from("teaching_assignments")
       .delete()
       .eq("teacher_id", teacherUserId)
-      .eq("batch_id", batchId);
+      .eq("batch_id", batchId)
+      .eq("institute_id", institute.id);
     if (error) return toast.error(error.message);
     toast.success("Batch removed");
     fetchData();
@@ -1561,7 +1543,6 @@ export default function InstituteDashboardPage() {
                     return (
                       <div key={b.id} className="bg-white rounded-2xl p-5 card-shadow card-hover border border-slate-50 relative group anim-row">
                         <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => setAssignBatch({ id: b.id, name: b.name })} title="Assign teacher" className="p-1.5 rounded-lg text-slate-400 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.UserPlus /></button>
                           <button onClick={() => deleteBatch(b.id)} title="Delete batch" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                         </div>
                         <div className="w-11 h-11 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center mb-3"><Icons.Layers /></div>
@@ -1844,16 +1825,6 @@ export default function InstituteDashboardPage() {
         </div>
       )}
 
-      {assignBatch && (
-        <AssignTeacherModal
-          batchId={assignBatch.id}
-          batchName={assignBatch.name}
-          teachers={teachers}
-          onClose={() => setAssignBatch(null)}
-          onAssigned={fetchData}
-        />
-      )}
-
       {assignTeacherBatches && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAssignTeacherBatches(null)}>
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
@@ -1861,7 +1832,8 @@ export default function InstituteDashboardPage() {
               <h3 className="text-lg font-bold text-slate-800">Assign Batches</h3>
               <button onClick={() => setAssignTeacherBatches(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
             </div>
-            <p className="text-sm text-slate-500 mb-4">Teacher: <strong>{assignTeacherBatches.teacherName}</strong></p>
+            <p className="text-sm text-slate-500 mb-1">Teacher: <strong>{assignTeacherBatches.teacherName}</strong></p>
+            <p className="text-xs text-slate-400 mb-4">A teacher is assigned to a batch through a subject (teaching_assignments).</p>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {batches.map(b => {
                 const isAssigned = (teacherBatchMap[assignTeacherBatches.teacherId] || []).includes(b.id);
@@ -1873,12 +1845,25 @@ export default function InstituteDashboardPage() {
                       <p className="text-sm font-bold text-slate-800">{b.name}</p>
                       <p className="text-xs text-slate-400">{b.class_level ? "Class " + b.class_level : ""} {b.department_id ? "· " + deptName(b.department_id) : ""}</p>
                     </div>
-                    <button
-                      onClick={() => isAssigned ? removeBatchFromTeacher(assignTeacherBatches.teacherId, b.id) : assignBatchToTeacher(assignTeacherBatches.teacherId, b.id)}
-                      className={"px-4 py-1.5 rounded-lg text-xs font-bold transition-colors " + (isAssigned ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-indigo-500 text-white hover:bg-indigo-600")}
-                    >
-                      {isAssigned ? "Remove" : "Assign"}
-                    </button>
+                    {isAssigned ? (
+                      <button
+                        onClick={() => removeBatchFromTeacher(assignTeacherBatches.teacherId, b.id)}
+                        className="px-4 py-1.5 rounded-lg text-xs font-bold transition-colors bg-red-50 text-red-600 hover:bg-red-100"
+                      >
+                        Remove
+                      </button>
+                    ) : (
+                      <select
+                        value=""
+                        onChange={e => { if (e.target.value) assignSubjectToTeacher(assignTeacherBatches.teacherId, b.id, e.target.value); }}
+                        className="px-2 py-1.5 rounded-lg text-xs font-bold bg-indigo-500 text-white outline-none cursor-pointer max-w-[150px]"
+                      >
+                        <option value="">Assign with subject…</option>
+                        {subjects.filter(s => !b.department_id || !s.department_id || s.department_id === b.department_id).map(s => (
+                          <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ""}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 );
               })}

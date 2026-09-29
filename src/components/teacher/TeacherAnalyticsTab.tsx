@@ -14,6 +14,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import * as XLSX from "xlsx";
+import { useMyScope } from "@/hooks/useMyScope";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -259,8 +260,11 @@ export default function TeacherAnalyticsTab({
   const [tests, setTests] = useState<TestItem[]>([]);
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
+  const scope = useMyScope();
+
   /* ───── FETCH TEACHER DATA ───── */
   const fetchData = useCallback(async () => {
+    if (scope.loading) return;
     if (!user?.id) {
       setLoading(false);
       return;
@@ -270,60 +274,11 @@ export default function TeacherAnalyticsTab({
     setErrorMsg(null);
 
     try {
-      // 1. Get institute membership
-      const { data: mem } = await supabase
-        .from("institute_members")
-        .select("institute_id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .limit(1)
-        .maybeSingle();
-
-      const instId = mem?.institute_id;
-
-      // 2. Fetch assigned batches in parallel
-      const [taRes, tbRes, pbRes] = await Promise.all([
-        supabase
-          .from("teaching_assignments")
-          .select("batch_id, batches(id, name, class_level)")
-          .eq("teacher_id", user.id)
-          .eq("is_active", true),
-        supabase
-          .from("teacher_batches")
-          .select("batch_id, batches(id, name, class_level)")
-          .eq("teacher_id", user.id),
-        supabase
-          .from("batches")
-          .select("id, name, class_level")
-          .eq("proctor_id", user.id)
-          .eq("is_active", true),
-      ]);
-
+      // 1–2. Batches = my scope only (teaching_assignments / timetable + proctor sections) via useMyScope.
+      //      Legacy teacher_batches and batches.proctor_id are no longer used for scope.
       const batchMap = new Map<string, BatchOption>();
-      (taRes.data || []).forEach((row: any) => {
-        if (row.batches) {
-          batchMap.set(row.batches.id, {
-            id: row.batches.id,
-            name: row.batches.name,
-            classLevel: row.batches.class_level,
-          });
-        }
-      });
-      (tbRes.data || []).forEach((row: any) => {
-        if (row.batches) {
-          batchMap.set(row.batches.id, {
-            id: row.batches.id,
-            name: row.batches.name,
-            classLevel: row.batches.class_level,
-          });
-        }
-      });
-      (pbRes.data || []).forEach((b: any) => {
-        batchMap.set(b.id, {
-          id: b.id,
-          name: b.name,
-          classLevel: b.class_level,
-        });
+      scope.batches.forEach((b) => {
+        batchMap.set(b.id, { id: b.id, name: b.name, classLevel: b.class_level || undefined });
       });
 
       const teacherBatches = Array.from(batchMap.values());
@@ -494,7 +449,7 @@ export default function TeacherAnalyticsTab({
     } finally {
       setLoading(false);
     }
-  }, [user?.id, selectedBatchId, timeRange]);
+  }, [user?.id, selectedBatchId, timeRange, scope]);
 
   useEffect(() => {
     fetchData();

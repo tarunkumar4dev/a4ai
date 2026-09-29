@@ -79,18 +79,33 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - B2: StudentPortalPage uses the shared persisted client → if staff is logged in in the same browser, portal requests carry staff JWT and anon policies don't apply. Test portal in incognito. Fix in Step 5 (separate non-persisted client or access-code RPCs).
   - B3: teachers only on legacy teacher_batches see empty dashboards until HOD assigns them via teaching_assignments.
   - HOD still sees ALL institute `institute_members` and `subjects` (AdminDashboardPage.tsx:275-277) — needs policies in a separate migration (02b), after checking every component that reads institute_members.
-  - UI still shows actions RLS now blocks: teacher "Add student" (TeacherStudentsTab:405), teacher "All batches" calendar event (TeacherCalendarTab:245). Access-code insert at TeacherStudentsTab:422 ignores errors. → Step 4.
+  - ~~UI still shows actions RLS now blocks: teacher "Add student" (TeacherStudentsTab:405), teacher "All batches" calendar event (TeacherCalendarTab:245). Access-code insert at TeacherStudentsTab:422 ignores errors.~~ Fixed in Step 4.
   - JoinInstitutePage fallback (:143-186) is broken (upsert ignores errors, shows "Joined!"). Main path is join_institute_by_code RPC.
   - ~~HODDashboardPage.tsx is dead code; /hod renders AdminDashboardPage.~~ Fixed in Step 3.
   - Unverified: whether join_institute_by_code / create_timetable_slot / assign_proctor / get_member_directory check the caller's role (definitions not in repo).
   - BulkStudentUpload: ALWAYS pick dept + section in the dropdown, else department_id/section_id go null and only admin sees those students.
 - [x] Step 3 (29 Sep): `/hod` = `src/pages/hod/HODDashboardPage.tsx` (AdminDashboardPage deleted). Shell/classes shared via `src/pages/institute/dashboardTheme.tsx` (customStyles + Icons, moved verbatim from InstituteDashboardPage). Tabs Overview · Sections · Teachers · Students · Attendance · Timetable. Dept from `useAccess()` (HOD: hod_department_ids; admin preview: dept picker, no "All"); every query filters by department. New section = main batch + optional labs A/B/C (institute_id, department_id, section_id always set). Section delete only if 0 students + 0 class_sessions (batch delete cascades). Subject assign → teaching_assignments only, per batch (main/lab). Timetable via create/delete_timetable_slot with explicit batch. `HODAttendanceDashboard` got `lockDeptId` (no dept dropdown, no institute-wide fallback, sessions filtered by the dept's batches). `npm run build` passes.
-- [ ] Step 3 test: HOD ECE → /hod shows only ECE; create ECE-2 (+A/B/C) → 4 batches with all 3 ids; assign proctor, subject teacher (incl. other-dept teacher via search), timetable slot; admin → /hod picker switches dept.
+- [x] Step 3 test (30 Sep, browser): HOD login → /hod shows only ECE; section create → 4 batches with institute_id/department_id/section_id set; subject assign on main batch only; section delete — all pass.
 - Known after Step 3:
   - `get_proctor_section_day` / `get_proctor_section_monthly` definitions not in repo — may reject a non-proctor HOD. UI hides Overview "Today" strip + Attendance section cards on error (console.warn). Verify/fix HOD access in a 03 migration.
   - Cross-dept teacher search in HOD TeacherPicker reads `institute_members` directly (active, teacher/hod, max 10, only id/user_id/name/email) — `// TODO 02b` in code; replace with a scoped RPC once institute_members RLS lands.
   - HOD page still calls `get_member_directory(institute)` to fill missing names (only used for its own scoped member list) — include in the 02b review.
   - Pre-existing tsc errors (Vite build unaffected): App.tsx `<Toaster position>`, InstituteDashboardPage overview search `activeTab !== "students"` narrowing.
+- [x] Step 4 (30 Sep): `src/hooks/useMyScope.ts` = the only source of teacher-side scope (useAccess: teaching_batch_ids + all batches of proctor_section_ids; admin = all institute batches; `canManageStudents`/`manageableBatches` = admin/HOD only). Never teacher_batches. Findings fixed:
+  4 TeacherStudentsTab — no fallbacks; empty state "Aapko abhi koi batch assign nahi hua — HOD se contact karein"; Add student only admin/HOD, into manageableBatches, payload sets department_id + section_id; access-code insert error → toast.warning.
+  5 TeacherAssignmentsTab — batch dropdown + assignment list = scope batches only (legacy teachers lose sight of old posts outside scope — accepted).
+  6 TeacherCalendarTab — scoped batches/events/deadlines (+ institute-wide events); "All Batches (Public)" admin-only; no institute_members `.single()`.
+  7 TeacherAnalyticsTab — scope from hook; teacher_batches + batches.proctor_id queries removed.
+  8 InstituteTeacherPanel — My Batches from hook; own member row read multi-row safe; email auto-link update removed.
+  9 AssignTeacherModal deleted (it wrote to non-existent `batch_teachers`). Admin "📚 Batches" modal/teacher card now read + write `teaching_assignments` (assign = batch + subject; remove = delete TA rows). No `.insert/.update/.upsert` on teacher_batches left in src (only the legacy cleanup delete in removeTeacher).
+  10 InstituteAttendanceView deleted (was lazy-imported, never rendered).
+  12 StudentProfilePage — `a4_can_view_student` RPC first ("Access nahi hai" on false/error); attendance from attendance_records + class_sessions.session_date (% = present / all marked, leave in total); route wrapped in RoleRoute (all staff).
+  Realtime callbacks in Assignments/Calendar call the latest loadData via ref (else they reload with an empty scope). `npm run build` passes. No 03 migration needed.
+- [ ] Step 4 test: subject teacher ECE-2 → Students/Assignments/Calendar/Analytics show only ECE-2 batches; unassigned teacher → empty state; proctor → all ECE-2 batches incl. labs; teacher opening another dept's student profile URL → "Access nahi hai"; admin → Batches modal assigns via subject.
+- Known after Step 4:
+  - TeacherStudentsTab attendance % still reads legacy `attendance` JSONB table (shows 0% under v2) — switch to attendance_records like StudentProfilePage.
+  - HODAttendanceDashboard still READS teacher_batches (display mapping only, not scope). Remove when convenient.
+  - `src/hooks/useInstituteTeacher.ts` is unused and reads non-existent `batch_teachers` — delete later.
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
