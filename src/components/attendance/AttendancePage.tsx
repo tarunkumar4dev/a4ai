@@ -1,52 +1,34 @@
 // src/components/attendance/AttendancePage.tsx
-// Wrapper — Teaching tab always, My Section tab auto-if proctor
-// Drop this into your route/page file
+// Teacher dashboard → "Attendance" tab = marking my own classes.
+// The proctor (class teacher) dashboard lives in its own "My Section" tab of the teacher
+// dashboard, so it is not duplicated here — proctors just get a shortcut banner.
 
-import React, { useState } from "react";
+import React from "react";
 import TeacherAttendanceView from "./TeacherAttendanceView";
-import ProctorSectionView, { useProctorCheck } from "./ProctorSectionView";
+import { useProctorCheck } from "./ProctorSectionView";
 
-type Tab = "teaching" | "section";
-
-export default function AttendancePage() {
-  const { isProctor } = useProctorCheck();
-  const [tab, setTab] = useState<Tab>("teaching");
+export default function AttendancePage({ onOpenSection }: {
+  /** Switch the teacher dashboard to the "My Section" tab. Optional. */
+  onOpenSection?: () => void;
+} = {}) {
+  const { isProctor, proctorSections } = useProctorCheck();
 
   return (
-    <div className="w-full">
-      {/* Tab bar — horizontal scroll on small screens */}
-      <div className="flex gap-0.5 mb-4 sm:mb-6 overflow-x-auto scrollbar-none -mx-1 px-1">
-        <button onClick={() => setTab("teaching")}
-          className={`relative px-4 sm:px-6 py-3 font-bold text-sm sm:text-base transition-colors whitespace-nowrap shrink-0 touch-manipulation active:scale-[0.97] ${
-            tab === "teaching" ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"
-          }`}>
-          Teaching
-          {tab === "teaching" && (
-            <span className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full"
-              style={{ background: "linear-gradient(90deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }} />
+    <div className="w-full space-y-4 sm:space-y-6">
+      {isProctor && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border border-teal-200/70 dark:border-teal-800/40 bg-teal-50/70 dark:bg-teal-950/20">
+          <p className="text-xs sm:text-sm font-semibold text-teal-800 dark:text-teal-300 min-w-0">
+            You're class teacher of <b>{proctorSections.map(s => s.name).join(", ")}</b> — see every subject's marking, correct marks and export the monthly sheet.
+          </p>
+          {onOpenSection && (
+            <button onClick={onOpenSection}
+              className="shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 active:scale-95 touch-manipulation">
+              My Section →
+            </button>
           )}
-        </button>
-
-        {isProctor && (
-          <button onClick={() => setTab("section")}
-            className={`relative px-4 sm:px-6 py-3 font-bold text-sm sm:text-base transition-colors whitespace-nowrap shrink-0 touch-manipulation active:scale-[0.97] ${
-              tab === "section" ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"
-            }`}>
-            My Section
-            {tab === "section" && (
-              <span className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full"
-                style={{ background: "linear-gradient(90deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }} />
-            )}
-          </button>
-        )}
-      </div>
-
-      {/* Divider */}
-      <div className="h-px bg-slate-200/60 dark:bg-white/5 -mt-4 sm:-mt-6 mb-4 sm:mb-6" />
-
-      {/* Content */}
-      {tab === "teaching" && <TeacherAttendanceView />}
-      {tab === "section" && isProctor && <ProctorSectionView />}
+        </div>
+      )}
+      <TeacherAttendanceView />
     </div>
   );
 }

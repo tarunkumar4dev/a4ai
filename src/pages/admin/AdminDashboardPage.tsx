@@ -3,27 +3,26 @@
 //
 // HOD sees ONLY their department:
 //   Department → Sections (create / delete, assign Proctor)
-//             → Section detail (assign subject teachers, lab batches A/B/C)
+//             → Section detail (assign subject teachers, timetable, lab batches A/B/C,
+//                               attendance = ProctorSectionView in read-only mode)
 // Institute owner/admin can open it too and pick any department (preview mode).
 //
 // ID conventions (matches InstituteDashboardPage):
 //   teaching_assignments.teacher_id = auth user_id
 //   teacher_batches.teacher_id      = auth user_id
-//   proctor_assignments.teacher_id  = see PROCTOR_ID_FIELD below
+//   proctor_assignments.teacher_id  = institute_members.id  (FK), UNIQUE(section_id)
+//   batches.proctor_id              = auth user_id (used by attendance_records RLS) — kept in sync
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import ProctorSectionView from "@/components/attendance/ProctorSectionView";
 import {
   Building2, Users, GraduationCap, Layers, ChevronRight, Plus, Shield,
   BookOpen, AlertCircle, X, Loader2, LogOut, Trash2, CalendarCheck, FlaskConical,
+  Clock, BarChart3,
 } from "lucide-react";
-
-// ⚠️ Verify against ProctorSectionView before relying on it.
-// If ProctorSectionView looks up proctor_assignments by institute_members.id,
-// change this to "id". Display below matches BOTH, only the insert depends on it.
-const PROCTOR_ID_FIELD: "user_id" | "id" = "user_id";
 
 // ============================================================
 // TYPES
@@ -39,6 +38,25 @@ interface Subject { id: string; name: string; code: string | null; department_id
 interface TA { teacher_id: string; batch_id: string; subject_id: string; }
 interface Proctor { teacher_id: string; section_id: string; }
 interface Stu { id: string; section_id: string | null; batch_id: string | null; }
+interface TSlot {
+  id: string; institute_id: string; batch_id: string; subject_id: string;
+  teacher_id: string; day_of_week: number; start_time: string; end_time: string;
+  room: string | null; is_active: boolean;
+}
+interface TodaySession {
+  sessionId: string; sectionId: string; batchId: string; batchName: string;
+  subjectName: string; subjectCode: string;
+  teacherName: string; startTime: string | null; isMarked: boolean;
+  presentCount: number; absentCount: number; leaveCount: number;
+  totalStudents: number;
+}
+interface MonthCell { held: number; present: number; pct: number; }
+interface MonthRow {
+  studentId: string; name: string; rollNo: string;
+  subjects: Record<string, MonthCell>;
+  held: number; present: number; pct: number;
+}
+interface SectionMonth { rows: MonthRow[]; codes: string[]; names: Record<string, string>; }
 
 // ============================================================
 // STYLES
@@ -61,6 +79,32 @@ const styles = `
 // ============================================================
 // HELPERS
 // ============================================================
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const localDate = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const pctColor = (p: number) => (p >= 75 ? "text-emerald-600" : p >= 50 ? "text-amber-600" : "text-red-600");
+
+/** get_proctor_section_monthly rows → one row per student, one cell per subject */
+function buildMonth(data: any[]): SectionMonth {
+  const names: Record<string, string> = {};
+  const map = new Map<string, MonthRow>();
+  for (const r of data) {
+    names[r.subject_code] = r.subject_name;
+    if (!map.has(r.student_id)) map.set(r.student_id, {
+      studentId: r.student_id, name: r.student_name, rollNo: r.roll_no || "—",
+      subjects: {}, held: 0, present: 0, pct: 0,
+    });
+    const row = map.get(r.student_id)!;
+    const held = Number(r.total_held) || 0, present = Number(r.total_present) || 0;
+    row.subjects[r.subject_code] = { held, present, pct: Number(r.percentage) || 0 };
+    row.held += held; row.present += present;
+  }
+  const rows = [...map.values()]
+    .map(r => ({ ...r, pct: r.held ? Math.round((r.present / r.held) * 100) : 0 }))
+    .sort((a, b) => a.rollNo.localeCompare(b.rollNo, undefined, { numeric: true }));
+  return { rows, codes: Object.keys(names).sort(), names };
+}
+
 const nameOf = (m?: Member | null) => m?.user_name || m?.user_email?.split("@")[0] || "Unnamed";
 const initials = (n: string) => n.split(" ").filter(Boolean).slice(0, 2).map(p => p[0]).join("").toUpperCase() || "?";
 
@@ -140,19 +184,33 @@ const AdminDashboardPage: React.FC = () => {
   const [dept, setDept] = useState<Dept | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
+  const subjects = useMemo(() => allSubjects.filter(s => !s.department_id || s.department_id === deptId), [allSubjects, deptId]);
   const [tas, setTas] = useState<TA[]>([]);
   const [proctors, setProctors] = useState<Proctor[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [students, setStudents] = useState<Stu[]>([]);
 
+  // timetable
+  const [tSlots, setTSlots] = useState<TSlot[]>([]);
+
+  // attendance
+  const [todaySessions, setTodaySessions] = useState<TodaySession[]>([]);
+  const [attLoading, setAttLoading] = useState(false);
+  const [attView, setAttView] = useState<"today" | "month">("today");
+  const [attMonth, setAttMonth] = useState(() => new Date().getMonth() + 1);
+  const [attYear, setAttYear] = useState(() => new Date().getFullYear());
+  const [monthly, setMonthly] = useState<Record<string, SectionMonth>>({});
+  const [monLoading, setMonLoading] = useState(false);
+
   // navigation + modals
   const [openSectionId, setOpenSectionId] = useState<string | null>(null);
-  const [modal, setModal] = useState<null | "section" | "proctor" | "subject" | "batch">(null);
+  const [modal, setModal] = useState<null | "section" | "proctor" | "subject" | "batch" | "timetable">(null);
   const [busy, setBusy] = useState(false);
   const [newSection, setNewSection] = useState({ name: "", year: "" });
   const [newBatchName, setNewBatchName] = useState("");
   const [subjForm, setSubjForm] = useState<{ subjectId: string; newName: string; teacher: Member | null }>({ subjectId: "", newName: "", teacher: null });
+  const [ttForm, setTtForm] = useState({ subjectId: "", teacherId: "", day: 1, startTime: "09:00", endTime: "10:00", room: "" });
 
   // ---------------- BOOT: who am I, which department ----------------
   useEffect(() => {
@@ -227,21 +285,34 @@ const AdminDashboardPage: React.FC = () => {
         .in("section_id", secIds.length ? secIds : NONE).eq("is_active", true).order("name");
       const batIds = (bat || []).map(b => b.id);
 
-      const [ta, pa] = await Promise.all([
+      const [ta, pa, ts] = await Promise.all([
         supabase.from("teaching_assignments").select("teacher_id, batch_id, subject_id")
           .in("batch_id", batIds.length ? batIds : NONE).eq("is_active", true),
         supabase.from("proctor_assignments").select("teacher_id, section_id")
           .in("section_id", secIds.length ? secIds : NONE).eq("is_active", true),
+        supabase.from("timetable_slots").select("id, institute_id, batch_id, subject_id, teacher_id, day_of_week, start_time, end_time, room, is_active")
+          .in("batch_id", batIds.length ? batIds : NONE).eq("is_active", true).order("day_of_week").order("start_time"),
       ]);
 
       setDept(d.data || null);
       setSections(secList);
       setBatches(bat || []);
-      setSubjects((subj.data || []).filter((s: Subject) => !s.department_id || s.department_id === deptId));
-      setMembers(mems.data || []);
+      setAllSubjects(subj.data || []);
+      let memList: Member[] = mems.data || [];
+      // Fill missing names/emails from auth.users (RPC in hod_followups.sql) — fixes "Unnamed"
+      if (memList.some(m => !m.user_name || !m.user_email)) {
+        const { data: dir, error: dirErr } = await supabase.rpc("get_member_directory", { p_institute_id: instId });
+        if (dirErr) console.error("get_member_directory:", dirErr.message);
+        const byId = Object.fromEntries((dir || []).map((r: any) => [r.user_id, r]));
+        memList = memList.map(m => byId[m.user_id]
+          ? { ...m, user_name: m.user_name || byId[m.user_id].full_name, user_email: m.user_email || byId[m.user_id].email }
+          : m);
+      }
+      setMembers(memList);
       setStudents(stus.data || []);
       setTas(ta.data || []);
       setProctors(pa.data || []);
+      setTSlots(ts.data || []);
     } catch (e: any) {
       console.error(e);
       toast.error("Couldn't load department");
@@ -295,13 +366,66 @@ const AdminDashboardPage: React.FC = () => {
     tas.filter(t => bIds.has(t.batch_id)).forEach(t => {
       const key = t.subject_id + "|" + t.teacher_id;
       if (!map.has(key)) map.set(key, {
-        subject: subjects.find(s => s.id === t.subject_id), teacher: memberById(t.teacher_id),
+        subject: allSubjects.find(s => s.id === t.subject_id), teacher: memberById(t.teacher_id),
         teacherId: t.teacher_id, subjectId: t.subject_id, batchIds: [],
       });
       map.get(key)!.batchIds.push(t.batch_id);
     });
     return [...map.values()].sort((a, b) => (a.subject?.name || "").localeCompare(b.subject?.name || ""));
-  }, [openSection, batches, tas, subjects, memberById]);
+  }, [openSection, batches, tas, allSubjects, memberById]);
+
+  const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  /** Timetable slots for the currently open section */
+  const sectionSlots = useMemo(() => {
+    if (!openSection) return [];
+    const bIds = new Set(batches.filter(b => b.section_id === openSection.id).map(b => b.id));
+    return tSlots.filter(s => bIds.has(s.batch_id)).sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time));
+  }, [openSection, batches, tSlots]);
+
+  // ---------------- ATTENDANCE DATA ----------------
+  // Same SECURITY DEFINER RPCs the proctor view uses (attendance_access.sql) — HOD/admin pass
+  // att_can_view_section. Today's sessions are auto-generated server-side from the timetable.
+  const loadAttendance = useCallback(async () => {
+    if (!instId || sections.length === 0) { setTodaySessions([]); return; }
+    setAttLoading(true);
+    const today = localDate();
+    const results = await Promise.all(sections.map(async sec => {
+      const { data, error } = await supabase.rpc("get_proctor_section_day", { p_section_id: sec.id, p_date: today });
+      if (error) { console.error(`get_proctor_section_day(${sec.name}):`, error.message); return [] as TodaySession[]; }
+      return (data || [])
+        .filter((r: any) => r.status !== "no_class")
+        .map((r: any): TodaySession => ({
+          sessionId: r.session_id, sectionId: sec.id, batchId: r.batch_id, batchName: r.batch_name,
+          subjectName: r.subject_name, subjectCode: r.subject_code || "",
+          teacherName: r.teacher_name || "—",
+          startTime: r.start_time ? String(r.start_time).slice(0, 5) : null,
+          isMarked: r.status === "marked",
+          presentCount: Number(r.present_count) || 0, absentCount: Number(r.absent_count) || 0,
+          leaveCount: Number(r.leave_count) || 0, totalStudents: Number(r.total_students) || 0,
+        }));
+    }));
+    setTodaySessions(results.flat());
+    setAttLoading(false);
+  }, [instId, sections]);
+
+  useEffect(() => { loadAttendance(); }, [loadAttendance]);
+
+  const loadMonthly = useCallback(async () => {
+    if (sections.length === 0) { setMonthly({}); return; }
+    setMonLoading(true);
+    const entries = await Promise.all(sections.map(async sec => {
+      const { data, error } = await supabase.rpc("get_proctor_section_monthly", {
+        p_section_id: sec.id, p_month: attMonth, p_year: attYear,
+      });
+      if (error) console.error(`get_proctor_section_monthly(${sec.name}):`, error.message);
+      return [sec.id, buildMonth(data || [])] as const;
+    }));
+    setMonthly(Object.fromEntries(entries));
+    setMonLoading(false);
+  }, [sections, attMonth, attYear]);
+
+  useEffect(() => { if (attView === "month") loadMonthly(); }, [attView, loadMonthly]);
 
   // ---------------- ACTIONS ----------------
   const createSection = async () => {
@@ -334,13 +458,17 @@ const AdminDashboardPage: React.FC = () => {
   const assignProctor = async (m: Member) => {
     if (!openSectionId || !instId || !deptId) return;
     setBusy(true);
-    await supabase.from("proctor_assignments").update({ is_active: false }).eq("section_id", openSectionId);
-    const { error } = await supabase.from("proctor_assignments").insert({
-      institute_id: instId, department_id: deptId, section_id: openSectionId,
-      teacher_id: m[PROCTOR_ID_FIELD], is_active: true,
+    // RPC with SECURITY DEFINER — bypasses RLS completely
+    const { error } = await supabase.rpc("assign_proctor", {
+      p_institute_id: instId,
+      p_department_id: deptId,
+      p_section_id: openSectionId,
+      p_teacher_id: m.id,
     });
+    if (error) { setBusy(false); return toast.error(error.message); }
+    // Mirror to batches.proctor_id so the proctor can correct attendance (attendance_records RLS uses it)
+    await supabase.from("batches").update({ proctor_id: m.user_id }).eq("section_id", openSectionId);
     setBusy(false);
-    if (error) return toast.error(error.message);
     toast.success(`${nameOf(m)} is now class teacher`);
     setModal(null); loadDept();
   };
@@ -355,7 +483,7 @@ const AdminDashboardPage: React.FC = () => {
       let sid = subjectId;
       if (!sid) {
         const name = newName.trim();
-        const existing = subjects.find(s => s.name.toLowerCase() === name.toLowerCase());
+        const existing = allSubjects.find(s => s.name.toLowerCase() === name.toLowerCase());
         if (existing) sid = existing.id;
         else {
           const code = name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() + "101";
@@ -398,6 +526,78 @@ const AdminDashboardPage: React.FC = () => {
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success("Batch added"); setNewBatchName(""); setModal(null); loadDept();
+  };
+
+  const createTimetableSlot = async () => {
+    if (!openSection || !instId || !ttForm.subjectId || !ttForm.teacherId) return;
+    const secBatches = batches.filter(b => b.section_id === openSection.id);
+    if (secBatches.length === 0) return toast.error("No batch in this section");
+    setBusy(true);
+    try {
+      const { error } = await supabase.rpc("create_timetable_slot", {
+        p_institute_id: instId,
+        p_batch_id: secBatches[0].id,
+        p_subject_id: ttForm.subjectId,
+        p_teacher_id: ttForm.teacherId,
+        p_day_of_week: ttForm.day,
+        p_start_time: ttForm.startTime,
+        p_end_time: ttForm.endTime,
+        p_room: ttForm.room.trim() || null,
+      });
+      if (error) throw error;
+      toast.success("Slot added");
+      setModal(null);
+      setTtForm({ subjectId: "", teacherId: "", day: 1, startTime: "09:00", endTime: "10:00", room: "" });
+      loadDept();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to add slot");
+    } finally { setBusy(false); }
+  };
+
+  const deleteTimetableSlot = async (slotId: string) => {
+    if (!confirm("Remove this timetable slot?")) return;
+    const { error } = await supabase.rpc("delete_timetable_slot", { p_slot_id: slotId });
+    if (error) return toast.error(error.message);
+    toast.success("Slot removed");
+    loadDept();
+  };
+
+  // ---------------- ATTENDANCE UI HELPERS ----------------
+  const attToolbar = (
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex gap-1 p-1 rounded-xl bg-gray-100 dark:bg-gray-800">
+        {(["today", "month"] as const).map(v => (
+          <button key={v} onClick={() => setAttView(v)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${attView === v ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500"}`}>
+            {v === "today" ? "Today" : "Monthly"}
+          </button>
+        ))}
+      </div>
+      {attView === "month" && (
+        <>
+          <select className="hod-field !py-1.5 !w-auto text-xs" value={attMonth} onChange={e => setAttMonth(Number(e.target.value))}>
+            {MONTH_NAMES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+          </select>
+          <select className="hod-field !py-1.5 !w-auto text-xs" value={attYear} onChange={e => setAttYear(Number(e.target.value))}>
+            {[attYear - 1, attYear, attYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </>
+      )}
+    </div>
+  );
+
+  /** Summary numbers for one section's month */
+  const monthSummary = (secId: string) => {
+    const m = monthly[secId];
+    const rows = (m?.rows || []).filter(r => r.held > 0);
+    const held = rows.reduce((n, r) => n + r.held, 0);
+    const present = rows.reduce((n, r) => n + r.present, 0);
+    return {
+      students: rows.length,
+      avg: held ? Math.round((present / held) * 100) : 0,
+      low: rows.filter(r => r.pct < 75),
+      subjects: m?.codes.length || 0,
+    };
   };
 
   // ============================================================
@@ -534,9 +734,98 @@ const AdminDashboardPage: React.FC = () => {
               </div>
             )}
 
-            <div className="hod-card p-5 flex items-center gap-3 text-sm text-gray-600">
-              <CalendarCheck className="w-5 h-5 text-orange-500 flex-shrink-0" />
-              Daily / monthly attendance per section will appear here after the database update (Phase 1).
+            {/* ── Today's Attendance Overview ── */}
+            <div>
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <CalendarCheck className="w-5 h-5 text-orange-500" /> Attendance
+                  {attView === "today" && todaySessions.length > 0 && (
+                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                      {todaySessions.filter(s => s.isMarked).length}/{todaySessions.length} marked
+                    </span>
+                  )}
+                </h2>
+                {attToolbar}
+              </div>
+              {attView === "month" ? (
+                monLoading ? (
+                  <div className="hod-card p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-orange-500" /></div>
+                ) : sections.length === 0 ? null : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {sections.map(s => {
+                      const sm = monthSummary(s.id);
+                      if (!sm.students) return (
+                        <div key={s.id} className="hod-card p-4 opacity-60">
+                          <span className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{s.name}</span>
+                          <span className="ml-2 text-xs text-gray-400">No attendance this month</span>
+                        </div>
+                      );
+                      return (
+                        <div key={s.id} className="hod-card p-4 hod-hover cursor-pointer" onClick={() => setOpenSectionId(s.id)}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-gray-900 dark:text-gray-100 text-sm">{s.name}</span>
+                            <span className={`text-lg font-black ${pctColor(sm.avg)}`}>{sm.avg}%</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            <span>{sm.students} students</span>
+                            <span>{sm.subjects} subjects</span>
+                            <span className={`ml-auto font-semibold ${sm.low.length ? "text-red-600" : "text-emerald-600"}`}>
+                              {sm.low.length ? `${sm.low.length} below 75%` : "All ≥ 75%"}
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mt-2">
+                            <div className={`h-full rounded-full ${sm.avg >= 75 ? "bg-emerald-500" : sm.avg >= 50 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${sm.avg}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : attLoading ? (
+                <div className="hod-card p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-orange-500" /></div>
+              ) : todaySessions.length === 0 ? (
+                <div className="hod-card p-6 text-center text-sm text-gray-500">No classes today. Add timetable slots in each section, or teachers can mark classes manually.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {sections.map(s => {
+                    const secSess = todaySessions.filter(ts => ts.sectionId === s.id);
+                    if (secSess.length === 0) return (
+                      <div key={s.id} className="hod-card p-4 opacity-60">
+                        <span className="font-semibold text-gray-800 dark:text-gray-200 text-sm">{s.name}</span>
+                        <span className="ml-2 text-xs text-gray-400">No classes today</span>
+                      </div>
+                    );
+                    const marked = secSess.filter(ss => ss.isMarked).length;
+                    const total = secSess.length;
+                    const allMarked = marked === total;
+                    const totalP = secSess.reduce((n, ss) => n + ss.presentCount, 0);
+                    const totalA = secSess.reduce((n, ss) => n + ss.absentCount, 0);
+                    const totalL = secSess.reduce((n, ss) => n + ss.leaveCount, 0);
+                    const pct = (totalP + totalA + totalL) > 0 ? Math.round((totalP / (totalP + totalA + totalL)) * 100) : 0;
+                    return (
+                      <div key={s.id} className="hod-card p-4 hod-hover cursor-pointer" onClick={() => setOpenSectionId(s.id)}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold text-gray-900 dark:text-gray-100 text-sm">{s.name}</span>
+                          <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${allMarked ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                            {marked}/{total} done
+                          </span>
+                        </div>
+                        {marked > 0 && (
+                          <div className="flex items-center gap-3 text-xs mb-2">
+                            <span className="font-semibold text-emerald-600">{totalP}P</span>
+                            <span className="font-semibold text-red-500">{totalA}A</span>
+                            {totalL > 0 && <span className="font-semibold text-blue-500">{totalL}L</span>}
+                            <span className="ml-auto font-bold text-gray-700 dark:text-gray-300">{pct}%</span>
+                          </div>
+                        )}
+                        <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full transition-[width] duration-500" style={{ width: `${(marked / total) * 100}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -582,6 +871,66 @@ const AdminDashboardPage: React.FC = () => {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Timetable */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Timetable</h3>
+                <button onClick={() => { setTtForm({ subjectId: "", teacherId: "", day: 1, startTime: "09:00", endTime: "10:00", room: "" }); setModal("timetable"); }}
+                  className="hod-btn px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-1.5"><Plus className="w-4 h-4" /> Add slot</button>
+              </div>
+              {sectionSlots.length === 0 ? (
+                <div className="hod-card p-8 text-center text-sm text-gray-600">
+                  <Clock className="w-9 h-9 mx-auto text-gray-400 mb-2" />
+                  No timetable slots yet. Add slots so teachers can mark attendance.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {DAY_LABELS.map((dayLabel, dayIdx) => {
+                    const daySlots = sectionSlots.filter(s => s.day_of_week === dayIdx);
+                    if (daySlots.length === 0) return null;
+                    return (
+                      <div key={dayIdx}>
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 mt-3">{dayLabel}</div>
+                        <div className="space-y-1.5">
+                          {daySlots.map(slot => {
+                            const subj = allSubjects.find(s => s.id === slot.subject_id);
+                            const teacher = memberById(slot.teacher_id);
+                            return (
+                              <div key={slot.id} className="hod-card p-3 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center">
+                                  <Clock className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">{subj?.name || "Subject"}</div>
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
+                                    {teacher ? ` · ${nameOf(teacher)}` : ""}
+                                    {slot.room ? ` · Room ${slot.room}` : ""}
+                                  </div>
+                                </div>
+                                <button onClick={() => deleteTimetableSlot(slot.id)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Attendance (section detail) — the proctor dashboard, read-only for HOD ── */}
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-3">
+                <BarChart3 className="w-5 h-5 text-orange-500" /> Attendance
+              </h3>
+              <div style={{ ["--theme-start" as any]: "#f97316", ["--theme-end" as any]: "#ea580c" }}>
+                <ProctorSectionView key={openSection.id} sectionId={openSection.id} readOnly embedded />
+              </div>
             </div>
 
             {/* Lab batches */}
@@ -659,6 +1008,56 @@ const AdminDashboardPage: React.FC = () => {
               </div>
             </>
           )}
+        </Modal>
+      )}
+
+      {modal === "timetable" && openSection && deptId && (
+        <Modal title={`Add timetable slot · ${openSection.name}`} onClose={() => setModal(null)}>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-600 uppercase">Day</label>
+              <select className="hod-field mt-1" value={ttForm.day} onChange={e => setTtForm({ ...ttForm, day: Number(e.target.value) })}>
+                {DAY_LABELS.map((d, i) => <option key={i} value={i}>{d}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-600 uppercase">Start time</label>
+                <input type="time" className="hod-field mt-1" value={ttForm.startTime}
+                  onChange={e => setTtForm({ ...ttForm, startTime: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600 uppercase">End time</label>
+                <input type="time" className="hod-field mt-1" value={ttForm.endTime}
+                  onChange={e => setTtForm({ ...ttForm, endTime: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600 uppercase">Subject</label>
+              <select className="hod-field mt-1" value={ttForm.subjectId} onChange={e => setTtForm({ ...ttForm, subjectId: e.target.value })}>
+                <option value="">— Pick subject —</option>
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ""}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600 uppercase">Teacher</label>
+              <select className="hod-field mt-1" value={ttForm.teacherId} onChange={e => setTtForm({ ...ttForm, teacherId: e.target.value })}>
+                <option value="">— Pick teacher —</option>
+                {members.filter(m => ["teacher", "hod"].includes(m.role)).map(m => (
+                  <option key={m.user_id} value={m.user_id}>{nameOf(m)}{m.department_id === deptId ? " (this dept)" : ""}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600 uppercase">Room (optional)</label>
+              <input className="hod-field mt-1" placeholder="e.g. 301" value={ttForm.room}
+                onChange={e => setTtForm({ ...ttForm, room: e.target.value })} />
+            </div>
+          </div>
+          <button disabled={busy || !ttForm.subjectId || !ttForm.teacherId} onClick={createTimetableSlot}
+            className="hod-btn w-full mt-5 py-2.5 rounded-xl text-sm font-semibold">
+            {busy ? "Adding…" : "Add slot"}
+          </button>
         </Modal>
       )}
 

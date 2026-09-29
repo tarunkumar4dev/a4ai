@@ -18,6 +18,8 @@ import PrivateRoute from "@/components/PrivateRoute";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { CoinProvider } from "@/context/CoinContext";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
+import { AccessProvider } from "@/context/AccessProvider";
+import { RoleRoute } from "@/components/routing/RoleRoute";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
 import HODDashboardPage from "@/pages/hod/HODDashboardPage";
@@ -56,6 +58,7 @@ const SignupPage = lazy(() => import("./pages/SignupPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage"));
 const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage"));
+const TeacherDashboard = TeacherDashboardPage;
 const InstituteDashboardPage = lazy(() => import("./pages/institute/InstituteDashboardPage"));
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
@@ -272,8 +275,9 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <IdleLogoutManager />
-        <ThemeProvider>
+        <AccessProvider>
+          <IdleLogoutManager />
+          <ThemeProvider>
           <CoinProvider>
             <TooltipProvider>
               <Toaster position="top-right" />
@@ -296,8 +300,39 @@ const App = () => {
                       } />
                         
 
-                      <Route path="/hod-dashboard" element={<HODDashboardPage />} />
-                      <Route path="/admin" element={<AdminDashboardPage />} /> 
+                      {/* ============================================ */}
+                      {/*  ROLE-BASED PROTECTED ROUTES                 */}
+                      {/* ============================================ */}
+                      <Route 
+                        path="/institute" 
+                        element={
+                          <RoleRoute allow={['admin']}>
+                            <InstituteDashboardPage />
+                          </RoleRoute>
+                        } 
+                      />
+
+                      <Route 
+                        path="/hod" 
+                        element={
+                          <RoleRoute allow={['admin', 'hod']}>
+                            <AdminDashboardPage />
+                          </RoleRoute>
+                        } 
+                      />
+
+                      <Route 
+                        path="/dashboard" 
+                        element={
+                          <RoleRoute allow={['admin', 'hod', 'proctor', 'teacher']}>
+                            <TeacherDashboard />
+                          </RoleRoute>
+                        } 
+                      />
+
+                      <Route path="/admin" element={<Navigate to="/hod" replace />} />
+                      <Route path="/hod-dashboard" element={<Navigate to="/hod" replace />} />
+                      <Route path="/hod/dashboard" element={<Navigate to="/hod" replace />} /> 
                       <Route path="/q/:slug" element={<CommunityQuizPlayPage />} />
                       <Route path="/institute/students/:studentId" element={<StudentProfilePage />} />
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
@@ -335,10 +370,7 @@ const App = () => {
                       <Route path="/login" element={<AuthGateForAuthPages><LoginPage /></AuthGateForAuthPages>} />
                       <Route path="/signup" element={<AuthGateForAuthPages><SignupPage /></AuthGateForAuthPages>} />
 
-                      {/* ============================================ */}
-                      {/*  DASHBOARD — smart redirect to role dashboard */}
-                      {/* ============================================ */}
-                      <Route path="/dashboard" element={<DashboardRedirect />} />
+
 
                       {/* ============================================ */}
                       {/*  STUDENT ROUTES                              */}
@@ -348,7 +380,7 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  TEACHER ROUTES                              */}
                       {/* ============================================ */}
-                      <Route path="/teacher/dashboard" element={<RoleAuthGate allowedRoles={["teacher"]}><TeacherDashboardPage /></RoleAuthGate>} />
+                      <Route path="/teacher/dashboard" element={<Navigate to="/dashboard" replace />} />
 
                       {/* B) NEW TEACHER ROUTE FOR COMMUNITY QUIZ CREATE */}
                       <Route
@@ -375,7 +407,7 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  INSTITUTE ROUTES                            */}
                       {/* ============================================ */}
-                      <Route path="/institute/dashboard" element={<RoleAuthGate allowedRoles={["institute"]}><InstituteDashboardPage /></RoleAuthGate>} />
+                      <Route path="/institute/dashboard" element={<Navigate to="/institute" replace />} />
 
                       {/* ============================================ */}
                       {/*  SHARED PROTECTED ROUTES (any logged-in user) */}
@@ -467,6 +499,7 @@ const App = () => {
             </TooltipProvider>
           </CoinProvider>
         </ThemeProvider>
+        </AccessProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

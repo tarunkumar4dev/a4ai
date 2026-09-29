@@ -84,8 +84,17 @@ export default function LoginPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (session) {
-      const targetRole = (role || "teacher").toLowerCase().trim();
-      navigate(`/${targetRole}/dashboard`, { replace: true });
+      const checkAccess = async () => {
+        try {
+          const { data } = await supabase.rpc('get_my_access');
+          const access = data?.[0];
+          navigate(access?.home_route || '/dashboard', { replace: true });
+        } catch {
+          const targetRole = (role || "teacher").toLowerCase().trim();
+          navigate(`/${targetRole}/dashboard`, { replace: true });
+        }
+      };
+      checkAccess();
     }
   }, [session, role, navigate]);
 
@@ -230,12 +239,14 @@ export default function LoginPage() {
     }
   };
 
-  const redirectAfterLogin = (userRole: string | null | undefined) => {
-    const targetRole = (userRole || role || "teacher").toLowerCase().trim();
-    if (["student", "teacher", "institute"].includes(targetRole)) {
-      navigate(`/${targetRole}/dashboard`, { replace: true });
-    } else {
-      navigate("/teacher/dashboard", { replace: true });
+  const redirectAfterLogin = async () => {
+    try {
+      const { data } = await supabase.rpc('get_my_access');
+      const access = data?.[0];
+      navigate(access?.home_route || '/dashboard', { replace: true });
+    } catch (err) {
+      console.error("Failed to get_my_access:", err);
+      navigate('/dashboard', { replace: true });
     }
   };
 
@@ -314,7 +325,7 @@ export default function LoginPage() {
         // Reset risk and rate limits on success
         RiskEngine.recordSuccess(identifier);
         RateLimiter.resetAttempts(`login_${identifier}`);
-        redirectAfterLogin(data.user?.user_metadata?.role);
+        await redirectAfterLogin();
       } else {
         const otpToken = otp.trim();
         if (otpToken.length !== 6) {
@@ -332,7 +343,7 @@ export default function LoginPage() {
         // Reset risk and rate limits on success
         RiskEngine.recordSuccess(identifier);
         RateLimiter.resetAttempts(`login_${identifier}`);
-        redirectAfterLogin(data.user?.user_metadata?.role);
+        await redirectAfterLogin();
       }
     } catch (error: unknown) {
       const err = error as Error;

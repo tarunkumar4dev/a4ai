@@ -1189,7 +1189,7 @@ export default function HODAttendanceDashboard({
      RENDER
   ═══════════════════════════════════════════════════════════ */
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Toast Alert */}
       {toast && (
         <div
@@ -1201,7 +1201,7 @@ export default function HODAttendanceDashboard({
       )}
 
       {/* ── TOP SECTION TOGGLE TABS (TEACHER ATTENDANCE vs STUDENT MONTHLY) ── */}
-      <div className="bg-white rounded-2xl p-2 sm:p-2.5 border border-slate-200/80 shadow-xs flex items-center justify-between gap-3 flex-wrap">
+      <div className="bg-white rounded-2xl p-2 sm:p-2.5 border border-slate-200/80 card-shadow flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
           <button
             onClick={() => setActiveTab("teachers")}
@@ -1226,9 +1226,9 @@ export default function HODAttendanceDashboard({
                 : "text-slate-500 hover:text-slate-800"
             }`}
           >
-            <GraduationCap className="w-4 h-4 text-indigo-500" />
+            <GraduationCap className="w-4 h-4 text-orange-500" />
             <span>Student Monthly Report</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-700">
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#FFF5F2] text-[#FF7043] border border-[#FF7043]/20">
               Batch Wise
             </span>
           </button>
@@ -1241,7 +1241,7 @@ export default function HODAttendanceDashboard({
                 onClick={exportDailyTeacherExcel}
                 disabled={teacherItems.length === 0}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold text-white transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
-                style={{ background: "linear-gradient(135deg, #FF7043, #E64A19)" }}
+                style={{ background: "linear-gradient(135deg, #FF7043, #F4511E)" }}
               >
                 <Download className="w-4 h-4" />
                 <span>Export Day Sheet</span>
@@ -1251,7 +1251,7 @@ export default function HODAttendanceDashboard({
                 onClick={exportMonthlyTeacherExcel}
                 disabled={monthlyTeacherSessions.length === 0}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-extrabold text-white transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
-                style={{ background: "linear-gradient(135deg, #4F46E5, #3730A3)" }}
+                style={{ background: "linear-gradient(135deg, #FF7043, #F4511E)" }}
               >
                 <Download className="w-4 h-4" />
                 <span>Export Monthly Sheet</span>
@@ -1267,7 +1267,7 @@ export default function HODAttendanceDashboard({
       {activeTab === "teachers" && (
         <div className="space-y-6">
           {/* ── FILTER MODE SWITCHER & CONTROLS ── */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4">
+          <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 card-shadow space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               {/* Daily vs Monthly Mode Toggle */}
               <div className="flex items-center gap-2 flex-wrap">
@@ -1287,11 +1287,11 @@ export default function HODAttendanceDashboard({
                     onClick={() => setTeacherDateMode("monthly")}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-black transition-all ${
                       teacherDateMode === "monthly"
-                        ? "bg-white text-indigo-900 shadow-xs"
+                        ? "bg-white text-slate-900 shadow-xs"
                         : "text-slate-500 hover:text-slate-800"
                     }`}
                   >
-                    <CalendarDays className="w-3.5 h-3.5 text-indigo-500" />
+                    <CalendarDays className="w-3.5 h-3.5 text-orange-500" />
                     <span>Monthly Filter</span>
                   </button>
                 </div>
@@ -1402,7 +1402,7 @@ export default function HODAttendanceDashboard({
                     <select
                       value={monthDayFilter}
                       onChange={(e) => setMonthDayFilter(e.target.value)}
-                      className="bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-1.5 text-xs font-extrabold text-indigo-800 outline-none cursor-pointer"
+                      className="bg-[#FFF5F2] border border-[#FF7043]/30 rounded-xl px-3 py-1.5 text-xs font-extrabold text-[#FF7043] outline-none cursor-pointer"
                     >
                       <option value="all">📅 All Days in {MONTHS_SHORT[teacherMonth - 1]}</option>
                       {monthlyAvailableDates.map((d) => (
@@ -1478,19 +1478,19 @@ export default function HODAttendanceDashboard({
                     <button
                       onClick={() => setTeacherMonthlySubView("sessions")}
                       className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition-all ${
-                        teacherMonthlySubView === "sessions" ? "bg-white text-indigo-900 shadow-xs font-black" : "text-slate-500"
+                        teacherMonthlySubView === "sessions" ? "bg-white text-slate-900 shadow-xs font-black" : "text-slate-500"
                       }`}
                     >
-                      <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                      <Layers className="w-3.5 h-3.5 text-orange-500" />
                       <span>Conducted Sessions ({filteredMonthlySessions.length})</span>
                     </button>
                     <button
                       onClick={() => setTeacherMonthlySubView("summary")}
                       className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition-all ${
-                        teacherMonthlySubView === "summary" ? "bg-white text-indigo-900 shadow-xs font-black" : "text-slate-500"
+                        teacherMonthlySubView === "summary" ? "bg-white text-slate-900 shadow-xs font-black" : "text-slate-500"
                       }`}
                     >
-                      <Award className="w-3.5 h-3.5 text-indigo-500" />
+                      <Award className="w-3.5 h-3.5 text-orange-500" />
                       <span>Faculty Summary ({teacherMonthlySummary.length})</span>
                     </button>
                   </div>
@@ -1558,25 +1558,25 @@ export default function HODAttendanceDashboard({
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex items-center justify-between">
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 card-shadow flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Teachers</p>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-2xl sm:text-3xl font-black text-indigo-600">{dailyStats.activeTeachers}</span>
+                    <span className="text-2xl sm:text-3xl font-black text-slate-900 stat-number">{dailyStats.activeTeachers}</span>
                     <span className="text-xs text-slate-400 font-bold">/ {dailyStats.uniqueTeachers} teachers</span>
                   </div>
                   <p className="text-[11px] text-slate-400 font-semibold mt-2">filled attendance today</p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center shrink-0">
                   <Users className="w-5 h-5" />
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex items-center justify-between">
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 card-shadow flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Overall Attendance</p>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className={`text-2xl sm:text-3xl font-black ${dailyStats.avgAttendance >= 75 ? "text-emerald-600" : "text-amber-600"}`}>
+                    <span className={`text-2xl sm:text-3xl font-black stat-number ${dailyStats.avgAttendance >= 75 ? "text-emerald-600" : "text-amber-600"}`}>
                       {dailyStats.avgAttendance}%
                     </span>
                     <span className="text-xs text-slate-400 font-bold">student presence</span>
@@ -1591,16 +1591,16 @@ export default function HODAttendanceDashboard({
           ) : (
             /* Monthly KPIs */
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex items-center justify-between">
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 card-shadow flex items-center justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Sessions</p>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-2xl sm:text-3xl font-black text-indigo-600">{monthlyStats.totalLectures}</span>
+                    <span className="text-2xl sm:text-3xl font-black text-slate-900 stat-number">{monthlyStats.totalLectures}</span>
                     <span className="text-xs text-slate-400 font-bold">conducted</span>
                   </div>
-                  <p className="text-[11px] text-indigo-600 font-semibold mt-2">in {MONTHS[teacherMonth - 1]} {teacherYear}</p>
+                  <p className="text-[11px] text-[#FF7043] font-semibold mt-2">in {MONTHS[teacherMonth - 1]} {teacherYear}</p>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center shrink-0">
                   <CalendarDays className="w-5 h-5" />
                 </div>
               </div>
@@ -1720,8 +1720,8 @@ export default function HODAttendanceDashboard({
                                 {item.batchName}
                               </span>
 
-                              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 flex items-center gap-1.5">
-                                <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                              <span className="text-xs font-bold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80 flex items-center gap-1.5">
+                                <BookOpen className="w-3.5 h-3.5 text-slate-500" />
                                 {item.subjectName} {item.subjectCode && `(${item.subjectCode})`}
                               </span>
 
@@ -1801,7 +1801,7 @@ export default function HODAttendanceDashboard({
                     <h3 className="text-base font-black text-slate-800">
                       Monthly Attendance Log • {MONTHS[teacherMonth - 1]} {teacherYear}
                       {monthDayFilter !== "all" && (
-                        <span className="ml-2 text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">
+                        <span className="ml-2 text-xs font-bold text-[#FF7043] bg-[#FFF5F2] px-2 py-0.5 rounded-lg border border-[#FF7043]/20">
                           Date: {new Date(monthDayFilter).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                         </span>
                       )}
@@ -1816,7 +1816,7 @@ export default function HODAttendanceDashboard({
 
                 {loadingMonthlyTeacher ? (
                   <div className="flex flex-col items-center justify-center py-16 gap-3">
-                    <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                    <div className="w-10 h-10 border-4 border-[#FFF5F2] border-t-[#FF7043] rounded-full animate-spin" />
                     <p className="text-slate-400 text-sm font-bold">Loading monthly faculty attendance records...</p>
                   </div>
                 ) : teacherMonthlySubView === "sessions" ? (
@@ -1838,12 +1838,12 @@ export default function HODAttendanceDashboard({
                       {filteredMonthlySessions.map((item) => (
                         <div
                           key={item.id}
-                          className="rounded-2xl border border-indigo-100/80 bg-indigo-50/10 hover:border-indigo-200 p-4 sm:p-5 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                          className="rounded-2xl border border-slate-200/80 bg-white hover:border-[#FF7043]/40 p-4 sm:p-5 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 card-shadow"
                         >
                           {/* Left: Date + Teacher & Class details */}
                           <div className="flex items-start sm:items-center gap-3.5 min-w-0">
                             {/* Date Badge */}
-                            <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex flex-col items-center justify-center shrink-0 shadow-xs">
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#FF7043] to-[#F4511E] text-white flex flex-col items-center justify-center shrink-0 shadow-xs">
                               <span className="text-[10px] uppercase font-bold tracking-wider leading-none">
                                 {item.date ? new Date(item.date).toLocaleDateString("en-IN", { month: "short" }) : "—"}
                               </span>
@@ -1870,8 +1870,8 @@ export default function HODAttendanceDashboard({
                                   {item.batchName}
                                 </span>
 
-                                <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 flex items-center gap-1.5">
-                                  <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                                <span className="text-xs font-bold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/80 flex items-center gap-1.5">
+                                  <BookOpen className="w-3.5 h-3.5 text-slate-500" />
                                   {item.subjectName} {item.subjectCode && `(${item.subjectCode})`}
                                 </span>
 
@@ -1957,8 +1957,8 @@ export default function HODAttendanceDashboard({
                                   {t.departmentName}
                                 </span>
                               </td>
-                              <td className="py-3.5 px-3 text-center font-black text-indigo-600">
-                                <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-xl text-xs font-black">
+                              <td className="py-3.5 px-3 text-center font-black text-slate-800">
+                                <span className="bg-[#FFF5F2] text-[#FF7043] border border-[#FF7043]/20 px-2.5 py-1 rounded-xl text-xs font-black">
                                   {t.totalLectures} Classes
                                 </span>
                               </td>

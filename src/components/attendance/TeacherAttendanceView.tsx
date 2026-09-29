@@ -1,6 +1,11 @@
 // src/components/attendance/TeacherAttendanceView.tsx
 // Mobile-first teacher attendance — session-based schema
-// Flow: Calendar + Today's classes / Manual pick → Attendance sheet → Save via mark_attendance() RPC
+// Flow: Calendar + Today's classes / Manual pick → Attendance sheet → Save via save_class_attendance() RPC
+//
+// ACCESS (enforced server-side in attendance_access.sql):
+//   Teacher → only the (batch, subject) pairs assigned to them (teaching_assignments / timetable_slots)
+//   HOD     → + every class in their department     Admin/owner → + every class in the institute
+//   Legacy subject-named batches (no section) are hidden in 'full' hierarchy institutes.
 
 import React, { useState, useMemo, useCallback, useEffect, memo, useRef } from "react";
 import { useAuth } from "@/providers/AuthProvider";
@@ -20,6 +25,7 @@ interface Student {
 interface SessionTarget {
   batchId: string;
   batchName: string;
+  sectionName?: string | null;
   subjectId: string;
   subjectName: string;
   subjectCode?: string;
@@ -29,7 +35,12 @@ interface SessionTarget {
   timeSlot?: string;
   room?: string;
   isMarked?: boolean;
+  isMine?: boolean;
 }
+
+// "ECE-1" or "ECE-1 · Lab A" when the batch is a lab batch of the section
+const classLabel = (t: { batchName: string; sectionName?: string | null }) =>
+  t.sectionName && t.sectionName !== t.batchName ? `${t.sectionName} · ${t.batchName}` : t.batchName;
 
 /* ───── CONSTANTS ───── */
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -169,6 +180,8 @@ export default function TeacherAttendanceView() {
   const [instId, setInstId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionTarget[]>([]);
   const [assigns, setAssigns] = useState<SessionTarget[]>([]);
+  // batch_id → class teacher (proctor) name, so the teacher knows who receives the marks
+  const [classTeachers, setClassTeachers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [pickBatch, setPickBatch] = useState("");
   const [pickSubj, setPickSubj] = useState("");
@@ -180,173 +193,63 @@ export default function TeacherAttendanceView() {
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
   }, []);
 
-  // ── Load data ──
+  // ── Load data (scope decided by the server from the caller's role) ──
   const load = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
     try {
       let targetInstId: string | null = null;
-      let userRole = "teacher";
-      let userDeptId: string | null = null;
 
       const { data: mem } = await supabase.from("institute_members")
-        .select("institute_id, role, department_id")
+        .select("institute_id")
         .eq("user_id", user.id)
         .eq("status", "active")
+        .limit(1)
         .maybeSingle();
 
       if (mem?.institute_id) {
         targetInstId = mem.institute_id;
-        userRole = mem.role || "teacher";
-        userDeptId = mem.department_id || null;
       } else {
         const { data: ownedInst } = await supabase.from("institutes")
-          .select("id")
-          .eq("owner_id", user.id)
-          .limit(1)
-          .maybeSingle();
-        if (ownedInst?.id) {
-          targetInstId = ownedInst.id;
-          userRole = "admin";
-        }
+          .select("id").eq("owner_id", user.id).limit(1).maybeSingle();
+        targetInstId = ownedInst?.id ?? null;
       }
 
-      if (!targetInstId) {
-        setLoading(false);
-        return;
-      }
+      if (!targetInstId) { setLoading(false); return; }
       setInstId(targetInstId);
       const ds = toDateStr(date);
 
-      // 1. Timetable sessions for today
-      try {
-        const { data: sess } = await supabase.rpc("get_teacher_today_sessions", { p_institute_id: targetInstId, p_date: ds });
-        setSessions((sess || []).map((r: any): SessionTarget => ({
-          batchId: r.batch_id, batchName: r.batch_name, subjectId: r.subject_id,
-          subjectName: r.subject_name, subjectCode: r.subject_code,
-          timetableSlotId: r.timetable_slot_id, sessionId: r.session_id,
-          studentCount: Number(r.student_count) || 0,
-          timeSlot: r.start_time ? String(r.start_time).slice(0, 5) : undefined,
-          room: r.room || undefined, isMarked: r.is_marked,
-        })));
-      } catch {
-        setSessions([]);
-      }
-
-      // 2. Fetch batches, subjects, teacher assignments
-      const [bRes, sRes, tbRes, taRes] = await Promise.all([
-        supabase.from("batches")
-          .select("id, name, department_id, class_level, subject")
-          .eq("institute_id", targetInstId)
-          .eq("is_active", true)
-          .order("name"),
-        supabase.from("subjects")
-          .select("id, name, code, department_id")
-          .eq("institute_id", targetInstId)
-          .eq("is_active", true)
-          .order("name"),
-        supabase.from("teacher_batches")
-          .select("batch_id")
-          .eq("teacher_id", user.id)
-          .eq("institute_id", targetInstId),
-        supabase.from("teaching_assignments")
-          .select("batch_id, subject_id, batches(name), subjects(name, code)")
-          .eq("teacher_id", user.id)
-          .eq("institute_id", targetInstId)
-          .eq("is_active", true),
+      const [sessRes, tgtRes, ctRes] = await Promise.all([
+        // 1. My timetable sessions for the selected date (server auto-generates them)
+        supabase.rpc("get_teacher_day_sessions", { p_institute_id: targetInstId, p_date: ds }),
+        // 2. Classes I'm allowed to mark (manual pick)
+        supabase.rpc("get_my_teaching_targets", { p_institute_id: targetInstId }),
+        // 3. Who is the class teacher (proctor) of each of my classes — proctor_dashboard.sql
+        supabase.rpc("get_my_class_teachers", { p_institute_id: targetInstId }),
       ]);
-
-      const allBatches = bRes.data || [];
-      const allSubjects = sRes.data || [];
-      const assignedBatchIds = new Set((tbRes.data || []).map((r: any) => r.batch_id));
-      const directAssigns = taRes.data || [];
-
-      // Determine which batches are relevant to this user
-      let relevantBatches = allBatches.filter(b => assignedBatchIds.has(b.id));
-
-      // Fallback: if teacher has no explicitly assigned batches in teacher_batches,
-      // or if user is admin / hod, show department batches or all institute batches
-      if (relevantBatches.length === 0) {
-        if (userDeptId) {
-          relevantBatches = allBatches.filter(b => b.department_id === userDeptId);
-        }
-        if (relevantBatches.length === 0 || userRole === "admin") {
-          relevantBatches = allBatches;
-        }
-      }
-
-      // Build target assigns list
-      const targets: SessionTarget[] = [];
-      const seen = new Set<string>();
-
-      // A. Include explicit teaching_assignments
-      directAssigns.forEach((r: any) => {
-        const key = `${r.batch_id}_${r.subject_id}`;
-        seen.add(key);
-        targets.push({
-          batchId: r.batch_id,
-          batchName: r.batches?.name || "Batch",
-          subjectId: r.subject_id,
-          subjectName: r.subjects?.name || "Subject",
-          subjectCode: r.subjects?.code,
-        });
+      if (sessRes.error) console.error("get_teacher_day_sessions:", sessRes.error);
+      if (tgtRes.error) console.error("get_my_teaching_targets:", tgtRes.error);
+      if (ctRes.error) console.error("get_my_class_teachers:", ctRes.error);
+      const ct: Record<string, string> = {};
+      (ctRes.data || []).forEach((r: any) => {
+        if (r.proctor_user_id) ct[r.batch_id] = r.proctor_user_id === user.id ? "you" : (r.proctor_name || "—");
       });
+      setClassTeachers(ct);
 
-      // B. For each relevant batch, link its subjects
-      relevantBatches.forEach(b => {
-        // Subjects matching this batch's department
-        const matchingSubjects = allSubjects.filter(s =>
-          b.department_id ? s.department_id === b.department_id : true
-        );
+      setSessions((sessRes.data || []).map((r: any): SessionTarget => ({
+        batchId: r.batch_id, batchName: r.batch_name, sectionName: r.section_name,
+        subjectId: r.subject_id, subjectName: r.subject_name, subjectCode: r.subject_code || undefined,
+        timetableSlotId: r.timetable_slot_id, sessionId: r.session_id,
+        studentCount: Number(r.student_count) || 0,
+        timeSlot: r.start_time ? String(r.start_time).slice(0, 5) : undefined,
+        room: r.room || undefined, isMarked: r.is_marked, isMine: true,
+      })));
 
-        // Find if batch.subject matches a subject
-        const namedMatch = allSubjects.find(s =>
-          s.name.toLowerCase() === (b.subject || "").trim().toLowerCase() ||
-          s.code.toLowerCase() === (b.subject || "").trim().toLowerCase()
-        );
-
-        if (namedMatch) {
-          const key = `${b.id}_${namedMatch.id}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            targets.push({
-              batchId: b.id,
-              batchName: b.name,
-              subjectId: namedMatch.id,
-              subjectName: namedMatch.name,
-              subjectCode: namedMatch.code,
-            });
-          }
-        }
-
-        matchingSubjects.forEach(s => {
-          const key = `${b.id}_${s.id}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            targets.push({
-              batchId: b.id,
-              batchName: b.name,
-              subjectId: s.id,
-              subjectName: s.name,
-              subjectCode: s.code,
-            });
-          }
-        });
-
-        // If no subjects found at all, create a virtual subject entry using batch subject/name
-        const batchHasAny = targets.some(t => t.batchId === b.id);
-        if (!batchHasAny) {
-          targets.push({
-            batchId: b.id,
-            batchName: b.name,
-            subjectId: b.id,
-            subjectName: b.subject || b.name,
-            subjectCode: b.class_level || undefined,
-          });
-        }
-      });
-
-      setAssigns(targets);
+      setAssigns((tgtRes.data || []).map((r: any): SessionTarget => ({
+        batchId: r.batch_id, batchName: r.batch_name, sectionName: r.section_name,
+        subjectId: r.subject_id, subjectName: r.subject_name, subjectCode: r.subject_code || undefined,
+        studentCount: Number(r.student_count) || 0, isMine: !!r.is_mine,
+      })));
     } catch (e) { console.error(e); toast("Failed to load", "error"); }
     setLoading(false);
   }, [user?.id, date, toast]);
@@ -354,10 +257,18 @@ export default function TeacherAttendanceView() {
   useEffect(() => { load(); }, [load]);
 
   const batches = useMemo(() => {
-    const m = new Map<string, string>();
-    assigns.forEach(a => { if (!m.has(a.batchId)) m.set(a.batchId, a.batchName); });
-    return Array.from(m, ([id, nm]) => ({ id, nm }));
+    const m = new Map<string, { nm: string; mine: boolean }>();
+    assigns.forEach(a => {
+      const cur = m.get(a.batchId);
+      if (!cur) m.set(a.batchId, { nm: classLabel(a), mine: !!a.isMine });
+      else if (a.isMine) cur.mine = true;
+    });
+    return Array.from(m, ([id, v]) => ({ id, ...v }));
   }, [assigns]);
+  const myBatches = useMemo(() => batches.filter(b => b.mine), [batches]);
+  const otherBatches = useMemo(() => batches.filter(b => !b.mine), [batches]);
+  const isFuture = toDateStr(date) > toDateStr(new Date());
+  const myCount = useMemo(() => assigns.filter(a => a.isMine).length, [assigns]);
 
   const subjects = useMemo(() => assigns.filter(a => a.batchId === pickBatch), [assigns, pickBatch]);
 
@@ -375,12 +286,12 @@ export default function TeacherAttendanceView() {
       const ds = toDateStr(date);
       const { data: stu } = await supabase.from("students").select("id, name, roll_no")
         .eq("batch_id", t.batchId).eq("is_active", true).order("roll_no");
-      if (!stu?.length) { toast(`${t.batchName} has no students`, "info"); setOriginal([]); setLoadingSheet(false); return; }
+      if (!stu?.length) { toast(`${classLabel(t)} has no students`, "info"); setOriginal([]); setLoadingSheet(false); return; }
 
       let sid = t.sessionId ?? null;
       if (!sid) {
         const { data: s } = await supabase.from("class_sessions").select("id")
-          .eq("batch_id", t.batchId).eq("subject_id", t.subjectId).eq("session_date", ds).eq("teacher_id", user?.id)
+          .eq("batch_id", t.batchId).eq("subject_id", t.subjectId).eq("session_date", ds)
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
         sid = s?.id ?? null;
       }
@@ -403,7 +314,8 @@ export default function TeacherAttendanceView() {
         status: saved[s.id] || "present", pct: pctMap[s.id] ?? 0,
       }));
       setStudents(loaded); setOriginal(JSON.parse(JSON.stringify(loaded)));
-      toast(`${t.batchName} · ${t.subjectName} — ${loaded.length} students${sid ? " (previously marked)" : ""}`, "info");
+      if (sid) setSelected(prev => (prev ? { ...prev, sessionId: sid } : prev));
+      toast(`${classLabel(t)} · ${t.subjectName} — ${loaded.length} students${sid && Object.keys(saved).length ? " (previously marked)" : ""}`, "info");
     } catch (e: any) { console.error(e); toast("Failed to load students", "error"); }
     setLoadingSheet(false);
   }, [date, user?.id, toast]);
@@ -431,96 +343,40 @@ export default function TeacherAttendanceView() {
 
   const save = useCallback(async () => {
     if (!selected || !instId) return;
+    if (isFuture) { toast("Can't mark attendance for a future date", "error"); return; }
     setSaving(true);
     try {
-      const recs = students.map(s => ({ student_id: s.id, status: s.status }));
-      const ds = toDateStr(date);
-      let savedOk = false;
+      const { data: sid, error } = await supabase.rpc("save_class_attendance", {
+        p_institute_id: instId,
+        p_batch_id: selected.batchId,
+        p_subject_id: selected.subjectId,
+        p_date: toDateStr(date),
+        p_timetable_slot_id: selected.timetableSlotId ?? null,
+        p_session_id: selected.sessionId ?? null,
+        p_records: students.map(s => ({ student_id: s.id, status: s.status })),
+      });
+      if (error) throw new Error(error.message);
 
-      // 1. Try mark_attendance RPC first
-      try {
-        const { data, error } = await supabase.rpc("mark_attendance", {
-          p_institute_id: instId,
-          p_batch_id: selected.batchId,
-          p_subject_id: selected.subjectId,
-          p_session_date: ds,
-          p_timetable_slot_id: selected.timetableSlotId ?? null,
-          p_topic: null,
-          p_records: recs,
-        });
-        if (!error && !data?.error) {
-          savedOk = true;
-        }
-      } catch {
-        savedOk = false;
-      }
-
-      // 2. Direct fallback to class_sessions + attendance_records
-      if (!savedOk) {
-        let sid = selected.sessionId ?? null;
-        if (!sid) {
-          const { data: s } = await supabase.from("class_sessions").select("id")
-            .eq("batch_id", selected.batchId).eq("session_date", ds)
-            .order("created_at", { ascending: false }).limit(1).maybeSingle();
-          sid = s?.id ?? null;
-        }
-
-        if (!sid) {
-          let validSubjId = selected.subjectId;
-          const { data: validSubj } = await supabase.from("subjects").select("id").eq("id", validSubjId).maybeSingle();
-          if (!validSubj) {
-            const { data: fallbackSubj } = await supabase.from("subjects").select("id").eq("institute_id", instId).limit(1).maybeSingle();
-            if (fallbackSubj) validSubjId = fallbackSubj.id;
-          }
-
-          const { data: newSess, error: sErr } = await supabase.from("class_sessions").insert({
-            institute_id: instId,
-            batch_id: selected.batchId,
-            subject_id: validSubjId,
-            teacher_id: user?.id,
-            session_date: ds,
-            status: "conducted",
-            marked_by: user?.id,
-          }).select("id").single();
-          if (sErr) throw sErr;
-          sid = newSess.id;
-        }
-
-        if (sid) {
-          const records = students.map(s => ({
-            institute_id: instId,
-            session_id: sid,
-            student_id: s.id,
-            status: s.status,
-            marked_by: user?.id,
-          }));
-          await supabase.from("attendance_records").delete().eq("session_id", sid);
-          const { error: rErr } = await supabase.from("attendance_records").insert(records);
-          if (rErr) throw rErr;
-          savedOk = true;
-        }
-      }
-
-      if (!savedOk) throw new Error("Could not record attendance");
-
+      setSelected(prev => (prev ? { ...prev, sessionId: sid as string, isMarked: true } : prev));
       setOriginal(JSON.parse(JSON.stringify(students))); setDirty(false);
       setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
-      toast(`Saved — ${selected.subjectName} · ${selected.batchName}`);
+      const ctName = classTeachers[selected.batchId];
+      toast(`Saved — ${selected.subjectName} · ${classLabel(selected)}${ctName && ctName !== "you" ? ` · sent to ${ctName}` : ""}`);
     } catch (e: any) { toast(e.message || "Save failed", "error"); }
     setSaving(false);
-  }, [students, selected, instId, date, user?.id, toast]);
+  }, [students, selected, instId, date, isFuture, toast, classTeachers]);
 
   // Keyboard shortcuts
   useEffect(() => {
     if (!selected) return;
     const h = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (dirty && !saving) save(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (dirty && !saving && !isFuture) save(); }
       if (e.key === "Escape") back();
       if ((e.ctrlKey || e.metaKey) && e.key === "f") { e.preventDefault(); searchRef.current?.focus(); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [selected, dirty, saving, save, back]);
+  }, [selected, dirty, saving, isFuture, save, back]);
 
   // Calendar
   const calDays = useMemo(() => {
@@ -577,7 +433,7 @@ export default function TeacherAttendanceView() {
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate">{name}</h3>
-              <p className="text-xs text-slate-500 font-medium">{loading ? "Loading…" : `${assigns.length} class${assigns.length !== 1 ? "es" : ""} · ${sessions.length} today`}</p>
+              <p className="text-xs text-slate-500 font-medium">{loading ? "Loading…" : `${myCount} assigned class${myCount !== 1 ? "es" : ""} · ${sessions.length} on this day`}</p>
             </div>
           </div>
 
@@ -621,11 +477,11 @@ export default function TeacherAttendanceView() {
           {/* Today's scheduled classes */}
           <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">Today's classes</h3>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">{toDateStr(date) === toDateStr(new Date()) ? "Today's classes" : "Classes on this day"}</h3>
               <span className="text-[11px] font-bold text-slate-400 pill px-3 py-1.5 rounded-full">{sessions.length} scheduled</span>
             </div>
             {loading ? <p className="py-6 text-center text-slate-400 text-sm font-medium">Loading…</p>
-            : sessions.length === 0 ? <p className="py-4 text-center text-slate-400 text-sm">No timetable classes. Use manual pick below.</p>
+            : sessions.length === 0 ? <p className="py-4 text-center text-slate-400 text-sm">No timetable classes{assigns.length ? ". Use manual pick below." : "."}</p>
             : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {sessions.map((s, i) => (
@@ -634,14 +490,17 @@ export default function TeacherAttendanceView() {
                     <div className="flex items-center justify-between mb-2">
                       <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-[11px] shrink-0"
                         style={{ background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }}>
-                        {s.subjectCode?.slice(0, 3) || s.batchName.slice(0, 2)}
+                        {s.subjectCode?.slice(0, 3) || s.subjectName.slice(0, 2).toUpperCase()}
                       </div>
                       {s.isMarked
                         ? <span className="text-[10px] font-bold text-emerald-600 pill px-2 py-1 rounded-full flex items-center gap-1"><Icon.Check /> Done</span>
                         : <span className="text-[10px] font-bold text-amber-600 pill px-2 py-1 rounded-full">Pending</span>}
                     </div>
                     <h4 className="font-bold text-sm text-slate-800 dark:text-white truncate">{s.subjectName}</h4>
-                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{s.batchName}</p>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{classLabel(s)}{s.room ? ` · ${s.room}` : ""}</p>
+                    {classTeachers[s.batchId] && (
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">Class teacher: <b className="text-slate-500">{classTeachers[s.batchId]}</b></p>
+                    )}
                     <div className="flex gap-3 mt-2 text-[11px] text-slate-400 font-medium">
                       {s.timeSlot && <span className="flex items-center gap-1"><Icon.Clock />{s.timeSlot}</span>}
                       <span className="flex items-center gap-1"><Icon.Users />{s.studentCount}</span>
@@ -655,12 +514,25 @@ export default function TeacherAttendanceView() {
           {/* Manual pick */}
           <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
             <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mb-1">Mark a class</h3>
-            <p className="text-xs text-slate-500 mb-3">Pick batch & subject manually.</p>
+            <p className="text-xs text-slate-500 mb-3">
+              {isFuture ? "Future date — you can view, but not mark." : "Only classes assigned to you are listed."}
+            </p>
+            {!loading && assigns.length === 0 ? (
+              <div className="pill rounded-xl px-4 py-4 text-center">
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">No classes assigned to you yet</p>
+                <p className="text-xs text-slate-400 mt-1">Ask your HOD to assign you a subject in a section.</p>
+              </div>
+            ) : (
             <div className="flex flex-col sm:flex-row gap-2.5">
               <select value={pickBatch} onChange={e => { setPickBatch(e.target.value); setPickSubj(""); }}
                 className="pill rounded-xl px-3 py-3 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none flex-1 min-w-0">
-                <option value="">Batch…</option>
-                {batches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}
+                <option value="">Section / batch…</option>
+                {otherBatches.length === 0
+                  ? myBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)
+                  : <>
+                      {myBatches.length > 0 && <optgroup label="My classes">{myBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>}
+                      <optgroup label="Other classes (HOD / admin access)">{otherBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>
+                    </>}
               </select>
               <select value={pickSubj} onChange={e => setPickSubj(e.target.value)} disabled={!pickBatch}
                 className="pill rounded-xl px-3 py-3 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none flex-1 min-w-0 disabled:opacity-40">
@@ -673,6 +545,7 @@ export default function TeacherAttendanceView() {
                 Open →
               </button>
             </div>
+            )}
           </div>
         </div>
       </>
@@ -693,11 +566,12 @@ export default function TeacherAttendanceView() {
             <button onClick={back} className="p-2 rounded-xl pill text-slate-600 dark:text-slate-300 active:scale-90 touch-manipulation shrink-0 mt-0.5"><Icon.Back /></button>
             <div className="flex-1 min-w-0">
               <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-white truncate">
-                {selected.subjectName} <span className="text-slate-400 font-bold text-sm">· {selected.batchName}</span>
+                {selected.subjectName} <span className="text-slate-400 font-bold text-sm">· {classLabel(selected)}</span>
               </h2>
               <p className="text-[11px] sm:text-xs text-slate-500 truncate">
                 {DAYS_FULL[date.getDay()]}, {date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · {students.length} students
                 {selected.timeSlot && ` · ${selected.timeSlot}`}
+                {classTeachers[selected.batchId] && ` · Class teacher: ${classTeachers[selected.batchId]}`}
               </p>
             </div>
           </div>
@@ -705,7 +579,7 @@ export default function TeacherAttendanceView() {
           <div className="flex items-center justify-between sm:justify-start gap-1.5 mt-3 sm:mt-2 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
             <button onClick={undo} disabled={!dirty} className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:py-2 rounded-xl pill font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 disabled:opacity-30 active:scale-95 touch-manipulation"><Icon.Undo /><span>Undo</span></button>
             <button onClick={markAll} className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:py-2 rounded-xl pill font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 active:scale-95 touch-manipulation"><Icon.Check /><span>All P</span></button>
-            <button onClick={save} disabled={!dirty || saving}
+            <button onClick={save} disabled={!dirty || saving || isFuture}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 sm:py-2 rounded-xl font-bold text-xs sm:text-sm text-white disabled:opacity-30 active:scale-95 touch-manipulation sm:ml-auto"
               style={{ background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }}>
               {saving ? <Icon.Spin /> : <Icon.Save />}{saving ? "Saving…" : "Save"}
