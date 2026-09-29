@@ -76,7 +76,7 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - [x] Step 2 code cross-check (29 Sep). B1 (INSERT…RETURNING fails SELECT policy for new section) → FIXED in 02 with column-based OR on dept/sec/batch SELECT.
 - [x] Step 2 applied on live DB + tested. HOD test pass (29 Sep): teacher@msit.a4ai.in promoted to hod ECE for testing; sees only ECE (7 batches, 45 students).
 - Known after Step 2 (accepted, fix later):
-  - B2: StudentPortalPage uses the shared persisted client → if staff is logged in in the same browser, portal requests carry staff JWT and anon policies don't apply. Test portal in incognito. Fix in Step 5 (separate non-persisted client or access-code RPCs).
+  - ~~B2~~ (fixed in Step 5 code — portal uses supabasePortalClient): StudentPortalPage uses the shared persisted client → if staff is logged in in the same browser, portal requests carry staff JWT and anon policies don't apply. Test portal in incognito. Fix in Step 5 (separate non-persisted client or access-code RPCs).
   - B3: teachers only on legacy teacher_batches see empty dashboards until HOD assigns them via teaching_assignments.
   - HOD still sees ALL institute `institute_members` and `subjects` (AdminDashboardPage.tsx:275-277) — needs policies in a separate migration (02b), after checking every component that reads institute_members.
   - ~~UI still shows actions RLS now blocks: teacher "Add student" (TeacherStudentsTab:405), teacher "All batches" calendar event (TeacherCalendarTab:245). Access-code insert at TeacherStudentsTab:422 ignores errors.~~ Fixed in Step 4.
@@ -101,11 +101,21 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   10 InstituteAttendanceView deleted (was lazy-imported, never rendered).
   12 StudentProfilePage — `a4_can_view_student` RPC first ("Access nahi hai" on false/error); attendance from attendance_records + class_sessions.session_date (% = present / all marked, leave in total); route wrapped in RoleRoute (all staff).
   Realtime callbacks in Assignments/Calendar call the latest loadData via ref (else they reload with an empty scope). `npm run build` passes. No 03 migration needed.
-- [ ] Step 4 test: subject teacher ECE-2 → Students/Assignments/Calendar/Analytics show only ECE-2 batches; unassigned teacher → empty state; proctor → all ECE-2 batches incl. labs; teacher opening another dept's student profile URL → "Access nahi hai"; admin → Batches modal assigns via subject.
+- [x] Step 4 test (30 Sep, browser): proctor.ece (only CSE-1 DSA), nitin.test (empty state), proctor@msit (ECE-1 + lab A) — pass.
 - Known after Step 4:
   - TeacherStudentsTab attendance % still reads legacy `attendance` JSONB table (shows 0% under v2) — switch to attendance_records like StudentProfilePage.
   - HODAttendanceDashboard still READS teacher_batches (display mapping only, not scope). Remove when convenient.
   - `src/hooks/useInstituteTeacher.ts` is unused and reads non-existent `batch_teachers` — delete later.
+  - "My Section" (get_my_proctor_sections) also shows a legacy section via batches.proctor_id — re-check after the Step 6 reset.
+- [x] Step 5 code (30 Sep): `05_student_portal.sql` (batches.is_lab + backfill " A/B/C", students.lab_batch_id; private `a4_student_id_from_code` with explicit REVOKE; RPCs `get_student_by_code` (volatile, updates last_used_at), `get_student_feed` (own batch + lab batch; announcements/events also institute-wide), `submit_assignment` (own batch/lab only, file path must be `<inst>/<assignment>/<student>_…`, graded = locked); grant to anon+authenticated). `05b_drop_anon_policies.sql` drops anon_read/anon_submit/anon_verify_code ("Public read institutes" kept, commented). Frontend: `src/lib/supabasePortalClient.ts` (persistSession/autoRefresh off, own storageKey) → StudentPortalPage uses only the 3 RPCs + storage upload (no `.from()` on tables; chat is localStorage-only since `batch_messages` doesn't exist); feed polls every 60 s + on focus; StudentCalendar has no DB access (events via props). HOD new section/lab batch sets is_lab. BulkStudentUpload: `lab_batch` column → lab_batch_id (same section; "ECE-2 A" or "A"), section/department fall back to the matched batch, exact batch-name match first (was able to pick "ECE-2 A" for "ECE-2"). Teacher side: labs in scope for proctors / teachers assigned to a lab; no teacher UI posts announcements. Anon-read grep: only StudentPortalPage + StudentCalendar read tables without login (JoinInstitutePage is PrivateRoute; debug-dashboard.tsx not routed). `npm run build` passes.
+- [ ] Step 5 DB: run `05_student_portal.sql` → deploy frontend → test portal in incognito (login, feed incl. lab batch items, PDF submit) → then run `05b_drop_anon_policies.sql` → re-test portal + `supabase.from('students').select('*')` as anon returns [].
+- Known after Step 5:
+  - anon can read institutes.join_code → anyone can join MSIT as teacher → then sees institute_members (02b leak). Replace with get_institute_public() RPC (name/logo only). ("Public read institutes" kept, commented, in 05b.)
+  - Storage bucket "submissions": check the anon upload policy — path-restricted (`<inst>/<assignment>/<student>_…`) or whole bucket open? submit_assignment only accepts own-path URLs, but uploads themselves are governed by storage policies.
+  - Access codes are 6 digits → anon can brute-force get_student_by_code. Needs longer codes or throttling (edge function).
+  - `announcements.batch_id` is NOT NULL, so institute-wide announcements can't exist yet (feed already handles batch_id null).
+  - BulkStudentUpload auto-maps a "phone" column (student's phone) to parent_phone (alias list); students has no phone column. Check mapping in preview.
+  - Pre-existing tsc error: StudentCalendar `color2` style prop.
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.

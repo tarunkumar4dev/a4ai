@@ -512,10 +512,14 @@ export default function HODDashboardPage() {
         .insert({ department_id: deptId, name, year: newSection.year ? parseInt(newSection.year) : null })
         .select("id").single();
       if (error) throw error;
-      // Main batch (normal attendance) + optional lab batches A/B/C. institute_id, department_id, section_id always set.
-      const names = [name, ...(newSection.labs ? ["A", "B", "C"].map(l => `${name} ${l}`) : [])];
+      // Main batch (normal attendance, is_lab=false) + optional lab batches A/B/C (is_lab=true).
+      // institute_id, department_id, section_id always set. is_lab needs 05_student_portal.sql.
+      const rows = [
+        { name, is_lab: false },
+        ...(newSection.labs ? ["A", "B", "C"].map(l => ({ name: `${name} ${l}`, is_lab: true })) : []),
+      ];
       const { error: bErr } = await supabase.from("batches").insert(
-        names.map(n => ({ institute_id: instId, department_id: deptId, section_id: sec.id, name: n, is_active: true })));
+        rows.map(r => ({ institute_id: instId, department_id: deptId, section_id: sec.id, name: r.name, is_lab: r.is_lab, is_active: true })));
       if (bErr) toast.error(`Section created, but batches failed: ${bErr.message}`);
       else toast.success(`Section ${name} created${newSection.labs ? " with lab batches A/B/C" : ""}`);
       setNewSection({ name: "", year: "", labs: true }); setModal(null);
@@ -616,7 +620,7 @@ export default function HODDashboardPage() {
     if (!openSection || !newBatchName.trim() || !instId || !deptId) return;
     setBusy(true);
     const { error } = await supabase.from("batches").insert({
-      institute_id: instId, department_id: deptId, section_id: openSection.id, name: newBatchName.trim(), is_active: true,
+      institute_id: instId, department_id: deptId, section_id: openSection.id, name: newBatchName.trim(), is_lab: true, is_active: true,
     });
     setBusy(false);
     if (error) return toast.error(error.message);
