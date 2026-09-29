@@ -81,9 +81,16 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - HOD still sees ALL institute `institute_members` and `subjects` (AdminDashboardPage.tsx:275-277) — needs policies in a separate migration (02b), after checking every component that reads institute_members.
   - UI still shows actions RLS now blocks: teacher "Add student" (TeacherStudentsTab:405), teacher "All batches" calendar event (TeacherCalendarTab:245). Access-code insert at TeacherStudentsTab:422 ignores errors. → Step 4.
   - JoinInstitutePage fallback (:143-186) is broken (upsert ignores errors, shows "Joined!"). Main path is join_institute_by_code RPC.
-  - HODDashboardPage.tsx is dead code; /hod renders AdminDashboardPage.
+  - ~~HODDashboardPage.tsx is dead code; /hod renders AdminDashboardPage.~~ Fixed in Step 3.
   - Unverified: whether join_institute_by_code / create_timetable_slot / assign_proctor / get_member_directory check the caller's role (definitions not in repo).
   - BulkStudentUpload: ALWAYS pick dept + section in the dropdown, else department_id/section_id go null and only admin sees those students.
+- [x] Step 3 (29 Sep): `/hod` = `src/pages/hod/HODDashboardPage.tsx` (AdminDashboardPage deleted). Shell/classes shared via `src/pages/institute/dashboardTheme.tsx` (customStyles + Icons, moved verbatim from InstituteDashboardPage). Tabs Overview · Sections · Teachers · Students · Attendance · Timetable. Dept from `useAccess()` (HOD: hod_department_ids; admin preview: dept picker, no "All"); every query filters by department. New section = main batch + optional labs A/B/C (institute_id, department_id, section_id always set). Section delete only if 0 students + 0 class_sessions (batch delete cascades). Subject assign → teaching_assignments only, per batch (main/lab). Timetable via create/delete_timetable_slot with explicit batch. `HODAttendanceDashboard` got `lockDeptId` (no dept dropdown, no institute-wide fallback, sessions filtered by the dept's batches). `npm run build` passes.
+- [ ] Step 3 test: HOD ECE → /hod shows only ECE; create ECE-2 (+A/B/C) → 4 batches with all 3 ids; assign proctor, subject teacher (incl. other-dept teacher via search), timetable slot; admin → /hod picker switches dept.
+- Known after Step 3:
+  - `get_proctor_section_day` / `get_proctor_section_monthly` definitions not in repo — may reject a non-proctor HOD. UI hides Overview "Today" strip + Attendance section cards on error (console.warn). Verify/fix HOD access in a 03 migration.
+  - Cross-dept teacher search in HOD TeacherPicker reads `institute_members` directly (active, teacher/hod, max 10, only id/user_id/name/email) — `// TODO 02b` in code; replace with a scoped RPC once institute_members RLS lands.
+  - HOD page still calls `get_member_directory(institute)` to fill missing names (only used for its own scoped member list) — include in the 02b review.
+  - Pre-existing tsc errors (Vite build unaffected): App.tsx `<Toaster position>`, InstituteDashboardPage overview search `activeTab !== "students"` narrowing.
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.

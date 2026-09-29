@@ -124,6 +124,10 @@ interface HODAttendanceDashboardProps {
   batches?: any[];
   departments?: any[];
   subjects?: any[];
+  /** HOD page: lock to this department. Hides the dept filter ("All Departments"), never falls back to
+   *  institute-wide fetches, and keeps only sessions of the batches passed in `batches` (so a teacher
+   *  from another dept who teaches here still shows up). */
+  lockDeptId?: string | null;
 }
 
 const MONTHS = [
@@ -180,6 +184,7 @@ export default function HODAttendanceDashboard({
   batches: initialBatches,
   departments: initialDepartments,
   subjects: initialSubjects,
+  lockDeptId = null,
 }: HODAttendanceDashboardProps) {
   // Navigation Mode: Main Tabs
   const [activeTab, setActiveTab] = useState<"teachers" | "monthly">("teachers");
@@ -198,7 +203,7 @@ export default function HODAttendanceDashboard({
   const [teacherMonthlySubView, setTeacherMonthlySubView] = useState<"sessions" | "summary">("sessions");
 
   // Department & Search Filters
-  const [selectedDeptId, setSelectedDeptId] = useState<string>(isHod && hodDeptId ? hodDeptId : "all");
+  const [selectedDeptId, setSelectedDeptId] = useState<string>(lockDeptId || (isHod && hodDeptId ? hodDeptId : "all"));
   const [statusFilter, setStatusFilter] = useState<"all" | "marked" | "pending">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -243,7 +248,7 @@ export default function HODAttendanceDashboard({
     try {
       // 1. Fetch Teachers (institute_members + profiles)
       let teachersData = initialTeachers;
-      if (!teachersData || teachersData.length === 0) {
+      if (!lockDeptId && (!teachersData || teachersData.length === 0)) {
         const { data: mems } = await supabase
           .from("institute_members")
           .select("*")
@@ -255,7 +260,7 @@ export default function HODAttendanceDashboard({
 
       // 2. Fetch Departments
       let deptsData = initialDepartments;
-      if (!deptsData || deptsData.length === 0) {
+      if (!lockDeptId && (!deptsData || deptsData.length === 0)) {
         const { data: depts } = await supabase
           .from("departments")
           .select("id, name")
@@ -268,7 +273,7 @@ export default function HODAttendanceDashboard({
 
       // 3. Fetch Batches
       let batchesData = initialBatches;
-      if (!batchesData || batchesData.length === 0) {
+      if (!lockDeptId && (!batchesData || batchesData.length === 0)) {
         const { data: bts } = await supabase
           .from("batches")
           .select("id, name, department_id, class_level, subject")
@@ -306,7 +311,7 @@ export default function HODAttendanceDashboard({
 
       // 5. Fetch Subjects
       let subjectsData = initialSubjects;
-      if (!subjectsData || subjectsData.length === 0) {
+      if (!lockDeptId && (!subjectsData || subjectsData.length === 0)) {
         const { data: subs } = await supabase
           .from("subjects")
           .select("id, name, code, department_id")
@@ -575,14 +580,15 @@ export default function HODAttendanceDashboard({
         return a.teacherName.localeCompare(b.teacherName);
       });
 
-      setTeacherItems(items);
+      const keepDaily = lockDeptId ? new Set((initialBatches || []).map((b: any) => b.id)) : null;
+      setTeacherItems(keepDaily ? items.filter((i) => keepDaily.has(i.batchId)) : items);
     } catch (err: any) {
       console.error("Error loading daily teacher status:", err);
       showToast("Failed to load daily attendance: " + err.message, false);
     } finally {
       setLoadingDaily(false);
     }
-  }, [instituteId, initialTeachers, initialBatches, initialDepartments, initialSubjects]);
+  }, [instituteId, initialTeachers, initialBatches, initialDepartments, initialSubjects, lockDeptId]);
 
   /* ─────────────────────────────────────────────────────────────
      2. LOAD MONTHLY TEACHER ATTENDANCE SESSIONS
@@ -598,7 +604,7 @@ export default function HODAttendanceDashboard({
 
       // 1. Fetch Teachers
       let teachersData = initialTeachers;
-      if (!teachersData || teachersData.length === 0) {
+      if (!lockDeptId && (!teachersData || teachersData.length === 0)) {
         const { data: mems } = await supabase
           .from("institute_members")
           .select("*")
@@ -610,7 +616,7 @@ export default function HODAttendanceDashboard({
 
       // 2. Fetch Departments
       let deptsData = initialDepartments;
-      if (!deptsData || deptsData.length === 0) {
+      if (!lockDeptId && (!deptsData || deptsData.length === 0)) {
         const { data: depts } = await supabase
           .from("departments")
           .select("id, name")
@@ -621,7 +627,7 @@ export default function HODAttendanceDashboard({
 
       // 3. Fetch Batches
       let batchesData = initialBatches;
-      if (!batchesData || batchesData.length === 0) {
+      if (!lockDeptId && (!batchesData || batchesData.length === 0)) {
         const { data: bts } = await supabase
           .from("batches")
           .select("id, name, department_id, class_level, subject")
@@ -647,7 +653,7 @@ export default function HODAttendanceDashboard({
 
       // 5. Fetch Subjects
       let subjectsData = initialSubjects;
-      if (!subjectsData || subjectsData.length === 0) {
+      if (!lockDeptId && (!subjectsData || subjectsData.length === 0)) {
         const { data: subs } = await supabase
           .from("subjects")
           .select("id, name, code, department_id")
@@ -759,14 +765,15 @@ export default function HODAttendanceDashboard({
         });
       });
 
-      setMonthlyTeacherSessions(items);
+      const keepMonthly = lockDeptId ? new Set((initialBatches || []).map((b: any) => b.id)) : null;
+      setMonthlyTeacherSessions(keepMonthly ? items.filter((i) => keepMonthly.has(i.batchId)) : items);
     } catch (err: any) {
       console.error("Error loading monthly teacher status:", err);
       showToast("Failed to load monthly attendance: " + err.message, false);
     } finally {
       setLoadingMonthlyTeacher(false);
     }
-  }, [instituteId, initialTeachers, initialBatches, initialDepartments, initialSubjects]);
+  }, [instituteId, initialTeachers, initialBatches, initialDepartments, initialSubjects, lockDeptId]);
 
   // Reload daily items whenever date changes
   useEffect(() => {
@@ -788,7 +795,7 @@ export default function HODAttendanceDashboard({
   // ── Daily Filtered Items ──
   const filteredDailyTeacherItems = useMemo(() => {
     return teacherItems.filter((item) => {
-      if (selectedDeptId !== "all" && item.departmentId !== selectedDeptId) {
+      if (!lockDeptId && selectedDeptId !== "all" && item.departmentId !== selectedDeptId) {
         return false;
       }
       if (statusFilter === "marked" && !item.isMarked) return false;
@@ -810,7 +817,7 @@ export default function HODAttendanceDashboard({
 
       return true;
     });
-  }, [teacherItems, selectedDeptId, statusFilter, searchQuery]);
+  }, [teacherItems, selectedDeptId, statusFilter, searchQuery, lockDeptId]);
 
   // ── Daily Executive Stats ──
   const dailyStats = useMemo(() => {
@@ -846,7 +853,7 @@ export default function HODAttendanceDashboard({
       }
 
       // Department filter
-      if (selectedDeptId !== "all" && item.departmentId !== selectedDeptId) {
+      if (!lockDeptId && selectedDeptId !== "all" && item.departmentId !== selectedDeptId) {
         return false;
       }
 
@@ -871,7 +878,7 @@ export default function HODAttendanceDashboard({
 
       return true;
     });
-  }, [monthlyTeacherSessions, monthDayFilter, selectedDeptId, statusFilter, searchQuery]);
+  }, [monthlyTeacherSessions, monthDayFilter, selectedDeptId, statusFilter, searchQuery, lockDeptId]);
 
   // ── Unique dates available in monthly data for day-picker ──
   const monthlyAvailableDates = useMemo(() => {
@@ -1426,21 +1433,23 @@ export default function HODAttendanceDashboard({
 
               {/* Department & Status Filters */}
               <div className="flex items-center gap-2.5 flex-wrap">
-                {/* Department dropdown */}
-                <div className="relative">
-                  <select
-                    value={selectedDeptId}
-                    onChange={(e) => setSelectedDeptId(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none cursor-pointer"
-                  >
-                    <option value="all">All Departments</option>
-                    {departmentList.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Department dropdown (hidden when locked to one dept) */}
+                {!lockDeptId && (
+                  <div className="relative">
+                    <select
+                      value={selectedDeptId}
+                      onChange={(e) => setSelectedDeptId(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                    >
+                      <option value="all">All Departments</option>
+                      {departmentList.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Status Toggle Pills (Only in daily mode) */}
                 {teacherDateMode === "daily" && (
