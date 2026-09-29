@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useAuth } from './AuthContext';
-import { supabase } from '../lib/supabase';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/providers/AuthProvider';
+import { supabase } from '@/lib/supabaseClient';
 
 export interface AccessData {
   institute_id: string | null;
@@ -12,25 +12,43 @@ export interface AccessData {
   teaching_batch_ids: string[];
 }
 
-interface AccessState { access: AccessData | null; loading: boolean; }
+interface AccessState {
+  access: AccessData | null;
+  loading: boolean;
+}
 
 const AccessContext = createContext<AccessState>({ access: null, loading: true });
 
 export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { session } = useAuth();
-  const [state, setState] = useState<AccessState>({ access: null, loading: true });
+  const { session, loading: authLoading } = useAuth();
+  const userId = session?.user?.id ?? null;
+  // access + the user id it was fetched for; loading is derived so there's no
+  // render where a fresh session looks "loaded" with access = null (F5 → /login bug)
+  const [fetched, setFetched] = useState<{ userId: string | null; access: AccessData | null }>({
+    userId: null,
+    access: null,
+  });
 
   useEffect(() => {
-    if (!session?.user) { setState({ access: null, loading: false }); return; }
-    setState(s => ({ ...s, loading: true }));
-    supabase.rpc('get_my_access').then(({ data, error }) => {
-      if (error) console.error('get_my_access failed:', error);
-      setState({ access: data?.[0] ?? null, loading: false });
-    });
-  }, [session?.user?.id]);
+    if (authLoading || !userId) return;
+    let cancelled = false;
+    supabase
+      .rpc('get_my_access')
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) console.error('get_my_access failed:', error);
+        setFetched({ userId, access: data?.[0] ?? null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, userId]);
 
-  return <AccessContext.Provider value={state}>{children}</AccessContext.Provider>;
+  const loading = authLoading || (!!userId && fetched.userId !== userId);
+  const access = userId && fetched.userId === userId ? fetched.access : null;
+  const value = useMemo<AccessState>(() => ({ access, loading }), [access, loading]);
+
+  return <AccessContext.Provider value={value}>{children}</AccessContext.Provider>;
 };
 
-export const useAccess = () => useContext(AccessContext);
 export const useAccess = () => useContext(AccessContext);
