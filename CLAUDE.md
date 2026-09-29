@@ -65,6 +65,26 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - **5. Student portal** — `students.lab_batch_id`, `batches.is_lab`; SECURITY DEFINER RPCs keyed by access code (`get_student_feed(code)`, `submit_assignment(code, …)`); then remove anon table policies.
 - **6. Clean reset + fresh run** — delete MSIT depts/sections/batches/students/attendance (script generated from audit FKs), re-create ECE → ECE-2 (2025) → upload `ECE-2_2025_students_upload.xlsx`.
 
+## Progress log (update after every step)
+- [x] Step 0: `00_audit_schema.sql` run on live DB (29 Sep). Full CSV → save as `supabase/audit_2026-09-29.csv` (306 rows).
+- [x] `01_access_helpers.sql` applied on live DB (29 Sep, "Success"). All 9 functions exist.
+- [x] Step 1 (first pass, committed): `src/context/AccessProvider.tsx`, `src/components/routing/RoleRoute.tsx`, App.tsx routes wrapped (`/institute` admin, `/hod` admin+hod, `/dashboard` all staff), AccessProvider wrapped in main.tsx, login redirects to `home_route`.
+  These were written in chat WITHOUT seeing the repo — import paths (`./AuthContext`, `../lib/supabase`) may be wrong. Verify against real files.
+- [x] Step 1 fix (committed): AccessProvider exposes `{ access, loading }`, RoleRoute shows "Loading…", `/admin` → `/hod` redirect. `npm run build` passes.
+- [ ] Step 1 test: admin→/institute, HOD→/hod (typing /institute bounces back), teacher→/dashboard, F5 keeps session.
+- [x] Step 2 written: `02_rls_policies.sql` + `02_rls_rollback.sql`. Pre-flight: only 3 test teachers on legacy teacher_batches (Aakash, Nitin, proctor@msit) — accepted.
+- [x] Step 2 code cross-check (29 Sep). B1 (INSERT…RETURNING fails SELECT policy for new section) → FIXED in 02 with column-based OR on dept/sec/batch SELECT.
+- [x] Step 2 applied on live DB + tested. HOD test pass (29 Sep): teacher@msit.a4ai.in promoted to hod ECE for testing; sees only ECE (7 batches, 45 students).
+- Known after Step 2 (accepted, fix later):
+  - B2: StudentPortalPage uses the shared persisted client → if staff is logged in in the same browser, portal requests carry staff JWT and anon policies don't apply. Test portal in incognito. Fix in Step 5 (separate non-persisted client or access-code RPCs).
+  - B3: teachers only on legacy teacher_batches see empty dashboards until HOD assigns them via teaching_assignments.
+  - HOD still sees ALL institute `institute_members` and `subjects` (AdminDashboardPage.tsx:275-277) — needs policies in a separate migration (02b), after checking every component that reads institute_members.
+  - UI still shows actions RLS now blocks: teacher "Add student" (TeacherStudentsTab:405), teacher "All batches" calendar event (TeacherCalendarTab:245). Access-code insert at TeacherStudentsTab:422 ignores errors. → Step 4.
+  - JoinInstitutePage fallback (:143-186) is broken (upsert ignores errors, shows "Joined!"). Main path is join_institute_by_code RPC.
+  - HODDashboardPage.tsx is dead code; /hod renders AdminDashboardPage.
+  - Unverified: whether join_institute_by_code / create_timetable_slot / assign_proctor / get_member_directory check the caller's role (definitions not in repo).
+  - BulkStudentUpload: ALWAYS pick dept + section in the dropdown, else department_id/section_id go null and only admin sees those students.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
