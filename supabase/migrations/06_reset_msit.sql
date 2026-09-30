@@ -29,7 +29,9 @@ declare
   v_handled text[] := array[
     'attendance_edit_log','attendance_records','class_sessions','timetable_slots','teaching_assignments',
     'proctor_assignments','submissions','assignments','announcements','calendar_events','student_access_codes',
-    'students','teacher_batches','subjects','batches','sections','departments','institute_members'];
+    'students','teacher_batches','subjects','batches','sections','departments','institute_members',
+    -- found by this guard on the live DB (not in the audit):
+    'batch_teachers','attendance_legacy','attendance_sessions'];
   v_bad text;
 begin
   select string_agg(format('%s.%s → %s', src.relname, c.conname, tgt.relname), ', ')
@@ -52,26 +54,55 @@ end $$;
 -- 1. Backup (MSIT rows only)
 -- ════════════════════════════════════════════════════════════════════
 create schema a4_backup_20260930;
+-- PII inside: never reachable through the API roles.
+revoke all on schema a4_backup_20260930 from public, anon, authenticated;
+
+-- Review 30 Sep: child tables are ALSO backed up by parent link (batch/section/session/student), not only by
+-- institute_id. Otherwise a row with NULL/mismatched institute_id would be removed by ON DELETE CASCADE
+-- when its MSIT batch/student is deleted — without a backup copy, so 06_restore could not bring it back.
 
 create table a4_backup_20260930.departments          as select * from public.departments          where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
 create table a4_backup_20260930.sections             as select * from public.sections             where department_id in (select id from a4_backup_20260930.departments);
-create table a4_backup_20260930.batches              as select * from public.batches              where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
+create table a4_backup_20260930.batches              as select * from public.batches              where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or section_id in (select id from a4_backup_20260930.sections);
 create table a4_backup_20260930.subjects             as select * from public.subjects             where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.teacher_batches      as select * from public.teacher_batches      where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.students             as select * from public.students             where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.student_access_codes as select * from public.student_access_codes where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.calendar_events      as select * from public.calendar_events      where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885' and batch_id is not null;
-create table a4_backup_20260930.announcements        as select * from public.announcements        where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.assignments          as select * from public.assignments          where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
+create table a4_backup_20260930.teacher_batches      as select * from public.teacher_batches      where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or batch_id in (select id from a4_backup_20260930.batches);
+create table a4_backup_20260930.students             as select * from public.students             where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or batch_id in (select id from a4_backup_20260930.batches) or section_id in (select id from a4_backup_20260930.sections);
+create table a4_backup_20260930.student_access_codes as select * from public.student_access_codes where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or student_id in (select id from a4_backup_20260930.students);
+create table a4_backup_20260930.calendar_events      as select * from public.calendar_events      where batch_id is not null
+     and (institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885' or batch_id in (select id from a4_backup_20260930.batches));
+create table a4_backup_20260930.announcements        as select * from public.announcements        where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or batch_id in (select id from a4_backup_20260930.batches);
+create table a4_backup_20260930.assignments          as select * from public.assignments          where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or batch_id in (select id from a4_backup_20260930.batches);
 create table a4_backup_20260930.submissions          as select * from public.submissions
   where assignment_id in (select id from a4_backup_20260930.assignments)
      or student_id    in (select id from a4_backup_20260930.students);
-create table a4_backup_20260930.proctor_assignments  as select * from public.proctor_assignments  where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.teaching_assignments as select * from public.teaching_assignments where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.timetable_slots      as select * from public.timetable_slots      where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.class_sessions       as select * from public.class_sessions       where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.attendance_records   as select * from public.attendance_records   where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
-create table a4_backup_20260930.attendance_edit_log  as select * from public.attendance_edit_log  where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885';
+create table a4_backup_20260930.proctor_assignments  as select * from public.proctor_assignments  where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or section_id in (select id from a4_backup_20260930.sections);
+create table a4_backup_20260930.teaching_assignments as select * from public.teaching_assignments where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or batch_id in (select id from a4_backup_20260930.batches);
+create table a4_backup_20260930.timetable_slots      as select * from public.timetable_slots      where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or batch_id in (select id from a4_backup_20260930.batches);
+create table a4_backup_20260930.class_sessions       as select * from public.class_sessions       where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or batch_id in (select id from a4_backup_20260930.batches);
+create table a4_backup_20260930.attendance_records   as select * from public.attendance_records   where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or session_id in (select id from a4_backup_20260930.class_sessions) or student_id in (select id from a4_backup_20260930.students);
+create table a4_backup_20260930.attendance_edit_log  as select * from public.attendance_edit_log  where institute_id = '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'
+     or session_id in (select id from a4_backup_20260930.class_sessions);
+-- Legacy tables found by the guard (30 Sep) — backed up by their FK columns to MSIT parents.
+create table a4_backup_20260930.batch_teachers      as select * from public.batch_teachers
+  where batch_id in (select id from a4_backup_20260930.batches);
+create table a4_backup_20260930.attendance_legacy   as select * from public.attendance_legacy
+  where batch_id in (select id from a4_backup_20260930.batches);
+create table a4_backup_20260930.attendance_sessions as select * from public.attendance_sessions
+  where batch_id      in (select id from a4_backup_20260930.batches)
+     or subject_id    in (select id from a4_backup_20260930.subjects)
+     or department_id in (select id from a4_backup_20260930.departments)
+     or section_id    in (select id from a4_backup_20260930.sections);
 -- members: only what this script changes
 create table a4_backup_20260930.institute_members_links as
   select id, department_id, section_id from public.institute_members
@@ -80,6 +111,9 @@ create table a4_backup_20260930.institute_members_links as
 -- ════════════════════════════════════════════════════════════════════
 -- 2. Delete — children first (audit FKs). Each step deletes exactly the backed-up rows.
 -- ════════════════════════════════════════════════════════════════════
+delete from public.attendance_legacy    where id in (select id from a4_backup_20260930.attendance_legacy);
+delete from public.batch_teachers       where id in (select id from a4_backup_20260930.batch_teachers);
+delete from public.attendance_sessions  where id in (select id from a4_backup_20260930.attendance_sessions);
 delete from public.attendance_edit_log  where id in (select id from a4_backup_20260930.attendance_edit_log);
 delete from public.attendance_records   where id in (select id from a4_backup_20260930.attendance_records);
 delete from public.class_sessions       where id in (select id from a4_backup_20260930.class_sessions);
@@ -112,7 +146,11 @@ commit;
 -- ════════════════════════════════════════════════════════════════════
 with inst as (select '6563b6a1-6062-4e00-a9fe-3cf7ae77a885'::uuid as id)
 select t.tbl, t.msit_now, t.backup from (
-  select 'attendance_edit_log' as tbl, (select count(*) from public.attendance_edit_log  where institute_id = (select id from inst)) as msit_now, (select count(*) from a4_backup_20260930.attendance_edit_log)  as backup, 1 as ord
+  select 'batch_teachers (legacy)' as tbl, (select count(*) from public.batch_teachers x where x.id in (select id from a4_backup_20260930.batch_teachers)) as msit_now, (select count(*) from a4_backup_20260930.batch_teachers) as backup, 0 as ord
+  union all select 'attendance_legacy', (select count(*) from public.attendance_legacy x where x.id in (select id from a4_backup_20260930.attendance_legacy)), (select count(*) from a4_backup_20260930.attendance_legacy), 0
+  union all select 'attendance_sessions (legacy)', (select count(*) from public.attendance_sessions x where x.id in (select id from a4_backup_20260930.attendance_sessions)), (select count(*) from a4_backup_20260930.attendance_sessions), 0
+  union all
+  select 'attendance_edit_log', (select count(*) from public.attendance_edit_log  where institute_id = (select id from inst)) as msit_now, (select count(*) from a4_backup_20260930.attendance_edit_log), 1
   union all select 'attendance_records',   (select count(*) from public.attendance_records   where institute_id = (select id from inst)), (select count(*) from a4_backup_20260930.attendance_records),   2
   union all select 'class_sessions',       (select count(*) from public.class_sessions       where institute_id = (select id from inst)), (select count(*) from a4_backup_20260930.class_sessions),       3
   union all select 'timetable_slots',      (select count(*) from public.timetable_slots      where institute_id = (select id from inst)), (select count(*) from a4_backup_20260930.timetable_slots),      4

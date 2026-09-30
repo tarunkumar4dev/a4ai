@@ -25,6 +25,10 @@ insert into public.timetable_slots      select * from a4_backup_20260930.timetab
 insert into public.class_sessions       select * from a4_backup_20260930.class_sessions       on conflict (id) do nothing;
 insert into public.attendance_records   select * from a4_backup_20260930.attendance_records   on conflict (id) do nothing;
 insert into public.attendance_edit_log  select * from a4_backup_20260930.attendance_edit_log  on conflict (id) do nothing;
+-- legacy tables (added 30 Sep after the guard found them)
+insert into public.attendance_sessions  select * from a4_backup_20260930.attendance_sessions  on conflict (id) do nothing;
+insert into public.batch_teachers       select * from a4_backup_20260930.batch_teachers       on conflict (id) do nothing;
+insert into public.attendance_legacy    select * from a4_backup_20260930.attendance_legacy    on conflict (id) do nothing;
 
 -- Re-link members to their old department / section
 update public.institute_members m
