@@ -148,6 +148,57 @@ const TYPE_LABELS: Record<string, string> = {
 // ── In-Memory Cache for Instant Loads ────────────────────────────
 const statsCache: Record<string, ChapterStat[]> = {};
 
+interface QuestionPage {
+  questions: NCERTQuestion[];
+  hasMore: boolean;
+}
+/** Question pages by request URL; in-flight requests are shared so prefetch + click never double-fetch. */
+const questionPageCache = new Map<string, QuestionPage>();
+const questionPageInflight = new Map<string, Promise<QuestionPage>>();
+
+function questionsUrl(
+  subject: string,
+  classGrade: string,
+  chapter: string,
+  questionType: string,
+  search: string,
+  offset: number
+): string {
+  const params = new URLSearchParams({
+    subject,
+    class_grade: classGrade,
+    chapter,
+    limit: String(PAGE_SIZE),
+    offset: String(offset),
+  });
+  if (questionType !== "all") params.set("question_type", questionType);
+  if (search) params.set("search", search);
+  return `${API_BASE}/test-generator/ncert-questions?${params}`;
+}
+
+function loadQuestionPage(url: string): Promise<QuestionPage> {
+  const cached = questionPageCache.get(url);
+  if (cached) return Promise.resolve(cached);
+  const pending = questionPageInflight.get(url);
+  if (pending) return pending;
+  const req = fetch(url, { headers: getAuthHeaders() })
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error("NCERT fetch failed");
+      const page: QuestionPage = {
+        questions: (data.questions || []).map((q: NCERTQuestion) => ({ ...q, options: parseOptions(q.options) })),
+        hasMore: !!data.hasMore,
+      };
+      if (questionPageCache.size > 300) questionPageCache.clear();
+      questionPageCache.set(url, page);
+      return page;
+    })
+    .finally(() => questionPageInflight.delete(url));
+  questionPageInflight.set(url, req);
+  return req;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -164,6 +215,32 @@ function getAuthHeaders(): Record<string, string> {
     /* no auth token */
   }
   return headers;
+}
+
+const LOGO_STORAGE_KEY = "a4ai.testBuilder.logo";
+
+/** Downscales a logo to ≤600px PNG so exports stay small and fast. */
+function compressLogo(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, 600 / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(reader.result as string);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function parseOptions(opts: string[] | string | null | undefined): string[] {
@@ -382,6 +459,8 @@ function QuestionContent({ question, truncateAt }: { question: NCERTQuestion; tr
 }
 
 // ── Draggable Question Card (Library Stream) ────────────────────
+// Memoised: KaTeX + table rendering is the expensive part of the library list.
+const MemoQuestionContent = React.memo(QuestionContent);
 function DraggableQuestion({
   question,
   onAdd,
@@ -448,7 +527,7 @@ function DraggableQuestion({
             </span>
           </div>
 
-          <QuestionContent question={question} truncateAt={isMobile ? 180 : 300} />
+          <MemoQuestionContent question={question} truncateAt={isMobile ? 180 : 300} />
         </div>
 
         {/* Action Button */}
@@ -480,6 +559,8 @@ function DraggableQuestion({
 }
 
 // ── Sortable Question (Test Paper Panel) ────────────────────────
+const MemoDraggableQuestion = React.memo(DraggableQuestion);
+
 function SortableTestQuestion({
   question,
   index,
@@ -533,7 +614,7 @@ function SortableTestQuestion({
           </div>
 
           <div className="flex-1 min-w-0">
-            <QuestionContent question={question} truncateAt={isMobile ? 160 : 250} />
+            <MemoQuestionContent question={question} truncateAt={isMobile ? 160 : 250} />
 
             <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-gray-400">
               <span className="font-medium text-gray-600">{question.chapter}</span>
@@ -824,6 +905,59 @@ export default function TestBuilderPage() {
   const [duration, setDuration] = useState("");
   const [topic, setTopic] = useState("");
   const [includeExplanations, setIncludeExplanations] = useState(false);
+  // Branding: logo is remembered on this device so teachers upload it once.
+  const [logoBase64, setLogoBase64] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LOGO_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [watermarkOn, setWatermarkOn] = useState(false);
+  const [watermarkText, setWatermarkText] = useState("");
+  const [watermarkLogo, setWatermarkLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) {
+      toast.error("Please upload a PNG, JPG or WebP logo.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Logo must be under 5 MB.");
+      return;
+    }
+    try {
+      const dataUrl = await compressLogo(file);
+      setLogoBase64(dataUrl);
+      try {
+        localStorage.setItem(LOGO_STORAGE_KEY, dataUrl);
+      } catch {
+        /* storage full / private mode — logo still works for this session */
+      }
+      toast.success("Logo added — it will appear on your PDF.");
+    } catch {
+      toast.error("Could not read this image.");
+    }
+  };
+
+  const removeLogo = () => {
+    setLogoBase64(null);
+    setWatermarkLogo(false);
+    try {
+      localStorage.removeItem(LOGO_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    if (logoInputRef.current) logoInputRef.current.value = "";
+  };
+
+  const brandingPayload = () => ({
+    logoBase64: logoBase64 || undefined,
+    watermarkText: watermarkOn ? (watermarkText.trim() || instituteName.trim() || undefined) : undefined,
+    watermarkLogo: watermarkOn && watermarkLogo && !!logoBase64,
+  });
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
 
@@ -904,51 +1038,65 @@ export default function TestBuilderPage() {
     };
   }, [classGrade, subject]);
 
-  // ── Fetch Questions ───────────────────────────────────────────
+  // ── Fetch Questions (cached + prefetched) ─────────────────────
+  const latestRequest = useRef(0);
+
   const fetchQuestions = useCallback(
     async (append = false) => {
       if (!selectedChapter) return;
       const currentOffset = append ? offset : 0;
+      const url = questionsUrl(subject, classGrade, selectedChapter, questionType, debouncedSearch, currentOffset);
+      const requestId = ++latestRequest.current;
+
+      // Instant render from cache (chapter revisits, prefetched chapters).
+      const cached = questionPageCache.get(url);
+      if (cached) {
+        if (append) setLibraryQuestions((prev) => [...prev, ...cached.questions]);
+        else setLibraryQuestions(cached.questions);
+        setHasMore(cached.hasMore);
+        setOffset(currentOffset + cached.questions.length);
+        setLoading(false);
+        setLoadingMore(false);
+        return;
+      }
+
       if (append) setLoadingMore(true);
       else setLoading(true);
       setError(null);
 
       try {
-        const params = new URLSearchParams({
-          subject,
-          class_grade: classGrade,
-          chapter: selectedChapter,
-          limit: String(PAGE_SIZE),
-          offset: String(currentOffset),
-        });
-        if (questionType !== "all") params.set("question_type", questionType);
-        if (debouncedSearch) params.set("search", debouncedSearch);
-
-        const res = await fetch(
-          `${API_BASE}/test-generator/ncert-questions?${params}`,
-          { headers: getAuthHeaders() }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        if (data.ok) {
-          const questions = (data.questions || []).map((q: NCERTQuestion) => ({
-            ...q,
-            options: parseOptions(q.options),
-          }));
-          if (append) setLibraryQuestions((prev) => [...prev, ...questions]);
-          else setLibraryQuestions(questions);
-          setHasMore(data.hasMore || false);
-          setOffset(currentOffset + questions.length);
-        }
+        const page = await loadQuestionPage(url);
+        // Ignore responses that arrive after the user has already moved on.
+        if (requestId !== latestRequest.current) return;
+        if (append) setLibraryQuestions((prev) => [...prev, ...page.questions]);
+        else setLibraryQuestions(page.questions);
+        setHasMore(page.hasMore);
+        setOffset(currentOffset + page.questions.length);
       } catch (err) {
-        setError("Failed to fetch questions from NCERT repository.");
+        if (requestId === latestRequest.current) setError("Failed to fetch questions from NCERT repository.");
       }
-      setLoading(false);
-      setLoadingMore(false);
+      if (requestId === latestRequest.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     },
     [selectedChapter, questionType, debouncedSearch, classGrade, subject, offset]
   );
+
+  /** Warms the cache for a chapter's first page (hover / idle), so opening it is instant. */
+  const prefetchChapter = useCallback(
+    (chapter: string) => {
+      const url = questionsUrl(subject, classGrade, chapter, "all", "", 0);
+      if (!questionPageCache.has(url)) loadQuestionPage(url).catch(() => undefined);
+    },
+    [subject, classGrade]
+  );
+
+  useEffect(() => {
+    if (!chapterStats.length) return;
+    const timer = setTimeout(() => chapterStats.slice(0, 3).forEach((c) => prefetchChapter(c.chapter)), 300);
+    return () => clearTimeout(timer);
+  }, [chapterStats, prefetchChapter]);
 
   useEffect(() => {
     if (selectedChapter) {
@@ -959,9 +1107,12 @@ export default function TestBuilderPage() {
   }, [selectedChapter, questionType, debouncedSearch]);
 
   // ── Paper Mutation Callbacks ──────────────────────────────────
+  // Stable callback (reads the latest ids from a ref) so memoised cards don't all re-render on add.
+  const addedIdsRef = useRef(addedIds);
+  addedIdsRef.current = addedIds;
   const addToTest = useCallback(
     (q: NCERTQuestion) => {
-      if (addedIds.has(q.id)) return;
+      if (addedIdsRef.current.has(q.id)) return;
       const testQ: TestQuestion = {
         ...q,
         options: parseOptions(q.options),
@@ -970,7 +1121,7 @@ export default function TestBuilderPage() {
       setTestQuestions((prev) => [...prev, testQ]);
       toast.success(`Added question Q${q.question_number || ""}`);
     },
-    [addedIds]
+    []
   );
 
   const removeFromTest = useCallback((paperId: string) => {
@@ -1055,8 +1206,8 @@ export default function TestBuilderPage() {
           marks: q.marks || 1,
           difficulty: q.difficulty || "medium",
           chapter: q.chapter || selectedChapter || "",
-          topic: q.topic || "",
-          format: q.format || (q.options && q.options.length > 0 ? "mcq" : "short_answer"),
+          topic: (q as any).topic || "",
+          format: (q as any).format || (q.options && q.options.length > 0 ? "mcq" : "short_answer"),
           position: idx + 1,
           image_url: q.image_url || undefined,
         }));
@@ -1111,6 +1262,7 @@ export default function TestBuilderPage() {
         topic: topic || selectedChapter || testQuestions[0]?.chapter || undefined,
         paperDate: new Date().toLocaleDateString("en-GB"),
         questions: buildQuestionsPayload(false),
+        ...brandingPayload(),
       };
 
       const res = await fetch(`${API_BASE}/test-generator/export`, {
@@ -1192,6 +1344,7 @@ export default function TestBuilderPage() {
         topic: topic || selectedChapter || testQuestions[0]?.chapter || undefined,
         paperDate: new Date().toLocaleDateString("en-GB"),
         questions: buildQuestionsPayload(true),
+        ...brandingPayload(),
       };
 
       const res = await fetch(`${API_BASE}/test-generator/export-answer-key`, {
@@ -1270,7 +1423,7 @@ export default function TestBuilderPage() {
             strategy={verticalListSortingStrategy}
           >
             {libraryQuestions.map((q) => (
-              <DraggableQuestion
+              <MemoDraggableQuestion
                 key={q.id}
                 question={q}
                 onAdd={addToTest}
@@ -1489,6 +1642,84 @@ export default function TestBuilderPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Branding: logo + watermark */}
+              <div className="flex flex-wrap items-start gap-6 pt-3 border-t border-gray-100">
+                <div className="flex items-center gap-3">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(e) => handleLogoFile(e.target.files?.[0])}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    className="w-14 h-14 rounded-xl border-2 border-dashed border-gray-300 hover:border-gray-500 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0"
+                    title={logoBase64 ? "Change logo" : "Add your logo"}
+                  >
+                    {logoBase64 ? (
+                      <img src={logoBase64} alt="Institute logo" className="max-w-full max-h-full object-contain p-1" />
+                    ) : (
+                      <ImageIcon className="w-5 h-5 text-gray-400" />
+                    )}
+                  </button>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-800">Institute Logo</p>
+                    <p className="text-[10px] text-gray-500">Printed in the paper header (PDF &amp; Word)</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => logoInputRef.current?.click()}
+                        className="text-[11px] font-semibold text-blue-700 hover:underline"
+                      >
+                        {logoBase64 ? "Change" : "Add your logo"}
+                      </button>
+                      {logoBase64 && (
+                        <button type="button" onClick={removeLogo} className="text-[11px] font-semibold text-rose-600 hover:underline">
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-[240px]">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-gray-800 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={watermarkOn}
+                      onChange={(e) => setWatermarkOn(e.target.checked)}
+                      className="w-4 h-4 accent-gray-900"
+                    />
+                    Watermark on every page <span className="font-normal text-gray-500">(PDF)</span>
+                  </label>
+                  {watermarkOn && (
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <input
+                        value={watermarkText}
+                        onChange={(e) => setWatermarkText(e.target.value.slice(0, 60))}
+                        placeholder={instituteName || "e.g. Apex Academy / CONFIDENTIAL"}
+                        className="flex-1 min-w-[180px] px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
+                      />
+                      <label
+                        className={`flex items-center gap-1.5 text-xs ${logoBase64 ? "text-gray-700 cursor-pointer" : "text-gray-400"}`}
+                        title={logoBase64 ? "" : "Add a logo first"}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={!logoBase64}
+                          checked={watermarkLogo && !!logoBase64}
+                          onChange={(e) => setWatermarkLogo(e.target.checked)}
+                          className="w-3.5 h-3.5 accent-gray-900"
+                        />
+                        Faded logo in background
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1565,6 +1796,7 @@ export default function TestBuilderPage() {
                         return (
                           <button
                             key={ch.chapter}
+                            onMouseEnter={() => prefetchChapter(ch.chapter)}
                             onClick={() => {
                               setSelectedChapter(ch.chapter);
                               setQuestionType("all");
