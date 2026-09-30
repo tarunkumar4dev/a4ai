@@ -1,4 +1,5 @@
 -- 05_student_portal.sql — Step 5: student portal via access-code RPCs (fixes finding 11 + B2 on the DB side).
+-- Status: reviewed + applied 30 Sep (live DB). This file = the applied version.
 -- Requires 01 + 02 (already applied). One transaction: if anything fails, nothing changes.
 --
 -- WHAT THIS DOES
@@ -152,8 +153,9 @@ end $$;
 
 -- ════════════════════════════════════════════════════════════════════
 -- 5. submit_assignment — only for an active assignment of the student's batch / lab batch.
---    File URL must point into the student's own folder of the "submissions" bucket:
---      …/submissions/<institute_id>/<assignment_id>/<student_id>_…
+--    File URL must be in this project's storage AND the student's own folder of the "submissions" bucket:
+--      https://dcmnzvjftmdbywrjkust.supabase.co/storage/v1/object/…/submissions/<institute_id>/<assignment_id>/<student_id>_…
+--    Text answer max 20000 characters.
 --    Graded submissions can't be overwritten.
 -- ════════════════════════════════════════════════════════════════════
 create or replace function public.submit_assignment(
@@ -187,8 +189,14 @@ begin
     raise exception 'Attach a file or write an answer' using errcode = '22023';
   end if;
 
+  if length(coalesce(p_text_answer, '')) > 20000 then
+    raise exception 'Answer is too long (max 20000 characters)' using errcode = '22023';
+  end if;
+
+  -- File must live in THIS project's storage (no external/phishing links) AND in the student's own folder.
   if p_file_url is not null
-     and position(('/submissions/' || v_asg.institute_id || '/' || v_asg.id || '/' || st.id || '_') in p_file_url) = 0 then
+     and (p_file_url not like 'https://dcmnzvjftmdbywrjkust.supabase.co/storage/v1/object/%'
+          or position(('/submissions/' || v_asg.institute_id || '/' || v_asg.id || '/' || st.id || '_') in p_file_url) = 0) then
     raise exception 'File must be uploaded from the student portal' using errcode = '42501';
   end if;
 

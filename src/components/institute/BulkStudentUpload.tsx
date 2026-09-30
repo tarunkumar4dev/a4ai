@@ -99,7 +99,7 @@ export default function BulkStudentUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const requiredFields = ["name"];
-  const allFields = ["name", "roll_no", "class_level", "parent_name", "parent_phone", "email", "batch", "lab_batch"];
+  const allFields = ["name", "roll_no", "class_level", "parent_name", "parent_phone", "phone", "email", "batch", "lab_batch"];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -138,35 +138,37 @@ export default function BulkStudentUpload({
 
         const headers = Object.keys(jsonData[0]);
         const autoMapping: Record<string, string> = {};
+        // Order matters for the loose (includes) pass: more specific fields first —
+        // parent_phone before phone ("parent mobile"), lab_batch before batch ("lab_batch").
         const fieldMap: Record<string, string[]> = {
           name: ["name", "student name", "student_name", "full name", "fullname", "studentsname", "candidate name", "student"],
           roll_no: ["roll", "roll no", "roll_no", "roll number", "rollnumber", "rollno", "enrollment", "enrollment no", "enrollment number", "adm no", "admission no", "id"],
           class_level: ["class", "class level", "class_level", "grade", "standard", "year", "sem", "semester", "branch"],
           parent_name: ["parent", "parent name", "parent_name", "father", "father name", "father's name", "fathers name", "mother", "guardian"],
-          parent_phone: ["phone", "parent phone", "parent_phone", "mobile", "contact", "student phone", "phone number", "mobile number", "mobile no", "contact no", "whatsapp"],
+          parent_phone: ["parent phone", "parent_phone", "parent mobile", "parent contact", "father phone", "father mobile", "mother phone", "guardian phone", "guardian mobile"],
+          phone: ["phone", "student phone", "student mobile", "mobile", "mobile number", "mobile no", "phone number", "contact", "contact no", "whatsapp"],
           email: ["email", "student email", "email id", "mail", "email address"],
-          // lab_batch BEFORE batch: the matcher uses includes(), so "lab_batch" would otherwise map to batch
           lab_batch: ["lab batch", "lab_batch", "lab group"],
           batch: ["batch", "batch name", "section", "group", "class batch"]
         };
-
-        headers.forEach((header) => {
-          const cleanHeader = header.toLowerCase().trim();
-          const strippedHeader = cleanHeader.replace(/[^a-z0-9]/g, "");
+        const clean = (v: string) => v.toLowerCase().trim();
+        const strip = (v: string) => clean(v).replace(/[^a-z0-9]/g, "");
+        const usedHeaders = new Set<string>();
+        const assign = (loose: boolean) => {
           for (const [field, aliases] of Object.entries(fieldMap)) {
-            if (!autoMapping[field]) {
-              const match = aliases.some(alias => {
-                const cleanAlias = alias.toLowerCase().trim();
-                const strippedAlias = cleanAlias.replace(/[^a-z0-9]/g, "");
-                return cleanHeader === cleanAlias || strippedHeader === strippedAlias || strippedHeader.includes(strippedAlias);
-              });
-              if (match) {
-                autoMapping[field] = header;
-                break;
-              }
+            if (autoMapping[field]) continue;
+            const header = headers.find(h => !usedHeaders.has(h) && aliases.some(alias =>
+              loose
+                ? strip(h).includes(strip(alias))
+                : clean(h) === clean(alias) || strip(h) === strip(alias)));
+            if (header) {
+              autoMapping[field] = header;
+              usedHeaders.add(header);
             }
           }
-        });
+        };
+        assign(false); // 1. exact header matches win ("phone" → phone, "parent_phone" → parent_phone)
+        assign(true);  // 2. then loose includes-matches for whatever is still unmapped
 
         setMapping(autoMapping);
         setPreviewData(jsonData);
@@ -274,7 +276,7 @@ export default function BulkStudentUpload({
           }
         }
 
-        // Parent phone / mobile number (note: database table has parent_phone, not phone)
+        // Parent's number → parent_phone; the student's own number → phone (06a)
         const phoneVal = getMappedValue(row, "parent_phone") || null;
 
         preparedRecords.push({
@@ -284,6 +286,7 @@ export default function BulkStudentUpload({
           class_level: getMappedValue(row, "class_level") || null,
           parent_name: getMappedValue(row, "parent_name") || null,
           parent_phone: phoneVal,
+          ...(mapping["phone"] ? { phone: getMappedValue(row, "phone") || null } : {}), // needs 06a_students_phone.sql
           email: getMappedValue(row, "email") || null,
           batch_id: rowBatchId,
           department_id: rowDepartmentId,
