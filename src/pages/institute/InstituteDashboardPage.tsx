@@ -256,7 +256,9 @@ export default function InstituteDashboardPage() {
         supabase.from("institutes").select("*").eq("id", id).single(),
         supabase.from("institute_members").select("*").eq("institute_id", id).eq("status", "active").in("role", ["teacher", "hod"]).order("joined_at", { ascending: false }),
         supabase.from("batches").select("*").eq("institute_id", id).eq("is_active", true).order("created_at", { ascending: false }),
-        supabase.from("students").select("*, batches(name), student_access_codes(access_code)").eq("institute_id", id).eq("is_active", true).order("name", { ascending: true }),
+        // students has TWO FKs to batches since 05 (batch_id, lab_batch_id) → the embed must name the FK column,
+        // else PostgREST rejects it as ambiguous (PGRST201) and no students load.
+        supabase.from("students").select("*, batches!batch_id(name), student_access_codes(access_code)").eq("institute_id", id).eq("is_active", true).order("name", { ascending: true }),
         supabase.from("departments").select("*").eq("institute_id", id).order("name", { ascending: true }),
         supabase.from("sections").select("*, departments!inner(institute_id)").eq("departments.institute_id", id).order("name", { ascending: true }),
       ]);
@@ -283,6 +285,10 @@ export default function InstituteDashboardPage() {
       }
       if (b.data) setTeachers(b.data as Teacher[]);
       if (c.data) setBatches(c.data as Batch[]);
+      if (d.error) {
+        console.error("students fetch:", d.error);
+        toast.error(`Couldn't load students: ${d.error.message}`);
+      }
       if (d.data) setStudents(d.data.map((s: any) => ({ ...s, batch_name: s.batches?.name || "Unassigned" })));
       if (e.data) setDepartments(e.data as Department[]);
       if (f.data) setSections(f.data as Section[]);

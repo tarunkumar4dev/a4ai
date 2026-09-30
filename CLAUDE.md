@@ -117,8 +117,10 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - ~~BulkStudentUpload auto-maps a "phone" column to parent_phone~~ Fixed in Step 6 prep (exact-match pass first; phone → students.phone via 06a).
   - Pre-existing tsc error: StudentCalendar `color2` style prop.
 - [x] Step 6 prep (30 Sep, files only): `06a_students_phone.sql` (students.phone + gender — TeacherStudentsTab "Add student" already sent both, so that insert was failing). BulkStudentUpload header mapping = exact pass first, then includes pass; one header → one field; new `phone` field; ECE-2 xlsx maps phone→phone, parent_phone→parent_phone, section→batch, year→class_level, lab_batch→lab_batch. `06_reset_msit.sql` (guard on unhandled FKs → backup schema a4_backup_20260930 → delete 17 tables child-first → members' dept/section NULL → verify counts) + `06_restore_msit.sql` (parents first, on conflict do nothing, re-link members).
-- [ ] Step 6 run: 06a → 06_reset (all msit_now = 0) → fresh run checklist (ECE → HOD → ECE-2 2025 + labs → upload) → expect 43 students, lab A 15 / B 14 / C 14.
+- [x] Step 6 run (30 Sep): reset done (guard found legacy tables attendance_sessions / batch_teachers / attendance_legacy → added to 06 reset/restore), fresh ECE → ECE-2 (2025, labs A/B/C) → upload: 43 students with institute/department/section/batch/lab_batch set; HOD /hod shows 43; admin RLS count 43.
+- [x] Fix (30 Sep): /institute Students tab + batch cards showed 0 — `InstituteDashboardPage` students query embedded `batches(name)`, which became ambiguous once 05 added students.lab_batch_id (2nd FK to batches) → PostgREST PGRST201, error ignored (`if (d.data)`). Now `batches!batch_id(name)` + error toast.
 - Known after Step 6 prep:
+  - Any new `students → batches` embed must name the FK (`batches!batch_id(...)` / `batches!lab_batch_id(...)`). Unused `src/hooks/useInstituteTeacher.ts` still has the ambiguous `batches(name)` embed (another reason to delete it).
   - Backup schema a4_backup_20260930 contains students' PII — `drop schema a4_backup_20260930 cascade;` 7 days after the fresh run is verified.
 
 ## Test matrix (after every step)
