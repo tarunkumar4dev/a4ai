@@ -4,9 +4,11 @@
 // MS Teams-inspired classroom view — Dark/Light Mode · Fully Responsive
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { supabase } from "@/lib/supabaseClient";
+// Portal-only client: never carries a staff session (B2). DB access only via the access-code RPCs
+// in supabase/migrations/05_student_portal.sql — no direct table reads.
+import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
 import { motion, AnimatePresence } from "framer-motion";
-import StudentCalendar from "@/components/student/StudentCalendar";
+import StudentCalendar, { type CalEvent } from "@/components/student/StudentCalendar";
 
 /* ─── Types ────────────────────────────────────────────────────── */
 type StudentData = {
@@ -15,6 +17,9 @@ type StudentData = {
   roll_no: string;
   batch_id: string;
   batch_name: string;
+  lab_batch_id: string | null;
+  lab_batch_name: string | null;
+  section_name: string | null;
   class_level: string;
   department_name: string;
   access_code: string;
@@ -31,6 +36,8 @@ type Assignment = {
   file_name: string | null;
   max_marks: number | null;
   created_at: string;
+  batch_id?: string;
+  batch_name?: string | null;
   submission?: Submission | null;
 };
 
@@ -317,6 +324,7 @@ export default function StudentPortalPage() {
   const [student, setStudent] = useState<StudentData | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
   const [activeAssignment, setActiveAssignment] = useState<Assignment | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "assignments" | "announcements">("overview");
   const [loading, setLoading] = useState(false);
@@ -339,41 +347,14 @@ export default function StudentPortalPage() {
 
   const t = themeTokens[theme];
 
-  // Load & Subscribe to Realtime Chat Messages
+  // Load chat messages. There is no batch_messages table in the DB (audit 29 Sep) → chat is local to this
+  // device (localStorage), which is what it effectively was before. No direct table reads from the portal.
   useEffect(() => {
     if (!student?.batch_id) return;
     const batchId = student.batch_id;
 
-    async function loadChat() {
-      // 1. Check Supabase table batch_messages
-      try {
-        const { data, error } = await supabase
-          .from("batch_messages")
-          .select("*")
-          .eq("batch_id", batchId)
-          .order("created_at", { ascending: true })
-          .limit(100);
-
-        if (!error && data && data.length > 0) {
-          const msgs: ChatMessage[] = data.map((m: any) => ({
-            id: String(m.id),
-            sender: m.sender_name || (m.sender_role === "teacher" ? "Teacher" : "Student"),
-            sender_id: m.sender_id,
-            sender_role: m.sender_role || "student",
-            text: m.message || m.text || "",
-            time: new Date(m.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
-            created_at: m.created_at,
-            isStudent: m.sender_id === student?.id || m.sender_role === "student",
-          }));
-          setChatMessages(msgs);
-          localStorage.setItem(`a4ai_chat_${batchId}`, JSON.stringify(msgs));
-          return;
-        }
-      } catch (e) {
-        // graceful fallback to localStorage
-      }
-
-      // 2. Fallback to localStorage
+    function loadChat() {
+      // 1. localStorage
       const local = localStorage.getItem(`a4ai_chat_${batchId}`);
       if (local) {
         try {
@@ -385,7 +366,7 @@ export default function StudentPortalPage() {
         } catch {}
       }
 
-      // 3. Default welcome message
+      // 2. Default welcome message
       const defaultMsg: ChatMessage[] = [
         {
           id: "welcome-1",
@@ -401,45 +382,6 @@ export default function StudentPortalPage() {
     }
 
     loadChat();
-
-    // Subscribe to real-time inserts on batch_messages
-    const channel = supabase
-      .channel(`batch-chat-${batchId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "batch_messages",
-          filter: `batch_id=eq.${batchId}`,
-        },
-        (payload) => {
-          const newRow = payload.new as any;
-          if (newRow) {
-            const incoming: ChatMessage = {
-              id: String(newRow.id),
-              sender: newRow.sender_name || (newRow.sender_role === "teacher" ? "Teacher" : "Student"),
-              sender_id: newRow.sender_id,
-              sender_role: newRow.sender_role || "student",
-              text: newRow.message || newRow.text || "",
-              time: new Date(newRow.created_at || Date.now()).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
-              created_at: newRow.created_at,
-              isStudent: newRow.sender_id === student?.id,
-            };
-            setChatMessages((prev) => {
-              if (prev.some((m) => m.id === incoming.id)) return prev;
-              const updated = [...prev, incoming];
-              localStorage.setItem(`a4ai_chat_${batchId}`, JSON.stringify(updated));
-              return updated;
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [student?.batch_id, student?.id, student?.batch_name]);
 
   // Auto-scroll to bottom of chat
@@ -474,76 +416,39 @@ export default function StudentPortalPage() {
 
   const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
 
-  /* ── Login ── */
+  /* ── Login (get_student_by_code RPC) ── */
   async function loginWithCode(inputCode: string) {
     setLoading(true);
     setError("");
     const clean = inputCode.trim().toUpperCase();
     try {
-      const { data: sac, error: sacErr } = await supabase
-        .from("student_access_codes")
-        .select("*")
-        .eq("access_code", clean)
-        .eq("is_active", true)
-        .single();
-
-      if (sacErr || !sac) {
+      const { data: row, error: rpcErr } = await supabase.rpc("get_student_by_code", { p_code: clean });
+      if (rpcErr) console.error("get_student_by_code:", rpcErr);
+      if (rpcErr || !row) {
         setError("Invalid code. Please check and try again.");
+        localStorage.removeItem("a4ai_student_code");
         setLoading(false);
         return;
-      }
-
-      const { data: studentRow } = await supabase
-        .from("students").select("*").eq("id", sac.student_id).single();
-
-      if (!studentRow) {
-        setError("Student record not found.");
-        setLoading(false);
-        return;
-      }
-
-      let batchName = "—", batchClass = studentRow.class_level || "";
-      if (sac.batch_id) {
-        const { data: batch } = await supabase
-          .from("batches").select("name, class_level").eq("id", sac.batch_id).single();
-        if (batch) { batchName = batch.name; batchClass = batchClass || batch.class_level || ""; }
-      }
-
-      let instName = "Institute";
-      if (sac.institute_id) {
-        const { data: inst } = await supabase
-          .from("institutes").select("name").eq("id", sac.institute_id).single();
-        if (inst) instName = inst.name;
-      }
-
-      let deptName = "";
-      if (studentRow.department_id) {
-        const { data: dept } = await supabase
-          .from("departments").select("name").eq("id", studentRow.department_id).single();
-        if (dept) deptName = dept.name;
       }
 
       const s: StudentData = {
-        id: sac.student_id,
-        name: studentRow.name || "Student",
-        roll_no: studentRow.roll_no || "",
-        batch_id: sac.batch_id,
-        batch_name: batchName,
-        class_level: batchClass,
-        department_name: deptName,
+        id: row.id,
+        name: row.name || "Student",
+        roll_no: row.roll_no || "",
+        batch_id: row.batch_id,
+        batch_name: row.batch_name || "—",
+        lab_batch_id: row.lab_batch_id || null,
+        lab_batch_name: row.lab_batch_name || null,
+        section_name: row.section_name || null,
+        class_level: row.class_level || "",
+        department_name: row.department_name || "",
         access_code: clean,
-        institute_name: instName,
-        institute_id: sac.institute_id,
+        institute_name: row.institute_name || "Institute",
+        institute_id: row.institute_id,
       };
 
       localStorage.setItem("a4ai_student_code", clean);
       setStudent(s);
-
-      await supabase
-        .from("student_access_codes")
-        .update({ last_used_at: new Date().toISOString() })
-        .eq("access_code", clean);
-
       await loadDashboard(s);
       setView("dashboard");
     } catch (e) {
@@ -552,68 +457,67 @@ export default function StudentPortalPage() {
     setLoading(false);
   }
 
-  async function loadDashboard(s: StudentData) {
-    const { data: asgns } = await supabase
-      .from("assignments")
-      .select("*")
-      .eq("batch_id", s.batch_id)
-      .eq("status", "active")
-      .order("created_at", { ascending: false });
-
-    if (asgns) {
-      const { data: subs } = await supabase
-        .from("submissions")
-        .select("*")
-        .eq("student_id", s.id)
-        .in("assignment_id", asgns.map(a => a.id));
-
-      const subMap: Record<string, Submission> = {};
-      if (subs) subs.forEach(sub => { subMap[sub.assignment_id] = sub; });
-
-      setAssignments(asgns.map(a => ({ ...a, submission: subMap[a.id] || null })));
+  /* ── Feed (get_student_feed RPC): own batch + lab batch only ── */
+  async function loadDashboard(s: StudentData): Promise<Assignment[]> {
+    const { data: feed, error: feedErr } = await supabase.rpc("get_student_feed", { p_code: s.access_code });
+    if (feedErr || !feed) {
+      if (feedErr) console.error("get_student_feed:", feedErr);
+      return [];
     }
+    const asgns: Assignment[] = feed.assignments || [];
+    setAssignments(asgns);
+    setAnnouncements(feed.announcements || []);
 
-    const { data: anns } = await supabase
-      .from("announcements")
-      .select("*")
-      .eq("batch_id", s.batch_id)
-      .order("is_pinned", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    if (anns) setAnnouncements(anns);
+    // Calendar = events + assignment deadlines
+    const evts: CalEvent[] = [...(feed.events || [])];
+    asgns.forEach((a) => {
+      if (a.deadline) evts.push({
+        id: `asgn-${a.id}`, title: `📋 ${a.title}`,
+        description: `Assignment deadline${a.max_marks ? ` · ${a.max_marks} marks` : ""}`,
+        event_type: "deadline", start_time: a.deadline, all_day: false,
+        color: "#F59E0B", is_assignment: true,
+      });
+    });
+    evts.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    setCalEvents(evts);
+    return asgns;
   }
 
+  // Anon gets no realtime events once table policies are gone (05b) → poll + refresh on focus instead
+  useEffect(() => {
+    if (!student) return;
+    const refresh = () => { if (document.visibilityState === "visible") loadDashboard(student); };
+    const id = window.setInterval(refresh, 60_000);
+    window.addEventListener("focus", refresh);
+    return () => { window.clearInterval(id); window.removeEventListener("focus", refresh); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student?.id, student?.access_code]);
+
+  /* ── Submit (storage upload + submit_assignment RPC) ── */
   async function handleSubmitFile(assignment: Assignment, file: File) {
     if (!student) return;
     setUploading(true);
     try {
+      // Path must be <institute>/<assignment>/<student>_… — submit_assignment rejects anything else
       const path = `${student.institute_id}/${assignment.id}/${student.id}_${Date.now()}.pdf`;
       const { error: upErr } = await supabase.storage.from("submissions").upload(path, file, { upsert: true, contentType: "application/pdf" });
       if (upErr) throw upErr;
 
       const { data: { publicUrl } } = supabase.storage.from("submissions").getPublicUrl(path);
 
-      const existing = assignment.submission;
-      if (existing) {
-        await supabase.from("submissions").update({
-          file_url: publicUrl, file_name: file.name,
-          submitted_at: new Date().toISOString(), status: "submitted",
-        }).eq("id", existing.id);
-      } else {
-        await supabase.from("submissions").insert({
-          assignment_id: assignment.id, student_id: student.id,
-          file_url: publicUrl, file_name: file.name, status: "submitted",
-        });
-      }
+      const { error: subErr } = await supabase.rpc("submit_assignment", {
+        p_code: student.access_code,
+        p_assignment_id: assignment.id,
+        p_file_url: publicUrl,
+        p_file_name: file.name,
+      });
+      if (subErr) throw subErr;
 
       setSubmitSuccess(true);
       setTimeout(() => setSubmitSuccess(false), 3000);
-      await loadDashboard(student);
-      const { data: updated } = await supabase.from("assignments").select("*").eq("id", assignment.id).single();
-      if (updated) {
-        const { data: sub } = await supabase.from("submissions").select("*").eq("assignment_id", assignment.id).eq("student_id", student.id).single();
-        setActiveAssignment({ ...updated, submission: sub || null });
-      }
+      const fresh = await loadDashboard(student);
+      const updated = fresh.find((a) => a.id === assignment.id);
+      if (updated) setActiveAssignment(updated);
     } catch (e: any) {
       alert("Upload failed: " + (e.message || "Unknown error"));
     }
@@ -625,6 +529,7 @@ export default function StudentPortalPage() {
     setStudent(null);
     setAssignments([]);
     setAnnouncements([]);
+    setCalEvents([]);
     setView("login");
     setCode("");
   }
@@ -1177,10 +1082,7 @@ export default function StudentPortalPage() {
 
             {/* Calendar View */}
             {sideView === "calendar" && (
-              <StudentCalendar
-                batchId={student.batch_id}
-                instituteId={student.institute_id}
-              />
+              <StudentCalendar events={calEvents} />
             )}
 
             {/* Activity View */}
@@ -1429,7 +1331,9 @@ export default function StudentPortalPage() {
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
                       <div className="text-5xl mb-2">🎓</div>
-                      <p className="text-xs font-medium" style={{ color: t.textSecondary }}>{student.batch_name}</p>
+                      <p className="text-xs font-medium" style={{ color: t.textSecondary }}>
+                        {student.batch_name}{student.lab_batch_name ? ` · Lab ${student.lab_batch_name}` : ""}
+                      </p>
                     </div>
                   </div>
                   <div className="absolute top-4 right-4 flex items-center space-x-1.5 px-2.5 py-1 rounded-md backdrop-blur-md" style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }}>

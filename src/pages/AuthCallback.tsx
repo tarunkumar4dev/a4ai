@@ -91,8 +91,14 @@ export default function AuthCallback() {
           return;
         }
 
-        // 8. Always redirect straight to dashboard
-        navigate(fallbackDashboard, { replace: true });
+        // 8. Redirect using get_my_access home_route
+        try {
+          const { data: accessData } = await supabase.rpc('get_my_access');
+          const access = accessData?.[0];
+          navigate(access?.home_route || fallbackDashboard, { replace: true });
+        } catch {
+          navigate(fallbackDashboard, { replace: true });
+        }
       } catch (error: any) {
         console.error("OAuth callback error:", error);
         toast({

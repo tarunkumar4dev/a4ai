@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { useMyScope } from "@/hooks/useMyScope";
 import {
   Users,
   Search,
@@ -113,158 +114,79 @@ export default function TeacherStudentsTab({
   });
   const [submittingAdd, setSubmittingAdd] = useState(false);
 
+  const scope = useMyScope();
+  /** Not assigned anywhere yet (no teaching batch, not a proctor) → dedicated empty state. */
+  const noScope = !scope.loading && !scope.isAdmin && batches.length === 0 && scope.proctorSectionIds.length === 0;
+
   /* ─── Data Fetching ────────────────────────────────────────────────────── */
   useEffect(() => {
-    loadData();
-  }, [userId, userEmail]);
+    if (!scope.loading) loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope]);
 
   async function loadData(isRefresh = false) {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
-      let instId: string | null = null;
-      let role = "teacher";
-      let departmentId: string | null = null;
-
-      // 1. Get institute membership from institute_members (by user_id)
-      if (userId) {
-        const { data: memData } = await supabase
-          .from("institute_members")
-          .select("id, institute_id, role, status, department_id, user_id")
-          .eq("user_id", userId)
-          .limit(1);
-
-        if (memData && memData.length > 0) {
-          instId = memData[0].institute_id;
-          role = memData[0].role || "teacher";
-          departmentId = memData[0].department_id || null;
-        }
-      }
-
-      // 1b. Fallback: search by user_email if not found by user_id
-      if (!instId && userEmail) {
-        const { data: emailMem } = await supabase
-          .from("institute_members")
-          .select("id, institute_id, role, status, department_id, user_id")
-          .eq("user_email", userEmail)
-          .limit(1);
-
-        if (emailMem && emailMem.length > 0) {
-          instId = emailMem[0].institute_id;
-          role = emailMem[0].role || "teacher";
-          departmentId = emailMem[0].department_id || null;
-        }
-      }
-
-      // 1c. Direct owner lookup
-      if (!instId && userId) {
-        const { data: ownerInst } = await supabase
-          .from("institutes")
-          .select("id, name")
-          .eq("owner_id", userId)
-          .limit(1);
-
-        if (ownerInst && ownerInst.length > 0) {
-          instId = ownerInst[0].id;
-          role = "admin";
-          setInstituteName(ownerInst[0].name || "Institute");
-        }
-      }
-
+      // 1. Institute + role come from get_my_access() (useMyScope) — no institute_members lookups here.
+      const instId = scope.instituteId;
       if (!instId) {
         setLoading(false);
         setRefreshing(false);
         return;
       }
-
       setInstituteId(instId);
-      setUserRole(role);
+      setUserRole(scope.isAdmin ? "admin" : scope.isHod ? "hod" : "teacher");
 
-      // Fetch institute name if not set
-      if (instId) {
-        const { data: inst } = await supabase
-          .from("institutes")
-          .select("name")
-          .eq("id", instId)
-          .single();
-        if (inst?.name) setInstituteName(inst.name);
-      }
+      const { data: inst } = await supabase
+        .from("institutes")
+        .select("name")
+        .eq("id", instId)
+        .maybeSingle();
+      if (inst?.name) setInstituteName(inst.name);
 
-      // 2. Fetch assigned batches
-      let batchRows: BatchInfo[] = [];
-
-      // Priority 1: explicit teacher_batches rows
-      if (userId) {
-        const { data: tb } = await supabase
-          .from("teacher_batches")
-          .select("batch_id")
-          .eq("teacher_id", userId)
-          .eq("institute_id", instId);
-
-        if (tb && tb.length > 0) {
-          const batchIds = tb.map((t) => t.batch_id).filter(Boolean);
-          const { data: bRows } = await supabase
-            .from("batches")
-            .select("id, name, class_level, department_id")
-            .in("id", batchIds)
-            .eq("is_active", true)
-            .order("name");
-          batchRows = (bRows as BatchInfo[]) || [];
-        }
-      }
-
-      // Priority 2: Fallback to department batches
-      if (batchRows.length === 0 && departmentId) {
-        const { data: bRows } = await supabase
-          .from("batches")
-          .select("id, name, class_level, department_id")
-          .eq("institute_id", instId)
-          .eq("department_id", departmentId)
-          .eq("is_active", true)
-          .order("name");
-        batchRows = (bRows as BatchInfo[]) || [];
-      }
-
-      // Priority 3: If admin/owner or still empty, fetch all active institute batches
-      const { data: allInstBatches } = await supabase
-        .from("batches")
-        .select("id, name, class_level, department_id")
-        .eq("institute_id", instId)
-        .eq("is_active", true)
-        .order("name");
-
+      // 2. Batches = my scope only (teaching + proctor sections; admin: all).
+      //    No teacher_batches / department / whole-institute fallback.
+      const batchRows: BatchInfo[] = scope.batches.map((b) => ({
+        id: b.id,
+        name: b.name,
+        class_level: b.class_level || undefined,
+        department_id: b.department_id,
+      }));
       const allBatchesMap: Record<string, BatchInfo> = {};
-      (allInstBatches || []).forEach((b) => {
-        allBatchesMap[b.id] = b as BatchInfo;
+      batchRows.forEach((b) => {
+        allBatchesMap[b.id] = b;
       });
-
-      if (batchRows.length === 0 && (role === "admin" || role === "owner" || (allInstBatches && allInstBatches.length > 0))) {
-        batchRows = (allInstBatches as BatchInfo[]) || [];
-      }
-
       setBatches(batchRows);
 
-      // Pre-select batch in add form if available
-      if (batchRows.length > 0 && !addForm.batch_id) {
+      // Pre-select a batch in the add form — only batches this user may add students to (admin / HOD)
+      const firstAddable = scope.manageableBatches[0];
+      if (firstAddable && !addForm.batch_id) {
         setAddForm((prev) => ({
           ...prev,
-          batch_id: batchRows[0].id,
-          class_level: batchRows[0].class_level || "",
+          batch_id: firstAddable.id,
+          class_level: firstAddable.class_level || "",
         }));
       }
 
-      // 3. Fetch Students
+      if (!scope.isAdmin && batchRows.length === 0 && scope.proctorSectionIds.length === 0) {
+        setStudents([]);
+        return;
+      }
+
+      // 3. Fetch Students of my batches (+ students of my proctor sections)
       let stuQuery = supabase
         .from("students")
         .select("*")
         .eq("institute_id", instId)
         .eq("is_active", true);
 
-      // Filter by teacher's batches if teacher has specific batches and is not admin/owner
-      const batchIds = batchRows.map((b) => b.id);
-      if (batchIds.length > 0 && role !== "admin" && role !== "owner") {
-        stuQuery = stuQuery.in("batch_id", batchIds);
+      if (!scope.isAdmin) {
+        const stuOr: string[] = [];
+        if (batchRows.length) stuOr.push(`batch_id.in.(${batchRows.map((b) => b.id).join(",")})`);
+        if (scope.proctorSectionIds.length) stuOr.push(`section_id.in.(${scope.proctorSectionIds.join(",")})`);
+        stuQuery = stuQuery.or(stuOr.join(","));
       }
 
       const { data: rawStudents, error: stuError } = await stuQuery.order("name", {
@@ -385,11 +307,19 @@ export default function TeacherStudentsTab({
       toast.error("Institute ID missing");
       return;
     }
+    // Only admin / HOD may add students (RLS stu_insert), and only into batches they manage.
+    const targetBatch = scope.manageableBatches.find((b) => b.id === addForm.batch_id);
+    if (!scope.canManageStudents || !targetBatch) {
+      toast.error("Only the admin or HOD can add students to this batch.");
+      return;
+    }
 
     setSubmittingAdd(true);
     try {
       const payload: any = {
         institute_id: instituteId,
+        department_id: targetBatch.department_id,
+        section_id: targetBatch.section_id,
         name: addForm.name.trim(),
         roll_no: addForm.roll_no.trim() || null,
         batch_id: addForm.batch_id || null,
@@ -415,19 +345,19 @@ export default function TeacherStudentsTab({
         return;
       }
 
-      // Generate access code if table exists
-      try {
-        if (newStudent?.id) {
-          const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-          await supabase.from("student_access_codes").insert({
-            student_id: newStudent.id,
-            institute_id: instituteId,
-            batch_id: addForm.batch_id || null,
-            access_code: generatedCode,
-          });
+      // Generate access code — the student is saved either way, so a failure here is a warning, not an error
+      if (newStudent?.id) {
+        const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const { error: codeErr } = await supabase.from("student_access_codes").insert({
+          student_id: newStudent.id,
+          institute_id: instituteId,
+          batch_id: addForm.batch_id || null,
+          access_code: generatedCode,
+        });
+        if (codeErr) {
+          console.error("Access code insert error:", codeErr);
+          toast.warning(`Student added, but the access code could not be created: ${codeErr.message}`);
         }
-      } catch {
-        // ignore code creation error
       }
 
       toast.success(`${addForm.name} enrolled successfully!`);
@@ -435,8 +365,8 @@ export default function TeacherStudentsTab({
       setAddForm({
         name: "",
         roll_no: "",
-        batch_id: batches[0]?.id || "",
-        class_level: batches[0]?.class_level || "",
+        batch_id: scope.manageableBatches[0]?.id || "",
+        class_level: scope.manageableBatches[0]?.class_level || "",
         parent_name: "",
         parent_phone: "",
         phone: "",
@@ -686,14 +616,16 @@ export default function TeacherStudentsTab({
             </button>
           )}
 
-          {/* Add Student Button */}
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF7043] to-[#F4511E] hover:from-[#F4511E] hover:to-[#E64A19] text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md shadow-orange-500/20 active:scale-95"
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Add Student</span>
-          </button>
+          {/* Add Student Button — admin / HOD only */}
+          {scope.canManageStudents && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF7043] to-[#F4511E] hover:from-[#F4511E] hover:to-[#E64A19] text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md shadow-orange-500/20 active:scale-95"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Add Student</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -961,17 +893,21 @@ export default function TeacherStudentsTab({
             <Users className="w-8 h-8" />
           </div>
           <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-1">
-            {students.length === 0
+            {noScope
+              ? "Aapko abhi koi batch assign nahi hua — HOD se contact karein"
+              : students.length === 0
               ? "No students enrolled yet"
               : "No students match your filter"}
           </h4>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
-            {students.length === 0
-              ? "Your assigned batches currently have no enrolled students. You can add students manually or ask your institute administrator."
+            {noScope
+              ? "Jab HOD aapko kisi section ka subject ya class teacher assign karega, us batch ke students yahan dikhenge."
+              : students.length === 0
+              ? "Your assigned batches currently have no enrolled students. Ask your HOD or institute administrator to add them."
               : "Try adjusting your search query, batch filter, or attendance status to find who you're looking for."}
           </p>
           {students.length === 0 ? (
-            <button
+            scope.canManageStudents && !noScope && <button
               onClick={() => setShowAddModal(true)}
               className="px-5 py-2.5 rounded-xl bg-[#FF7043] text-white font-bold text-sm shadow-md hover:bg-[#F4511E] transition-all inline-flex items-center gap-2"
             >
@@ -1488,7 +1424,7 @@ export default function TeacherStudentsTab({
                     required
                     value={addForm.batch_id}
                     onChange={(e) => {
-                      const sel = batches.find((b) => b.id === e.target.value);
+                      const sel = scope.manageableBatches.find((b) => b.id === e.target.value);
                       setAddForm({
                         ...addForm,
                         batch_id: e.target.value,
@@ -1497,7 +1433,7 @@ export default function TeacherStudentsTab({
                     }}
                     className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-xs font-bold outline-none focus:border-[#FF7043] text-slate-800 dark:text-white"
                   >
-                    {batches.map((b) => (
+                    {scope.manageableBatches.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.name} {b.class_level ? `(${b.class_level})` : ""}
                       </option>

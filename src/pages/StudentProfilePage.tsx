@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
+import { useAccess } from "@/context/AccessProvider";
 
 /* ─── Avatar ─────────────────────────────────────────────────────── */
 function Avatar({ gender, size = 80 }: { gender?: string | null; size?: number }) {
@@ -98,7 +99,7 @@ function printReport(student: any, att: any, monthly: any[], instituteName: stri
   <div class="stat"><div class="sn" style="color:${attColor}">${att.pct}%</div><div class="sl">Overall</div></div>
   <div class="stat"><div class="sn" style="color:#3B82F6">${att.present}</div><div class="sl">Present</div></div>
   <div class="stat"><div class="sn" style="color:#EF4444">${att.absent}</div><div class="sl">Absent</div></div>
-  <div class="stat"><div class="sn" style="color:#64748B">${att.total}</div><div class="sl">Total Days</div></div>
+  <div class="stat"><div class="sn" style="color:#64748B">${att.total}</div><div class="sl">Total Classes</div></div>
 </div>
 ${monthly.length > 0 ? `
 <table>
@@ -129,13 +130,26 @@ export default function StudentProfilePage() {
   const [instituteName, setInstituteName] = useState("Institute");
   const [instituteLogoUrl, setInstituteLogoUrl] = useState<string | null>(null);
   const [error, setError]       = useState<string | null>(null);
+  const [denied, setDenied]     = useState(false);
+  const { access, loading: accessLoading } = useAccess();
 
-  useEffect(() => { if (studentId) load(); }, [studentId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (studentId && !accessLoading) load(); }, [studentId, accessLoading]);
 
   async function load() {
     setLoading(true);
     setError(null);
+    setDenied(false);
     try {
+      // ── 0. Access check first (admin / HOD of dept / proctor / teacher of the student's batch) ──
+      const { data: canView, error: canErr } = await supabase.rpc("a4_can_view_student", { p_student_id: studentId });
+      if (canErr) console.error("a4_can_view_student:", canErr);
+      if (canErr || canView !== true) {
+        setDenied(true);
+        setLoading(false);
+        return;
+      }
+
       // ── 1. Fetch student (simple — only columns we know exist) ──
       const { data: s, error: sErr } = await supabase
         .from("students")
@@ -174,14 +188,9 @@ export default function StudentProfilePage() {
       }
 
       // ── 4. Fetch institute name ──
-      const { data: member } = await supabase
-        .from("institute_members")
-        .select("institute_id")
-        .eq("user_id", (await supabase.auth.getUser()).data.user?.id ?? "")
-        .eq("status", "active")
-        .limit(1)
-        .single();
-      if (member?.institute_id) {
+      // Institute from get_my_access() — no multi-row-unsafe .single() on institute_members
+      const member = { institute_id: access?.institute_id || s.institute_id };
+      if (member.institute_id) {
         const { data: inst } = await supabase
           .from("institutes")
           .select("name")
@@ -202,37 +211,41 @@ export default function StudentProfilePage() {
 
       setStudent({ ...s, batchName, class_level: batchClassLevel, deptName });
 
-      // ── 5. Fetch attendance ──
-      if (s.batch_id) {
-        const { data: attRows } = await supabase
-          .from("attendance")
-          .select("date, records")
-          .eq("batch_id", s.batch_id);
+      // ── 5. Attendance from attendance_records (v2) + class_sessions.session_date ──
+      //     % = present / all marked classes (leave counts in the total, not as present — same as proctor view)
+      const { data: attRows, error: attErr } = await supabase
+        .from("attendance_records")
+        .select("status, class_sessions(session_date)")
+        .eq("student_id", s.id);
+      if (attErr) console.error("attendance_records:", attErr);
 
-        if (attRows && attRows.length > 0) {
-          let present = 0, total = 0;
-          const monthMap: Record<string, { present: number; total: number }> = {};
+      if (attRows && attRows.length > 0) {
+        let present = 0, absent = 0, total = 0;
+        const monthMap: Record<string, { present: number; total: number; sort: string }> = {};
 
-          attRows.forEach((row: any) => {
-            const records: Record<string, string> = typeof row.records === "object" ? row.records : {};
-            const status = records[s.id];
-            if (status === undefined) return;
-            total++;
-            const monthKey = new Date(row.date).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
-            if (!monthMap[monthKey]) monthMap[monthKey] = { present: 0, total: 0 };
-            monthMap[monthKey].total++;
-            if (status === "present") { present++; monthMap[monthKey].present++; }
-          });
+        attRows.forEach((row: any) => {
+          const date: string | undefined = row.class_sessions?.session_date;
+          total++;
+          if (row.status === "present") present++;
+          else if (row.status === "absent") absent++;
+          if (!date) return;
+          const d = new Date(date);
+          const monthKey = d.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+          if (!monthMap[monthKey]) monthMap[monthKey] = { present: 0, total: 0, sort: date.slice(0, 7) };
+          monthMap[monthKey].total++;
+          if (row.status === "present") monthMap[monthKey].present++;
+        });
 
-          const pct = total > 0 ? Math.round((present / total) * 100) : 0;
-          setAtt({ total, present, absent: total - present, pct });
-          setMonthly(Object.entries(monthMap).map(([month, v]) => ({
+        const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+        setAtt({ total, present, absent, pct });
+        setMonthly(Object.entries(monthMap)
+          .sort((a, b) => a[1].sort.localeCompare(b[1].sort))
+          .map(([month, v]) => ({
             month,
             present: v.present,
             total: v.total,
             pct: v.total > 0 ? Math.round((v.present / v.total) * 100) : 0,
           })));
-        }
       }
 
     } catch (err: any) {
@@ -250,6 +263,16 @@ export default function StudentProfilePage() {
         <p style={{ color: "#94A3B8", fontWeight: 600, fontSize: 14 }}>Loading student profile...</p>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
+    </div>
+  );
+
+  // ── No access ──
+  if (denied) return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: "#F7F9FC", padding: 24 }}>
+      <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "12px 20px", fontSize: 14, color: "#B45309", fontWeight: 600, maxWidth: 400, textAlign: "center" }}>
+        🔒 Access nahi hai — ye student aapke section / batch me nahi hai.
+      </div>
+      <button onClick={() => navigate(-1)} style={{ background: "#FF7043", color: "#fff", border: "none", borderRadius: 10, padding: "10px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>← Go Back</button>
     </div>
   );
 
@@ -328,7 +351,7 @@ export default function StudentProfilePage() {
               { label: "Attendance", value: `${att.pct}%`, color: attColor },
               { label: "Present",    value: att.present,   color: "#FF7043" },
               { label: "Absent",     value: att.absent,    color: "#EF4444" },
-              { label: "Total Days", value: att.total,     color: "#64748B" },
+              { label: "Total Classes", value: att.total,     color: "#64748B" },
             ].map((chip, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
                 style={{ background: "#fff", borderRadius: 12, padding: "8px 14px", boxShadow: "0 2px 12px rgba(0,0,0,0.08)", textAlign: "center", minWidth: 64 }}>

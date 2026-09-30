@@ -1,11 +1,10 @@
 // src/components/student/StudentCalendar.tsx
-// Student-facing calendar — shows batch events + assignment deadlines
-// Import into StudentPortalPage for the Calendar sidebar tab
+// Student-facing calendar — shows batch / lab batch / institute-wide events + assignment deadlines.
+// No DB access here: StudentPortalPage loads everything via the get_student_feed RPC and passes `events`.
 
-import React, { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import React, { useState, useMemo } from "react";
 
-type CalEvent = {
+export type CalEvent = {
   id: string;
   title: string;
   description?: string;
@@ -27,53 +26,10 @@ const TYPE_ICONS: Record<string,string> = {
   event:"📅", meeting:"📹", deadline:"⏰", holiday:"🎉", exam:"📝", class:"🏫"
 };
 
-export default function StudentCalendar({ batchId, instituteId }: { batchId: string; instituteId: string }) {
+export default function StudentCalendar({ events }: { events: CalEvent[] }) {
   const today = new Date();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<CalEvent|null>(null);
-
-  useEffect(() => { loadEvents(); }, [batchId]);
-
-  useEffect(() => {
-    if (!batchId) return;
-    const ch = supabase
-      .channel(`student-cal-${batchId}`)
-      .on("postgres_changes",{event:"*",schema:"public",table:"calendar_events"}, () => loadEvents())
-      .on("postgres_changes",{event:"*",schema:"public",table:"assignments"}, () => loadEvents())
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [batchId]);
-
-  async function loadEvents() {
-    const calEvents: CalEvent[] = [];
-
-    // Calendar events for this batch or all-batch
-    const { data: evts } = await supabase
-      .from("calendar_events").select("*")
-      .eq("institute_id", instituteId)
-      .or(`batch_id.eq.${batchId},batch_id.is.null`)
-      .order("start_time");
-
-    if (evts) evts.forEach(e => calEvents.push(e));
-
-    // Assignment deadlines
-    const { data: asgns } = await supabase
-      .from("assignments").select("id,title,deadline,max_marks")
-      .eq("batch_id", batchId).eq("status","active").not("deadline","is",null);
-
-    if (asgns) asgns.forEach(a => {
-      if (a.deadline) calEvents.push({
-        id:`asgn-${a.id}`, title:`📋 ${a.title}`,
-        description:`Assignment deadline${a.max_marks?` · ${a.max_marks} marks`:""}`,
-        event_type:"deadline", start_time:a.deadline, all_day:false,
-        color:"#F59E0B", is_assignment:true,
-      });
-    });
-
-    calEvents.sort((a,b)=>new Date(a.start_time).getTime()-new Date(b.start_time).getTime());
-    setEvents(calEvents);
-  }
 
   const monthGrid = useMemo(() => {
     const y=currentDate.getFullYear(), m=currentDate.getMonth();

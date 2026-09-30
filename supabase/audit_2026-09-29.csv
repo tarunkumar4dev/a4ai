@@ -1,0 +1,410 @@
+ord,kind,obj,detail
+1,column,announcements,"id uuid NOT NULL, institute_id uuid NOT NULL, batch_id uuid NOT NULL, created_by uuid NOT NULL, title character varying NOT NULL, content text, file_url text, is_pinned boolean, created_at timestamp with time zone"
+1,column,assignments,"id uuid NOT NULL, institute_id uuid NOT NULL, batch_id uuid NOT NULL, created_by uuid NOT NULL, title character varying NOT NULL, description text, deadline timestamp with time zone, file_url text, file_name character varying, status character varying, max_marks integer, created_at timestamp with time zone, updated_at timestamp with time zone"
+1,column,attendance_edit_log,"id uuid NOT NULL, institute_id uuid NOT NULL, session_id uuid NOT NULL, student_id uuid NOT NULL, old_status text NOT NULL, new_status text NOT NULL, edited_by uuid NOT NULL, edited_at timestamp with time zone NOT NULL, reason text"
+1,column,attendance_records,"id uuid NOT NULL, institute_id uuid NOT NULL, session_id uuid NOT NULL, student_id uuid NOT NULL, status text NOT NULL, marked_by uuid NOT NULL, marked_at timestamp with time zone NOT NULL"
+1,column,batches,"id uuid NOT NULL, institute_id uuid NOT NULL, name text NOT NULL, description text, class_level text, subject text, is_active boolean, created_at timestamp with time zone, updated_at timestamp with time zone, department_id uuid, section_id uuid, proctor_id uuid"
+1,column,calendar_events,"id uuid NOT NULL, institute_id uuid NOT NULL, batch_id uuid, created_by uuid NOT NULL, title character varying NOT NULL, description text, event_type character varying, start_time timestamp with time zone NOT NULL, end_time timestamp with time zone, all_day boolean, meeting_link text, color character varying, is_recurring boolean, created_at timestamp with time zone"
+1,column,class_sessions,"id uuid NOT NULL, institute_id uuid NOT NULL, timetable_slot_id uuid, batch_id uuid NOT NULL, subject_id uuid NOT NULL, teacher_id uuid NOT NULL, session_date date NOT NULL, status text NOT NULL, topic text, marked_by uuid, marked_at timestamp with time zone, created_at timestamp with time zone"
+1,column,departments,"id uuid NOT NULL, institute_id uuid NOT NULL, name text NOT NULL, student_code text, teacher_code text, created_at timestamp with time zone, hod_id uuid, code text, is_active boolean, updated_at timestamp with time zone"
+1,column,institute_members,"id uuid NOT NULL, institute_id uuid NOT NULL, user_id uuid NOT NULL, role text NOT NULL, status text, invited_at timestamp with time zone, joined_at timestamp with time zone, created_at timestamp with time zone, department_id uuid, section_id uuid, user_email text, user_name text"
+1,column,institutes,"id uuid NOT NULL, name text NOT NULL, slug text, logo_url text, owner_id uuid NOT NULL, plan_id text, max_teachers integer, max_students integer, monthly_test_limit integer, join_code text, is_active boolean, created_at timestamp with time zone, updated_at timestamp with time zone"
+1,column,proctor_assignments,"id uuid NOT NULL, institute_id uuid NOT NULL, teacher_id uuid NOT NULL, section_id uuid NOT NULL, department_id uuid NOT NULL, is_active boolean, assigned_at timestamp with time zone"
+1,column,sections,"id uuid NOT NULL, department_id uuid NOT NULL, name text NOT NULL, year integer, created_at timestamp with time zone"
+1,column,student_access_codes,"id uuid NOT NULL, student_id uuid NOT NULL, access_code character varying NOT NULL, batch_id uuid, institute_id uuid NOT NULL, is_active boolean, created_at timestamp with time zone, last_used_at timestamp with time zone"
+1,column,students,"id uuid NOT NULL, institute_id uuid NOT NULL, batch_id uuid, name text NOT NULL, roll_no text, class_level text, parent_name text, parent_phone text, email text, is_active boolean, created_at timestamp with time zone, updated_at timestamp with time zone, department_id uuid, section_id uuid, user_id uuid"
+1,column,subjects,"id uuid NOT NULL, institute_id uuid NOT NULL, department_id uuid, name text NOT NULL, code text NOT NULL, is_active boolean, created_at timestamp with time zone"
+1,column,submissions,"id uuid NOT NULL, assignment_id uuid NOT NULL, student_id uuid NOT NULL, file_url text, file_name character varying, text_answer text, submitted_at timestamp with time zone, grade integer, feedback text, graded_at timestamp with time zone, graded_by uuid, status character varying"
+1,column,teacher_batches,"id uuid NOT NULL, teacher_id uuid NOT NULL, batch_id uuid NOT NULL, institute_id uuid NOT NULL, assigned_at timestamp with time zone"
+1,column,teaching_assignments,"id uuid NOT NULL, institute_id uuid NOT NULL, teacher_id uuid NOT NULL, batch_id uuid NOT NULL, subject_id uuid NOT NULL, is_active boolean, created_at timestamp with time zone"
+1,column,timetable_slots,"id uuid NOT NULL, institute_id uuid NOT NULL, batch_id uuid NOT NULL, subject_id uuid NOT NULL, teacher_id uuid NOT NULL, day_of_week smallint NOT NULL, start_time time without time zone NOT NULL, end_time time without time zone NOT NULL, room text, is_active boolean, created_at timestamp with time zone"
+2,rls_enabled,announcements,RLS ON
+2,rls_enabled,assignments,RLS ON
+2,rls_enabled,attendance_edit_log,RLS ON
+2,rls_enabled,attendance_records,RLS ON
+2,rls_enabled,batches,RLS ON
+2,rls_enabled,calendar_events,RLS ON
+2,rls_enabled,class_sessions,RLS ON
+2,rls_enabled,departments,RLS ON
+2,rls_enabled,institute_members,RLS ON
+2,rls_enabled,institutes,RLS ON
+2,rls_enabled,proctor_assignments,RLS ON
+2,rls_enabled,sections,RLS ON
+2,rls_enabled,student_access_codes,RLS ON
+2,rls_enabled,students,RLS ON
+2,rls_enabled,subjects,RLS ON
+2,rls_enabled,submissions,RLS ON
+2,rls_enabled,teacher_batches,RLS ON
+2,rls_enabled,teaching_assignments,RLS ON
+2,rls_enabled,timetable_slots,RLS ON
+3,policy,announcements,"Members manage announcements | ALL | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,announcements,Public read announcements | SELECT | roles=public | USING: true | CHECK: -
+3,policy,assignments,"Members manage assignments | ALL | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,assignments,Public read assignments | SELECT | roles=public | USING: true | CHECK: -
+3,policy,attendance_edit_log,ael_insert | INSERT | roles=public | USING: - | CHECK: is_institute_member(institute_id)
+3,policy,attendance_edit_log,ael_select | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,attendance_records,ar_delete | DELETE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,attendance_records,ar_insert_admin | INSERT | roles=public | USING: - | CHECK: is_institute_admin(institute_id)
+3,policy,attendance_records,"ar_insert_teacher | INSERT | roles=public | USING: - | CHECK: (is_institute_member(institute_id) AND (is_session_teacher(session_id) OR (EXISTS ( SELECT 1
+   FROM (class_sessions cs
+     JOIN batches b ON ((b.id = cs.batch_id)))
+  WHERE ((cs.id = attendance_records.session_id) AND (b.proctor_id = auth.uid()) AND (cs.session_date >= (CURRENT_DATE - '2 days'::interval)))))) AND (EXISTS ( SELECT 1
+   FROM class_sessions cs
+  WHERE ((cs.id = attendance_records.session_id) AND (cs.session_date = CURRENT_DATE)))))"
+3,policy,attendance_records,ar_select | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,attendance_records,"ar_update_proctor | UPDATE | roles=public | USING: (is_institute_member(institute_id) AND ((EXISTS ( SELECT 1
+   FROM (class_sessions cs
+     JOIN batches b ON ((b.id = cs.batch_id)))
+  WHERE ((cs.id = attendance_records.session_id) AND (b.proctor_id = auth.uid()) AND (cs.session_date >= (CURRENT_DATE - '2 days'::interval))))) OR is_institute_admin(institute_id))) | CHECK: -"
+3,policy,batches,Admin can create batches | INSERT | roles=public | USING: - | CHECK: is_institute_admin(institute_id)
+3,policy,batches,Admin can delete batches | DELETE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,batches,Admin can update batches | UPDATE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,batches,Members can view batches | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,batches,Public read batches | SELECT | roles=public | USING: true | CHECK: -
+3,policy,batches,"batches_admin_delete | DELETE | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,batches,"batches_admin_insert | INSERT | roles=public | USING: - | CHECK: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text))))"
+3,policy,batches,"batches_admin_update | UPDATE | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,batches,"batches_institute_select | SELECT | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,batches,hod_insert | INSERT | roles=public | USING: - | CHECK: is_dept_hod(department_id)
+3,policy,batches,hod_update | UPDATE | roles=public | USING: is_dept_hod(department_id) | CHECK: -
+3,policy,calendar_events,"Members manage calendar | ALL | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,calendar_events,Public read calendar | SELECT | roles=public | USING: true | CHECK: -
+3,policy,class_sessions,cs_insert_admin | INSERT | roles=public | USING: - | CHECK: is_institute_admin(institute_id)
+3,policy,class_sessions,cs_insert_teacher | INSERT | roles=public | USING: - | CHECK: (is_institute_member(institute_id) AND (teacher_id = auth.uid()))
+3,policy,class_sessions,cs_select | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,class_sessions,cs_update_admin | UPDATE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,class_sessions,cs_update_teacher | UPDATE | roles=public | USING: (is_institute_member(institute_id) AND (teacher_id = auth.uid()) AND (session_date = CURRENT_DATE)) | CHECK: -
+3,policy,departments,Public read departments | SELECT | roles=public | USING: true | CHECK: -
+3,policy,departments,"admin_all | ALL | roles=public | USING: (institute_id IN ( SELECT institutes.id
+   FROM institutes
+  WHERE (institutes.owner_id = auth.uid())
+UNION
+ SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text)))) | CHECK: -"
+3,policy,departments,"departments_delete_admin | DELETE | roles=public | USING: (EXISTS ( SELECT 1
+   FROM institute_members
+  WHERE ((institute_members.institute_id = departments.institute_id) AND (institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,departments,"departments_insert_admin | INSERT | roles=public | USING: - | CHECK: (EXISTS ( SELECT 1
+   FROM institute_members
+  WHERE ((institute_members.institute_id = departments.institute_id) AND (institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text))))"
+3,policy,departments,"departments_select | SELECT | roles=public | USING: (EXISTS ( SELECT 1
+   FROM institute_members
+  WHERE ((institute_members.institute_id = departments.institute_id) AND (institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,departments,"departments_update_admin | UPDATE | roles=public | USING: (EXISTS ( SELECT 1
+   FROM institute_members
+  WHERE ((institute_members.institute_id = departments.institute_id) AND (institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,departments,dept_delete | DELETE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,departments,dept_insert | INSERT | roles=public | USING: - | CHECK: is_institute_admin(institute_id)
+3,policy,departments,dept_select | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,departments,dept_update | UPDATE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,departments,"hod_read | SELECT | roles=public | USING: (id IN ( SELECT institute_members.department_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'hod'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,departments,"teacher_read | SELECT | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,institute_members,institute_members_admin_delete | DELETE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,institute_members,institute_members_admin_insert | INSERT | roles=public | USING: - | CHECK: is_institute_admin(institute_id)
+3,policy,institute_members,institute_members_admin_select | SELECT | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,institute_members,institute_members_admin_update | UPDATE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,institute_members,institute_members_select | SELECT | roles=public | USING: ((user_id = auth.uid()) OR (institute_id IN ( SELECT my_institute_ids() AS my_institute_ids))) | CHECK: -
+3,policy,institutes,Public read institutes | SELECT | roles=public | USING: true | CHECK: -
+3,policy,institutes,anyone_creates_institute | INSERT | roles=public | USING: - | CHECK: true
+3,policy,institutes,"institutes_admin_update | UPDATE | roles=public | USING: (id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,institutes,"institutes_members_read | SELECT | roles=public | USING: (id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,institutes,institutes_select | SELECT | roles=public | USING: ((owner_id = auth.uid()) OR (id IN ( SELECT my_institute_ids() AS my_institute_ids))) | CHECK: -
+3,policy,institutes,"member_read | SELECT | roles=public | USING: (id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,institutes,owner_all | ALL | roles=public | USING: (owner_id = auth.uid()) | CHECK: -
+3,policy,institutes,owner_deletes_institute | DELETE | roles=public | USING: (owner_id = auth.uid()) | CHECK: -
+3,policy,institutes,owner_reads_institute | SELECT | roles=public | USING: (owner_id = auth.uid()) | CHECK: -
+3,policy,institutes,owner_updates_institute | UPDATE | roles=public | USING: (owner_id = auth.uid()) | CHECK: -
+3,policy,proctor_assignments,"admin_all | ALL | roles=public | USING: (institute_id IN ( SELECT institutes.id
+   FROM institutes
+  WHERE (institutes.owner_id = auth.uid()))) | CHECK: (institute_id IN ( SELECT institutes.id
+   FROM institutes
+  WHERE (institutes.owner_id = auth.uid())))"
+3,policy,proctor_assignments,"hod_manage | ALL | roles=public | USING: (department_id IN ( SELECT institute_members.department_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'hod'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,proctor_assignments,"hod_manage_proctors | ALL | roles=public | USING: (department_id IN ( SELECT institute_members.department_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'hod'::text) AND (institute_members.status = 'active'::text)))) | CHECK: (department_id IN ( SELECT institute_members.department_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'hod'::text) AND (institute_members.status = 'active'::text))))"
+3,policy,proctor_assignments,"member_read | SELECT | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,proctor_assignments,"proctor_read_own | SELECT | roles=public | USING: (teacher_id IN ( SELECT institute_members.id
+   FROM institute_members
+  WHERE (institute_members.user_id = auth.uid()))) | CHECK: -"
+3,policy,proctor_assignments,"teacher_self | SELECT | roles=public | USING: (teacher_id IN ( SELECT institute_members.id
+   FROM institute_members
+  WHERE (institute_members.user_id = auth.uid()))) | CHECK: -"
+3,policy,sections,"sections_manage | ALL | roles=public | USING: (EXISTS ( SELECT 1
+   FROM (departments d
+     JOIN institute_members im ON ((im.institute_id = d.institute_id)))
+  WHERE ((d.id = sections.department_id) AND (im.user_id = auth.uid()) AND (im.status = 'active'::text) AND ((im.role = 'admin'::text) OR ((im.role = 'hod'::text) AND (im.department_id = d.id)))))) | CHECK: -"
+3,policy,sections,"sections_select | SELECT | roles=public | USING: (EXISTS ( SELECT 1
+   FROM (departments d
+     JOIN institute_members im ON ((im.institute_id = d.institute_id)))
+  WHERE ((d.id = sections.department_id) AND (im.user_id = auth.uid()) AND (im.status = 'active'::text)))) | CHECK: -"
+3,policy,student_access_codes,Anyone can verify access code | SELECT | roles=public | USING: (is_active = true) | CHECK: -
+3,policy,student_access_codes,"Members manage access codes | ALL | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,students,Admin and teachers can add students | INSERT | roles=public | USING: - | CHECK: is_institute_member(institute_id)
+3,policy,students,Admin and teachers can update students | UPDATE | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,students,Members can view students of their institute | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,students,Only admin can delete students | DELETE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,students,Public read students | SELECT | roles=public | USING: true | CHECK: -
+3,policy,students,"students_admin_delete | DELETE | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,students,"students_admin_insert | INSERT | roles=public | USING: - | CHECK: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text))))"
+3,policy,students,"students_admin_update | UPDATE | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,students,"students_institute_select | SELECT | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,students,students_select | SELECT | roles=public | USING: ((user_id = auth.uid()) OR (institute_id IN ( SELECT my_institute_ids() AS my_institute_ids))) | CHECK: -
+3,policy,subjects,hod_insert | INSERT | roles=public | USING: - | CHECK: is_dept_hod(department_id)
+3,policy,subjects,subj_delete | DELETE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,subjects,subj_insert | INSERT | roles=public | USING: - | CHECK: is_institute_admin(institute_id)
+3,policy,subjects,subj_select | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,subjects,subj_update | UPDATE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,submissions,Anyone can read submissions | SELECT | roles=public | USING: true | CHECK: -
+3,policy,submissions,Anyone can submit | INSERT | roles=public | USING: - | CHECK: true
+3,policy,submissions,"Members grade submissions | UPDATE | roles=public | USING: (assignment_id IN ( SELECT a.id
+   FROM assignments a
+  WHERE (a.institute_id IN ( SELECT institute_members.institute_id
+           FROM institute_members
+          WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))))) | CHECK: -"
+3,policy,teacher_batches,"Members manage teacher_batches | ALL | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,teacher_batches,Public read teacher_batches | SELECT | roles=public | USING: true | CHECK: -
+3,policy,teacher_batches,"teacher_batches_admin_delete | DELETE | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,teacher_batches,"teacher_batches_admin_insert | INSERT | roles=public | USING: - | CHECK: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.role = 'admin'::text) AND (institute_members.status = 'active'::text))))"
+3,policy,teacher_batches,"teacher_batches_institute_select | SELECT | roles=public | USING: (institute_id IN ( SELECT institute_members.institute_id
+   FROM institute_members
+  WHERE ((institute_members.user_id = auth.uid()) AND (institute_members.status = 'active'::text)))) | CHECK: -"
+3,policy,teaching_assignments,"hod_delete | DELETE | roles=public | USING: (EXISTS ( SELECT 1
+   FROM batches b
+  WHERE ((b.id = teaching_assignments.batch_id) AND is_dept_hod(b.department_id)))) | CHECK: -"
+3,policy,teaching_assignments,"hod_insert | INSERT | roles=public | USING: - | CHECK: (EXISTS ( SELECT 1
+   FROM batches b
+  WHERE ((b.id = teaching_assignments.batch_id) AND is_dept_hod(b.department_id))))"
+3,policy,teaching_assignments,ta_delete | DELETE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,teaching_assignments,ta_insert | INSERT | roles=public | USING: - | CHECK: is_institute_admin(institute_id)
+3,policy,teaching_assignments,ta_select | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,teaching_assignments,ta_update | UPDATE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,timetable_slots,tt_delete | DELETE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+3,policy,timetable_slots,tt_insert | INSERT | roles=public | USING: - | CHECK: is_institute_admin(institute_id)
+3,policy,timetable_slots,tt_select | SELECT | roles=public | USING: is_institute_member(institute_id) | CHECK: -
+3,policy,timetable_slots,tt_update | UPDATE | roles=public | USING: is_institute_admin(institute_id) | CHECK: -
+4,fk,announcements,batch_id -> batches.id (on delete CASCADE)
+4,fk,announcements,institute_id -> institutes.id (on delete CASCADE)
+4,fk,assignments,batch_id -> batches.id (on delete CASCADE)
+4,fk,assignments,institute_id -> institutes.id (on delete CASCADE)
+4,fk,attendance_edit_log,institute_id -> institutes.id (on delete CASCADE)
+4,fk,attendance_edit_log,session_id -> class_sessions.id (on delete CASCADE)
+4,fk,attendance_edit_log,student_id -> students.id (on delete CASCADE)
+4,fk,attendance_records,institute_id -> institutes.id (on delete CASCADE)
+4,fk,attendance_records,session_id -> class_sessions.id (on delete CASCADE)
+4,fk,attendance_records,student_id -> students.id (on delete CASCADE)
+4,fk,batches,department_id -> departments.id (on delete SET NULL)
+4,fk,batches,institute_id -> institutes.id (on delete CASCADE)
+4,fk,batches,section_id -> sections.id (on delete SET NULL)
+4,fk,calendar_events,batch_id -> batches.id (on delete CASCADE)
+4,fk,calendar_events,institute_id -> institutes.id (on delete CASCADE)
+4,fk,class_sessions,batch_id -> batches.id (on delete CASCADE)
+4,fk,class_sessions,institute_id -> institutes.id (on delete CASCADE)
+4,fk,class_sessions,subject_id -> subjects.id (on delete CASCADE)
+4,fk,class_sessions,timetable_slot_id -> timetable_slots.id (on delete SET NULL)
+4,fk,departments,institute_id -> institutes.id (on delete CASCADE)
+4,fk,institute_members,department_id -> departments.id (on delete SET NULL)
+4,fk,institute_members,institute_id -> institutes.id (on delete CASCADE)
+4,fk,institute_members,section_id -> sections.id (on delete SET NULL)
+4,fk,proctor_assignments,department_id -> departments.id (on delete CASCADE)
+4,fk,proctor_assignments,institute_id -> institutes.id (on delete CASCADE)
+4,fk,proctor_assignments,section_id -> sections.id (on delete CASCADE)
+4,fk,proctor_assignments,teacher_id -> institute_members.id (on delete CASCADE)
+4,fk,sections,department_id -> departments.id (on delete CASCADE)
+4,fk,student_access_codes,batch_id -> batches.id (on delete SET NULL)
+4,fk,student_access_codes,institute_id -> institutes.id (on delete CASCADE)
+4,fk,student_access_codes,student_id -> students.id (on delete CASCADE)
+4,fk,students,batch_id -> batches.id (on delete SET NULL)
+4,fk,students,department_id -> departments.id (on delete SET NULL)
+4,fk,students,institute_id -> institutes.id (on delete CASCADE)
+4,fk,students,section_id -> sections.id (on delete SET NULL)
+4,fk,students,user_id -> profiles.id (on delete SET NULL)
+4,fk,subjects,department_id -> departments.id (on delete SET NULL)
+4,fk,subjects,institute_id -> institutes.id (on delete CASCADE)
+4,fk,submissions,assignment_id -> assignments.id (on delete CASCADE)
+4,fk,submissions,student_id -> students.id (on delete CASCADE)
+4,fk,teacher_batches,batch_id -> batches.id (on delete CASCADE)
+4,fk,teacher_batches,institute_id -> institutes.id (on delete CASCADE)
+4,fk,teaching_assignments,batch_id -> batches.id (on delete CASCADE)
+4,fk,teaching_assignments,institute_id -> institutes.id (on delete CASCADE)
+4,fk,teaching_assignments,subject_id -> subjects.id (on delete CASCADE)
+4,fk,timetable_slots,batch_id -> batches.id (on delete CASCADE)
+4,fk,timetable_slots,institute_id -> institutes.id (on delete CASCADE)
+4,fk,timetable_slots,subject_id -> subjects.id (on delete CASCADE)
+5,function,a4_can_manage_section,p_section_id uuid  [SECURITY DEFINER]
+5,function,a4_can_view_batch,p_batch_id uuid  [SECURITY DEFINER]
+5,function,a4_can_view_section,p_section_id uuid  [SECURITY DEFINER]
+5,function,a4_can_view_student,p_student_id uuid  [SECURITY DEFINER]
+5,function,a4_is_inst_admin,p_institute_id uuid  [SECURITY DEFINER]
+5,function,a4_my_hod_dept_ids,"  [SECURITY DEFINER]"
+5,function,a4_my_proctor_section_ids,"  [SECURITY DEFINER]"
+5,function,a4_my_teaching_batch_ids,"  [SECURITY DEFINER]"
+5,function,activate_subscription,"p_user_id uuid, p_plan_slug text, p_razorpay_order_id text, p_razorpay_payment_id text, p_razorpay_signature text  [SECURITY DEFINER]"
+5,function,assign_free_plan,"  [invoker]"
+5,function,assign_proctor,"p_institute_id uuid, p_department_id uuid, p_section_id uuid, p_teacher_id uuid  [SECURITY DEFINER]"
+5,function,att_caller_role,p_institute_id uuid  [SECURITY DEFINER]
+5,function,att_can_view_section,p_section_id uuid  [SECURITY DEFINER]
+5,function,att_edit_window_days,p_kind text  [invoker]
+5,function,att_is_section_proctor,p_section_id uuid  [SECURITY DEFINER]
+5,function,att_today_ist,"  [invoker]"
+5,function,att_user_name,p_uid uuid  [SECURITY DEFINER]
+5,function,binary_quantize,halfvec  [invoker]
+5,function,binary_quantize,vector  [invoker]
+5,function,calculate_submission_marks,"  [invoker]"
+5,function,check_usage,p_user_id uuid  [SECURITY DEFINER]
+5,function,create_institute,"p_name text, p_slug text  [SECURITY DEFINER]"
+5,function,create_timetable_slot,"p_institute_id uuid, p_batch_id uuid, p_subject_id uuid, p_teacher_id uuid, p_day_of_week smallint, p_start_time time without time zone, p_end_time time without time zone, p_room text  [SECURITY DEFINER]"
+5,function,delete_timetable_slot,p_slot_id uuid  [SECURITY DEFINER]
+5,function,edit_attendance,"p_session_id uuid, p_student_id uuid, p_new_status text, p_reason text  [SECURITY DEFINER]"
+5,function,end_expired_quizzes,"  [invoker]"
+5,function,fill_member_identity,"  [SECURITY DEFINER]"
+5,function,fn_attendance_audit,"  [SECURITY DEFINER]"
+5,function,generate_daily_sessions,"p_institute_id uuid, p_date date  [SECURITY DEFINER]"
+5,function,generate_quiz_slug,"  [invoker]"
+5,function,generate_student_access_codes,p_institute_id uuid  [SECURITY DEFINER]
+5,function,get_chunk_with_similar,"chunk_id uuid, similarity_threshold double precision, similar_count integer  [invoker]"
+5,function,get_class_roster,"p_batch_id uuid, p_subject_id uuid, p_date date, p_session_id uuid  [SECURITY DEFINER]"
+5,function,get_hod_department_overview,"p_department_id uuid, p_date date  [SECURITY DEFINER]"
+5,function,get_institute_stats,p_institute_id uuid  [SECURITY DEFINER]
+5,function,get_member_directory,p_institute_id uuid  [SECURITY DEFINER]
+5,function,get_monthly_attendance,"p_batch_id uuid, p_month integer, p_year integer, p_subject_id uuid  [SECURITY DEFINER]"
+5,function,get_my_access,"  [SECURITY DEFINER]"
+5,function,get_my_class_teachers,p_institute_id uuid  [SECURITY DEFINER]
+5,function,get_my_proctor_sections,p_institute_id uuid  [SECURITY DEFINER]
+5,function,get_my_teaching_targets,p_institute_id uuid  [SECURITY DEFINER]
+5,function,get_ncert_database_stats,"  [invoker]"
+5,function,get_proctor_section_day,"p_section_id uuid, p_date date  [SECURITY DEFINER]"
+5,function,get_proctor_section_monthly,"p_section_id uuid, p_month integer, p_year integer  [SECURITY DEFINER]"
+5,function,get_proctor_section_status,"p_batch_id uuid, p_date date  [SECURITY DEFINER]"
+5,function,get_related_chunks,"chunk_id uuid, similarity_threshold double precision, max_results integer  [invoker]"
+5,function,get_section_context,p_section_id uuid  [SECURITY DEFINER]
+5,function,get_section_edit_log,"p_section_id uuid, p_days integer  [SECURITY DEFINER]"
+5,function,get_subject_distribution,"  [invoker]"
+5,function,get_teacher_day_sessions,"p_institute_id uuid, p_date date  [SECURITY DEFINER]"
+5,function,get_teacher_today_sessions,"p_institute_id uuid, p_date date  [SECURITY DEFINER]"
+5,function,get_user_institute_id,"  [SECURITY DEFINER]"
+5,function,get_user_plan_status,p_user_id uuid  [SECURITY DEFINER]
+5,function,gin_extract_query_trgm,"text, internal, smallint, internal, internal, internal, internal  [invoker]"
+5,function,gin_extract_value_trgm,"text, internal  [invoker]"
+5,function,gin_trgm_consistent,"internal, smallint, text, integer, internal, internal, internal, internal  [invoker]"
+5,function,gin_trgm_triconsistent,"internal, smallint, text, integer, internal, internal, internal  [invoker]"
+5,function,gtrgm_compress,internal  [invoker]
+5,function,gtrgm_consistent,"internal, text, smallint, oid, internal  [invoker]"
+5,function,gtrgm_decompress,internal  [invoker]
+5,function,gtrgm_distance,"internal, text, smallint, oid, internal  [invoker]"
+5,function,gtrgm_in,cstring  [invoker]
+5,function,gtrgm_options,internal  [invoker]
+5,function,gtrgm_out,gtrgm  [invoker]
+5,function,gtrgm_penalty,"internal, internal, internal  [invoker]"
+5,function,gtrgm_picksplit,"internal, internal  [invoker]"
+5,function,gtrgm_same,"gtrgm, gtrgm, internal  [invoker]"
+5,function,gtrgm_union,"internal, internal  [invoker]"
+5,function,hamming_distance,"bit, bit  [invoker]"
+5,function,handle_new_user,"  [SECURITY DEFINER]"
+5,function,has_institute_role,"_institute_id uuid, _role text  [SECURITY DEFINER]"
+5,function,hybrid_ncert_search,"search_query text, query_embedding vector, text_weight double precision, vector_weight double precision, result_count integer  [invoker]"
+5,function,increment_bucket_usage,bucket_id uuid  [invoker]
+5,function,increment_usage,"p_user_id uuid, p_action text  [SECURITY DEFINER]"
+5,function,is_dept_hod,p_dept uuid  [SECURITY DEFINER]
+5,function,is_hod_of_dept,p_dept_id uuid  [SECURITY DEFINER]
+5,function,is_institute_admin,inst_id uuid  [SECURITY DEFINER]
+5,function,is_institute_member,inst_id uuid  [SECURITY DEFINER]
+5,function,is_proctor_of,p_batch_id uuid  [SECURITY DEFINER]
+5,function,is_session_teacher,p_session_id uuid  [SECURITY DEFINER]
+5,function,is_within_edit_window,p_session_id uuid  [SECURITY DEFINER]
+5,function,jaccard_distance,"bit, bit  [invoker]"
+5,function,join_institute,"p_code text, p_full_name text  [SECURITY DEFINER]"
+5,function,join_institute_by_code,p_join_code text  [SECURITY DEFINER]
+5,function,l1_distance,"halfvec, halfvec  [invoker]"
+5,function,l1_distance,"sparsevec, sparsevec  [invoker]"
+5,function,l1_distance,"vector, vector  [invoker]"
+5,function,list_legacy_attendance_batches,p_institute_id uuid  [SECURITY DEFINER]
+5,function,mark_attendance,"p_institute_id uuid, p_batch_id uuid, p_subject_id uuid, p_session_date date, p_timetable_slot_id uuid, p_topic text, p_records jsonb  [SECURITY DEFINER]"
+5,function,match_documents,"query_embedding vector, match_threshold double precision, match_count integer  [invoker]"
+5,function,match_ncert,"query_embedding vector, match_threshold double precision, match_count integer, chapter_filter text, subject_filter text  [invoker]"
+5,function,match_ncert_chunks,"query_embedding vector, subject_filter text, class_filter text, chapter_filter text[], match_threshold double precision, match_count integer  [invoker]"
+5,function,migrate_legacy_attendance,"p_from_batch uuid, p_to_batch uuid, p_dry_run boolean  [SECURITY DEFINER]"
+5,function,my_institute_ids,"  [SECURITY DEFINER]"
+5,function,ncert_hybrid_search,"query_text text, query_embedding vector, text_weight double precision, vector_weight double precision, top_k integer  [invoker]"
+5,function,ncert_rag_search,"query_embedding vector, similarity_threshold double precision, top_k integer, filter_class text, filter_subject text, filter_chapter text  [SECURITY DEFINER]"
+5,function,ncert_semantic_search,"query_embedding vector, top_k integer, min_similarity double precision, class_filter text[], subject_filter text[]  [invoker]"
+5,function,record_usage,"p_user_id uuid, p_action text  [SECURITY DEFINER]"
+5,function,save_class_attendance,"p_institute_id uuid, p_batch_id uuid, p_subject_id uuid, p_date date, p_timetable_slot_id uuid, p_session_id uuid, p_records jsonb, p_reason text  [SECURITY DEFINER]"
+5,function,search_enhanced_questions,"search_query text, p_subject text, p_class_num integer, p_chapter text, p_type question_type, p_difficulty difficulty_level, p_cognitive cognitive_level, p_min_marks integer, p_max_marks integer, limit_count integer, offset_count integer  [invoker]"
+5,function,search_module_chunks,"p_module_id uuid, p_query_embedding vector, p_match_count integer  [invoker]"
+5,function,search_ncert_similarity,"query_embedding vector, match_threshold double precision, match_count integer, filter_class text, filter_subject text, filter_chapter text  [SECURITY DEFINER]"
+5,function,search_ncert_similarity_768d,"query_embedding vector, match_threshold double precision, match_count integer, filter_class text, filter_subject text  [SECURITY DEFINER]"
+5,function,set_limit,real  [invoker]
+5,function,set_updated_at,"  [invoker]"
+5,function,show_limit,"  [invoker]"
+5,function,show_trgm,text  [invoker]
+5,function,similarity,"text, text  [invoker]"
+5,function,similarity_dist,"text, text  [invoker]"
+5,function,similarity_op,"text, text  [invoker]"
+5,function,strict_word_similarity,"text, text  [invoker]"
+5,function,strict_word_similarity_commutator_op,"text, text  [invoker]"
+5,function,strict_word_similarity_dist_commutator_op,"text, text  [invoker]"
+5,function,strict_word_similarity_dist_op,"text, text  [invoker]"
+5,function,strict_word_similarity_op,"text, text  [invoker]"
+5,function,subvector,"halfvec, integer, integer  [invoker]"
+5,function,subvector,"vector, integer, integer  [invoker]"
+5,function,test_ncert_rag,"  [invoker]"
+5,function,test_rag_system,"  [invoker]"
+5,function,touch_updated_at,"  [invoker]"
+5,function,update_generation_analytics,"p_user_id uuid, p_success boolean, p_questions_count integer, p_quality_score numeric, p_generation_time integer, p_cognitive_breakdown jsonb, p_difficulty_breakdown jsonb, p_subject text  [invoker]"
+5,function,update_modules_updated_at,"  [invoker]"
+5,function,update_quiz_updated_at,"  [invoker]"
+5,function,update_updated_at,"  [invoker]"
+5,function,update_updated_at_column,"  [invoker]"
+5,function,word_similarity,"text, text  [invoker]"
+5,function,word_similarity_commutator_op,"text, text  [invoker]"
+5,function,word_similarity_dist_commutator_op,"text, text  [invoker]"
+5,function,word_similarity_dist_op,"text, text  [invoker]"
+5,function,word_similarity_op,"text, text  [invoker]"

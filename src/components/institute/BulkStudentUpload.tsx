@@ -12,6 +12,9 @@ import * as XLSX from "xlsx";
 interface Batch {
   id: string;
   name: string;
+  section_id?: string | null;
+  department_id?: string | null;
+  is_lab?: boolean | null;
 }
 
 interface Department {
@@ -96,7 +99,7 @@ export default function BulkStudentUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const requiredFields = ["name"];
-  const allFields = ["name", "roll_no", "class_level", "parent_name", "parent_phone", "email", "batch"];
+  const allFields = ["name", "roll_no", "class_level", "parent_name", "parent_phone", "phone", "email", "batch", "lab_batch"];
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -135,33 +138,37 @@ export default function BulkStudentUpload({
 
         const headers = Object.keys(jsonData[0]);
         const autoMapping: Record<string, string> = {};
+        // Order matters for the loose (includes) pass: more specific fields first —
+        // parent_phone before phone ("parent mobile"), lab_batch before batch ("lab_batch").
         const fieldMap: Record<string, string[]> = {
           name: ["name", "student name", "student_name", "full name", "fullname", "studentsname", "candidate name", "student"],
           roll_no: ["roll", "roll no", "roll_no", "roll number", "rollnumber", "rollno", "enrollment", "enrollment no", "enrollment number", "adm no", "admission no", "id"],
           class_level: ["class", "class level", "class_level", "grade", "standard", "year", "sem", "semester", "branch"],
           parent_name: ["parent", "parent name", "parent_name", "father", "father name", "father's name", "fathers name", "mother", "guardian"],
-          parent_phone: ["phone", "parent phone", "parent_phone", "mobile", "contact", "student phone", "phone number", "mobile number", "mobile no", "contact no", "whatsapp"],
+          parent_phone: ["parent phone", "parent_phone", "parent mobile", "parent contact", "father phone", "father mobile", "mother phone", "guardian phone", "guardian mobile"],
+          phone: ["phone", "student phone", "student mobile", "mobile", "mobile number", "mobile no", "phone number", "contact", "contact no", "whatsapp"],
           email: ["email", "student email", "email id", "mail", "email address"],
+          lab_batch: ["lab batch", "lab_batch", "lab group"],
           batch: ["batch", "batch name", "section", "group", "class batch"]
         };
-
-        headers.forEach((header) => {
-          const cleanHeader = header.toLowerCase().trim();
-          const strippedHeader = cleanHeader.replace(/[^a-z0-9]/g, "");
+        const clean = (v: string) => v.toLowerCase().trim();
+        const strip = (v: string) => clean(v).replace(/[^a-z0-9]/g, "");
+        const usedHeaders = new Set<string>();
+        const assign = (loose: boolean) => {
           for (const [field, aliases] of Object.entries(fieldMap)) {
-            if (!autoMapping[field]) {
-              const match = aliases.some(alias => {
-                const cleanAlias = alias.toLowerCase().trim();
-                const strippedAlias = cleanAlias.replace(/[^a-z0-9]/g, "");
-                return cleanHeader === cleanAlias || strippedHeader === strippedAlias || strippedHeader.includes(strippedAlias);
-              });
-              if (match) {
-                autoMapping[field] = header;
-                break;
-              }
+            if (autoMapping[field]) continue;
+            const header = headers.find(h => !usedHeaders.has(h) && aliases.some(alias =>
+              loose
+                ? strip(h).includes(strip(alias))
+                : clean(h) === clean(alias) || strip(h) === strip(alias)));
+            if (header) {
+              autoMapping[field] = header;
+              usedHeaders.add(header);
             }
           }
-        });
+        };
+        assign(false); // 1. exact header matches win ("phone" → phone, "parent_phone" → parent_phone)
+        assign(true);  // 2. then loose includes-matches for whatever is still unmapped
 
         setMapping(autoMapping);
         setPreviewData(jsonData);
@@ -226,6 +233,9 @@ export default function BulkStudentUpload({
     let successCount = 0;
     let failCount = 0;
     let lastErrorMsg = "";
+    const hasLabColumn = Boolean(mapping["lab_batch"]);
+    let labUnmatched = 0;
+    const sectionName = (id?: string | null) => sections.find(s => s.id === id)?.name || "";
 
     try {
       const preparedRecords: any[] = [];
@@ -235,20 +245,38 @@ export default function BulkStudentUpload({
         const studentName = getMappedValue(row, "name");
         if (!studentName) continue;
 
-        // Resolve batch
+        // Resolve batch — exact name first; a partial match never picks a lab batch
+        // ("ECE-2" must resolve to the main batch "ECE-2", not "ECE-2 A").
         let rowBatchId = targetBatch || null;
         if (hasBatchColumn) {
-          const rowBatchName = getMappedValue(row, "batch");
+          const rowBatchName = getMappedValue(row, "batch").toLowerCase();
           if (rowBatchName) {
-            const foundBatch = batches.find(b =>
-              b.name.toLowerCase().trim() === rowBatchName.toLowerCase().trim() ||
-              b.name.toLowerCase().includes(rowBatchName.toLowerCase().trim())
-            );
+            const foundBatch =
+              batches.find(b => b.name.toLowerCase().trim() === rowBatchName) ||
+              batches.find(b => !b.is_lab && !/ [abc]$/i.test(b.name.trim()) && b.name.toLowerCase().includes(rowBatchName));
             if (foundBatch) rowBatchId = foundBatch.id;
           }
         }
+        const rowBatch = batches.find(b => b.id === rowBatchId);
+        // Section / department: dropdown wins, else taken from the matched batch (so they are never silently null)
+        const rowSectionId = selectedSection || rowBatch?.section_id || null;
+        const rowDepartmentId = selectedDepartment || rowBatch?.department_id || null;
 
-        // Parent phone / mobile number (note: database table has parent_phone, not phone)
+        // Lab batch ("ECE-2 A" or just "A") → a batch of the SAME section. Column absent → field not sent at all.
+        let labBatchId: string | null = null;
+        if (hasLabColumn) {
+          const labVal = getMappedValue(row, "lab_batch").toLowerCase();
+          if (labVal) {
+            const secName = sectionName(rowSectionId).toLowerCase();
+            const lab = batches.find(b =>
+              b.section_id === rowSectionId && b.id !== rowBatchId &&
+              (b.name.toLowerCase().trim() === labVal || (!!secName && b.name.toLowerCase().trim() === `${secName} ${labVal}`)));
+            if (lab) labBatchId = lab.id;
+            else labUnmatched++;
+          }
+        }
+
+        // Parent's number → parent_phone; the student's own number → phone (06a)
         const phoneVal = getMappedValue(row, "parent_phone") || null;
 
         preparedRecords.push({
@@ -258,10 +286,12 @@ export default function BulkStudentUpload({
           class_level: getMappedValue(row, "class_level") || null,
           parent_name: getMappedValue(row, "parent_name") || null,
           parent_phone: phoneVal,
+          ...(mapping["phone"] ? { phone: getMappedValue(row, "phone") || null } : {}), // needs 06a_students_phone.sql
           email: getMappedValue(row, "email") || null,
           batch_id: rowBatchId,
-          department_id: selectedDepartment || null,
-          section_id: selectedSection || null,
+          department_id: rowDepartmentId,
+          section_id: rowSectionId,
+          ...(hasLabColumn ? { lab_batch_id: labBatchId } : {}), // needs 05_student_portal.sql
           is_active: true,
         });
       }
@@ -303,6 +333,9 @@ export default function BulkStudentUpload({
 
       if (successCount > 0) {
         toast.success(`Successfully uploaded ${successCount} student${successCount !== 1 ? "s" : ""}!${failCount > 0 ? ` (${failCount} failed)` : ""}`);
+        if (labUnmatched > 0) {
+          toast.warning(`${labUnmatched} row(s): lab batch not found in their section — uploaded without a lab batch. Create lab batches A/B/C in /hod first.`);
+        }
         // Auto-generate access codes for newly uploaded students
         try {
           await supabase.rpc("generate_student_access_codes", { p_institute_id: instituteId });

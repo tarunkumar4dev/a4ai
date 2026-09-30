@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import { toast } from "sonner";
+import { useMyScope } from "@/hooks/useMyScope";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -134,113 +135,129 @@ export default function TeacherAssignmentsTab() {
   const [bulkFeedback, setBulkFeedback] = useState("");
   const [bulkGrading, setBulkGrading] = useState(false);
 
-  useEffect(() => { loadData(); }, []);
+  // Batches + institute come from useMyScope (teaching + proctor sections; admin: all). Never teacher_batches.
+  const scope = useMyScope();
+
+  useEffect(() => {
+    if (!scope.loading) loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, user?.id]);
 
   // ── Real-time subscription: refresh on any submission change ──
   useEffect(() => {
-    if (!instituteId) return;
+    if (!instituteId && !user?.id) return;
+    const channelKey = `teacher-assignments-${instituteId || user?.id}`;
     const channel = supabase
-      .channel(`teacher-assignments-${instituteId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => loadData())
-      .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => loadData())
+      .channel(channelKey)
+      .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, () => loadDataRef.current())
+      .on("postgres_changes", { event: "*", schema: "public", table: "assignments" }, () => loadDataRef.current())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [instituteId]);
+  }, [instituteId, user?.id]);
+
+  // Realtime callbacks must call the latest loadData (with the loaded scope), not the first render's closure
+  const loadDataRef = useRef<() => Promise<void>>(async () => {});
+  loadDataRef.current = loadData;
 
   async function loadData() {
     setLoading(true);
     try {
-      const { data: member } = await supabase
-        .from("institute_members")
-        .select("institute_id")
-        .eq("user_id", user?.id)
-        .eq("status", "active")
-        .limit(1)
-        .single();
+      const instId = scope.instituteId;
+      if (instId) setInstituteId(instId);
 
-      if (!member) { setLoading(false); return; }
-      const instId = member.institute_id;
-      setInstituteId(instId);
+      // Batches = my scope only (the dropdown can't offer a batch the teacher doesn't teach)
+      const batchRows: Batch[] = scope.batches.map(b => ({ id: b.id, name: b.name, class_level: b.class_level || "" }));
+      const scopeIds = batchRows.map(b => b.id);
 
-      // Get assigned batches (teacher_batches) or fallback to department
-      const { data: tb } = await supabase
-        .from("teacher_batches").select("batch_id")
-        .eq("teacher_id", user?.id).eq("institute_id", instId);
-
-      let batchRows: any[] = [];
-      if (tb && tb.length > 0) {
-        const { data: bRows } = await supabase
-          .from("batches").select("id, name, class_level")
-          .in("id", tb.map(t => t.batch_id)).eq("is_active", true).order("name");
-        batchRows = bRows || [];
-      } else {
-        // Fallback: all batches in institute
-        const { data: bRows } = await supabase
-          .from("batches").select("id, name, class_level")
-          .eq("institute_id", instId).eq("is_active", true).order("name");
-        batchRows = bRows || [];
+      // Assignments of my batches only
+      let asgns: any[] = [];
+      if (scopeIds.length > 0) {
+        let asgnQuery = supabase.from("assignments").select("*");
+        asgnQuery = scope.isAdmin && instId
+          ? asgnQuery.eq("institute_id", instId)
+          : asgnQuery.in("batch_id", scopeIds);
+        const { data, error: asgnsErr } = await asgnQuery.order("created_at", { ascending: false });
+        if (asgnsErr) console.error("Error fetching assignments:", asgnsErr);
+        asgns = data || [];
       }
+
       setBatches(batchRows);
 
-      const { data: asgns } = await supabase
-        .from("assignments")
-        .select("*")
-        .eq("institute_id", instId)
-        .order("created_at", { ascending: false });
+      const batchMap: Record<string, string> = {};
+      batchRows.forEach(b => {
+        batchMap[b.id] = b.name;
+      });
 
-      if (asgns && batchRows) {
-        const batchMap: Record<string, string> = {};
-        batchRows.forEach(b => batchMap[b.id] = b.name);
+      const asgIds = (asgns || []).map(a => a.id);
+      const countMap: Record<string, { submitted: number; graded: number; late: number }> = {};
 
-        const asgIds = asgns.map(a => a.id);
+      if (asgIds.length > 0) {
         const { data: subs } = await supabase
           .from("submissions")
           .select("assignment_id, status, submitted_at")
-          .in("assignment_id", asgIds.length > 0 ? asgIds : ["_"]);
+          .in("assignment_id", asgIds);
 
-        const countMap: Record<string, { submitted: number; graded: number; late: number }> = {};
-        if (subs) subs.forEach(s => {
-          if (!countMap[s.assignment_id]) countMap[s.assignment_id] = { submitted: 0, graded: 0, late: 0 };
-          countMap[s.assignment_id].submitted++;
-          if (s.status === "graded") countMap[s.assignment_id].graded++;
-          // Check if late
-          const asgn = asgns.find(a => a.id === s.assignment_id);
-          if (asgn?.deadline && new Date(s.submitted_at) > new Date(asgn.deadline)) {
-            countMap[s.assignment_id].late++;
-          }
-        });
+        if (subs) {
+          subs.forEach(s => {
+            if (!countMap[s.assignment_id]) {
+              countMap[s.assignment_id] = { submitted: 0, graded: 0, late: 0 };
+            }
+            countMap[s.assignment_id].submitted++;
+            if (s.status === "graded") countMap[s.assignment_id].graded++;
+            const asgn = asgns?.find(a => a.id === s.assignment_id);
+            if (asgn?.deadline && new Date(s.submitted_at) > new Date(asgn.deadline)) {
+              countMap[s.assignment_id].late++;
+            }
+          });
+        }
+      }
 
-        const { data: studentCounts } = await supabase
+      const batchStudentCount: Record<string, number> = {};
+      if (instId && scopeIds.length > 0) {
+        let countQuery = supabase
           .from("students")
           .select("batch_id")
           .eq("institute_id", instId)
           .eq("is_active", true);
-        const batchStudentCount: Record<string, number> = {};
-        if (studentCounts) studentCounts.forEach(s => {
-          if (s.batch_id) batchStudentCount[s.batch_id] = (batchStudentCount[s.batch_id] || 0) + 1;
-        });
+        if (!scope.isAdmin) countQuery = countQuery.in("batch_id", scopeIds);
+        const { data: studentCounts } = await countQuery;
 
-        setAssignments(asgns.map(a => ({
+        if (studentCounts) {
+          studentCounts.forEach(s => {
+            if (s.batch_id) {
+              batchStudentCount[s.batch_id] = (batchStudentCount[s.batch_id] || 0) + 1;
+            }
+          });
+        }
+      }
+
+      setAssignments(
+        (asgns || []).map(a => ({
           ...a,
-          batch_name: batchMap[a.batch_id] || "—",
+          batch_name: batchMap[a.batch_id] || "Batch",
           submission_count: countMap[a.id]?.submitted || 0,
           graded_count: countMap[a.id]?.graded || 0,
           late_count: countMap[a.id]?.late || 0,
           total_students: batchStudentCount[a.batch_id] || 0,
-        })));
-      }
-    } catch (e) { console.error(e); }
+        }))
+      );
+    } catch (e) {
+      console.error("loadData error in TeacherAssignmentsTab:", e);
+    }
     setLoading(false);
   }
 
   /* ── Create / Update Assignment ── */
   async function handleSave() {
-    if (!form.title.trim() || !form.batch_id || !user || !instituteId) return;
+    if (!form.title.trim() || !form.batch_id || !user) {
+      toast.error("Please fill in title and select a batch.");
+      return;
+    }
     setCreating(true);
     try {
       let fileUrl = null, fileName = null;
       if (form.file) {
-        const path = `${instituteId}/${Date.now()}_${form.file.name}`;
+        const path = `${instituteId || user.id}/${Date.now()}_${form.file.name}`;
         const { error: upErr } = await supabase.storage
           .from("assignments")
           .upload(path, form.file, { contentType: "application/pdf" });
@@ -265,7 +282,7 @@ export default function TeacherAssignmentsTab() {
       } else {
         const { error } = await supabase.from("assignments").insert({
           ...payload,
-          institute_id: instituteId,
+          institute_id: instituteId || null,
           batch_id: form.batch_id,
           created_by: user.id,
           status: "active",

@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
+import { useMyScope } from "@/hooks/useMyScope";
 
 type InstituteInfo = {
   id: string;
@@ -37,64 +38,29 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
   const [totalStudents, setTotalStudents] = useState(0);
   const [logoUrl, setLogoUrl]       = useState<string | null>(null);
 
-  useEffect(() => { if (userId || userEmail) load(); }, [userId, userEmail]);
+  // Institute + "My Batches" come from useMyScope (teaching + proctor sections). Never teacher_batches.
+  const scope = useMyScope();
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!scope.loading && (userId || userEmail)) load(); }, [userId, userEmail, scope]);
 
   async function load() {
     setLoading(true);
     try {
-      let instId: string | null = null;
-      let memberRole = "teacher";
-      let memberStatus = "active";
-      let departmentId: string | null = null;
-
-      // 1. Get institute membership from institute_members (by user_id)
-      let { data: memData } = await supabase
-        .from("institute_members")
-        .select("id, institute_id, role, status, department_id, user_id")
-        .eq("user_id", userId)
-        .limit(1);
-
-      // 1b. Fallback: search by user_email if not found by user_id
-      if ((!memData || memData.length === 0) && userEmail) {
-        const { data: emailMem } = await supabase
-          .from("institute_members")
-          .select("id, institute_id, role, status, department_id, user_id")
-          .eq("user_email", userEmail)
-          .limit(1);
-
-        if (emailMem && emailMem.length > 0) {
-          memData = emailMem;
-          // Auto-link user_id for future fast lookups
-          if (!emailMem[0].user_id && userId) {
-            await supabase
-              .from("institute_members")
-              .update({ user_id: userId })
-              .eq("id", emailMem[0].id);
-          }
-        }
-      }
-
-      if (memData && memData.length > 0) {
-        instId = memData[0].institute_id;
-        memberRole = memData[0].role || "teacher";
-        memberStatus = memData[0].status || "active";
-        departmentId = memData[0].department_id || null;
-      } else {
-        // 2. Check if user is the owner of an institute directly
-        const { data: ownerInst } = await supabase
-          .from("institutes")
-          .select("id")
-          .eq("owner_id", userId)
-          .limit(1);
-
-        if (ownerInst && ownerInst.length > 0) {
-          instId = ownerInst[0].id;
-          memberRole = "admin";
-          memberStatus = "active";
-        }
-      }
-
+      const instId = scope.instituteId;
       if (!instId) { setLoading(false); return; }
+
+      // 1. Own membership rows — only for the role / department label. Multi-row safe (HOD + teacher etc.).
+      const { data: memData } = await supabase
+        .from("institute_members")
+        .select("role, status, department_id")
+        .eq("user_id", userId)
+        .eq("institute_id", instId)
+        .eq("status", "active");
+      const myRow = (memData || []).find(m => m.role === "hod") || (memData || [])[0];
+      const memberRole = scope.isAdmin ? "admin" : myRow?.role || "teacher";
+      const memberStatus = myRow?.status || "active";
+      const departmentId: string | null = myRow?.department_id || null;
 
       // 3. Get institute details
       const { data: inst } = await supabase
@@ -124,41 +90,11 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
         department_id: departmentId,
       });
 
-      // 5. Get assigned batches
-      //    Priority 1: explicit teacher_batches rows (true assignment)
-      //    Priority 2: department batches (only if department is assigned)
-      //    Otherwise: empty — do NOT fall back to all institute batches.
-      let batchRows: any[] = [];
-
-      const { data: tb } = await supabase
-        .from("teacher_batches")
-        .select("batch_id")
-        .eq("teacher_id", userId)
-        .eq("institute_id", instId);
-
-      if (tb && tb.length > 0) {
-        const { data: bRows } = await supabase
-          .from("batches")
-          .select("id, name, class_level")
-          .in("id", tb.map(t => t.batch_id))
-          .eq("is_active", true)
-          .order("name");
-        batchRows = bRows || [];
-      } else if (departmentId) {
-        // Fallback: department batches
-        const { data: bRows } = await supabase
-          .from("batches")
-          .select("id, name, class_level")
-          .eq("institute_id", instId)
-          .eq("department_id", departmentId)
-          .eq("is_active", true)
-          .order("name");
-        batchRows = bRows || [];
-      }
-      // No explicit teacher_batches row and no department assigned:
-      // show a true empty state instead of every batch in the institute.
-      // (Previously this fell back to ALL institute batches, which made
-      // unassigned teachers/proctors look like they already had a batch.)
+      // 5. My batches = useMyScope (teaching_assignments / timetable + proctor sections).
+      //    No teacher_batches, no department fallback, no whole-institute fallback → true empty state if unassigned.
+      const batchRows = scope.batches.map(b => ({ id: b.id, name: b.name, class_level: b.class_level || undefined }));
+      setBatches(batchRows);
+      setTotalStudents(0);
 
       if (batchRows && batchRows.length > 0) {
         // Get student counts per batch
