@@ -1,14 +1,13 @@
 /**
- * TestBuilderPage.tsx — NCERT Drag & Drop Test Builder (Production v4.1 — God Level)
- *
- * Combines:
- *   - Mobile-first slide-up Chapter Bottom Sheet with search autofocus & ESC listener
- *   - Sticky bottom bar in clean light mode with sleek BLACK "View Paper" button
- *   - Both mobile reorder methods: Touch drag handle (⠿) + Quick ▲/▼ buttons
- *   - Export buttons with animated loading spinner (<Spinner />)
- *   - Smooth requestAnimationFrame useIsMobile hook
- *   - Full-width question cards on mobile, 2-panel split on desktop
- *   - Full KaTeX math, diagram badge, and responsive table support
+ * TestBuilderPage.tsx — Modernized a4ai NCERT Test Builder
+ * 
+ * Performance & Design Upgrades:
+ *   - Fast load: Zero CSS keyframe animations, in-memory stats cache, instant rendering
+ *   - Modern a4ai native design: Clean surfaces, crisp typography, Lucide icons, dark CTAs
+ *   - Desktop 2-panel live workspace + Mobile responsive bottom sheet & drawer
+ *   - Drag & drop reordering with quick-nudge up/down arrows
+ *   - PDF & DOCX export with browser-side fallback + auto-save to history
+ *   - KaTeX math, tables, diagrams, and responsive options
  */
 
 import React, {
@@ -16,6 +15,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import {
   DndContext,
@@ -42,15 +42,45 @@ import "katex/dist/katex.min.css";
 import { InlineMath, BlockMath } from "react-katex";
 import { supabase } from "@/lib/supabaseClient";
 import { generateTestPaperPdf, generateAnswerKeyPdf } from "@/utils/testPdfExporter";
+import { getQuestionSegments, hasTable, type AccSegment } from "@/utils/accountancyTables";
+import { AccountancySegments } from "@/components/AccountancyTableView";
 import { toast } from "sonner";
+import {
+  BookOpen,
+  FileText,
+  Search,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  GripVertical,
+  Check,
+  CheckCircle2,
+  SlidersHorizontal,
+  Download,
+  Image as ImageIcon,
+  Sparkles,
+  Clock,
+  Layers,
+  ChevronRight,
+  RotateCcw,
+  X,
+  FileKey,
+  Shield,
+  Loader2,
+} from "lucide-react";
 
 // ── Config ──────────────────────────────────────────────────────
-const API_BASE = (
+const RAW_API_URL = (
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE ||
   "http://localhost:8000"
 ).replace(/\/+$/, "");
-const API_PREFIX = "/api/v1";
+
+const API_BASE = RAW_API_URL.endsWith("/api/v1")
+  ? RAW_API_URL
+  : `${RAW_API_URL}/api/v1`;
+
 const PAGE_SIZE = 30;
 const MOBILE_BREAKPOINT = 1024;
 
@@ -71,6 +101,8 @@ interface NCERTQuestion {
   figure_ref?: string | null;
   question_table?: QuestionTable | null;
   image_url?: string | null;
+  /** Accountancy only: text/table segments rebuilt by the backend (same as the exported PDF). */
+  structured_segments?: AccSegment[] | null;
 }
 
 interface QuestionTable {
@@ -89,6 +121,32 @@ interface ChapterStat {
   sections: { name: string; count: number }[];
   types: { name: string; count: number }[];
 }
+
+// ── Constants ───────────────────────────────────────────────────
+const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+
+const SUBJECTS_BY_CLASS: Record<string, string[]> = {
+  "6":  ["Science", "Mathematics"],
+  "7":  ["Mathematics"],
+  "8":  ["Science", "Mathematics"],
+  "9":  ["Science", "Mathematics", "English", "Economics", "Geography", "History", "Political Science"],
+  "10": ["Science", "Mathematics", "English", "Economics", "Geography", "History", "Political Science"],
+  "11": ["Accountancy", "Physics", "Chemistry", "Biology", "Mathematics", "Economics", "History", "Political Science"],
+  "12": ["Accountancy", "Physics", "Chemistry", "Biology", "Mathematics", "Economics", "English", "History", "Political Science"],
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  all: "All Types",
+  exercise: "Exercise",
+  example: "Examples",
+  intext: "In-Text",
+  activity: "Activities",
+  hots: "HOTS",
+  diagram: "Diagrams",
+};
+
+// ── In-Memory Cache for Instant Loads ────────────────────────────
+const statsCache: Record<string, ChapterStat[]> = {};
 
 // ── Helpers ─────────────────────────────────────────────────────
 function getAuthHeaders(): Record<string, string> {
@@ -135,23 +193,14 @@ function useIsMobile(breakpoint = MOBILE_BREAKPOINT): boolean {
     typeof window !== "undefined" ? window.innerWidth < breakpoint : false
   );
   useEffect(() => {
-    let raf = 0;
-    const handleResize = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() =>
-        setIsMobile(window.innerWidth < breakpoint)
-      );
-    };
+    const handleResize = () => setIsMobile(window.innerWidth < breakpoint);
     window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      cancelAnimationFrame(raf);
-    };
+    return () => window.removeEventListener("resize", handleResize);
   }, [breakpoint]);
   return isMobile;
 }
 
-// ── Safe LaTeX Renderer ─────────────────────────────────────────
+// ── Safe LaTeX Math Renderer ────────────────────────────────────
 function renderMathText(text: string): React.ReactNode {
   if (!text) return null;
   const parts = text.split(/(\$\$[\s\S]+?\$\$|\$[^$]+?\$)/g);
@@ -167,7 +216,7 @@ function renderMathText(text: string): React.ReactNode {
           }
         } catch {
           return (
-            <span key={i} style={{ fontFamily: "monospace", fontSize: 12 }}>
+            <span key={i} className="font-mono text-xs">
               {part}
             </span>
           );
@@ -178,71 +227,26 @@ function renderMathText(text: string): React.ReactNode {
   );
 }
 
-// ── Table Renderer ──────────────────────────────────────────────
+// ── Question Table View ─────────────────────────────────────────
 function QuestionTableView({ table }: { table: QuestionTable }) {
   if (!table?.headers?.length) return null;
   return (
-    <div
-      style={{
-        overflowX: "auto",
-        margin: "8px 0",
-        WebkitOverflowScrolling: "touch",
-      }}
-    >
-      <table
-        style={{
-          borderCollapse: "collapse",
-          fontSize: 12,
-          width: "100%",
-          border: "1px solid #e2e8f0",
-          borderRadius: 6,
-          overflow: "hidden",
-        }}
-      >
+    <div className="overflow-x-auto my-2.5 rounded-lg border border-gray-200">
+      <table className="w-full text-xs border-collapse">
         <thead>
-          <tr style={{ background: "#f1f5f9" }}>
+          <tr className="bg-gray-50 border-b border-gray-200 text-gray-700 font-semibold">
             {table.headers.map((h, i) => (
-              <th
-                key={i}
-                style={{
-                  padding: "6px 10px",
-                  borderBottom: "1px solid #e2e8f0",
-                  textAlign: "center",
-                  fontWeight: 600,
-                  color: "#334155",
-                  fontSize: 11,
-                  borderRight:
-                    i < table.headers.length - 1
-                      ? "1px solid #e2e8f0"
-                      : "none",
-                }}
-              >
+              <th key={i} className="px-3 py-2 text-center border-r border-gray-200 last:border-r-0">
                 {renderMathText(h)}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-gray-100 bg-white">
           {table.rows.map((row, ri) => (
-            <tr
-              key={ri}
-              style={{ background: ri % 2 === 0 ? "#fff" : "#fafbfc" }}
-            >
+            <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
               {row.map((cell, ci) => (
-                <td
-                  key={ci}
-                  style={{
-                    padding: "5px 10px",
-                    textAlign: "center",
-                    color: "#475569",
-                    borderRight:
-                      ci < row.length - 1 ? "1px solid #e2e8f0" : "none",
-                    borderBottom:
-                      ri < table.rows.length - 1
-                        ? "1px solid #f1f5f9"
-                        : "none",
-                  }}
-                >
+                <td key={ci} className="px-3 py-1.5 text-center text-gray-600 border-r border-gray-100 last:border-r-0">
                   {renderMathText(cell)}
                 </td>
               ))}
@@ -254,123 +258,55 @@ function QuestionTableView({ table }: { table: QuestionTable }) {
   );
 }
 
-// ── Constants ───────────────────────────────────────────────────
-const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
-
-const SUBJECTS_BY_CLASS: Record<string, string[]> = {
-  "6":  ["Science", "Mathematics"],
-  "7":  ["Mathematics"],
-  "8":  ["Science", "Mathematics"],
-  "9":  ["Science", "Mathematics", "English", "Economics", "Geography", "History", "Political Science"],
-  "10": ["Science", "Mathematics", "English", "Economics", "Geography", "History", "Political Science"],
-  "11": ["Accountancy", "Physics", "Chemistry", "Biology", "Mathematics", "Economics", "History", "Political Science"],
-  "12": ["Accountancy", "Physics", "Chemistry", "Biology", "Mathematics", "Economics", "English", "History", "Political Science"],
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  all: "All",
-  exercise: "Exercise",
-  example: "Examples",
-  intext: "In-Text",
-  activity: "Activities",
-  hots: "HOTS",
-  diagram: "Diagram",
-};
-
-const DIFFICULTY_COLORS: Record<string, string> = {
-  easy: "#16a34a",
-  medium: "#ca8a04",
-  hard: "#dc2626",
-};
-
 // ── Diagram Badge ───────────────────────────────────────────────
-function DiagramBadge({
-  figRef,
-  hasImage,
-}: {
-  figRef?: string | null;
-  hasImage?: boolean;
-}) {
+function DiagramBadge({ figRef, hasImage }: { figRef?: string | null; hasImage?: boolean }) {
   if (hasImage) {
     return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 3,
-          fontSize: 10,
-          fontWeight: 600,
-          color: "#047857",
-          background: "#d1fae5",
-          padding: "2px 8px",
-          borderRadius: 4,
-          marginLeft: 6,
-          border: "1px solid #a7f3d0",
-        }}
-      >
-        📷 {figRef ? `${figRef}` : "Diagram Included"}
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-md">
+        <ImageIcon className="w-3 h-3 text-emerald-600" />
+        {figRef ? `${figRef}` : "Diagram Included"}
       </span>
     );
   }
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 3,
-        fontSize: 10,
-        fontWeight: 600,
-        color: "#b45309",
-        background: "#fef3c7",
-        padding: "2px 8px",
-        borderRadius: 4,
-        marginLeft: 6,
-        border: "1px solid #fde68a",
-      }}
-    >
-      📐 {figRef ? `Refer ${figRef}` : "Diagram required"}
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md">
+      <Sparkles className="w-3 h-3 text-amber-600" />
+      {figRef ? `Refer ${figRef}` : "Diagram Required"}
     </span>
   );
 }
 
-// ── Spinner ─────────────────────────────────────────────────────
-function Spinner({
-  size = 14,
-  color = "#fff",
-}: {
-  size?: number;
-  color?: string;
-}) {
+// ── Difficulty Badge ────────────────────────────────────────────
+function DifficultyBadge({ difficulty }: { difficulty: string }) {
+  const d = (difficulty || "medium").toLowerCase();
+  if (d === "easy") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        Easy
+      </span>
+    );
+  }
+  if (d === "hard") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+        Hard
+      </span>
+    );
+  }
   return (
-    <span
-      style={{
-        display: "inline-block",
-        width: size,
-        height: size,
-        border: `2px solid ${color}40`,
-        borderTopColor: color,
-        borderRadius: "50%",
-        animation: "tbspin 0.7s linear infinite",
-        verticalAlign: "-2px",
-        marginRight: 6,
-      }}
-    />
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+      Medium
+    </span>
   );
 }
 
-// ── Question Content ────────────────────────────────────────────
-function QuestionContent({
-  question,
-  truncateAt,
-}: {
-  question: NCERTQuestion;
-  truncateAt?: number;
-}) {
+// ── Question Content Component ──────────────────────────────────
+function QuestionContent({ question, truncateAt }: { question: NCERTQuestion; truncateAt?: number }) {
   const text = question.question_text || "";
-  const displayText =
-    truncateAt && text.length > truncateAt
-      ? text.slice(0, truncateAt) + "…"
-      : text;
+  const displayText = truncateAt && text.length > truncateAt ? text.slice(0, truncateAt) + "…" : text;
 
   const table = question.question_table;
   const parsedTable = useMemo(() => {
@@ -385,30 +321,67 @@ function QuestionContent({
     return table;
   }, [table]);
 
+  const opts = parseOptions(question.options);
+
+  // Accountancy: ledgers, balance sheets, cash books and trial balances as real tables.
+  const isAccountancy = /account/i.test(question.subject || "");
+  const accSegments = useMemo(
+    () => (isAccountancy ? getQuestionSegments(question) : null),
+    [isAccountancy, question.question_text, question.question_table, question.structured_segments]
+  );
+  const showAccTables = !!accSegments && hasTable(accSegments);
+
   return (
-    <div>
-      <div style={{ color: "#1e293b" }}>{renderMathText(displayText)}</div>
-      {parsedTable?.headers && <QuestionTableView table={parsedTable} />}
-      {question.image_url && (
-        <img
-          src={question.image_url}
-          alt="Question diagram"
-          style={{
-            maxWidth: "100%",
-            maxHeight: 200,
-            objectFit: "contain",
-            marginTop: 6,
-            borderRadius: 6,
-            border: "1px solid #e2e8f0",
-          }}
-          loading="lazy"
+    <div className="space-y-2">
+      {showAccTables ? (
+        <AccountancySegments
+          segments={accSegments!}
+          renderText={renderMathText}
+          truncateAt={truncateAt}
+          maxRows={truncateAt ? 6 : undefined}
         />
+      ) : (
+        <div className="text-gray-900 text-sm leading-relaxed font-normal">
+          {renderMathText(isAccountancy ? displayText.replace(/`/g, "₹") : displayText)}
+        </div>
+      )}
+
+      {!showAccTables && parsedTable?.headers && <QuestionTableView table={parsedTable} />}
+
+      {question.image_url && (
+        <div className="mt-2 rounded-lg overflow-hidden border border-gray-200 inline-block bg-white p-1">
+          <img
+            src={question.image_url}
+            alt="Question diagram"
+            className="max-h-48 max-w-full object-contain"
+            loading="lazy"
+          />
+        </div>
+      )}
+
+      {opts.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2 pt-1">
+          {opts.map((opt, idx) => {
+            const letter = String.fromCharCode(65 + idx);
+            return (
+              <div
+                key={idx}
+                className="flex items-start gap-2 p-2 rounded-lg bg-gray-50 border border-gray-200/60 text-xs text-gray-700 font-medium"
+              >
+                <span className="w-5 h-5 flex-shrink-0 rounded bg-white border border-gray-200 text-gray-700 font-bold flex items-center justify-center text-[10px]">
+                  {letter}
+                </span>
+                <span className="leading-snug">{renderMathText(opt)}</span>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
-// ── Library Question Card ───────────────────────────────────────
+// ── Draggable Question Card (Library Stream) ────────────────────
 function DraggableQuestion({
   question,
   onAdd,
@@ -425,170 +398,88 @@ function DraggableQuestion({
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    opacity: isDragging ? 0.35 : isAdded ? 0.55 : 1,
-    padding: isMobile ? "12px 14px" : "10px 12px",
-    marginBottom: 8,
-    background: isAdded ? "#f8fafc" : "#fff",
-    border: `1px solid ${
-      isAdded ? "#cbd5e1" : isDragging ? "#6366f1" : "#e2e8f0"
-    }`,
-    borderRadius: 10,
-    fontSize: 13,
-    lineHeight: 1.55,
-    boxShadow: isDragging
-      ? "0 8px 20px rgba(99,102,241,0.2)"
-      : "0 1px 2px rgba(0,0,0,0.03)",
-    transition: "opacity 0.15s, box-shadow 0.15s, border-color 0.15s",
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 10,
-        }}
-      >
-        {/* Desktop Drag Handle */}
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className={`relative p-4 rounded-xl border transition-colors bg-white mb-2.5 ${
+        isDragging
+          ? "opacity-30 border-blue-500 shadow-md ring-2 ring-blue-500/20"
+          : isAdded
+          ? "bg-gray-50/60 border-gray-200/80"
+          : "border-gray-200/80 hover:border-gray-300 shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
+      }`}
+    >
+      <div className="flex items-start gap-3 justify-between">
         {!isAdded && !isMobile && (
           <div
             {...listeners}
-            style={{
-              touchAction: "none",
-              cursor: "grab",
-              padding: "4px 7px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#94a3b8",
-              userSelect: "none",
-              borderRadius: 6,
-              background: "#f1f5f9",
-              marginTop: 2,
-              flexShrink: 0,
-            }}
-            title="Drag to add to test paper"
-            aria-label="Drag question"
+            className="cursor-grab active:cursor-grabbing p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex-shrink-0 mt-0.5"
+            title="Drag to test paper"
           >
-            <span style={{ fontSize: 16, lineHeight: 1 }}>⠿</span>
+            <GripVertical className="w-4 h-4" />
           </div>
         )}
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 4,
-              marginBottom: 4,
-              alignItems: "center",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                color: "#4f46e5",
-                background: "#eef2ff",
-                padding: "2px 6px",
-                borderRadius: 4,
-              }}
-            >
+        <div className="flex-1 min-w-0">
+          {/* Header Badges */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md">
               {question.question_number || question.question_type}
             </span>
+
             {question.section && (
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "#64748b",
-                  background: "#f1f5f9",
-                  padding: "2px 6px",
-                  borderRadius: 4,
-                }}
-              >
+              <span className="text-[10px] font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-md">
                 {question.section}
               </span>
             )}
+
             {(question.question_type === "diagram" || !!question.image_url) && (
               <DiagramBadge figRef={question.figure_ref} hasImage={!!question.image_url} />
             )}
+
+            <DifficultyBadge difficulty={question.difficulty} />
+
+            <span className="text-[10px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md ml-auto">
+              {question.marks}m
+            </span>
           </div>
 
-          <QuestionContent
-            question={question}
-            truncateAt={isMobile ? 150 : 220}
-          />
+          <QuestionContent question={question} truncateAt={isMobile ? 180 : 300} />
         </div>
 
-        {/* Tap-to-add action button */}
+        {/* Action Button */}
         <button
           onClick={(e) => {
             e.stopPropagation();
             if (!isAdded) onAdd(question);
           }}
           disabled={isAdded}
-          style={{
-            flexShrink: 0,
-            border: "none",
-            borderRadius: 8,
-            padding: isMobile ? "8px 16px" : "5px 14px",
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: isAdded ? "default" : "pointer",
-            background: isAdded ? "#e2e8f0" : "#4f46e5",
-            color: isAdded ? "#94a3b8" : "#fff",
-            transition: "all 0.15s ease",
-            minWidth: isMobile ? 70 : "auto",
-            minHeight: isMobile ? 42 : "auto",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: isAdded ? "none" : "0 2px 4px rgba(79, 70, 229, 0.2)",
-          }}
+          className={`flex-shrink-0 ml-2 rounded-xl text-xs font-semibold px-3 py-1.5 flex items-center gap-1 transition-all ${
+            isAdded
+              ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+              : "bg-gray-900 hover:bg-black text-white shadow-sm active:scale-95 cursor-pointer"
+          }`}
         >
-          {isAdded ? "✓ Added" : "+ Add"}
+          {isAdded ? (
+            <>
+              <Check className="w-3.5 h-3.5" /> Added
+            </>
+          ) : (
+            <>
+              <Plus className="w-3.5 h-3.5" /> Add
+            </>
+          )}
         </button>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          marginTop: 8,
-          fontSize: 11,
-          color: "#94a3b8",
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
-        <span
-          style={{
-            color: DIFFICULTY_COLORS[question.difficulty] || "#94a3b8",
-            fontWeight: 500,
-          }}
-        >
-          {question.difficulty}
-        </span>
-        <span>·</span>
-        <span>{question.marks}m</span>
-        <span>·</span>
-        <span>
-          {TYPE_LABELS[question.question_type] || question.question_type}
-        </span>
-        {parseOptions(question.options).length > 0 && (
-          <>
-            <span>·</span>
-            <span>MCQ</span>
-          </>
-        )}
       </div>
     </div>
   );
 }
 
-// ── Sortable Test Question (Paper Panel) ─────────────────────────
+// ── Sortable Question (Test Paper Panel) ────────────────────────
 function SortableTestQuestion({
   question,
   index,
@@ -608,161 +499,77 @@ function SortableTestQuestion({
   onMoveDown: (paperId: string) => void;
   isMobile: boolean;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: question.paperId });
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useSortable({ id: question.paperId });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-    padding: isMobile ? "12px 14px" : "10px 12px",
-    marginBottom: 8,
-    background: isDragging ? "#eef2ff" : "#fff",
-    border: `1px solid ${isDragging ? "#6366f1" : "#e2e8f0"}`,
-    borderRadius: 10,
-    fontSize: 13,
-    lineHeight: 1.55,
-    boxShadow: isDragging
-      ? "0 8px 20px rgba(99,102,241,0.2)"
-      : "0 1px 2px rgba(0,0,0,0.03)",
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 8,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "flex-start",
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          {/* Touch Drag Handle: Supported on BOTH mobile & desktop */}
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className={`p-3.5 mb-2.5 rounded-xl border bg-white transition-colors ${
+        isDragging
+          ? "opacity-40 border-blue-500 shadow-lg ring-2 ring-blue-500/20"
+          : "border-gray-200/80 hover:border-gray-300 shadow-sm"
+      }`}
+    >
+      <div className="flex items-start gap-2.5 justify-between">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          {/* Touch/Mouse Drag handle */}
           <div
             {...listeners}
-            style={{
-              touchAction: "none",
-              cursor: "grab",
-              padding: isMobile ? "6px 8px" : "4px 8px",
-              background: "#f1f5f9",
-              borderRadius: 6,
-              color: "#64748b",
-              fontSize: isMobile ? 18 : 16,
-              marginTop: 2,
-              flexShrink: 0,
-              userSelect: "none",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minWidth: isMobile ? 32 : "auto",
-              minHeight: isMobile ? 32 : "auto",
-            }}
-            title="Drag to reorder question in paper"
-            aria-label="Drag to reorder"
+            className="cursor-grab active:cursor-grabbing p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex-shrink-0 mt-0.5"
+            title="Drag to reorder"
           >
-            ⠿
+            <GripVertical className="w-4 h-4" />
           </div>
 
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <span
-              style={{ fontWeight: 600, color: "#4f46e5", fontSize: 12 }}
-            >
-              Q{index + 1}.
-            </span>{" "}
-            <QuestionContent
-              question={question}
-              truncateAt={isMobile ? 160 : 250}
-            />
-            {(question.question_type === "diagram" || !!question.image_url) && (
-              <DiagramBadge figRef={question.figure_ref} hasImage={!!question.image_url} />
-            )}
+          <div className="w-6 h-6 rounded-lg bg-gray-900 text-white font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+            {index + 1}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <QuestionContent question={question} truncateAt={isMobile ? 160 : 250} />
+
+            <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-gray-400">
+              <span className="font-medium text-gray-600">{question.chapter}</span>
+              <span>•</span>
+              <DifficultyBadge difficulty={question.difficulty} />
+            </div>
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            flexShrink: 0,
-            alignItems: "center",
-            flexWrap: "wrap",
-            justifyContent: "flex-end",
-          }}
-        >
-          {/* Quick-nudge buttons for mobile single-tap reorder */}
-          {isMobile && (
-            <div style={{ display: "flex", gap: 3 }}>
-              <button
-                onClick={() => onMoveUp(question.paperId)}
-                disabled={index === 0}
-                style={{
-                  background: index === 0 ? "#f8fafc" : "#f1f5f9",
-                  color: index === 0 ? "#cbd5e1" : "#475569",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "4px 8px",
-                  fontSize: 12,
-                  cursor: index === 0 ? "not-allowed" : "pointer",
-                  minHeight: 34,
-                }}
-                aria-label="Move up"
-                title="Move up"
-              >
-                ▲
-              </button>
-              <button
-                onClick={() => onMoveDown(question.paperId)}
-                disabled={index === totalCount - 1}
-                style={{
-                  background:
-                    index === totalCount - 1 ? "#f8fafc" : "#f1f5f9",
-                  color: index === totalCount - 1 ? "#cbd5e1" : "#475569",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 6,
-                  padding: "4px 8px",
-                  fontSize: 12,
-                  cursor:
-                    index === totalCount - 1 ? "not-allowed" : "pointer",
-                  minHeight: 34,
-                }}
-                aria-label="Move down"
-                title="Move down"
-              >
-                ▼
-              </button>
-            </div>
-          )}
+        {/* Right Action Tools */}
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+          {/* Quick Nudge Buttons */}
+          <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg p-0.5">
+            <button
+              onClick={() => onMoveUp(question.paperId)}
+              disabled={index === 0}
+              className="p-1 rounded text-gray-500 hover:text-gray-900 hover:bg-white disabled:opacity-30 disabled:pointer-events-none"
+              title="Move Up"
+            >
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onMoveDown(question.paperId)}
+              disabled={index === totalCount - 1}
+              className="p-1 rounded text-gray-500 hover:text-gray-900 hover:bg-white disabled:opacity-30 disabled:pointer-events-none"
+              title="Move Down"
+            >
+              <ArrowDown className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
+          {/* Marks Picker */}
           <select
             value={question.marks}
-            onChange={(e) =>
-              onEditMarks(question.paperId, Number(e.target.value))
-            }
-            style={{
-              border: "1px solid #cbd5e1",
-              borderRadius: 6,
-              padding: isMobile ? "6px 8px" : "2px 4px",
-              fontSize: 11,
-              cursor: "pointer",
-              background: "#fff",
-              fontWeight: 500,
-              minHeight: isMobile ? 36 : "auto",
-            }}
+            onChange={(e) => onEditMarks(question.paperId, Number(e.target.value))}
+            className="bg-white border border-gray-200 text-gray-700 text-xs font-bold rounded-lg px-2 py-1 focus:ring-1 focus:ring-gray-900 outline-none cursor-pointer"
           >
             {[1, 2, 3, 4, 5, 6].map((m) => (
               <option key={m} value={m}>
@@ -771,50 +578,21 @@ function SortableTestQuestion({
             ))}
           </select>
 
+          {/* Delete Button */}
           <button
             onClick={() => onRemove(question.paperId)}
-            style={{
-              background: "#fee2e2",
-              color: "#dc2626",
-              border: "none",
-              borderRadius: 6,
-              padding: isMobile ? "6px 10px" : "2px 8px",
-              fontSize: 11,
-              cursor: "pointer",
-              fontWeight: 600,
-              minHeight: isMobile ? 36 : "auto",
-            }}
-            aria-label="Remove question"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+            title="Remove Question"
           >
-            ✕
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          gap: 6,
-          marginTop: 4,
-          marginLeft: isMobile ? 0 : 28,
-          fontSize: 11,
-          color: "#94a3b8",
-          flexWrap: "wrap",
-        }}
-      >
-        <span>{question.chapter}</span>
-        <span>·</span>
-        <span
-          style={{ color: DIFFICULTY_COLORS[question.difficulty] || "#94a3b8" }}
-        >
-          {question.difficulty}
-        </span>
       </div>
     </div>
   );
 }
 
-// ── Droppable Paper Zone ────────────────────────────────────────
+// ── Droppable Paper Dropzone ────────────────────────────────────
 function PaperDropZone({
   children,
   isDragging,
@@ -829,137 +607,20 @@ function PaperDropZone({
   return (
     <div
       ref={setNodeRef}
-      style={{
-        padding: 10,
-        minHeight: isMobile ? 240 : 480,
-        maxHeight: isMobile ? "none" : 650,
-        overflowY: "auto",
-        WebkitOverflowScrolling: "touch",
-        borderRadius: 8,
-        transition: "all 0.2s ease",
-        background: isOver
-          ? "#eef2ff"
+      className={`p-3 rounded-xl transition-colors ${
+        isOver
+          ? "bg-blue-50/70 border-2 border-dashed border-blue-500"
           : isDragging
-          ? "#f8fafc"
-          : "transparent",
-        border: isOver
-          ? "2px dashed #4f46e5"
-          : isDragging
-          ? "2px dashed #cbd5e1"
-          : "2px dashed transparent",
-      }}
+          ? "bg-gray-50 border-2 border-dashed border-gray-300"
+          : "border-2 border-dashed border-transparent"
+      } ${isMobile ? "min-h-[200px]" : "min-h-[500px]"}`}
     >
       {children}
     </div>
   );
 }
 
-// ── Mobile Bottom Bar (with Black "View Paper" Button) ──────────
-function MobileBottomBar({
-  questionCount,
-  totalMarks,
-  onViewPaper,
-  onOpenLibrary,
-  activeScreen,
-}: {
-  questionCount: number;
-  totalMarks: number;
-  onViewPaper: () => void;
-  onOpenLibrary: () => void;
-  activeScreen: "library" | "paper";
-}) {
-  const isPaperScreen = activeScreen === "paper";
-
-  return (
-    <div
-      className="lg:hidden"
-      style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 40,
-        background: "#ffffff",
-        borderTop: "1px solid #e2e8f0",
-        color: "#0f172a",
-        padding: "12px 16px",
-        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-        boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.08)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-      }}
-    >
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <p
-          style={{
-            margin: 0,
-            fontWeight: 700,
-            fontSize: 13,
-            color: "#1e293b",
-          }}
-        >
-          📝 {questionCount} Questions · {totalMarks} Marks
-        </p>
-        <p style={{ margin: "2px 0 0", fontSize: 11, color: "#64748b" }}>
-          {questionCount === 0
-            ? "Tap + Add on questions to build paper"
-            : isPaperScreen
-            ? "Ready to review and export"
-            : "Tap to review test paper"}
-        </p>
-      </div>
-
-      {isPaperScreen ? (
-        <button
-          onClick={onOpenLibrary}
-          style={{
-            background: "#4f46e5",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: 10,
-            padding: "10px 18px",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-            flexShrink: 0,
-            minHeight: 44,
-            boxShadow: "0 2px 8px rgba(79, 70, 229, 0.25)",
-          }}
-        >
-          + Add More
-        </button>
-      ) : (
-        /* Black View Paper button as explicitly requested */
-        <button
-          onClick={onViewPaper}
-          disabled={questionCount === 0}
-          style={{
-            background: questionCount === 0 ? "#cbd5e1" : "#0f172a",
-            color: questionCount === 0 ? "#94a3b8" : "#ffffff",
-            border: "none",
-            borderRadius: 10,
-            padding: "10px 18px",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: questionCount === 0 ? "not-allowed" : "pointer",
-            flexShrink: 0,
-            minHeight: 44,
-            boxShadow:
-              questionCount === 0
-                ? "none"
-                : "0 2px 8px rgba(15, 23, 42, 0.3)",
-          }}
-        >
-          View Paper ({questionCount}) →
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Chapter Bottom Sheet ────────────────────────────────────────
+// ── Chapter Bottom Sheet (Mobile) ───────────────────────────────
 function ChapterBottomSheet({
   open,
   onClose,
@@ -988,7 +649,6 @@ function ChapterBottomSheet({
     [chapterStats, search]
   );
 
-  // Close on ESC key
   useEffect(() => {
     if (!open) return;
     const handleKey = (e: KeyboardEvent) => {
@@ -1002,145 +662,50 @@ function ChapterBottomSheet({
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        background: "rgba(15, 23, 42, 0.4)",
-        display: "flex",
-        alignItems: "flex-end",
-        animation: "tbfade 0.15s ease",
-      }}
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end justify-center"
       onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Select chapter"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "100%",
-          maxHeight: "85vh",
-          background: "#ffffff",
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          animation: "tbslide 0.2s ease",
-          boxShadow: "0 -8px 30px rgba(0, 0, 0, 0.12)",
-        }}
+        className="w-full max-h-[85vh] bg-white rounded-t-2xl flex flex-col shadow-2xl overflow-hidden"
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            padding: "10px 0 6px",
-          }}
-        >
-          <div
-            style={{
-              width: 44,
-              height: 4,
-              borderRadius: 2,
-              background: "#cbd5e1",
-            }}
-          />
+        <div className="flex justify-center pt-2.5 pb-1">
+          <div className="w-12 h-1.5 rounded-full bg-gray-300" />
         </div>
 
-        <div
-          style={{
-            padding: "8px 16px 12px",
-            borderBottom: "1px solid #e2e8f0",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 10,
-            }}
-          >
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: "#0f172a",
-                }}
-              >
-                Select Chapter
-              </h2>
-              <p
-                style={{
-                  margin: "2px 0 0",
-                  fontSize: 12,
-                  color: "#64748b",
-                }}
-              >
-                {subject} · Class {classGrade} ({chapterStats.length} Chapters)
+              <h2 className="text-base font-bold text-gray-900">Select Chapter</h2>
+              <p className="text-xs text-gray-500">
+                {subject} • Class {classGrade} ({chapterStats.length} Chapters)
               </p>
             </div>
             <button
               onClick={onClose}
-              style={{
-                background: "#f1f5f9",
-                border: "none",
-                borderRadius: 8,
-                width: 36,
-                height: 36,
-                fontSize: 16,
-                cursor: "pointer",
-                color: "#64748b",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              aria-label="Close"
+              className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:text-gray-900"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
           </div>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search chapters…"
-            autoFocus
-            style={{
-              width: "100%",
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid #cbd5e1",
-              fontSize: 13,
-              boxSizing: "border-box",
-              outline: "none",
-              background: "#f8fafc",
-            }}
-          />
+
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search chapters..."
+              autoFocus
+              className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
+            />
+          </div>
         </div>
 
-        <div
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            WebkitOverflowScrolling: "touch",
-            padding: "4px 0",
-          }}
-        >
+        <div className="flex-1 overflow-y-auto p-2 divide-y divide-gray-50">
           {statsLoading ? (
-            <p
-              style={{ padding: 24, textAlign: "center", color: "#94a3b8" }}
-            >
-              Loading chapters…
-            </p>
+            <div className="p-8 text-center text-gray-400 text-xs">Loading chapters...</div>
           ) : filtered.length === 0 ? (
-            <p
-              style={{ padding: 24, textAlign: "center", color: "#94a3b8" }}
-            >
-              No chapters found.
-            </p>
+            <div className="p-8 text-center text-gray-400 text-xs">No chapters found.</div>
           ) : (
             filtered.map((ch) => {
               const isSelected = selectedChapter === ch.chapter;
@@ -1151,57 +716,15 @@ function ChapterBottomSheet({
                     onSelect(ch.chapter);
                     onClose();
                   }}
-                  style={{
-                    display: "flex",
-                    width: "100%",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 18px",
-                    border: "none",
-                    background: isSelected ? "#eef2ff" : "transparent",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    borderLeft: isSelected
-                      ? "4px solid #4f46e5"
-                      : "4px solid transparent",
-                    transition: "background 0.15s ease",
-                  }}
+                  className={`w-full flex items-center justify-between p-3.5 text-left rounded-xl transition-colors ${
+                    isSelected ? "bg-blue-50/80 text-blue-700 font-semibold" : "hover:bg-gray-50 text-gray-800"
+                  }`}
                 >
-                  <div style={{ minWidth: 0, flex: 1, paddingRight: 10 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: isSelected ? 700 : 500,
-                        color: isSelected ? "#4338ca" : "#1e293b",
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {ch.chapter}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#64748b",
-                        marginTop: 2,
-                      }}
-                    >
-                      {ch.total} questions
-                      {ch.sections.length > 0 &&
-                        ` · ${ch.sections.length} sections`}
-                    </div>
+                  <div>
+                    <div className="text-sm font-medium leading-snug">{ch.chapter}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{ch.total} questions</div>
                   </div>
-                  {isSelected && (
-                    <span
-                      style={{
-                        color: "#4f46e5",
-                        fontSize: 18,
-                        fontWeight: 700,
-                        marginLeft: 8,
-                      }}
-                    >
-                      ✓
-                    </span>
-                  )}
+                  {isSelected && <Check className="w-4 h-4 text-blue-600 ml-2" />}
                 </button>
               );
             })
@@ -1212,7 +735,58 @@ function ChapterBottomSheet({
   );
 }
 
-// ── Main Component ──────────────────────────────────────────────
+// ── Mobile Bottom Floating Bar ──────────────────────────────────
+function MobileBottomBar({
+  questionCount,
+  totalMarks,
+  onViewPaper,
+  onOpenLibrary,
+  activeScreen,
+}: {
+  questionCount: number;
+  totalMarks: number;
+  onViewPaper: () => void;
+  onOpenLibrary: () => void;
+  activeScreen: "library" | "paper";
+}) {
+  const isPaper = activeScreen === "paper";
+
+  return (
+    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-200 px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))] shadow-lg flex items-center justify-between gap-3">
+      <div>
+        <div className="text-xs font-bold text-gray-900">
+          {questionCount} Questions • {totalMarks} Marks
+        </div>
+        <div className="text-[11px] text-gray-500">
+          {isPaper ? "Review & Export" : "Tap View Paper to review"}
+        </div>
+      </div>
+
+      {isPaper ? (
+        <button
+          onClick={onOpenLibrary}
+          className="bg-gray-900 hover:bg-black text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm flex items-center gap-1.5"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add Questions
+        </button>
+      ) : (
+        <button
+          onClick={onViewPaper}
+          disabled={questionCount === 0}
+          className={`text-xs font-semibold px-4 py-2.5 rounded-xl shadow-sm flex items-center gap-1.5 ${
+            questionCount === 0
+              ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+              : "bg-gray-900 hover:bg-black text-white cursor-pointer active:scale-95"
+          }`}
+        >
+          View Paper ({questionCount}) <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Main Page Component ─────────────────────────────────────────
 export default function TestBuilderPage() {
   // Filters
   const [classGrade, setClassGrade] = useState("10");
@@ -1222,7 +796,6 @@ export default function TestBuilderPage() {
     return SUBJECTS_BY_CLASS[classGrade] || ["Science", "Mathematics"];
   }, [classGrade]);
 
-  // When class changes, ensure selected subject is valid for the new class
   useEffect(() => {
     const valid = SUBJECTS_BY_CLASS[classGrade] || [];
     if (valid.length > 0 && !valid.includes(subject)) {
@@ -1233,25 +806,19 @@ export default function TestBuilderPage() {
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [questionType, setQuestionType] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const debouncedSearch = useDebounce(searchQuery, 300);
+  const debouncedSearch = useDebounce(searchQuery, 250);
 
-  // Mobile screen state
-  const [mobileScreen, setMobileScreen] = useState<"library" | "paper">(
-    "library"
-  );
+  // Mobile state
+  const [mobileScreen, setMobileScreen] = useState<"library" | "paper">("library");
   const [showChapterSheet, setShowChapterSheet] = useState(false);
 
   // Data
   const [chapterStats, setChapterStats] = useState<ChapterStat[]>([]);
   const [libraryQuestions, setLibraryQuestions] = useState<NCERTQuestion[]>([]);
   const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
-  const [examTitle, setExamTitle] = useState("Untitled Test");
-  const [templateTier, setTemplateTier] = useState<"standard" | "premium">(
-    "standard"
-  );
-  const [colorTheme, setColorTheme] = useState<
-    "teal" | "navy" | "dark_green" | "orange"
-  >("teal");
+  const [examTitle, setExamTitle] = useState("Custom NCERT Test Paper");
+  const [templateTier, setTemplateTier] = useState<"standard" | "premium">("standard");
+  const [colorTheme, setColorTheme] = useState<"teal" | "navy" | "dark_green" | "orange">("teal");
   const [instituteName, setInstituteName] = useState("");
   const [teacherName, setTeacherName] = useState("");
   const [duration, setDuration] = useState("");
@@ -1276,23 +843,38 @@ export default function TestBuilderPage() {
     [testQuestions]
   );
 
+  const totalMarks = useMemo(
+    () => testQuestions.reduce((sum, q) => sum + (Number(q.marks) || 1), 0),
+    [testQuestions]
+  );
+
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 8 },
-    }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 8 } }),
     useSensor(KeyboardSensor)
   );
 
-  // ── Fetch chapter stats ───────────────────────────────────────
+  // ── Fetch Chapter Stats with In-Memory Cache ──────────────────
   useEffect(() => {
     let cancelled = false;
+    const cacheKey = `${subject}_${classGrade}`;
+
+    if (statsCache[cacheKey]) {
+      const cached = statsCache[cacheKey];
+      setChapterStats(cached);
+      setSelectedChapter((prev) => {
+        if (prev && cached.some((c) => c.chapter === prev)) return prev;
+        return cached.length > 0 ? cached[0].chapter : null;
+      });
+      return;
+    }
+
     async function fetchStats() {
       setStatsLoading(true);
       setError(null);
       try {
         const res = await fetch(
-          `${API_BASE}${API_PREFIX}/test-generator/ncert-question-stats?subject=${encodeURIComponent(
+          `${API_BASE}/test-generator/ncert-question-stats?subject=${encodeURIComponent(
             subject
           )}&class_grade=${classGrade}`,
           { headers: getAuthHeaders() }
@@ -1301,29 +883,28 @@ export default function TestBuilderPage() {
         const data = await res.json();
         if (!cancelled && data.ok) {
           const chs = data.chapters || [];
+          statsCache[cacheKey] = chs;
           setChapterStats(chs);
           setSelectedChapter((prev) => {
-            if (prev && chs.some((c: ChapterStat) => c.chapter === prev))
-              return prev;
+            if (prev && chs.some((c: ChapterStat) => c.chapter === prev)) return prev;
             return chs.length > 0 ? chs[0].chapter : null;
           });
           setLibraryQuestions([]);
           setOffset(0);
         }
       } catch (err) {
-        if (!cancelled)
-          setError("Failed to load chapters. Check your connection.");
-        console.error("Stats fetch error:", err);
+        if (!cancelled) setError("Could not load chapters. Please check your connection.");
       }
       if (!cancelled) setStatsLoading(false);
     }
+
     fetchStats();
     return () => {
       cancelled = true;
     };
   }, [classGrade, subject]);
 
-  // ── Fetch questions ───────────────────────────────────────────
+  // ── Fetch Questions ───────────────────────────────────────────
   const fetchQuestions = useCallback(
     async (append = false) => {
       if (!selectedChapter) return;
@@ -1344,7 +925,7 @@ export default function TestBuilderPage() {
         if (debouncedSearch) params.set("search", debouncedSearch);
 
         const res = await fetch(
-          `${API_BASE}${API_PREFIX}/test-generator/ncert-questions?${params}`,
+          `${API_BASE}/test-generator/ncert-questions?${params}`,
           { headers: getAuthHeaders() }
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1361,20 +942,12 @@ export default function TestBuilderPage() {
           setOffset(currentOffset + questions.length);
         }
       } catch (err) {
-        setError("Failed to load questions.");
-        console.error("Questions fetch error:", err);
+        setError("Failed to fetch questions from NCERT repository.");
       }
       setLoading(false);
       setLoadingMore(false);
     },
-    [
-      selectedChapter,
-      questionType,
-      debouncedSearch,
-      classGrade,
-      subject,
-      offset,
-    ]
+    [selectedChapter, questionType, debouncedSearch, classGrade, subject, offset]
   );
 
   useEffect(() => {
@@ -1383,10 +956,9 @@ export default function TestBuilderPage() {
       setLibraryQuestions([]);
       fetchQuestions(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChapter, questionType, debouncedSearch]);
 
-  // ── Add / Remove / Edit / Move ────────────────────────────────
+  // ── Paper Mutation Callbacks ──────────────────────────────────
   const addToTest = useCallback(
     (q: NCERTQuestion) => {
       if (addedIds.has(q.id)) return;
@@ -1396,6 +968,7 @@ export default function TestBuilderPage() {
         paperId: `paper-${q.id}-${Date.now()}`,
       };
       setTestQuestions((prev) => [...prev, testQ]);
+      toast.success(`Added question Q${q.question_number || ""}`);
     },
     [addedIds]
   );
@@ -1420,9 +993,8 @@ export default function TestBuilderPage() {
     });
   }, []);
 
-  // ── Drag handlers ────────────────────────────────────────────
-  const handleDragStart = (event: DragStartEvent) =>
-    setActiveId(event.active.id as string);
+  // ── Drag & Drop Handlers ──────────────────────────────────────
+  const handleDragStart = (event: DragStartEvent) => setActiveId(event.active.id as string);
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
@@ -1451,27 +1023,7 @@ export default function TestBuilderPage() {
     }
   };
 
-  // ── Export ────────────────────────────────────────────────────
-  const buildQuestionsPayload = (includeAnswers: boolean) =>
-    testQuestions.map((q) => ({
-      id: String(q.id),
-      text: q.question_text,
-      options: q.options || [],
-      correctAnswer: includeAnswers ? q.answer || "" : "",
-      explanation: "",
-      marks: q.marks,
-      difficulty: q.difficulty,
-      chapter: q.chapter,
-      format: q.options && q.options.length > 0 ? "mcq" : "short_answer",
-      section: q.section,
-      subParts: (q as any).subParts || (q as any).sub_parts || undefined,
-      image_url: q.image_url || undefined,
-      imageUrl: q.image_url || undefined,
-      question_table: q.question_table || undefined,
-      isManual: false,
-      validationStatus: "valid",
-    }));
-
+  // ── Export Flow & Auto-save ───────────────────────────────────
   const autoSaveTestToHistory = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -1509,20 +1061,38 @@ export default function TestBuilderPage() {
           image_url: q.image_url || undefined,
         }));
         await supabase.from("questions").insert(qRows);
-        console.log("[TestBuilder] Test auto-saved to history:", testId);
       }
-    } catch (saveErr) {
-      console.warn("[TestBuilder] Could not auto-save test to history:", saveErr);
+    } catch {
+      // silently proceed
     }
   };
 
+  const buildQuestionsPayload = (includeAnswers: boolean) =>
+    testQuestions.map((q) => ({
+      id: String(q.id),
+      text: q.question_text,
+      options: q.options || [],
+      correctAnswer: includeAnswers ? q.answer || "" : "",
+      explanation: "",
+      marks: q.marks,
+      difficulty: q.difficulty,
+      chapter: q.chapter,
+      format: q.options && q.options.length > 0 ? "mcq" : "short_answer",
+      section: q.section,
+      subParts: (q as any).subParts || (q as any).sub_parts || undefined,
+      image_url: q.image_url || undefined,
+      imageUrl: q.image_url || undefined,
+      question_table: q.question_table || undefined,
+      isManual: false,
+      validationStatus: "valid",
+    }));
+
   const handleExport = async (format: "pdf" | "docx") => {
     if (testQuestions.length === 0) {
-      alert("Add questions to the test paper first!");
+      toast.error("Please add at least 1 question to the test paper!");
       return;
     }
     setExporting(true);
-    // Auto-save test so it appears in Test History
     autoSaveTestToHistory();
 
     try {
@@ -1534,28 +1104,23 @@ export default function TestBuilderPage() {
         format,
         includeAnswers: false,
         includeExplanations: false,
-        template:
-          templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
+        template: templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
         teacher_name: teacherName || undefined,
         institute_name: instituteName || undefined,
         duration: duration || undefined,
-        topic:
-          topic ||
-          selectedChapter ||
-          testQuestions[0]?.chapter ||
-          undefined,
+        topic: topic || selectedChapter || testQuestions[0]?.chapter || undefined,
         paperDate: new Date().toLocaleDateString("en-GB"),
         questions: buildQuestionsPayload(false),
       };
-      const res = await fetch(
-        `${API_BASE}${API_PREFIX}/test-generator/export`,
-        {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify(payload),
-        }
-      );
-      if (!res.ok) throw new Error("Export failed");
+
+      const res = await fetch(`${API_BASE}/test-generator/export`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Backend export failed");
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1563,9 +1128,8 @@ export default function TestBuilderPage() {
       a.download = `${examTitle.replace(/\s+/g, "_")}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("Test paper exported successfully!");
-    } catch (err) {
-      console.warn("Backend export error, attempting client-side generator:", err);
+      toast.success("Test Paper downloaded successfully!");
+    } catch {
       if (format === "pdf") {
         try {
           await generateTestPaperPdf(
@@ -1586,19 +1150,20 @@ export default function TestBuilderPage() {
               text: q.question_text || (q as any).text || "",
               marks: q.marks,
               options: q.options,
-              correct_answer: q.answer || (q as any).correctAnswer || (q as any).solution || "",
-              explanation: (q as any).solution || (q as any).explanation || "",
+              correct_answer: q.answer || (q as any).correctAnswer || "",
+              explanation: "",
               image_url: q.image_url || undefined,
               imageUrl: q.image_url || undefined,
             }))
           );
-          toast.success("Generated Question Paper PDF in browser!");
+          toast.success("Generated PDF via browser engine!");
           return;
-        } catch (pdfErr) {
-          console.error("Client PDF generation error:", pdfErr);
+        } catch {
+          toast.error("Export failed. Please try again.");
         }
+      } else {
+        toast.error("Export failed. Please try again.");
       }
-      alert("Export failed. Please try again.");
     } finally {
       setExporting(false);
     }
@@ -1606,11 +1171,10 @@ export default function TestBuilderPage() {
 
   const handleExportAnswerKey = async (format: "pdf" | "docx") => {
     if (testQuestions.length === 0) {
-      alert("Add questions to the test paper first!");
+      toast.error("Please add questions first!");
       return;
     }
     setExporting(true);
-    // Auto-save test so it appears in Test History
     autoSaveTestToHistory();
 
     try {
@@ -1621,28 +1185,23 @@ export default function TestBuilderPage() {
         subject,
         format,
         includeExplanations,
-        template:
-          templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
+        template: templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
         teacher_name: teacherName || undefined,
         institute_name: instituteName || undefined,
         duration: duration || undefined,
-        topic:
-          topic ||
-          selectedChapter ||
-          testQuestions[0]?.chapter ||
-          undefined,
+        topic: topic || selectedChapter || testQuestions[0]?.chapter || undefined,
         paperDate: new Date().toLocaleDateString("en-GB"),
         questions: buildQuestionsPayload(true),
       };
-      const res = await fetch(
-        `${API_BASE}${API_PREFIX}/test-generator/export-answer-key`,
-        {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify(payload),
-        }
-      );
+
+      const res = await fetch(`${API_BASE}/test-generator/export-answer-key`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
+
       if (!res.ok) throw new Error("Answer key export failed");
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1650,9 +1209,8 @@ export default function TestBuilderPage() {
       a.download = `${examTitle.replace(/\s+/g, "_")}_AnswerKey.${format}`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success("Answer key exported successfully!");
-    } catch (err) {
-      console.warn("Backend answer key error, attempting client-side generator:", err);
+      toast.success("Answer Key downloaded successfully!");
+    } catch {
       if (format === "pdf") {
         try {
           await generateAnswerKeyPdf(
@@ -1681,43 +1239,29 @@ export default function TestBuilderPage() {
           );
           toast.success("Generated Answer Key PDF in browser!");
           return;
-        } catch (pdfErr) {
-          console.error("Client PDF generation error:", pdfErr);
+        } catch {
+          toast.error("Could not export answer key.");
         }
+      } else {
+        toast.error("Could not export answer key.");
       }
-      alert("Answer key export failed. Please try again.");
     } finally {
       setExporting(false);
     }
   };
 
-  // ── Computed ──────────────────────────────────────────────────
-  const totalMarks = testQuestions.reduce((sum, q) => sum + q.marks, 0);
-
-  // ── Render: Library Questions List ────────────────────────────
+  // ── Render Library Question Stream ────────────────────────────
   const renderLibraryList = () => (
-    <>
+    <div>
       {loading ? (
-        <p
-          style={{
-            color: "#94a3b8",
-            fontSize: 13,
-            textAlign: "center",
-            paddingTop: 40,
-          }}
-        >
-          Loading questions…
-        </p>
+        <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-2">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+          <span className="text-xs">Loading questions...</span>
+        </div>
       ) : libraryQuestions.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            paddingTop: 40,
-            color: "#94a3b8",
-          }}
-        >
-          <p style={{ fontSize: 28, marginBottom: 8 }}>📖</p>
-          <p style={{ fontSize: 13 }}>No questions match this filter.</p>
+        <div className="py-16 text-center text-gray-400 flex flex-col items-center gap-2">
+          <BookOpen className="w-8 h-8 text-gray-300 stroke-[1.5]" />
+          <p className="text-xs font-medium text-gray-600">No questions match this filter.</p>
         </div>
       ) : (
         <>
@@ -1740,823 +1284,17 @@ export default function TestBuilderPage() {
             <button
               onClick={() => fetchQuestions(true)}
               disabled={loadingMore}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "12px",
-                marginTop: 8,
-                background: "#f1f5f9",
-                border: "1px solid #e2e8f0",
-                borderRadius: 10,
-                fontSize: 13,
-                color: "#4f46e5",
-                cursor: loadingMore ? "wait" : "pointer",
-                fontWeight: 600,
-                minHeight: 44,
-              }}
+              className="w-full py-3 my-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 transition-colors flex items-center justify-center gap-2"
             >
-              {loadingMore ? "Loading more…" : "Load more questions"}
+              {loadingMore ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+              {loadingMore ? "Loading more..." : "Load More Questions"}
             </button>
           )}
         </>
       )}
-    </>
-  );
-
-  // ── Render: Mobile Library Screen ─────────────────────────────
-  const renderMobileLibrary = () => (
-    <div style={{ paddingBottom: 100 }}>
-      {/* Chapter Trigger Card */}
-      <button
-        onClick={() => setShowChapterSheet(true)}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "12px 14px",
-          background: "#ffffff",
-          border: "1px solid #cbd5e1",
-          borderRadius: 12,
-          marginBottom: 10,
-          cursor: "pointer",
-          textAlign: "left",
-          minHeight: 56,
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
-        }}
-      >
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 10,
-              color: "#64748b",
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: 0.5,
-            }}
-          >
-            Chapter
-          </div>
-          <div
-            style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#1e293b",
-              marginTop: 2,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {selectedChapter || "Select a chapter…"}
-          </div>
-        </div>
-        <span
-          style={{
-            color: "#4f46e5",
-            fontSize: 12,
-            fontWeight: 700,
-            background: "#eef2ff",
-            padding: "4px 10px",
-            borderRadius: 6,
-            marginLeft: 8,
-          }}
-        >
-          Change ▾
-        </span>
-      </button>
-
-      {/* Search & Filter */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <input
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search questions in chapter…"
-          style={{
-            flex: 1,
-            padding: "10px 14px",
-            borderRadius: 10,
-            border: "1px solid #cbd5e1",
-            fontSize: 13,
-            outline: "none",
-            boxSizing: "border-box",
-            minHeight: 44,
-            background: "#fff",
-          }}
-        />
-        <select
-          value={questionType}
-          onChange={(e) => setQuestionType(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #cbd5e1",
-            fontSize: 13,
-            background: "#fff",
-            fontWeight: 500,
-            minHeight: 44,
-          }}
-        >
-          {Object.entries(TYPE_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {renderLibraryList()}
     </div>
   );
 
-  // ── Render: Mobile Paper Screen ───────────────────────────────
-  const renderMobilePaper = () => (
-    <div style={{ paddingBottom: 100 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 10,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>
-          Questions ({testQuestions.length}) · {totalMarks} Marks
-        </div>
-        {testQuestions.length > 0 && (
-          <button
-            onClick={() => {
-              if (confirm("Remove all questions from paper?"))
-                setTestQuestions([]);
-            }}
-            style={{
-              background: "#fee2e2",
-              border: "none",
-              borderRadius: 6,
-              padding: "4px 10px",
-              fontSize: 11,
-              color: "#dc2626",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
-            Reset All
-          </button>
-        )}
-      </div>
-
-      <PaperDropZone isDragging={Boolean(activeId)} isMobile>
-        {testQuestions.length === 0 ? (
-          <div
-            style={{
-              border: "2px dashed #cbd5e1",
-              borderRadius: 12,
-              padding: "50px 20px",
-              textAlign: "center",
-              color: "#94a3b8",
-              background: "#fafbfc",
-            }}
-          >
-            <p style={{ fontSize: 32, marginBottom: 8 }}>📄</p>
-            <p style={{ fontSize: 14, fontWeight: 600, color: "#475569" }}>
-              Your test paper is empty
-            </p>
-            <p style={{ fontSize: 12, marginTop: 4, color: "#94a3b8" }}>
-              Tap "+ Add More" below or switch to Library tab
-            </p>
-          </div>
-        ) : (
-          <SortableContext
-            items={testQuestions.map((q) => q.paperId)}
-            strategy={verticalListSortingStrategy}
-          >
-            {testQuestions.map((q, i) => (
-              <SortableTestQuestion
-                key={q.paperId}
-                question={q}
-                index={i}
-                totalCount={testQuestions.length}
-                onRemove={removeFromTest}
-                onEditMarks={editMarks}
-                onMoveUp={(id) => moveQuestion(id, -1)}
-                onMoveDown={(id) => moveQuestion(id, 1)}
-                isMobile={isMobile}
-              />
-            ))}
-          </SortableContext>
-        )}
-      </PaperDropZone>
-
-      {/* Export Section */}
-      {testQuestions.length > 0 && (
-        <div
-          style={{
-            marginTop: 16,
-            background: "#f8fafc",
-            borderRadius: 12,
-            border: "1px solid #e2e8f0",
-            padding: 14,
-          }}
-        >
-          <div style={{ marginBottom: 12 }}>
-            <p
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#64748b",
-                margin: "0 0 8px",
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
-            >
-              Question Paper
-            </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => handleExport("pdf")}
-                disabled={exporting}
-                style={{
-                  background: "#0f172a",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: exporting ? "not-allowed" : "pointer",
-                  opacity: exporting ? 0.6 : 1,
-                  flex: 1,
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {exporting && <Spinner />}
-                📄 PDF
-              </button>
-              <button
-                onClick={() => handleExport("docx")}
-                disabled={exporting}
-                style={{
-                  background: "#ffffff",
-                  color: "#0f172a",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: exporting ? "not-allowed" : "pointer",
-                  opacity: exporting ? 0.6 : 1,
-                  flex: 1,
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {exporting && <Spinner color="#0f172a" />}
-                📄 DOCX
-              </button>
-            </div>
-          </div>
-
-          <div
-            style={{
-              borderTop: "1px dashed #e2e8f0",
-              paddingTop: 12,
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#64748b",
-                  margin: 0,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                }}
-              >
-                Answer Key
-              </p>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 12,
-                  color: "#64748b",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={includeExplanations}
-                  onChange={(e) => setIncludeExplanations(e.target.checked)}
-                  style={{ cursor: "pointer", width: 16, height: 16 }}
-                />
-                Explanations
-              </label>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => handleExportAnswerKey("pdf")}
-                disabled={exporting}
-                style={{
-                  background: "#059669",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: exporting ? "not-allowed" : "pointer",
-                  opacity: exporting ? 0.6 : 1,
-                  flex: 1,
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {exporting && <Spinner />}
-                🔑 PDF
-              </button>
-              <button
-                onClick={() => handleExportAnswerKey("docx")}
-                disabled={exporting}
-                style={{
-                  background: "#ffffff",
-                  color: "#059669",
-                  border: "1px solid #059669",
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: exporting ? "not-allowed" : "pointer",
-                  opacity: exporting ? 0.6 : 1,
-                  flex: 1,
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {exporting && <Spinner color="#059669" />}
-                🔑 DOCX
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // ── Render: Desktop 2-Panel ───────────────────────────────────
-  const renderDesktop = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-      {/* LEFT: NCERT Question Library */}
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 12,
-          background: "#fafbfc",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            padding: "12px 16px",
-            borderBottom: "1px solid #e2e8f0",
-            background: "#f8fafc",
-            fontWeight: 600,
-            fontSize: 14,
-            color: "#0f172a",
-          }}
-        >
-          NCERT Question Library
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "220px 1fr",
-            minHeight: 500,
-          }}
-        >
-          {/* Chapter sidebar */}
-          <div
-            style={{
-              borderRight: "1px solid #e2e8f0",
-              padding: "6px 0",
-              maxHeight: 600,
-              overflowY: "auto",
-              background: "#f1f5f9",
-            }}
-          >
-            {statsLoading ? (
-              <p style={{ padding: 12, color: "#94a3b8", fontSize: 13 }}>
-                Loading…
-              </p>
-            ) : chapterStats.length === 0 ? (
-              <p
-                style={{
-                  padding: 12,
-                  color: "#94a3b8",
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                }}
-              >
-                No questions found for {subject} Class {classGrade}.
-              </p>
-            ) : (
-              chapterStats.map((ch) => (
-                <button
-                  key={ch.chapter}
-                  onClick={() => {
-                    setSelectedChapter(ch.chapter);
-                    setQuestionType("all");
-                    setSearchQuery("");
-                    setOffset(0);
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "7px 12px",
-                    border: "none",
-                    cursor: "pointer",
-                    fontSize: 12,
-                    lineHeight: 1.4,
-                    background:
-                      selectedChapter === ch.chapter
-                        ? "#e0e7ff"
-                        : "transparent",
-                    color:
-                      selectedChapter === ch.chapter ? "#4338ca" : "#334155",
-                    fontWeight: selectedChapter === ch.chapter ? 600 : 400,
-                    borderLeft:
-                      selectedChapter === ch.chapter
-                        ? "3px solid #6366f1"
-                        : "3px solid transparent",
-                  }}
-                >
-                  {ch.chapter}
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: 10,
-                      color:
-                        selectedChapter === ch.chapter
-                          ? "#6366f1"
-                          : "#94a3b8",
-                    }}
-                  >
-                    {ch.total} questions
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-
-          {/* Question List */}
-          <div
-            style={{
-              padding: 12,
-              maxHeight: 600,
-              overflowY: "auto",
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
-            {selectedChapter ? (
-              <>
-                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                  <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search questions…"
-                    style={{
-                      flex: 1,
-                      padding: "6px 10px",
-                      borderRadius: 8,
-                      border: "1px solid #cbd5e1",
-                      fontSize: 12,
-                      background: "#fff",
-                    }}
-                  />
-                  <select
-                    value={questionType}
-                    onChange={(e) => setQuestionType(e.target.value)}
-                    style={{
-                      padding: "6px 8px",
-                      borderRadius: 8,
-                      border: "1px solid #cbd5e1",
-                      fontSize: 12,
-                      background: "#fff",
-                    }}
-                  >
-                    {Object.entries(TYPE_LABELS).map(([val, label]) => (
-                      <option key={val} value={val}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {renderLibraryList()}
-              </>
-            ) : (
-              <div
-                style={{
-                  textAlign: "center",
-                  paddingTop: 60,
-                  color: "#94a3b8",
-                }}
-              >
-                <p style={{ fontSize: 28, marginBottom: 8 }}>📖</p>
-                <p style={{ fontSize: 13 }}>
-                  Select a chapter to browse questions
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* RIGHT: Test Paper */}
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 12,
-          background: "#fafbfc",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            padding: "12px 16px",
-            borderBottom: "1px solid #e2e8f0",
-            background: "#f8fafc",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <span
-              style={{ fontWeight: 600, fontSize: 14, color: "#0f172a" }}
-            >
-              Your Test Paper
-            </span>
-            <span
-              style={{ fontSize: 12, color: "#64748b", marginLeft: 8 }}
-            >
-              {testQuestions.length} questions · {totalMarks} marks
-            </span>
-          </div>
-          {testQuestions.length > 0 && (
-            <button
-              onClick={() => {
-                if (confirm("Remove all questions from paper?"))
-                  setTestQuestions([]);
-              }}
-              style={{
-                background: "none",
-                border: "1px solid #e2e8f0",
-                borderRadius: 8,
-                padding: "4px 10px",
-                fontSize: 11,
-                color: "#64748b",
-                cursor: "pointer",
-              }}
-            >
-              Reset
-            </button>
-          )}
-        </div>
-
-        <PaperDropZone isDragging={Boolean(activeId)} isMobile={false}>
-          {testQuestions.length === 0 ? (
-            <div
-              style={{
-                border: "2px dashed #cbd5e1",
-                borderRadius: 12,
-                padding: "60px 20px",
-                textAlign: "center",
-                color: "#94a3b8",
-                minHeight: 300,
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <p style={{ fontSize: 28, marginBottom: 8 }}>📄</p>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#475569" }}>
-                Drop questions here to build your test
-              </p>
-              <p style={{ fontSize: 12, marginTop: 4, color: "#94a3b8" }}>
-                Or click "+ Add" on any question
-              </p>
-            </div>
-          ) : (
-            <SortableContext
-              items={testQuestions.map((q) => q.paperId)}
-              strategy={verticalListSortingStrategy}
-            >
-              {testQuestions.map((q, i) => (
-                <SortableTestQuestion
-                  key={q.paperId}
-                  question={q}
-                  index={i}
-                  totalCount={testQuestions.length}
-                  onRemove={removeFromTest}
-                  onEditMarks={editMarks}
-                  onMoveUp={(id) => moveQuestion(id, -1)}
-                  onMoveDown={(id) => moveQuestion(id, 1)}
-                  isMobile={false}
-                />
-              ))}
-            </SortableContext>
-          )}
-        </PaperDropZone>
-
-        {testQuestions.length > 0 && (
-          <div
-            style={{
-              padding: "12px 16px",
-              borderTop: "1px solid #e2e8f0",
-              background: "#f8fafc",
-            }}
-          >
-            <div style={{ marginBottom: 10 }}>
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#64748b",
-                  margin: "0 0 6px",
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                }}
-              >
-                Question Paper
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => handleExport("pdf")}
-                  disabled={exporting}
-                  style={{
-                    background: "#0f172a",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: 8,
-                    padding: "8px 20px",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: exporting ? "not-allowed" : "pointer",
-                    opacity: exporting ? 0.6 : 1,
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {exporting && <Spinner />}
-                  📄 Download PDF
-                </button>
-                <button
-                  onClick={() => handleExport("docx")}
-                  disabled={exporting}
-                  style={{
-                    background: "#ffffff",
-                    color: "#0f172a",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    padding: "8px 20px",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: exporting ? "not-allowed" : "pointer",
-                    opacity: exporting ? 0.6 : 1,
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {exporting && <Spinner color="#0f172a" />}
-                  📄 Download DOCX
-                </button>
-              </div>
-            </div>
-
-            <div
-              style={{
-                borderTop: "1px dashed #e2e8f0",
-                paddingTop: 10,
-                marginTop: 4,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 6,
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#64748b",
-                    margin: 0,
-                    textTransform: "uppercase",
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  Answer Key (separate file)
-                </p>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    fontSize: 11,
-                    color: "#64748b",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={includeExplanations}
-                    onChange={(e) => setIncludeExplanations(e.target.checked)}
-                    style={{ cursor: "pointer" }}
-                  />
-                  Include explanations
-                </label>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => handleExportAnswerKey("pdf")}
-                  disabled={exporting}
-                  style={{
-                    background: "#059669",
-                    color: "#ffffff",
-                    border: "none",
-                    borderRadius: 8,
-                    padding: "8px 20px",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: exporting ? "not-allowed" : "pointer",
-                    opacity: exporting ? 0.6 : 1,
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {exporting && <Spinner />}
-                  🔑 Answer Key (PDF)
-                </button>
-                <button
-                  onClick={() => handleExportAnswerKey("docx")}
-                  disabled={exporting}
-                  style={{
-                    background: "#ffffff",
-                    color: "#059669",
-                    border: "1px solid #059669",
-                    borderRadius: 8,
-                    padding: "8px 20px",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: exporting ? "not-allowed" : "pointer",
-                    opacity: exporting ? 0.6 : 1,
-                    flex: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {exporting && <Spinner color="#059669" />}
-                  🔑 Answer Key (DOCX)
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // ── Main Render ───────────────────────────────────────────────
   return (
     <DndContext
       sensors={sensors}
@@ -2564,676 +1302,634 @@ export default function TestBuilderPage() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <style>{`
-        @keyframes tbfade { from { opacity: 0 } to { opacity: 1 } }
-        @keyframes tbslide { from { transform: translateY(100%) } to { transform: translateY(0) } }
-        @keyframes tbspin { to { transform: rotate(360deg) } }
-      `}</style>
+      <div className="min-h-screen bg-[#F8F9FB] text-gray-900 pb-24">
+        {/* Top Header Navbar */}
+        <div className="bg-white border-b border-gray-200/80 sticky top-0 z-30 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+          <div className="max-w-7xl mx-auto px-4 py-3 sm:px-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Left Brand & Title */}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md">
+                    NCERT Repository
+                  </span>
+                  <span className="text-xs text-gray-400 font-medium">• 1,00,000+ Questions</span>
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mt-0.5">
+                  Test Paper Builder
+                </h1>
+              </div>
 
-      <div
-        style={{
-          maxWidth: 1400,
-          margin: "0 auto",
-          padding: isMobile ? "16px 14px 100px" : "20px 16px",
-        }}
-      >
-        {/* Header */}
-        <div style={{ marginBottom: isMobile ? 12 : 16 }}>
-          <h1
-            style={{
-              fontSize: isMobile ? 18 : 22,
-              fontWeight: 700,
-              color: "#0f172a",
-              margin: 0,
-            }}
-          >
-            {isMobile && mobileScreen === "paper"
-              ? "Your Test Paper"
-              : "NCERT Test Builder"}
-          </h1>
-          <p style={{ color: "#64748b", fontSize: isMobile ? 12 : 13, margin: "4px 0 0" }}>
-            Browse over 1,00,000 NCERT questions across 1,000 chapters — drag or
-            click to build your test paper.
-          </p>
-        </div>
+              {/* Right Primary Controls */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Class Chips */}
+                <div className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200/70">
+                  {CLASS_OPTIONS.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setClassGrade(c)}
+                      className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all ${
+                        classGrade === c
+                          ? "bg-white text-gray-900 shadow-sm"
+                          : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
 
-        {/* Primary Selectors: Class, Subject, Title */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr 1fr" : "100px 160px 1fr",
-            gap: 10,
-            marginBottom: 12,
-            alignItems: "flex-end",
-          }}
-        >
-          <div>
-            <label
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#64748b",
-                display: "block",
-                marginBottom: 4,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
-            >
-              Class
-            </label>
-            <select
-              value={classGrade}
-              onChange={(e) => setClassGrade(e.target.value)}
-              style={{
-                padding: isMobile ? "10px 12px" : "7px 12px",
-                borderRadius: 10,
-                border: "1px solid #cbd5e1",
-                fontSize: 13,
-                width: "100%",
-                background: "#fff",
-                fontWeight: 500,
-                minHeight: isMobile ? 44 : "auto",
-              }}
-            >
-              {CLASS_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  Class {c}
-                </option>
-              ))}
-            </select>
-          </div>
+                {/* Subject Dropdown */}
+                <select
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-800 outline-none focus:ring-1 focus:ring-gray-900 cursor-pointer shadow-sm"
+                >
+                  {availableSubjects.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
 
-          <div>
-            <label
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#64748b",
-                display: "block",
-                marginBottom: 4,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
-            >
-              Subject
-            </label>
-            <select
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              style={{
-                padding: isMobile ? "10px 12px" : "7px 12px",
-                borderRadius: 10,
-                border: "1px solid #cbd5e1",
-                fontSize: 13,
-                width: "100%",
-                background: "#fff",
-                fontWeight: 500,
-                minHeight: isMobile ? 44 : "auto",
-              }}
-            >
-              {availableSubjects.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
+                {/* Settings Toggle */}
+                <button
+                  onClick={() => setShowSettings(!showSettings)}
+                  className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm ${
+                    showSettings
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                  }`}
+                  title="Configure test details & template"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Settings</span>
+                </button>
+              </div>
+            </div>
 
-          {/* Title on desktop */}
-          {!isMobile && (
-            <div>
-              <label
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#64748b",
-                  display: "block",
-                  marginBottom: 4,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                }}
-              >
-                Test Title
-              </label>
+            {/* Test Title Input Bar */}
+            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-3">
               <input
                 value={examTitle}
                 onChange={(e) => setExamTitle(e.target.value)}
-                placeholder="Enter test title…"
-                style={{
-                  padding: "7px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #cbd5e1",
-                  fontSize: 13,
-                  width: "100%",
-                  boxSizing: "border-box",
-                  background: "#fff",
-                }}
+                placeholder="Enter Test Paper Title (e.g. Science Mid-Term Unit Test)..."
+                className="w-full text-sm font-medium text-gray-900 placeholder-gray-400 bg-transparent outline-none focus:ring-0"
               />
             </div>
-          )}
-        </div>
-
-        {/* Title on mobile */}
-        {isMobile && (
-          <div style={{ marginBottom: 12 }}>
-            <label
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#64748b",
-                display: "block",
-                marginBottom: 4,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
-            >
-              Test Title
-            </label>
-            <input
-              value={examTitle}
-              onChange={(e) => setExamTitle(e.target.value)}
-              placeholder="e.g. Unit Test 1…"
-              style={{
-                padding: "10px 14px",
-                borderRadius: 10,
-                border: "1px solid #cbd5e1",
-                fontSize: 13,
-                width: "100%",
-                boxSizing: "border-box",
-                background: "#fff",
-                minHeight: 44,
-              }}
-            />
           </div>
-        )}
-
-        {/* Settings toggle */}
-        <div style={{ marginBottom: 12 }}>
-          <button
-            type="button"
-            onClick={() => setShowSettings(!showSettings)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              width: "100%",
-              padding: "12px 14px",
-              background: "#f1f5f9",
-              color: "#334155",
-              fontSize: 13,
-              fontWeight: 600,
-              borderRadius: 10,
-              border: "1px solid #e2e8f0",
-              cursor: "pointer",
-              minHeight: 44,
-            }}
-          >
-            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span>⚙️</span>
-              {isMobile
-                ? "Paper Details & Template (Optional)"
-                : "More Paper Details (Institute, Teacher, Template, Color)"}
-            </span>
-            <span style={{ color: "#4f46e5", fontWeight: 700 }}>
-              {showSettings ? "▲ Hide" : "▼ Edit"}
-            </span>
-          </button>
         </div>
 
-        {/* Collapsible settings */}
+        {/* Collapsible Paper Settings Card */}
         {showSettings && (
-          <div
-            style={{
-              marginBottom: 16,
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
-              borderRadius: 12,
-              padding: 14,
-            }}
-          >
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: isMobile ? "100%" : 180 }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#64748b",
-                    display: "block",
-                    marginBottom: 4,
-                  }}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+            <div className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-gray-700" />
+                  <h3 className="text-sm font-bold text-gray-900">Paper Details & Template</h3>
+                </div>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1"
                 >
-                  Institute / Coaching Name
-                </label>
-                <input
-                  value={instituteName}
-                  onChange={(e) => setInstituteName(e.target.value)}
-                  placeholder="e.g., DeepJyoti Coaching Institute"
-                  style={{
-                    padding: isMobile ? "10px 12px" : "6px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                    fontSize: 13,
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: "#fff",
-                    minHeight: isMobile ? 44 : "auto",
-                  }}
-                />
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <div style={{ flex: 1, minWidth: isMobile ? "100%" : 140 }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#64748b",
-                    display: "block",
-                    marginBottom: 4,
-                  }}
-                >
-                  Teacher Name
-                </label>
-                <input
-                  value={teacherName}
-                  onChange={(e) => setTeacherName(e.target.value)}
-                  placeholder="e.g., Mr. Sharma"
-                  style={{
-                    padding: isMobile ? "10px 12px" : "6px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                    fontSize: 13,
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: "#fff",
-                    minHeight: isMobile ? 44 : "auto",
-                  }}
-                />
-              </div>
-              <div style={{ minWidth: isMobile ? "100%" : 100 }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#64748b",
-                    display: "block",
-                    marginBottom: 4,
-                  }}
-                >
-                  Duration
-                </label>
-                <input
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  placeholder="e.g., 1 hr"
-                  style={{
-                    padding: isMobile ? "10px 12px" : "6px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                    fontSize: 13,
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: "#fff",
-                    minHeight: isMobile ? 44 : "auto",
-                  }}
-                />
-              </div>
-              <div style={{ flex: 1, minWidth: isMobile ? "100%" : 160 }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#64748b",
-                    display: "block",
-                    marginBottom: 4,
-                  }}
-                >
-                  Topic / Subtitle
-                </label>
-                <input
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder={
-                    selectedChapter
-                      ? `e.g., ${selectedChapter}`
-                      : "e.g., Unit 1"
-                  }
-                  style={{
-                    padding: isMobile ? "10px 12px" : "6px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #cbd5e1",
-                    fontSize: 13,
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: "#fff",
-                    minHeight: isMobile ? 44 : "auto",
-                  }}
-                />
-              </div>
-            </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 20,
-                flexWrap: "wrap",
-                alignItems: "flex-start",
-                marginTop: 14,
-              }}
-            >
-              <div style={{ flex: isMobile ? "1 1 100%" : "0 0 auto" }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#64748b",
-                    display: "block",
-                    marginBottom: 6,
-                  }}
-                >
-                  Paper Template
-                </label>
-                <div
-                  style={{
-                    display: "flex",
-                    borderRadius: 10,
-                    overflow: "hidden",
-                    border: "1px solid #cbd5e1",
-                    width: "100%",
-                  }}
-                >
-                  {[
-                    { id: "standard" as const, label: "⚡ Standard" },
-                    { id: "premium" as const, label: "✨ Premium" },
-                  ].map((tier) => (
-                    <button
-                      key={tier.id}
-                      onClick={() => setTemplateTier(tier.id)}
-                      style={{
-                        flex: 1,
-                        padding: isMobile ? "10px 8px" : "8px 18px",
-                        border: "none",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        background:
-                          templateTier === tier.id ? "#0f172a" : "#fff",
-                        color:
-                          templateTier === tier.id ? "#fff" : "#374151",
-                        transition: "all 0.15s",
-                        minHeight: isMobile ? 44 : "auto",
-                      }}
-                    >
-                      {tier.label}
-                    </button>
-                  ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Institute / Coaching Name
+                  </label>
+                  <input
+                    value={instituteName}
+                    onChange={(e) => setInstituteName(e.target.value)}
+                    placeholder="e.g. Apex Academy"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Teacher Name
+                  </label>
+                  <input
+                    value={teacherName}
+                    onChange={(e) => setTeacherName(e.target.value)}
+                    placeholder="e.g. Prof. Sharma"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Duration
+                  </label>
+                  <input
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    placeholder="e.g. 1.5 Hours"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">
+                    Subtitle / Topic
+                  </label>
+                  <input
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder={selectedChapter || "Chapter or Topic name"}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
+                  />
                 </div>
               </div>
 
-              <div style={{ flex: isMobile ? "1 1 100%" : "0 0 auto" }}>
-                <label
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#64748b",
-                    display: "block",
-                    marginBottom: 6,
-                  }}
-                >
-                  Paper Color
-                </label>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {[
-                    { id: "teal" as const, label: "Teal", color: "#0f766e" },
-                    {
-                      id: "navy" as const,
-                      label: "Navy",
-                      color: "#1e3a8a",
-                    },
-                    {
-                      id: "dark_green" as const,
-                      label: "Green",
-                      color: "#166534",
-                    },
-                    {
-                      id: "orange" as const,
-                      label: "Orange",
-                      color: "#c2410c",
-                    },
-                  ].map((theme) => (
+              {/* Template & Color */}
+              <div className="flex flex-wrap items-center gap-6 pt-2 border-t border-gray-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-700">Template:</span>
+                  <div className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200">
                     <button
-                      key={theme.id}
-                      onClick={() => setColorTheme(theme.id)}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: isMobile ? "8px 12px" : "6px 14px",
-                        borderRadius: 10,
-                        border:
-                          colorTheme === theme.id
-                            ? `2px solid ${theme.color}`
-                            : "1px solid #cbd5e1",
-                        background:
-                          colorTheme === theme.id
-                            ? `${theme.color}15`
-                            : "#fff",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color:
-                          colorTheme === theme.id ? theme.color : "#334155",
-                        transition: "all 0.15s",
-                        minHeight: isMobile ? 42 : "auto",
-                      }}
+                      onClick={() => setTemplateTier("standard")}
+                      className={`text-xs font-semibold px-3 py-1 rounded-lg ${
+                        templateTier === "standard" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600"
+                      }`}
                     >
-                      <span
-                        style={{
-                          width: 14,
-                          height: 14,
-                          borderRadius: "50%",
-                          background: theme.color,
-                          border: "1px solid rgba(0,0,0,0.1)",
-                        }}
-                      />
-                      {theme.label}
+                      Standard
                     </button>
-                  ))}
+                    <button
+                      onClick={() => setTemplateTier("premium")}
+                      className={`text-xs font-semibold px-3 py-1 rounded-lg ${
+                        templateTier === "premium" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600"
+                      }`}
+                    >
+                      ✨ Premium
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-700">Accent Color:</span>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { id: "teal" as const, label: "Teal", color: "bg-teal-600" },
+                      { id: "navy" as const, label: "Navy", color: "bg-blue-800" },
+                      { id: "dark_green" as const, label: "Green", color: "bg-emerald-700" },
+                      { id: "orange" as const, label: "Orange", color: "bg-orange-600" },
+                    ].map((theme) => (
+                      <button
+                        key={theme.id}
+                        onClick={() => setColorTheme(theme.id)}
+                        className={`w-6 h-6 rounded-full ${theme.color} transition-all ${
+                          colorTheme === theme.id ? "ring-2 ring-offset-2 ring-gray-900 scale-110" : "opacity-80"
+                        }`}
+                        title={theme.label}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Error banner */}
+        {/* Error notification */}
         {error && (
-          <div
-            style={{
-              padding: "10px 14px",
-              marginBottom: 12,
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: 10,
-              color: "#dc2626",
-              fontSize: 13,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span style={{ flex: 1 }}>{error}</span>
-            <button
-              onClick={() => setError(null)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#dc2626",
-                cursor: "pointer",
-                fontWeight: 700,
-                fontSize: 16,
-                padding: 4,
-                flexShrink: 0,
-              }}
-              aria-label="Dismiss"
-            >
-              ✕
-            </button>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-xs font-medium flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="text-rose-500 hover:text-rose-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
         {/* Mobile Tab Switcher */}
         {isMobile && (
-          <div
-            style={{
-              display: "flex",
-              background: "#f1f5f9",
-              padding: 4,
-              borderRadius: 12,
-              marginBottom: 14,
-              gap: 4,
-            }}
-          >
-            <button
-              onClick={() => setMobileScreen("library")}
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 10,
-                border: "none",
-                cursor: "pointer",
-                background:
-                  mobileScreen === "library" ? "#ffffff" : "transparent",
-                color:
-                  mobileScreen === "library" ? "#4f46e5" : "#64748b",
-                boxShadow:
+          <div className="px-4 pt-3 pb-1">
+            <div className="flex items-center bg-gray-200/80 p-1 rounded-xl">
+              <button
+                onClick={() => setMobileScreen("library")}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
                   mobileScreen === "library"
-                    ? "0 2px 6px rgba(0,0,0,0.06)"
-                    : "none",
-                transition: "all 0.15s ease",
-                minHeight: 44,
-              }}
-            >
-              📚 Question Library
-            </button>
-            <button
-              onClick={() => setMobileScreen("paper")}
-              style={{
-                flex: 1,
-                padding: "10px 12px",
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 10,
-                border: "none",
-                cursor: "pointer",
-                background:
-                  mobileScreen === "paper" ? "#ffffff" : "transparent",
-                color:
-                  mobileScreen === "paper" ? "#4f46e5" : "#64748b",
-                boxShadow:
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600"
+                }`}
+              >
+                Question Bank
+              </button>
+              <button
+                onClick={() => setMobileScreen("paper")}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                   mobileScreen === "paper"
-                    ? "0 2px 6px rgba(0,0,0,0.06)"
-                    : "none",
-                transition: "all 0.15s ease",
-                minHeight: 44,
-              }}
-            >
-              📝 Test Paper ({testQuestions.length})
-            </button>
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-600"
+                }`}
+              >
+                Test Paper ({testQuestions.length})
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Main Content Area */}
-        {isMobile
-          ? mobileScreen === "paper"
-            ? renderMobilePaper()
-            : renderMobileLibrary()
-          : renderDesktop()}
-      </div>
+        {/* Main Content Workspace */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+          {/* DESKTOP 2-COLUMN VIEW */}
+          {!isMobile && (
+            <div className="grid grid-cols-12 gap-5 items-start">
+              {/* LEFT: NCERT Question Library (7 cols) */}
+              <div className="col-span-7 bg-white rounded-2xl border border-gray-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden">
+                {/* Library Header */}
+                <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-gray-700" />
+                    <h2 className="text-sm font-bold text-gray-900">NCERT Question Library</h2>
+                  </div>
+                  <span className="text-xs text-gray-400 font-medium">
+                    {chapterStats.length} Chapters
+                  </span>
+                </div>
 
-      {/* Mobile Sticky Bottom Bar */}
-      {isMobile && (
-        <MobileBottomBar
-          questionCount={testQuestions.length}
-          totalMarks={totalMarks}
-          onViewPaper={() => setMobileScreen("paper")}
-          onOpenLibrary={() => setMobileScreen("library")}
-          activeScreen={mobileScreen}
-        />
-      )}
+                {/* Chapter Split Pane */}
+                <div className="grid grid-cols-12 min-h-[580px]">
+                  {/* Chapter Sidebar (4 cols) */}
+                  <div className="col-span-4 border-r border-gray-100 bg-[#FAFAFC] p-2 space-y-1 max-h-[650px] overflow-y-auto">
+                    {statsLoading ? (
+                      <div className="p-4 text-center text-xs text-gray-400">Loading chapters...</div>
+                    ) : chapterStats.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-gray-400">No chapters found.</div>
+                    ) : (
+                      chapterStats.map((ch) => {
+                        const isSelected = selectedChapter === ch.chapter;
+                        return (
+                          <button
+                            key={ch.chapter}
+                            onClick={() => {
+                              setSelectedChapter(ch.chapter);
+                              setQuestionType("all");
+                              setSearchQuery("");
+                              setOffset(0);
+                            }}
+                            className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors flex items-center justify-between gap-1 ${
+                              isSelected
+                                ? "bg-gray-900 text-white font-semibold shadow-sm"
+                                : "text-gray-700 hover:bg-gray-100/80"
+                            }`}
+                          >
+                            <span className="truncate leading-tight">{ch.chapter}</span>
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${
+                                isSelected ? "bg-white/20 text-white" : "bg-gray-200/70 text-gray-600"
+                              }`}
+                            >
+                              {ch.total}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
 
-      {/* Mobile Chapter Bottom Sheet */}
-      <ChapterBottomSheet
-        open={showChapterSheet}
-        onClose={() => setShowChapterSheet(false)}
-        chapterStats={chapterStats}
-        selectedChapter={selectedChapter}
-        onSelect={(chapter) => {
-          setSelectedChapter(chapter);
-          setQuestionType("all");
-          setSearchQuery("");
-          setOffset(0);
-        }}
-        statsLoading={statsLoading}
-        subject={subject}
-        classGrade={classGrade}
-      />
+                  {/* Question Stream (8 cols) */}
+                  <div className="col-span-8 p-3.5 max-h-[650px] overflow-y-auto">
+                    {/* Filters */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="relative flex-1">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search questions in chapter..."
+                          className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
+                        />
+                      </div>
 
-      <DragOverlay dropAnimation={defaultDropAnimation}>
-        {activeId ? (
-          <div
-            style={{
-              padding: "10px 14px",
-              background: "#ffffff",
-              border: "2px solid #4f46e5",
-              borderRadius: 10,
-              fontSize: 13,
-              boxShadow: "0 12px 28px rgba(0,0,0,0.18)",
-              maxWidth: 320,
-              cursor: "grabbing",
-              touchAction: "none",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                marginBottom: 4,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "#4f46e5",
-                  background: "#eef2ff",
-                  padding: "1px 6px",
-                  borderRadius: 4,
-                }}
-              >
-                Dragging Question
-              </span>
+                      <select
+                        value={questionType}
+                        onChange={(e) => setQuestionType(e.target.value)}
+                        className="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:ring-1 focus:ring-gray-900 cursor-pointer"
+                      >
+                        {Object.entries(TYPE_LABELS).map(([val, label]) => (
+                          <option key={val} value={val}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {renderLibraryList()}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: Test Paper Live Workspace (5 cols) */}
+              <div className="col-span-5 bg-white rounded-2xl border border-gray-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col">
+                {/* Paper Summary Header */}
+                <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-900">Your Test Paper</h2>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
+                      <span className="font-semibold text-gray-800">{testQuestions.length} Questions</span>
+                      <span>•</span>
+                      <span className="font-semibold text-emerald-600">{totalMarks} Marks</span>
+                      <span>•</span>
+                      <span className="text-gray-400">~{Math.max(15, totalMarks * 1.5)} mins</span>
+                    </div>
+                  </div>
+
+                  {testQuestions.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Reset and clear all questions from test paper?")) {
+                          setTestQuestions([]);
+                        }
+                      }}
+                      className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/70 border border-rose-100 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Reset
+                    </button>
+                  )}
+                </div>
+
+                {/* Paper Droppable List */}
+                <div className="p-3.5 flex-1 max-h-[500px] overflow-y-auto">
+                  <PaperDropZone isDragging={Boolean(activeId)} isMobile={false}>
+                    {testQuestions.length === 0 ? (
+                      <div className="py-20 text-center text-gray-400 flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl">
+                        <FileText className="w-8 h-8 text-gray-300 stroke-[1.5]" />
+                        <p className="text-xs font-semibold text-gray-700">Test Paper is Empty</p>
+                        <p className="text-[11px] text-gray-400 max-w-[200px]">
+                          Click "+ Add" on any question from the library to include it in this test.
+                        </p>
+                      </div>
+                    ) : (
+                      <SortableContext
+                        items={testQuestions.map((q) => q.paperId)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {testQuestions.map((q, i) => (
+                          <SortableTestQuestion
+                            key={q.paperId}
+                            question={q}
+                            index={i}
+                            totalCount={testQuestions.length}
+                            onRemove={removeFromTest}
+                            onEditMarks={editMarks}
+                            onMoveUp={(id) => moveQuestion(id, -1)}
+                            onMoveDown={(id) => moveQuestion(id, 1)}
+                            isMobile={false}
+                          />
+                        ))}
+                      </SortableContext>
+                    )}
+                  </PaperDropZone>
+                </div>
+
+                {/* Export Control Deck */}
+                {testQuestions.length > 0 && (
+                  <div className="p-4 border-t border-gray-100 bg-[#FAFAFC] space-y-3">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                        Download Test Paper
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleExport("pdf")}
+                          disabled={exporting}
+                          className="bg-gray-900 hover:bg-black text-white font-semibold py-2.5 px-3 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                        >
+                          {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                          Question Paper (PDF)
+                        </button>
+
+                        <button
+                          onClick={() => handleExport("docx")}
+                          disabled={exporting}
+                          className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 font-semibold py-2.5 px-3 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-blue-600" />
+                          Word (DOCX)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-gray-200/60">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          Answer Key & Solutions
+                        </div>
+                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={includeExplanations}
+                            onChange={(e) => setIncludeExplanations(e.target.checked)}
+                            className="rounded border-gray-300 text-gray-900 focus:ring-0 cursor-pointer"
+                          />
+                          With Explanations
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleExportAnswerKey("pdf")}
+                          disabled={exporting}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-3 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                        >
+                          <FileKey className="w-3.5 h-3.5" /> Answer Key (PDF)
+                        </button>
+                        <button
+                          onClick={() => handleExportAnswerKey("docx")}
+                          disabled={exporting}
+                          className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 font-semibold py-2 px-3 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                        >
+                          Answer Key (DOCX)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <p
-              style={{
-                margin: 0,
-                fontSize: 12,
-                color: "#1e293b",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
+          )}
+
+          {/* MOBILE VIEW */}
+          {isMobile && (
+            <div>
+              {mobileScreen === "library" ? (
+                <div>
+                  {/* Chapter Select Button */}
+                  <button
+                    onClick={() => setShowChapterSheet(true)}
+                    className="w-full p-3.5 bg-white border border-gray-200/80 rounded-2xl mb-3 flex items-center justify-between text-left shadow-sm active:bg-gray-50"
+                  >
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                        Chapter
+                      </span>
+                      <span className="text-sm font-semibold text-gray-900 block truncate mt-0.5">
+                        {selectedChapter || "Select a chapter..."}
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
+                      Change ▾
+                    </span>
+                  </button>
+
+                  {/* Filter Bar */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="relative flex-1">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search questions..."
+                        className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900 shadow-sm"
+                      />
+                    </div>
+
+                    <select
+                      value={questionType}
+                      onChange={(e) => setQuestionType(e.target.value)}
+                      className="bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 outline-none shadow-sm"
+                    >
+                      {Object.entries(TYPE_LABELS).map(([val, label]) => (
+                        <option key={val} value={val}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {renderLibraryList()}
+                </div>
+              ) : (
+                /* Mobile Test Paper Review */
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-bold text-gray-900">
+                        {testQuestions.length} Questions • {totalMarks} Marks
+                      </h2>
+                    </div>
+                    {testQuestions.length > 0 && (
+                      <button
+                        onClick={() => {
+                          if (confirm("Reset and clear all questions?")) setTestQuestions([]);
+                        }}
+                        className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 px-2.5 py-1 rounded-lg"
+                      >
+                        Reset All
+                      </button>
+                    )}
+                  </div>
+
+                  <PaperDropZone isDragging={Boolean(activeId)} isMobile>
+                    {testQuestions.length === 0 ? (
+                      <div className="py-16 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-xl bg-white p-6">
+                        <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-xs font-semibold text-gray-700">Test Paper is Empty</p>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Switch to Question Bank tab and tap "+ Add" on questions.
+                        </p>
+                      </div>
+                    ) : (
+                      <SortableContext
+                        items={testQuestions.map((q) => q.paperId)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {testQuestions.map((q, i) => (
+                          <SortableTestQuestion
+                            key={q.paperId}
+                            question={q}
+                            index={i}
+                            totalCount={testQuestions.length}
+                            onRemove={removeFromTest}
+                            onEditMarks={editMarks}
+                            onMoveUp={(id) => moveQuestion(id, -1)}
+                            onMoveDown={(id) => moveQuestion(id, 1)}
+                            isMobile
+                          />
+                        ))}
+                      </SortableContext>
+                    )}
+                  </PaperDropZone>
+
+                  {/* Export Controls for Mobile */}
+                  {testQuestions.length > 0 && (
+                    <div className="bg-white rounded-2xl border border-gray-200/80 p-4 space-y-3 shadow-sm">
+                      <button
+                        onClick={() => handleExport("pdf")}
+                        disabled={exporting}
+                        className="w-full bg-gray-900 hover:bg-black text-white font-semibold py-3 px-4 rounded-xl text-xs shadow-sm flex items-center justify-center gap-2"
+                      >
+                        {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        Download Question Paper (PDF)
+                      </button>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleExport("docx")}
+                          disabled={exporting}
+                          className="bg-white border border-gray-200 text-gray-800 font-semibold py-2.5 px-3 rounded-xl text-xs"
+                        >
+                          DOCX Paper
+                        </button>
+                        <button
+                          onClick={() => handleExportAnswerKey("pdf")}
+                          disabled={exporting}
+                          className="bg-emerald-600 text-white font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5"
+                        >
+                          <FileKey className="w-3.5 h-3.5" /> Answer Key
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Floating Sticky Bar */}
+        {isMobile && (
+          <MobileBottomBar
+            questionCount={testQuestions.length}
+            totalMarks={totalMarks}
+            onViewPaper={() => setMobileScreen("paper")}
+            onOpenLibrary={() => setMobileScreen("library")}
+            activeScreen={mobileScreen}
+          />
+        )}
+
+        {/* Mobile Chapter Bottom Sheet Drawer */}
+        <ChapterBottomSheet
+          open={showChapterSheet}
+          onClose={() => setShowChapterSheet(false)}
+          chapterStats={chapterStats}
+          selectedChapter={selectedChapter}
+          onSelect={(chapter) => {
+            setSelectedChapter(chapter);
+            setQuestionType("all");
+            setSearchQuery("");
+            setOffset(0);
+          }}
+          statsLoading={statsLoading}
+          subject={subject}
+          classGrade={classGrade}
+        />
+
+        {/* Drag Overlay (Smooth Ghost Preview) */}
+        <DragOverlay dropAnimation={defaultDropAnimation}>
+          {activeId ? (
+            <div className="p-3 bg-white border-2 border-gray-900 rounded-xl shadow-2xl max-w-xs text-xs font-medium text-gray-800 pointer-events-none truncate">
               {activeId.startsWith("lib-")
-                ? libraryQuestions.find((q) => `lib-${q.id}` === activeId)
-                    ?.question_text || "Question"
-                : testQuestions.find((q) => q.paperId === activeId)
-                    ?.question_text || "Question"}
-            </p>
-          </div>
-        ) : null}
-      </DragOverlay>
+                ? libraryQuestions.find((q) => `lib-${q.id}` === activeId)?.question_text || "Dragging question..."
+                : testQuestions.find((q) => q.paperId === activeId)?.question_text || "Reordering question..."}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </div>
     </DndContext>
   );
 }
