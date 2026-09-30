@@ -4,8 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import { LifeBuoy, Search, MessageCircleQuestion, ChevronDown } from "lucide-react";
 
-const BRAND_GRADIENT =
-  "linear-gradient(90deg, #818cf8, #34d399, #38bdf8, #6366f1, #818cf8, #34d399, #38bdf8, #6366f1)";
+const BRAND_GRADIENT = "#f75961";
 
 const FAQS = [
   { q: "I signed in with Google but the dashboard is blank.", a: "Ensure a profile row exists in `profiles`. Our auth callback and `onAuthStateChange` upsert will auto-create it—refresh once after first login.", tag: "Auth" },
@@ -55,17 +54,10 @@ const GlobalStyles = () => {
         forced-color-adjust: none !important;
       }
 
-      @keyframes fast-gradient {
-        0% { background-position: 0% center; }
-        100% { background-position: -200% center; }
-      }
       .running-gradient-text {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: fast-gradient 4s linear infinite;
+        color: #f75961 !important;
+        background: none !important;
+        -webkit-text-fill-color: #f75961 !important;
         display: inline-block;
         forced-color-adjust: none !important;
       }
@@ -101,7 +93,7 @@ export default function HelpCenter() {
 
       <section className="mx-auto max-w-4xl px-6 pt-14 pb-12 text-center flex flex-col items-center bg-white">
         <div className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur mb-6"
-          style={{ background: "rgba(59,130,246,0.08)", color: "#3b82f6", borderColor: "rgba(59,130,246,0.16)" }}>
+          style={{ background: "#fff0f1", color: "#f75961", borderColor: "#fecdd3" }}>
           <LifeBuoy className="h-3.5 w-3.5" /> Support & Troubleshooting
         </div>
         <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">

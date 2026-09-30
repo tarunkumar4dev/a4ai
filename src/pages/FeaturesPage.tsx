@@ -67,45 +67,44 @@ const GlobalStyles = () => {
       @media (hover: hover) {
         .feature-card:hover {
           transform: translateY(-4px) !important;
-          border-color: rgba(147, 197, 253, 0.9) !important;
-          box-shadow: 0 20px 40px -12px rgba(59, 130, 246, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+          border-color: rgba(247, 89, 97, 0.4) !important;
+          box-shadow: 0 20px 40px -12px rgba(247, 89, 97, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04) !important;
         }
       }
 
-      .btn-blue-gradient {
-        background: linear-gradient(180deg, #93c5fd 0%, #3b82f6 85%) !important;
+      .btn-black-action {
+        background: #000000 !important;
         color: #ffffff !important;
-        border: 1px solid #60a5fa !important;
-        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25) !important;
+        border: 1px solid #000000 !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15) !important;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        border-radius: 14px;
-        font-weight: 700;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
       }
-      .btn-blue-gradient * { color: #ffffff !important; stroke: #ffffff !important; }
+      .btn-black-action * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) { 
-        .btn-blue-gradient:hover { 
-          filter: brightness(1.05); 
+        .btn-black-action:hover { 
+          background: #262626 !important; 
           transform: translateY(-1px);
-          box-shadow: 0 6px 20px rgba(59, 130, 246, 0.38) !important; 
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important; 
         } 
       }
 
       .btn-white-action {
-        background: #ffffff !important;
-        color: #0f172a !important;
-        border: 1px solid #e2e8f0 !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        background: #f75961 !important;
+        color: #ffffff !important;
+        border: 1px solid #f75961 !important;
+        box-shadow: 0 4px 14px rgba(247, 89, 97, 0.25) !important;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-        border-radius: 14px;
-        font-weight: 700;
+        border-radius: 14px !important;
+        font-weight: 700 !important;
       }
-      .btn-white-action * { color: #0f172a !important; stroke: #0f172a !important; }
+      .btn-white-action * { color: #ffffff !important; stroke: #ffffff !important; }
       @media (hover: hover) {
         .btn-white-action:hover {
-          background: #f8fafc !important;
-          border-color: #cbd5e1 !important;
+          background: #e8454d !important;
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07) !important;
+          box-shadow: 0 6px 20px rgba(247, 89, 97, 0.35) !important;
         }
       }
 
@@ -114,12 +113,9 @@ const GlobalStyles = () => {
         100% { background-position: -200% center; }
       }
       .nlm-text {
-        background: ${BRAND_GRADIENT};
-        background-size: 200% auto;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        animation: fast-gradient 4s linear infinite;
+        color: #f75961 !important;
+        -webkit-text-fill-color: #f75961 !important;
+        background: none !important;
       }
 
       /* Clean Frosted Transparent Custom Navigation Header Dock */
@@ -138,9 +134,9 @@ const GlobalStyles = () => {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        background: #eff6ff;
-        border: 1px solid #dbeafe;
-        color: #1d4ed8;
+        background: #fff0f1;
+        border: 1px solid #fecdd3;
+        color: #f75961;
         font-size: 11px;
         font-weight: 700;
         padding: 3px 10px;
@@ -155,9 +151,9 @@ const GlobalStyles = () => {
         border-radius: 999px;
         font-size: 13px;
         font-weight: 700;
-        background: rgba(59,130,246,0.06);
-        color: #1d4ed8;
-        border: 1px solid rgba(59,130,246,0.14);
+        background: #fff0f1;
+        color: #f75961;
+        border: 1px solid #fecdd3;
       }
       .sorb { position: absolute; border-radius: 50%; pointer-events: none; filter: blur(70px); }
       @media (min-width: 640px) { .sorb { filter: blur(100px); } }
@@ -347,7 +343,7 @@ export default function FeaturesPage() {
 
               {/* Action Buttons */}
               <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-                <Link to="/contact" className="btn-blue-gradient px-6 py-3 text-sm font-bold flex items-center gap-2">
+                <Link to="/contact" className="btn-black-action px-6 py-3 text-sm font-bold flex items-center gap-2">
                   Get Started for Free <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link to="/pricing" className="btn-white-action px-6 py-3 text-sm font-bold flex items-center gap-2">
@@ -415,10 +411,12 @@ export default function FeaturesPage() {
 
             {/* Bottom Footer Call-To-Action Button */}
             <div className="relative z-10 text-center mt-20 mb-24">
-              <button onClick={() => navigate("/dashboard/test-generator")} className="btn-blk px-8 py-4 text-base sm:text-lg font-bold">
-                <span className="relative z-10 flex items-center justify-center gap-2">
-                  🚀 Start creating tests <ArrowRight className="h-5 w-5" />
-                </span>
+              <button
+                onClick={() => navigate("/dashboard/test-generator")}
+                className="bg-black hover:bg-neutral-800 text-white rounded-[14px] px-8 py-4 text-base sm:text-lg font-bold cursor-pointer transition-colors shadow-md inline-flex items-center justify-center gap-2"
+              >
+                <span>🚀 Start creating tests</span>
+                <ArrowRight className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -497,7 +495,7 @@ function FeatureCard({ feature }: { feature: Feature }) {
         className="feature-card p-6 flex flex-col h-full relative"
       >
         {feature.tag && (
-          <div className="absolute -top-3 right-4 rounded-full bg-blue-600 px-3 py-0.5 text-xs font-bold text-white shadow z-10">
+          <div className="absolute -top-3 right-4 rounded-full bg-[#f75961] px-3 py-0.5 text-xs font-bold text-white shadow z-10">
             {feature.tag}
           </div>
         )}
@@ -506,13 +504,13 @@ function FeatureCard({ feature }: { feature: Feature }) {
         <motion.span
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
+          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(247,89,97,0.06), transparent 80%)` }}
         />
 
         <div className="relative z-10 flex flex-col h-full">
           <div className="flex items-center gap-3.5 mb-4">
-            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/70 border border-blue-100 flex-shrink-0 text-blue-600 shadow-xs">
-              <Icon className="h-6 w-6 text-blue-600" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff0f1] border border-[#fecdd3] flex-shrink-0 text-[#f75961] shadow-xs">
+              <Icon className="h-6 w-6 text-[#f75961]" />
             </div>
             <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight leading-snug">
               {feature.title}
@@ -526,7 +524,7 @@ function FeatureCard({ feature }: { feature: Feature }) {
           <ul className="space-y-2.5 mb-6 flex-grow">
             {feature.bullets.map((b, i) => (
               <li key={i} className="flex items-start gap-2.5 text-sm font-medium">
-                <div className="h-5 w-5 rounded-full bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shrink-0 mt-0.5">
+                <div className="h-5 w-5 rounded-full bg-[#fff0f1] border border-[#fecdd3] flex items-center justify-center text-[#f75961] shrink-0 mt-0.5">
                   <Check className="h-3 w-3" strokeWidth={3} />
                 </div>
                 <span className="text-slate-700 font-semibold leading-snug">{b}</span>
@@ -538,7 +536,7 @@ function FeatureCard({ feature }: { feature: Feature }) {
             <span className="per-student-pill">Included in all plans</span>
             <Link
               to="/pricing"
-              className="inline-flex items-center text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors group-hover:translate-x-0.5"
+              className="inline-flex items-center text-xs font-bold text-[#f75961] hover:text-[#e8454d] transition-colors group-hover:translate-x-0.5"
             >
               See Plans <ArrowRight className="ml-1 h-3.5 w-3.5" />
             </Link>
@@ -565,7 +563,7 @@ function Compare({ good, bad }: { good: string; bad: string }) {
       className="rounded-2xl p-4 text-left shadow-xs relative overflow-hidden bg-slate-50 border border-slate-200/90"
     >
       <div className="text-sm flex items-center mb-1">
-        <span className="mr-2 rounded px-1.5 py-0.5 text-[10px] font-extrabold text-white uppercase tracking-wider bg-blue-600">
+        <span className="mr-2 rounded px-1.5 py-0.5 text-[10px] font-extrabold text-white uppercase tracking-wider bg-[#f75961]">
           a4ai
         </span>
         <span className="font-bold text-slate-900">{good}</span>
@@ -584,12 +582,12 @@ function VideoRow() {
         <div 
           className="px-6 py-4 text-sm font-bold flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 text-slate-800"
         >
-          <Video className="h-4 w-4 text-blue-600" /> See it in action
+          <Video className="h-4 w-4 text-[#f75961]" /> See it in action
         </div>
         <div className="p-0 bg-white">
           <motion.div
             initial={{ opacity: 0.98 }} whileHover={{ scale: 1.01 }} transition={{ duration: 0.3 }}
-            className="relative group p-[1px] bg-gradient-to-br from-blue-500/20 to-indigo-500/10"
+            className="relative group p-[1px] bg-gradient-to-br from-[#f75961]/20 to-[#f75961]/10"
           >
             <div className="bg-black overflow-hidden relative">
               <video ref={demoRef} className="aspect-video w-full object-cover" src="/demo.mp4" playsInline controls preload="metadata" />
@@ -598,7 +596,7 @@ function VideoRow() {
         </div>
         <div className="justify-between gap-3 flex-wrap flex px-6 py-4 bg-slate-50/70 border-t border-slate-100">
           <button
-            className="btn-blue-gradient px-5 py-2.5 text-sm font-bold flex items-center gap-2"
+            className="btn-black-action px-5 py-2.5 text-sm font-bold flex items-center gap-2"
             onClick={() => {
               const v = demoRef.current;
               if (v) { v.scrollIntoView({ behavior: "smooth", block: "center" }); v.play(); }
@@ -614,7 +612,7 @@ function VideoRow() {
       </div>
 
       <div className="p-6 feature-card bg-white">
-        <div className="mb-4 text-sm font-extrabold uppercase tracking-wider text-blue-600">Why it feels different</div>
+        <div className="mb-4 text-sm font-extrabold uppercase tracking-wider text-[#f75961]">Why it feels different</div>
         <div className="grid gap-4 text-sm font-medium">
           <Bullet>Blueprint-first generation matches your marking scheme exactly.</Bullet>
           <Bullet>Outcome coverage heatmaps catch blind-spots before export.</Bullet>
@@ -629,7 +627,7 @@ function VideoRow() {
 function Bullet({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-600" />
+      <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-[#f75961]" />
       <span className="leading-relaxed font-semibold text-slate-700">{children}</span>
     </div>
   );

@@ -73,15 +73,15 @@ function BlogCard({ p }: { p: typeof posts[0] }) {
         <motion.span
           aria-hidden
           className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(59,130,246,0.06), transparent 80%)` }}
+          style={{ background: useMotionTemplate`radial-gradient(180px 140px at ${mx}px ${my}px, rgba(247,89,97,0.06), transparent 80%)` }}
         />
         
         <div className="relative z-10 flex flex-col h-full bg-transparent">
-          <p className="text-xs font-bold mb-2 uppercase tracking-wider text-blue-600">{p.date}</p>
+          <p className="text-xs font-bold mb-2 uppercase tracking-wider text-[#f75961]">{p.date}</p>
           <h3 className="text-lg font-bold mb-2.5 text-neutral-900">{p.title}</h3>
           <p className="text-sm leading-relaxed mb-6 flex-grow text-neutral-500">{p.excerpt}</p>
           
-          <button className="flex items-center gap-1.5 text-sm font-semibold transition-colors mt-auto w-fit text-blue-600 hover:text-blue-700 bg-transparent">
+          <button className="flex items-center gap-1.5 text-sm font-semibold transition-colors mt-auto w-fit text-[#f75961] hover:text-[#e8454d] bg-transparent cursor-pointer">
             Read article <ArrowRight className="h-4 w-4" />
           </button>
         </div>
