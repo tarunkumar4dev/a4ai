@@ -5,7 +5,6 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   CreditCard, Smartphone, QrCode, Wallet, Shield,
   CheckCircle, Check, ArrowLeft, Zap, Crown,
-  Building2, Users, BarChart3,
 } from "lucide-react";
 import { 
   motion, 
@@ -16,6 +15,7 @@ import {
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/context/ThemeContext";
+import { supabase } from "@/lib/supabaseClient";
 
 declare global {
   interface Window { Razorpay: any; }
@@ -29,8 +29,6 @@ const joinUrl = (b: string, p: string) => `${b.replace(/\/+$/, "")}/${p.replace(
 
 type MethodId = "upi" | "card" | "wallet" | "netbanking";
 type BillingCycle = "monthly" | "yearly";
-
-const YEARLY_DISCOUNT = 0.20;
 
 /* ──────────────────────────────────────────────────────────────
    BRAND STYLES & GLOBAL INJECTION
@@ -96,58 +94,48 @@ const head = (isDark: boolean) => (isDark ? "#f1f5f9" : "#111111");
 const accent = (_isDark: boolean) => "#f75961";
 
 // ═══════════════════════════════════════════════════════════
-// PLAN CONFIG (must match PricingPage + DB)
+// PLAN CONFIG
+// Online checkout covers the teacher plans only; institute plans are sold by
+// the team. Prices and paper limits are read from the plans table, the same
+// source the backend charges from, so the page can never show a stale price.
 // ═══════════════════════════════════════════════════════════
 interface PlanInfo {
   slug: string;
   name: string;
-  monthlyPaise: number;
-  testLimit: number;
   features: string[];
   icon: React.ReactNode;
-  studentLimit?: number;
 }
 
 const PLAN_MAP: Record<string, PlanInfo> = {
   starter: {
-    slug: "starter", name: "Starter", monthlyPaise: 14900, testLimit: 10,
-    features: ["10 test papers/month", "All formats", "PDF & DOCX", "2 free contests"],
+    slug: "starter", name: "Starter",
+    features: ["All formats", "PDF & DOCX", "2 free contests"],
     icon: <Zap className="h-5 w-5" />,
   },
   pro: {
-    slug: "pro", name: "Pro", monthlyPaise: 29900, testLimit: 50,
-    features: ["Unlimited test papers", "All formats", "Unlimited contests", "Priority generation"],
+    slug: "pro", name: "Pro",
+    features: ["All formats", "Unlimited contests", "Priority generation"],
     icon: <Crown className="h-5 w-5" />,
-  },
-  institute_start: {
-    slug: "institute_start", name: "Institute Start", monthlyPaise: 99900, testLimit: 75,
-    features: ["100 students", "75 papers/month", "Attendance", "Contests"],
-    icon: <Building2 className="h-5 w-5" />, studentLimit: 100,
-  },
-  institute_scale: {
-    slug: "institute_scale", name: "Institute Scale", monthlyPaise: 149900, testLimit: 120,
-    features: ["250 students", "120 papers/month", "Analytics", "Priority support"],
-    icon: <Users className="h-5 w-5" />, studentLimit: 250,
-  },
-  institute_enterprise: {
-    slug: "institute_enterprise", name: "Institute Enterprise", monthlyPaise: 199900, testLimit: 200,
-    features: ["500 students", "Unlimited papers", "Advanced analytics", "Dedicated support"],
-    icon: <BarChart3 className="h-5 w-5" />, studentLimit: 500,
   },
 };
 
-function getPrice(paise: number, cycle: BillingCycle): number {
-  if (cycle === "yearly") return Math.round(paise * 12 * (1 - YEARLY_DISCOUNT));
-  return paise;
+interface DbPrices {
+  monthly: number; // paise
+  yearly: number; // paise
+  testLimit: number; // -1 = unlimited
 }
-function getMonthlyEquiv(paise: number): number {
-  return Math.round((paise * 12 * (1 - YEARLY_DISCOUNT)) / 12);
-}
+
 function fmt(paise: number): string { return `₹${(paise / 100).toFixed(0)}`; }
-function fmtPerDay(paise: number, cycle: BillingCycle): string {
-  const total = getPrice(paise, cycle);
+function fmtPerDay(totalPaise: number, cycle: BillingCycle): string {
   const days = cycle === "yearly" ? 365 : 30;
-  return `₹${(total / 100 / days).toFixed(0)}`;
+  return `₹${(totalPaise / 100 / days).toFixed(0)}`;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+  return headers;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -187,9 +175,39 @@ export default function PaymentPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
+  const [prices, setPrices] = useState<DbPrices | null>(null);
+  const [priceError, setPriceError] = useState(false);
+
   useEffect(() => {
-    if (!plan) navigate("/pricing");
+    // Institute and unknown plans are not sold online.
+    if (!plan) navigate("/contact");
   }, [plan, navigate]);
+
+  useEffect(() => {
+    if (!plan) return;
+    let cancelled = false;
+    supabase
+      .from("plans")
+      .select("price_paise, price_yearly_paise, test_limit")
+      .eq("slug", plan.slug)
+      .eq("is_active", true)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setPriceError(true);
+          return;
+        }
+        setPrices({
+          monthly: Number(data.price_paise) || 0,
+          yearly: Number(data.price_yearly_paise) || 0,
+          testLimit: Number(data.test_limit),
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [plan]);
 
   const ensureRazorpay = () =>
     new Promise<void>((resolve, reject) => {
@@ -202,12 +220,15 @@ export default function PaymentPage() {
       document.head.appendChild(s);
     });
 
-  const actualPrice = plan ? getPrice(plan.monthlyPaise, billingCycle) : 0;
-  const monthlyEquiv = plan && billingCycle === "yearly" ? getMonthlyEquiv(plan.monthlyPaise) : plan?.monthlyPaise || 0;
-  const savings = plan && billingCycle === "yearly" ? (plan.monthlyPaise * 12) - actualPrice : 0;
+  const actualPrice = prices ? (billingCycle === "yearly" ? prices.yearly : prices.monthly) : 0;
+  const monthlyEquiv = prices && billingCycle === "yearly" ? Math.round(prices.yearly / 12) : prices?.monthly || 0;
+  const yearlySavings = prices && prices.yearly > 0 ? prices.monthly * 12 - prices.yearly : 0;
+  const savings = billingCycle === "yearly" ? yearlySavings : 0;
+  const yearlyDiscountPct = prices && prices.monthly > 0 ? Math.round((yearlySavings / (prices.monthly * 12)) * 100) : 0;
+  const papersLabel = !prices ? "…" : prices.testLimit < 0 ? "Unlimited" : String(prices.testLimit);
 
   async function handlePay() {
-    if (!plan || !user) return;
+    if (!plan || !user || !prices || actualPrice <= 0) return;
     if (!RZP_KEY) { alert("Razorpay key missing"); return; }
 
     setIsProcessing(true);
@@ -216,13 +237,12 @@ export default function PaymentPage() {
 
       const res = await fetch(joinUrl(RAW_BACKEND_URL, "create-order"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           amount: actualPrice,
           payment_method: selectedMethod,
           plan_slug: plan.slug,
           billing_cycle: billingCycle,
-          user_id: user.id,
         }),
       });
 
@@ -250,12 +270,11 @@ export default function PaymentPage() {
           try {
             const vRes = await fetch(joinUrl(RAW_BACKEND_URL, "verify-payment"), {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: await authHeaders(),
               body: JSON.stringify({
-                ...response,
-                plan_slug: plan.slug,
-                billing_cycle: billingCycle,
-                user_id: user.id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
               }),
             });
             const result = await vRes.json().catch(() => ({}));
@@ -263,7 +282,10 @@ export default function PaymentPage() {
               setPaymentSuccess(true);
               refreshStatus();
             } else {
-              throw new Error(result?.error || "Verification failed");
+              throw new Error(
+                result?.detail ||
+                  "We received your payment but could not activate the plan. Please contact support with your payment ID."
+              );
             }
           } catch (err: any) {
             alert(err?.message || "Verification failed");
@@ -318,8 +340,8 @@ export default function PaymentPage() {
             <strong style={{ color: head(isDark) }}>{plan.name} ({cycleLabel})</strong> is now active.
           </p>
           <p className="text-sm mb-6" style={{ color: muted(isDark) }}>
-            {plan.testLimit >= 200 ? "Unlimited" : plan.testLimit} test papers unlocked.
-            {billingCycle === "yearly" && " You saved 20% with annual billing."}
+            {papersLabel} AI test papers a month unlocked.
+            {billingCycle === "yearly" && savings > 0 && ` You saved ${fmt(savings)} with annual billing.`}
           </p>
           <button
             onClick={() => navigate("/dashboard")}
@@ -412,13 +434,15 @@ export default function PaymentPage() {
                     >
                       <p className="text-sm font-bold capitalize" style={{ color: head(isDark) }}>{c}</p>
                       <p className="text-xs mt-0.5" style={{ color: muted(isDark) }}>
-                        {c === "monthly"
-                          ? `${fmt(plan.monthlyPaise)}/month`
-                          : `${fmt(getPrice(plan.monthlyPaise, "yearly"))}/year`}
+                        {!prices
+                          ? "…"
+                          : c === "monthly"
+                            ? `${fmt(prices.monthly)}/month`
+                            : `${fmt(prices.yearly)}/year`}
                       </p>
-                      {c === "yearly" && (
+                      {c === "yearly" && yearlyDiscountPct > 0 && (
                         <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#fff0f1", color: "#f75961", border: "1px solid #fecdd3" }}>
-                          -20%
+                          -{yearlyDiscountPct}%
                         </span>
                       )}
                     </button>
@@ -493,29 +517,25 @@ export default function PaymentPage() {
                 <div className="flex justify-between">
                   <span style={{ color: muted(isDark) }}>{plan.name} plan</span>
                   <span className="font-medium" style={{ color: head(isDark) }}>
-                    {billingCycle === "yearly"
-                      ? `${fmt(plan.monthlyPaise)} × 12`
-                      : fmt(plan.monthlyPaise)}
+                    {!prices
+                      ? "…"
+                      : billingCycle === "yearly"
+                        ? `${fmt(prices.monthly)} × 12`
+                        : fmt(prices.monthly)}
                   </span>
                 </div>
-                {billingCycle === "yearly" && (
+                {billingCycle === "yearly" && savings > 0 && (
                   <div className="flex justify-between" style={{ color: "#f75961" }}>
-                    <span>Annual discount (20%)</span>
+                    <span>Annual discount ({yearlyDiscountPct}%)</span>
                     <span className="font-medium">-{fmt(savings)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span style={{ color: muted(isDark) }}>Test papers</span>
+                  <span style={{ color: muted(isDark) }}>AI test papers</span>
                   <span className="font-medium" style={{ color: head(isDark) }}>
-                    {plan.testLimit >= 200 ? "Unlimited" : `${plan.testLimit}/mo`}
+                    {papersLabel === "Unlimited" ? papersLabel : `${papersLabel}/mo`}
                   </span>
                 </div>
-                {plan.studentLimit && (
-                  <div className="flex justify-between">
-                    <span style={{ color: muted(isDark) }}>Students</span>
-                    <span className="font-medium" style={{ color: head(isDark) }}>Up to {plan.studentLimit}</span>
-                  </div>
-                )}
               </div>
 
               <div className="border-t pt-3 mb-5" style={{ borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }}>
@@ -529,14 +549,14 @@ export default function PaymentPage() {
                   </div>
                 </div>
                 <p className="text-xs mt-1 text-right" style={{ color: muted(isDark) }}>
-                  That's just {fmtPerDay(plan.monthlyPaise, billingCycle)}/day
+                  That's just {fmtPerDay(actualPrice, billingCycle)}/day
                 </p>
               </div>
 
               {/* Pay button */}
               <button
                 onClick={handlePay}
-                disabled={isProcessing}
+                disabled={isProcessing || !prices}
                 className="btn-blk w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {isProcessing ? (
@@ -547,8 +567,12 @@ export default function PaymentPage() {
                     </svg>
                     Processing...
                   </>
-                ) : (
+                ) : prices ? (
                   `Pay ${fmt(actualPrice)} Now`
+                ) : priceError ? (
+                  "Price unavailable. Please refresh."
+                ) : (
+                  "Loading price…"
                 )}
               </button>
 
@@ -560,7 +584,7 @@ export default function PaymentPage() {
               <div className="mt-4 pt-4 border-t" style={{ borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }}>
                 <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: muted(isDark) }}>What you get</p>
                 <ul className="space-y-1.5">
-                  {plan.features.map((f, i) => (
+                  {[`${papersLabel} AI test papers/month`, ...plan.features].map((f, i) => (
                     <li key={i} className="flex items-center gap-2 text-xs" style={{ color: head(isDark) }}>
                       <Check className="h-3.5 w-3.5 flex-shrink-0" style={{ color: "#f75961" }} /> {f}
                     </li>

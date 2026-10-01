@@ -181,6 +181,8 @@ interface PlanCard {
   buttonLabel?: { normal: string; popular: string };
   unavailable?: string[];
   isSales?: boolean;
+  /** Plan slug for online checkout. Cards without one go to the sales/contact form. */
+  checkoutSlug?: "starter" | "pro";
 }
 
 const plans: Record<AudienceKey, PlanCard[]> = {
@@ -216,6 +218,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
       ],
       unavailable: ["Analytics — available in Pro"],
       popular: true,
+      checkoutSlug: "starter",
     },
     {
       name: "Pro",
@@ -232,6 +235,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
         "Custom school logo on papers",
         "Priority WhatsApp support",
       ],
+      checkoutSlug: "pro",
     },
   ],
 
@@ -621,8 +625,11 @@ export default function PricingPage() {
                       handleSalesClick();
                     } else if (isFree) {
                       navigate("/signup");
+                    } else if (plan.checkoutSlug) {
+                      navigate(`/payment?plan=${plan.checkoutSlug}&cycle=${billingPeriod}`);
                     } else {
-                      navigate("/payment");
+                      // Institute and college plans are sold by the team.
+                      navigate("/contact");
                     }
                   }}
                   className={`mt-3 inline-flex h-11 w-full items-center justify-center rounded-[14px] font-bold px-4 text-[14px] cursor-pointer ${buttonGradient}`}
@@ -866,7 +873,7 @@ export default function PricingPage() {
                         <td className="px-4 py-3.5 text-right whitespace-nowrap">
                           {r.action === "popular" ? (
                             <button
-                              onClick={() => navigate("/payment")}
+                              onClick={() => navigate("/contact")}
                               className="btn-peach-action h-8 px-3.5 rounded-[12px] text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
                               style={hx}
                             >
@@ -890,7 +897,7 @@ export default function PricingPage() {
                             </button>
                           ) : (
                             <button
-                              onClick={() => navigate("/payment")}
+                              onClick={() => navigate("/contact")}
                               className="btn-peach-action h-8 px-3.5 rounded-[12px] text-xs font-semibold cursor-pointer inline-flex items-center justify-center gap-1 shadow-sm"
                               style={hx}
                             >

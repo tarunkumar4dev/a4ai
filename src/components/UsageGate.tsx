@@ -90,7 +90,7 @@ export function UpgradeBanner() {
             You've used all {status.test_limit} test papers on your {status.plan_name} plan this month.
           </p>
           <button
-            onClick={() => navigate("/payment")}
+            onClick={() => navigate("/pricing")}
             className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 px-3 py-1.5 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/60 transition"
           >
             <Crown className="h-4 w-4" />
