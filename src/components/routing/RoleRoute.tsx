@@ -1,16 +1,24 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAccess } from '../../context/AccessProvider';
 
 type Role = 'admin' | 'hod' | 'proctor' | 'teacher';
 
 export const RoleRoute: React.FC<{ children: React.ReactNode; allow: Role[] }> = ({ children, allow }) => {
   const { access, loading } = useAccess();
+  const location = useLocation();
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading…</div>;
   if (!access) return <Navigate to="/login" replace />;
-  if (access.primary_role === 'none' || !allow.includes(access.primary_role as Role)) {
-    return <Navigate to={access.home_route || '/dashboard'} replace />;
+  // No institute membership = independent teacher: they get the personal teacher dashboard.
+  const role: Role = access.primary_role === 'none' ? 'teacher' : (access.primary_role as Role);
+  if (!allow.includes(role)) {
+    const target = access.home_route || '/dashboard';
+    // Never redirect to the page we are already on (that renders a blank screen).
+    if (target === location.pathname) {
+      return <div style={{ padding: 40, textAlign: 'center' }}>You don't have access to this page.</div>;
+    }
+    return <Navigate to={target} replace />;
   }
   return <>{children}</>;
 };
