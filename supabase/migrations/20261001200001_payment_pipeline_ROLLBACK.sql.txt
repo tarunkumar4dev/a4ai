@@ -1,0 +1,168 @@
+-- Rollback for 20261001200000_payment_pipeline.sql
+-- Restores the function bodies and grants exactly as they were on 01 Oct 2026 before that migration.
+-- Run in Supabase SQL Editor only if the migration must be undone.
+
+begin;
+
+CREATE OR REPLACE FUNCTION public.check_usage(p_user_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+declare
+  v_plan_id uuid;
+  v_limit int;
+  v_period text := to_char(now(), 'YYYY-MM');
+  v_used int;
+begin
+  -- plan: active subscription pehle, phir teacher_profiles, phir free
+  select s.plan_id into v_plan_id
+  from subscriptions s
+  where s.user_id = p_user_id and s.status = 'active'
+    and (s.expires_at is null or s.expires_at > now())
+  order by s.expires_at desc nulls last limit 1;
+
+  if v_plan_id is null then
+    select plan_id into v_plan_id from teacher_profiles where id = p_user_id;
+  end if;
+
+  if v_plan_id is not null then
+    select test_limit into v_limit from plans where id = v_plan_id;
+  end if;
+  if v_limit is null then
+    select test_limit into v_limit from plans where slug = 'free';
+  end if;
+  v_limit := coalesce(v_limit, 2);
+
+  select coalesce(sum(count), 0) into v_used
+  from usage_records
+  where user_id = p_user_id and action_type = 'test_generated'
+    and billing_period = v_period;
+
+  if v_limit < 0 then
+    return jsonb_build_object('allowed', true, 'used', v_used, 'limit', -1, 'remaining', -1);
+  end if;
+
+  return jsonb_build_object(
+    'allowed', v_used < v_limit,
+    'used', v_used, 'limit', v_limit,
+    'remaining', greatest(v_limit - v_used, 0));
+end; $function$;
+
+CREATE OR REPLACE FUNCTION public.increment_usage(p_user_id uuid, p_action text DEFAULT 'test_generated'::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  current_period text;
+  user_plan record;
+  current_count integer;
+BEGIN
+  current_period := to_char(now(), 'YYYY-MM');
+
+  -- Get user's plan
+  SELECT p.test_limit, p.slug INTO user_plan
+  FROM teacher_profiles tp
+  JOIN plans p ON p.id = tp.plan_id
+  WHERE tp.id = p_user_id;
+
+  IF NOT FOUND THEN
+    RETURN '{"allowed": false, "error": "user_not_found"}'::jsonb;
+  END IF;
+
+  -- Get current usage
+  SELECT count INTO current_count
+  FROM usage_records
+  WHERE user_id = p_user_id
+    AND action_type = p_action
+    AND billing_period = current_period;
+
+  current_count := COALESCE(current_count, 0);
+
+  -- Check limit (skip if unlimited)
+  IF user_plan.test_limit != -1 AND current_count >= user_plan.test_limit THEN
+    RETURN jsonb_build_object(
+      'allowed', false,
+      'error', 'limit_reached',
+      'plan', user_plan.slug,
+      'used', current_count,
+      'limit', user_plan.test_limit
+    );
+  END IF;
+
+  -- Upsert usage
+  INSERT INTO usage_records (user_id, action_type, billing_period, count)
+  VALUES (p_user_id, p_action, current_period, 1)
+  ON CONFLICT (user_id, action_type, billing_period)
+  DO UPDATE SET count = usage_records.count + 1, updated_at = now();
+
+  RETURN jsonb_build_object(
+    'allowed', true,
+    'used', current_count + 1,
+    'limit', user_plan.test_limit,
+    'remaining', CASE
+      WHEN user_plan.test_limit = -1 THEN -1
+      ELSE user_plan.test_limit - (current_count + 1)
+    END
+  );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.get_user_plan_status(p_user_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  result jsonb;
+  current_period text;
+BEGIN
+  current_period := to_char(now(), 'YYYY-MM');
+
+  SELECT jsonb_build_object(
+    'plan_slug', p.slug,
+    'plan_name', p.display_name,
+    'test_limit', p.test_limit,
+    'price_paise', p.price_paise,
+    'features', p.features,
+    'tests_used', COALESCE(u.count, 0),
+    'tests_remaining', CASE
+      WHEN p.test_limit = -1 THEN -1  -- unlimited
+      ELSE GREATEST(0, p.test_limit - COALESCE(u.count, 0))
+    END,
+    'billing_period', current_period,
+    'subscription_status', COALESCE(
+      (SELECT s.status FROM subscriptions s
+       WHERE s.user_id = p_user_id AND s.status = 'active'
+       ORDER BY s.created_at DESC LIMIT 1),
+      'none'
+    ),
+    'subscription_expires', (
+      SELECT s.expires_at FROM subscriptions s
+      WHERE s.user_id = p_user_id AND s.status = 'active'
+      ORDER BY s.created_at DESC LIMIT 1
+    )
+  ) INTO result
+  FROM teacher_profiles tp
+  JOIN plans p ON p.id = tp.plan_id
+  LEFT JOIN usage_records u ON u.user_id = tp.id
+    AND u.action_type = 'test_generated'
+    AND u.billing_period = current_period
+  WHERE tp.id = p_user_id;
+
+  RETURN COALESCE(result, '{"error": "user_not_found"}'::jsonb);
+END;
+$function$;
+
+
+grant execute on function public.activate_subscription(uuid, text, text, text, text) to public, anon, authenticated;
+grant execute on function public.check_usage(uuid), public.record_usage(uuid, text),
+  public.increment_usage(uuid, text), public.get_user_plan_status(uuid) to public, anon, authenticated;
+
+drop function if exists public.capture_payment(text, text, text);
+drop function if exists public.whatsapp_paper_quota(text, boolean);
+drop function if exists public.a4_effective_plan(uuid);
+drop table if exists public.whatsapp_usage;
+
+commit;
