@@ -407,7 +407,14 @@ export async function fetchQuestionsForTest(
   // 2. Try Backend API
   try {
     const apiBase = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000/api";
-    const res = await fetch(`${apiBase}/v1/test-generator/test/${testId}${teacherId ? `?teacher_id=${encodeURIComponent(teacherId)}` : ""}`);
+    // The backend identifies the owner from this token; teacher_id in the query is ignored.
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string, string> = {};
+    if (session?.access_token) headers["Authorization"] = `Bearer ${session.access_token}`;
+    const res = await fetch(
+      `${apiBase}/v1/test-generator/test/${testId}${teacherId ? `?teacher_id=${encodeURIComponent(teacherId)}` : ""}`,
+      { headers }
+    );
     if (res.ok) {
       const json = await res.json();
       if (json.questions && Array.isArray(json.questions)) {
