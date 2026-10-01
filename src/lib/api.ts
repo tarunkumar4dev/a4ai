@@ -127,7 +127,9 @@ async function apiFetch<T>(
   };
 
   try {
-    const { supabase } = await import("@/integrations/supabase/client");
+    // Login stores the session in the "@/lib/supabaseClient" client (storageKey a4ai.auth.token);
+    // the integrations client never has a session, so it sent no token.
+    const { supabase } = await import("@/lib/supabaseClient");
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       defaultHeaders["Authorization"] = `Bearer ${session.access_token}`;
