@@ -16,6 +16,7 @@ import {
   RotateCcw, Sparkles, Clock, BookOpen, User,
   FileKey, Hash, Code2, Shield, Target, Minus
 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -194,7 +195,11 @@ export default function TestChecker() {
         formData.append("answer_key_json", answerKeyJson);
       }
 
-      const res = await fetch(endpoint, { method: "POST", body: formData });
+      // The backend requires a signed-in user (owner comes from this token).
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) headers["Authorization"] = `Bearer ${session.access_token}`;
+      const res = await fetch(endpoint, { method: "POST", body: formData, headers });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `Server error (${res.status})`);
