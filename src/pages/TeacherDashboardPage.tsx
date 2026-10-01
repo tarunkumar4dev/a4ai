@@ -15,6 +15,7 @@ import ProctorSectionView, { useProctorCheck } from "@/components/attendance/Pro
 import TeacherAnalyticsTab from "@/components/teacher/TeacherAnalyticsTab";
 import { downloadTestDocument, fetchQuestionsForTest, type TestQuestionData } from "@/utils/testPdfExporter";
 import { toast } from "sonner";
+import { sendAiChat } from "@/lib/aiChat";
 
 
 /* ------------------- SAFE STORAGE ------------------- */
@@ -1990,122 +1991,29 @@ TONE & FORMATTING GUIDELINES:
 - Keep responses focused, structured, and easy to read on mobile or desktop.
 - End with an encouraging next step or question.`;
 
-    const resolveChatApiUrl = () => {
-      const raw = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").trim().replace(/\/+$/, "");
-      if (raw.endsWith("/api/v1")) return `${raw}/chat`;
-      if (raw.endsWith("/api")) return `${raw}/v1/chat`;
-      return `${raw}/api/v1/chat`;
-    };
-
-    const backendUrl = resolveChatApiUrl();
-    const groqKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
-    const openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined;
-
-    // Slice recent messages to adhere to backend limits (max 20)
     const contextHistory = chatMessages
       .filter((m) => m.role !== "system")
       .slice(-12)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    const groqMessages = [
+    // Backend proxy (OpenRouter). The offline helper keeps the UI working if it is unavailable.
+    const result = await sendAiChat([
       { role: "system", content: systemPromptText },
       ...contextHistory,
-      { role: userMsg.role, content: userMsg.content },
-    ];
+      { role: "user", content: userMsg.content },
+    ]);
 
-    let replyText = "";
-
-    // TIER 1: Backend /api/v1/chat
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-      const res = await fetch(backendUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: groqMessages }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.content) {
-          replyText = data.content;
-        } else if (data.answer) {
-          replyText = data.answer;
-        }
-      }
-    } catch (backendErr) {
-      console.warn("Backend chat failed or timed out, trying Groq direct...", backendErr);
+    if (!result.ok && result.reason === "rate_limited") {
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: result.message || "You've reached today's AI message limit. Please try again tomorrow." },
+      ]);
+      setIsChatLoading(false);
+      return;
     }
 
-    // TIER 2: Direct Groq Cloud API (qwen/qwen3.8-27b)
-    if (!replyText && groqKey) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 7000);
-
-        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${groqKey}`,
-          },
-          body: JSON.stringify({
-            model: "qwen/qwen3.8-27b",
-            messages: groqMessages,
-            temperature: 0.7,
-            max_tokens: 800,
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (groqRes.ok) {
-          const groqData = await groqRes.json();
-          replyText = groqData.choices?.[0]?.message?.content || "";
-        }
-      } catch (groqErr) {
-        console.warn("Groq direct chat failed or timed out, trying OpenRouter...", groqErr);
-      }
-    }
-
-    // TIER 3: Direct OpenRouter API (deepseek/deepseek-chat)
-    if (!replyText && openRouterKey) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-        const openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${openRouterKey}`,
-            "HTTP-Referer": window.location.origin,
-            "X-Title": "a4ai AI Sarthi",
-          },
-          body: JSON.stringify({
-            model: "deepseek/deepseek-chat",
-            messages: groqMessages,
-            temperature: 0.7,
-            max_tokens: 800,
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (openRouterRes.ok) {
-          const orData = await openRouterRes.json();
-          replyText = orData.choices?.[0]?.message?.content || "";
-        }
-      } catch (orErr) {
-        console.warn("OpenRouter chat failed or timed out...", orErr);
-      }
-    }
-
-    // TIER 4: Offline Smart Pedagogical AI Engine (Guaranteed Fallback)
-    if (!replyText) {
+    if (!result.ok) {
+      toast("Chat temporarily offline", { description: "Showing a built-in answer for now." });
       const fallbackResult = getOfflinePedagogicalFallback(textToSend);
       setChatMessages((prev) => [
         ...prev,
@@ -2119,6 +2027,8 @@ TONE & FORMATTING GUIDELINES:
       setIsChatLoading(false);
       return;
     }
+
+    const replyText = result.content;
 
     // Contextual actions and dynamic suggestions based on conversation
     const meta = getChatMeta(textToSend, replyText);

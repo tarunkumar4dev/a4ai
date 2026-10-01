@@ -10,6 +10,8 @@ import React, {
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
+import { sendAiChat } from "@/lib/aiChat";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -377,11 +379,28 @@ type Message = {
     content: string;
 };
 
-// --- API CONFIGURATION ---
-const AI_CONFIG = {
-    apiKey: import.meta.env.VITE_GROQ_API_KEY,
-    model: "llama-3.3-70b-versatile",
-};
+// --- AI CHAT (backend proxy, see src/lib/aiChat.ts) ---
+const STUDENT_SYSTEM_PROMPT = `You are a4ai (Artificial Intelligence for All India), a practical AI tool designed specifically for Indian education.
+
+                        Your Core Identity & Mission:
+                        - You are not just another AI wrapper; you are built to solve real classroom challenges.
+                        - You deeply understand Indian curriculum patterns (CBSE, ICSE, State Boards).
+                        - You support multilingual content needs appropriate for India.
+                        - Website: https://a4ai.in
+
+                        Your Primary Function (For Teachers):
+                        - Teachers spend hours creating tests. You help them do it in minutes.
+                        - You act as an "AI Test Generator".
+                        - Process: Users upload textbooks/notes (PDF/Text) -> You generate relevant questions -> They download ready-to-use tests.
+                        - Future feature: Tracking student performance.
+
+                        Current Status:
+                        - Actively being tested with real educators.
+
+                        Instructions:
+                        - Keep answers helpful, encouraging, and concise.
+                        - If asked about your capabilities, mention the Test Generator and Indian curriculum focus.
+                        - Be polite and professional.`;
 
 export default function StudentDashboardPage() {
   const navigate = useNavigate();
@@ -443,78 +462,28 @@ export default function StudentDashboardPage() {
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
-    if (!AI_CONFIG.apiKey) {
-       setChatMessages(prev => [...prev, { role: 'assistant', content: "Error: API Key is missing. Please add VITE_GROQ_API_KEY to your .env.local file." }]);
-       return;
-    }
-
     const userMsg: Message = { role: 'user', content: inputMessage };
     setChatMessages(prev => [...prev, userMsg]);
     setInputMessage("");
     setIsChatLoading(true);
 
-    try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${AI_CONFIG.apiKey}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model: AI_CONFIG.model,
-                messages: [
-                    {
-                        role: "system",
-                        content: `You are a4ai (Artificial Intelligence for All India), a practical AI tool designed specifically for Indian education.
+    const result = await sendAiChat([
+      { role: "system", content: STUDENT_SYSTEM_PROMPT },
+      ...chatMessages.filter((m) => m.role !== "system"),
+      userMsg,
+    ]);
 
-                        Your Core Identity & Mission:
-                        - You are not just another AI wrapper; you are built to solve real classroom challenges.
-                        - You deeply understand Indian curriculum patterns (CBSE, ICSE, State Boards).
-                        - You support multilingual content needs appropriate for India.
-                        - Website: https://a4ai.in
-
-                        Your Primary Function (For Teachers):
-                        - Teachers spend hours creating tests. You help them do it in minutes.
-                        - You act as an "AI Test Generator".
-                        - Process: Users upload textbooks/notes (PDF/Text) -> You generate relevant questions -> They download ready-to-use tests.
-                        - Future feature: Tracking student performance.
-
-                        Current Status:
-                        - Actively being tested with real educators.
-
-                        Instructions:
-                        - Keep answers helpful, encouraging, and concise.
-                        - If asked about your capabilities, mention the Test Generator and Indian curriculum focus.
-                        - Be polite and professional.`
-                    },
-                    ...chatMessages.filter(m => m.role !== 'system'),
-                    userMsg
-                ],
-                temperature: 0.7,
-                max_tokens: 1024
-            })
-        });
-
-        const data = await response.json();
-
-        if (data.error) {
-           console.error("API Error Detail:", data.error);
-           throw new Error(data.error.message);
-        }
-
-        if (data.choices && data.choices[0]) {
-            const aiMsg: Message = { role: 'assistant', content: data.choices[0].message.content };
-            setChatMessages(prev => [...prev, aiMsg]);
-        } else {
-            throw new Error("No response from API");
-        }
-
-    } catch (error: any) {
-        console.error("Chat Error:", error);
-        setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message || "Connection failed"}. Please check your internet or API key.` }]);
-    } finally {
-        setIsChatLoading(false);
+    let reply: string;
+    if (result.ok) {
+      reply = result.content;
+    } else if (result.reason === "rate_limited") {
+      reply = result.message || "You've reached today's AI message limit. Please try again tomorrow.";
+    } else {
+      toast("Chat temporarily offline", { description: "Please try again in a few minutes." });
+      reply = "I'm offline right now. Please try again in a few minutes.";
     }
+    setChatMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+    setIsChatLoading(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
