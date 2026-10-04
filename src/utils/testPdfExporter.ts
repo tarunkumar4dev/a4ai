@@ -19,6 +19,17 @@ export interface TestQuestionData {
   topic?: string;
   format?: string;
   position?: number;
+  // Rich fields saved with the paper (questions table columns); passed through to the export.
+  section?: string | null;
+  bloom_level?: string | null;
+  image_url?: string | null;
+  answer_table?: unknown;
+  question_table?: unknown;
+  is_or?: boolean;
+  sub_parts?: unknown;
+  marking_scheme?: unknown;
+  model_answer?: string | null;
+  common_mistakes?: unknown;
 }
 
 export interface TestPaperMeta {
@@ -495,7 +506,21 @@ export async function downloadTestDocument({
           options: parseQuestionOptions(q.options),
           correct_answer: q.correct_answer || q.correctAnswer || "",
           explanation: q.explanation || q.solution || "",
-          format: q.format || "mcq"
+          format: q.format || "mcq",
+          // Without these a re-downloaded paper lost its sections, data tables, answer
+          // tables and OR (internal choice) markers, and counted OR questions in the marks.
+          chapter: q.chapter || undefined,
+          topic: q.topic || undefined,
+          section: q.section || undefined,
+          bloom_level: q.bloom_level || undefined,
+          image_url: q.image_url || undefined,
+          answer_table: q.answer_table || undefined,
+          question_table: q.question_table || undefined,
+          isOr: Boolean(q.is_or),
+          sub_parts: q.sub_parts || undefined,
+          marking_scheme: q.marking_scheme || undefined,
+          model_answer: q.model_answer || undefined,
+          common_mistakes: q.common_mistakes || undefined,
         }))
       };
 
