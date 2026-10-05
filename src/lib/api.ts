@@ -52,6 +52,23 @@ export interface GeneratedQuestion {
   answerTable?: any;
 }
 
+export interface AnswerVerdict {
+  id: string;
+  verdict: "fix" | "reject";
+  issue?: string;
+  correctAnswer?: string;
+  explanation?: string;
+}
+
+export interface VerifyAnswersResponse {
+  results: AnswerVerdict[];
+  checked: number;
+  unchecked: number;
+  fixed: number;
+  flagged: number;
+  model?: string;
+}
+
 export interface GenerateTestResponse {
   ok: boolean;
   testId: string;
@@ -232,6 +249,17 @@ export const api = {
         })),
         global_comment: payload.globalComment,
       }),
+    });
+  },
+
+  /**
+   * Second-model check of a generated paper's answer key (runs after the paper is shown).
+   * POST /api/v1/test-generator/verify-answers
+   */
+  async verifyAnswers(payload: { subject: string; classGrade: string; questions: any[] }): Promise<VerifyAnswersResponse> {
+    return apiFetch<VerifyAnswersResponse>("/api/v1/test-generator/verify-answers", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 

@@ -87,7 +87,14 @@ interface QuestionWithStatus extends GeneratedQuestion {
   // v8: Statistics question table
   question_table?: QuestionTable | null;
   questionTable?: QuestionTable | null;
+  // Result of the background answer-key check (fix = key corrected, reject = teacher should review)
+  verification?: { verdict: "fix" | "reject"; issue?: string; previousAnswer?: string };
 }
+
+type VerifyState =
+  | { state: "running" }
+  | { state: "done"; fixed: number; flagged: number; unchecked: number; checked: number }
+  | { state: "failed" };
 
 // ── v8: Markdown table stripper ───────────────────────────────────────
 // Mirrors backend _strip_markdown_table_from_text — removes inline pipe
@@ -469,6 +476,22 @@ const QuestionCard = ({
             {(question as any).isManual && (
               <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
                 MANUAL
+              </span>
+            )}
+            {question.verification?.verdict === "fix" && (
+              <span
+                className="text-[10px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full"
+                title={`${question.verification.issue || "Answer key corrected"}${question.verification.previousAnswer ? `\nPrevious key: ${question.verification.previousAnswer}` : ""}`}
+              >
+                KEY CORRECTED
+              </span>
+            )}
+            {question.verification?.verdict === "reject" && (
+              <span
+                className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full"
+                title={question.verification.issue || "Please review this question"}
+              >
+                REVIEW: {(question.verification.issue || "check this question").slice(0, 60)}
               </span>
             )}
           </div>
@@ -897,6 +920,51 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     }
   }, [questions, paperDate, result.testId]);
 
+  // Background answer-key check: the paper is usable immediately; corrections arrive a few
+  // seconds later. A key the teacher already edited is never overwritten.
+  const [verify, setVerify] = useState<VerifyState | null>(null);
+  useEffect(() => {
+    if (!result.testId || !result.questions?.length) return;
+    let cancelled = false;
+    const original = new Map(result.questions.map((q) => [q.id, q.correctAnswer]));
+    setVerify({ state: "running" });
+    api
+      .verifyAnswers({
+        subject: result.meta?.subject || "",
+        classGrade: result.meta?.classGrade || "",
+        questions: result.questions,
+      })
+      .then((res) => {
+        if (cancelled) return;
+        const byId = new Map(res.results.map((r) => [r.id, r]));
+        setQuestions((prev) =>
+          prev.map((q) => {
+            const v = byId.get(q.id);
+            if (!v || q.verification) return q;
+            const untouched = !q.editData && q.correctAnswer === original.get(q.id);
+            if (v.verdict === "fix" && v.correctAnswer && untouched) {
+              return {
+                ...q,
+                correctAnswer: v.correctAnswer,
+                explanation: v.explanation || q.explanation,
+                verification: { verdict: "fix", issue: v.issue, previousAnswer: q.correctAnswer },
+              };
+            }
+            return { ...q, verification: { verdict: "reject", issue: v.issue } };
+          })
+        );
+        setVerify({ state: "done", fixed: res.fixed, flagged: res.flagged, unchecked: res.unchecked, checked: res.checked });
+      })
+      .catch(() => {
+        if (!cancelled) setVerify({ state: "failed" });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Run once per generated paper.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result.testId]);
+
   // Clear localStorage when user clicks "Save & Finish" or "New Test"
   const clearStoredProgress = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY);
@@ -1185,13 +1253,37 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
               </div>
 
               <p className="text-sm text-gray-500 mt-1">
-                {activeQuestions.length} questions · {activeQuestions.reduce((s, q) => s + q.marks, 0)} marks · Generated in {result.generationTime}s
+                {/* OR alternatives are an internal choice: they add neither a question nor marks. */}
+                {activeQuestions.filter((q) => !(q as any).isOr).length} questions · {activeQuestions.filter((q) => !(q as any).isOr).reduce((s, q) => s + q.marks, 0)} marks · Generated in {result.generationTime}s
               </p>
               <div className="flex gap-3 mt-2 text-xs">
                 <span className="text-emerald-600 font-bold">{approvedCount} approved</span>
                 <span className="text-gray-400 font-bold">{pendingCount} pending</span>
                 <span className="text-red-500 font-bold">{rejectedCount} rejected</span>
               </div>
+              {verify && (
+                <div className="mt-2 text-xs font-semibold">
+                  {verify.state === "running" && (
+                    <span className="inline-flex items-center gap-1.5 text-sky-700 bg-sky-50 px-2.5 py-1 rounded-full">
+                      <Loader2 size={12} className="animate-spin" /> Verifying answer key…
+                    </span>
+                  )}
+                  {verify.state === "done" && (
+                    <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+                      <CheckCircle2 size={12} />
+                      Answer key checked
+                      {verify.fixed > 0 && ` · ${verify.fixed} corrected`}
+                      {verify.flagged > 0 && ` · ${verify.flagged} to review`}
+                      {verify.unchecked > 0 && ` · ${verify.unchecked} could not be checked`}
+                    </span>
+                  )}
+                  {verify.state === "failed" && (
+                    <span className="inline-flex items-center gap-1.5 text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                      Answer key check unavailable — please review answers before printing.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* v9: Actions — 2-col grid on mobile, flex-wrap on desktop */}
