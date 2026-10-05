@@ -665,13 +665,15 @@ function SearchBar({
 }
 
 /* ------------------- SUBSCRIPTION & HELP WIDGETS ------------------- */
-function SubscriptionSidebarWidget({ navigate, testsCount = 0 }: { navigate: any; testsCount?: number }) {
+function SubscriptionSidebarWidget({ navigate }: { navigate: any }) {
   const { status } = useSubscription();
 
   const isPro = status?.plan_slug === "pro";
-  const used = Math.max(status?.tests_used || 0, testsCount);
-  const limit = status?.test_limit || 10;
-  const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  // Same numbers the backend enforces (usage_records via get_user_plan_status) — no local tests-table count.
+  const used = status?.tests_used ?? 0;
+  const limit = status?.test_limit ?? 0;
+  const unlimited = limit < 0;
+  const percent = !unlimited && limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
 
   const [isMobile, setIsMobile] = useState(false);
 
@@ -698,7 +700,7 @@ function SubscriptionSidebarWidget({ navigate, testsCount = 0 }: { navigate: any
         {status?.plan_name || "Free Plan"}
       </h4>
       <p className="text-slate-500 dark:text-slate-400 text-[13px] font-medium mb-4">
-        {used}/{limit} tests used
+        {!status ? "Loading…" : unlimited ? `${used} tests this month · unlimited` : `${used}/${limit} tests used`}
       </p>
 
       <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mb-6 overflow-hidden">
@@ -1725,17 +1727,6 @@ export default function TeacherDashboardPage() {
 
   const recentTests = allTests.slice(0, 3);
 
-  const currentMonthTestsCount = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    return allTests.filter((t) => {
-      if (!t.created_at) return true;
-      const d = new Date(t.created_at);
-      return !isNaN(d.getTime()) && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    }).length;
-  }, [allTests]);
-
   useEffect(() => {
     const root = window.document.documentElement;
     if (isDarkMode) root.classList.add("dark");
@@ -2267,7 +2258,7 @@ TONE & FORMATTING GUIDELINES:
           </div>
 
           <div className="mt-auto px-5 pb-4 animate-entrance" style={{ animationDelay: "300ms" }}>
-            <SubscriptionSidebarWidget navigate={navigate} testsCount={currentMonthTestsCount} />
+            <SubscriptionSidebarWidget navigate={navigate} />
             <SidebarHelpWidget />
           </div>
         </aside>
