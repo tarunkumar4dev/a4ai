@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, rememberPassword } from "@/lib/authHelpers";
 import { useAuth } from "@/providers/AuthProvider";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -221,6 +222,10 @@ export default function SignupPage() {
 
   // ---------- Google Signup ----------
   const handleGoogleSignup = async () => {
+    if (isInAppBrowser()) {
+      toast({ title: "Browser badlein", description: IN_APP_BROWSER_MESSAGE, variant: "destructive" });
+      return;
+    }
     if (!selectedRole) {
       setIsExpanded(true);
       toast({ title: "Select role first", description: "Choose your role before signing up", variant: "destructive" });
@@ -229,10 +234,8 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       localStorage.setItem("a4ai_pending_role", selectedRole);
-      
-      const redirectTarget = isMobileDevice
-        ? "io.supabase.a4ai://login-callback"
-        : `${window.location.origin}/auth/callback`;
+
+      const redirectTarget = authRedirectUrl();
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -313,9 +316,8 @@ export default function SignupPage() {
 
     setIsLoading(true);
     try {
-      const redirectTarget = isMobileDevice
-        ? "io.supabase.a4ai://login-callback"
-        : `${window.location.origin}/auth/callback`;
+      // Email-confirmation link target. Was a native-app deep link on mobile → confirm links were broken on phones.
+      const redirectTarget = authRedirectUrl();
 
       if (signupMethod === "email") {
         if (formValues.password !== formValues.confirmPassword) {
@@ -339,6 +341,7 @@ export default function SignupPage() {
         if (error) throw error;
         if (data.session) {
           RiskEngine.recordSuccess(identifier);
+          await rememberPassword(formValues.email.trim(), formValues.password, formValues.name);
           const finalRole = (currentRole || "teacher").toLowerCase().trim();
           navigate(`/${finalRole}/dashboard`, { replace: true });
         } else {
@@ -519,9 +522,8 @@ export default function SignupPage() {
               {signupMethod === "phone" ? "Use Email Instead" : "Use Mobile Number Instead"}
             </Button>
 
-            {/* Google Signup — HIDDEN ON MOBILE */}
-            {!isMobileDevice && (
-              <Button
+            {/* Google Signup — all devices (in-app browsers get a hint instead) */}
+            <Button
                 variant="outline"
                 onClick={handleGoogleSignup}
                 disabled={isLoading}
@@ -535,7 +537,6 @@ export default function SignupPage() {
                 </svg>
                 Sign up with Google
               </Button>
-            )}
 
             {/* Form */}
             <form onSubmit={onSubmit} className="space-y-3">
@@ -640,14 +641,14 @@ export default function SignupPage() {
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Full Name</Label>
                     <div className="relative">
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <Input name="name" required value={formValues.name} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="John Doe" />
+                      <Input name="name" autoComplete="name" required value={formValues.name} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="John Doe" />
                     </div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <Input type="email" name="email" required value={formValues.email} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="john@example.com" />
+                      <Input type="email" name="email" autoComplete="username" required value={formValues.email} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="john@example.com" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -657,6 +658,7 @@ export default function SignupPage() {
                         <Input 
                           type={showPw ? "text" : "password"} 
                           name="password" 
+                          autoComplete="new-password"
                           required 
                           value={formValues.password} 
                           onChange={onChange} 
@@ -677,6 +679,7 @@ export default function SignupPage() {
                         <Input 
                           type={showConfirmPw ? "text" : "password"} 
                           name="confirmPassword" 
+                          autoComplete="new-password"
                           required 
                           value={formValues.confirmPassword} 
                           onChange={onChange} 

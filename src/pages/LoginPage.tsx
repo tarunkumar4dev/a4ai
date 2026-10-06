@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword } from "@/lib/authHelpers";
 import { useAuth } from "@/providers/AuthProvider";
 import {
   Eye, EyeOff, ArrowLeft, Sun, Moon, Phone, Mail, Lock, ShieldAlert
@@ -218,11 +219,13 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
+    if (isInAppBrowser()) {
+      toast({ title: "Browser badlein", description: IN_APP_BROWSER_MESSAGE, variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
     try {
-      const redirectTarget = isMobileDevice
-        ? "io.supabase.a4ai://login-callback"
-        : `${window.location.origin}/auth/callback`;
+      const redirectTarget = authRedirectUrl();
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -320,11 +323,18 @@ export default function LoginPage() {
           email: formValues.email.trim(),
           password: formValues.password,
         });
-        if (error) throw error;
+        if (error) {
+          // Google-created accounts have no password → say so instead of a bare "Invalid login credentials"
+          if (/invalid login credentials/i.test(error.message)) {
+            throw new Error(`${error.message}. ${GOOGLE_ACCOUNT_HINT}`);
+          }
+          throw error;
+        }
 
         // Reset risk and rate limits on success
         RiskEngine.recordSuccess(identifier);
         RateLimiter.resetAttempts(`login_${identifier}`);
+        await rememberPassword(formValues.email.trim(), formValues.password); // browser "save password" prompt
         await redirectAfterLogin();
       } else {
         const otpToken = otp.trim();
@@ -470,9 +480,8 @@ export default function LoginPage() {
               )}
             </Button>
 
-            {/* Google Login — HIDDEN ON MOBILE */}
-            {!isMobileDevice && (
-              <Button
+            {/* Google Login — all devices (in-app browsers get a hint instead) */}
+            <Button
                 variant="outline"
                 onClick={handleGoogleLogin}
                 disabled={isLoading}
@@ -488,7 +497,6 @@ export default function LoginPage() {
                 </svg>
                 Google Login
               </Button>
-            )}
 
             {/* FORM AREA */}
             <form onSubmit={onSubmit} className="space-y-4">
@@ -522,12 +530,12 @@ export default function LoginPage() {
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
-                    <Input type="email" name="email" value={formValues.email} onChange={onChange} className={`h-11 rounded-xl transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`} placeholder="name@company.com" />
+                    <Input type="email" name="email" autoComplete="username" value={formValues.email} onChange={onChange} className={`h-11 rounded-xl transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`} placeholder="name@company.com" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Password</Label>
                     <div className="relative">
-                      <Input type={showPw ? "text" : "password"} name="password" value={formValues.password} onChange={onChange} className={`h-11 rounded-xl pr-11 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`} placeholder="••••••••" />
+                      <Input type={showPw ? "text" : "password"} name="password" autoComplete="current-password" value={formValues.password} onChange={onChange} className={`h-11 rounded-xl pr-11 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`} placeholder="••••••••" />
                       <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black">
                         {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
