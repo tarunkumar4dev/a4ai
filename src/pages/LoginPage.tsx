@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword } from "@/lib/authHelpers";
+import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import OtpHelp from "@/components/auth/OtpHelp";
 import { useAuth } from "@/providers/AuthProvider";
 import {
   Eye, EyeOff, ArrowLeft, Sun, Moon, Phone, Mail, Lock, ShieldAlert
@@ -18,10 +19,8 @@ import { SmartCaptcha } from "@/components/security/SmartCaptcha";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 
-// Format 10-digit Indian number to +91XXXXXXXXXX
-const formatPhoneForIndia = (phone: string): string => {
-  return WAF.sanitizeIndianPhone(phone);
-};
+// Format 10-digit Indian number to +91XXXXXXXXXX (shared normaliser; sendOtp validates first)
+const formatPhoneForIndia = (phone: string): string => normalizeIndianPhone(phone) || phone.trim();
 
 /* ──────────────────────────────────────────────────────────────
    ROBUST VECTOR FALLBACK LOGO
@@ -53,6 +52,7 @@ export default function LoginPage() {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [otpSentAt, setOtpSentAt] = useState(0); // restarts the "OTP nahi aaya?" help on every (re)send
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -153,6 +153,10 @@ export default function LoginPage() {
       toast({ title: "Error", description: "Enter phone number", variant: "destructive" });
       return;
     }
+    if (!normalizeIndianPhone(phoneRaw)) {
+      toast({ title: "Galat number", description: INVALID_PHONE_MESSAGE, variant: "destructive" });
+      return;
+    }
 
     // 1. WAF & Honeypot Check
     const wafCheck = WAF.inspectPayload({ phone: phoneRaw, honeypot });
@@ -206,13 +210,15 @@ export default function LoginPage() {
 
       // Record successful OTP dispatch in rate limiter
       RateLimiter.recordOtpSent(phoneRaw);
+      setOtp(""); // a resend invalidates the previous code
       setOtpSent(true);
+      setOtpSentAt(Date.now());
       setTimer(60);
-      toast({ title: "OTP Sent", description: "Verification code sent to your mobile" });
+      toast({ title: "OTP bheja gaya", description: OTP_SENT_MESSAGE });
     } catch (error: unknown) {
       const err = error as Error;
       RiskEngine.recordFailure(phoneRaw);
-      toast({ title: "Failed to send OTP", description: err.message, variant: "destructive" });
+      toast({ title: "OTP nahi gaya", description: friendlyOtpError(err.message), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -357,6 +363,7 @@ export default function LoginPage() {
       }
     } catch (error: unknown) {
       const err = error as Error;
+      if (loginMethod === "phone") err.message = friendlyOtpError(err.message);
 
       // Record failure in risk engine and rate limiter
       const riskResult = RiskEngine.recordFailure(identifier);
@@ -565,7 +572,7 @@ export default function LoginPage() {
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1 ml-1">Enter your 10-digit mobile number</p>
+                    <p className="text-xs text-slate-500 mt-1 ml-1">WhatsApp wala 10-digit mobile number — OTP WhatsApp pe aayega</p>
                   </div>
 
                   {otpSent && (
@@ -605,6 +612,12 @@ export default function LoginPage() {
                           </InputOTPGroup>
                         </InputOTP>
                       </div>
+                      <OtpHelp
+                        sentAt={otpSentAt}
+                        isDarkMode={isDarkMode}
+                        onGoogle={handleGoogleLogin}
+                        onEmail={() => { setLoginMethod("email"); setOtp(""); setOtpSent(false); setOtpSentAt(0); }}
+                      />
                     </div>
                   )}
                 </div>

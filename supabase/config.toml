@@ -5,3 +5,7 @@ major_version = 15
 
 [functions.generate-test]
 verify_jwt = false
+
+[functions.send-whatsapp-otp]
+# Called by Supabase Auth (Send SMS Hook) with a Standard Webhooks signature, not a user JWT.
+verify_jwt = false

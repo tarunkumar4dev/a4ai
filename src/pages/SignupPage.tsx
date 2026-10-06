@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, rememberPassword } from "@/lib/authHelpers";
+import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, rememberPassword, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import OtpHelp from "@/components/auth/OtpHelp";
 import { useAuth } from "@/providers/AuthProvider";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -23,10 +24,8 @@ import { REGEXP_ONLY_DIGITS } from "input-otp";
 
 type Role = "student" | "teacher" | "institute";
 
-// Format 10-digit Indian number to +91XXXXXXXXXX
-const formatPhoneForIndia = (phone: string): string => {
-  return WAF.sanitizeIndianPhone(phone);
-};
+// Format 10-digit Indian number to +91XXXXXXXXXX (shared normaliser; sendOtp validates first)
+const formatPhoneForIndia = (phone: string): string => normalizeIndianPhone(phone) || phone.trim();
 
 /* ──────────────────────────────────────────────────────────────
    ROBUST VECTOR FALLBACK LOGO
@@ -64,6 +63,7 @@ export default function SignupPage() {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [otpSentAt, setOtpSentAt] = useState(0); // restarts the "OTP nahi aaya?" help on every (re)send
 
   // Security, Bot Honeypot, Risk & Verification States
   const formMountTime = useRef(Date.now());
@@ -164,8 +164,8 @@ export default function SignupPage() {
       return;
     }
     const phoneRaw = formValues.phone.trim();
-    if (!phoneRaw || phoneRaw.replace(/\D/g, "").length < 10) {
-      toast({ title: "Error", description: "Enter valid 10-digit phone number", variant: "destructive" });
+    if (!phoneRaw || !normalizeIndianPhone(phoneRaw)) {
+      toast({ title: "Galat number", description: INVALID_PHONE_MESSAGE, variant: "destructive" });
       return;
     }
 
@@ -209,12 +209,14 @@ export default function SignupPage() {
 
       // Record OTP dispatch
       RateLimiter.recordOtpSent(phoneRaw);
+      setOtp(""); // a resend invalidates the previous code
       setOtpSent(true);
+      setOtpSentAt(Date.now());
       setTimer(60);
-      toast({ title: "OTP Sent", description: "Check your mobile for verification code" });
+      toast({ title: "OTP bheja gaya", description: OTP_SENT_MESSAGE });
     } catch (error: unknown) {
       const err = error as Error;
-      toast({ title: "Failed", description: err.message, variant: "destructive" });
+      toast({ title: "OTP nahi gaya", description: friendlyOtpError(err.message), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -365,7 +367,9 @@ export default function SignupPage() {
         });
         if (error) throw error;
 
-        if (data.user) {
+        // Only a brand-new account gets the picked role. An existing number signing up again is just a
+        // login — don't overwrite their role (e.g. an institute admin becoming "student").
+        if (data.user && !data.user.user_metadata?.role) {
           await supabase.auth.updateUser({
             data: { role: currentRole },
           });
@@ -377,7 +381,8 @@ export default function SignupPage() {
     } catch (error: unknown) {
       const err = error as Error;
       RateLimiter.recordAttempt("signup_attempt", 10 * 60 * 1000);
-      toast({ title: "Signup failed", description: err.message, variant: "destructive" });
+      const msg = signupMethod === "phone" ? friendlyOtpError(err.message) : err.message;
+      toast({ title: "Signup failed", description: msg, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -513,7 +518,7 @@ export default function SignupPage() {
             {/* Toggle phone / email */}
             <Button
               type="button"
-              onClick={() => { setSignupMethod(signupMethod === "email" ? "phone" : "email"); setOtpSent(false); setOtp(["","","","","",""]); }}
+              onClick={() => { setSignupMethod(signupMethod === "email" ? "phone" : "email"); setOtpSent(false); setOtpSentAt(0); setOtp(""); }}
               className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
                 isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
               }`}
@@ -592,7 +597,7 @@ export default function SignupPage() {
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">10-digit number (e.g. 9593457XXX)</p>
+                    <p className="text-xs text-slate-500 mt-1">WhatsApp wala 10-digit number — OTP WhatsApp pe aayega</p>
                   </div>
                   {otpSent && (
                     <div className="space-y-2 animate-in zoom-in-95 duration-200 pt-2">
@@ -631,6 +636,12 @@ export default function SignupPage() {
                           </InputOTPGroup>
                         </InputOTP>
                       </div>
+                      <OtpHelp
+                        sentAt={otpSentAt}
+                        isDarkMode={isDarkMode}
+                        onGoogle={handleGoogleSignup}
+                        onEmail={() => { setSignupMethod("email"); setOtp(""); setOtpSent(false); setOtpSentAt(0); }}
+                      />
                     </div>
                   )}
                 </div>

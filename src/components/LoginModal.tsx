@@ -6,14 +6,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Phone, Download, Share2, Save } from "lucide-react";
+import { normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import OtpHelp from "@/components/auth/OtpHelp";
 
-const formatPhoneForIndia = (phone: string): string => {
-  const cleaned = phone.replace(/\D/g, "");
-  if (cleaned.length === 10) return `+91${cleaned}`;
-  if (cleaned.length === 12 && cleaned.startsWith("91")) return `+${cleaned}`;
-  if (phone.startsWith("+")) return phone;
-  return phone;
-};
+// Shared normaliser (same as Login/Signup pages); handleSendOTP validates first
+const formatPhoneForIndia = (phone: string): string => normalizeIndianPhone(phone) || phone.trim();
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -27,6 +24,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpSent, setOtpSent] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [otpSentAt, setOtpSentAt] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -59,8 +57,8 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
   const actionText = action === "share" ? "share this test" : action === "save" ? "save this test" : "download this test";
 
   const handleSendOTP = async () => {
-    if (!phone || phone.replace(/\D/g, "").length < 10) {
-      setError("Enter valid 10-digit mobile number");
+    if (!normalizeIndianPhone(phone)) {
+      setError(INVALID_PHONE_MESSAGE);
       return;
     }
     setError("");
@@ -70,11 +68,13 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
         phone: formatPhoneForIndia(phone),
       });
       if (otpError) throw otpError;
+      setOtp(["", "", "", "", "", ""]); // a resend invalidates the previous code
       setOtpSent(true);
+      setOtpSentAt(Date.now());
       setTimer(60);
-      setSuccess("OTP sent! Check your phone.");
+      setSuccess(OTP_SENT_MESSAGE);
     } catch (err: any) {
-      setError(err.message || "Failed to send OTP");
+      setError(friendlyOtpError(err.message));
     } finally {
       setIsLoading(false);
     }
@@ -96,8 +96,10 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
       });
       if (verifyError) throw verifyError;
       if (data.user) {
-        // Set default role
-        await supabase.auth.updateUser({ data: { role: "teacher" } });
+        // Default role only for a brand-new account — never overwrite an existing user's role
+        if (!data.user.user_metadata?.role) {
+          await supabase.auth.updateUser({ data: { role: "teacher" } });
+        }
         setSuccess("Login successful!");
         setTimeout(() => {
           onLoginSuccess?.();
@@ -105,7 +107,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
         }, 500);
       }
     } catch (err: any) {
-      setError(err.message || "Invalid OTP");
+      setError(friendlyOtpError(err.message));
     } finally {
       setIsLoading(false);
     }
@@ -231,7 +233,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="Mobile number"
+                  placeholder="WhatsApp mobile number"
                   className="flex-1 py-4 pr-4 text-sm font-bold outline-none placeholder-slate-400 text-slate-800"
                   maxLength={10}
                   onKeyDown={(e) => e.key === "Enter" && handleSendOTP()}
@@ -249,7 +251,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
           ) : (
             <div className="space-y-4">
               <p className="text-center text-sm text-slate-500 font-medium">
-                OTP sent to <span className="font-bold text-slate-800">+91 {phone}</span>
+                OTP aapke <b>WhatsApp</b> pe bheja gaya: <span className="font-bold text-slate-800">+91 {phone}</span>
               </p>
               <div className="flex justify-center gap-2">
                 {otp.map((digit, idx) => (
@@ -281,6 +283,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
                   <button onClick={handleSendOTP} className="text-xs text-indigo-600 font-bold hover:underline">Resend OTP</button>
                 )}
               </div>
+              <OtpHelp sentAt={otpSentAt} onGoogle={handleGoogleLogin} />
             </div>
           )}
 

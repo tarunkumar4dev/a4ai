@@ -34,3 +34,37 @@ export async function rememberPassword(email: string, password: string, name?: s
     /* unsupported browser or user dismissed — ignore */
   }
 }
+
+/* ── Phone OTP over WhatsApp (Supabase Send SMS Hook → Edge Function send-whatsapp-otp) ── */
+
+/** Indian mobile → "+91XXXXXXXXXX", or null if it isn't a valid 10-digit Indian mobile.
+ *  Accepts spaces/dashes, "+91", "91" and a leading "0". One formatter for every OTP screen
+ *  (the old copies disagreed — e.g. "09310…" passed through unformatted in LoginModal). */
+export function normalizeIndianPhone(raw: string): string | null {
+  let d = (raw || "").replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+  if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
+  if (d.length !== 10 || !/^[6-9]/.test(d)) return null;
+  return `+91${d}`;
+}
+
+export const INVALID_PHONE_MESSAGE = "Sahi 10-digit mobile number daalein (WhatsApp wala).";
+export const OTP_SENT_MESSAGE = "OTP aapke WhatsApp pe bheja gaya hai.";
+const OTP_SERVICE_DOWN = "WhatsApp OTP abhi nahi ja pa raha. Google ya Email se login karein.";
+
+/** Supabase / hook error → message a user can act on. */
+export function friendlyOtpError(message: string | undefined): string {
+  const m = message || "";
+  const wait = m.match(/after (\d+) seconds?/i);
+  if (wait) return `Naya OTP ${wait[1]} second baad maang sakte hain.`;
+  if (/expired|invalid.*(otp|token)|token.*invalid/i.test(m)) return "OTP galat hai ya expire ho gaya. Resend karke naya OTP daalein.";
+  // Messages written by our Edge Function are already user-facing — show them as they are
+  const ours = m.match(/(WhatsApp[^.]*\.[^"]*|Naya OTP[^"]*|Is number[^"]*|Bahut saari[^"]*|OTP bhejne[^"]*|Sahi 10-digit[^"]*)/);
+  if (ours) return ours[1].trim();
+  if (/rate limit|too many/i.test(m)) return "Bahut zyada koshishein. Thodi der baad try karein.";
+  if (/hook|sms|provider|send/i.test(m)) return OTP_SERVICE_DOWN;
+  return m || OTP_SERVICE_DOWN;
+}
+
+/** Seconds after "OTP sent" before showing the "OTP nahi aaya?" help. */
+export const OTP_HELP_AFTER_MS = 30_000;
