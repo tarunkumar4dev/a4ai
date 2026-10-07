@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, takeRedirectAfterLogin, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
 import OtpHelp from "@/components/auth/OtpHelp";
 import { useAuth } from "@/providers/AuthProvider";
 import {
@@ -47,12 +47,12 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("phone");
+  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email"); // Google + email first; mobile OTP only for older phone accounts
   const [formValues, setFormValues] = useState({ email: "", password: "", phone: "" });
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [timer, setTimer] = useState(0);
-  const [otpSentAt, setOtpSentAt] = useState(0); // restarts the "OTP nahi aaya?" help on every (re)send
+  const [otpSentAt, setOtpSentAt] = useState(0); // restarts the "Didn't get the OTP?" help on every (re)send
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -154,7 +154,7 @@ export default function LoginPage() {
       return;
     }
     if (!normalizeIndianPhone(phoneRaw)) {
-      toast({ title: "Galat number", description: INVALID_PHONE_MESSAGE, variant: "destructive" });
+      toast({ title: "Invalid number", description: INVALID_PHONE_MESSAGE, variant: "destructive" });
       return;
     }
 
@@ -214,11 +214,11 @@ export default function LoginPage() {
       setOtpSent(true);
       setOtpSentAt(Date.now());
       setTimer(60);
-      toast({ title: "OTP bheja gaya", description: OTP_SENT_MESSAGE });
+      toast({ title: "OTP sent", description: OTP_SENT_MESSAGE });
     } catch (error: unknown) {
       const err = error as Error;
       RiskEngine.recordFailure(phoneRaw);
-      toast({ title: "OTP nahi gaya", description: friendlyOtpError(err.message), variant: "destructive" });
+      toast({ title: "Could not send OTP", description: friendlyOtpError(err.message), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -226,7 +226,7 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     if (isInAppBrowser()) {
-      toast({ title: "Browser badlein", description: IN_APP_BROWSER_MESSAGE, variant: "destructive" });
+      toast({ title: "Switch browser", description: IN_APP_BROWSER_MESSAGE, variant: "destructive" });
       return;
     }
     setIsLoading(true);
@@ -249,6 +249,11 @@ export default function LoginPage() {
   };
 
   const redirectAfterLogin = async () => {
+    const back = takeRedirectAfterLogin(); // e.g. the test paper page that opened the login modal
+    if (back) {
+      navigate(back, { replace: true });
+      return;
+    }
     try {
       const { data } = await supabase.rpc('get_my_access');
       const access = data?.[0];
@@ -333,6 +338,15 @@ export default function LoginPage() {
           // Google-created accounts have no password → say so instead of a bare "Invalid login credentials"
           if (/invalid login credentials/i.test(error.message)) {
             throw new Error(`${error.message}. ${GOOGLE_ACCOUNT_HINT}`);
+          }
+          if (/email not confirmed/i.test(error.message)) {
+            // Send a fresh confirmation link; the old one may have expired.
+            await supabase.auth.resend({
+              type: "signup",
+              email: formValues.email.trim(),
+              options: { emailRedirectTo: authRedirectUrl() },
+            }).catch(() => undefined);
+            throw new Error("Please confirm your email first — we've just sent you a new confirmation link. Check your inbox (and spam).");
           }
           throw error;
         }
@@ -463,31 +477,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-5">
-            {/* Toggle email / phone */}
-            <Button
-              type="button"
-              onClick={() => {
-                setLoginMethod(loginMethod === "email" ? "phone" : "email");
-                setOtp("");
-              }}
-              className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
-                isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
-              }`}
-            >
-              {loginMethod === "email" ? (
-                <>
-                  <Phone className="w-4 h-4" />
-                  Use Mobile Number Instead
-                </>
-              ) : (
-                <>
-                  <Mail className="w-4 h-4" />
-                  Use Email Instead
-                </>
-              )}
-            </Button>
-
-            {/* Google Login — all devices (in-app browsers get a hint instead) */}
+            {/* Google Login — primary option, all devices (in-app browsers get a hint instead) */}
             <Button
                 variant="outline"
                 onClick={handleGoogleLogin}
@@ -502,8 +492,16 @@ export default function LoginPage() {
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
-                Google Login
+                Continue with Google
               </Button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-slate-400/30" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                {loginMethod === "email" ? "or sign in with email" : "or use your mobile number"}
+              </span>
+              <div className="flex-1 h-px bg-slate-400/30" />
+            </div>
 
             {/* FORM AREA */}
             <form onSubmit={onSubmit} className="space-y-4">
@@ -572,7 +570,7 @@ export default function LoginPage() {
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1 ml-1">WhatsApp wala 10-digit mobile number — OTP WhatsApp pe aayega</p>
+                    <p className="text-xs text-slate-500 mt-1 ml-1">Your 10-digit WhatsApp number — the OTP comes on WhatsApp</p>
                   </div>
 
                   {otpSent && (
@@ -668,6 +666,22 @@ export default function LoginPage() {
                 </Link>
               </p>
             </form>
+
+            {/* Mobile OTP stays available for accounts that were created with a phone number */}
+            <p className="text-center text-xs text-slate-500">
+              {loginMethod === "email" ? (
+                <>
+                  Signed up with a mobile number?{" "}
+                  <button type="button" onClick={() => { setLoginMethod("phone"); setOtp(""); }} className="font-bold underline">
+                    Sign in with OTP
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => { setLoginMethod("email"); setOtp(""); setOtpSent(false); }} className="font-bold underline">
+                  Use email instead
+                </button>
+              )}
+            </p>
           </div>
         </div>
 

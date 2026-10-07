@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Phone, Download, Share2, Save } from "lucide-react";
-import { normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import { normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError, rememberRedirectAfterLogin } from "@/lib/authHelpers";
 import OtpHelp from "@/components/auth/OtpHelp";
 
 // Shared normaliser (same as Login/Signup pages); handleSendOTP validates first
@@ -224,68 +224,14 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
             <div className="flex-1 h-px bg-slate-200" />
           </div>
 
-          {/* Phone OTP */}
-          {!otpSent ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 border-2 border-slate-200 rounded-2xl overflow-hidden focus-within:border-indigo-400 transition-colors">
-                <span className="pl-4 text-slate-500 font-bold text-sm select-none">+91</span>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="WhatsApp mobile number"
-                  className="flex-1 py-4 pr-4 text-sm font-bold outline-none placeholder-slate-400 text-slate-800"
-                  maxLength={10}
-                  onKeyDown={(e) => e.key === "Enter" && handleSendOTP()}
-                />
-              </div>
-              <button
-                onClick={handleSendOTP}
-                disabled={isLoading || phone.replace(/\D/g, "").length < 10}
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-2xl hover:from-indigo-700 hover:to-purple-700 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <Phone className="w-4 h-4" />
-                {isLoading ? "Sending..." : "Send OTP"}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-center text-sm text-slate-500 font-medium">
-                OTP aapke <b>WhatsApp</b> pe bheja gaya: <span className="font-bold text-slate-800">+91 {phone}</span>
-              </p>
-              <div className="flex justify-center gap-2">
-                {otp.map((digit, idx) => (
-                  <input
-                    key={idx}
-                    id={`modal-otp-${idx}`}
-                    type="tel"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(e.target.value, idx)}
-                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                    className="w-12 h-14 text-center text-xl font-bold border-2 border-slate-200 rounded-xl outline-none focus:border-indigo-500 transition-colors text-slate-800"
-                    autoFocus={idx === 0}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={handleVerifyOTP}
-                disabled={isLoading || otp.join("").length !== 6}
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-2xl hover:from-indigo-700 hover:to-purple-700 transition-all active:scale-[0.98] disabled:opacity-50"
-              >
-                {isLoading ? "Verifying..." : "Verify & Continue"}
-              </button>
-              <div className="text-center">
-                {timer > 0 ? (
-                  <span className="text-xs text-slate-400 font-medium">Resend in {timer}s</span>
-                ) : (
-                  <button onClick={handleSendOTP} className="text-xs text-indigo-600 font-bold hover:underline">Resend OTP</button>
-                )}
-              </div>
-              <OtpHelp sentAt={otpSentAt} onGoogle={handleGoogleLogin} />
-            </div>
-          )}
+          {/* Email — opens the full sign-in page; the current page is remembered and restored after login */}
+          <button
+            type="button"
+            onClick={() => { rememberRedirectAfterLogin(); onClose(); window.location.assign("/login"); }}
+            className="w-full py-4 border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:border-indigo-400 hover:text-indigo-700 transition-all active:scale-[0.98]"
+          >
+            Sign in with email
+          </button>
 
           {/* Footer */}
           <p className="text-center text-[11px] text-slate-400 font-medium pt-2">

@@ -54,6 +54,8 @@ const SubjectHubPage = lazy(() => import("@/practice/SubjectHub"));
 const RoleSelectionPage = lazy(() => import("./pages/RoleSelectionPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const SignupPage = lazy(() => import("./pages/SignupPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const StudentDashboardPage = lazy(() => import("./pages/StudentDashboardPage"));
 const TeacherDashboardPage = lazy(() => import("./pages/TeacherDashboardPage"));
@@ -305,7 +307,7 @@ const App = () => {
                       <Route 
                         path="/institute" 
                         element={
-                          <RoleRoute allow={['admin']}>
+                          <RoleRoute allow={['admin']} allowNewInstituteOwner>
                             <InstituteDashboardPage />
                           </RoleRoute>
                         } 
@@ -367,6 +369,9 @@ const App = () => {
                       <Route path="/auth/callback" element={<AuthCallback />} />
                       <Route path="/select-role" element={<RoleSelectionPage />} />
                       <Route path="/login" element={<AuthGateForAuthPages><LoginPage /></AuthGateForAuthPages>} />
+                      <Route path="/forgot" element={<ForgotPasswordPage />} />
+                      {/* not behind AuthGateForAuthPages: the recovery link signs the user in */}
+                      <Route path="/reset-password" element={<ResetPasswordPage />} />
                       <Route path="/signup" element={<AuthGateForAuthPages><SignupPage /></AuthGateForAuthPages>} />
 
 

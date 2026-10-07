@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
+import { takeRedirectAfterLogin } from "@/lib/authHelpers";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -22,14 +23,21 @@ export default function AuthCallback() {
         // 1. Check for OAuth errors in URL
         const oauthError = url.searchParams.get("error");
         if (oauthError) {
-          throw new Error(url.searchParams.get("error_description") || oauthError);
+          throw new Error(oauthError === "access_denied"
+            ? "Google sign-in was cancelled."
+            : url.searchParams.get("error_description") || oauthError);
         }
 
-        // 2. Exchange code for session (required for PKCE flow)
+        // 2. Exchange code for session (PKCE). The client (detectSessionInUrl) usually exchanges it already —
+        //    a second exchange fails ("code verifier not found"), which used to show "Sign-in failed" after a
+        //    successful login. Only exchange when there's no session yet, and ignore an error if one appears.
         const code = url.searchParams.get("code");
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-          if (error) throw error;
+          const { data: { session: existing } } = await supabase.auth.getSession();
+          if (!existing) {
+            const { error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+            if (error && !(await supabase.auth.getSession()).data.session) throw error;
+          }
         }
 
         // 3. Get user with retry (OAuth can be slow sometimes)
@@ -46,11 +54,16 @@ export default function AuthCallback() {
         let finalRole = existingRole;
 
         if (!finalRole && pendingRole && ["student", "teacher", "institute"].includes(pendingRole)) {
-          // Save pending role to user_metadata
+          // Save pending role to user_metadata (Google sign-up from the Signup page)
           await supabase.auth.updateUser({ data: { role: pendingRole } });
           finalRole = pendingRole;
-          localStorage.removeItem("a4ai_pending_role");
+        } else if (!finalRole) {
+          // Google sign-in from the Login page / modal for a brand-new account: the app treats a user without
+          // a role as a teacher (AuthProvider default) — store that, instead of the old "student" fallback below.
+          await supabase.auth.updateUser({ data: { role: "teacher" } });
+          finalRole = "teacher";
         }
+        localStorage.removeItem("a4ai_pending_role");
 
         // 5. Upsert profile in profiles table
         try {
@@ -61,7 +74,7 @@ export default function AuthCallback() {
               (user.user_metadata?.full_name as string) ||
               (user.user_metadata?.name as string) ||
               "New User",
-            role: finalRole || "student", // fallback for DB constraint
+            role: finalRole,
             updated_at: new Date().toISOString(),
           });
         } catch (profileErr) {
@@ -73,20 +86,12 @@ export default function AuthCallback() {
         window.history.replaceState({}, "", `${window.location.origin}/auth/callback`);
 
         // 7. Check for redirect URL after successful auth
-        const redirectUrl = localStorage.getItem("a4ai_redirect_after_login");
-        localStorage.removeItem("a4ai_redirect_after_login");
+        const redirectUrl = takeRedirectAfterLogin(); // same-site app paths only
 
         const targetRole = (finalRole || "teacher").toLowerCase().trim();
         const fallbackDashboard = `/${targetRole}/dashboard`;
 
-        if (
-          redirectUrl &&
-          redirectUrl !== "/" &&
-          !redirectUrl.startsWith("/login") &&
-          !redirectUrl.startsWith("/signup") &&
-          !redirectUrl.startsWith("/select-role") &&
-          !redirectUrl.startsWith("/auth")
-        ) {
+        if (redirectUrl) {
           navigate(redirectUrl, { replace: true });
           return;
         }

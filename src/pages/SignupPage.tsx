@@ -55,7 +55,7 @@ export default function SignupPage() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
+  const [signupMethod, setSignupMethod] = useState<"email" | "phone">("email"); // new accounts: Google or email (no new phone/OTP signups)
   const [logoFailed, setLogoFailed] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
@@ -63,7 +63,7 @@ export default function SignupPage() {
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [timer, setTimer] = useState(0);
-  const [otpSentAt, setOtpSentAt] = useState(0); // restarts the "OTP nahi aaya?" help on every (re)send
+  const [otpSentAt, setOtpSentAt] = useState(0); // restarts the "Didn't get the OTP?" help on every (re)send
 
   // Security, Bot Honeypot, Risk & Verification States
   const formMountTime = useRef(Date.now());
@@ -165,7 +165,7 @@ export default function SignupPage() {
     }
     const phoneRaw = formValues.phone.trim();
     if (!phoneRaw || !normalizeIndianPhone(phoneRaw)) {
-      toast({ title: "Galat number", description: INVALID_PHONE_MESSAGE, variant: "destructive" });
+      toast({ title: "Invalid number", description: INVALID_PHONE_MESSAGE, variant: "destructive" });
       return;
     }
 
@@ -213,10 +213,10 @@ export default function SignupPage() {
       setOtpSent(true);
       setOtpSentAt(Date.now());
       setTimer(60);
-      toast({ title: "OTP bheja gaya", description: OTP_SENT_MESSAGE });
+      toast({ title: "OTP sent", description: OTP_SENT_MESSAGE });
     } catch (error: unknown) {
       const err = error as Error;
-      toast({ title: "OTP nahi gaya", description: friendlyOtpError(err.message), variant: "destructive" });
+      toast({ title: "Could not send OTP", description: friendlyOtpError(err.message), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -225,7 +225,7 @@ export default function SignupPage() {
   // ---------- Google Signup ----------
   const handleGoogleSignup = async () => {
     if (isInAppBrowser()) {
-      toast({ title: "Browser badlein", description: IN_APP_BROWSER_MESSAGE, variant: "destructive" });
+      toast({ title: "Switch browser", description: IN_APP_BROWSER_MESSAGE, variant: "destructive" });
       return;
     }
     if (!selectedRole) {
@@ -381,7 +381,13 @@ export default function SignupPage() {
     } catch (error: unknown) {
       const err = error as Error;
       RateLimiter.recordAttempt("signup_attempt", 10 * 60 * 1000);
-      const msg = signupMethod === "phone" ? friendlyOtpError(err.message) : err.message;
+      const msg = signupMethod === "phone"
+        ? friendlyOtpError(err.message)
+        : /already registered|already exists/i.test(err.message)
+          ? "This email already has an account. Sign in instead — or use Continue with Google if you created it with Google."
+          : /password/i.test(err.message) && /(short|least|weak)/i.test(err.message)
+            ? "Choose a stronger password (at least 8 characters)."
+            : err.message;
       toast({ title: "Signup failed", description: msg, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -515,19 +521,7 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Toggle phone / email */}
-            <Button
-              type="button"
-              onClick={() => { setSignupMethod(signupMethod === "email" ? "phone" : "email"); setOtpSent(false); setOtpSentAt(0); setOtp(""); }}
-              className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all border ${
-                isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"
-              }`}
-            >
-              {signupMethod === "phone" ? <Mail className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
-              {signupMethod === "phone" ? "Use Email Instead" : "Use Mobile Number Instead"}
-            </Button>
-
-            {/* Google Signup — all devices (in-app browsers get a hint instead) */}
+            {/* Google Signup — primary option, all devices (in-app browsers get a hint instead) */}
             <Button
                 variant="outline"
                 onClick={handleGoogleSignup}
@@ -540,8 +534,14 @@ export default function SignupPage() {
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
-                Sign up with Google
+                Continue with Google
               </Button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-slate-400/30" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">or sign up with email</span>
+              <div className="flex-1 h-px bg-slate-400/30" />
+            </div>
 
             {/* Form */}
             <form onSubmit={onSubmit} className="space-y-3">
@@ -597,7 +597,7 @@ export default function SignupPage() {
                         {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">WhatsApp wala 10-digit number — OTP WhatsApp pe aayega</p>
+                    <p className="text-xs text-slate-500 mt-1">Your 10-digit WhatsApp number — the OTP comes on WhatsApp</p>
                   </div>
                   {otpSent && (
                     <div className="space-y-2 animate-in zoom-in-95 duration-200 pt-2">

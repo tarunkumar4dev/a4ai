@@ -207,8 +207,8 @@ export default function InstituteDashboardPage() {
 
   /* ─────────────────────────────────────────────────────────────
      FIXED: fetchData
-     - Optional `id` param: agar diya gaya, to seedha usi institute ko load karo
-     - Warna: pehle institutes (owner) check karo, phir institute_members
+     - Optional `id` param: if given, load that institute directly
+     - Otherwise: check institutes (owner) first, then institute_members
      ───────────────────────────────────────────────────────────── */
   const fetchData = async (explicitId?: string) => {
     setLoading(true);
@@ -327,9 +327,9 @@ export default function InstituteDashboardPage() {
 
   /* ─────────────────────────────────────────────────────────────
      FIXED: handleCreateInstitute
-     - RPC ka return value (UUID) seedha use karta hai
-     - Success ke baad fetchData(newId) call karta hai — page reload ki zarurat nahi
-     - Duplicate slug error ko friendly message mein convert karta hai
+     - Uses the RPC's return value (UUID) directly
+     - Calls fetchData(newId) on success — no page reload needed
+     - Turns a duplicate-slug error into a friendly message
      ───────────────────────────────────────────────────────────── */
   const handleCreateInstitute = async () => {
     if (!newInstituteName.trim() || !user || creatingInstitute) return;
@@ -351,14 +351,10 @@ export default function InstituteDashboardPage() {
       }
 
       toast.success("Institute created!");
-
-      // Agar RPC ne naya institute ID return kiya, usi ko load karo
-      if (newId && typeof newId === "string") {
-        await fetchData(newId);
-      } else {
-        // Fallback: normal fetch
-        await fetchData();
-      }
+      // Full reload: access (get_my_access) is loaded once per login — the new admin role only shows up after it
+      // reloads, otherwise /hod, routing and every scoped screen still see "no institute".
+      setTimeout(() => window.location.assign("/institute"), 600);
+      return;
     } catch (e: any) {
       toast.error(e.message || "Failed to create institute");
     }

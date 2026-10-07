@@ -13,11 +13,11 @@ export function isInAppBrowser(): boolean {
 }
 
 export const IN_APP_BROWSER_MESSAGE =
-  "Google login WhatsApp/Instagram ke andar wale browser me nahi chalta. Upar ⋮ menu se \"Open in Chrome\" (iPhone pe Safari) karke dobara try karein.";
+  "Google login doesn't work inside the WhatsApp/Instagram browser. Tap the ⋮ menu, choose \"Open in Chrome\" (Safari on iPhone) and try again.";
 
 /** Shown when email + password login fails: accounts created with Google have no password. */
 export const GOOGLE_ACCOUNT_HINT =
-  "Agar ye account Google se banaya tha to \"Google Login\" dabaiye, ya \"Forgot Password\" se naya password set karein.";
+  "If you created this account with Google, use \"Google Login\", or set a new password with \"Forgot Password\".";
 
 /**
  * Ask the browser to save the login (Chrome/Edge/Android support the Credential Management API).
@@ -48,23 +48,50 @@ export function normalizeIndianPhone(raw: string): string | null {
   return `+91${d}`;
 }
 
-export const INVALID_PHONE_MESSAGE = "Sahi 10-digit mobile number daalein (WhatsApp wala).";
-export const OTP_SENT_MESSAGE = "OTP aapke WhatsApp pe bheja gaya hai.";
-const OTP_SERVICE_DOWN = "WhatsApp OTP abhi nahi ja pa raha. Google ya Email se login karein.";
+export const INVALID_PHONE_MESSAGE = "Enter a valid 10-digit mobile number (the one on WhatsApp).";
+export const OTP_SENT_MESSAGE = "We sent the OTP to your WhatsApp.";
+const OTP_SERVICE_DOWN = "WhatsApp OTP is unavailable right now. Please sign in with Google or Email.";
 
-/** Supabase / hook error → message a user can act on. */
+/** Supabase / hook error → message a user can act on. Also maps the older Hinglish messages
+ *  of the send-whatsapp-otp Edge Function, so the page stays English whichever version is deployed. */
 export function friendlyOtpError(message: string | undefined): string {
   const m = message || "";
-  const wait = m.match(/after (\d+) seconds?/i);
-  if (wait) return `Naya OTP ${wait[1]} second baad maang sakte hain.`;
-  if (/expired|invalid.*(otp|token)|token.*invalid/i.test(m)) return "OTP galat hai ya expire ho gaya. Resend karke naya OTP daalein.";
-  // Messages written by our Edge Function are already user-facing — show them as they are
-  const ours = m.match(/(WhatsApp[^.]*\.[^"]*|Naya OTP[^"]*|Is number[^"]*|Bahut saari[^"]*|OTP bhejne[^"]*|Sahi 10-digit[^"]*)/);
-  if (ours) return ours[1].trim();
-  if (/rate limit|too many/i.test(m)) return "Bahut zyada koshishein. Thodi der baad try karein.";
-  if (/hook|sms|provider|send/i.test(m)) return OTP_SERVICE_DOWN;
+  const wait = m.match(/(\d+) seconds?\b/i);
+  if (wait) return `You can request a new OTP in ${wait[1]} seconds.`;
+  if (/expired|invalid.*(otp|token)|token.*invalid/i.test(m)) return "The OTP is wrong or has expired. Tap Resend and enter the new OTP.";
+  if (/not on WhatsApp|WhatsApp nahi mila/i.test(m)) return "This number is not on WhatsApp. Use your WhatsApp number or sign in with Google or Email.";
+  if (/hour|ghante/i.test(m)) return "Too many OTPs were sent to this number. Try again in an hour or sign in with Google or Email.";
+  if (/today|tomorrow|aaj ki/i.test(m)) return "This number has reached today's OTP limit. Try again tomorrow or sign in with Google or Email.";
+  if (/slow/i.test(m)) return "WhatsApp is responding slowly. Please try again.";
+  if (/rate limit|too many|Bahut/i.test(m)) return "Too many attempts. Please try again in a minute.";
+  if (/valid 10-digit|Sahi 10-digit/i.test(m)) return INVALID_PHONE_MESSAGE;
+  if (/could not send|OTP bhejne/i.test(m)) return "Could not send the OTP. Please try again shortly or sign in with Google or Email.";
+  if (/hook|sms|provider|send|unavailable|nahi ja pa raha/i.test(m)) return OTP_SERVICE_DOWN;
   return m || OTP_SERVICE_DOWN;
 }
 
-/** Seconds after "OTP sent" before showing the "OTP nahi aaya?" help. */
+/** Seconds after "OTP sent" before showing the "Didn't get the OTP?" help. */
 export const OTP_HELP_AFTER_MS = 30_000;
+
+/* ── Post-login redirect (LoginModal stores the page the user was on) ── */
+const REDIRECT_KEY = "a4ai_redirect_after_login";
+
+/** Read + clear the stored "go back here after login" path. Only same-site app paths are allowed. */
+export function takeRedirectAfterLogin(): string | null {
+  let path: string | null = null;
+  try {
+    path = localStorage.getItem(REDIRECT_KEY);
+    localStorage.removeItem(REDIRECT_KEY);
+  } catch { /* storage blocked */ }
+  if (!path || !path.startsWith("/") || path.startsWith("//") || path === "/") return null;
+  if (/^\/(login|signup|select-role|auth|forgot|reset-password)/.test(path)) return null;
+  return path;
+}
+
+export function rememberRedirectAfterLogin(): void {
+  try {
+    const here = window.location.pathname + window.location.search;
+    if (here && here !== "/") localStorage.setItem(REDIRECT_KEY, here);
+    else localStorage.removeItem(REDIRECT_KEY);
+  } catch { /* storage blocked */ }
+}
