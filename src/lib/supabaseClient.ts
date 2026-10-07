@@ -326,26 +326,4 @@ export const practiceDB = {
     return data || [];
   },
 
-  // Direct Supabase query for debugging
-  async debugQuery(query: string) {
-    console.log('🔧 [practiceDB.debugQuery] Running:', query);
-    
-    try {
-      const { data, error } = await supabase.rpc('exec_sql', { query });
-      
-      if (error) {
-        console.error('❌ [practiceDB.debugQuery] RPC error:', error);
-        
-        // Fallback to direct fetch
-        console.log('🔄 [practiceDB.debugQuery] Trying fallback...');
-        return { error: error.message };
-      }
-      
-      console.log('✅ [practiceDB.debugQuery] Success:', data);
-      return { data };
-    } catch (error: any) {
-      console.error('🔥 [practiceDB.debugQuery] Error:', error);
-      return { error: error.message };
-    }
-  }
 };

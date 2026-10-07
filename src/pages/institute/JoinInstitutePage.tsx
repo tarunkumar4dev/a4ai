@@ -113,88 +113,33 @@ export default function JoinInstitutePage() {
     setError(null);
 
     try {
-      // 1. Try RPC first
+      // join_institute_by_code (07): case-insensitive, accepts the institute join code OR a department
+      // teacher code. The old fallback read institutes/departments directly and its insert always failed
+      // RLS — yet still showed "Joined!". Now the RPC's answer is the only truth.
       const { data, error: rpcError } = await supabase.rpc("join_institute_by_code", {
-        p_join_code: rawInput.toLowerCase(),
+        p_join_code: rawInput,
       });
+      if (rpcError) throw rpcError;
 
-      if (!rpcError && data) {
-        const result = typeof data === "string" ? JSON.parse(data) : data;
-        if (result.success) {
-          setSuccess(result.institute_name || "Institute");
-          toast.success(`Joined ${result.institute_name || "Institute"}!`);
-          setTimeout(() => navigate("/teacher/dashboard"), 1500);
-          setJoining(false);
-          return;
-        }
-      }
-
-      // 2. Direct Fallback: Check institutes table by join_code
-      const { data: instList } = await supabase
-        .from("institutes")
-        .select("id, name, join_code")
-        .ilike("join_code", rawInput);
-
-      let targetInst = instList && instList.length > 0 ? instList[0] : null;
-      let targetDeptId: string | null = null;
-
-      // 3. Check departments table by teacher_code
-      if (!targetInst) {
-        const { data: deptList } = await supabase
-          .from("departments")
-          .select("id, name, institute_id, teacher_code, institutes(id, name)")
-          .ilike("teacher_code", rawInput);
-
-        if (deptList && deptList.length > 0) {
-          const d = deptList[0];
-          targetDeptId = d.id;
-          targetInst = (d.institutes as any) || null;
-        }
-      }
-
-      if (!targetInst) {
-        setError("Invalid code. Please check your join code and try again.");
-        setJoining(false);
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      if (result?.success || result?.error === "Already a member") {
+        const name = result.institute_name || "Institute";
+        setSuccess(name);
+        toast.success(result?.success ? `Joined ${name}!` : `You are already a member of ${name}.`);
+        // Full reload: access (get_my_access) is loaded once per login, so a soft navigate would still
+        // show "no institute" until the next refresh.
+        setTimeout(() => window.location.assign("/dashboard"), 1200);
         return;
       }
-
-      // 4. Insert or update membership in institute_members
-      const { error: insertErr } = await supabase
-        .from("institute_members")
-        .upsert({
-          institute_id: targetInst.id,
-          user_id: user.id,
-          role: "teacher",
-          status: "active",
-          department_id: targetDeptId,
-          user_email: user.email,
-          user_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Teacher",
-        }, { onConflict: "institute_id,user_id" });
-
-      if (insertErr) {
-        // Fallback for single insert
-        await supabase
-          .from("institute_members")
-          .insert({
-            institute_id: targetInst.id,
-            user_id: user.id,
-            role: "teacher",
-            status: "active",
-            department_id: targetDeptId,
-            user_email: user.email,
-            user_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Teacher",
-          });
-      }
-
-      setSuccess(targetInst.name);
-      toast.success(`Joined ${targetInst.name}!`);
-      setTimeout(() => navigate("/teacher/dashboard"), 1500);
-
+      setError(result?.error === "Please sign in first"
+        ? "Please sign in again and retry."
+        : "Invalid code. Please check your join code and try again.");
     } catch (e: any) {
       console.error("Join error:", e);
-      setError(e.message || "Failed to join institute. Please try again.");
+      setError(e?.message || "Failed to join institute. Please try again.");
+    } finally {
+      setJoining(false);
     }
-    setJoining(false);
   };
 
   return (

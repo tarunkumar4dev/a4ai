@@ -122,15 +122,11 @@ const TeacherPicker: React.FC<{
     let cancelled = false;
     const t = setTimeout(async () => {
       setSearching(true);
-      // TODO 02b: replace with scoped RPC once institute_members RLS lands.
-      const { data, error } = await supabase
-        .from("institute_members")
-        .select("id, user_id, user_name, user_email") // ids are needed to assign; nothing else is read
-        .eq("institute_id", instId)
-        .eq("status", "active")
-        .in("role", ["teacher", "hod"])
-        .or(`user_name.ilike.%${term}%,user_email.ilike.%${term}%`)
-        .limit(10);
+      // Scoped RPC (07): admin/HOD only, active teachers/HODs, max 10, id/user_id/name/email only.
+      const { data, error } = await supabase.rpc("search_institute_teachers", {
+        p_institute_id: instId,
+        p_query: term,
+      });
       if (cancelled) return;
       if (error) console.warn("teacher search:", error.message);
       const known = new Set(members.map(m => m.user_id));

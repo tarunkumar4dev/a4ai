@@ -500,7 +500,7 @@ export default function StudentPortalPage() {
     try {
       // Path must be <institute>/<assignment>/<student>_… — submit_assignment rejects anything else
       const path = `${student.institute_id}/${assignment.id}/${student.id}_${Date.now()}.pdf`;
-      const { error: upErr } = await supabase.storage.from("submissions").upload(path, file, { upsert: true, contentType: "application/pdf" });
+      const { error: upErr } = await supabase.storage.from("submissions").upload(path, file, { upsert: false, contentType: "application/pdf" }); // unique path; upsert would need storage SELECT (removed in 07)
       if (upErr) throw upErr;
 
       const { data: { publicUrl } } = supabase.storage.from("submissions").getPublicUrl(path);
