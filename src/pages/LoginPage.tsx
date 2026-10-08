@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, takeRedirectAfterLogin, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import { authRedirectUrl, PHONE_OTP_ENABLED, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, takeRedirectAfterLogin, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
 import OtpHelp from "@/components/auth/OtpHelp";
 import { useAuth } from "@/providers/AuthProvider";
 import {
@@ -72,7 +72,7 @@ export default function LoginPage() {
       const mobile = mobileUA || isSmallScreen;
       
       setIsMobileDevice(mobile);
-      if (mobile) {
+      if (mobile && PHONE_OTP_ENABLED) {
         setLoginMethod("phone");
       }
     };
@@ -667,7 +667,8 @@ export default function LoginPage() {
               </p>
             </form>
 
-            {/* Mobile OTP stays available for accounts that were created with a phone number */}
+            {/* Mobile OTP for accounts created with a phone number (paused: PHONE_OTP_ENABLED) */}
+            {PHONE_OTP_ENABLED && (
             <p className="text-center text-xs text-slate-500">
               {loginMethod === "email" ? (
                 <>
@@ -682,6 +683,7 @@ export default function LoginPage() {
                 </button>
               )}
             </p>
+            )}
           </div>
         </div>
 

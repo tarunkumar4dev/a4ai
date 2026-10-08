@@ -9,7 +9,7 @@ const OptimizedDemo = () => {
   const videoRef = useRef(null);
   const wrapRef = useRef(null);
   const [ready, setReady] = useState(false);
-  const [ratio, setRatio] = useState(16 / 9); // fallback jab tak metadata na aaye
+  const [ratio, setRatio] = useState(16 / 9); // fallback until the video metadata loads
 
   /* ── Scroll-triggered autoplay ── */
   useEffect(() => {
@@ -22,7 +22,7 @@ const OptimizedDemo = () => {
         if (!v) return;
 
         if (entry.isIntersecting) {
-          v.muted = true; // mobile autoplay policy ke liye zaroori
+          v.muted = true; // required by mobile autoplay policies
           const p = v.play();
           if (p && typeof p.catch === 'function') {
             p.catch(() => {

@@ -1,5 +1,5 @@
 // src/components/auth/OtpHelp.tsx
-// "OTP nahi aaya?" box shown OTP_HELP_AFTER_MS after a WhatsApp OTP was sent.
+// "Didn't get the OTP?" box shown OTP_HELP_AFTER_MS after a WhatsApp OTP was sent.
 // Meta accepts the message even if the number isn't on WhatsApp (delivery fails later, silently),
 // so the page can't detect it — this box is the way out for that user.
 import React, { useEffect, useState } from "react";
@@ -32,27 +32,27 @@ export default function OtpHelp({ sentAt, onGoogle, onEmail, isDarkMode }: Props
         isDarkMode ? "bg-white/5 border-white/10 text-slate-300" : "bg-amber-50 border-amber-200 text-amber-900"
       }`}
     >
-      <p className="font-bold mb-1">OTP nahi aaya?</p>
+      <p className="font-bold mb-1">Didn't get the OTP?</p>
       <ul className="list-disc ml-4 space-y-0.5">
-        <li>WhatsApp kholke check karein — message "a4ai" ke naam se aata hai.</li>
-        <li>Kya ye number WhatsApp pe hai? Nahi to WhatsApp wala number daalein.</li>
-        <li>Timer khatam hone par "Resend" dabayein.</li>
+        <li>Open WhatsApp and check — the message comes from "a4ai".</li>
+        <li>Is this number on WhatsApp? If not, enter your WhatsApp number.</li>
+        <li>When the timer ends, tap "Resend".</li>
       </ul>
       {(onGoogle || onEmail) && (
         <p className="mt-2">
-          Ya{" "}
+          Or sign in with{" "}
           {onGoogle && (
             <button type="button" onClick={onGoogle} className={link}>
-              Google se login
+              Google
             </button>
           )}
           {onGoogle && onEmail && " / "}
           {onEmail && (
             <button type="button" onClick={onEmail} className={link}>
-              Email se login
+              Email
             </button>
-          )}{" "}
-          karein.
+          )}
+          .
         </p>
       )}
     </div>

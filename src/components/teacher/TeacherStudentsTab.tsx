@@ -894,14 +894,14 @@ export default function TeacherStudentsTab({
           </div>
           <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-1">
             {noScope
-              ? "Aapko abhi koi batch assign nahi hua — HOD se contact karein"
+              ? "No batch is assigned to you yet — contact your HOD"
               : students.length === 0
               ? "No students enrolled yet"
               : "No students match your filter"}
           </h4>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
             {noScope
-              ? "Jab HOD aapko kisi section ka subject ya class teacher assign karega, us batch ke students yahan dikhenge."
+              ? "When your HOD assigns you as a subject or class teacher for a section, its students will appear here."
               : students.length === 0
               ? "Your assigned batches currently have no enrolled students. Ask your HOD or institute administrator to add them."
               : "Try adjusting your search query, batch filter, or attendance status to find who you're looking for."}

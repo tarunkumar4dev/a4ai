@@ -270,7 +270,7 @@ export default function StudentProfilePage() {
   if (denied) return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, background: "#F7F9FC", padding: 24 }}>
       <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "12px 20px", fontSize: 14, color: "#B45309", fontWeight: 600, maxWidth: 400, textAlign: "center" }}>
-        🔒 Access nahi hai — ye student aapke section / batch me nahi hai.
+        🔒 No access — this student is not in your section or batch.
       </div>
       <button onClick={() => navigate(-1)} style={{ background: "#FF7043", color: "#fff", border: "none", borderRadius: 10, padding: "10px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>← Go Back</button>
     </div>

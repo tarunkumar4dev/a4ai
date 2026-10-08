@@ -58,13 +58,13 @@ async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Meta error → message for the user (Hinglish) + whether it's our config problem. */
+/** Meta error → message for the user + whether it's our config problem. */
 function explainMetaError(code: number | undefined): { message: string; config: boolean } {
   switch (code) {
     case 190: // token expired / invalid
     case 10: // permission denied
     case 200:
-      return { message: "WhatsApp OTP abhi nahi ja pa raha. Google ya Email se login karein.", config: true };
+      return { message: "WhatsApp OTP is unavailable right now. Please sign in with Google or Email.", config: true };
     case 132000: // template param mismatch
     case 132001: // template doesn't exist (name / language)
     case 132005:
@@ -72,17 +72,17 @@ function explainMetaError(code: number | undefined): { message: string; config: 
     case 132012:
     case 132015: // template paused
     case 132016: // template disabled
-      return { message: "WhatsApp OTP abhi nahi ja pa raha. Google ya Email se login karein.", config: true };
+      return { message: "WhatsApp OTP is unavailable right now. Please sign in with Google or Email.", config: true };
     case 131030: // recipient not in allowed list (test number)
-      return { message: "WhatsApp OTP abhi nahi ja pa raha. Google ya Email se login karein.", config: true };
+      return { message: "WhatsApp OTP is unavailable right now. Please sign in with Google or Email.", config: true };
     case 130429: // throughput
     case 131048: // spam rate limit
     case 131056: // pair rate limit
-      return { message: "Bahut saari requests aa rahi hain. 1 minute baad dobara try karein.", config: false };
+      return { message: "Too many requests right now. Please try again in a minute.", config: false };
     case 131026: // undeliverable (usually not on WhatsApp)
-      return { message: "Is number pe WhatsApp nahi mila. WhatsApp wala number daalein ya Google/Email se login karein.", config: false };
+      return { message: "This number is not on WhatsApp. Use your WhatsApp number or sign in with Google or Email.", config: false };
     default:
-      return { message: "OTP bhejne me dikkat aayi. Thodi der baad try karein ya Google/Email se login karein.", config: false };
+      return { message: "Could not send the OTP. Please try again shortly or sign in with Google or Email.", config: false };
   }
 }
 
@@ -104,14 +104,14 @@ Deno.serve(async (req) => {
 
   if (!WA_TOKEN || !WA_PHONE_ID) {
     console.error("send-whatsapp-otp: WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID not set");
-    return hookError(500, "WhatsApp OTP abhi nahi ja pa raha. Google ya Email se login karein.");
+    return hookError(500, "WhatsApp OTP is unavailable right now. Please sign in with Google or Email.");
   }
 
   // 2) Validate input
   const otp = String(event.sms?.otp || "");
   const to = normalizeIndianMobile(String(event.user?.phone || ""));
   if (!/^\d{4,10}$/.test(otp)) return hookError(400, "Invalid OTP payload");
-  if (!to) return hookError(400, "Sahi 10-digit Indian mobile number daalein.");
+  if (!to) return hookError(400, "Enter a valid 10-digit Indian mobile number.");
 
   // 3) Per-number limit (server-side; the browser limiter can be bypassed)
   const { data: rate, error: rateErr } = await admin.rpc("a4_otp_rate_check", {
@@ -120,15 +120,15 @@ Deno.serve(async (req) => {
   if (rateErr) {
     // Fail closed: without the limiter a script could burn through WhatsApp credits.
     console.error("send-whatsapp-otp: rate check failed", rateErr.message);
-    return hookError(500, "OTP bhejne me dikkat aayi. Thodi der baad try karein.");
+    return hookError(500, "Could not send the OTP. Please try again shortly.");
   }
   if (!rate?.allowed) {
     const wait = Number(rate?.retry_after_sec) || 60;
     const msg = rate?.reason === "too_soon"
-      ? `Naya OTP ${wait} second baad maang sakte hain.`
+      ? `You can request a new OTP in ${wait} seconds.`
       : rate?.reason === "hourly_limit"
-        ? "Is number pe bahut OTP bheje ja chuke hain. 1 ghante baad try karein ya Google/Email se login karein."
-        : "Is number ki aaj ki OTP limit poori ho gayi. Kal try karein ya Google/Email se login karein.";
+        ? "Too many OTPs were sent to this number. Try again in an hour or sign in with Google or Email."
+        : "This number has reached today's OTP limit. Try again tomorrow or sign in with Google or Email.";
     return hookError(429, msg);
   }
 
@@ -168,13 +168,13 @@ Deno.serve(async (req) => {
     }
 
     // Accepted by Meta. Delivery can still fail later (e.g. number not on WhatsApp) — the page shows
-    // "OTP nahi aaya?" help after 30 s for that case.
+    // "Didn't get the OTP?" help after 30 s for that case.
     console.log(`send-whatsapp-otp: sent to=${mask(to)} id=${body?.messages?.[0]?.id || "?"}`);
     return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e) {
     const timedOut = (e as Error)?.name === "AbortError";
     console.error(`send-whatsapp-otp: ${timedOut ? "Meta timeout" : "fetch failed"} to=${mask(to)}`, String(e));
-    return hookError(504, "WhatsApp slow chal raha hai. Dobara try karein.");
+    return hookError(504, "WhatsApp is responding slowly. Please try again.");
   } finally {
     clearTimeout(timer);
   }

@@ -73,6 +73,10 @@ export function friendlyOtpError(message: string | undefined): string {
 /** Seconds after "OTP sent" before showing the "Didn't get the OTP?" help. */
 export const OTP_HELP_AFTER_MS = 30_000;
 
+/** Phone (WhatsApp) OTP sign-in is paused until the WhatsApp sender is live; Google + email only.
+ *  Set VITE_PHONE_OTP_ENABLED=true (Vercel env, then redeploy) to bring it back. */
+export const PHONE_OTP_ENABLED = String(import.meta.env.VITE_PHONE_OTP_ENABLED ?? "false").toLowerCase() === "true";
+
 /* ── Post-login redirect (LoginModal stores the page the user was on) ── */
 const REDIRECT_KEY = "a4ai_redirect_after_login";
 

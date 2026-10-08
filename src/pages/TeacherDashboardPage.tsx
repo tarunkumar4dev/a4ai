@@ -700,6 +700,16 @@ function SubscriptionSidebarWidget({ navigate, testsCount = 0 }: { navigate: any
       <p className="text-slate-500 dark:text-slate-400 text-[13px] font-medium mb-4">
         {used}/{limit} tests used
       </p>
+      {status?.plan_slug !== "free" && status?.subscription_expires && (
+        <p className="text-slate-400 dark:text-slate-500 text-[12px] font-medium -mt-3 mb-4">
+          Valid till{" "}
+          {new Date(status.subscription_expires).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
+        </p>
+      )}
 
       <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mb-6 overflow-hidden">
         <div
@@ -1490,12 +1500,12 @@ function getOfflinePedagogicalFallback(userText: string): {
 
   if (q.includes("test") || q.includes("paper") || q.includes("generate") || q.includes("question")) {
     return {
-      content: `Aap a4ai par 30 seconds ke andar high-quality test paper bana sakte hain:
+      content: `You can build a high-quality test paper on a4ai in about a minute:
 
-• **1 Lakh+ NCERT Questions**: Class 6-12 ke chapters se MCQs, Short, Long, Assertion-Reason aur Numericals select karein.
-• **Instant Auto-Generate**: Class, Subject aur Chapters chunein — balanced paper turant ready ho jata hai.
-• **Institute Branding**: Apna school/coaching logo aur header lagakar PDF ya Word (.docx) mein download karein.
-• **Ready Answer Key**: Checking ke liye step-by-step solutions sath mein milte hain.`,
+• **1 Lakh+ NCERT Questions**: Pick MCQs, Short, Long, Assertion-Reason and Numericals from Class 6-12 chapters.
+• **Instant Auto-Generate**: Choose Class, Subject and Chapters — a balanced paper is ready right away.
+• **Institute Branding**: Add your school/coaching logo and header, then download as PDF or Word (.docx).
+• **Ready Answer Key**: Step-by-step solutions come with every paper for checking.`,
       actions: [{ label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" }],
       suggestions: ["Class 10 Science blueprint", "How to add school logo?", "Pricing plans"]
     };
@@ -1503,11 +1513,11 @@ function getOfflinePedagogicalFallback(userText: string): {
 
   if (q.includes("check") || q.includes("copy") || q.includes("grading") || q.includes("sheet")) {
     return {
-      content: `Humara **AI Paper Checker** teachers ka ghanto ka samay bachata hai:
+      content: `Our **AI Paper Checker** saves teachers hours of checking:
 
-• **Handwritten Copies Support**: Students ki answer sheets ki photo upload karein — AI handwriting read karke automatically marks evaluate karta hai.
-• **Smart Rubric Scoring**: Question-by-question marks aur partial grading transparently hoti hai.
-• **Student Feedback**: Har student ko unki mistakes aur improvement areas par feedback milta hai.`,
+• **Handwritten Copies Support**: Upload photos of students' answer sheets — the AI reads the handwriting and marks the answers.
+• **Smart Rubric Scoring**: Question-by-question marks with transparent partial grading.
+• **Student Feedback**: Every student gets feedback on their mistakes and what to improve.`,
       actions: [{ label: "Open AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" }],
       suggestions: ["How to upload student copies?", "Can it check handwritten copies?", "Generate Test Paper"]
     };
@@ -1515,11 +1525,11 @@ function getOfflinePedagogicalFallback(userText: string): {
 
   if (q.includes("attendance") || q.includes("marks") || q.includes("analytics") || q.includes("defaulter")) {
     return {
-      content: `Aapke Dashboard par complete **Teacher Analytics** available hai:
+      content: `Your Dashboard has complete **Teacher Analytics**:
 
-• **Marks Analytics**: Class average, highest/lowest scores, pass percentage aur top performers leaderboard.
-• **Attendance Analytics**: Daily batch attendance, 75% se kam attendance wale **Defaulters ki Watchlist**.
-• **One-Click Export**: PTM aur school records ke liye poora data Excel/CSV mein download karein.`,
+• **Marks Analytics**: Class average, highest/lowest scores, pass percentage and a top-performers leaderboard.
+• **Attendance Analytics**: Daily batch attendance and a **Defaulters Watchlist** for students below 75%.
+• **One-Click Export**: Download all the data as Excel/CSV for PTMs and school records.`,
       actions: [{ label: "View Analytics & Attendance", icon: "📊", tab: "analytics" }],
       suggestions: ["Identify defaulters (<75%)", "Export Excel attendance report", "How to mark daily attendance?"]
     };
@@ -1527,26 +1537,26 @@ function getOfflinePedagogicalFallback(userText: string): {
 
   if (q.includes("price") || q.includes("pricing") || q.includes("plan") || q.includes("free") || q.includes("starter") || q.includes("pro")) {
     return {
-      content: `a4ai ke plans simple aur teacher-friendly hain:
+      content: `a4ai plans are simple and teacher-friendly:
 
-• **Free Plan (₹0)**: 2 test papers har mahine, full NCERT questions access.
-• **Starter Plan (₹149/month)**: 10 tests/month, 2 free student contests, no watermark (~₹5/day).
-• **Pro Plan (₹299/month)**: Unlimited tests, unlimited contests, aapka school logo har paper par, aur priority AI support (~₹10/day).`,
+• **Free Plan (₹0)**: 1 test paper a month, full NCERT question access.
+• **Starter Plan (₹199/month)**: 10 test papers a month, clean PDF & DOCX with no watermark.
+• **Pro Plan (₹299/month)**: 25 test papers a month, live proctored contests, advanced analytics and your school logo on every paper.`,
       actions: [{ label: "View Subscription Plans", icon: "💎", path: "/pricing" }],
       suggestions: ["Upgrade with UPI", "Starter vs Pro difference", "How to create test?"]
     };
   }
 
   return {
-    content: `Main AI Sarthi hoon, aapka 24x7 teaching buddy.
+    content: `I'm AI Sarthi, your 24x7 teaching buddy.
 
-Aap mujhse:
+You can ask me about:
 • **Test Paper Generation** (1 lakh+ NCERT questions, blueprints)
 • **AI Paper Checker** (handwritten copies & assignment evaluation)
 • **Academic Doubts & Concept Explanations** (Maths, Science, SST, etc. for Classes 1-12)
-• **Lesson Planning & Classroom Tips** ke baare mein kuch bhi pooch sakte hain.
+• **Lesson Planning & Classroom Tips**
 
-Bataiye, kis topic ya feature mein help karoon?`,
+Which topic or feature can I help you with?`,
     actions: [
       { label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" },
       { label: "Open AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" }
@@ -1637,7 +1647,7 @@ export default function TeacherDashboardPage() {
     {
       role: "assistant",
       content:
-        "Namaste! Main AI Sarthi hoon — aapka a4ai teaching co-pilot. 1 Lakh+ NCERT questions se test banana ho, student answer copies check karni ho, ya koi concept samajhna ho — main 24x7 yahin hoon. Aaj kya karna chahenge?",
+        "Hello! I'm AI Sarthi, your a4ai teaching co-pilot. Whether you want to build a test from 1 Lakh+ NCERT questions, check student answer copies or understand a concept, I'm here 24x7. What would you like to do today?",
       suggestions: [
         "How to Generate Test Paper",
         "Try AI Paper Checker",
@@ -1859,13 +1869,13 @@ export default function TeacherDashboardPage() {
       },
 
       "How to Generate Test Paper": {
-        content: `Aap a4ai par sirf 1 minute me complete test paper bana sakte hain:
+        content: `You can build a complete test paper on a4ai in about a minute:
 
-1. **Test Builder Kholein**: Dashboard par **Create Test** button dabayein.
-2. **Class & Subject Chunein**: Class (6–12), Subject aur specific Chapters select karein.
-3. **Question Types**: MCQ, Short Answer, Long Answer, Assertion-Reason ya Case-Based select karein ya auto-select hone dein.
-4. **School Branding**: Apna institute name aur logo add karein.
-5. **Download**: Ek click me **PDF** ya editable **Word (DOCX)** format me answer key ke sath download karein!`,
+1. **Open the Test Builder**: Click **Create Test** on the Dashboard.
+2. **Choose Class & Subject**: Select the Class (6–12), Subject and specific Chapters.
+3. **Question Types**: Pick MCQ, Short Answer, Long Answer, Assertion-Reason or Case-Based, or let it auto-select.
+4. **School Branding**: Add your institute name and logo.
+5. **Download**: One click gives you a **PDF** or editable **Word (DOCX)** file with the answer key!`,
         actions: [
           { label: "Launch Test Builder", icon: "✨", path: "/dashboard/create-test" },
         ],
@@ -1873,12 +1883,12 @@ export default function TeacherDashboardPage() {
       },
 
       "Try AI Paper Checker": {
-        content: `**AI Paper Checker** teachers ke copy checking ka bojh 90% kam kar deta hai:
+        content: `**AI Paper Checker** cuts teachers' copy-checking work by up to 90%:
 
-• **Handwritten Copies**: Students ke handwritten papers ya copies ki photo upload karein — AI writing read karke answers evaluate karta hai.
-• **Rubric-Based Marking**: Question-by-question step marks aur transparent scoring.
-• **Personalized Student Feedback**: Har student ko unki specific mistakes aur tips milti hain.
-• **Batch Checking**: Ek sath poori class ki copies check karke marks record karein.`,
+• **Handwritten Copies**: Upload photos of students' handwritten papers — the AI reads them and evaluates the answers.
+• **Rubric-Based Marking**: Question-by-question step marks with transparent scoring.
+• **Personalized Student Feedback**: Every student gets their specific mistakes and tips.
+• **Batch Checking**: Check a whole class's copies at once and record the marks.`,
         actions: [
           { label: "Launch AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" },
         ],
@@ -1886,13 +1896,13 @@ export default function TeacherDashboardPage() {
       },
 
       "What are the pricing": {
-        content: `a4ai ke plans transparent aur affordable hain:
+        content: `a4ai plans are transparent and affordable:
 
-• **Free Plan — ₹0 (Lifetime)**: 2 test papers/month, 1 lakh+ NCERT questions access.
-• **Starter Plan — ₹149/month (~₹5/day)**: 10 tests/month, 2 free student contests, no watermark, fast generation.
-• **Pro Plan — ₹299/month (~₹10/day)**: Unlimited tests, unlimited contests, aapke school ka watermark/logo, priority AI processing.
+• **Free Plan — ₹0 (Lifetime)**: 1 test paper a month, access to 1 lakh+ NCERT questions.
+• **Starter Plan — ₹199/month**: 10 test papers a month, clean PDF & DOCX with no watermark.
+• **Pro Plan — ₹299/month**: 25 test papers a month, live proctored contests, advanced analytics and your school logo on papers.
 
-Upgrades UPI, Cards aur Net Banking se instantly activate ho jaate hain.`,
+Upgrades paid by UPI, Card or Net Banking activate instantly.`,
         actions: [
           { label: "Explore Subscription Plans", icon: "💎", path: "/pricing" },
         ],
@@ -1902,25 +1912,25 @@ Upgrades UPI, Cards aur Net Banking se instantly activate ho jaate hain.`,
       "Learn any topic": {
         content: `**Happy to help!** 
 
-Main Class 1 se 12 tak ke kisi bhi topic ko aasan bhasha me explain kar sakta hoon — **Maths, Physics, Chemistry, Biology, Social Science, English**.
+I can explain any topic from Class 1 to 12 in simple language — **Maths, Physics, Chemistry, Biology, Social Science, English**.
 
-Aap topic aur class likhiye (jaise *"Class 10 Trigonometry basics"* ya *"Class 9 Cell Structure"*), aur main aapko:
+Type the topic and class (like *"Class 10 Trigonometry basics"* or *"Class 9 Cell Structure"*) and I'll give you:
 • Simple real-life analogies
 • Blackboard explanation points
 • Key formulas & definitions
-• Practice questions for students
-turant de doonga!`,
+• Practice questions for students`,
         suggestions: ["Explain Photosynthesis Class 10", "Derive Quadratic Formula Class 10", "Newton's 3 Laws with examples"],
       },
 
       "Solve Any doubt 24x7": {
-        content: `Main aapka 24x7 academic buddy hoon. Aap mujhse:
+        content: `I'm your 24x7 academic buddy. Feel free to ask me for:
 
-• Kisi bhi difficult question ka step-by-step solution
-• Class test ke liye 3-4 tricky HOTS questions
-• Weak students ko engage karne ki pedagogical tips
-• Parent notices aur WhatsApp announcements ka draft
-bina kisi jhijhak pooch sakte hain. Type karein ya mic dabakar boliye!`,
+• A step-by-step solution to any difficult question
+• 3-4 tricky HOTS questions for a class test
+• Teaching tips to engage weaker students
+• Drafts of parent notices and WhatsApp announcements
+
+Type your question or tap the mic and speak!`,
         suggestions: ["Give 3 HOTS questions for Class 10 Math", "Draft parent notice for unit test", "How to help slow learners?"],
       },
     };
@@ -1945,17 +1955,8 @@ bina kisi jhijhak pooch sakte hain. Type karein ya mic dabakar boliye!`,
 
     setIsChatLoading(true);
 
-    const isHindi = /[\u0900-\u097F]/.test(textToSend);
-    const isHinglish =
-      !isHindi &&
-      /\b(kya|hai|hain|ho|kar|karo|mujhe|mera|meri|aap|bhi|nahi|toh|kaise|chahiye|batao|dekho|abhi|agar|lekin|aur|se|pe|ko|ka|ki|ke|hoga|krna|bnao|samjhao|bataiye|dijiye)\b/i.test(
-        textToSend
-      );
-    const langInstruction = isHindi
-      ? "LANGUAGE: User ne Hindi (Devanagari) mein likha hai. Poora reply polite aur clear Devanagari Hindi mein do."
-      : isHinglish
-        ? "LANGUAGE: User ne Hinglish mein likha hai. Natural, conversational Hinglish (Hindi-English mix) mein reply do — jaise Indian teachers baat karte hain."
-        : "LANGUAGE: User wrote in English. Reply in clear, professional English.";
+    const langInstruction =
+      "LANGUAGE: Always reply in clear, professional English, even if the user writes in Hindi or Hinglish.";
 
     const systemPromptText = `You are "AI Sarthi", the brilliant, warm, and highly capable AI Teaching Co-Pilot for a4ai (always write "a4ai" in lowercase).
 Founded by Tarun Pathak (B.Tech ECE, passionate educator & edtech founder).

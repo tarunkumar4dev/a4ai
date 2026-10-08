@@ -248,7 +248,7 @@ export default function TeacherCalendarTab() {
   async function handleCreate() {
     if (!form.title.trim() || !form.start_time || !instituteId || !user) return;
     if (!scope.isAdmin && !form.batch_id) {
-      toast.error("Aapko abhi koi batch assign nahi hua — event sirf apni batch ke liye bana sakte hain.");
+      toast.error("No batch is assigned to you yet — you can only create events for your own batches.");
       return;
     }
     setSaving(true);
