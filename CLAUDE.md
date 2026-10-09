@@ -130,6 +130,25 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - handle_new_user links a student row to any new auth user with the same email (count = 1). Fine while email signups require confirmation; re-check if confirmation is ever disabled.
   - WhatsApp OTP: code + secrets ready; blocked on Meta ("WABA has no permission to create message template" even after payment method). Send SMS hook must stay OFF. Rotate the WhatsApp token + hook secret (both were pasted in chat) once it works.
 
+- [x] Step 7 run (10 Oct): 07 applied on live DB (search_institute_teachers etc. exist, "Public read institutes" gone).
+- [x] Demo reset (10 Oct): `09_msit_video_reset.sql` run — 0 students, ECE → ECE-2 + A/B/C kept, 14 old members `inactive`,
+  4 demo accounts active: admin.demo / hod.ece / proctor.ece2 / teacher.ece2 @msit.a4ai.in (HOD + proctor assigned in the UI).
+  Backup schema a4_backup_20261010 (student PII) → drop after the demo is verified.
+- [x] Smart Assignment Checker v2 (10 Oct, Yash's v1 continued; backend `app/services/smart_assignment_service.py`):
+  rubric of MARKING POINTS (paper + key, one call) → per-point verdicts with evidence → server computes marks (0.5 grid).
+  JWT on all endpoints, pipeline in threadpool, Gemini files deleted, temperature 0 + seed, borderline/low-confidence → "Review".
+  Eval: `python scripts/eval_smart_checker.py` (backend). Needs REAL handwritten sheets with teacher marks for a true accuracy number.
+- [x] Phase 4 code (10 Oct): portal submissions. Teacher attaches a PRIVATE answer key (bucket `answer-keys`, row in
+  `assignment_ai_keys` — never in `assignments`, which students can read) → Submissions → "✨ AI check" (rubric once, then
+  1 request per submission, 3 parallel — serverless-safe) → review per point → "Approve & send" writes grade/feedback →
+  student portal shows them (get_student_feed unchanged). Shared UI: `src/components/checker/AiGradeBreakdown.tsx`.
+- [ ] Run `10_smart_assignment_checks.sql` then `11_assignment_ai_check.sql` (11 turns submissions.grade int → numeric).
+- Known after Phase 4:
+  - `assignments` and `submissions` storage buckets are PUBLIC — anyone with a file URL can read question papers / student
+    submissions. Make `submissions` private + signed URLs (portal + teacher view) in a later step.
+  - A logged-in student (a4_my_student_ids) can read their own submission row incl. `ai_*` before the teacher approves.
+  - Old test checker (`test_checker_router`) also runs the Gemini pipeline on the event loop — same threadpool fix needed.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

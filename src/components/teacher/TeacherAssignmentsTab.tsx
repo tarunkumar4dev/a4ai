@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import { toast } from "sonner";
 import { useMyScope } from "@/hooks/useMyScope";
+import { AiQuestionList, type GradedQuestion } from "@/components/checker/AiGradeBreakdown";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -17,13 +18,54 @@ type Assignment = {
   batch_id: string; batch_name?: string; status: string; created_at: string;
   submission_count?: number; graded_count?: number; late_count?: number;
   total_students?: number;
+  ai_key_name?: string | null; ai_strictness?: Strictness;
+};
+type Strictness = "easy" | "medium" | "hard" | "extreme";
+type AiResult = {
+  graded_questions: GradedQuestion[];
+  total_marks_awarded: number; max_marks: number; percentage: number;
+  overall_remarks: string; needs_review_count?: number;
 };
 type Submission = {
   id: string; student_id: string; student_name?: string; student_roll?: string;
   file_url: string | null; file_name: string | null; submitted_at: string;
   grade: number | null; feedback: string | null; status: string;
   is_late?: boolean;
+  ai_status?: "checking" | "done" | "failed" | null;
+  ai_marks?: number | null; ai_max_marks?: number | null;
+  ai_result?: AiResult | null; ai_error?: string | null;
 };
+
+/* ─── AI checking (backend: smart-assignment-checker) ─── */
+const CHECKER_API = `${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api"}/v1/smart-assignment-checker`;
+const AI_PARALLEL = 3;
+const KEY_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp";
+
+async function checkerPost(path: string, body?: unknown) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Session expired. Please log in again.");
+  const res = await fetch(`${CHECKER_API}${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `AI check failed (${res.status})`);
+  return data;
+}
+
+/** Student-facing feedback from an AI result: overall remark + the questions that lost marks. */
+function feedbackFromAi(r: AiResult): string {
+  const lines = [r.overall_remarks?.trim()].filter(Boolean) as string[];
+  for (const q of r.graded_questions || []) {
+    if (q.counted === false || q.marks_awarded >= q.max_marks) continue;
+    const note = q.has_subparts
+      ? (q.subpart_grades || []).filter(s => s.marks_awarded < s.max_marks).map(s => `${s.sub_id}: ${s.feedback}`).join("; ")
+      : q.feedback;
+    lines.push(`Q${q.q_no}: ${q.marks_awarded}/${q.max_marks}${note ? ` — ${note}` : ""}`);
+  }
+  return lines.join("\n").slice(0, 1500);
+}
 
 /* ─── Helpers ──────────────────────────────────────── */
 function fmtDate(d: string) {
@@ -116,11 +158,13 @@ export default function TeacherAssignmentsTab() {
   // Create form
   const [form, setForm] = useState({
     title: "", description: "", deadline: "", batch_id: "",
-    max_marks: "", file: null as File | null
+    max_marks: "", file: null as File | null,
+    keyFile: null as File | null, strictness: "medium" as Strictness,
   });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const keyRef = useRef<HTMLInputElement>(null);
 
   // Submissions view
   const [activeAssignment, setActiveAssignment] = useState<Assignment | null>(null);
@@ -134,6 +178,11 @@ export default function TeacherAssignmentsTab() {
   const [bulkMarks, setBulkMarks] = useState("");
   const [bulkFeedback, setBulkFeedback] = useState("");
   const [bulkGrading, setBulkGrading] = useState(false);
+
+  // AI checking
+  const [aiRun, setAiRun] = useState<{ phase: "rubric" | "grading"; done: number; total: number; failed: number } | null>(null);
+  const [aiOpenId, setAiOpenId] = useState<string | null>(null);
+  const aiStop = useRef(false);
 
   // Batches + institute come from useMyScope (teaching + proctor sections; admin: all). Never teacher_batches.
   const scope = useMyScope();
@@ -189,6 +238,15 @@ export default function TeacherAssignmentsTab() {
       });
 
       const asgIds = (asgns || []).map(a => a.id);
+      // Answer keys (RLS: only staff who can grade see these rows)
+      const keyMap: Record<string, { name: string | null; strictness: Strictness }> = {};
+      if (asgIds.length > 0) {
+        const { data: keys } = await supabase
+          .from("assignment_ai_keys")
+          .select("assignment_id, answer_key_name, strictness")
+          .in("assignment_id", asgIds);
+        (keys || []).forEach(k => { keyMap[k.assignment_id] = { name: k.answer_key_name, strictness: k.strictness }; });
+      }
       const countMap: Record<string, { submitted: number; graded: number; late: number }> = {};
 
       if (asgIds.length > 0) {
@@ -239,6 +297,8 @@ export default function TeacherAssignmentsTab() {
           graded_count: countMap[a.id]?.graded || 0,
           late_count: countMap[a.id]?.late || 0,
           total_students: batchStudentCount[a.batch_id] || 0,
+          ai_key_name: keyMap[a.id] ? (keyMap[a.id].name || "answer key") : null,
+          ai_strictness: keyMap[a.id]?.strictness || "medium",
         }))
       );
     } catch (e) {
@@ -275,21 +335,40 @@ export default function TeacherAssignmentsTab() {
       };
       if (fileUrl) { payload.file_url = fileUrl; payload.file_name = fileName; }
 
+      let assignmentId = editingId;
       if (editingId) {
         const { error } = await supabase.from("assignments").update(payload).eq("id", editingId);
         if (error) throw error;
-        toast.success("Assignment updated!");
       } else {
-        const { error } = await supabase.from("assignments").insert({
+        const { data: created, error } = await supabase.from("assignments").insert({
           ...payload,
           institute_id: instituteId || null,
           batch_id: form.batch_id,
           created_by: user.id,
           status: "active",
-        });
+        }).select("id").single();
         if (error) throw error;
-        toast.success("Assignment published!");
+        assignmentId = created.id;
       }
+
+      // Answer key → PRIVATE bucket (students never see it); its row lives in assignment_ai_keys
+      if (assignmentId && form.keyFile) {
+        const safe = form.keyFile.name.replace(/[^\w.\-]+/g, "_");
+        const keyPath = `${user.id}/${assignmentId}/${Date.now()}_${safe}`;
+        const { error: kErr } = await supabase.storage.from("answer-keys")
+          .upload(keyPath, form.keyFile, { contentType: form.keyFile.type || "application/pdf", upsert: false });
+        if (kErr) throw new Error(`Answer key upload failed: ${kErr.message}`);
+        const { error: rowErr } = await supabase.from("assignment_ai_keys").upsert({
+          assignment_id: assignmentId, answer_key_path: keyPath, answer_key_name: form.keyFile.name,
+          strictness: form.strictness, rubric: null, rubric_source: null,
+          updated_by: user.id, updated_at: new Date().toISOString(),
+        });
+        if (rowErr) throw new Error(`Answer key save failed: ${rowErr.message}`);
+      } else if (assignmentId && editingId) {
+        // Strictness can change without a new key (rubric stays valid)
+        await supabase.from("assignment_ai_keys").update({ strictness: form.strictness }).eq("assignment_id", assignmentId);
+      }
+      toast.success(editingId ? "Assignment updated!" : "Assignment published!");
 
       resetForm();
       setView("list");
@@ -299,7 +378,7 @@ export default function TeacherAssignmentsTab() {
   }
 
   function resetForm() {
-    setForm({ title: "", description: "", deadline: "", batch_id: "", max_marks: "", file: null });
+    setForm({ title: "", description: "", deadline: "", batch_id: "", max_marks: "", file: null, keyFile: null, strictness: "medium" });
     setEditingId(null);
   }
 
@@ -311,6 +390,8 @@ export default function TeacherAssignmentsTab() {
       batch_id: a.batch_id,
       max_marks: a.max_marks?.toString() || "",
       file: null,
+      keyFile: null,
+      strictness: a.ai_strictness || "medium",
     });
     setEditingId(a.id);
     setView("create");
@@ -352,7 +433,7 @@ export default function TeacherAssignmentsTab() {
   async function handleGrade(subId: string) {
     try {
       const { error } = await supabase.from("submissions").update({
-        grade: gradeInput ? parseInt(gradeInput) : null,
+        grade: gradeInput ? parseFloat(gradeInput) : null,
         feedback: feedbackInput.trim() || null,
         graded_at: new Date().toISOString(),
         graded_by: user?.id,
@@ -376,7 +457,7 @@ export default function TeacherAssignmentsTab() {
     try {
       const ids = Array.from(selectedSubs);
       const { error } = await supabase.from("submissions").update({
-        grade: parseInt(bulkMarks),
+        grade: parseFloat(bulkMarks),
         feedback: bulkFeedback.trim() || null,
         graded_at: new Date().toISOString(),
         graded_by: user?.id,
@@ -391,6 +472,80 @@ export default function TeacherAssignmentsTab() {
       loadData();
     } catch (e: any) { toast.error(e.message || "Failed"); }
     setBulkGrading(false);
+  }
+
+  /* ── AI check: marking scheme once, then each submission (3 at a time; one request each, so it
+        works on serverless and can be stopped/resumed) ── */
+  async function runAiCheck(only?: string) {
+    if (!activeAssignment || aiRun) return;
+    const targets = submissions.filter(s =>
+      only ? s.id === only : s.status !== "graded" && s.ai_status !== "done");
+    if (targets.length === 0) { toast.info("Nothing left to check."); return; }
+    aiStop.current = false;
+    setAiRun({ phase: "rubric", done: 0, total: targets.length, failed: 0 });
+    try {
+      const r = await checkerPost(`/assignments/${activeAssignment.id}/rubric`);
+      if (r.rubric?.marks_mismatch) toast.warning(r.rubric.marks_mismatch);
+      if (activeAssignment.max_marks && r.rubric?.total_marks && Number(activeAssignment.max_marks) !== Number(r.rubric.total_marks)) {
+        toast.warning(`Question paper totals ${r.rubric.total_marks} marks, assignment says ${activeAssignment.max_marks}.`);
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+      setAiRun(null);
+      return;
+    }
+
+    setAiRun(prev => prev && { ...prev, phase: "grading" });
+    setSubmissions(prev => prev.map(s => targets.some(t => t.id === s.id) ? { ...s, ai_status: "checking", ai_error: null } : s));
+    let next = 0, failed = 0, stopMsg = "";
+    const worker = async () => {
+      while (next < targets.length && !aiStop.current) {
+        const sub = targets[next++];
+        try {
+          const { result } = await checkerPost(`/assignments/${activeAssignment.id}/submissions/${sub.id}/check`);
+          setSubmissions(prev => prev.map(s => s.id === sub.id ? {
+            ...s, ai_status: "done", ai_result: result, ai_marks: result.total_marks_awarded,
+            ai_max_marks: result.max_marks, ai_error: null,
+          } : s));
+        } catch (e: any) {
+          failed++;
+          setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, ai_status: "failed", ai_error: e.message } : s));
+          if (/daily limit|session expired/i.test(e.message)) { aiStop.current = true; stopMsg = e.message; }
+        }
+        setAiRun(prev => prev && { ...prev, done: prev.done + 1, failed });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(AI_PARALLEL, targets.length) }, worker));
+    setAiRun(null);
+    if (stopMsg) toast.error(stopMsg);
+    else if (failed) toast.warning(`${targets.length - failed} checked, ${failed} failed — use Retry on those.`);
+    else toast.success(`${targets.length} submission${targets.length > 1 ? "s" : ""} checked. Review and approve.`);
+    if (activeAssignment) openSubmissions(activeAssignment);
+  }
+
+  function openAiReview(sub: Submission) {
+    setAiOpenId(sub.id);
+    setGradingId(sub.id);
+    setGradeInput(sub.ai_marks != null ? String(sub.ai_marks) : "");
+    setFeedbackInput(sub.ai_result ? feedbackFromAi(sub.ai_result) : "");
+  }
+
+  /** Approve AI marks as-is for every checked submission that has no review flags. */
+  async function approveAllClean() {
+    const clean = submissions.filter(s => s.status !== "graded" && s.ai_status === "done" && s.ai_result
+      && !(s.ai_result.needs_review_count || 0));
+    if (clean.length === 0) { toast.info("No AI-checked submissions without review flags."); return; }
+    if (!confirm(`Approve AI marks for ${clean.length} submission(s)? Students will see marks and feedback.`)) return;
+    setBulkGrading(true);
+    const results = await Promise.all(clean.map(s => supabase.from("submissions").update({
+      grade: s.ai_marks, feedback: feedbackFromAi(s.ai_result!),
+      graded_at: new Date().toISOString(), graded_by: user?.id, status: "graded",
+    }).eq("id", s.id)));
+    const errs = results.filter(r => r.error).length;
+    setBulkGrading(false);
+    if (errs) toast.error(`${errs} could not be saved.`); else toast.success(`${clean.length} approved.`);
+    if (activeAssignment) openSubmissions(activeAssignment);
+    loadData();
   }
 
   function toggleSelect(id: string) {
@@ -495,6 +650,41 @@ export default function TeacherAssignmentsTab() {
                 onChange={e => { if (e.target.files?.[0]) setForm({ ...form, file: e.target.files[0] }); }} />
             </div>
 
+            <div style={{ padding: 16, borderRadius: 12, background: "#F5F3FF", border: "1px solid #DDD6FE" }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#6D28D9", display: "block", marginBottom: 4 }}>
+                ✨ ANSWER KEY FOR AI CHECKING (optional · private)
+              </label>
+              <p style={{ margin: "0 0 10px", fontSize: 12, color: "#7C3AED" }}>
+                Students never see this file. With the question paper PDF above, AI can check every submission against it.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 170px", gap: 10 }}>
+                <div onClick={() => keyRef.current?.click()}
+                  style={{ border: "2px dashed #C4B5FD", borderRadius: 12, padding: 14, textAlign: "center", cursor: "pointer", background: form.keyFile ? "#F0FDF4" : "#fff" }}>
+                  {form.keyFile
+                    ? <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#16A34A" }}>🔑 {form.keyFile.name}</p>
+                    : <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#8B5CF6" }}>
+                        {editingId && assignments.find(a => a.id === editingId)?.ai_key_name
+                          ? `🔑 ${assignments.find(a => a.id === editingId)?.ai_key_name} — click to replace`
+                          : "Click to upload answer key (PDF / image)"}
+                      </p>}
+                </div>
+                <select className="ta-field" value={form.strictness} title="How strictly AI marks"
+                  onChange={e => setForm({ ...form, strictness: e.target.value as Strictness })} style={{ background: "#fff" }}>
+                  <option value="easy">Lenient</option>
+                  <option value="medium">Standard</option>
+                  <option value="hard">Strict</option>
+                  <option value="extreme">Very strict</option>
+                </select>
+              </div>
+              <input ref={keyRef} type="file" accept={KEY_ACCEPT} style={{ display: "none" }}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  if (f.size > 20 * 1024 * 1024) { toast.error("Answer key too large (max 20 MB)."); return; }
+                  setForm({ ...form, keyFile: f });
+                }} />
+            </div>
+
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 8 }}>
               <button className="ta-btn-ghost" onClick={() => { resetForm(); setView("list"); }}>Cancel</button>
               <button className="ta-btn-primary" onClick={handleSave}
@@ -535,6 +725,44 @@ export default function TeacherAssignmentsTab() {
               </div>
             ))}
           </div>
+
+          {/* AI checking bar */}
+          {(() => {
+            const pending = submissions.filter(s => s.status !== "graded" && s.ai_status !== "done").length;
+            const clean = submissions.filter(s => s.status !== "graded" && s.ai_status === "done" && !(s.ai_result?.needs_review_count || 0)).length;
+            const ready = !!activeAssignment.ai_key_name && !!activeAssignment.file_url;
+            return (
+              <div className="ta-card" style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "linear-gradient(135deg, #F5F3FF, #EEF2FF)" }}>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#4C1D95" }}>✨ AI checking</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6D28D9" }}>
+                    {!ready
+                      ? (!activeAssignment.file_url ? "Attach the question paper PDF and an answer key (Edit) to enable." : "Attach an answer key (Edit) to enable.")
+                      : aiRun
+                        ? (aiRun.phase === "rubric" ? "Reading question paper + answer key…" : `Checking ${aiRun.done}/${aiRun.total}${aiRun.failed ? ` · ${aiRun.failed} failed` : ""}…`)
+                        : `AI marks each answer point by point. You review, then approve — students see marks only after approval.`}
+                  </p>
+                  {aiRun && aiRun.phase === "grading" && (
+                    <div style={{ height: 4, background: "#DDD6FE", borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.round(aiRun.done / aiRun.total * 100)}%`, height: "100%", background: "#7C3AED", transition: "width .3s" }} />
+                    </div>
+                  )}
+                </div>
+                {aiRun
+                  ? <button className="ta-btn-ghost" onClick={() => { aiStop.current = true; }}>Stop</button>
+                  : <>
+                      {clean > 0 && (
+                        <button className="ta-btn-ghost" disabled={bulkGrading} onClick={approveAllClean}>
+                          ✓ Approve {clean} without review flags
+                        </button>
+                      )}
+                      <button className="ta-btn-primary" disabled={!ready || pending === 0} onClick={() => runAiCheck()}>
+                        ✨ AI check {pending > 0 ? pending : ""}
+                      </button>
+                    </>}
+              </div>
+            );
+          })()}
 
           {/* Bulk grade bar */}
           {selectedSubs.size > 0 && (
@@ -609,6 +837,20 @@ export default function TeacherAssignmentsTab() {
                             📄 View PDF
                           </a>
                         )}
+                        {sub.status !== "graded" && sub.ai_status === "checking" && (
+                          <span className="ta-badge" style={{ background: "#EDE9FE", color: "#6D28D9" }}>✨ Checking…</span>
+                        )}
+                        {sub.status !== "graded" && sub.ai_status === "failed" && (
+                          <button className="ta-btn-danger" style={{ fontSize: 12 }} title={sub.ai_error || ""}
+                            disabled={!!aiRun} onClick={() => runAiCheck(sub.id)}>⚠ AI failed · Retry</button>
+                        )}
+                        {sub.status !== "graded" && sub.ai_status === "done" && sub.ai_result && (
+                          <button className="ta-btn-ghost" style={{ fontSize: 12, background: "#EDE9FE", color: "#5B21B6" }}
+                            onClick={() => aiOpenId === sub.id ? (setAiOpenId(null), setGradingId(null)) : openAiReview(sub)}>
+                            ✨ AI {sub.ai_marks}/{sub.ai_max_marks}
+                            {(sub.ai_result.needs_review_count || 0) > 0 && <span style={{ color: "#C2410C" }}> · {sub.ai_result.needs_review_count} to review</span>}
+                          </button>
+                        )}
                         {sub.status === "graded" ? (
                           <span className="ta-badge" style={{ background: "#DCFCE7", color: "#16A34A" }}>
                             ✓ {sub.grade !== null ? `${sub.grade}/${activeAssignment.max_marks || "?"}` : "Graded"}
@@ -616,6 +858,7 @@ export default function TeacherAssignmentsTab() {
                         ) : (
                           <button className="ta-btn-primary" style={{ padding: "6px 14px", fontSize: 12 }}
                             onClick={() => {
+                              setAiOpenId(null);
                               setGradingId(sub.id);
                               setGradeInput(sub.grade?.toString() || "");
                               setFeedbackInput(sub.feedback || "");
@@ -632,15 +875,27 @@ export default function TeacherAssignmentsTab() {
                       </div>
                     )}
 
+                    {aiOpenId === sub.id && sub.ai_result && (
+                      <div className="ta-fade" style={{ marginTop: 12, border: "1px solid #E9D5FF", borderRadius: 12, overflow: "hidden", background: "#fff" }}>
+                        <div style={{ padding: "10px 16px", background: "#FAF5FF", fontSize: 12, color: "#6B21A8" }}>
+                          <b>AI: {sub.ai_result.total_marks_awarded}/{sub.ai_result.max_marks}</b> ({sub.ai_result.percentage}%) — {sub.ai_result.overall_remarks}
+                          <span style={{ display: "block", marginTop: 2, color: "#9333EA" }}>Open a question to see each marking point and what the student wrote. Edit marks below if needed.</span>
+                        </div>
+                        <AiQuestionList questions={sub.ai_result.graded_questions || []} />
+                      </div>
+                    )}
+
                     {gradingId === sub.id && (
                       <div className="ta-fade" style={{ marginTop: 12, padding: 16, background: "#F8FAFC", borderRadius: 12, display: "flex", flexDirection: "column", gap: 10 }}>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                          <input className="ta-field" type="number"
+                          <input className="ta-field" type="number" step="0.5" min="0"
                             placeholder={`Marks (out of ${activeAssignment.max_marks || "?"})`}
                             value={gradeInput} onChange={e => setGradeInput(e.target.value)}
                             style={{ maxWidth: 220, background: "#fff" }} autoFocus />
-                          <button className="ta-btn-ghost" onClick={() => setGradingId(null)}>Cancel</button>
-                          <button className="ta-btn-primary" onClick={() => handleGrade(sub.id)}>Save Grade</button>
+                          <button className="ta-btn-ghost" onClick={() => { setGradingId(null); setAiOpenId(null); }}>Cancel</button>
+                          <button className="ta-btn-primary" onClick={() => { setAiOpenId(null); handleGrade(sub.id); }}>
+                            {aiOpenId === sub.id ? "✓ Approve & send to student" : "Save Grade"}
+                          </button>
                         </div>
                         <textarea className="ta-field" placeholder="Feedback for student (optional)..." rows={2}
                           value={feedbackInput} onChange={e => setFeedbackInput(e.target.value)}
@@ -736,6 +991,7 @@ export default function TeacherAssignmentsTab() {
                           )}
                           {a.max_marks && <span className="ta-badge" style={{ background: "#F1F5F9", color: "#64748B" }}>⭐ {a.max_marks} marks</span>}
                           {a.file_url && <span style={{ fontSize: 11, color: "#6366F1", fontWeight: 700 }}>📎 PDF</span>}
+                          {a.ai_key_name && <span className="ta-badge" style={{ background: "#F5F3FF", color: "#7C3AED" }}>✨ AI ready</span>}
                           {(a.late_count || 0) > 0 && (
                             <span className="ta-badge" style={{ background: "#FEE2E2", color: "#DC2626" }}>
                               ⚠ {a.late_count} late
