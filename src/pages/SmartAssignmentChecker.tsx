@@ -1,5 +1,5 @@
 /**
- * SmartAssignmentChecker.tsx — v1.0
+ * SmartAssignmentChecker.tsx — v2.0
  *
  * Teacher uploads:
  *   1. Question paper
@@ -8,11 +8,13 @@
  *
  * System:
  *   - Validates student name, class, roll no (invalid if any missing)
- *   - Grades per question and sub-part
- *   - Marks strictly capped at paper's maximum
+ *   - Builds a marking rubric (points per question) from the paper + key
+ *   - Grades every marking point with the student's own words as evidence
+ *   - Flags answers a teacher should look at (low confidence, illegible, estimated split)
  */
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -23,6 +25,19 @@ interface StudentInfo {
   missing_fields: string[];
 }
 
+type Verdict = "full" | "mostly" | "partial" | "none";
+
+interface PointGrade {
+  id: string;
+  text: string;
+  expected: string;
+  max_marks: number;
+  marks_awarded: number;
+  verdict: Verdict;
+  evidence: string;
+  reason: string;
+}
+
 interface SubpartGrade {
   sub_id: string;
   max_marks: number;
@@ -31,6 +46,9 @@ interface SubpartGrade {
   key_concepts_found: string[];
   key_concepts_missed: string[];
   feedback: string;
+  points?: PointGrade[];
+  needs_review?: boolean;
+  review_reasons?: string[];
 }
 
 interface GradedQuestion {
@@ -46,6 +64,12 @@ interface GradedQuestion {
   not_attempted: boolean;
   has_subparts: boolean;
   subpart_grades: SubpartGrade[];
+  points?: PointGrade[];
+  needs_review?: boolean;
+  review_reasons?: string[];
+  counted?: boolean;
+  or_group?: string | null;
+  scheme_source?: "key" | "estimated" | "adjusted";
 }
 
 interface AssignmentResult {
@@ -59,12 +83,13 @@ interface AssignmentResult {
   percentage: number;
   overall_remarks: string;
   readability_score: string;
-  paper_info?: { total_questions: number; total_marks: number };
+  needs_review_count?: number;
+  paper_info?: { total_questions: number; total_marks: number; marks_mismatch?: string | null };
   _meta?: {
     model: string;
     strictness: string;
-    parse_paper_time_s: number;
-    parse_key_time_s: number;
+    upload_time_s?: number;
+    rubric_time_s?: number;
     grade_time_s: number;
     total_time_s: number;
   };
@@ -79,23 +104,29 @@ interface CheckResponse {
 
 type Strictness = "easy" | "medium" | "hard" | "extreme";
 type Step = "upload" | "grading" | "results";
-type GradingPhase = "paper" | "key" | "grading";
+type GradingPhase = "rubric" | "grading";
 
 // ── Constants ─────────────────────────────────────────────────────
 
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api"}/v1`;
 
 const STRICTNESS_OPTIONS: { value: Strictness; label: string; desc: string }[] = [
-  { value: "easy",    label: "Lenient",       desc: "40% concept coverage = full marks" },
-  { value: "medium",  label: "Standard",      desc: "60% coverage = full marks, fair partial marks" },
-  { value: "hard",    label: "Strict",        desc: "80% coverage, key terms required" },
-  { value: "extreme", label: "Very Strict",   desc: "90%+ exact coverage required" },
+  { value: "easy",    label: "Lenient",       desc: "right idea in any words gets the mark" },
+  { value: "medium",  label: "Standard",      desc: "board-style marking, own words accepted" },
+  { value: "hard",    label: "Strict",        desc: "key technical terms required" },
+  { value: "extreme", label: "Very Strict",   desc: "complete, precise answers only" },
 ];
 
 const PHASE_LABELS: Record<GradingPhase, { title: string; desc: string }> = {
-  paper:   { title: "Step 1: Reading question paper…",   desc: "Extracting questions, sub-parts and marks structure." },
-  key:     { title: "Step 2: Reading answer key…",       desc: "Mapping correct answers and key concepts to each question." },
-  grading: { title: "Step 3: Grading student sheet…",    desc: "Validating student identity and grading each answer." },
+  rubric:  { title: "Step 1: Reading question paper + answer key…", desc: "Building the marking scheme: marks for every point of every question." },
+  grading: { title: "Step 2: Grading student sheet…",               desc: "Checking identity and marking each point against the student's own words." },
+};
+
+const VERDICT_STYLE: Record<Verdict, { label: string; cls: string }> = {
+  full:    { label: "Full",    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  mostly:  { label: "Mostly",  cls: "bg-lime-100 text-lime-700 dark:bg-lime-900/40 dark:text-lime-300" },
+  partial: { label: "Partial", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  none:    { label: "None",    cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
 };
 
 const ACCEPTED = ".pdf,.png,.jpg,.jpeg,.webp";
@@ -161,7 +192,7 @@ export default function SmartAssignmentChecker() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<CheckResponse | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const [phase, setPhase] = useState<GradingPhase>("paper");
+  const [phase, setPhase] = useState<GradingPhase>("rubric");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const validateFile = (f: File): boolean => {
@@ -179,15 +210,13 @@ export default function SmartAssignmentChecker() {
     if (!canGrade()) { setError("Upload all three files before grading."); return; }
 
     setLoading(true); setError(""); setStep("grading");
-    setElapsed(0); setPhase("paper");
+    setElapsed(0); setPhase("rubric");
 
     const startTime = Date.now();
     timerRef.current = setInterval(() => {
       const s = Math.floor((Date.now() - startTime) / 1000);
       setElapsed(s);
-      if (s < 30) setPhase("paper");
-      else if (s < 70) setPhase("key");
-      else setPhase("grading");
+      setPhase(s < 20 ? "rubric" : "grading");
     }, 1000);
 
     try {
@@ -198,12 +227,19 @@ export default function SmartAssignmentChecker() {
       fd.append("strictness", strictness);
       fd.append("subject", subject);
       fd.append("class_grade", classGrade);
-      fd.append("teacher_id", "");
 
-      const res = await fetch(`${API_BASE}/smart-assignment-checker/check`, { method: "POST", body: fd });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Your session has expired. Please log in again.");
+
+      const res = await fetch(`${API_BASE}/smart-assignment-checker/check`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: fd,
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `Server error (${res.status})`);
+        if (res.status === 401) throw new Error("Your session has expired. Please log in again.");
+        throw new Error(typeof err.detail === "string" ? err.detail : `Server error (${res.status})`);
       }
       setResult(await res.json());
       setStep("results");
@@ -307,10 +343,10 @@ export default function SmartAssignmentChecker() {
             <p className="text-sm text-gray-500 dark:text-gray-400">{PHASE_LABELS[phase].desc}</p>
             <div className="w-72 mx-auto mt-5 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div className="h-full bg-blue-500 rounded-full transition-all duration-1000"
-                style={{ width: phase === "paper" ? "25%" : phase === "key" ? "60%" : "88%" }} />
+                style={{ width: phase === "rubric" ? "40%" : "85%" }} />
             </div>
             <p className="text-2xl font-mono text-blue-600 mt-4">{elapsed}s</p>
-            <p className="text-xs text-gray-400 mt-1">3 AI passes — usually 90–150 seconds</p>
+            <p className="text-xs text-gray-400 mt-1">2 AI passes — usually 30–60 seconds</p>
           </div>
         )}
 
@@ -403,11 +439,21 @@ function ResultsView({ data, onReset }: { data: CheckResponse; onReset: () => vo
               <p>{r.readability_score === "good" ? "🟢" : r.readability_score === "average" ? "🟡" : "🔴"} Legibility: {r.readability_score}</p>
             )}
             {meta && <p>⏱ {meta.total_time_s}s total</p>}
-            {meta && <p>📄 Parse: {meta.parse_paper_time_s}s · Key: {meta.parse_key_time_s}s · Grade: {meta.grade_time_s}s</p>}
+            {meta && meta.rubric_time_s !== undefined && <p>📄 Marking scheme: {meta.rubric_time_s}s · Grading: {meta.grade_time_s}s</p>}
             {r.paper_info && <p>📝 {r.paper_info.total_questions} questions · {r.paper_info.total_marks} max marks</p>}
           </div>
         </div>
       </div>
+
+      {/* Needs-review / paper warnings */}
+      {(!!r.needs_review_count || r.paper_info?.marks_mismatch) && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl px-5 py-3 text-sm text-amber-800 dark:text-amber-200 space-y-1">
+          {!!r.needs_review_count && (
+            <p>👀 <b>{r.needs_review_count}</b> answer{r.needs_review_count > 1 ? "s" : ""} need a quick teacher check — marked “Review” below.</p>
+          )}
+          {r.paper_info?.marks_mismatch && <p>⚠ {r.paper_info.marks_mismatch}. Check the question paper's marks.</p>}
+        </div>
+      )}
 
       {/* Per-question breakdown */}
       <section className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -460,6 +506,8 @@ function QuestionRow({ q }: { q: GradedQuestion }) {
         {!isNotAttempted && <span className={`w-2 h-2 rounded-full shrink-0 ${confDot}`} title={`Confidence: ${q.confidence}`} />}
         <span className="text-sm text-gray-600 dark:text-gray-400 truncate flex-1">{q.feedback}</span>
         <div className="flex gap-1 shrink-0">
+          {q.needs_review && q.counted !== false && <span className="text-xs bg-orange-100 dark:bg-orange-900/40 text-orange-700 px-2 py-0.5 rounded" title={(q.review_reasons || []).join(" · ")}>Review</span>}
+          {q.counted === false && <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 px-2 py-0.5 rounded">not counted (OR)</span>}
           {q.legibility_issue && <span className="text-xs bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 px-2 py-0.5 rounded">illegible</span>}
           {isNotAttempted && <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 px-2 py-0.5 rounded">not attempted</span>}
           {q.has_subparts && <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-600 px-2 py-0.5 rounded">{q.subpart_grades.length} parts</span>}
@@ -469,6 +517,9 @@ function QuestionRow({ q }: { q: GradedQuestion }) {
 
       {expanded && (
         <div className="px-6 pb-4 space-y-3">
+          {q.needs_review && q.review_reasons && q.review_reasons.length > 0 && (
+            <p className="ml-10 text-xs text-orange-600 dark:text-orange-300">Review: {q.review_reasons.join(" · ")}</p>
+          )}
           {/* Sub-parts */}
           {q.has_subparts && q.subpart_grades.length > 0 && (
             <div className="ml-10 space-y-2">
@@ -488,9 +539,11 @@ function QuestionRow({ q }: { q: GradedQuestion }) {
                       </span>
                     </div>
                     <p className="text-xs text-gray-600 dark:text-gray-400">{sp.feedback}</p>
-                    {sp.key_concepts_missed.length > 0 && (
-                      <p className="text-xs text-red-500 mt-1">Missed: {sp.key_concepts_missed.join(", ")}</p>
-                    )}
+                    {sp.points && sp.points.length > 0
+                      ? <PointList points={sp.points} />
+                      : sp.key_concepts_missed.length > 0 && (
+                        <p className="text-xs text-red-500 mt-1">Missed: {sp.key_concepts_missed.join(", ")}</p>
+                      )}
                   </div>
                 );
               })}
@@ -506,20 +559,55 @@ function QuestionRow({ q }: { q: GradedQuestion }) {
                   <p className="text-gray-700 dark:text-gray-300 mt-0.5 bg-gray-50 dark:bg-gray-800 rounded px-3 py-2">{q.student_answer_summary}</p>
                 </div>
               )}
-              {q.key_concepts_found.length > 0 && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                  ✓ Found: {q.key_concepts_found.join(", ")}
-                </p>
+              {q.points && q.points.length > 0 ? <PointList points={q.points} /> : (
+                <>
+                  {q.key_concepts_found.length > 0 && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                      ✓ Found: {q.key_concepts_found.join(", ")}
+                    </p>
+                  )}
+                  {q.key_concepts_missed.length > 0 && (
+                    <p className="text-xs text-red-500 dark:text-red-400">
+                      ✕ Missed: {q.key_concepts_missed.join(", ")}
+                    </p>
+                  )}
+                </>
               )}
-              {q.key_concepts_missed.length > 0 && (
-                <p className="text-xs text-red-500 dark:text-red-400">
-                  ✕ Missed: {q.key_concepts_missed.join(", ")}
-                </p>
+              {q.scheme_source === "estimated" && (
+                <p className="text-xs text-gray-400">Marks split estimated by AI — the answer key had no per-point marks.</p>
               )}
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// MARKING POINTS — why each mark was (not) given
+// ═══════════════════════════════════════════════════════════════════════
+
+function PointList({ points }: { points: PointGrade[] }) {
+  return (
+    <div className="mt-2 space-y-1.5">
+      {points.map(p => {
+        const v = VERDICT_STYLE[p.verdict] || VERDICT_STYLE.none;
+        return (
+          <div key={p.id} className="text-xs border border-gray-100 dark:border-gray-800 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-gray-700 dark:text-gray-300">{p.text || p.id}</span>
+              <span className={`px-1.5 py-0.5 rounded font-bold ${v.cls}`}>{v.label} · {p.marks_awarded}/{p.max_marks}</span>
+            </div>
+            {p.expected && <p className="text-gray-400 mt-1">Key: {p.expected}</p>}
+            {p.evidence
+              ? <p className="text-gray-600 dark:text-gray-400 mt-0.5">Student: “{p.evidence}”</p>
+              : <p className="text-gray-400 mt-0.5 italic">Student: nothing written for this point</p>}
+            {p.reason && <p className="text-gray-500 mt-0.5">{p.reason}</p>}
+          </div>
+        );
+      })}
     </div>
   );
 }
