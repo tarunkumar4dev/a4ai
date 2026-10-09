@@ -69,6 +69,11 @@ const ModulesPage = lazy(() => import("./pages/ModulesPage"));
 /* ---------- TEST CHECKER ---------- */
 const TestChecker = lazy(() => import("./pages/TestChecker"));
 
+/* ---------- SMART ASSIGNMENT CHECKER ---------- */
+const SmartAssignmentChecker = lazy(
+  () => import("./pages/SmartAssignmentChecker")
+);
+
 /* ---------- NEW QUIZ PAGE ---------- */
 const QuizPage = lazy(() => import("./pages/Quiz"));
 
@@ -422,6 +427,13 @@ const App = () => {
                       <Route path="/dashboard/test-checker" element={
                         <RoleAuthGate allowedRoles={["teacher", "institute", "admin"]}>
                           <TestChecker />
+                        </RoleAuthGate>
+                      } />
+
+                      {/* ── Smart Assignment Checker (teacher + institute only) ── */}
+                      <Route path="/dashboard/assignment-checker" element={
+                        <RoleAuthGate allowedRoles={["teacher", "institute"]}>
+                          <SmartAssignmentChecker />
                         </RoleAuthGate>
                       } />
 
