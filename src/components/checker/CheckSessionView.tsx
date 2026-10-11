@@ -536,6 +536,11 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
             <button onClick={approve} disabled={saving} className="w-full py-4 rounded-2xl bg-gray-900 text-white font-black text-sm">
               {saving ? "Saving…" : "Save changes"}
             </button>
+          ) : sheet.status === "failed" ? (
+            <button onClick={onCheck} disabled={uploading > 0 || sheet.pages.length === 0}
+              className="w-full py-4 rounded-2xl bg-red-600 text-white font-black text-sm disabled:bg-gray-300">
+              ↻ Retry check
+            </button>
           ) : (
             <button onClick={doneAndNext} disabled={locked || uploading > 0 || sheet.pages.length === 0}
               className="w-full py-4 rounded-2xl bg-[#111827] text-white font-black text-sm disabled:bg-gray-300">
