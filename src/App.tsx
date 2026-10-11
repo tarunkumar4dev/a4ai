@@ -224,9 +224,12 @@ function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowed
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
 
+  // `role` is the self-chosen signup role (user_metadata) — the user can change it, so this gate is UX only
+  // (keeps students out of teacher pages). Never let it unlock anything: no "admin" bypass here; institute
+  // roles come from get_my_access() via RoleRoute, data access from RLS / backend JWT.
   const userRole = (role || "teacher").toLowerCase().trim();
   const normalizedAllowed = allowedRoles.map((r) => r.toLowerCase().trim());
-  if (userRole !== "admin" && !normalizedAllowed.includes(userRole)) {
+  if (!normalizedAllowed.includes(userRole)) {
     toast.error(`Access denied. You are registered as a ${role || "teacher"}.`);
     return <Navigate to={`/${userRole}/dashboard`} replace />;
   }
@@ -428,7 +431,7 @@ const App = () => {
                       {/* Practice & PYQ Routes */}
                       <Route path="/practice/zone" element={<PrivateRoute><PracticeZonePage /></PrivateRoute>} />
                       <Route path="/practice/pyq-session" element={<PrivateRoute><PYQPracticeSessionPage /></PrivateRoute>} />
-                      <Route path="/admin/pyq" element={<RoleAuthGate allowedRoles={["teacher", "admin"]}><PYQAdminPage /></RoleAuthGate>} />
+                      <Route path="/admin/pyq" element={<RoleRoute allow={['admin']}><PYQAdminPage /></RoleRoute>} />
 
                       <Route path="/dashboard/practice" element={<PrivateRoute><PracticePage /></PrivateRoute>} />
                       <Route path="/practice" element={<PracticePage />} />

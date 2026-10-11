@@ -503,6 +503,8 @@ export default function StudentPortalPage() {
       const { error: upErr } = await supabase.storage.from("submissions").upload(path, file, { upsert: false, contentType: "application/pdf" }); // unique path; upsert would need storage SELECT (removed in 07)
       if (upErr) throw upErr;
 
+      // Bucket is private (12): this URL isn't directly readable, it's the stored reference that
+      // submit_assignment validates and staff/backend turn back into a path.
       const { data: { publicUrl } } = supabase.storage.from("submissions").getPublicUrl(path);
 
       const { error: subErr } = await supabase.rpc("submit_assignment", {
@@ -807,8 +809,9 @@ export default function StudentPortalPage() {
                         <p className="text-xs" style={{ color: t.textMuted }}>Submitted {fmtDate(sub.submitted_at)}</p>
                       </div>
                     </div>
+                    {/* The submissions bucket is private and the portal has no session to sign a URL — no View link. */}
                     {sub.file_url && (
-                      <a href={sub.file_url} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline shrink-0" style={{ color: t.accent }}>View</a>
+                      <span className="text-sm font-medium shrink-0" style={{ color: t.accent }}>Submitted ✓</span>
                     )}
                   </div>
                 )}
@@ -1268,15 +1271,20 @@ export default function StudentPortalPage() {
 
                         <div className="border-t pt-3 mt-2 flex items-center justify-between text-xs" style={{ borderColor: t.border }}>
                           <span style={{ color: t.textMuted }}>{fmtDate(file.date)}</span>
-                          <a
-                            href={file.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold border transition-colors"
-                            style={{ background: t.bg, color: file.type === "assignment" ? t.teal : t.accent, borderColor: t.border }}
-                          >
-                            <Icons.Download /> Open / Download
-                          </a>
+                          {file.type === "submission" ? (
+                            // private bucket, no portal session to sign a URL
+                            <span className="px-3 py-1.5 font-semibold" style={{ color: t.accent }}>Submitted ✓</span>
+                          ) : (
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold border transition-colors"
+                              style={{ background: t.bg, color: t.teal, borderColor: t.border }}
+                            >
+                              <Icons.Download /> Open / Download
+                            </a>
+                          )}
                         </div>
                       </div>
                     ))}

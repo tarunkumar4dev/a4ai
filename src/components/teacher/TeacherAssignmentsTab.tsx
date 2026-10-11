@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import { toast } from "sonner";
+import { openSubmissionFile } from "@/lib/submissionFiles";
 import { useMyScope } from "@/hooks/useMyScope";
 import { AiQuestionList, feedbackFromAi, type AiResult } from "@/components/checker/AiGradeBreakdown";
 
@@ -816,9 +817,16 @@ export default function TeacherAssignmentsTab() {
 
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                         {sub.file_url && (
-                          <a href={sub.file_url} target="_blank" rel="noreferrer" className="ta-btn-ghost" style={{ fontSize: 12, textDecoration: "none" }}>
+                          <button
+                            type="button"
+                            className="ta-btn-ghost"
+                            style={{ fontSize: 12 }}
+                            onClick={async () => {
+                              if (!(await openSubmissionFile(sub.file_url!))) toast.error("Couldn't open this file.");
+                            }}
+                          >
                             📄 View PDF
-                          </a>
+                          </button>
                         )}
                         {sub.status !== "graded" && sub.ai_status === "checking" && (
                           <span className="ta-badge" style={{ background: "#EDE9FE", color: "#6D28D9" }}>✨ Checking…</span>

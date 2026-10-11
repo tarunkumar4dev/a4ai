@@ -65,18 +65,22 @@ export default function AuthCallback() {
         }
         localStorage.removeItem("a4ai_pending_role");
 
-        // 5. Upsert profile in profiles table
+        // 5. Ensure profile row. Role only on a NEW row — the DB rejects role changes from the app
+        //    (12_role_hardening a4_guard_profile_role), which would fail the whole upsert.
         try {
-          await supabase.from("profiles").upsert({
-            id: user.id,
+          const fullName =
+            (user.user_metadata?.full_name as string) ||
+            (user.user_metadata?.name as string) ||
+            "New User";
+          await supabase.from("profiles").upsert(
+            { id: user.id, email: user.email, full_name: fullName, role: finalRole },
+            { onConflict: "id", ignoreDuplicates: true }
+          );
+          await supabase.from("profiles").update({
             email: user.email,
-            full_name:
-              (user.user_metadata?.full_name as string) ||
-              (user.user_metadata?.name as string) ||
-              "New User",
-            role: finalRole,
+            full_name: fullName,
             updated_at: new Date().toISOString(),
-          });
+          }).eq("id", user.id);
         } catch (profileErr) {
           // Non-fatal — profile might already exist or table might not exist yet
           console.debug("Profile upsert skipped:", (profileErr as any)?.message);

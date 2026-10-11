@@ -320,20 +320,13 @@ export default function HODAttendanceDashboard({
       }
       const subMap = new Map((subjectsData || []).map((s: any) => [s.id, s]));
 
-      // 6. Fetch Teaching Assignments & Teacher Batches
-      const [taRes, tbRes] = await Promise.all([
-        supabase
-          .from("teaching_assignments")
-          .select("teacher_id, batch_id, subject_id")
-          .eq("institute_id", instituteId),
-        supabase
-          .from("teacher_batches")
-          .select("teacher_id, batch_id")
-          .eq("institute_id", instituteId),
-      ]);
+      // 6. Fetch Teaching Assignments (teacher_batches is legacy — never used for scope or display)
+      const taRes = await supabase
+        .from("teaching_assignments")
+        .select("teacher_id, batch_id, subject_id")
+        .eq("institute_id", instituteId);
 
       const teachingAssignments = taRes.data || [];
-      const teacherBatches = tbRes.data || [];
 
       // 7. Query class_sessions for this institute and date
       const { data: sessions } = await supabase
@@ -475,52 +468,6 @@ export default function HODAttendanceDashboard({
           subjectId: ta.subject_id,
           subjectName: subject?.name || batch?.subject || "Assigned Subject",
           subjectCode: subject?.code || "",
-          classroom: room,
-          timeSlot: timeSlot,
-          isMarked: false,
-          presentCount: 0,
-          absentCount: 0,
-          leaveCount: 0,
-          totalStudents: studentCount,
-          attendancePct: 0,
-        });
-      });
-
-      // Check teacher_batches for any remaining pending assignments
-      teacherBatches.forEach((tb: any) => {
-        const key = `${tb.teacher_id}_${tb.batch_id}`;
-        if (handledKeys.has(key)) return;
-        handledKeys.add(key);
-
-        const tInfo = teacherMap.get(tb.teacher_id) || {
-          name: "Teacher",
-          email: "",
-          departmentId: "",
-          departmentName: "General",
-        };
-        const batch = bMap.get(tb.batch_id);
-        const studentCount = batchCountMap[tb.batch_id] || 0;
-
-        const { room, timeSlot } = getDeterministicRoomAndTime(
-          tb.batch_id,
-          undefined,
-          tb.teacher_id,
-          date
-        );
-
-        items.push({
-          id: `pending_tb_${tb.teacher_id}_${tb.batch_id}`,
-          date: date,
-          teacherId: tb.teacher_id,
-          teacherName: tInfo.name,
-          teacherEmail: tInfo.email,
-          departmentId: tInfo.departmentId || batch?.department_id,
-          departmentName: deptMap.get(tInfo.departmentId || batch?.department_id) || tInfo.departmentName,
-          batchId: tb.batch_id,
-          batchName: batch?.name || "Batch",
-          classLevel: batch?.class_level,
-          subjectName: batch?.subject || "Subject",
-          subjectCode: "",
           classroom: room,
           timeSlot: timeSlot,
           isMarked: false,
