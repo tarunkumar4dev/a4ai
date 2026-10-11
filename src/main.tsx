@@ -3,6 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import "./styles/lite.css"; // no animations / blur (Play Store WebView speed)
 
 /* ---------- Vercel Analytics inject() ---------- */
 import { inject } from "@vercel/analytics";

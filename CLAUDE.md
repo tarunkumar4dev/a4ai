@@ -196,6 +196,11 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Job ids hard-coded in CareersPage + the RPC — change both when roles change.
 - [ ] Run 14 + VERIFY block, then submit one test application on /careers.
 
+- [x] Lite mode (12 Oct): app also ships as a Play Store WebView wrapper → `src/styles/lite.css` (imported in main.tsx)
+  kills CSS animations/transitions/backdrop blur (spinners excepted) + `MotionConfig reducedMotion="always"` in App.tsx.
+  Chatbot = `src/components/chat/StaticSarthi.tsx` (fixed answers, no AI/network; Groq/OpenRouter browser calls removed).
+  HODDashboardPage lazy → main bundle 1049 KB → 462 KB. Don't add new animations; new UI must look right without them.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

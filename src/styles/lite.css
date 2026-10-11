@@ -1,0 +1,33 @@
+/* Lite mode (12 Oct 2026): a4ai also runs inside the Play Store WebView wrapper, where motion and blur
+   are the main cause of lag. Everything renders in its final state instantly; nothing animates.
+   Framer Motion is switched off separately (MotionConfig reducedMotion="always" in App.tsx).
+   To bring animations back, remove the import of this file in main.tsx. */
+
+*,
+*::before,
+*::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Loading indicators keep moving so a wait never looks frozen. */
+.animate-spin,
+.animate-spin-reverse,
+.anim-spin,
+.animate-loading-bar,
+[style*="spin"] {
+  animation-duration: 1s !important;
+  animation-iteration-count: infinite !important;
+}
+
+/* Decorative blurred glow blobs (big filter: blur layers) cost a lot to paint and carry no content. */
+.pointer-events-none[class*="blur-2xl"],
+.pointer-events-none[class*="blur-3xl"] {
+  display: none !important;
+}

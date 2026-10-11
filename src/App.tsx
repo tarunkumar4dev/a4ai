@@ -21,7 +21,8 @@ import { AccessProvider } from "@/context/AccessProvider";
 import { RoleRoute } from "@/components/routing/RoleRoute";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
-import HODDashboardPage from "@/pages/hod/HODDashboardPage";
+import { MotionConfig } from "framer-motion";
+const HODDashboardPage = lazy(() => import("@/pages/hod/HODDashboardPage")); // pulls xlsx; keep it out of the main bundle
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 /* ---------- Vercel Analytics ---------- */
@@ -271,12 +272,13 @@ const App = () => {
       window.requestIdleCallback(() => {
         import("./pages/LandingPage");
         import("./pages/LoginPage");
-        import("./pages/DashboardPage");
       });
     }
   }, []);
 
   return (
+    // Lite mode: framer-motion skips transform/layout animations everywhere (see src/styles/lite.css)
+    <MotionConfig reducedMotion="always" transition={{ duration: 0 }}>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AccessProvider>
@@ -506,6 +508,7 @@ const App = () => {
         </AccessProvider>
       </AuthProvider>
     </QueryClientProvider>
+    </MotionConfig>
   );
 };
 
