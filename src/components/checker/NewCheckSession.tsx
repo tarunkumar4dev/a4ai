@@ -9,7 +9,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useMyScope } from "@/hooks/useMyScope";
 import { buildRubric, uploadPage, MAX_PAGES, STRICTNESS_LABEL, type Strictness } from "./copyCheckerApi";
 
-type SavedTest = { id: string; exam_title: string | null; subject: string | null; class_grade: string | null; total_marks: number | null; created_at: string };
+type SavedTest = { id: string; exam_title: string | null; subject: string | null; class_grade: string | null; total_marks: number | null; created_at: string; usable?: boolean };
 
 export default function NewCheckSession({ initialTestId, onCreated, onCancel }: {
   initialTestId?: string | null;
@@ -18,7 +18,7 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
 }) {
   const { user } = useAuth();
   const scope = useMyScope();
-  const [source, setSource] = useState<"test" | "upload">(initialTestId ? "test" : "test");
+  const [source, setSource] = useState<"test" | "upload">("test");
   const [tests, setTests] = useState<SavedTest[]>([]);
   const [testsLoading, setTestsLoading] = useState(true);
   const [testId, setTestId] = useState<string>(initialTestId || "");
@@ -38,10 +38,22 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
     supabase.from("tests")
       .select("id, exam_title, subject, class_grade, total_marks, created_at")
       .eq("teacher_id", user.id).order("created_at", { ascending: false }).limit(40)
-      .then(({ data }) => {
-        setTests(data || []);
+      .then(async ({ data }) => {
+        const list: SavedTest[] = data || [];
+        // Some tests (mostly old drafts) have no saved questions → no answers to build a scheme from.
+        if (list.length) {
+          const { data: qs } = await supabase.from("questions").select("test_id").in("test_id", list.map(t => t.id));
+          const withQs = new Set((qs || []).map(q => q.test_id));
+          // If RLS hid every row we can't tell — leave all usable and let the backend decide
+          list.forEach(t => { t.usable = withQs.size === 0 ? true : withQs.has(t.id); });
+        }
+        setTests(list);
         setTestsLoading(false);
-        if (!data?.length && !initialTestId) setSource("upload");
+        if (initialTestId && list.find(t => t.id === initialTestId)?.usable === false) {
+          setTestId("");
+          setSource("upload");
+          toast.info("This test's questions weren't saved — take a photo of the paper instead.");
+        } else if (!list.some(t => t.usable) && !initialTestId) setSource("upload");
       });
   }, [user, initialTestId]);
 
@@ -160,14 +172,15 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
             {testsLoading ? <p className="p-4 text-sm text-gray-400">Loading your tests…</p>
               : tests.length === 0 ? <p className="p-4 text-sm text-gray-500">No saved tests yet. Generate one, or use “Photo of paper”.</p>
               : tests.map(t => (
-                <button key={t.id} onClick={() => setTestId(t.id)}
-                  className={`w-full text-left px-4 py-3 flex items-center gap-3 ${testId === t.id ? "bg-gray-900 text-white" : "active:bg-gray-50"}`}>
+                <button key={t.id} onClick={() => t.usable !== false && setTestId(t.id)} disabled={t.usable === false}
+                  className={`w-full text-left px-4 py-3 flex items-center gap-3 ${testId === t.id ? "bg-gray-900 text-white" : t.usable === false ? "opacity-50" : "active:bg-gray-50"}`}>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold truncate">{t.exam_title || `${t.subject || "Test"} test`}</p>
                     <p className={`text-xs ${testId === t.id ? "text-gray-300" : "text-gray-400"}`}>
                       {[t.subject, t.class_grade && `Class ${t.class_grade}`, t.total_marks && `${t.total_marks} marks`].filter(Boolean).join(" · ")}
                       {" · "}{new Date(t.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                     </p>
+                    {t.usable === false && <p className="text-[11px] font-bold text-amber-700">Questions not saved — use “Photo of paper”</p>}
                   </div>
                   {testId === t.id && <span className="text-lg">✓</span>}
                 </button>
