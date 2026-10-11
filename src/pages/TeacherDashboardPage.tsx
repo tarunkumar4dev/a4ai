@@ -559,7 +559,7 @@ function SearchBar({
     { type: "nav", label: "Test History", sub: "All your tests", Icon: Icons.History, action: () => onNavChange("tests") },
     { type: "nav", label: "Analytics", sub: "Performance graphs", Icon: Icons.Chart, action: () => onNavChange("analytics") },
     { type: "nav", label: "AI Tools", sub: "Teaching utilities", Icon: Icons.Brain, action: () => onNavChange("ai-tools") },
-    { type: "tool", label: "AI Paper Checker", sub: "Grade answer sheets & tests", Icon: Icons.Sparkles, action: () => navigate("/dashboard/test-checker") },
+    { type: "tool", label: "AI Paper Checker", sub: "Grade answer sheets & tests", Icon: Icons.Sparkles, action: () => navigate("/dashboard/test-generator?tab=check") },
     { type: "tool", label: "Community Quiz", sub: "From YouTube video", Icon: Icons.Youtube, action: () => navigate("/teacher/community-quiz/new") },
     { type: "tool", label: "Create Test", sub: "Test generator", Icon: Icons.Zap, action: () => navigate("/dashboard/test-generator") },
     { type: "tool", label: "Host Contest", sub: "Live competition", Icon: Icons.Trophy, action: () => navigate("/contests") },
@@ -786,6 +786,7 @@ function TestHistory({
   const [statusFilter, setStatusFilter] = useState<"all" | "saved" | "draft">("all");
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadingType, setDownloadingType] = useState<"paper" | "key" | "docx" | null>(null);
+  const navigateTo = useNavigate();
 
   // Preview Modal State
   const [previewTest, setPreviewTest] = useState<SavedTest | null>(null);
@@ -1085,6 +1086,16 @@ function TestHistory({
                       <span className="text-xs">📝</span>
                     )}
                     <span>DOCX</span>
+                  </button>
+
+                  {/* Check students' copies of this test (rubric comes from the saved answers) */}
+                  <button
+                    onClick={() => navigateTo(`/dashboard/test-generator?tab=check&test=${t.id}`)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-gray-900 text-white border border-gray-900 hover:bg-gray-800 transition-all shadow-xs active:scale-95 cursor-pointer"
+                    title="Photograph students' answer copies and check them with AI"
+                  >
+                    <span className="text-sm">✅</span>
+                    <span>Check copies</span>
                   </button>
                 </div>
               </div>
@@ -1392,7 +1403,7 @@ function getChatMeta(userText: string, replyText: string) {
     actions.push({
       label: "Open AI Paper Checker",
       icon: "🪄",
-      path: "/dashboard/test-checker",
+      path: "/dashboard/test-generator?tab=check",
     });
     suggestions.push(
       "Can it check handwritten copies?",
@@ -1518,7 +1529,7 @@ function getOfflinePedagogicalFallback(userText: string): {
 • **Handwritten Copies Support**: Upload photos of students' answer sheets — the AI reads the handwriting and marks the answers.
 • **Smart Rubric Scoring**: Question-by-question marks with transparent partial grading.
 • **Student Feedback**: Every student gets feedback on their mistakes and what to improve.`,
-      actions: [{ label: "Open AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" }],
+      actions: [{ label: "Open AI Paper Checker", icon: "🪄", path: "/dashboard/test-generator?tab=check" }],
       suggestions: ["How to upload student copies?", "Can it check handwritten copies?", "Generate Test Paper"]
     };
   }
@@ -1559,7 +1570,7 @@ You can ask me about:
 Which topic or feature can I help you with?`,
     actions: [
       { label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" },
-      { label: "Open AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" }
+      { label: "Open AI Paper Checker", icon: "🪄", path: "/dashboard/test-generator?tab=check" }
     ],
     suggestions: ["How to create a test paper?", "Try AI Paper Checker", "Explain a concept", "What are the pricing plans?"]
   };
@@ -1656,7 +1667,7 @@ export default function TeacherDashboardPage() {
       ],
       actions: [
         { label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" },
-        { label: "AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" },
+        { label: "AI Paper Checker", icon: "🪄", path: "/dashboard/test-generator?tab=check" },
         { label: "View Analytics", icon: "📊", tab: "analytics" },
       ],
     }
@@ -1862,7 +1873,7 @@ export default function TeacherDashboardPage() {
 • **Student Portal**: 6-character access codes for students to submit homework and view tests with zero friction.`,
         actions: [
           { label: "Open Test Builder", icon: "✨", path: "/dashboard/create-test" },
-          { label: "Try AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" },
+          { label: "Try AI Paper Checker", icon: "🪄", path: "/dashboard/test-generator?tab=check" },
           { label: "View Analytics", icon: "📊", tab: "analytics" },
         ],
         suggestions: ["How to Generate Test Paper", "Try AI Paper Checker", "What are the pricing", "Explain a concept"],
@@ -1890,7 +1901,7 @@ export default function TeacherDashboardPage() {
 • **Personalized Student Feedback**: Every student gets their specific mistakes and tips.
 • **Batch Checking**: Check a whole class's copies at once and record the marks.`,
         actions: [
-          { label: "Launch AI Paper Checker", icon: "🪄", path: "/dashboard/test-checker" },
+          { label: "Launch AI Paper Checker", icon: "🪄", path: "/dashboard/test-generator?tab=check" },
         ],
         suggestions: ["How to upload student copies?", "Can it check handwritten copies?", "How to Generate Test Paper"],
       },
@@ -1975,7 +1986,7 @@ YOUR EXTENSIVE CAPABILITIES:
 2. a4ai PLATFORM MASTERY:
    - 1 Lakh+ NCERT Question Bank: Over 100,000+ verified NCERT questions with answers and solutions across all chapters.
    - Instant Test Builder: Generates custom question papers in under 30 seconds. Teachers can customize marks, sections, add school logo/watermark, and export to PDF or editable Word (.docx).
-   - AI Paper / Test Checker (/dashboard/test-checker): Magical AI tool that scans and grades student answer sheets (including handwritten copies!), calculates scores question-by-question with rubrics, and generates student feedback.
+   - AI Paper / Test Checker (/dashboard/test-generator?tab=check): Magical AI tool that scans and grades student answer sheets (including handwritten copies!), calculates scores question-by-question with rubrics, and generates student feedback.
    - Attendance & Marks Analytics: Daily batch attendance, Defaulters Watchlist (< 75%), Marks distribution, Top rankers, and Excel/CSV export.
    - Student Portal: Frictionless 6-character access codes for students to submit homework and view tests.
    - Pricing: Free Plan (₹0, 2 tests/mo), Starter Plan (₹149/mo, 10 tests + contests), Pro Plan (₹299/mo, unlimited tests & logo).
@@ -2561,7 +2572,7 @@ TONE & FORMATTING GUIDELINES:
                         fullWidth
                         showNewBadge
                         isStartupsStyle
-                        onClick={() => navigate("/dashboard/test-checker")}
+                        onClick={() => navigate("/dashboard/test-generator?tab=check")}
                       />
                       <GlossyButton
                         label="Community Quiz"
@@ -2670,7 +2681,7 @@ TONE & FORMATTING GUIDELINES:
                         Icon: Icons.Sparkles,
                         title: "AI Paper Checker",
                         desc: "Magically check & auto-grade handwritten answer sheets, test papers & assignments with instant scoring and line-by-line feedback.",
-                        action: () => navigate("/dashboard/test-checker"),
+                        action: () => navigate("/dashboard/test-generator?tab=check"),
                         badge: "MAGICAL AI",
                         badgeClass: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
                         btnLabel: "Check Papers",
@@ -2961,7 +2972,7 @@ TONE & FORMATTING GUIDELINES:
                       title: "AI Paper Checker",
                       tagline: "Instant answer sheet & test grading",
                       desc: "Magically scan and auto-grade handwritten student answer sheets & test papers with question-by-question scoring and rubric feedback.",
-                      action: () => navigate("/dashboard/test-checker"),
+                      action: () => navigate("/dashboard/test-generator?tab=check"),
                       badge: "MAGICAL AI",
                       badgeClass: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
                       btnLabel: "Check Papers",

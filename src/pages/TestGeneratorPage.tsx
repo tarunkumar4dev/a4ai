@@ -1,12 +1,15 @@
 // src/pages/TestGeneratorPage.tsx
 import React, { useState } from "react";
 import { ChevronLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import TestGeneratorForm from "@/components/TestGeneratorForm";
 import TestBuilderPage from "./TestBuilderPage";
 import { useAuth } from "@/providers/AuthProvider";
 import { useGuestAccess } from "@/hooks/useGuestAccess";
 import LoginModal from "@/components/LoginModal";
+import CopyChecker from "@/components/checker/CopyChecker";
+
+type Tab = "ai" | "builder" | "check";
 
 export default function TestGeneratorPage() {
   const { user } = useAuth();
@@ -19,7 +22,18 @@ export default function TestGeneratorPage() {
     setShowLoginModal,
   } = useGuestAccess();
 
-  const [activeTab, setActiveTab] = useState<"ai" | "builder">("ai");
+  // ?tab=check opens "Check Copies"; &test=<id> starts a check for that saved test (Test History button)
+  const [params, setParams] = useSearchParams();
+  const [activeTab, setActiveTabState] = useState<Tab>(
+    params.get("tab") === "check" ? "check" : params.get("tab") === "builder" ? "builder" : "ai");
+  const checkTestId = params.get("test");
+  const setActiveTab = (t: Tab) => {
+    setActiveTabState(t);
+    const next = new URLSearchParams(params);
+    if (t === "ai") next.delete("tab"); else next.set("tab", t);
+    next.delete("test");
+    setParams(next, { replace: true });
+  };
 
   const displayName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
@@ -103,27 +117,24 @@ export default function TestGeneratorPage() {
       <main className="relative z-10 w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-6 md:py-10 pb-28 sm:pb-36 md:pb-40">
 
         {/* TABS */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setActiveTab("ai")}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${
-              activeTab === "ai"
-                ? "bg-[#111827] text-white shadow"
-                : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400"
-            }`}
-          >
-            ✨ AI Generator
-          </button>
-          <button
-            onClick={() => setActiveTab("builder")}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${
-              activeTab === "builder"
-                ? "bg-[#111827] text-white shadow"
-                : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400"
-            }`}
-          >
-            📚 Test Builder
-          </button>
+        <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-1 px-1">
+          {([
+            ["ai", "✨ AI Generator"],
+            ["builder", "📚 Test Builder"],
+            ["check", "✅ Check Copies"],
+          ] as [Tab, string][]).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setActiveTab(k)}
+              className={`shrink-0 px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                activeTab === k
+                  ? "bg-[#111827] text-white shadow"
+                  : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {activeTab === "ai" ? (
@@ -156,8 +167,13 @@ export default function TestGeneratorPage() {
               onGenerated={() => { if (isGuest) incrementGuestCount(); }}
             />
           </>
-        ) : (
+        ) : activeTab === "builder" ? (
           <TestBuilderPage />
+        ) : (
+          <CopyChecker
+            initialTestId={checkTestId}
+            onConsumeTestId={() => { const n = new URLSearchParams(params); n.delete("test"); setParams(n, { replace: true }); }}
+          />
         )}
 
       </main>

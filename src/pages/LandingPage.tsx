@@ -129,7 +129,7 @@ const AI_TOOLS_DATA = [
     tagline: "Instant answer sheet & assignment grading",
     desc: "Magically scan and auto-grade student handwritten copies and tests with question-by-question scoring and rubric feedback.",
     cta: "Check Papers",
-    href: "/dashboard/test-checker",
+    href: "/dashboard/test-generator?tab=check",
     highlights: ["Handwritten copies supported", "Rubric & step-wise grading", "Instant student analysis"],
     isHighlight: true,
   },

@@ -60,6 +60,25 @@ export const VERDICT_STYLE: Record<Verdict, { label: string; cls: string }> = {
   none:    { label: "None",    cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
 };
 
+export type AiResult = {
+  graded_questions: GradedQuestion[];
+  total_marks_awarded: number; max_marks: number; percentage: number;
+  overall_remarks: string; needs_review_count?: number;
+};
+
+/** Student-facing feedback from an AI result: overall remark + the questions that lost marks. */
+export function feedbackFromAi(r: AiResult): string {
+  const lines = [r.overall_remarks?.trim()].filter(Boolean) as string[];
+  for (const q of r.graded_questions || []) {
+    if (q.counted === false || q.marks_awarded >= q.max_marks) continue;
+    const note = q.has_subparts
+      ? (q.subpart_grades || []).filter(s => s.marks_awarded < s.max_marks).map(s => `${s.sub_id}: ${s.feedback}`).join("; ")
+      : q.feedback;
+    lines.push(`Q${q.q_no}: ${q.marks_awarded}/${q.max_marks}${note ? ` — ${note}` : ""}`);
+  }
+  return lines.join("\n").slice(0, 1500);
+}
+
 export function AiQuestionList({ questions }: { questions: GradedQuestion[] }) {
   return (
     <div className="divide-y divide-gray-100 dark:divide-gray-800">

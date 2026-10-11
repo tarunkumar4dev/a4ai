@@ -1,0 +1,233 @@
+// src/components/checker/NewCheckSession.tsx
+// Step 1 of "Check Copies": which paper (Test History or photos of the paper + key), which class,
+// how strict. The marking scheme is prepared ONCE here, before any student copy is added.
+
+import React, { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/providers/AuthProvider";
+import { useMyScope } from "@/hooks/useMyScope";
+import { buildRubric, uploadPage, MAX_PAGES, STRICTNESS_LABEL, type Strictness } from "./copyCheckerApi";
+
+type SavedTest = { id: string; exam_title: string | null; subject: string | null; class_grade: string | null; total_marks: number | null; created_at: string };
+
+export default function NewCheckSession({ initialTestId, onCreated, onCancel }: {
+  initialTestId?: string | null;
+  onCreated: (sessionId: string) => void;
+  onCancel: () => void;
+}) {
+  const { user } = useAuth();
+  const scope = useMyScope();
+  const [source, setSource] = useState<"test" | "upload">(initialTestId ? "test" : "test");
+  const [tests, setTests] = useState<SavedTest[]>([]);
+  const [testsLoading, setTestsLoading] = useState(true);
+  const [testId, setTestId] = useState<string>(initialTestId || "");
+  const [qpFiles, setQpFiles] = useState<File[]>([]);
+  const [keyFiles, setKeyFiles] = useState<File[]>([]);
+  const [title, setTitle] = useState("");
+  const [batchId, setBatchId] = useState("");
+  const [strictness, setStrictness] = useState<Strictness>("medium");
+  const [busy, setBusy] = useState<string | null>(null);
+  const qpCam = useRef<HTMLInputElement>(null);
+  const qpPick = useRef<HTMLInputElement>(null);
+  const keyCam = useRef<HTMLInputElement>(null);
+  const keyPick = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("tests")
+      .select("id, exam_title, subject, class_grade, total_marks, created_at")
+      .eq("teacher_id", user.id).order("created_at", { ascending: false }).limit(40)
+      .then(({ data }) => {
+        setTests(data || []);
+        setTestsLoading(false);
+        if (!data?.length && !initialTestId) setSource("upload");
+      });
+  }, [user, initialTestId]);
+
+  const chosenTest = tests.find(t => t.id === testId);
+  useEffect(() => {
+    if (chosenTest && !title) setTitle(chosenTest.exam_title || `${chosenTest.subject || "Test"} ${chosenTest.class_grade || ""}`.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chosenTest]);
+
+  const addFiles = (setter: React.Dispatch<React.SetStateAction<File[]>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    setter(prev => [...prev, ...files].slice(0, MAX_PAGES));
+  };
+
+  const canCreate = !!title.trim() && (source === "test" ? !!testId : qpFiles.length > 0) && !busy;
+
+  async function create() {
+    if (!user || !canCreate) return;
+    try {
+      setBusy("Creating…");
+      const { data: s, error } = await supabase.from("check_sessions").insert({
+        title: title.trim().slice(0, 200), source,
+        test_id: source === "test" ? testId : null,
+        batch_id: batchId || null,
+        subject: chosenTest?.subject || null, class_grade: chosenTest?.class_grade || null,
+        strictness,
+      }).select("id").single();
+      if (error) throw error;
+
+      if (source === "upload") {
+        setBusy("Uploading question paper…");
+        const qp: string[] = [];
+        for (const f of qpFiles) qp.push(await uploadPage(user.id, s.id, "paper", f));
+        const key: string[] = [];
+        if (keyFiles.length) setBusy("Uploading answer key…");
+        for (const f of keyFiles) key.push(await uploadPage(user.id, s.id, "key", f));
+        const { error: uErr } = await supabase.from("check_sessions").update({ qp_paths: qp, key_paths: key }).eq("id", s.id);
+        if (uErr) throw uErr;
+      }
+
+      if (batchId) {
+        setBusy("Adding students…");
+        const { data: studs } = await supabase.from("students")
+          .select("id, name, roll_no").eq("batch_id", batchId).eq("is_active", true).order("roll_no");
+        if (studs?.length) {
+          const { error: sErr } = await supabase.from("check_sheets").insert(
+            studs.map(st => ({ session_id: s.id, student_id: st.id, student_name: st.name, roll_no: st.roll_no })));
+          if (sErr) toast.warning(`Students not added: ${sErr.message}`);
+        }
+      }
+
+      setBusy(source === "test" ? "Preparing marking scheme…" : "Reading the paper and preparing the marking scheme…");
+      try {
+        await buildRubric(s.id);
+      } catch (e: any) {
+        toast.error(e.message); // the session view shows the error with a Retry button
+      }
+      onCreated(s.id);
+    } catch (e: any) {
+      toast.error(e.message || "Could not create");
+      setBusy(null);
+    }
+  }
+
+  const chip = (active: boolean) =>
+    `flex-1 py-3 rounded-xl text-sm font-bold border transition-all ${active ? "bg-[#111827] text-white border-[#111827]" : "bg-white text-gray-600 border-gray-200"}`;
+
+  const FilePicker = ({ label, files, setFiles, cam, pick, optional }: {
+    label: string; files: File[]; setFiles: React.Dispatch<React.SetStateAction<File[]>>;
+    cam: React.RefObject<HTMLInputElement>; pick: React.RefObject<HTMLInputElement>; optional?: boolean;
+  }) => (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-bold text-gray-800">{label}{optional && <span className="text-gray-400 font-medium"> (optional)</span>}</p>
+        {files.length > 0 && <button className="text-xs text-red-500 font-semibold" onClick={() => setFiles([])}>Clear</button>}
+      </div>
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {files.map((f, i) => (
+            <span key={i} className="text-xs bg-gray-100 rounded-lg px-2 py-1 text-gray-700 max-w-[160px] truncate">
+              {f.type === "application/pdf" ? "📄" : "🖼"} {i + 1}. {f.name}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => cam.current?.click()} className="py-3 rounded-xl bg-gray-900 text-white text-sm font-bold active:scale-[0.98]">📷 Take photo</button>
+        <button type="button" onClick={() => pick.current?.click()} className="py-3 rounded-xl bg-gray-100 text-gray-800 text-sm font-bold active:scale-[0.98]">🖼 Gallery / PDF</button>
+      </div>
+      <input ref={cam} type="file" accept="image/*" capture="environment" className="hidden" onChange={addFiles(setFiles)} />
+      <input ref={pick} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={addFiles(setFiles)} />
+    </div>
+  );
+
+  return (
+    <div className="max-w-xl mx-auto space-y-4 pb-28">
+      <div className="flex items-center gap-3">
+        <button onClick={onCancel} className="h-10 w-10 rounded-full bg-white border border-gray-200 text-gray-600 font-bold">←</button>
+        <div>
+          <h2 className="text-lg font-black text-gray-900 leading-tight">New check</h2>
+          <p className="text-xs text-gray-500">The marking scheme is prepared once for the whole class</p>
+        </div>
+      </div>
+
+      {/* 1. Paper */}
+      <section className="space-y-3">
+        <p className="text-[11px] font-black uppercase tracking-wider text-gray-400">1 · Question paper</p>
+        <div className="flex gap-2">
+          <button className={chip(source === "test")} onClick={() => setSource("test")}>📚 From my tests</button>
+          <button className={chip(source === "upload")} onClick={() => setSource("upload")}>📷 Photo of paper</button>
+        </div>
+
+        {source === "test" ? (
+          <div className="rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 max-h-72 overflow-y-auto">
+            {testsLoading ? <p className="p-4 text-sm text-gray-400">Loading your tests…</p>
+              : tests.length === 0 ? <p className="p-4 text-sm text-gray-500">No saved tests yet. Generate one, or use “Photo of paper”.</p>
+              : tests.map(t => (
+                <button key={t.id} onClick={() => setTestId(t.id)}
+                  className={`w-full text-left px-4 py-3 flex items-center gap-3 ${testId === t.id ? "bg-gray-900 text-white" : "active:bg-gray-50"}`}>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold truncate">{t.exam_title || `${t.subject || "Test"} test`}</p>
+                    <p className={`text-xs ${testId === t.id ? "text-gray-300" : "text-gray-400"}`}>
+                      {[t.subject, t.class_grade && `Class ${t.class_grade}`, t.total_marks && `${t.total_marks} marks`].filter(Boolean).join(" · ")}
+                      {" · "}{new Date(t.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                    </p>
+                  </div>
+                  {testId === t.id && <span className="text-lg">✓</span>}
+                </button>
+              ))}
+          </div>
+        ) : (
+          <>
+            <FilePicker label="Question paper" files={qpFiles} setFiles={setQpFiles} cam={qpCam} pick={qpPick} />
+            <FilePicker label="Answer key" files={keyFiles} setFiles={setKeyFiles} cam={keyCam} pick={keyPick} optional />
+            {keyFiles.length === 0 && qpFiles.length > 0 && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                No answer key: AI will write the answers itself. Check the marking scheme before adding copies.
+              </p>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* 2. Details */}
+      <section className="space-y-3">
+        <p className="text-[11px] font-black uppercase tracking-wider text-gray-400">2 · Details</p>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+          <div>
+            <label className="text-xs font-bold text-gray-500">Name of this check</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Unit Test 2 – Science"
+              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300" />
+          </div>
+          {scope.batches.length > 0 && (
+            <div>
+              <label className="text-xs font-bold text-gray-500">Class (adds all its students)</label>
+              <select value={batchId} onChange={e => setBatchId(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm bg-white">
+                <option value="">No class — I'll add students myself</option>
+                {scope.batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-bold text-gray-500">Checking strictness</label>
+            <div className="mt-1 grid grid-cols-4 gap-1.5">
+              {(Object.keys(STRICTNESS_LABEL) as Strictness[]).map(k => (
+                <button key={k} onClick={() => setStrictness(k)}
+                  className={`py-2.5 rounded-xl text-xs font-bold border ${strictness === k ? "bg-[#111827] text-white border-[#111827]" : "bg-white text-gray-600 border-gray-200"}`}>
+                  {STRICTNESS_LABEL[k]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Sticky action */}
+      <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-gray-200 p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+        <div className="max-w-xl mx-auto">
+          <button onClick={create} disabled={!canCreate}
+            className="w-full py-4 rounded-2xl bg-[#111827] text-white font-black text-sm disabled:bg-gray-300 active:scale-[0.99]">
+            {busy || "Continue → add students' copies"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import { toast } from "sonner";
 import { useMyScope } from "@/hooks/useMyScope";
-import { AiQuestionList, type GradedQuestion } from "@/components/checker/AiGradeBreakdown";
+import { AiQuestionList, feedbackFromAi, type AiResult } from "@/components/checker/AiGradeBreakdown";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -21,11 +21,6 @@ type Assignment = {
   ai_key_name?: string | null; ai_strictness?: Strictness;
 };
 type Strictness = "easy" | "medium" | "hard" | "extreme";
-type AiResult = {
-  graded_questions: GradedQuestion[];
-  total_marks_awarded: number; max_marks: number; percentage: number;
-  overall_remarks: string; needs_review_count?: number;
-};
 type Submission = {
   id: string; student_id: string; student_name?: string; student_roll?: string;
   file_url: string | null; file_name: string | null; submitted_at: string;
@@ -54,18 +49,6 @@ async function checkerPost(path: string, body?: unknown) {
   return data;
 }
 
-/** Student-facing feedback from an AI result: overall remark + the questions that lost marks. */
-function feedbackFromAi(r: AiResult): string {
-  const lines = [r.overall_remarks?.trim()].filter(Boolean) as string[];
-  for (const q of r.graded_questions || []) {
-    if (q.counted === false || q.marks_awarded >= q.max_marks) continue;
-    const note = q.has_subparts
-      ? (q.subpart_grades || []).filter(s => s.marks_awarded < s.max_marks).map(s => `${s.sub_id}: ${s.feedback}`).join("; ")
-      : q.feedback;
-    lines.push(`Q${q.q_no}: ${q.marks_awarded}/${q.max_marks}${note ? ` — ${note}` : ""}`);
-  }
-  return lines.join("\n").slice(0, 1500);
-}
 
 /* ─── Helpers ──────────────────────────────────────── */
 function fmtDate(d: string) {

@@ -149,6 +149,16 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - A logged-in student (a4_my_student_ids) can read their own submission row incl. `ai_*` before the teacher approves.
   - Old test checker (`test_checker_router`) also runs the Gemini pipeline on the event loop — same threadpool fix needed.
 
+- [x] Check Copies P1 code (11 Oct): ONE checker = Test Generator page → tab "✅ Check Copies" (`?tab=check&test=<id>`).
+  Old pages TestChecker.tsx + SmartAssignmentChecker.tsx deleted; /dashboard/test-checker + /dashboard/assignment-checker redirect there.
+  Flow: New check (paper from Test History = rubric built from saved answers WITHOUT AI, or photos of paper + optional key)
+  → class roster (batch) or quick-add → per student multi-page camera (compressed in browser, `src/lib/imageCompress.ts`)
+  → "Done & next" queues the AI check (3 parallel, 1 request per copy) → review → approve. Test History rows: "Check copies".
+  DB: `12_copy_checker.sql` (check_sessions, check_sheets, private bucket answer-sheets). Backend: `app/routers/copy_checker_router.py`.
+- [ ] Run 10 → 11 → 12 (12 needs 10). Local backend `.env`: SUPABASE_SERVICE_KEY == anon key (backend warns) → private-bucket
+  downloads and history inserts fail until the real service_role key is set (check Vercel env too).
+- Next (P2): per-student PDF report + class summary, WhatsApp share (Web Share API / wa.me to parent_phone), results in portal.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

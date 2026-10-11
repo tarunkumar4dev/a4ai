@@ -67,12 +67,7 @@ const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 /* ---------- NEW MODULE PAGE ---------- */
 const ModulesPage = lazy(() => import("./pages/ModulesPage"));
 /* ---------- TEST CHECKER ---------- */
-const TestChecker = lazy(() => import("./pages/TestChecker"));
 
-/* ---------- SMART ASSIGNMENT CHECKER ---------- */
-const SmartAssignmentChecker = lazy(
-  () => import("./pages/SmartAssignmentChecker")
-);
 
 /* ---------- NEW QUIZ PAGE ---------- */
 const QuizPage = lazy(() => import("./pages/Quiz"));
@@ -423,19 +418,9 @@ const App = () => {
                       {/* ============================================ */}
                       <Route path="/dashboard/test-generator" element={<TestGeneratorPage />} />
                       
-                      {/* ── Answer Sheet Checker (teacher + institute only) ── */}
-                      <Route path="/dashboard/test-checker" element={
-                        <RoleAuthGate allowedRoles={["teacher", "institute", "admin"]}>
-                          <TestChecker />
-                        </RoleAuthGate>
-                      } />
-
-                      {/* ── Smart Assignment Checker (teacher + institute only) ── */}
-                      <Route path="/dashboard/assignment-checker" element={
-                        <RoleAuthGate allowedRoles={["teacher", "institute"]}>
-                          <SmartAssignmentChecker />
-                        </RoleAuthGate>
-                      } />
+                      {/* ── Old checker pages → one checker: Test Generator → "Check Copies" tab ── */}
+                      <Route path="/dashboard/test-checker" element={<Navigate to="/dashboard/test-generator?tab=check" replace />} />
+                      <Route path="/dashboard/assignment-checker" element={<Navigate to="/dashboard/test-generator?tab=check" replace />} />
 
                       <Route path="/dashboard/analytics" element={<PrivateRoute><AnalyticsPage /></PrivateRoute>} />
                       <Route path="/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} />
