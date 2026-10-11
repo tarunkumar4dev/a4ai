@@ -458,18 +458,25 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
                   )}
                 </div>
               ))}
-              {sheet.pages.length < MAX_PAGES && !locked && (
-                <button onClick={() => cam.current?.click()}
-                  className="aspect-[3/4] rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-500 active:bg-gray-100">
-                  <span className="text-2xl">📷</span>
-                  <span className="text-[11px] font-bold mt-1">{sheet.pages.length ? "Next page" : "Page 1"}</span>
-                </button>
-              )}
             </div>
-            {!locked && (
-              <button onClick={() => pick.current?.click()} className="mt-2 text-xs font-bold text-gray-500 underline">
-                or choose from gallery / PDF
-              </button>
+            {sheet.pages.length === 0 && (
+              <p className="text-xs text-gray-500 mb-2">
+                Photograph each page of the copy, or upload a scanned PDF (all pages in one file is fine).
+              </p>
+            )}
+            {sheet.pages.length < MAX_PAGES && !locked && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <button onClick={() => cam.current?.click()}
+                  className="py-4 rounded-2xl bg-[#111827] text-white flex flex-col items-center justify-center active:scale-[0.98]">
+                  <span className="text-2xl">📷</span>
+                  <span className="text-xs font-bold mt-1">{sheet.pages.length ? "Take next page" : "Take photo"}</span>
+                </button>
+                <button onClick={() => pick.current?.click()}
+                  className="py-4 rounded-2xl bg-white border-2 border-gray-200 text-gray-800 flex flex-col items-center justify-center active:scale-[0.98]">
+                  <span className="text-2xl">📄</span>
+                  <span className="text-xs font-bold mt-1">Upload PDF / images</span>
+                </button>
+              </div>
             )}
             <input ref={cam} type="file" accept="image/*" capture="environment" className="hidden" onChange={addPages} />
             <input ref={pick} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={addPages} />
