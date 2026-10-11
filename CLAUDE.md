@@ -190,6 +190,12 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - `/dashboard/test-generator` (incl. Check Copies tab since 59d10ac) is public by design — backend enforces JWT.
   - HODAttendanceDashboard fallback C still maps teachers to dept batches with fake room/time when nothing is assigned.
 
+- [x] Careers (11 Oct): /careers = 2 roles only (Android Developer, Backend Engineer) + apply form. `14_job_applications.sql`:
+  `job_applications` (RLS on, no policies → read only in Supabase dashboard), private `resumes` bucket (anon insert-only,
+  `<uuid>/resume.pdf`, PDF ≤ 5 MB), `submit_job_application` RPC (validates, resume must exist, 1 per email+job per 24 h).
+  Job ids hard-coded in CareersPage + the RPC — change both when roles change.
+- [ ] Run 14 + VERIFY block, then submit one test application on /careers.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
