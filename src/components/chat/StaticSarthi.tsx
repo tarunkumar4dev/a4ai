@@ -1,15 +1,27 @@
-// Static help bot (teacher + student dashboards). No AI call, no network, no animation, no drag:
-// fixed answers + shortcut buttons, so it costs nothing to render in the Play Store WebView.
-// Typed questions are matched to a topic by keywords; anything else gets the topic list + support email.
-import { useEffect, useRef, useState } from "react";
+// Help bot (teacher + student dashboards). No animation, no drag — light enough for the Play Store WebView.
+// Topic chips and clearly matching questions get a fixed answer instantly (free, not counted).
+// Any other question goes to the backend AI (POST /api/v1/chat with the user's JWT). The backend enforces
+// the limit: free users 10 messages/day, paid users unlimited, repeating the same message counts as abuse
+// (supabase/migrations/15_ai_chat_quota.sql). Nothing here is trusted for limits.
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageCircle, X, Send } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:8000").trim().replace(/\/+$/, "");
+const CHAT_URL = API_BASE.endsWith("/api/v1")
+  ? `${API_BASE}/chat`
+  : API_BASE.endsWith("/api")
+    ? `${API_BASE}/v1/chat`
+    : `${API_BASE}/api/v1/chat`;
+const HISTORY_FOR_AI = 8; // previous messages sent as context
 
 type Action = { label: string; path?: string; tab?: string; href?: string };
 type Topic = { id: string; question: string; keywords: string[]; answer: string; actions: Action[] };
-type Msg = { from: "bot" | "user"; text: string; actions?: Action[]; chips?: boolean };
+type Msg = { from: "bot" | "user"; text: string; actions?: Action[]; chips?: boolean; ai?: boolean };
 
 const SUPPORT: Action = { label: "Email support", href: "mailto:a4ai.team@gmail.com" };
+const PLANS: Action = { label: "Upgrade for unlimited", path: "/pricing" };
 
 const TEACHER_TOPICS: Topic[] = [
   {
@@ -101,10 +113,11 @@ const STUDENT_TOPICS: Topic[] = [
   },
 ];
 
+/** A typed question gets a fixed answer only on a clear match (2+ keywords); otherwise the AI answers. */
 function matchTopic(topics: Topic[], text: string): Topic | null {
   const q = text.toLowerCase();
   let best: Topic | null = null;
-  let bestScore = 0;
+  let bestScore = 1;
   for (const t of topics) {
     const score = t.keywords.reduce((n, k) => (q.includes(k) ? n + 1 : n), 0);
     if (score > bestScore) {
@@ -135,30 +148,83 @@ export default function StaticSarthi({
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([{ from: "bot", text: greeting, chips: true }]);
+  const [thinking, setThinking] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null); // null = unknown or unlimited
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) endRef.current?.scrollIntoView({ block: "end" });
-  }, [msgs, open]);
+  }, [msgs, open, thinking]);
 
-  const answer = (question: string, topic: Topic | null) => {
-    const reply: Msg = topic
-      ? { from: "bot", text: topic.answer, actions: topic.actions, chips: true }
-      : {
-          from: "bot",
-          text: "I can only help with the topics below. For anything else, email the a4ai team.",
-          actions: [SUPPORT],
-          chips: true,
-        };
-    // older replies drop their chips so only the latest list is shown
-    setMsgs((m) => [...m.map((x) => ({ ...x, chips: false })), { from: "user", text: question }, reply]);
+  // older replies drop their chips so only the latest topic list is shown
+  const push = (...add: Msg[]) => setMsgs((m) => [...m.map((x) => ({ ...x, chips: false })), ...add]);
+
+  const answerTopic = (question: string, topic: Topic) =>
+    push({ from: "user", text: question }, { from: "bot", text: topic.answer, actions: topic.actions, chips: true });
+
+  const askAi = async (question: string, history: Msg[]) => {
+    push({ from: "user", text: question });
+    setThinking(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        push({ from: "bot", text: "Please sign in again to ask the AI.", chips: true });
+        return;
+      }
+      const context = history
+        .filter((m) => m.text !== greeting)
+        .slice(-HISTORY_FOR_AI)
+        .map((m) => ({ role: m.from === "user" ? "user" : "assistant", content: m.text.slice(0, 4000) }));
+      const res = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "system",
+              content:
+                variant === "teacher"
+                  ? "The user is a teacher on a4ai. Keep answers short and practical."
+                  : "The user is a school student on a4ai. Explain simply, step by step, and keep it short.",
+            },
+            ...context,
+            { role: "user", content: question.slice(0, 4000) },
+          ],
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.content) {
+        setRemaining(body.unlimited ? null : typeof body.remaining_today === "number" ? body.remaining_today : null);
+        push({ from: "bot", text: body.content, ai: true });
+        return;
+      }
+      const detail = body?.detail;
+      const message: string | undefined = typeof detail === "string" ? detail : detail?.message;
+      if (res.status === 429 && detail?.error === "daily_limit_reached") {
+        setRemaining(0);
+        push({ from: "bot", text: message || "Today's free AI messages are used up.", actions: [PLANS], chips: true });
+      } else if (res.status === 429) {
+        push({ from: "bot", text: message || "Too many messages. Please wait a minute.", chips: true });
+      } else if (res.status === 401) {
+        push({ from: "bot", text: "Please sign in again to ask the AI.", chips: true });
+      } else {
+        push({ from: "bot", text: "The AI is not available right now. Try one of these topics:", actions: [SUPPORT], chips: true });
+      }
+    } catch {
+      push({ from: "bot", text: "Couldn't reach the AI. Check your internet and try again.", chips: true });
+    } finally {
+      setThinking(false);
+    }
   };
 
   const send = () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || thinking) return;
     setInput("");
-    answer(text, matchTopic(topics, text));
+    const topic = matchTopic(topics, text);
+    if (topic) answerTopic(text, topic);
+    else void askAi(text, msgs);
   };
 
   const runAction = (a: Action) => {
@@ -197,7 +263,7 @@ export default function StaticSarthi({
                     }`}
                     style={m.from === "user" ? { background: accent } : undefined}
                   >
-                    {m.text}
+                    {m.ai ? <RichText text={m.text} /> : m.text}
                   </div>
                 </div>
                 {m.actions && m.actions.length > 0 && (
@@ -221,7 +287,7 @@ export default function StaticSarthi({
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => answer(t.question, t)}
+                        onClick={() => answerTopic(t.question, t)}
                         className="px-3 py-1 rounded-full text-xs font-medium text-left border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                       >
                         {t.question}
@@ -231,8 +297,14 @@ export default function StaticSarthi({
                 )}
               </div>
             ))}
+            {thinking && <div className="text-xs text-slate-500 dark:text-slate-400 px-1">AI is typing…</div>}
             <div ref={endRef} />
           </div>
+          {remaining !== null && (
+            <div className="px-3 pt-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900">
+              {remaining} free AI {remaining === 1 ? "message" : "messages"} left today
+            </div>
+          )}
 
           <form
             className="p-2 flex gap-2 border-t border-slate-200 dark:border-slate-700 shrink-0"
@@ -244,12 +316,12 @@ export default function StaticSarthi({
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a question…"
+              placeholder={thinking ? "Waiting for the answer…" : "Ask anything…"}
               className="flex-1 min-w-0 rounded-xl px-3 py-2 text-base sm:text-sm bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none"
             />
             <button
               type="submit"
-              disabled={!input.trim()}
+              disabled={!input.trim() || thinking}
               className="px-3 rounded-xl text-white disabled:opacity-40"
               style={{ background: accent }}
               aria-label="Send"
@@ -270,5 +342,20 @@ export default function StaticSarthi({
         {open ? <X size={24} /> : <MessageCircle size={26} />}
       </button>
     </div>
+  );
+}
+
+/** AI replies use **bold**; show it as bold instead of asterisks. */
+function RichText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
+          <strong key={i}>{part.slice(2, -2)}</strong>
+        ) : (
+          <Fragment key={i}>{part}</Fragment>
+        )
+      )}
+    </>
   );
 }

@@ -201,6 +201,11 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Chatbot = `src/components/chat/StaticSarthi.tsx` (fixed answers, no AI/network; Groq/OpenRouter browser calls removed).
   HODDashboardPage lazy → main bundle 1049 KB → 462 KB. Don't add new animations; new UI must look right without them.
 
+- [x] Help bot AI back (12 Oct): StaticSarthi answers chips / 2+-keyword matches locally; other questions → backend
+  POST /api/v1/chat with JWT. `15_ai_chat_quota.sql`: ai_chat_usage + a4_is_paid_user + consume_ai_chat_quota (free 10/day,
+  paid unlimited, same message again counts against the 10). RAG-BACKEND chat.py: default limit 10, sends message hash.
+- [ ] Run 15 + VERIFY, deploy backend (OPENROUTER_API_KEY must be set on Vercel), then frontend.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
