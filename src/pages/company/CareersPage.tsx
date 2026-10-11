@@ -101,12 +101,12 @@ const EMPTY: FormState = {
 };
 
 const inputCls =
-  "w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm " +
+  "w-full min-w-0 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 py-2.5 text-base sm:text-sm " +
   "placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300 dark:focus:ring-orange-500/40";
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
         {label}
         {required && <span style={{ color: ACCENT }}> *</span>}
@@ -208,7 +208,7 @@ export default function CareersPage() {
   return (
     <CompanyLayout title="Careers" subtitle="Building the operating system for coaching institutes and schools.">
       {/* Hero */}
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-6 sm:p-8 mb-8">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-5 sm:p-8 mb-6 sm:mb-8">
         <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">
           We're Hiring!
         </h2>
@@ -228,7 +228,7 @@ export default function CareersPage() {
           <li
             key={j.id}
             id={j.id}
-            className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/60 p-5 sm:p-6 border-l-4"
+            className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/60 p-4 sm:p-6 border-l-4"
             style={{ borderLeftColor: ACCENT }}
           >
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -250,7 +250,7 @@ export default function CareersPage() {
               <button
                 type="button"
                 onClick={() => applyFor(j.id)}
-                className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 transition"
+                className="w-full md:w-auto shrink-0 rounded-xl px-5 py-3 md:py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 transition"
                 style={{ background: ACCENT }}
               >
                 Apply now
@@ -283,7 +283,7 @@ export default function CareersPage() {
       </ul>
 
       {/* Apply form */}
-      <div ref={formRef} className="mt-10 scroll-mt-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-5 sm:p-8">
+      <div ref={formRef} className="mt-8 sm:mt-10 scroll-mt-20 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 sm:p-8">
         {doneFor ? (
           <div className="text-center py-8">
             <CheckCircle2 className="h-12 w-12 mx-auto" style={{ color: ACCENT }} />
@@ -386,7 +386,7 @@ export default function CareersPage() {
                 }}
               >
                 {resume ? <FileText className="h-6 w-6 shrink-0" style={{ color: ACCENT }} /> : <Upload className="h-6 w-6 shrink-0 text-slate-400" />}
-                <span className="text-sm text-slate-600 dark:text-slate-300 truncate">
+                <span className="min-w-0 text-sm text-slate-600 dark:text-slate-300 truncate">
                   {resume ? `${resume.name} (${(resume.size / 1024 / 1024).toFixed(1)} MB)` : "Click or drop your resume here"}
                 </span>
                 <input
@@ -403,7 +403,7 @@ export default function CareersPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:brightness-110 transition disabled:opacity-60"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white shadow-sm hover:brightness-110 transition disabled:opacity-60"
                 style={{ background: ACCENT }}
               >
                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -418,7 +418,7 @@ export default function CareersPage() {
       </div>
 
       {/* Email option */}
-      <p className="mt-6 text-sm text-slate-600 dark:text-slate-400">
+      <p className="mt-6 text-sm text-slate-600 dark:text-slate-400 break-words">
         Prefer email? Send your resume to{" "}
         <a href="mailto:a4ai.team@gmail.com" className="font-medium hover:underline" style={{ color: ACCENT }}>
           a4ai.team@gmail.com

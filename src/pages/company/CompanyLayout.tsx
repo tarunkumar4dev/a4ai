@@ -12,13 +12,13 @@ export default function CompanyLayout({
   return (
     <div className="min-h-[70vh]">
       <header className="bg-gradient-to-b from-indigo-50 to-white dark:from-gray-900 dark:to-gray-950 border-b border-gray-200/60 dark:border-gray-800">
-        <div className="max-w-6xl mx-auto px-6 py-10">
-          <h1 className="text-3xl font-bold">{title}</h1>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
+          <h1 className="text-2xl sm:text-3xl font-bold">{title}</h1>
           {subtitle ? (
             <p className="text-gray-600 dark:text-gray-300 mt-2">{subtitle}</p>
           ) : null}
 
-          <nav className="mt-4 text-sm text-gray-600 dark:text-gray-400 flex gap-4">
+          <nav className="mt-4 text-sm text-gray-600 dark:text-gray-400 flex flex-wrap gap-x-4 gap-y-2">
             <Link to="/about" className="hover:text-indigo-600 dark:hover:text-indigo-400">
               About Us
             </Link>
@@ -38,7 +38,7 @@ export default function CompanyLayout({
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-10">{children}</main>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">{children}</main>
     </div>
   );
 }
