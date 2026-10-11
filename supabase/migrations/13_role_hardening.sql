@@ -1,4 +1,4 @@
--- 12_role_hardening.sql — self-assigned roles, notes ownership, private submissions (11 Oct 2026)
+-- 13_role_hardening.sql — self-assigned roles, notes ownership, private submissions (11 Oct 2026)
 --
 -- Written from a READ-ONLY check of the live DB (11 Oct):
 --   * no RLS policy reads auth user_metadata; handle_new_user copies metadata->>'role' into profiles.role
@@ -8,15 +8,17 @@
 --     policy has NO owner check → any "teacher" (or a student who sets role = 'teacher') deletes every note
 --   * storage bucket `submissions` is public → anyone with the URL reads student PDFs
 --
--- 1. handle_new_user   role from signup metadata only if student / teacher / institute (else teacher)
+-- 1. handle_new_user   role from signup metadata if student / teacher / institute; no role in metadata
+--                      (Google / phone signup) → NULL; anything else ('admin', …) → teacher
 -- 2. profiles.role     trigger: app users (anon / authenticated JWT) may set it once (NULL → student /
 --                      teacher / institute) and never change it; service_role, SQL editor, auth triggers can.
+--                      auth.users trigger copies a later metadata role choice into a NULL profile role, once.
 -- 3. notes             insert = own row (uploader_id = auth.uid()) + teacher/admin; delete = own row only.
 --                      No UPDATE policy (none existed; the app never updates notes) → updates stay denied.
 -- 4. submissions       bucket private. Staff who can see the assignment's batch can read (signed URLs);
 --                      backend AI check downloads with the service key (unchanged). file_url keeps the
 --                      .../object/public/submissions/<path> format: submit_assignment + backend parse it.
--- Run after 10 and 11. Safe to re-run.
+-- Run after 10, 11, 12_copy_checker. Safe to re-run.
 
 begin;
 
@@ -30,8 +32,13 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'full_name',
              NEW.raw_user_meta_data->>'name', ''),
     NEW.email,
+    -- valid → it; no role yet (Google / phone signup) → NULL, filled once by a4_sync_profile_role below;
+    -- anything else ('admin', junk) → teacher
     CASE WHEN NEW.raw_user_meta_data->>'role' IN ('student', 'teacher', 'institute')
-         THEN NEW.raw_user_meta_data->>'role' ELSE 'teacher' END,
+           THEN NEW.raw_user_meta_data->>'role'
+         WHEN nullif(NEW.raw_user_meta_data->>'role', '') IS NULL
+           THEN NULL
+         ELSE 'teacher' END,
     now()
   )
   ON CONFLICT (id) DO NOTHING;
@@ -64,7 +71,7 @@ begin
     return new;
   end if;
   if new.role is distinct from old.role then
-    -- one-time choice for a profile that has no role yet (DashboardPage fills a missing role)
+    -- one-time choice for a profile that has no role yet (Google / phone signup, see a4_sync_profile_role)
     if old.role is null and new.role in ('student', 'teacher', 'institute') then
       return new;
     end if;
@@ -77,6 +84,25 @@ drop trigger if exists a4_guard_profile_role on public.profiles;
 create trigger a4_guard_profile_role
   before insert or update on public.profiles
   for each row execute function public.a4_guard_profile_role();
+
+-- Role chosen AFTER the auth user exists (AuthCallback after Google, RoleSelectionPage, phone signup) only
+-- lands in user_metadata. Copy it into a profile whose role is still NULL — once; never overwrites.
+create or replace function public.a4_sync_profile_role()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.raw_user_meta_data->>'role' in ('student', 'teacher', 'institute')
+     and new.raw_user_meta_data->>'role' is distinct from old.raw_user_meta_data->>'role' then
+    update public.profiles set role = new.raw_user_meta_data->>'role'
+     where id = new.id and role is null;
+  end if;
+  return new;
+end $$;
+revoke execute on function public.a4_sync_profile_role() from public, anon, authenticated;
+
+drop trigger if exists a4_sync_profile_role on auth.users;
+create trigger a4_sync_profile_role
+  after update of raw_user_meta_data on auth.users
+  for each row execute function public.a4_sync_profile_role();
 
 -- ── 3. notes: owner-only writes ──────────────────────────────────────────────
 drop policy if exists notes_insert_teachers_admin on public.notes;
@@ -128,6 +154,7 @@ commit;
 -- ════════════════════════════════════════════════════════════════════
 -- select 'no policy trusts user_metadata', not exists (select 1 from pg_policies where coalesce(qual,'')||coalesce(with_check,'') ilike any (array['%user_metadata%','%raw_user_meta%']))
 -- union all select 'role guard trigger', exists (select 1 from pg_trigger where tgname = 'a4_guard_profile_role' and tgrelid = 'public.profiles'::regclass)
+-- union all select 'role sync trigger', exists (select 1 from pg_trigger where tgname = 'a4_sync_profile_role' and tgrelid = 'auth.users'::regclass)
 -- union all select 'old notes policies gone', not exists (select 1 from pg_policies where tablename = 'notes' and policyname like 'notes_%_teachers_admin')
 -- union all select 'no notes UPDATE policy', not exists (select 1 from pg_policies where tablename = 'notes' and cmd in ('UPDATE','ALL'))
 -- union all select 'submissions private', not (select public from storage.buckets where id = 'submissions')

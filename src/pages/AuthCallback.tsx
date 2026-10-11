@@ -66,7 +66,8 @@ export default function AuthCallback() {
         localStorage.removeItem("a4ai_pending_role");
 
         // 5. Ensure profile row. Role only on a NEW row — the DB rejects role changes from the app
-        //    (12_role_hardening a4_guard_profile_role), which would fail the whole upsert.
+        //    (13_role_hardening a4_guard_profile_role), which would fail the whole upsert. A profile created
+        //    by handle_new_user without a role gets finalRole from the updateUser above (a4_sync_profile_role).
         try {
           const fullName =
             (user.user_metadata?.full_name as string) ||

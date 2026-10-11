@@ -503,7 +503,7 @@ export default function StudentPortalPage() {
       const { error: upErr } = await supabase.storage.from("submissions").upload(path, file, { upsert: false, contentType: "application/pdf" }); // unique path; upsert would need storage SELECT (removed in 07)
       if (upErr) throw upErr;
 
-      // Bucket is private (12): this URL isn't directly readable, it's the stored reference that
+      // Bucket is private (13_role_hardening): this URL isn't directly readable, it's the stored reference that
       // submit_assignment validates and staff/backend turn back into a path.
       const { data: { publicUrl } } = supabase.storage.from("submissions").getPublicUrl(path);
 

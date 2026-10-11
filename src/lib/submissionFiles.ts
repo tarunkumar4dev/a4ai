@@ -1,4 +1,4 @@
-// Student submission PDFs live in the PRIVATE `submissions` bucket (12_role_hardening).
+// Student submission PDFs live in the PRIVATE `submissions` bucket (13_role_hardening).
 // submissions.file_url keeps the ".../object/public/submissions/<path>" form (submit_assignment and the
 // backend AI check parse it), so staff open the file through a short-lived signed URL made from that path.
 // Storage RLS (a4_submissions_staff_read) decides who may sign it.

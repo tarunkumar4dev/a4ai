@@ -162,8 +162,11 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - [x] Step 8 code (11 Oct): role hardening, from READ-ONLY live checks (`supabase db query --linked`). Findings: no RLS
   policy reads user_metadata (5 functions read only `full_name`); `handle_new_user` copied metadata role → profiles.role;
   every user could UPDATE own profiles.role (table-level grant); only `notes` policies trusted profiles.role and
-  notes DELETE had no owner check; 10 + 11 were NOT applied on live. `12_role_hardening.sql`: handle_new_user
-  clamps role to student/teacher/institute; trigger `a4_guard_profile_role` (app JWT may set role once NULL →
+  notes DELETE had no owner check; 10 + 11 were NOT applied on live. `13_role_hardening.sql`: handle_new_user
+  role = valid metadata role, NULL if metadata has none (Google/phone), 'teacher' for junk ('admin');
+  `a4_sync_profile_role` (auth.users AFTER UPDATE of metadata) copies a later choice (AuthCallback updateUser,
+  RoleSelectionPage) into a NULL profile role once — without it 13 + the AuthCallback change made every Google
+  signup a 'teacher' profile; trigger `a4_guard_profile_role` (app JWT may set role once NULL →
   student/teacher/institute, never change it; service_role/SQL editor pass); notes insert/delete owner-only (no
   UPDATE policy = denied); `submissions` bucket private + `a4_submissions_staff_read` (a4_can_read_submission_object).
   Frontend: RoleAuthGate lost its "admin" bypass (UX only, self-chosen role); `/admin/pyq` (localStorage mock, no DB)
@@ -172,9 +175,13 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   HODAttendanceDashboard no longer reads teacher_batches; useInstituteTeacher.ts deleted. platform_admins skipped
   (nothing reads it yet). Generator backend (prod rag-backend-kappa-three.vercel.app): no-token POST → 401;
   `check_usage` RPC = monthly plan quota per JWT user + in-memory IP limit 20/min. `npm run build` passes.
-- [ ] Step 8 run: 10 → 11 → 12 → VERIFY 1 + VERIFY 2 blocks at end of 12 → deploy frontend → test teacher View PDF,
-  portal submit, Google login of an existing user (profile name refresh, no error).
+- [ ] Step 8 run: 10 → 11 → 12_copy_checker → 13_role_hardening → VERIFY 1 + VERIFY 2 at end of 13 → deploy frontend → test teacher View PDF,
+  portal submit, Google login of an existing user (profile name refresh, no error), Google signup from /signup as
+  student → profiles.role = 'student'.
 - Known after Step 8:
+  - 10 profiles have metadata role ≠ profiles.role (7× meta teacher / profile student, 1× institute/student,
+    1× student/teacher, 1× institute/teacher) — left as is; profiles.role only gates notes now.
+  - DashboardPage (fills a NULL profile role) is not routed — dead code. 63 auth users have no profile row.
   - Students can't re-open their own submitted PDF in the portal. Needs a backend endpoint (access code → signed URL).
   - `assignments` bucket still public (question papers; TeacherAssignmentsTab stores getPublicUrl) — separate commit.
   - `notes` bucket public + "Public Access for notes" SELECT; notes row delete doesn't remove the file.
