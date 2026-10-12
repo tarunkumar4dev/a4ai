@@ -10,7 +10,9 @@
 //   SUPABASE_SERVICE_ROLE_KEY   required — set it in the terminal only, never in a file:
 //                                 PowerShell:  $env:SUPABASE_SERVICE_ROLE_KEY = "…"
 //                                 afterwards:  Remove-Item Env:SUPABASE_SERVICE_ROLE_KEY
-//   SUPABASE_URL                optional, falls back to VITE_SUPABASE_URL (read from .env.local)
+//                               A copy in .env / .env.local is ignored (warning printed, value never read out).
+//   SUPABASE_URL                optional, falls back to VITE_SUPABASE_URL — the ONLY value read from
+//                               .env / .env.local
 //
 // After --apply the user signs in with this email: "Forgot password" on /login sets a password,
 // or Google works if the Google account uses the same email.
@@ -33,19 +35,23 @@ const fail = (msg) => {
 if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) fail("--user-id <uuid> is required");
 if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail("--email <valid email> is required");
 
-// ── env (.env / .env.local, without printing values) ────────────────────────
-function loadEnvFile(path) {
-  if (!existsSync(path)) return;
+// ── env ─────────────────────────────────────────────────────────────────────
+// Files may provide VITE_SUPABASE_URL and nothing else. The service key comes only from the terminal.
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let fileUrl = null;
+for (const path of [".env", ".env.local"]) {
+  if (!existsSync(path)) continue;
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (!m || process.env[m[1]]) continue;
-    process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, "");
+    const m = line.match(/^\s*(?:export\s+)?([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (!m) continue;
+    if (m[1] === "SUPABASE_SERVICE_ROLE_KEY") {
+      console.warn("⚠ Found SUPABASE_SERVICE_ROLE_KEY in a .env file — remove it; key is read only from the terminal.");
+    } else if (m[1] === "VITE_SUPABASE_URL" && !fileUrl) {
+      fileUrl = m[2].replace(/^['"]|['"]$/g, "");
+    }
   }
 }
-loadEnvFile(".env");
-loadEnvFile(".env.local");
-const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || fileUrl;
 if (!url) fail("SUPABASE_URL (or VITE_SUPABASE_URL) is not set");
 if (!serviceKey) fail('SUPABASE_SERVICE_ROLE_KEY is not set — set it in the terminal: $env:SUPABASE_SERVICE_ROLE_KEY = "…" (never in a file)');
 
