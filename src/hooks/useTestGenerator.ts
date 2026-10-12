@@ -158,7 +158,9 @@ export function useTestGenerator(): UseTestGeneratorReturn {
               "Monthly limit reached. Upgrade your plan to generate more tests."
           );
         } else if (err.status === 422) {
-          setError(`Invalid input: ${typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail)}`);
+          // A plain-text 422 is already a readable message (e.g. "Content is not available for the
+          // selected chapters: …"); field-validation errors come as objects.
+          setError(typeof err.detail === "string" ? err.detail : `Invalid input: ${JSON.stringify(err.detail)}`);
         } else if (err.status === 429) {
           setError(
             "Rate limit reached. Please wait a minute and try again."

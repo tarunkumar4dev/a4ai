@@ -79,6 +79,8 @@ export interface GenerateTestResponse {
   generationTime: number;
   status: string;
   meta: Record<string, any>;
+  /** Chosen chapters left out because there is no NCERT content for them */
+  skipped_chapters?: string[];
 }
 
 export interface ChaptersResponse {

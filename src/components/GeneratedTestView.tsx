@@ -1211,6 +1211,19 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
         transition={{ duration: 0.4 }}
         className="space-y-6"
       >
+        {/* ── Skipped chapters (no NCERT content) ─────────────────────── */}
+        {(result.skipped_chapters?.length ?? 0) > 0 && (
+          <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+            <p className="text-sm font-bold">
+              ⚠ {result.skipped_chapters!.length === 1 ? "1 chapter was" : `${result.skipped_chapters!.length} chapters were`} skipped
+            </p>
+            <p className="text-xs mt-1">
+              These chapters were skipped because their content is not available:{" "}
+              <b>{result.skipped_chapters!.join(", ")}</b>. The paper was made from your other chapters.
+            </p>
+          </div>
+        )}
+
         {/* ── Header Bar ──────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
