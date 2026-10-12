@@ -73,9 +73,11 @@ export function friendlyOtpError(message: string | undefined): string {
 /** Seconds after "OTP sent" before showing the "Didn't get the OTP?" help. */
 export const OTP_HELP_AFTER_MS = 30_000;
 
-/** Phone (WhatsApp) OTP sign-in is paused until the WhatsApp sender is live; Google + email only.
- *  Set VITE_PHONE_OTP_ENABLED=true (Vercel env, then redeploy) to bring it back. */
-export const PHONE_OTP_ENABLED = String(import.meta.env.VITE_PHONE_OTP_ENABLED ?? "false").toLowerCase() === "true";
+/** Phone (WhatsApp) OTP sign-in is off until Meta approves the WhatsApp sender; Google + email only.
+ *  Every OTP screen (phone input, Send OTP, verify) checks this. Set VITE_ENABLE_WHATSAPP_OTP=true
+ *  (Vercel env, then redeploy) to bring it back — together with WHATSAPP_OTP_ENABLED on the
+ *  send-whatsapp-otp Edge Function and the Supabase Send SMS hook. */
+export const PHONE_OTP_ENABLED = String(import.meta.env.VITE_ENABLE_WHATSAPP_OTP ?? "false").toLowerCase() === "true";
 
 /* ── Post-login redirect (LoginModal stores the page the user was on) ── */
 const REDIRECT_KEY = "a4ai_redirect_after_login";

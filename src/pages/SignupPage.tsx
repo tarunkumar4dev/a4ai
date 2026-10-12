@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, rememberPassword, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import { authRedirectUrl, PHONE_OTP_ENABLED, isInAppBrowser, IN_APP_BROWSER_MESSAGE, rememberPassword, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
 import OtpHelp from "@/components/auth/OtpHelp";
 import { useAuth } from "@/providers/AuthProvider";
 import { motion, AnimatePresence } from "framer-motion";
@@ -55,7 +55,9 @@ export default function SignupPage() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [signupMethod, setSignupMethod] = useState<"email" | "phone">("email"); // new accounts: Google or email (no new phone/OTP signups)
+  const [signupMethodState, setSignupMethod] = useState<"email" | "phone">("email"); // new accounts: Google or email (no new phone/OTP signups)
+  // WhatsApp OTP off (VITE_ENABLE_WHATSAPP_OTP) → the phone/OTP form can never show
+  const signupMethod: "email" | "phone" = PHONE_OTP_ENABLED ? signupMethodState : "email";
   const [logoFailed, setLogoFailed] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 

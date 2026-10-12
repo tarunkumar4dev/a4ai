@@ -1,12 +1,12 @@
 // src/components/LoginModal.tsx
 // Popup login modal for guest users trying to download/share/save
-// Shows phone OTP + Google login options
+// Shows Google + email (phone OTP code kept, used only when VITE_ENABLE_WHATSAPP_OTP=true)
 // After login, stays on same page (no redirect)
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Phone, Download, Share2, Save } from "lucide-react";
-import { normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError, rememberRedirectAfterLogin } from "@/lib/authHelpers";
+import { PHONE_OTP_ENABLED, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError, rememberRedirectAfterLogin } from "@/lib/authHelpers";
 import OtpHelp from "@/components/auth/OtpHelp";
 
 // Shared normaliser (same as Login/Signup pages); handleSendOTP validates first
@@ -57,6 +57,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
   const actionText = action === "share" ? "share this test" : action === "save" ? "save this test" : "download this test";
 
   const handleSendOTP = async () => {
+    if (!PHONE_OTP_ENABLED) return; // WhatsApp OTP off — never call signInWithOtp
     if (!normalizeIndianPhone(phone)) {
       setError(INVALID_PHONE_MESSAGE);
       return;
@@ -81,6 +82,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
   };
 
   const handleVerifyOTP = async () => {
+    if (!PHONE_OTP_ENABLED) return;
     const code = otp.join("");
     if (code.length !== 6) {
       setError("Enter 6-digit OTP");

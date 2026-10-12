@@ -47,7 +47,9 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email"); // Google + email first; mobile OTP only for older phone accounts
+  const [loginMethodState, setLoginMethod] = useState<"email" | "phone">("email"); // Google + email first; mobile OTP only for older phone accounts
+  // WhatsApp OTP off (VITE_ENABLE_WHATSAPP_OTP) → the phone/OTP form can never show
+  const loginMethod: "email" | "phone" = PHONE_OTP_ENABLED ? loginMethodState : "email";
   const [formValues, setFormValues] = useState({ email: "", password: "", phone: "" });
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
