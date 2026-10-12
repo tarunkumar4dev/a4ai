@@ -69,17 +69,10 @@ import {
   Shield,
   Loader2,
 } from "lucide-react";
+import { getBackendApiBase } from "@/lib/apiBase";
 
 // ── Config ──────────────────────────────────────────────────────
-const RAW_API_URL = (
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_API_BASE ||
-  "http://localhost:8000"
-).replace(/\/+$/, "");
-
-const API_BASE = RAW_API_URL.endsWith("/api/v1")
-  ? RAW_API_URL
-  : `${RAW_API_URL}/api/v1`;
+const API_BASE = `${getBackendApiBase()}/v1`;
 
 const PAGE_SIZE = 30;
 const MOBILE_BREAKPOINT = 1024;

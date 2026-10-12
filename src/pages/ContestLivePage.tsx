@@ -41,6 +41,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { getBackendApiBase } from "@/lib/apiBase";
 
 /**
  * ContestLivePage — BACKEND-WIRED
@@ -62,13 +63,12 @@ import {
  *    the locked screen before the student starts.
  *
  * ⚠️ ADJUST IF NEEDED:
- * - API_BASE assumes VITE_API_URL is the server root (e.g. https://api.a4ai.in).
- *   If your VITE_API_URL already includes /api/v1, remove it from API_BASE below.
+ * - API_BASE comes from getBackendApiBase() (works with or without "/api" in the env URL).
  * - QuestionPanel must accept the question shape produced by mapApiQuestion().
  *   If questions don't render, send me QuestionPanel.tsx and I'll match the shape.
  */
 
-const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api/v1`;
+const API_BASE = `${getBackendApiBase()}/v1`;
 
 type PermissionCardProps = {
   icon: ReactNode;

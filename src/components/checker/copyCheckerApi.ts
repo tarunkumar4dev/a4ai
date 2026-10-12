@@ -5,6 +5,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { compressImage } from "@/lib/imageCompress";
 import type { AiResult } from "./AiGradeBreakdown";
+import { backendUrl } from "@/lib/apiBase";
 
 export type Strictness = "easy" | "medium" | "hard" | "extreme";
 export type SheetStatus = "pending" | "uploaded" | "checking" | "checked" | "failed" | "approved";
@@ -38,7 +39,7 @@ export const STRICTNESS_LABEL: Record<Strictness, string> = {
 
 export const MAX_PAGES = 16;
 const BUCKET = "answer-sheets";
-const API = `${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api"}/v1/copy-checker`;
+const API = backendUrl("/v1/copy-checker");
 
 async function post(path: string, body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();

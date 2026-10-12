@@ -4,12 +4,9 @@
 // ──────────────────────────────────────────────────────────
 
 import { supabase } from "@/lib/supabaseClient";
+import { backendUrl } from "@/lib/apiBase";
 
-const API_BASE_URL =
-  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) ||
-  "http://localhost:8000";
-
-const API_PREFIX = `${API_BASE_URL}/api/v1/community-quizzes`;
+const API_PREFIX = backendUrl("/v1/community-quizzes");
 
 /* ─────────── Types ─────────── */
 

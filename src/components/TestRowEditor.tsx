@@ -33,6 +33,7 @@ import {
   AlignLeft, ListChecks, ArrowLeftRight, Loader2, AlertCircle, ChevronDown, Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { backendUrl } from "@/lib/apiBase";
 
 // ==================== TYPES ====================
 interface SimpleRowData {
@@ -71,22 +72,7 @@ interface FormValues {
   simpleData: SimpleRowData[];
 }
 
-// ==================== API CONFIGURATION ====================
-const getApiBaseUrl = (): string => {
-  if (import.meta.env.PROD) {
-    return import.meta.env.VITE_API_URL || "";
-  }
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  if (typeof window !== "undefined") {
-    const { hostname } = window.location;
-    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-      return `http://${hostname}:8000`;
-    }
-  }
-  return "http://localhost:8000";
-};
+// API base: backendUrl() in src/lib/apiBase.ts (also covers the LAN dev host on :8000).
 
 // ==================== MOCK FALLBACK ====================
 const MOCK_CHAPTERS: Record<string, string[]> = {
@@ -128,8 +114,7 @@ async function fetchChaptersFromAPI(
   signal: AbortSignal,
 ): Promise<ChaptersFetchResult> {
   const classNum = classLevel.replace(/\D/g, "") || "10";
-  const base = getApiBaseUrl();
-  const url = `${base}/api/v1/test-generator/chapters?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`;
+  const url = `${backendUrl("/v1/test-generator/chapters")}?subject=${encodeURIComponent(subject)}&class_grade=${encodeURIComponent(classNum)}`;
 
   const res = await fetch(url, {
     signal,

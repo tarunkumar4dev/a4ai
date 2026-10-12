@@ -7,13 +7,9 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageCircle, X, Send } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { backendUrl } from "@/lib/apiBase";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:8000").trim().replace(/\/+$/, "");
-const CHAT_URL = API_BASE.endsWith("/api/v1")
-  ? `${API_BASE}/chat`
-  : API_BASE.endsWith("/api")
-    ? `${API_BASE}/v1/chat`
-    : `${API_BASE}/api/v1/chat`;
+const CHAT_URL = backendUrl("/v1/chat");
 const HISTORY_FOR_AI = 8; // previous messages sent as context
 const MAX_CHARS = 2000; // backend limit per message (longer history is cut, a longer question is refused)
 

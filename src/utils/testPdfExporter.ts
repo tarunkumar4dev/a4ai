@@ -1,6 +1,7 @@
 // src/utils/testPdfExporter.ts
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { getBackendApiBase } from "@/lib/apiBase";
 
 export interface TestQuestionData {
   id?: string;
@@ -417,7 +418,7 @@ export async function fetchQuestionsForTest(
 
   // 2. Try Backend API
   try {
-    const apiBase = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000/api";
+    const apiBase = getBackendApiBase();
     // The backend identifies the owner from this token; teacher_id in the query is ignored.
     const { data: { session } } = await supabase.auth.getSession();
     const headers: Record<string, string> = {};
@@ -478,7 +479,7 @@ export async function downloadTestDocument({
     }
 
     // Step 2: If DOCX or backend is available, try backend export first
-    const apiBase = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000/api";
+    const apiBase = getBackendApiBase();
     const endpoint = isAnswerKey
       ? `${apiBase}/v1/test-generator/export-answer-key`
       : `${apiBase}/v1/test-generator/export`;

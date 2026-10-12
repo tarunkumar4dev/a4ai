@@ -34,6 +34,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useGuestAccess } from "@/hooks/useGuestAccess";
 import LoginModal from "@/components/LoginModal";
 import { toast } from "sonner";
+import { backendUrl } from "@/lib/apiBase";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -811,10 +812,9 @@ async function downloadFile(
     instituteName: clean(institute?.instituteName),
   };
 
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
   const endpoint = mode === "standalone_answer_key"
-    ? `${API_BASE}/api/v1/test-generator/export-answer-key`
-    : `${API_BASE}/api/v1/test-generator/export`;
+    ? backendUrl("/api/v1/test-generator/export-answer-key")
+    : backendUrl("/api/v1/test-generator/export");
 
   const res = await fetch(endpoint, {
     method: "POST",

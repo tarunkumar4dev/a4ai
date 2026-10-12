@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { openSubmissionFile } from "@/lib/submissionFiles";
 import { useMyScope } from "@/hooks/useMyScope";
 import { AiQuestionList, feedbackFromAi, type AiResult } from "@/components/checker/AiGradeBreakdown";
+import { backendUrl } from "@/lib/apiBase";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -33,7 +34,7 @@ type Submission = {
 };
 
 /* ─── AI checking (backend: smart-assignment-checker) ─── */
-const CHECKER_API = `${import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api"}/v1/smart-assignment-checker`;
+const CHECKER_API = backendUrl("/v1/smart-assignment-checker");
 const AI_PARALLEL = 3;
 const KEY_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp";
 

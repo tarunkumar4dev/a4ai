@@ -1,6 +1,6 @@
 // src/lib/api.ts
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+import { backendUrl } from "@/lib/apiBase";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -137,7 +137,7 @@ async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const url = backendUrl(path);
 
   const defaultHeaders: Record<string, string> = {
     "Content-Type": "application/json",
@@ -328,7 +328,7 @@ export const api = {
     instituteName?: string | null;
     templateTier?: "standard" | "premium";
   }): Promise<Blob> {
-    const url = `${API_BASE}/api/v1/test-generator/export`;
+    const url = backendUrl("/api/v1/test-generator/export");
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -368,7 +368,7 @@ export const api = {
     instituteName?: string | null;
     templateTier?: "standard" | "premium";
   }): Promise<Blob> {
-    const url = `${API_BASE}/api/v1/test-generator/export-answer-key`;
+    const url = backendUrl("/api/v1/test-generator/export-answer-key");
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

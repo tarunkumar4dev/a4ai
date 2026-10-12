@@ -3,7 +3,9 @@
 // Frontend API client for Contest endpoints
 // ──────────────────────────────────────────────────────────
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+import { getBackendApiBase } from "@/lib/apiBase";
+
+const API_V1 = `${getBackendApiBase()}/v1`;
 
 // ── Types ──
 
@@ -145,7 +147,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export const contestApi = {
 
   async createContest(payload: CreateContestPayload): Promise<CreateContestResponse> {
-    const res = await fetch(`${API_BASE}/api/v1/contests`, {
+    const res = await fetch(`${API_V1}/contests`, {
       method: "POST",
       headers: await getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -159,7 +161,7 @@ export const contestApi = {
   },
 
   async getContestInfo(shortCode: string): Promise<ContestInfo> {
-    const res = await fetch(`${API_BASE}/api/v1/contests/${shortCode}/info`, {
+    const res = await fetch(`${API_V1}/contests/${shortCode}/info`, {
       headers: { "Content-Type": "application/json" },
     });
     if (res.status === 404) throw new Error("Contest not found");
@@ -174,7 +176,7 @@ export const contestApi = {
     studentName?: string,
     studentEmail?: string,
   ): Promise<ContestData> {
-    const res = await fetch(`${API_BASE}/api/v1/contests/${shortCode}/start`, {
+    const res = await fetch(`${API_V1}/contests/${shortCode}/start`, {
       method: "POST",
       headers: await getAuthHeaders(),
       body: JSON.stringify({
@@ -196,7 +198,7 @@ export const contestApi = {
   ): Promise<SubmitResponse> {
     const headers = await getAuthHeaders();
     headers["X-Attempt-Id"] = attemptId;
-    const res = await fetch(`${API_BASE}/api/v1/contests/${contestId}/submit`, {
+    const res = await fetch(`${API_V1}/contests/${contestId}/submit`, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
@@ -209,7 +211,7 @@ export const contestApi = {
   },
 
   async getLeaderboard(contestId: string) {
-    const res = await fetch(`${API_BASE}/api/v1/contests/${contestId}/leaderboard`, {
+    const res = await fetch(`${API_V1}/contests/${contestId}/leaderboard`, {
       headers: await getAuthHeaders(),
     });
     if (!res.ok) throw new Error("Failed to load leaderboard");
@@ -217,7 +219,7 @@ export const contestApi = {
   },
 
   async listMyContests() {
-    const res = await fetch(`${API_BASE}/api/v1/contests/my`, {
+    const res = await fetch(`${API_V1}/contests/my`, {
       headers: await getAuthHeaders(),
     });
     if (!res.ok) throw new Error("Failed to load contests");

@@ -206,6 +206,10 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   paid unlimited, same message again counts against the 10). RAG-BACKEND chat.py: default limit 10, sends message hash.
 - [ ] Run 15 + VERIFY, deploy backend (OPENROUTER_API_KEY must be set on Vercel), then frontend.
 
+- Backend URLs (12 Oct): every FastAPI /api/v1 call builds its URL with `src/lib/apiBase.ts` (getBackendApiBase / backendUrl).
+  Works whether VITE_BACKEND_URL / VITE_API_URL end in nothing, /api or /api/v1. Live VITE_BACKEND_URL had no /api → checker
+  calls were 404. Don't build backend URLs from env vars directly. (Modules/worksheet still use VITE_API_URL root + /modules.)
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
