@@ -15,6 +15,7 @@
    WHATSAPP_OTP_TEMPLATE   default "a4ai_login_otp"  (category: Authentication, button: Copy code)
    WHATSAPP_OTP_LANG       default "en"               (template language code exactly as in WhatsApp Manager)
    WHATSAPP_GRAPH_VERSION  default "v21.0"
+   WHATSAPP_OTP_ENABLED    "true" to send OTPs; anything else (default) = off, Meta is never called
    OTP_HASH_PEPPER         optional extra secret mixed into the stored phone hash
    SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY — provided by Supabase automatically
 ===================================================== */
@@ -28,6 +29,9 @@ const WA_TEMPLATE = Deno.env.get("WHATSAPP_OTP_TEMPLATE") || "a4ai_login_otp";
 const WA_LANG = Deno.env.get("WHATSAPP_OTP_LANG") || "en";
 const GRAPH_VERSION = Deno.env.get("WHATSAPP_GRAPH_VERSION") || "v21.0";
 const PEPPER = Deno.env.get("OTP_HASH_PEPPER") || "";
+// Kill switch (12 Oct 2026, Meta approval pending): unless WHATSAPP_OTP_ENABLED=true, every request is refused
+// before any signature/DB/Meta work — no WhatsApp message is ever sent.
+const OTP_ENABLED = (Deno.env.get("WHATSAPP_OTP_ENABLED") || "false").toLowerCase() === "true";
 const META_TIMEOUT_MS = 4000; // Supabase waits ~5 s for an auth hook
 
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -87,6 +91,7 @@ function explainMetaError(code: number | undefined): { message: string; config: 
 }
 
 Deno.serve(async (req) => {
+  if (!OTP_ENABLED) return hookError(503, "WhatsApp OTP is unavailable right now. Please sign in with Google or Email.");
   if (req.method !== "POST") return hookError(405, "Method not allowed");
 
   // 1) Only Supabase Auth may call this (Standard Webhooks signature). Otherwise anyone could spend our money.
