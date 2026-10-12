@@ -76,34 +76,6 @@ interface FormValues {
 
 // API base: backendUrl() in src/lib/apiBase.ts (also covers the LAN dev host on :8000).
 
-// ==================== MOCK FALLBACK ====================
-const MOCK_CHAPTERS: Record<string, string[]> = {
-  Science: [
-    "Chemical Reactions and Equations",
-    "Acids Bases and Salts",
-    "Metals and Non-metals",
-    "Carbon and Its Compounds",
-    "Periodic Classification",
-    "Life Processes",
-    "Control and Coordination",
-    "How do Organisms Reproduce",
-    "Heredity and Evolution",
-    "Light Reflection and Refraction",
-    "Human Eye and Colorful World",
-    "Electricity",
-    "Magnetic Effects of Electric Current",
-    "Our Environment",
-  ],
-  Maths: [
-    "Real Numbers", "Polynomials", "Pair of Linear Equations",
-    "Quadratic Equations", "Arithmetic Progressions", "Triangles",
-    "Coordinate Geometry", "Introduction to Trigonometry",
-    "Some Applications of Trigonometry", "Circles", "Constructions",
-    "Areas Related to Circles", "Surface Areas and Volumes",
-    "Statistics", "Probability",
-  ],
-};
-
 // ==================== API: FETCH CHAPTERS ====================
 interface ChaptersFetchResult {
   flat: string[];
@@ -133,9 +105,8 @@ async function fetchChaptersFromAPI(
   const labels: Record<string, string> =
     data.labels && typeof data.labels === "object" ? data.labels : {};
 
-  if (flat.length === 0 && MOCK_CHAPTERS[subject]) {
-    return { flat: MOCK_CHAPTERS[subject], groups: null, labels: {} };
-  }
+  // ok:false = the backend hit an error (it answers with an empty list) → show "couldn't load"
+  if (data.ok === false) throw new Error("Chapter service error");
 
   return { flat, groups, labels };
 }
@@ -148,6 +119,7 @@ function useChapters(classLevel: string, subject: string) {
   const [labels, setLabels]              = useState<Record<string, string>>({});
   const [loading, setLoading]            = useState(false);
   const [error, setError]                = useState<string | null>(null);
+  const [reloadKey, setReloadKey]        = useState(0);
 
   useEffect(() => {
     if (!classLevel || !subject) {
@@ -179,13 +151,10 @@ function useChapters(classLevel: string, subject: string) {
         if (err.name === "AbortError") return;
         console.error("Chapter fetch failed:", err.message);
         setError(err.message);
-        if (MOCK_CHAPTERS[subject]) {
-          setChapters(MOCK_CHAPTERS[subject]);
-          setChapterGroups(null);
-        } else {
-          setChapters([]);
-          setChapterGroups(null);
-        }
+        // No fallback list: the old one was Class 10 Science/Maths for EVERY class
+        setChapters([]);
+        setChapterGroups(null);
+        setLabels({});
         setSubtopicsMap({});
       })
       .finally(() => {
@@ -193,9 +162,10 @@ function useChapters(classLevel: string, subject: string) {
       });
 
     return () => { controller.abort(); };
-  }, [classLevel, subject]);
+  }, [classLevel, subject, reloadKey]);
 
-  return { chapters, chapterGroups, subtopicsMap, labels, loading, error };
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  return { chapters, chapterGroups, subtopicsMap, labels, loading, error, reload };
 }
 
 // ==================== COMMON SUBTOPICS (helper map only) ====================
@@ -989,7 +959,7 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
   const classLevel     = watch("classGrade") ?? "";
   const currentSubject = watch("subject") ?? "";
 
-  const { chapters: apiChapters, chapterGroups: apiChapterGroups, subtopicsMap, labels: chapterLabels, loading: chaptersLoading, error: chaptersError } =
+  const { chapters: apiChapters, chapterGroups: apiChapterGroups, subtopicsMap, labels: chapterLabels, loading: chaptersLoading, error: chaptersError, reload: reloadChapters } =
     useChapters(classLevel, currentSubject);
 
   const isEnglish = currentSubject?.toLowerCase() === "english";
@@ -1058,7 +1028,6 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
                 ({finalChapters.length} chapters{finalChapterGroups && finalChapterGroups.length > 0 ? `, ${finalChapterGroups.length} groups` : ""})
               </span>
             )}
-            {chaptersError && <span className="text-[10px] sm:text-xs text-amber-600">(using fallback)</span>}
           </div>
         </div>
       </div>
@@ -1084,8 +1053,21 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
       {classLevel && currentSubject && !chaptersLoading && finalChapters.length === 0 && (
         <div className="py-8 sm:py-10 text-center px-4 bg-amber-50/50 border-b border-amber-100">
           <AlertCircle size={28} className="mx-auto mb-3 text-amber-500" />
-          <p className="font-bold text-sm text-amber-900">No chapters for {currentSubject} · {classLevel}</p>
-          <p className="text-xs mt-1.5 text-amber-700">Try another subject or class.</p>
+          {chaptersError ? (
+            <>
+              <p className="font-bold text-sm text-amber-900">Couldn't load chapters for {currentSubject} · {classLevel}</p>
+              <p className="text-xs mt-1.5 text-amber-700">Check your internet connection and try again.</p>
+              <button type="button" onClick={reloadChapters}
+                className="mt-3 px-4 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700">
+                Retry
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="font-bold text-sm text-amber-900">No chapters for {currentSubject} · {classLevel}</p>
+              <p className="text-xs mt-1.5 text-amber-700">Try another subject or class.</p>
+            </>
+          )}
         </div>
       )}
 
