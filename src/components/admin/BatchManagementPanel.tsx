@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { teacherDisplayName } from "@/lib/teacherName";
 
 /* ───── TYPES ───── */
 interface Batch {
@@ -53,12 +54,11 @@ function displayNameOf(m?: {
   id?: string | null;
 }): string {
   if (!m) return "—";
-  const uid = m.user_id || m.id || "";
   return (
     (m.full_name && m.full_name.trim()) ||
     (m.username && m.username.trim()) ||
     (m.email && m.email.includes("@") ? m.email.split("@")[0] : m.email) ||
-    (uid ? `Teacher ${uid.substring(0, 6)}` : "Unknown")
+    "Unnamed teacher"
   );
 }
 
@@ -297,7 +297,7 @@ export default function BatchManagementPanel({ instituteId }: { instituteId: str
     () =>
       members.map(m => ({
         value: m.user_id,
-        label: m.displayName || m.email || `Teacher ${m.user_id.slice(0, 6)}`,
+        label: teacherDisplayName(m),
       })),
     [members]
   );

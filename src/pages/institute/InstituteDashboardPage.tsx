@@ -11,6 +11,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+import { teacherDisplayName } from "@/lib/teacherName";
 import { toast } from "sonner";
 import BulkStudentUpload from "@/components/institute/BulkStudentUpload";
 import BatchManagementPanel from "@/components/admin/BatchManagementPanel";
@@ -283,7 +284,19 @@ export default function InstituteDashboardPage() {
           } catch { setBannerUrl(null); }
         } catch { /* ignore */ }
       }
-      if (b.data) setTeachers(b.data as Teacher[]);
+      if (b.data) {
+        let list = b.data as Teacher[];
+        if (list.some(t => !t.user_name || !t.user_email)) {
+          // Fill missing names/emails from auth.users (same RPC the HOD page uses)
+          const { data: dir, error: dirErr } = await supabase.rpc("get_member_directory", { p_institute_id: id });
+          if (dirErr) console.warn("get_member_directory:", dirErr.message);
+          const byId = Object.fromEntries((dir || []).map((r: any) => [r.user_id, r]));
+          list = list.map(t => byId[t.user_id]
+            ? { ...t, user_name: t.user_name || byId[t.user_id].full_name, user_email: t.user_email || byId[t.user_id].email }
+            : t);
+        }
+        setTeachers(list);
+      }
       if (c.data) setBatches(c.data as Batch[]);
       if (d.error) {
         console.error("students fetch:", d.error);
@@ -1244,7 +1257,7 @@ export default function InstituteDashboardPage() {
                             <div className="flex-1 min-w-0">
                               {dHod ? (
                                 <>
-                                  <p className="text-[13px] font-bold text-slate-800 truncate">{dHod.user_name || dHod.user_email || `Teacher ${dHod.user_id.slice(0, 8)}`}</p>
+                                  <p className="text-[13px] font-bold text-slate-800 truncate">{teacherDisplayName(dHod)}</p>
                                   <p className="text-[11px] font-medium text-slate-500">HOD · joined {fmtDate(dHod.joined_at)}</p>
                                 </>
                               ) : (
@@ -1371,7 +1384,7 @@ export default function InstituteDashboardPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-[13px] font-bold text-slate-800 truncate">{t.user_name || t.user_email || `Teacher ${t.user_id.slice(0, 8)}`}</p>
+                            <p className="text-[13px] font-bold text-slate-800 truncate">{teacherDisplayName(t)}</p>
                             {t.role === "hod" && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 inline-flex items-center gap-1"><Icons.Crown /> HOD</span>}
                             {t.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(t.department_id)}</span>}
                           </div>
@@ -1815,7 +1828,7 @@ export default function InstituteDashboardPage() {
                   <button key={t.id} onClick={() => promoteToHod(t.id, assignHodDept.id)} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-[#FF7043]/40 hover:bg-[#FFF5F2] transition-all text-left">
                     <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center shrink-0"><Icons.User /></div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-slate-800 truncate">{t.user_name || t.user_email || `Teacher ${t.user_id.slice(0, 8)}`}</p>
+                      <p className="text-[13px] font-bold text-slate-800 truncate">{teacherDisplayName(t)}</p>
                       <p className="text-[11px] font-medium text-slate-400">{t.department_id ? `Currently in ${deptName(t.department_id)}` : "No department"}</p>
                     </div>
                     <span className="text-[11px] font-bold text-[#FF7043] flex items-center gap-1"><Icons.Crown /> Promote</span>
