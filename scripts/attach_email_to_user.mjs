@@ -6,9 +6,11 @@
 //   node scripts/attach_email_to_user.mjs --user-id <uuid> --email <email>            # dry run (default)
 //   node scripts/attach_email_to_user.mjs --user-id <uuid> --email <email> --apply    # really change it
 //
-// Env (read from the shell, else .env / .env.local in the repo root; never printed):
-//   SUPABASE_SERVICE_ROLE_KEY   required (service_role key — keep it out of git; .env is gitignored)
-//   SUPABASE_URL                optional, falls back to VITE_SUPABASE_URL
+// Env (never printed):
+//   SUPABASE_SERVICE_ROLE_KEY   required — set it in the terminal only, never in a file:
+//                                 PowerShell:  $env:SUPABASE_SERVICE_ROLE_KEY = "…"
+//                                 afterwards:  Remove-Item Env:SUPABASE_SERVICE_ROLE_KEY
+//   SUPABASE_URL                optional, falls back to VITE_SUPABASE_URL (read from .env.local)
 //
 // After --apply the user signs in with this email: "Forgot password" on /login sets a password,
 // or Google works if the Google account uses the same email.
@@ -45,7 +47,7 @@ loadEnvFile(".env.local");
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url) fail("SUPABASE_URL (or VITE_SUPABASE_URL) is not set");
-if (!serviceKey) fail("SUPABASE_SERVICE_ROLE_KEY is not set (add it to .env — it is gitignored)");
+if (!serviceKey) fail('SUPABASE_SERVICE_ROLE_KEY is not set — set it in the terminal: $env:SUPABASE_SERVICE_ROLE_KEY = "…" (never in a file)');
 
 const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
