@@ -15,6 +15,7 @@ const CHAT_URL = API_BASE.endsWith("/api/v1")
     ? `${API_BASE}/v1/chat`
     : `${API_BASE}/api/v1/chat`;
 const HISTORY_FOR_AI = 8; // previous messages sent as context
+const MAX_CHARS = 2000; // backend limit per message (longer history is cut, a longer question is refused)
 
 type Action = { label: string; path?: string; tab?: string; href?: string };
 type Topic = { id: string; question: string; keywords: string[]; answer: string; actions: Action[] };
@@ -175,7 +176,7 @@ export default function StaticSarthi({
       const context = history
         .filter((m) => m.text !== greeting)
         .slice(-HISTORY_FOR_AI)
-        .map((m) => ({ role: m.from === "user" ? "user" : "assistant", content: m.text.slice(0, 4000) }));
+        .map((m) => ({ role: m.from === "user" ? "user" : "assistant", content: m.text.slice(0, MAX_CHARS) }));
       const res = await fetch(CHAT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -189,7 +190,7 @@ export default function StaticSarthi({
                   : "The user is a school student on a4ai. Explain simply, step by step, and keep it short.",
             },
             ...context,
-            { role: "user", content: question.slice(0, 4000) },
+            { role: "user", content: question.slice(0, MAX_CHARS) },
           ],
         }),
       });
@@ -206,6 +207,8 @@ export default function StaticSarthi({
         push({ from: "bot", text: message || "Today's free AI messages are used up.", actions: [PLANS], chips: true });
       } else if (res.status === 429) {
         push({ from: "bot", text: message || "Too many messages. Please wait a minute.", chips: true });
+      } else if (res.status === 422 && message) {
+        push({ from: "bot", text: message, chips: true });
       } else if (res.status === 401) {
         push({ from: "bot", text: "Please sign in again to ask the AI.", chips: true });
       } else {
@@ -315,6 +318,7 @@ export default function StaticSarthi({
           >
             <input
               value={input}
+              maxLength={MAX_CHARS}
               onChange={(e) => setInput(e.target.value)}
               placeholder={thinking ? "Waiting for the answer…" : "Ask anything…"}
               className="flex-1 min-w-0 rounded-xl px-3 py-2 text-base sm:text-sm bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white focus:outline-none"
