@@ -225,50 +225,42 @@ export default function TeacherStudentsTab({
         // Soft fail
       }
 
-      // 5. Safely calculate attendance percentage if attendance records exist
+      // 5. Attendance % from attendance_records (v2) — same rule as StudentProfilePage / proctor view:
+      //    % = present / all marked classes (leave counts in the total, not as present).
+      //    The legacy `attendance` JSONB table is empty under v2 (always showed 0%).
       const attendanceMap: Record<
         string,
         { total: number; present: number; pct: number | null }
       > = {};
 
       try {
-        const relevantBatches = Array.from(
-          new Set(stuList.map((s) => s.batch_id).filter(Boolean))
-        );
-
-        if (relevantBatches.length > 0) {
-          const { data: attRows } = await supabase
-            .from("attendance")
-            .select("batch_id, date, records")
-            .in("batch_id", relevantBatches);
-
-          if (attRows && attRows.length > 0) {
-            attRows.forEach((row: any) => {
-              const records: Record<string, string> =
-                typeof row.records === "object" && row.records ? row.records : {};
-
-              Object.entries(records).forEach(([sId, status]) => {
-                if (!attendanceMap[sId]) {
-                  attendanceMap[sId] = { total: 0, present: 0, pct: null };
-                }
-                attendanceMap[sId].total += 1;
-                if (status === "present") {
-                  attendanceMap[sId].present += 1;
-                }
-              });
+        const ids = stuList.map((s) => s.id).filter(Boolean);
+        const ID_CHUNK = 150;   // keeps the .in() URL short
+        const PAGE = 1000;      // PostgREST max rows per request
+        for (let i = 0; i < ids.length; i += ID_CHUNK) {
+          const chunk = ids.slice(i, i + ID_CHUNK);
+          for (let from = 0; ; from += PAGE) {
+            const { data: rows, error: attErr } = await supabase
+              .from("attendance_records")
+              .select("student_id, status")
+              .in("student_id", chunk)
+              .order("id")
+              .range(from, from + PAGE - 1);
+            if (attErr) { console.error("attendance_records:", attErr); break; }
+            (rows || []).forEach((r: any) => {
+              const a = (attendanceMap[r.student_id] ||= { total: 0, present: 0, pct: null });
+              a.total += 1;
+              if (r.status === "present") a.present += 1;
             });
-
-            // Calculate pct
-            Object.keys(attendanceMap).forEach((sId) => {
-              const item = attendanceMap[sId];
-              if (item.total > 0) {
-                item.pct = Math.round((item.present / item.total) * 100);
-              }
-            });
+            if (!rows || rows.length < PAGE) break;
           }
         }
+        Object.values(attendanceMap).forEach((a) => {
+          if (a.total > 0) a.pct = Math.round((a.present / a.total) * 100);
+        });
       } catch (err) {
-        // Soft fail
+        // Soft fail — the list still renders without attendance
+        console.error("attendance % failed:", err);
       }
 
       // 6. Enrich students
