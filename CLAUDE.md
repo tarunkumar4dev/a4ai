@@ -194,7 +194,7 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   `job_applications` (RLS on, no policies → read only in Supabase dashboard), private `resumes` bucket (anon insert-only,
   `<uuid>/resume.pdf`, PDF ≤ 5 MB), `submit_job_application` RPC (validates, resume must exist, 1 per email+job per 24 h).
   Job ids hard-coded in CareersPage + the RPC — change both when roles change.
-- [ ] Run 14 + VERIFY block, then submit one test application on /careers.
+- [x] 14 applied (11 Oct); first real application received (Android Developer, 11 Oct 23:33 IST).
 
 - [x] Lite mode (12 Oct): app also ships as a Play Store WebView wrapper → `src/styles/lite.css` (imported in main.tsx)
   kills CSS animations/transitions/backdrop blur (spinners excepted) + `MotionConfig reducedMotion="always"` in App.tsx.
@@ -204,11 +204,33 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - [x] Help bot AI back (12 Oct): StaticSarthi answers chips / 2+-keyword matches locally; other questions → backend
   POST /api/v1/chat with JWT. `15_ai_chat_quota.sql`: ai_chat_usage + a4_is_paid_user + consume_ai_chat_quota (free 10/day,
   paid unlimited, same message again counts against the 10). RAG-BACKEND chat.py: default limit 10, sends message hash.
-- [ ] Run 15 + VERIFY, deploy backend (OPENROUTER_API_KEY must be set on Vercel), then frontend.
+- [x] 15 applied + VERIFY pass (12 Oct; final version: paid hard cap 200/day, `consume_ai_chat_quota(uuid,int,text,int)`).
+  RAG-BACKEND main = 37ab825 (12 Oct, fast-forward; history 8 x 2000 chars, max_tokens 600). Prod checks: /health 200,
+  copy-checker / smart-assignment-checker / chat without token → 401 (were 404). Frontend merge pending.
 
 - Backend URLs (12 Oct): every FastAPI /api/v1 call builds its URL with `src/lib/apiBase.ts` (getBackendApiBase / backendUrl).
   Works whether VITE_BACKEND_URL / VITE_API_URL end in nothing, /api or /api/v1. Live VITE_BACKEND_URL had no /api → checker
   calls were 404. Don't build backend URLs from env vars directly. (Modules/worksheet still use VITE_API_URL root + /modules.)
+
+- [x] 16 applied on live (12 Oct, by human): `16_rejoin_inactive_member.sql` — join_institute_by_code re-activates an
+  inactive member as plain teacher (invited keeps its role). Before it, inactive rows (09 reset) got "Already a member"
+  and get_my_access (status=active only) said "none" → endless "not part of any institute". MSIT now 13 inactive / 5 active.
+- [x] Join link (12 Oct, branch): /join?code=… → /join-institute?code=… (code pre-filled; remembered across login).
+- [x] WhatsApp kill switches (12 Oct, branch, code kept): frontend `VITE_ENABLE_WHATSAPP_OTP` (default off; replaces
+  VITE_PHONE_OTP_ENABLED) — Login/Signup forced to email, LoginModal OTP handlers no-op. Edge Function send-whatsapp-otp:
+  `WHATSAPP_OTP_ENABLED` secret (default off → 503 before any Meta call). RAG-BACKEND whatsapp.py = the WhatsApp PAPER BOT
+  (not OTP): `WHATSAPP_BOT_ENABLED` (default off → all /api/v1/whatsapp routes 404; commit 7682908, not pushed).
+  No DB check requires a verified phone. whatsapp_usage has 0 rows (bot never used).
+- [ ] Deploy the Edge Function (`supabase functions deploy send-whatsapp-otp`) — the kill switch is not live until then
+  (Send SMS hook is OFF, so nothing is sent today). Push RAG-BACKEND 7682908 → preview → main when approved.
+- [ ] Rotate leaked secrets: Groq key (revoked 12 Oct; VITE_GROQ_API_KEY was still listed in Vercel a4ai env — confirm
+  removed), WhatsApp token (WHATSAPP_TOKEN on Supabase / WHATSAPP_ACCESS_TOKEN on Vercel rag-backend) and
+  SEND_SMS_HOOK_SECRET (both pasted in chat earlier). Live bundle still contains the revoked gsk_ key until the frontend merge.
+- Known (12 Oct): 22 auth users are phone-only (no email) → cannot sign in while OTP is off (OTP paused since 10 Oct).
+  7 have signed in before (last 7 Oct); 15 never. ONE is a paying customer: c842e6bc… (****0167, starter 6 Oct–5 Nov,
+  5 tests, 1 module, MSIT inactive). 1f304b41… (****2201) has 41 modules. Most have no profiles row. Needs a decision:
+  add an email to these accounts (Auth admin) or ask them to sign up with email/Google and move their data.
+- Prod VITE_BACKEND_URL (a4ai, Production) has no "/api" — fine after the apiBase merge, but set it to …/api anyway.
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
