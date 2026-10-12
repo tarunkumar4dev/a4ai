@@ -1,5 +1,6 @@
 /// <reference lib="deno.unstable" />
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { supabaseSecretKey } from "../_shared/supabaseKeys.ts";
 import { z } from "https://esm.sh/zod@3.23.8";
 
 /* ========= ENV (set via: supabase functions secrets set ...) =========
@@ -8,7 +9,7 @@ import { z } from "https://esm.sh/zod@3.23.8";
    ALLOWED_ORIGINS = https://www.a4ai.in,https://a4ai.in,http://localhost:5173
 ====================================================================== */
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SERVICE_KEY = supabaseSecretKey(); // sb_secret_… if injected, else legacy service_role
 const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "*")
   .split(",")
   .map((s) => s.trim());

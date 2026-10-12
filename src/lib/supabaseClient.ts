@@ -3,7 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 
 /** ---------------- Env (soft check) ---------------- */
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// sb_publishable_… (new API keys) if set, else the legacy anon JWT
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   // Don’t crash the entire app in local/dev if env is missing.

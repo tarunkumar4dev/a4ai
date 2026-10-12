@@ -1,5 +1,6 @@
 /// <reference types="https://deno.land/x/deno@v2.0.0/types.d.ts" />
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { supabaseSecretKey } from "../_shared/supabaseKeys.ts";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { z } from "https://esm.sh/zod@3.22.4"; // ✅ FIXED: Correct zod version
 import JSZip from "https://esm.sh/jszip@3.10.1"; // ✅ FIXED: Correct import
@@ -109,7 +110,7 @@ const Input = z.object({
 
 /* -------------------- Env & Setup -------------------- */
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const SUPABASE_SERVICE_ROLE_KEY = supabaseSecretKey(); // sb_secret_… if injected, else legacy service_role
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY") || "";
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";

@@ -16,10 +16,11 @@
    WHATSAPP_OTP_LANG       default "en"               (template language code exactly as in WhatsApp Manager)
    WHATSAPP_GRAPH_VERSION  default "v21.0"
    OTP_HASH_PEPPER         optional extra secret mixed into the stored phone hash
-   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY — provided by Supabase automatically
+   SUPABASE_URL / SUPABASE_SECRET_KEYS (or legacy SUPABASE_SERVICE_ROLE_KEY) — provided by Supabase automatically
 ===================================================== */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
+import { supabaseSecretKey } from "../_shared/supabaseKeys.ts";
 
 const HOOK_SECRET = (Deno.env.get("SEND_SMS_HOOK_SECRET") || "").replace(/^v1,whsec_/, "");
 const WA_TOKEN = Deno.env.get("WHATSAPP_TOKEN") || "";
@@ -30,7 +31,7 @@ const GRAPH_VERSION = Deno.env.get("WHATSAPP_GRAPH_VERSION") || "v21.0";
 const PEPPER = Deno.env.get("OTP_HASH_PEPPER") || "";
 const META_TIMEOUT_MS = 4000; // Supabase waits ~5 s for an auth hook
 
-const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+const admin = createClient(Deno.env.get("SUPABASE_URL")!, supabaseSecretKey(), {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
