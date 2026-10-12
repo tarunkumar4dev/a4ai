@@ -50,13 +50,15 @@ interface ChapterGroup {
   book: string;
   chapter_type: string;
   label: string;
-  chapters: { name: string; order: number | null }[];
+  chapters: { name: string; label?: string; order: number | null }[];
 }
 
 interface RowProps {
   index: number;
   field: { id: string };
   availableTopics: string[];
+  /** DB chapter name → what to show (CAPITALISED names come back title-cased) */
+  chapterLabels: Record<string, string>;
   chapterGroups: ChapterGroup[] | null;
   subtopicsMap: Record<string, string[]>;
   chaptersLoading: boolean;
@@ -106,6 +108,7 @@ const MOCK_CHAPTERS: Record<string, string[]> = {
 interface ChaptersFetchResult {
   flat: string[];
   groups: ChapterGroup[] | null;
+  labels: Record<string, string>;
 }
 
 async function fetchChaptersFromAPI(
@@ -127,12 +130,14 @@ async function fetchChaptersFromAPI(
   const flat: string[] = Array.isArray(data.chapters) ? data.chapters : [];
   const groups: ChapterGroup[] | null =
     Array.isArray(data.groups) && data.groups.length > 0 ? data.groups : null;
+  const labels: Record<string, string> =
+    data.labels && typeof data.labels === "object" ? data.labels : {};
 
   if (flat.length === 0 && MOCK_CHAPTERS[subject]) {
-    return { flat: MOCK_CHAPTERS[subject], groups: null };
+    return { flat: MOCK_CHAPTERS[subject], groups: null, labels: {} };
   }
 
-  return { flat, groups };
+  return { flat, groups, labels };
 }
 
 // ==================== HOOK: useChapters ====================
@@ -140,6 +145,7 @@ function useChapters(classLevel: string, subject: string) {
   const [chapters, setChapters]          = useState<string[]>([]);
   const [chapterGroups, setChapterGroups] = useState<ChapterGroup[] | null>(null);
   const [subtopicsMap, setSubtopicsMap]  = useState<Record<string, string[]>>({});
+  const [labels, setLabels]              = useState<Record<string, string>>({});
   const [loading, setLoading]            = useState(false);
   const [error, setError]                = useState<string | null>(null);
 
@@ -148,6 +154,7 @@ function useChapters(classLevel: string, subject: string) {
       setChapters([]);
       setChapterGroups(null);
       setSubtopicsMap({});
+      setLabels({});
       return;
     }
 
@@ -156,12 +163,15 @@ function useChapters(classLevel: string, subject: string) {
     setError(null);
 
     fetchChaptersFromAPI(classLevel, subject, controller.signal)
-      .then(({ flat, groups }) => {
+      .then(({ flat, groups, labels }) => {
         setChapters(flat);
         setChapterGroups(groups);
+        setLabels(labels);
         const sMap: Record<string, string[]> = {};
         flat.forEach((ch) => {
-          if (COMMON_SUBTOPICS[ch]) sMap[ch] = COMMON_SUBTOPICS[ch];
+          // subtopics are keyed by the readable name ("Laws of Motion"), DB may say "LAWS OF MOTION"
+          const subs = COMMON_SUBTOPICS[ch] || COMMON_SUBTOPICS[labels[ch]];
+          if (subs) sMap[ch] = subs;
         });
         setSubtopicsMap(sMap);
       })
@@ -185,7 +195,7 @@ function useChapters(classLevel: string, subject: string) {
     return () => { controller.abort(); };
   }, [classLevel, subject]);
 
-  return { chapters, chapterGroups, subtopicsMap, loading, error };
+  return { chapters, chapterGroups, subtopicsMap, labels, loading, error };
 }
 
 // ==================== COMMON SUBTOPICS (helper map only) ====================
@@ -562,21 +572,23 @@ const generateUUID = (): string => {
 };
 
 // ==================== CHAPTER OPTIONS RENDERER ====================
+// value = exact DB chapter name (sent to the backend); text = readable label
 function renderChapterOptions(
   chapterGroups: ChapterGroup[] | null,
   flatChapters: string[],
+  labels: Record<string, string>,
 ): React.ReactNode {
   if (chapterGroups && chapterGroups.length > 0) {
     return chapterGroups.map((group) => (
       <optgroup key={`${group.book || "x"}-${group.chapter_type || "x"}`} label={group.label}>
         {group.chapters.map((ch) => (
-          <option key={ch.name} value={ch.name}>{ch.name}</option>
+          <option key={ch.name} value={ch.name}>{ch.label || labels[ch.name] || ch.name}</option>
         ))}
       </optgroup>
     ));
   }
   return flatChapters.map((topic) => (
-    <option key={topic} value={topic}>{topic}</option>
+    <option key={topic} value={topic}>{labels[topic] || topic}</option>
   ));
 }
 
@@ -622,7 +634,7 @@ FormatSelector.displayName = "FormatSelector";
 // MOBILE: Card Row
 // ═══════════════════════════════════════════════════════════════════════
 const MobileCard = memo(({
-  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove, isCbseMode,
+  index, field, availableTopics, chapterLabels, chapterGroups, subtopicsMap, chaptersLoading, remove, isCbseMode,
 }: RowProps) => {
   const { control, watch, setValue } = useFormContext<FormValues>();
 
@@ -631,7 +643,8 @@ const MobileCard = memo(({
   // which is what stops the mobile snap-back.
   const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
   const subject      = watch("subject") ?? "";
-  const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
+  const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic]
+    || COMMON_SUBTOPICS[chapterLabels[currentTopic]] || [];
 
   const inputClass = "w-full min-h-[44px] bg-white border border-[#E5E7EB] rounded-xl px-3 py-2.5 text-sm font-semibold text-[#111827] outline-none focus:border-gray-500 focus:ring-2 focus:ring-gray-400/10 transition-all appearance-none";
   const labelClass = "text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 block";
@@ -682,7 +695,7 @@ const MobileCard = memo(({
                 <option value="">
                   {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select a chapter..."}
                 </option>
-                {renderChapterOptions(chapterGroups, availableTopics)}
+                {renderChapterOptions(chapterGroups, availableTopics, chapterLabels)}
               </select>
             )}
           />
@@ -803,13 +816,14 @@ MobileCard.displayName = "MobileCard";
 // DESKTOP: Table Row
 // ═══════════════════════════════════════════════════════════════════════
 const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
-  index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove, isCbseMode,
+  index, field, availableTopics, chapterLabels, chapterGroups, subtopicsMap, chaptersLoading, remove, isCbseMode,
 }, ref) => {
   const { control, watch, setValue } = useFormContext<FormValues>();
 
   const currentTopic = watch(`simpleData.${index}.topic`) ?? "";
   const subject      = watch("subject") ?? "";
-  const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic] || [];
+  const subOptions   = subtopicsMap[currentTopic] || COMMON_SUBTOPICS[currentTopic]
+    || COMMON_SUBTOPICS[chapterLabels[currentTopic]] || [];
 
   return (
     <motion.tr
@@ -847,7 +861,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
                   <option value="">
                     {chaptersLoading ? "Loading chapters..." : availableTopics.length === 0 ? "No chapters available" : "Select Chapter/Topic..."}
                   </option>
-                  {renderChapterOptions(chapterGroups, availableTopics)}
+                  {renderChapterOptions(chapterGroups, availableTopics, chapterLabels)}
                 </select>
               )}
             />
@@ -975,7 +989,7 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
   const classLevel     = watch("classGrade") ?? "";
   const currentSubject = watch("subject") ?? "";
 
-  const { chapters: apiChapters, chapterGroups: apiChapterGroups, subtopicsMap, loading: chaptersLoading, error: chaptersError } =
+  const { chapters: apiChapters, chapterGroups: apiChapterGroups, subtopicsMap, labels: chapterLabels, loading: chaptersLoading, error: chaptersError } =
     useChapters(classLevel, currentSubject);
 
   const isEnglish = currentSubject?.toLowerCase() === "english";
@@ -1087,6 +1101,7 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
                   index={index}
                   field={field}
                   availableTopics={finalChapters}
+                  chapterLabels={chapterLabels}
                   chapterGroups={finalChapterGroups}
                   subtopicsMap={subtopicsMap}
                   chaptersLoading={chaptersLoading}
@@ -1129,6 +1144,7 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
                       index={index}
                       field={field}
                       availableTopics={finalChapters}
+                      chapterLabels={chapterLabels}
                       chapterGroups={finalChapterGroups}
                       subtopicsMap={subtopicsMap}
                       chaptersLoading={chaptersLoading}
