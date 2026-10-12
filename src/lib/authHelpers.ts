@@ -94,9 +94,9 @@ export function takeRedirectAfterLogin(): string | null {
   return path;
 }
 
-export function rememberRedirectAfterLogin(): void {
+export function rememberRedirectAfterLogin(path?: string): void {
   try {
-    const here = window.location.pathname + window.location.search;
+    const here = path ?? window.location.pathname + window.location.search;
     if (here && here !== "/") localStorage.setItem(REDIRECT_KEY, here);
     else localStorage.removeItem(REDIRECT_KEY);
   } catch { /* storage blocked */ }

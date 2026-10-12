@@ -2,7 +2,7 @@
 // Clean page where teachers enter a join code to join an institute
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
@@ -100,7 +100,9 @@ const styles = `
 export default function JoinInstitutePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [code, setCode] = useState("");
+  const [searchParams] = useSearchParams();
+  // share link: /join?code=… (or /join-institute?code=…) fills the box
+  const [code, setCode] = useState(() => (searchParams.get("code") || "").trim().slice(0, 32));
   const [joining, setJoining] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -21,6 +21,7 @@ import { AccessProvider } from "@/context/AccessProvider";
 import { RoleRoute } from "@/components/routing/RoleRoute";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
+import { rememberRedirectAfterLogin } from "@/lib/authHelpers";
 import { MotionConfig } from "framer-motion";
 const HODDashboardPage = lazy(() => import("@/pages/hod/HODDashboardPage")); // pulls xlsx; keep it out of the main bundle
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -238,6 +239,17 @@ function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowed
   return <>{children}</>;
 }
 
+/** /join?code=… (institute share link) → /join-institute?code=… (keeps the query string) */
+function JoinLinkRedirect() {
+  const { search } = useLocation();
+  const { loading, session } = useAuth();
+  if (loading) return <LoadingScreen />;
+  const target = `/join-institute${search}`;
+  // logged out: PrivateRoute sends them to /login; come back here with the code after sign-in
+  if (!session) rememberRedirectAfterLogin(target);
+  return <Navigate to={target} replace />;
+}
+
 /** Smart dashboard redirect — sends user to their role-specific dashboard */
 function DashboardRedirect() {
   const { loading, session, role } = useAuth();
@@ -342,6 +354,8 @@ const App = () => {
                       <Route path="/q/:slug" element={<CommunityQuizPlayPage />} />
                       <Route path="/institute/students/:studentId" element={<RoleRoute allow={['admin', 'hod', 'proctor', 'teacher']}><StudentProfilePage /></RoleRoute>} />
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
+                      {/* admin share link (InstituteDashboardPage) is /join?code=… */}
+                      <Route path="/join" element={<JoinLinkRedirect />} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/student" element={<StudentPortalPage />} />
                       <Route path="/pricing" element={<PricingPage />} />
