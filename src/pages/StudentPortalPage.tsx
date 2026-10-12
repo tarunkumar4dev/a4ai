@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 // Portal-only client: never carries a staff session (B2). DB access only via the access-code RPCs
 // in supabase/migrations/05_student_portal.sql — no direct table reads.
 import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
+import { backendUrl } from "@/lib/apiBase";
 import { motion, AnimatePresence } from "framer-motion";
 import StudentCalendar, { type CalEvent } from "@/components/student/StudentCalendar";
 
@@ -493,6 +494,28 @@ export default function StudentPortalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, student?.access_code]);
 
+  /* ── Private files (assignments + submissions buckets): the backend checks the access code and
+        returns a 10-minute signed link (18_private_assignments_bucket, POST /api/v1/portal/files) ── */
+  async function openPortalFile(assignmentId: string, kind: "question" | "submission") {
+    if (!student) return;
+    const win = window.open("", "_blank"); // open inside the click so popup blockers allow it
+    try {
+      const res = await fetch(backendUrl("/v1/portal/files"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: student.access_code, assignment_id: assignmentId }),
+      });
+      const body = await res.json().catch(() => ({}));
+      const url: string | undefined = kind === "question" ? body.question_url : body.submission_url;
+      if (!res.ok || !url) throw new Error(typeof body?.detail === "string" ? body.detail : "not available");
+      if (win) win.location.href = url;
+      else window.location.assign(url);
+    } catch {
+      win?.close();
+      alert("Couldn't open the file. Please try again.");
+    }
+  }
+
   /* ── Submit (storage upload + submit_assignment RPC) ── */
   async function handleSubmitFile(assignment: Assignment, file: File) {
     if (!student) return;
@@ -761,15 +784,14 @@ export default function StudentPortalPage() {
               {activeAssignment.file_url && (
                 <div>
                   <h3 className="text-sm font-semibold mb-2" style={{ color: t.textSecondary }}>Attachments</h3>
-                  <a
-                    href={activeAssignment.file_url}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => openPortalFile(activeAssignment.id, "question")}
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border"
                     style={{ background: t.bg, color: t.teal, borderColor: t.border }}
                   >
                     <Icons.Download /> {activeAssignment.file_name || "Download Assignment"}
-                  </a>
+                  </button>
                 </div>
               )}
 
@@ -809,9 +831,8 @@ export default function StudentPortalPage() {
                         <p className="text-xs" style={{ color: t.textMuted }}>Submitted {fmtDate(sub.submitted_at)}</p>
                       </div>
                     </div>
-                    {/* The submissions bucket is private and the portal has no session to sign a URL — no View link. */}
                     {sub.file_url && (
-                      <span className="text-sm font-medium shrink-0" style={{ color: t.accent }}>Submitted ✓</span>
+                      <button type="button" onClick={() => openPortalFile(activeAssignment.id, "submission")} className="text-sm font-medium hover:underline shrink-0" style={{ color: t.accent }}>View</button>
                     )}
                   </div>
                 )}
@@ -1271,20 +1292,14 @@ export default function StudentPortalPage() {
 
                         <div className="border-t pt-3 mt-2 flex items-center justify-between text-xs" style={{ borderColor: t.border }}>
                           <span style={{ color: t.textMuted }}>{fmtDate(file.date)}</span>
-                          {file.type === "submission" ? (
-                            // private bucket, no portal session to sign a URL
-                            <span className="px-3 py-1.5 font-semibold" style={{ color: t.accent }}>Submitted ✓</span>
-                          ) : (
-                            <a
-                              href={file.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold border transition-colors"
-                              style={{ background: t.bg, color: t.teal, borderColor: t.border }}
-                            >
-                              <Icons.Download /> Open / Download
-                            </a>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => openPortalFile(file.assignmentObj.id, file.type === "submission" ? "submission" : "question")}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold border transition-colors"
+                            style={{ background: t.bg, color: file.type === "assignment" ? t.teal : t.accent, borderColor: t.border }}
+                          >
+                            <Icons.Download /> Open / Download
+                          </button>
                         </div>
                       </div>
                     ))}

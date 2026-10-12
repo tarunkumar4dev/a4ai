@@ -65,7 +65,11 @@ export async function listNotes(klass: string, subject: string) {
 }
 
 export async function deleteNoteAndFile(row: NoteRow) {
-  await supabase.storage.from(BUCKET).remove([row.file_path]);
-  const { error } = await supabase.from("notes").delete().eq("id", row.id);
+  // Row first: RLS lets only the uploader delete it (13), so a refused delete leaves the file alone.
+  const { data: deleted, error } = await supabase.from("notes").delete().eq("id", row.id).select("id");
   if (error) throw error;
+  if (!deleted || deleted.length === 0) throw new Error("You can only delete notes you uploaded.");
+  // Then the file (storage policy a4_notes_delete_own, 18). Errors were ignored before → orphan files.
+  const { error: fileErr } = await supabase.storage.from(BUCKET).remove([row.file_path]);
+  if (fileErr) console.warn("Note deleted but its file could not be removed:", fileErr.message);
 }
