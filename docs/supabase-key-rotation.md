@@ -12,15 +12,15 @@ makes the leaked key useless. Written 13 Oct 2026 from a read-only inventory of 
 | Backend (Vercel `rag-backend`) — `app/core/config.py`, `app/core/database.py`, `module_service.py` | `SUPABASE_KEY`, `SUPABASE_SERVICE_KEY` (+ `SUPABASE_ANON_KEY` fallback) | `SUPABASE_PUBLISHABLE_KEY` + `SUPABASE_SECRET_KEY` (read first; legacy names are the fallback) |
 | Edge Functions `generate-test`, `submit-contact`, `send-whatsapp-otp` | auto-injected `SUPABASE_SERVICE_ROLE_KEY` | `_shared/supabaseKeys.ts`: injected `SUPABASE_SECRET_KEYS`, else legacy |
 | `scripts/attach_email_to_user.mjs` (product) | `$env:SUPABASE_SERVICE_ROLE_KEY` = legacy JWT | same variable, value = `sb_secret_…` |
-| Backend local scripts (`ncert-ingestion/*`, `02_extract_ncert_questions.py`) | `SUPABASE_SERVICE_KEY` in local env | `sb_secret_…` value (needs supabase-py ≥ 2.32 locally) |
+| Backend local scripts (`ncert-ingestion/*`, `02_extract_ncert_questions.py`) | `SUPABASE_SERVICE_KEY` in local env | `sb_secret_…` value (needs supabase-py ≥ 2.16 locally) |
 | `a4ai-api` (payments, api.a4ai.in) | no Supabase key | — |
 | Database (cron, DB webhooks, vault, functions) | none found (no pg_cron, no hooks, vault empty, no JWT in function bodies) | — |
 | Send SMS hook secret | own secret, not an API key | rotate separately |
 
 Library support (checked 13 Oct):
 - **supabase-py 2.9.0 rejects any non-JWT key** ("Invalid API key"). Branch `chore/supabase-new-keys` (RAG-BACKEND)
-  pins **2.32.0** in `api/requirements.txt` and `test-generator-backend/requirements.txt`; works with the pinned
-  `httpx==0.27.2` (`pip check` clean) and keeps every client call the backend uses. Preview build Ready.
+  pins **2.16.0** (commit 1b4b2c5; 2.32.0 needed a newer pydantic than the pinned 2.8.2 and broke the Vercel build).
+  2.16.0 has no JWT check, so `sb_secret_…` / `sb_publishable_…` are accepted.
 - supabase-js 2.52 (frontend, scripts) and 2.45.4 (Edge Functions) take any key string; they also send it as
   `Authorization: Bearer <key>` when there is no session. **Verify on step 4 / 5 below that requests with the new
   keys succeed before disabling legacy** — if they don't, bump `@supabase/supabase-js` (latest 2.117.x).
