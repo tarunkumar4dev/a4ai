@@ -232,6 +232,15 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   add an email to these accounts (Auth admin) or ask them to sign up with email/Google and move their data.
 - Prod VITE_BACKEND_URL (a4ai, Production) has no "/api" — fine after the apiBase merge, but set it to …/api anyway.
 
+- [x] Key rotation prep (13 Oct, branches only — legacy service_role JWT leaked): `chore/supabase-new-keys` in BOTH repos.
+  Product c8acff2 + d025d83: Edge Functions read the server key via `supabase/functions/_shared/supabaseKeys.ts`
+  (injected SUPABASE_SECRET_KEYS, else legacy SUPABASE_SERVICE_ROLE_KEY); frontend clients read
+  VITE_SUPABASE_PUBLISHABLE_KEY first; checklist `docs/supabase-key-rotation.md`. RAG-BACKEND cd6e903: supabase-py
+  2.9.0 → 2.32.0 (2.9 rejects non-JWT keys; 2.32 OK with httpx 0.27.2), config reads SUPABASE_PUBLISHABLE_KEY /
+  SUPABASE_SECRET_KEY first, startup refuses swapped keys; preview build Ready. DB holds no keys (no pg_cron, no DB
+  webhooks, vault empty). Cutover is env-only, then Dashboard → API Keys → disable legacy.
+- [ ] Follow docs/supabase-key-rotation.md (merge both branches → add new keys in Vercel → test → disable legacy).
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
