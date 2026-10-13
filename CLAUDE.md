@@ -241,6 +241,15 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   webhooks, vault empty). Cutover is env-only, then Dashboard → API Keys → disable legacy.
 - [ ] Follow docs/supabase-key-rotation.md (merge both branches → add new keys in Vercel → test → disable legacy).
 
+- [x] Private buckets (13 Oct, branches `sec/private-buckets` in both repos): product 16f12bd — DRAFT
+  `18_private_assignments_bucket.sql` (assignments bucket private, staff read policy, portal_assignment_files
+  service_role only, notes owner delete, a4_storage_path); portal opens question paper + own submission via
+  POST /api/v1/portal/files; notes delete = row first, then file, errors checked. RAG-BACKEND bc00662 — portal_files
+  router (10-min signed URLs, 404 for wrong code or assignment, 30/min per IP). Stored file_url keeps the
+  public-format reference (submit_assignment + AI check parse it) → no data conversion (live: 0 rows in
+  assignments / submissions / notes; orphan objects 15 / 6 / 11).
+- [ ] Run 18 → merge backend sec/private-buckets → merge product → test portal "View"/"Open" + teacher AI check.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
