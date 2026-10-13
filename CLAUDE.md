@@ -250,6 +250,14 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   assignments / submissions / notes; orphan objects 15 / 6 / 11).
 - [ ] Run 18 → merge backend sec/private-buckets → merge product → test portal "View"/"Open" + teacher AI check.
 
+- [x] Quota race (13 Oct, branches `fix/quota-race`): product cbcc208 — DRAFT `19_test_generation_reserve.sql`
+  (reserve_test_generation: per-user advisory lock + plan limit + count in one tx; release_test_generation refunds;
+  record_usage search_path pinned). RAG-BACKEND acc7464 — /generate-frontend and /generate reserve first, refund on
+  failure, never refund a delivered paper; falls back to check→record if 19 isn't applied. Mocked tests pass.
+- [ ] Run 19 (+ VERIFY 2) → merge backend fix/quota-race.
+- Known: every new free account gets a fresh monthly quota (2 papers). Options (not built): require verified email
+  before generating; one free quota per device/IP fingerprint; free tier = smaller papers; captcha on signup.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
