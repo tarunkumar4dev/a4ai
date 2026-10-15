@@ -63,27 +63,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      extractUserInfo(currentSession?.user ?? null);
-      setLoading(false);
-    });
-
+    // The one auth subscription in the app. INITIAL_SESSION fires once the stored session has been
+    // restored (and refreshed if it had expired), so `loading` stays true until then — no flash of /login.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      extractUserInfo(currentSession?.user ?? null);
+    } = supabase.auth.onAuthStateChange((event, currentSession) => {
+      switch (event) {
+        case "SIGNED_OUT":
+          setSession(null);
+          setUser(null);
+          extractUserInfo(null);
+          break;
+        case "TOKEN_REFRESHED":
+          // new access token, same user: keep the user object so effects keyed on it don't re-run
+          setSession(currentSession);
+          setUser((prev) => (prev && prev.id === currentSession?.user?.id ? prev : currentSession?.user ?? null));
+          break;
+        default: // INITIAL_SESSION, SIGNED_IN, USER_UPDATED, PASSWORD_RECOVERY, MFA_CHALLENGE_VERIFIED
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          extractUserInfo(currentSession?.user ?? null);
+      }
       setLoading(false);
 
       if (event === "SIGNED_IN" && currentSession?.user) {
-        ensureProfileExists(currentSession.user);
+        const signedInUser = currentSession.user;
+        // Supabase calls inside this callback can deadlock the auth lock — run them after it returns.
+        setTimeout(() => ensureProfileExists(signedInUser), 0);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Laptop woke up / came back online: re-read the session, which refreshes an expired access token.
+    // (supabase-js already does this on tab visibility changes.)
+    const recheck = () => {
+      if (document.visibilityState === "visible") void supabase.auth.getSession();
+    };
+    window.addEventListener("online", recheck);
+    window.addEventListener("focus", recheck);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("online", recheck);
+      window.removeEventListener("focus", recheck);
+    };
   }, []);
 
   const ensureProfileExists = async (currentUser: User) => {

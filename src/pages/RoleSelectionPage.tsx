@@ -1,5 +1,5 @@
 // src/pages/RoleSelectionPage.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
@@ -10,19 +10,20 @@ type Role = "student" | "teacher" | "institute";
 
 export default function RoleSelectionPage() {
   const navigate = useNavigate();
-  const { session, role: existingRole, updateRole, signOut } = useAuth();
+  const { session, loading, role: existingRole, updateRole, signOut } = useAuth();
   const { toast } = useToast();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // If not logged in, go to login; if role exists, go to dashboard
   useEffect(() => {
+    if (loading) return; // stored session not restored yet
     if (!session) {
       navigate("/login", { replace: true });
     } else if (existingRole) {
       navigate(`/${existingRole}/dashboard`, { replace: true });
     }
-  }, [session, existingRole, navigate]);
+  }, [loading, session, existingRole, navigate]);
 
   const roles = [
     {

@@ -192,17 +192,8 @@ export default function DashboardPage() {
   }, [loading, profile?.id, profile?.coins, searchParams.get("newUser")]);
 
   /* ensure profile */
-  // Check authentication and redirect if not logged in
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
-        navigate("/login");
-        return;
-      }
-    };
-    checkAuth();
-  }, [navigate]);
+  // Auth is checked by RoleRoute (via AuthProvider). The old getUser() check here sent users to /login
+  // on any network error, e.g. right after a laptop woke up.
 
   // Create profile if it doesn't exist (with correct role)
   useEffect(() => {

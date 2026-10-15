@@ -11,11 +11,22 @@ export const RoleRoute: React.FC<{
   /** /institute only: someone who signed up as "institute" and has no institute yet may open the page to create one. */
   allowNewInstituteOwner?: boolean;
 }> = ({ children, allow, allowNewInstituteOwner }) => {
-  const { access, loading } = useAccess();
+  const { access, loading, failed, retry } = useAccess();
   const { role: signupRole } = useAuth();
   const location = useLocation();
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading…</div>;
+  // Couldn't reach the server — the user is still signed in, so offer a retry instead of /login.
+  if (failed) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center' }}>
+        <p>Couldn't load your account. Check your internet connection.</p>
+        <button type="button" onClick={retry} style={{ marginTop: 12, padding: '8px 16px', border: '1px solid currentColor', borderRadius: 8 }}>
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (!access) return <Navigate to="/login" replace />;
   if (allowNewInstituteOwner && access.primary_role === 'none' && signupRole === 'institute') {
     return <>{children}</>;

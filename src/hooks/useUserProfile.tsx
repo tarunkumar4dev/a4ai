@@ -1,17 +1,20 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/providers/AuthProvider";
 
 export const useUserProfile = () => {
+  const { user, loading: authLoading } = useAuth();
+  const userId = user?.id ?? null;
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
     const getProfile = async () => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        console.error("User fetch error:", userError?.message);
+      // user comes from AuthProvider (restored session) — no extra network round trip that can fail offline
+      if (!userId) {
+        setProfile(null);
         setLoading(false);
         return;
       }
@@ -19,11 +22,11 @@ export const useUserProfile = () => {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", user.id)
+        .eq("id", userId)
         .single();
 
       if (error) {
-        console.warn("Profile not found:", error.message, "for user:", user.id);
+        console.warn("Profile not found:", error.message);
         setProfile(null);
       } else {
         setProfile(data);
@@ -33,7 +36,7 @@ export const useUserProfile = () => {
     };
 
     getProfile();
-  }, []);
+  }, [authLoading, userId]);
 
   return { profile, loading };
 };
