@@ -12,6 +12,20 @@ export function isInAppBrowser(): boolean {
   return /FBAN|FBAV|Instagram|WhatsApp|LinkedInApp|Snapchat|Line\/|; wv\)/i.test(ua);
 }
 
+/**
+ * Inside the a4ai Android app (a WebView wrapper around the site). Google blocks OAuth in WebViews and the app
+ * has no "Open in Chrome" menu, so the Google button is hidden there and users sign in with email — until the
+ * wrapper opens Google sign-in in Chrome Custom Tabs (docs/android-webview-checklist.md).
+ * WhatsApp/Instagram/Facebook in-app browsers are WebViews too, but they keep the "open in Chrome" hint.
+ * The wrapper may also add "a4ai-android" to its user agent to be detected explicitly.
+ */
+export function isAppWebView(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/a4ai-android/i.test(ua)) return true;
+  return /; wv\)/.test(ua) && !/FBAN|FBAV|Instagram|WhatsApp|LinkedInApp|Snapchat|Line\//i.test(ua);
+}
+
 export const IN_APP_BROWSER_MESSAGE =
   "Google login doesn't work inside the WhatsApp/Instagram browser. Tap the ⋮ menu, choose \"Open in Chrome\" (Safari on iPhone) and try again.";
 

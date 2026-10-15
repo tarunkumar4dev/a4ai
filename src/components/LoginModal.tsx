@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { X, Phone, Download, Share2, Save } from "lucide-react";
-import { normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError, rememberRedirectAfterLogin } from "@/lib/authHelpers";
+import { isAppWebView, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError, rememberRedirectAfterLogin } from "@/lib/authHelpers";
 import OtpHelp from "@/components/auth/OtpHelp";
 
 // Shared normaliser (same as Login/Signup pages); handleSendOTP validates first
@@ -202,6 +202,8 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
             </div>
           )}
 
+          {/* Hidden inside the a4ai Android app: Google blocks sign-in in WebViews (docs/android-webview-checklist.md) */}
+          {!isAppWebView() && (<>
           {/* Google Login */}
           <button
             onClick={handleGoogleLogin}
@@ -223,6 +225,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">or</span>
             <div className="flex-1 h-px bg-slate-200" />
           </div>
+          </>)}
 
           {/* Email — opens the full sign-in page; the current page is remembered and restored after login */}
           <button

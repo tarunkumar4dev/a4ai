@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, rememberPassword, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import { authRedirectUrl, isInAppBrowser, isAppWebView, IN_APP_BROWSER_MESSAGE, rememberPassword, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
 import OtpHelp from "@/components/auth/OtpHelp";
 import { useAuth } from "@/providers/AuthProvider";
 import { motion, AnimatePresence } from "framer-motion";
@@ -521,6 +521,8 @@ export default function SignupPage() {
               </div>
             </div>
 
+            {/* Hidden inside the a4ai Android app: Google blocks sign-in in WebViews (docs/android-webview-checklist.md) */}
+            {!isAppWebView() && (<>
             {/* Google Signup — primary option, all devices (in-app browsers get a hint instead) */}
             <Button
                 variant="outline"
@@ -542,6 +544,7 @@ export default function SignupPage() {
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">or sign up with email</span>
               <div className="flex-1 h-px bg-slate-400/30" />
             </div>
+            </>)}
 
             {/* Form */}
             <form onSubmit={onSubmit} className="space-y-3">
