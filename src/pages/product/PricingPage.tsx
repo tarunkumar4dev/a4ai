@@ -224,7 +224,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
       name: "Pro",
       price: { monthly: "₹299", yearly: "₹2,990" },
       priceNote: { monthly: "/ month", yearly: "/ year" },
-      description: "Unlimited power. Live contests. Full analytics.",
+      description: "More papers. Live contests. Full analytics.",
       features: [
         "25 test papers per month",
         "25 assignments per month",

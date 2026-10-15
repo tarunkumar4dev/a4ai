@@ -18,7 +18,7 @@ type Topic = { id: string; question: string; keywords: string[]; answer: string;
 type Msg = { from: "bot" | "user"; text: string; actions?: Action[]; chips?: boolean; ai?: boolean };
 
 const SUPPORT: Action = { label: "Email support", href: "mailto:a4ai.team@gmail.com" };
-const PLANS: Action = { label: "Upgrade for unlimited", path: "/pricing" };
+const PLANS: Action = { label: "Upgrade for more messages", path: "/pricing" };
 
 const TEACHER_TOPICS: Topic[] = [
   {
