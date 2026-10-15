@@ -277,9 +277,14 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - Backfill decisions for 21: only institute owners → institute_owner; student profiles with teacher activity →
   individual_teacher (4b960486…, ca406b93…), a9530028… stays student; 37ecd1cb…, f047f033…, 931f4251… on HOLD for the
   human. Show preview counts before applying.
-- [ ] 20b (branch fix/chat-quota, NOT applied, tested rolled back as a real free + paid user): drops the 3-arg
-  consume_ai_chat_quota, creates the final 4-arg one. Until then the backend's RPC call fails (42883) and chat.py
-  silently uses its in-memory fallback (10/day per serverless instance, paid users capped at 10, nothing stored).
+- [x] 20b applied (15 Oct, branch fix/chat-quota, VERIFY pass): only the final 4-arg consume_ai_chat_quota exists.
+  Before it the backend's RPC failed (42883) and chat.py silently used its in-memory fallback (10/day per
+  serverless instance, paid users capped at 10, nothing stored).
+- 21 backfill MUST also create profiles rows for auth users that have none (62 on 15 Oct, all created before 23 Aug;
+  several phone users still log in Sept–Oct) — account_type lives on profiles, so a missing row = no account type.
+- Auth config (15 Oct, from `supabase config diff`, read-only): email confirmations OFF (autoconfirm), NO custom
+  SMTP (default Supabase mailer → password-reset mails reach only team members, ~2/h), phone signup ON via Twilio
+  (every phone signup since 26 Sep stayed unconfirmed), captcha off, Google on.
 - [x] AuthProvider ensureProfileExists removed (sec/close-self-grant, now REBASED onto feat/persistent-login 932c5f5,
   conflict resolved, build passes). No path needs a teacher_profiles row up front: backend record_usage retry,
   19 reserve_test_generation and create-order create it with the service key.
