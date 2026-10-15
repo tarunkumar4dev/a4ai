@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
+import { signOut, signOutEverywhere } from "@/lib/auth";
 import { toast } from "sonner";
 
 /* ------------------- STYLES ------------------- */
@@ -235,6 +237,8 @@ const Row = ({ title, description, control }: any) => (
 /* ------------------- MAIN PAGE ------------------- */
 export default function SettingsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [signingOutAll, setSigningOutAll] = useState(false);
   
   // Default values matching User/Google logic
   const defaultName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Educator";
@@ -313,6 +317,25 @@ export default function SettingsPage() {
     toast("Account deletion requested", {
       description: "We'll process this shortly.",
     });
+  };
+
+  const logoutHere = async () => {
+    await signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const logoutEverywhere = async () => {
+    if (!window.confirm("Log out on every device where you are signed in, including this one?")) return;
+    setSigningOutAll(true);
+    try {
+      await signOutEverywhere();
+      toast.success("Logged out on all devices");
+      navigate("/login", { replace: true });
+    } catch {
+      toast.error("Couldn't reach the server, so other devices are still signed in. Check your internet and try again.");
+    } finally {
+      setSigningOutAll(false);
+    }
   };
 
   const exportData = () => {
@@ -462,6 +485,21 @@ export default function SettingsPage() {
                 <div className="flex flex-wrap gap-3">
                   <OutlineButton icon={Icons.Lock} label="Change Password" />
                   <OutlineButton icon={Icons.Download} label="Export My Data" onClick={exportData} />
+                </div>
+
+                <div className="h-px w-full bg-slate-200/50 dark:bg-white/5 my-6" />
+                <Row
+                  title="Signed-in devices"
+                  description="On a shared computer, always log out when you're done. Lost a phone or laptop? Log out everywhere."
+                  control={null}
+                />
+                <div className="flex flex-wrap gap-3">
+                  <OutlineButton label="Log out on this device" onClick={logoutHere} />
+                  <GlossyButton
+                    variant="danger"
+                    label={signingOutAll ? "Logging out…" : "Log out from all devices"}
+                    onClick={signingOutAll ? undefined : logoutEverywhere}
+                  />
                 </div>
               </div>
 

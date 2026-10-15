@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { rememberPassword } from "@/lib/authHelpers";
+import { signOutOtherDevices } from "@/lib/auth";
 
 type Phase = "checking" | "ready" | "invalid" | "done";
 
@@ -66,6 +67,9 @@ export default function ResetPasswordPage() {
       return;
     }
     if (data.user?.email) await rememberPassword(data.user.email, password);
+    // New password: whoever had the old one (another device, a shared computer) is signed out.
+    // Best effort — the password change itself already succeeded.
+    await signOutOtherDevices().catch(() => undefined);
     setPhase("done");
   };
 

@@ -1,6 +1,7 @@
 // src/lib/auth.ts
 // One place for the things every page needs from the staff session:
 //   signOut()     — local sign-out that always clears this browser, even offline
+//   signOutEverywhere() / signOutOtherDevices() — global sign-out / after a password change
 //   authFetch()   — fetch to FastAPI with the current access token; on 401 refreshes once and retries,
 //                   and signs out cleanly if the backend still says 401
 // The session itself lives in "@/lib/supabaseClient" (the only persisting client); supabase-js refreshes
@@ -30,6 +31,23 @@ export async function signOut(): Promise<void> {
     // the client still holds the session in memory; a full reload drops it
     window.location.assign("/login");
   }
+}
+
+/**
+ * "Log out from all devices": revokes every refresh token of this user, then clears this browser.
+ * Other devices drop out at their next backend call (≤30 s token cache) or token refresh (≤1 h).
+ * Throws when the server can't be reached — the other devices would still be signed in, so the
+ * caller must tell the user instead of pretending it worked.
+ */
+export async function signOutEverywhere(): Promise<void> {
+  const { error } = await supabase.auth.signOut({ scope: "global" });
+  if (error) throw error;
+}
+
+/** Revokes every session except this one (used after a password change). */
+export async function signOutOtherDevices(): Promise<void> {
+  const { error } = await supabase.auth.signOut({ scope: "others" });
+  if (error) throw error;
 }
 
 /** Current access token (supabase-js refreshes it first if it has expired), or null when signed out. */
