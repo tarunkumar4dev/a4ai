@@ -277,9 +277,17 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - Backfill decisions for 21: only institute owners → institute_owner; student profiles with teacher activity →
   individual_teacher (4b960486…, ca406b93…), a9530028… stays student; 37ecd1cb…, f047f033…, 931f4251… on HOLD for the
   human. Show preview counts before applying.
-- Known (15 Oct): live has only consume_ai_chat_quota(uuid,int,text) but the backend sends p_paid_daily_cap → AI chat
-  likely fails for everyone (ai_chat_usage 0 rows). Re-run the final 15. AuthProvider teacher_profiles upsert always
-  fails RLS (no INSERT policy) — backend creates teacher_profiles; remove in 21.
+- [ ] 20b (branch fix/chat-quota, NOT applied, tested rolled back as a real free + paid user): drops the 3-arg
+  consume_ai_chat_quota, creates the final 4-arg one. Until then the backend's RPC call fails (42883) and chat.py
+  silently uses its in-memory fallback (10/day per serverless instance, paid users capped at 10, nothing stored).
+- [x] AuthProvider ensureProfileExists removed (sec/close-self-grant, now REBASED onto feat/persistent-login 932c5f5,
+  conflict resolved, build passes). No path needs a teacher_profiles row up front: backend record_usage retry,
+  19 reserve_test_generation and create-order create it with the service key.
+- Razorpay: prod frontend + every backend env use LIVE keys (backend KEY_ID/SECRET = Production, Preview, Development).
+  Test key id set on rag-backend Preview (fix/auth-body-ids) only, 15 Oct; test SECRET is the human's to add.
+  rag-backend previews return 302 (Vercel Deployment Protection) → browser calls fail until bypassed.
+- Since 23 Aug every new auth user has a profile row; the 62 without one are older (not the 13 bug). Email signups
+  that failed 11–15 Oct left no auth.users row → only visible in Supabase Auth logs. No signups at all since 11 Oct.
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
