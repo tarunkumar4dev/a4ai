@@ -13,6 +13,7 @@ import {
   MAX_PAGES, STRICTNESS_LABEL, type CheckSession, type CheckSheet, type SheetStatus,
 } from "./copyCheckerApi";
 import { exportSessionResults } from "./checkerExport";
+import CheckSessionAnalytics from "./CheckSessionAnalytics";
 
 const PARALLEL = 3;
 
@@ -35,6 +36,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
   const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [showScheme, setShowScheme] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newRoll, setNewRoll] = useState("");
@@ -218,6 +220,19 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
           </div>
         ))}
       </div>
+
+      {/* Class analytics — once at least 2 copies are approved */}
+      {counts.done >= 2 && (
+        <div className="rounded-2xl bg-white border border-gray-200 p-4">
+          <button className="w-full flex items-center justify-between" onClick={() => setShowAnalytics(v => !v)}>
+            <span className="text-sm font-bold text-gray-800">📊 Class analytics · {counts.done} approved</span>
+            <span className="text-gray-400 text-sm">{showAnalytics ? "▴" : "▾"}</span>
+          </button>
+          {showAnalytics && (
+            <CheckSessionAnalytics session={session} sheets={sheets} nameOf={s => s.student_name} onOpen={setOpenId} />
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
