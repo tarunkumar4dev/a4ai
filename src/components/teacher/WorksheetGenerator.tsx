@@ -6,6 +6,7 @@
 
 import React, { useState, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { authFetch } from '@/lib/auth';
 import { useAuth } from '@/providers/AuthProvider';
 import {
   Upload,
@@ -175,7 +176,7 @@ export const WorksheetGenerator: React.FC = () => {
       const finalSubject = subject === 'Other' ? customSubject : subject;
       const finalClass = classLevel === 'Other' ? customClass : classLevel;
 
-      const res = await fetch(`${API_URL}/worksheet/generate-direct`, {
+      const res = await authFetch(`${API_URL}/worksheet/generate-direct`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -212,7 +213,7 @@ export const WorksheetGenerator: React.FC = () => {
       const teacherId = user?.id;
       const logoB64 = await getLogoBase64();
 
-      const res = await fetch(`${API_URL}/worksheet/download`, {
+      const res = await authFetch(`${API_URL}/worksheet/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
