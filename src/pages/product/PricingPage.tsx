@@ -193,7 +193,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
       priceNote: { monthly: "forever", yearly: "forever" },
       description: "Try it out. No card needed.",
       features: [
-        "1 test paper per month",
+        "2 test papers per month",
         "1 assignment per month",
         "All question types (MCQ, Short, Long)",
         "PDF download — no watermark",
@@ -226,7 +226,7 @@ const plans: Record<AudienceKey, PlanCard[]> = {
       priceNote: { monthly: "/ month", yearly: "/ year" },
       description: "More papers. Live contests. Full analytics.",
       features: [
-        "25 test papers per month",
+        "50 test papers per month",
         "25 assignments per month",
         "All Starter features",
         "Live proctored contest with camera",
@@ -923,7 +923,7 @@ export default function PricingPage() {
             {[
               {
                 q: "Is the free plan really free?",
-                a: "Yes, forever. 1 test + 1 assignment per month with full NCERT content. No credit card needed.",
+                a: "Yes, forever. 2 tests + 1 assignment per month with full NCERT content. No credit card needed.",
               },
               {
                 q: "Can I change plans anytime?",
