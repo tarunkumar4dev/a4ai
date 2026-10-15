@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { compressImage } from "@/lib/imageCompress";
 import type { AiResult } from "./AiGradeBreakdown";
 import { backendUrl } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 export type Strictness = "easy" | "medium" | "hard" | "extreme";
 export type SheetStatus = "pending" | "uploaded" | "checking" | "checked" | "failed" | "approved";
@@ -44,9 +45,9 @@ const API = backendUrl("/v1/copy-checker");
 async function post(path: string, body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Session expired. Please log in again.");
-  const res = await fetch(`${API}${path}`, {
+  const res = await authFetch(`${API}${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
   const data = await res.json().catch(() => ({}));

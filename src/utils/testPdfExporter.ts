@@ -2,6 +2,7 @@
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { getBackendApiBase } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 export interface TestQuestionData {
   id?: string;
@@ -420,12 +421,8 @@ export async function fetchQuestionsForTest(
   try {
     const apiBase = getBackendApiBase();
     // The backend identifies the owner from this token; teacher_id in the query is ignored.
-    const { data: { session } } = await supabase.auth.getSession();
-    const headers: Record<string, string> = {};
-    if (session?.access_token) headers["Authorization"] = `Bearer ${session.access_token}`;
-    const res = await fetch(
-      `${apiBase}/v1/test-generator/test/${testId}${teacherId ? `?teacher_id=${encodeURIComponent(teacherId)}` : ""}`,
-      { headers }
+    const res = await authFetch(
+      `${apiBase}/v1/test-generator/test/${testId}${teacherId ? `?teacher_id=${encodeURIComponent(teacherId)}` : ""}`
     );
     if (res.ok) {
       const json = await res.json();

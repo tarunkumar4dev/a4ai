@@ -5,6 +5,7 @@
 
 import { supabase } from "@/lib/supabaseClient";
 import { backendUrl } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 const API_PREFIX = backendUrl("/v1/community-quizzes");
 
@@ -180,14 +181,8 @@ export interface PublicLeaderboardResponse {
 }
 
 /* ─────────── Auth ─────────── */
-async function authHeaders(): Promise<HeadersInit> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
+// authFetch adds the access token (and refreshes + retries once on 401)
+const jsonHeaders: HeadersInit = { "Content-Type": "application/json" };
 
 class ApiError extends Error {
   code: string;
@@ -216,43 +211,43 @@ async function handleResponse<T>(res: Response): Promise<T> {
 /* ─────────── TEACHER endpoints ─────────── */
 
 export async function previewVideo(url: string): Promise<VideoPreview> {
-  const res = await fetch(`${API_PREFIX}/preview-video`, {
+  const res = await authFetch(`${API_PREFIX}/preview-video`, {
     method: "POST",
-    headers: await authHeaders(),
+    headers: jsonHeaders,
     body: JSON.stringify({ url }),
   });
   return handleResponse<VideoPreview>(res);
 }
 
 export async function createQuiz(payload: CreateQuizPayload): Promise<CreateQuizResponse> {
-  const res = await fetch(`${API_PREFIX}`, {
+  const res = await authFetch(`${API_PREFIX}`, {
     method: "POST",
-    headers: await authHeaders(),
+    headers: jsonHeaders,
     body: JSON.stringify(payload),
   });
   return handleResponse<CreateQuizResponse>(res);
 }
 
 export async function listMyQuizzes(): Promise<{ quizzes: QuizListItem[] }> {
-  const res = await fetch(`${API_PREFIX}`, {
+  const res = await authFetch(`${API_PREFIX}`, {
     method: "GET",
-    headers: await authHeaders(),
+    headers: jsonHeaders,
   });
   return handleResponse<{ quizzes: QuizListItem[] }>(res);
 }
 
 export async function getLeaderboard(quizId: string): Promise<LeaderboardResponse> {
-  const res = await fetch(`${API_PREFIX}/${quizId}/leaderboard`, {
+  const res = await authFetch(`${API_PREFIX}/${quizId}/leaderboard`, {
     method: "GET",
-    headers: await authHeaders(),
+    headers: jsonHeaders,
   });
   return handleResponse<LeaderboardResponse>(res);
 }
 
 export async function deleteQuiz(quizId: string): Promise<{ deleted: boolean; quiz_id: string }> {
-  const res = await fetch(`${API_PREFIX}/${quizId}`, {
+  const res = await authFetch(`${API_PREFIX}/${quizId}`, {
     method: "DELETE",
-    headers: await authHeaders(),
+    headers: jsonHeaders,
   });
   return handleResponse<{ deleted: boolean; quiz_id: string }>(res);
 }

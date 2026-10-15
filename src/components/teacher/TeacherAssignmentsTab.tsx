@@ -11,6 +11,7 @@ import { openSubmissionFile } from "@/lib/submissionFiles";
 import { useMyScope } from "@/hooks/useMyScope";
 import { AiQuestionList, feedbackFromAi, type AiResult } from "@/components/checker/AiGradeBreakdown";
 import { backendUrl } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -41,9 +42,9 @@ const KEY_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp";
 async function checkerPost(path: string, body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Session expired. Please log in again.");
-  const res = await fetch(`${CHECKER_API}${path}`, {
+  const res = await authFetch(`${CHECKER_API}${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
   const data = await res.json().catch(() => ({}));

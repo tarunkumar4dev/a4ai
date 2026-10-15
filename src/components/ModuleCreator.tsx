@@ -22,6 +22,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { authFetch } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 
 const API_URL = (
@@ -129,7 +130,6 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
         setError('Please login first to create modules.');
         return;
       }
-      const accessToken = sessionData?.session?.access_token || '';
 
       // 2. Upload file to Supabase Storage
       setStatus('uploading');
@@ -151,11 +151,10 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
       setStatus('creating');
       setStatusMessage('Registering module in database...');
 
-      const createRes = await fetch(`${API_URL}/modules/create`, {
+      const createRes = await authFetch(`${API_URL}/modules/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           storage_path: storagePath,
@@ -179,11 +178,10 @@ export const ModuleCreator: React.FC<ModuleCreatorProps> = ({ onModuleCreated })
       setStatus('processing');
       setStatusMessage('AI is analyzing the document (extracting topics, formulas & concepts)...');
 
-      const processRes = await fetch(`${API_URL}/modules/process`, {
+      const processRes = await authFetch(`${API_URL}/modules/process`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ module_id: moduleId }),
       });

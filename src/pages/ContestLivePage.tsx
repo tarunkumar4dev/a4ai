@@ -42,6 +42,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { getBackendApiBase } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 /**
  * ContestLivePage — BACKEND-WIRED
@@ -223,12 +224,6 @@ export default function ContestLivePage() {
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [attemptId, submitState]);
 
-  // Helper: current Supabase access token (for backend auth), if logged in
-  const getAccessToken = async (): Promise<string | null> => {
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  };
-
   // Gate check — reads contest status only (NO answers → no leak)
   useEffect(() => {
     const gate = async () => {
@@ -324,13 +319,10 @@ export default function ContestLivePage() {
         return;
       }
 
-      const token = await getAccessToken();
-
-      const res = await fetch(`${API_BASE}/contests/${contestCode}/start`, {
+      const res = await authFetch(`${API_BASE}/contests/${contestCode}/start`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           student_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Student",
@@ -381,13 +373,11 @@ export default function ContestLivePage() {
       : 0;
 
     const doSubmit = async (): Promise<boolean> => {
-      const token = await getAccessToken();
-      const res = await fetch(`${API_BASE}/contests/${contestDbId}/submit`, {
+      const res = await authFetch(`${API_BASE}/contests/${contestDbId}/submit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Attempt-Id": attemptId,
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           answers: formattedAnswers,

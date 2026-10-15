@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { MessageCircle, X, Send } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { backendUrl } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 const CHAT_URL = backendUrl("/v1/chat");
 const HISTORY_FOR_AI = 8; // previous messages sent as context
@@ -173,9 +174,9 @@ export default function StaticSarthi({
         .filter((m) => m.text !== greeting)
         .slice(-HISTORY_FOR_AI)
         .map((m) => ({ role: m.from === "user" ? "user" : "assistant", content: m.text.slice(0, MAX_CHARS) }));
-      const res = await fetch(CHAT_URL, {
+      const res = await authFetch(CHAT_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [
             {

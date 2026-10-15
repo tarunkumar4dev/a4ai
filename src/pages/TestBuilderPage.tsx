@@ -70,6 +70,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getBackendApiBase } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 // ── Config ──────────────────────────────────────────────────────
 const API_BASE = `${getBackendApiBase()}/v1`;
@@ -174,7 +175,7 @@ function loadQuestionPage(url: string): Promise<QuestionPage> {
   if (cached) return Promise.resolve(cached);
   const pending = questionPageInflight.get(url);
   if (pending) return pending;
-  const req = fetch(url, { headers: getAuthHeaders() })
+  const req = authFetch(url, { headers: getAuthHeaders() })
     .then(async (res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -197,16 +198,8 @@ function getAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  try {
-    const raw = localStorage.getItem("sb-dcmnzvjftmdbywrjkust-auth-token");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      const token = parsed?.access_token;
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-    }
-  } catch {
-    /* no auth token */
-  }
+  // The token used to be read from "sb-…-auth-token", a key login never writes, so none was sent.
+  // authFetch adds the current access token (refresh + retry once on 401).
   return headers;
 }
 
@@ -1000,7 +993,7 @@ export default function TestBuilderPage() {
       setStatsLoading(true);
       setError(null);
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `${API_BASE}/test-generator/ncert-question-stats?subject=${encodeURIComponent(
             subject
           )}&class_grade=${classGrade}`,
@@ -1258,7 +1251,7 @@ export default function TestBuilderPage() {
         ...brandingPayload(),
       };
 
-      const res = await fetch(`${API_BASE}/test-generator/export`, {
+      const res = await authFetch(`${API_BASE}/test-generator/export`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),
@@ -1340,7 +1333,7 @@ export default function TestBuilderPage() {
         ...brandingPayload(),
       };
 
-      const res = await fetch(`${API_BASE}/test-generator/export-answer-key`, {
+      const res = await authFetch(`${API_BASE}/test-generator/export-answer-key`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(payload),

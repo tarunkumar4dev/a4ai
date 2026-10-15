@@ -4,6 +4,7 @@
 // ──────────────────────────────────────────────────────────
 
 import { getBackendApiBase } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 const API_V1 = `${getBackendApiBase()}/v1`;
 
@@ -127,16 +128,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  try {
-    // FIX: Use correct import path matching the rest of the app
-    const { supabase } = await import("@/lib/supabaseClient");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      headers["Authorization"] = `Bearer ${session.access_token}`;
-    }
-  } catch (err) {
-    console.warn("[contestApi] Auth header failed:", err);
-  }
+  // the access token is added by authFetch (refresh + retry once on 401)
   return headers;
 }
 
@@ -147,7 +139,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 export const contestApi = {
 
   async createContest(payload: CreateContestPayload): Promise<CreateContestResponse> {
-    const res = await fetch(`${API_V1}/contests`, {
+    const res = await authFetch(`${API_V1}/contests`, {
       method: "POST",
       headers: await getAuthHeaders(),
       body: JSON.stringify(payload),
@@ -176,7 +168,7 @@ export const contestApi = {
     studentName?: string,
     studentEmail?: string,
   ): Promise<ContestData> {
-    const res = await fetch(`${API_V1}/contests/${shortCode}/start`, {
+    const res = await authFetch(`${API_V1}/contests/${shortCode}/start`, {
       method: "POST",
       headers: await getAuthHeaders(),
       body: JSON.stringify({
@@ -198,7 +190,7 @@ export const contestApi = {
   ): Promise<SubmitResponse> {
     const headers = await getAuthHeaders();
     headers["X-Attempt-Id"] = attemptId;
-    const res = await fetch(`${API_V1}/contests/${contestId}/submit`, {
+    const res = await authFetch(`${API_V1}/contests/${contestId}/submit`, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
@@ -211,7 +203,7 @@ export const contestApi = {
   },
 
   async getLeaderboard(contestId: string) {
-    const res = await fetch(`${API_V1}/contests/${contestId}/leaderboard`, {
+    const res = await authFetch(`${API_V1}/contests/${contestId}/leaderboard`, {
       headers: await getAuthHeaders(),
     });
     if (!res.ok) throw new Error("Failed to load leaderboard");
@@ -219,7 +211,7 @@ export const contestApi = {
   },
 
   async listMyContests() {
-    const res = await fetch(`${API_V1}/contests/my`, {
+    const res = await authFetch(`${API_V1}/contests/my`, {
       headers: await getAuthHeaders(),
     });
     if (!res.ok) throw new Error("Failed to load contests");

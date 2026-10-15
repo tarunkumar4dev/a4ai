@@ -1,6 +1,7 @@
 // src/lib/api.ts
 
 import { backendUrl } from "@/lib/apiBase";
+import { authFetch } from "@/lib/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -143,19 +144,8 @@ async function apiFetch<T>(
     "Content-Type": "application/json",
   };
 
-  try {
-    // Login stores the session in the "@/lib/supabaseClient" client (storageKey a4ai.auth.token);
-    // the integrations client never has a session, so it sent no token.
-    const { supabase } = await import("@/lib/supabaseClient");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      defaultHeaders["Authorization"] = `Bearer ${session.access_token}`;
-    }
-  } catch {
-    // No auth — continue
-  }
-
-  const res = await fetch(url, {
+  // authFetch adds the current access token and refreshes + retries once on 401
+  const res = await authFetch(url, {
     ...options,
     headers: { ...defaultHeaders, ...options.headers },
   });
