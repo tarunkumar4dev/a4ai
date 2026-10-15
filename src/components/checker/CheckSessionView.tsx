@@ -28,6 +28,12 @@ const STATUS: Record<SheetStatus, { label: string; cls: string }> = {
 
 type Filter = "all" | "todo" | "review" | "done";
 
+/** Blind grading is a per-session, per-browser preference (UI only — names are still saved). */
+const blindKey = (sessionId: string) => `a4ai.checker.blind.${sessionId}`;
+function readBlind(sessionId: string): boolean {
+  try { return localStorage.getItem(blindKey(sessionId)) === "1"; } catch { return false; }
+}
+
 export default function CheckSessionView({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
   const { user } = useAuth();
   const [session, setSession] = useState<CheckSession | null>(null);
@@ -37,6 +43,13 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
   const [openId, setOpenId] = useState<string | null>(null);
   const [showScheme, setShowScheme] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [blind, setBlind] = useState(() => readBlind(sessionId));
+
+  function toggleBlind() {
+    const next = !blind;
+    setBlind(next);
+    try { localStorage.setItem(blindKey(sessionId), next ? "1" : "0"); } catch { /* private mode: not remembered */ }
+  }
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newRoll, setNewRoll] = useState("");
@@ -150,6 +163,9 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     clean: sheets.filter(s => s.status === "checked" && !(s.ai_result?.needs_review_count || 0)).length,
   }), [sheets]);
 
+  /** Name as shown in this view: "Student N" (position in the class list) while blind grading is on. */
+  const nameOf = (s: CheckSheet) => blind ? `Student ${sheets.findIndex(x => x.id === s.id) + 1}` : s.student_name;
+
   const visible = sheets.filter(s =>
     filter === "all" ? true
       : filter === "todo" ? (s.status === "pending" || s.status === "failed" || s.status === "uploaded")
@@ -229,10 +245,19 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
             <span className="text-gray-400 text-sm">{showAnalytics ? "▴" : "▾"}</span>
           </button>
           {showAnalytics && (
-            <CheckSessionAnalytics session={session} sheets={sheets} nameOf={s => s.student_name} onOpen={setOpenId} />
+            <CheckSessionAnalytics session={session} sheets={sheets} nameOf={nameOf} onOpen={setOpenId} />
           )}
         </div>
       )}
+
+      {/* Blind grading */}
+      <label className="flex items-center justify-between gap-3 rounded-2xl bg-white border border-gray-200 px-4 py-3 cursor-pointer">
+        <span>
+          <span className="block text-sm font-bold text-gray-800">🙈 Hide student names during review</span>
+          <span className="block text-[11px] text-gray-400">Shows "Student 1, 2…" here only — names stay saved and appear in the Excel export.</span>
+        </span>
+        <input type="checkbox" checked={blind} onChange={toggleBlind} className="h-5 w-5 accent-violet-600 shrink-0" />
+      </label>
 
       {/* Filters */}
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
@@ -252,10 +277,10 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
         {visible.map(s => (
           <button key={s.id} onClick={() => setOpenId(s.id)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-gray-50">
             <div className="h-10 w-10 shrink-0 rounded-xl bg-gray-100 flex items-center justify-center font-black text-gray-500 text-sm">
-              {s.roll_no || (s.student_name[0] || "?").toUpperCase()}
+              {blind ? sheets.findIndex(x => x.id === s.id) + 1 : s.roll_no || (s.student_name[0] || "?").toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-gray-900 truncate">{s.student_name}</p>
+              <p className="text-sm font-bold text-gray-900 truncate">{nameOf(s)}</p>
               <p className="text-xs text-gray-400">
                 {s.pages.length ? `${s.pages.length} page${s.pages.length > 1 ? "s" : ""}` : "No pages yet"}
                 {s.status === "checked" && (s.ai_result?.needs_review_count || 0) > 0 && <span className="text-orange-600"> · {s.ai_result!.needs_review_count} to review</span>}
@@ -312,6 +337,8 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
         <StudentCopy
           key={open.id}
           sheet={open}
+          displayName={nameOf(open)}
+          blind={blind}
           session={session}
           userId={user.id}
           canCheck={rubricReady}
@@ -358,8 +385,8 @@ function SchemeList({ session }: { session: CheckSession }) {
 }
 
 /* ── One student's copy: camera → pages → check → review → approve ── */
-function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPrev, onNext, onChange, onCheck, onDeleted }: {
-  sheet: CheckSheet; session: CheckSession; userId: string; canCheck: boolean; position: string;
+function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, position, onClose, onPrev, onNext, onChange, onCheck, onDeleted }: {
+  sheet: CheckSheet; displayName: string; blind: boolean; session: CheckSession; userId: string; canCheck: boolean; position: string;
   onClose: () => void; onPrev?: () => void; onNext?: () => void;
   onChange: (f: Partial<CheckSheet>) => void; onCheck: () => void; onDeleted: () => void;
 }) {
@@ -452,12 +479,12 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
     setSaving(false);
     if (error) return toast.error(error.message);
     onChange({ status: "approved", final_marks: m, feedback: feedback.trim() || null });
-    toast.success(`${sheet.student_name}: ${m}/${sheet.max_marks}`);
+    toast.success(`${displayName}: ${m}/${sheet.max_marks}`);
     if (onNext) onNext();
   }
 
   async function deleteStudent() {
-    if (!confirm(`Remove ${sheet.student_name} from this check?`)) return;
+    if (!confirm(`Remove ${displayName} from this check?`)) return;
     await removeFiles(sheet.pages).catch(() => {});
     const { error } = await supabase.from("check_sheets").delete().eq("id", sheet.id);
     if (error) return toast.error(error.message);
@@ -474,8 +501,8 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 py-2.5 flex items-center gap-2">
           <button onClick={onClose} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600">✕</button>
           <div className="min-w-0 flex-1 text-center">
-            <p className="text-sm font-black text-gray-900 truncate">{sheet.student_name}</p>
-            <p className="text-[11px] text-gray-400">{sheet.roll_no ? `Roll ${sheet.roll_no} · ` : ""}{position}</p>
+            <p className="text-sm font-black text-gray-900 truncate">{displayName}</p>
+            <p className="text-[11px] text-gray-400">{sheet.roll_no && !blind ? `Roll ${sheet.roll_no} · ` : ""}{position}</p>
           </div>
           <button disabled={!onPrev} onClick={onPrev} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30">‹</button>
           <button disabled={!onNext} onClick={onNext} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30">›</button>
