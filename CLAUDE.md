@@ -258,6 +258,29 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - Known: every new free account gets a fresh monthly quota (2 papers). Options (not built): require verified email
   before generating; one free quota per device/IP fingerprint; free tier = smaller papers; captcha on signup.
 
+- [x] Access + billing audit (15 Oct): https://claude.ai/artifact/DoYdNbitaoFgYgTSBpoi5q. Plan: 21 account_type →
+  22 member_role_audit → 23 entitlements → 24 billing_v2 (institute checkout, offline activation by platform_admins,
+  value-based upgrade credit, downgrade at period end) → 25 invoices (Resend, billing@a4ai.in, receipt without GST).
+  21–25 wait until the 3 backend branches (keys, quota-race, private-buckets) are merged; show each migration first.
+- [x] 17 applied (15 Oct, branch fix/institute-signup): profiles_role_check allows 'institute'. Institute signup was
+  broken since 13 (handle_new_user → check violation; Google path never saved the role).
+- [x] 20 applied (15 Oct, branch sec/close-self-grant): any user could UPDATE own subscriptions → Pro (confirmed in a
+  rolled-back test). Now: no app writes on subscriptions/payments/plans/usage_records, no direct institutes INSERT,
+  owner_id/plan_id/max_* locked (trigger), plan_id locked on profiles/teacher_profiles. AuthProvider subscriptions
+  upsert removed (frontend branch not merged yet; old code just gets 403). No sign the hole was used.
+  Role tests: scratchpad pattern = DO block that ends with `raise exception 'RESULT %'` (always rolls back);
+  run SQL with `supabase db query --linked -f file` — npx on Windows cuts multi-line arguments after line 1.
+- [ ] Razorpay test-mode Starter payment after 20 → confirm payments 'paid' + subscription + teacher_profiles.plan_id.
+- Pricing truth (for 23/24): Free 2/month, Pro 50/month, Institute Starter ₹999 / Plus ₹1,999 / Pro ₹2,999 (rename DB
+  plans), College = manual activation only (rows in 24), drop individual_199/249 (0 references, 15 Oct).
+  Pricing page copy fixed on branch fix/pricing-copy (not merged).
+- Backfill decisions for 21: only institute owners → institute_owner; student profiles with teacher activity →
+  individual_teacher (4b960486…, ca406b93…), a9530028… stays student; 37ecd1cb…, f047f033…, 931f4251… on HOLD for the
+  human. Show preview counts before applying.
+- Known (15 Oct): live has only consume_ai_chat_quota(uuid,int,text) but the backend sends p_paid_daily_cap → AI chat
+  likely fails for everyone (ai_chat_usage 0 rows). Re-run the final 15. AuthProvider teacher_profiles upsert always
+  fails RLS (no INSERT policy) — backend creates teacher_profiles; remove in 21.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
