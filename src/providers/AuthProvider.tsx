@@ -85,12 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           extractUserInfo(currentSession?.user ?? null);
       }
       setLoading(false);
-
-      if (event === "SIGNED_IN" && currentSession?.user) {
-        const signedInUser = currentSession.user;
-        // Supabase calls inside this callback can deadlock the auth lock — run them after it returns.
-        setTimeout(() => ensureProfileExists(signedInUser), 0);
-      }
     });
 
     // Laptop woke up / came back online: re-read the session, which refreshes an expired access token.
@@ -107,43 +101,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("focus", recheck);
     };
   }, []);
-
-  const ensureProfileExists = async (currentUser: User) => {
-    try {
-      const { data: existingProfile } = await supabase
-        .from("teacher_profiles")
-        .select("id")
-        .eq("id", currentUser.id)
-        .single();
-
-      if (!existingProfile) {
-        const { data: freePlan } = await supabase
-          .from("plans")
-          .select("id")
-          .eq("slug", "free")
-          .single();
-
-        if (freePlan) {
-          await supabase.from("teacher_profiles").upsert({
-            id: currentUser.id,
-            phone: currentUser.phone || null,
-            email: currentUser.email || null,
-            full_name:
-              currentUser.user_metadata?.full_name ||
-              currentUser.user_metadata?.name ||
-              "",
-            role: "teacher",
-            plan_id: freePlan.id,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
-          // No subscriptions row: no subscription = Free (a4_effective_plan); only the backend writes subscriptions.
-        }
-      }
-    } catch (err) {
-      console.warn("Profile ensure check:", err);
-    }
-  };
 
   const updateRole = async (newRole: string) => {
     const { error } = await supabase.auth.updateUser({
