@@ -356,6 +356,8 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
   }, [sheet.status, sheet.ai_result, sheet.ai_marks]);
 
   const locked = sheet.status === "checking";
+  const imagePages = sheet.pages.filter(p => !p.endsWith(".pdf") && urls[p]);
+  const viewerIndex = viewer ? imagePages.indexOf(viewer) : -1;
 
   async function addPages(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -427,7 +429,8 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/40 flex sm:items-center sm:justify-center" onClick={onClose}>
-      <div className="bg-[#F9FAFB] w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-xl sm:rounded-3xl overflow-y-auto" onClick={e => e.stopPropagation()}>
+      {/* Phone: one scrolling column. Desktop (md+): scan on the left (40%), AI result on the right (60%), each scrolls on its own. */}
+      <div className="bg-[#F9FAFB] w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-xl sm:rounded-3xl overflow-y-auto md:max-w-6xl md:h-[92vh] md:max-h-none md:overflow-hidden md:flex md:flex-col" onClick={e => e.stopPropagation()}>
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 py-2.5 flex items-center gap-2">
           <button onClick={onClose} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600">✕</button>
@@ -439,18 +442,21 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
           <button disabled={!onNext} onClick={onNext} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30">›</button>
         </div>
 
-        <div className="p-4 space-y-4 pb-32">
+        <div className="md:flex-1 md:min-h-0 md:grid md:grid-cols-[2fr_3fr]">
+        {/* Left: the scanned copy (+ its own lightbox on desktop) */}
+        <div className="relative md:min-h-0 md:border-r md:border-gray-200">
+        <div className="p-4 pb-0 md:pb-4 md:h-full md:overflow-y-auto">
           {/* Pages */}
           <div>
             <p className="text-[11px] font-black uppercase tracking-wider text-gray-400 mb-2">
               Copy · {sheet.pages.length} page{sheet.pages.length === 1 ? "" : "s"}{uploading > 0 && ` · uploading ${uploading}…`}
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 md:grid-cols-2 gap-2">
               {sheet.pages.map((p, i) => (
                 <div key={p} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gray-200 border border-gray-200">
                   {p.endsWith(".pdf")
                     ? <div className="h-full flex items-center justify-center text-3xl">📄</div>
-                    : urls[p] ? <img src={urls[p]} alt={`Page ${i + 1}`} className="h-full w-full object-cover" onClick={() => setViewer(urls[p])} />
+                    : urls[p] ? <img src={urls[p]} alt={`Page ${i + 1}`} className="h-full w-full object-cover cursor-zoom-in" onClick={() => setViewer(p)} />
                     : <div className="h-full flex items-center justify-center text-xs text-gray-400">…</div>}
                   <span className="absolute bottom-1 left-1 text-[10px] font-black bg-black/60 text-white rounded px-1.5">{i + 1}</span>
                   {!locked && (
@@ -481,7 +487,33 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
             <input ref={cam} type="file" accept="image/*" capture="environment" className="hidden" onChange={addPages} />
             <input ref={pick} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={addPages} />
           </div>
+        </div>
 
+          {/* Page viewer: full screen on phones, inside the left panel on desktop (the result stays visible) */}
+          {viewer && urls[viewer] && (
+            <div className="fixed inset-0 z-[70] bg-black flex items-center justify-center md:absolute md:z-20 md:bg-black/90"
+              onClick={e => { e.stopPropagation(); setViewer(null); }}>
+              <img src={urls[viewer]} alt="Page" className="max-h-full max-w-full object-contain" />
+              <div className="absolute top-3 inset-x-3 flex items-center justify-between" onClick={e => e.stopPropagation()}>
+                <span className="text-xs font-bold text-white bg-black/60 rounded-full px-3 py-1.5">
+                  Page {viewerIndex + 1} / {imagePages.length}
+                </span>
+                <button onClick={() => setViewer(null)} className="h-9 w-9 rounded-full bg-black/60 text-white font-bold">✕</button>
+              </div>
+              {viewerIndex > 0 && (
+                <button onClick={e => { e.stopPropagation(); setViewer(imagePages[viewerIndex - 1]); }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/60 text-white text-xl font-bold">‹</button>
+              )}
+              {viewerIndex < imagePages.length - 1 && (
+                <button onClick={e => { e.stopPropagation(); setViewer(imagePages[viewerIndex + 1]); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/60 text-white text-xl font-bold">›</button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right: AI result, marks, feedback */}
+        <div className="p-4 space-y-4 pb-32 md:pb-6 md:min-h-0 md:overflow-y-auto">
           {/* Status / result */}
           {sheet.status === "checking" && (
             <div className="rounded-2xl bg-violet-50 border border-violet-200 p-4 text-sm text-violet-700 flex items-center gap-3">
@@ -525,6 +557,7 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
 
           <button onClick={deleteStudent} className="text-xs font-bold text-red-500">Remove student from this check</button>
         </div>
+        </div>
 
         {/* Bottom action */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
@@ -550,11 +583,6 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
         </div>
       </div>
 
-      {viewer && (
-        <div className="fixed inset-0 z-[70] bg-black flex items-center justify-center" onClick={e => { e.stopPropagation(); setViewer(null); }}>
-          <img src={viewer} alt="Page" className="max-h-full max-w-full object-contain" />
-        </div>
-      )}
     </div>
   );
 }
