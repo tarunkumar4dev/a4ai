@@ -137,17 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
-
-          await supabase.from("subscriptions").upsert({
-            user_id: currentUser.id,
-            plan_id: freePlan.id,
-            status: "active",
-            starts_at: new Date().toISOString(),
-            ends_at: new Date(
-              Date.now() + 365 * 100 * 24 * 60 * 60 * 1000
-            ).toISOString(),
-            created_at: new Date().toISOString(),
-          });
+          // No subscriptions row: no subscription = Free (a4_effective_plan); only the backend writes subscriptions.
         }
       }
     } catch (err) {
