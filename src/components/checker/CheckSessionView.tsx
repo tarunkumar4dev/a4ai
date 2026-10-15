@@ -12,6 +12,7 @@ import {
   buildRubric, checkSheet, overrideMarks, removeFiles, signedUrls, uploadPage,
   MAX_PAGES, STRICTNESS_LABEL, type CheckSession, type CheckSheet, type SheetStatus,
 } from "./copyCheckerApi";
+import { exportSessionResults } from "./checkerExport";
 
 const PARALLEL = 3;
 
@@ -115,6 +116,19 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     load();
   }
 
+  async function exportResults() {
+    if (!session) return;
+    const withResult = sheets.filter(s => s.ai_result);
+    if (!withResult.length) return toast.info("No checked copies to export yet.");
+    const notApproved = withResult.filter(s => s.status !== "approved").length;
+    if (notApproved && !confirm(`${notApproved} checked ${notApproved > 1 ? "copies are" : "copy is"} not approved yet — their AI marks will be exported. Export anyway?`)) return;
+    try {
+      await exportSessionResults(session, sheets);
+    } catch (e: any) {
+      toast.error(`Export failed: ${e?.message || e}`);
+    }
+  }
+
   async function deleteSession() {
     if (!session || !confirm(`Delete “${session.title}” and all its photos? This cannot be undone.`)) return;
     await removeFiles([...session.qp_paths, ...session.key_paths, ...sheets.flatMap(s => s.pages)]).catch(() => {});
@@ -157,6 +171,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
             {[session.total_marks && `${session.total_marks} marks`, STRICTNESS_LABEL[session.strictness], session.source === "test" ? "From Test History" : "From photos"].filter(Boolean).join(" · ")}
           </p>
         </div>
+        <button onClick={exportResults} className="text-xs font-bold text-gray-700 px-2 py-2" title="Download results as Excel">⬇ Export Results</button>
         <button onClick={deleteSession} className="text-xs font-bold text-red-500 px-2 py-2">Delete</button>
       </div>
 
