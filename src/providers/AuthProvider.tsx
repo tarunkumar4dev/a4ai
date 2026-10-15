@@ -11,6 +11,7 @@ import {
 } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import { signOut as signOutThisDevice } from "@/lib/auth";
 
 interface AuthContextType {
   session: Session | null;
@@ -141,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await signOutThisDevice();
     setSession(null);
     setUser(null);
     setRole("teacher");

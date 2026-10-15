@@ -14,6 +14,10 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
+/** Where the staff session is stored. This is the app's ONLY persisting Supabase client — don't create
+ *  another one with persistSession (two clients refreshing one session log each other out). */
+export const AUTH_STORAGE_KEY = "a4ai.auth.token";
+
 /** ---------------- Client (stable PKCE auth) ---------------- */
 export const supabase = createClient(
   SUPABASE_URL || "https://example.supabase.co",
@@ -25,7 +29,7 @@ export const supabase = createClient(
     detectSessionInUrl: true,
     flowType: "pkce",
     storage: window.localStorage,
-    storageKey: "a4ai.auth.token",
+    storageKey: AUTH_STORAGE_KEY,
   },
   global: {
     headers: { "x-client-info": "a4ai-web" },

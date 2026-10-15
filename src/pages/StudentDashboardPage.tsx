@@ -11,6 +11,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import StaticSarthi from "@/components/chat/StaticSarthi";
 import { supabase } from "@/lib/supabaseClient";
+import { signOut } from "@/lib/auth";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -534,7 +535,7 @@ export default function StudentDashboardPage() {
                                     <Settings size={16} /> {t.settings}
                                 </Link>
                                 <div
-                                    onClick={() => supabase.auth.signOut().then(() => navigate('/login'))}
+                                    onClick={() => signOut().then(() => navigate('/login'))}
                                     className="flex items-center gap-3 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 rounded-xl cursor-pointer text-sm transition-colors mt-2 border-t border-slate-100 dark:border-slate-700"
                                 >
                                     <LogOut size={16} /> {t.logOut}

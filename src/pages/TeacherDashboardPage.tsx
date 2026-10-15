@@ -7,6 +7,7 @@ import StaticSarthi from "@/components/chat/StaticSarthi";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+import { signOut } from "@/lib/auth";
 import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel";
 import TeacherAssignmentsTab from "@/components/teacher/TeacherAssignmentsTab";
 import WorksheetGenerator from "@/components/teacher/WorksheetGenerator";
@@ -1320,7 +1321,7 @@ export default function TeacherDashboardPage() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await signOut();
       navigate("/login");
     } catch (error) {
       console.error("Error logging out:", error);

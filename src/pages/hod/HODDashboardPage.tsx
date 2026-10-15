@@ -16,6 +16,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
+import { signOut } from "@/lib/auth";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAccess } from "@/context/AccessProvider";
 import { customStyles, Icons } from "@/pages/institute/dashboardTheme";
@@ -489,7 +490,7 @@ export default function HODDashboardPage() {
   useEffect(() => { if (activeTab === "attendance" && attView === "month") loadMonthly(); }, [activeTab, attView, loadMonthly]);
 
   // ---------------- ACTIONS ----------------
-  const handleSignOut = async () => { await supabase.auth.signOut(); navigate("/login"); };
+  const handleSignOut = async () => { await signOut(); navigate("/login"); };
   const goHome = () => navigate("/");
 
   const copyCode = async (code: string | null | undefined, key: string) => {

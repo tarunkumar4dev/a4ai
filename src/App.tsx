@@ -19,7 +19,6 @@ import { CoinProvider } from "@/context/CoinContext";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import { AccessProvider } from "@/context/AccessProvider";
 import { RoleRoute } from "@/components/routing/RoleRoute";
-import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
 import { MotionConfig } from "framer-motion";
 const HODDashboardPage = lazy(() => import("@/pages/hod/HODDashboardPage")); // pulls xlsx; keep it out of the main bundle
@@ -247,22 +246,6 @@ function DashboardRedirect() {
   return <Navigate to={`/${targetRole}/dashboard`} replace />;
 }
 
-/* ---------- Idle Logout ---------- */
-function IdleLogoutManager() {
-  const { session } = useAuth();
-  return session ? <IdleLogoutEnabled /> : null;
-}
-
-function IdleLogoutEnabled() {
-  useIdleLogout({
-    timeoutMs: 2 * 60 * 60 * 1000,
-    warnBeforeMs: 60 * 1000,
-    onWarn: () => toast.warning("You've been inactive. Auto sign-out in 1 minute."),
-    onLogout: () => toast.info("Signed out due to inactivity."),
-  });
-  return null;
-}
-
 /* ========================================================= */
 
 const App = () => {
@@ -282,7 +265,6 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AccessProvider>
-          <IdleLogoutManager />
           <ThemeProvider>
           <CoinProvider>
             <TooltipProvider>

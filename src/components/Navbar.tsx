@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+import { signOut } from "@/lib/auth";
 import { Search, Menu, X, ArrowRight, User, Settings, LayoutDashboard, LogOut, ChevronRight } from "lucide-react";
 
 const navItems = [
@@ -94,7 +95,7 @@ export default function Navbar() {
 
   async function handleSignOut() {
     try {
-      await supabase.auth.signOut();
+      await signOut();
     } finally {
       setProfileOpen(false);
       setMobileMenuOpen(false);

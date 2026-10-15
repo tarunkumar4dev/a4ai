@@ -19,6 +19,7 @@ import {
   useReducedMotion,
 } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
+import { signOut } from "@/lib/auth";
 import { useUserProfile } from "@/hooks/useUserProfile";
 
 import DashboardSidebar from "@/components/DashboardSidebar";
@@ -423,7 +424,7 @@ export const DashboardLayout = ({
                 </div>
                 <Button
                   onClick={async () => {
-                    await supabase.auth.signOut();
+                    await signOut();
                     navigate("/login");
                   }}
                   variant="destructive"
