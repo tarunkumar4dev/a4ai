@@ -41,11 +41,11 @@ export const MAX_PAGES = 16;
 const BUCKET = "answer-sheets";
 const API = backendUrl("/v1/copy-checker");
 
-async function post(path: string, body?: unknown) {
+async function request(method: "POST" | "PATCH", path: string, body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Session expired. Please log in again.");
   const res = await fetch(`${API}${path}`, {
-    method: "POST",
+    method,
     headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
@@ -54,11 +54,18 @@ async function post(path: string, body?: unknown) {
   return data;
 }
 
+const post = (path: string, body?: unknown) => request("POST", path, body);
+
 export const buildRubric = (sessionId: string, force = false) =>
   post(`/sessions/${sessionId}/rubric`, { force }) as Promise<{ rubric: { status: string; total_marks: number }; full_rubric: Rubric }>;
 
 export const checkSheet = (sheetId: string) =>
   post(`/sheets/${sheetId}/check`) as Promise<{ sheet: CheckSheet }>;
+
+/** Teacher sets one question's marks (AI marks are kept for comparison; every change is audit-logged). */
+export const overrideMarks = (sheetId: string, qNo: string, marks: number, note?: string) =>
+  request("PATCH", `/sheets/${sheetId}/questions/${encodeURIComponent(qNo)}/marks`,
+    { marks_awarded: marks, teacher_note: note?.trim() || null }) as Promise<{ sheet: Pick<CheckSheet, "id" | "status" | "ai_marks" | "final_marks" | "max_marks" | "ai_result"> }>;
 
 /** Compress (images) and upload one file into the teacher's private folder. Returns the storage path. */
 export async function uploadPage(userId: string, sessionId: string, folder: string, file: File): Promise<string> {

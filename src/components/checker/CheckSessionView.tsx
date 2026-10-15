@@ -7,9 +7,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
-import { AiQuestionList, feedbackFromAi } from "./AiGradeBreakdown";
+import { AiQuestionList, effectiveTotal, feedbackFromAi } from "./AiGradeBreakdown";
 import {
-  buildRubric, checkSheet, removeFiles, signedUrls, uploadPage,
+  buildRubric, checkSheet, overrideMarks, removeFiles, signedUrls, uploadPage,
   MAX_PAGES, STRICTNESS_LABEL, type CheckSession, type CheckSheet, type SheetStatus,
 } from "./copyCheckerApi";
 
@@ -108,7 +108,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     if (!confirm(`Approve AI marks for ${clean.length} student(s)?`)) return;
     const now = new Date().toISOString();
     const res = await Promise.all(clean.map(s => supabase.from("check_sheets").update({
-      status: "approved", final_marks: s.ai_marks, feedback: feedbackFromAi(s.ai_result!), approved_at: now, updated_at: now,
+      status: "approved", final_marks: effectiveTotal(s.ai_result!), feedback: feedbackFromAi(s.ai_result!), approved_at: now, updated_at: now,
     }).eq("id", s.id)));
     const failed = res.filter(r => r.error).length;
     if (failed) toast.error(`${failed} could not be saved`); else toast.success(`${clean.length} approved`);
@@ -232,7 +232,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
               </p>
             </div>
             {(s.status === "checked" || s.status === "approved") && (
-              <span className="text-sm font-black text-gray-900">{s.status === "approved" ? s.final_marks : s.ai_marks}<span className="text-gray-400 font-bold text-xs">/{s.max_marks}</span></span>
+              <span className="text-sm font-black text-gray-900">{s.status === "approved" ? s.final_marks : s.ai_result ? effectiveTotal(s.ai_result) : s.ai_marks}<span className="text-gray-400 font-bold text-xs">/{s.max_marks}</span></span>
             )}
             <span className={`shrink-0 text-[11px] font-bold px-2 py-1 rounded-lg ${STATUS[s.status].cls}`}>{STATUS[s.status].label}</span>
           </button>
@@ -337,7 +337,7 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
   const pick = useRef<HTMLInputElement>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(0);
-  const [marks, setMarks] = useState<string>(String(sheet.final_marks ?? sheet.ai_marks ?? ""));
+  const [marks, setMarks] = useState<string>(String(sheet.final_marks ?? (sheet.ai_result ? effectiveTotal(sheet.ai_result) : sheet.ai_marks) ?? ""));
   const [feedback, setFeedback] = useState(sheet.feedback || (sheet.ai_result ? feedbackFromAi(sheet.ai_result) : ""));
   const [saving, setSaving] = useState(false);
   const [viewer, setViewer] = useState<string | null>(null);
@@ -350,10 +350,19 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
 
   useEffect(() => {   // AI result arrived while open → prefill
     if (sheet.status === "checked" && sheet.ai_result) {
-      setMarks(String(sheet.ai_marks ?? ""));
+      setMarks(String(effectiveTotal(sheet.ai_result)));
       setFeedback(feedbackFromAi(sheet.ai_result));
     }
-  }, [sheet.status, sheet.ai_result, sheet.ai_marks]);
+  }, [sheet.status, sheet.ai_result]);
+
+  /** ✎ on a question: backend saves it (audit-logged); the total and untouched feedback follow. */
+  async function overrideQuestion(qNo: string, m: number, note: string) {
+    const before = sheet.ai_result;
+    const { sheet: s } = await overrideMarks(sheet.id, qNo, m, note);
+    if (before && feedback === feedbackFromAi(before) && s.ai_result) setFeedback(feedbackFromAi(s.ai_result));
+    onChange({ ai_result: s.ai_result, final_marks: s.final_marks, status: s.status });
+    if (s.ai_result) setMarks(String(effectiveTotal(s.ai_result)));
+  }
 
   const locked = sheet.status === "checking";
   const imagePages = sheet.pages.filter(p => !p.endsWith(".pdf") && urls[p]);
@@ -531,10 +540,12 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
           {r && (sheet.status === "checked" || sheet.status === "approved") && (
             <>
               <div className="rounded-2xl bg-white border border-gray-200 p-4">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black text-gray-900">{r.total_marks_awarded}</span>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-3xl font-black text-gray-900">{effectiveTotal(r)}</span>
                   <span className="text-gray-400 font-bold">/ {r.max_marks}</span>
-                  <span className="text-sm font-bold text-gray-500">AI · {r.percentage}%</span>
+                  {r.teacher_total != null
+                    ? <span className="text-sm font-bold text-blue-700">with your changes · AI gave {r.total_marks_awarded}</span>
+                    : <span className="text-sm font-bold text-gray-500">AI · {r.percentage}%</span>}
                 </div>
                 {r.overall_remarks && <p className="text-xs text-gray-600 mt-1">{r.overall_remarks}</p>}
                 {(r.needs_review_count || 0) > 0 && (
@@ -542,7 +553,7 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
                 )}
               </div>
               <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
-                <AiQuestionList questions={r.graded_questions || []} />
+                <AiQuestionList questions={r.graded_questions || []} onOverride={overrideQuestion} />
               </div>
               <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-2">
                 <label className="text-xs font-bold text-gray-500">Final marks (edit if needed)</label>
