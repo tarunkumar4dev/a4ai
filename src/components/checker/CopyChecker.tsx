@@ -16,7 +16,7 @@ export default function CopyChecker({ initialTestId, onConsumeTestId }: {
   onConsumeTestId?: () => void;
 }) {
   const { user } = useAuth();
-  const [view, setView] = useState<{ name: "list" } | { name: "new"; testId?: string | null } | { name: "session"; id: string }>(
+  const [view, setView] = useState<{ name: "list" } | { name: "new"; testId?: string | null } | { name: "session"; id: string; pickStudents?: boolean }>(
     initialTestId ? { name: "new", testId: initialTestId } : { name: "list" });
   const [rows, setRows] = useState<Row[]>([]);
   const [counts, setCounts] = useState<Counts>({});
@@ -56,10 +56,10 @@ export default function CopyChecker({ initialTestId, onConsumeTestId }: {
   }
   if (view.name === "new") {
     return <NewCheckSession initialTestId={view.testId} onCancel={() => setView({ name: "list" })}
-      onCreated={id => setView({ name: "session", id })} />;
+      onCreated={(id, pickStudents) => setView({ name: "session", id, pickStudents })} />;
   }
   if (view.name === "session") {
-    return <CheckSessionView sessionId={view.id} onBack={() => setView({ name: "list" })} />;
+    return <CheckSessionView sessionId={view.id} startWithPicker={view.pickStudents} onBack={() => setView({ name: "list" })} />;
   }
 
   return (

@@ -11,6 +11,7 @@ import { openSubmissionFile } from "@/lib/submissionFiles";
 import { useMyScope } from "@/hooks/useMyScope";
 import { AiQuestionList, feedbackFromAi, type AiResult } from "@/components/checker/AiGradeBreakdown";
 import { backendUrl } from "@/lib/apiBase";
+import { checkerFetch } from "@/components/checker/checkerFetch";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -38,18 +39,7 @@ const CHECKER_API = backendUrl("/v1/smart-assignment-checker");
 const AI_PARALLEL = 3;
 const KEY_ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp";
 
-async function checkerPost(path: string, body?: unknown) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("Session expired. Please log in again.");
-  const res = await fetch(`${CHECKER_API}${path}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `AI check failed (${res.status})`);
-  return data;
-}
+const checkerPost = (path: string, body?: unknown) => checkerFetch(`${CHECKER_API}${path}`, "POST", body);
 
 
 /* ─── Helpers ──────────────────────────────────────── */

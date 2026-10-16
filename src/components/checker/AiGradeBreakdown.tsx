@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from "react";
+import { Check, ChevronDown, Pencil, X } from "lucide-react";
 
 export type Verdict = "full" | "mostly" | "partial" | "none";
 
@@ -51,6 +52,9 @@ export interface GradedQuestion {
   counted?: boolean;
   or_group?: string | null;
   scheme_source?: "key" | "estimated" | "adjusted";
+  /** Set when the teacher changed this question's marks (marks_awarded stays the AI's). */
+  teacher_marks?: number | null;
+  teacher_note?: string | null;
 }
 
 export const VERDICT_STYLE: Record<Verdict, { label: string; cls: string }> = {
@@ -64,25 +68,37 @@ export type AiResult = {
   graded_questions: GradedQuestion[];
   total_marks_awarded: number; max_marks: number; percentage: number;
   overall_remarks: string; needs_review_count?: number;
+  /** Sheet total after the teacher's per-question changes (absent = no changes). */
+  teacher_total?: number; overridden_questions?: number;
 };
+
+/** The marks that count for a question: the teacher's if changed, else the AI's. */
+export const effectiveMarks = (q: GradedQuestion) => q.teacher_marks ?? q.marks_awarded;
+
+/** Sheet total that counts: with the teacher's per-question changes, else the AI total. */
+export const effectiveTotal = (r: AiResult) => r.teacher_total ?? r.total_marks_awarded;
+
+export type OverrideFn = (qNo: string, marks: number, note: string) => Promise<void>;
 
 /** Student-facing feedback from an AI result: overall remark + the questions that lost marks. */
 export function feedbackFromAi(r: AiResult): string {
   const lines = [r.overall_remarks?.trim()].filter(Boolean) as string[];
   for (const q of r.graded_questions || []) {
-    if (q.counted === false || q.marks_awarded >= q.max_marks) continue;
+    const got = effectiveMarks(q);
+    if (q.counted === false || got >= q.max_marks) continue;
     const note = q.has_subparts
       ? (q.subpart_grades || []).filter(s => s.marks_awarded < s.max_marks).map(s => `${s.sub_id}: ${s.feedback}`).join("; ")
       : q.feedback;
-    lines.push(`Q${q.q_no}: ${q.marks_awarded}/${q.max_marks}${note ? ` — ${note}` : ""}`);
+    lines.push(`Q${q.q_no}: ${got}/${q.max_marks}${note ? ` — ${note}` : ""}`);
   }
   return lines.join("\n").slice(0, 1500);
 }
 
-export function AiQuestionList({ questions }: { questions: GradedQuestion[] }) {
+/** onOverride: when given, each question gets a ✎ to change its marks (Check Copies only). */
+export function AiQuestionList({ questions, onOverride }: { questions: GradedQuestion[]; onOverride?: OverrideFn }) {
   return (
     <div className="divide-y divide-gray-100 dark:divide-gray-800">
-      {questions.map((q, i) => <QuestionRow key={i} q={q} />)}
+      {questions.map((q, i) => <QuestionRow key={i} q={q} onOverride={onOverride} />)}
     </div>
   );
 }
@@ -91,10 +107,40 @@ export function AiQuestionList({ questions }: { questions: GradedQuestion[] }) {
 // QUESTION ROW
 // ═══════════════════════════════════════════════════════════════════════
 
-export function QuestionRow({ q }: { q: GradedQuestion }) {
+export function QuestionRow({ q, onOverride }: { q: GradedQuestion; onOverride?: OverrideFn }) {
   const [expanded, setExpanded] = useState(false);
-  const isFull = q.marks_awarded >= q.max_marks;
-  const isZero = q.marks_awarded === 0;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const got = effectiveMarks(q);
+  const overridden = q.teacher_marks != null;
+  const isFull = got >= q.max_marks;
+  const isZero = got === 0;
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraft(String(got));
+    setNote(q.teacher_note || "");
+    setEditError(null);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    const m = parseFloat(draft);
+    if (Number.isNaN(m) || m < 0 || m > q.max_marks) return setEditError(`Enter 0 to ${q.max_marks}.`);
+    setSaving(true);
+    setEditError(null);
+    try {
+      await onOverride!(q.q_no, m, note);
+      setEditing(false);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
   const isNotAttempted = q.not_attempted;
 
   const marksBg = isNotAttempted ? "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
@@ -109,8 +155,16 @@ export function QuestionRow({ q }: { q: GradedQuestion }) {
       <div className="px-6 py-3.5 flex items-center gap-3 sm:gap-4 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 w-10 shrink-0">Q{q.q_no}</span>
         <span className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${marksBg}`}>
-          {q.marks_awarded}/{q.max_marks}
+          {got}/{q.max_marks}
         </span>
+        {overridden && (
+          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 dark:bg-blue-900/40 dark:text-blue-300 rounded px-1.5 py-0.5 shrink-0"
+            title={q.teacher_note || "Changed by teacher"}>edited · AI {q.marks_awarded}</span>
+        )}
+        {onOverride && !editing && (
+          <button onClick={startEdit} title="Change marks" aria-label={`Change marks for Q${q.q_no}`}
+            className="h-7 w-7 shrink-0 rounded-full text-gray-400 hover:text-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center"><Pencil size={14} /></button>
+        )}
         {!isNotAttempted && <span className={`w-2 h-2 rounded-full shrink-0 ${confDot}`} title={`Confidence: ${q.confidence}`} />}
         <span className="text-sm text-gray-600 dark:text-gray-400 truncate flex-1">{q.feedback}</span>
         <div className="flex gap-1 shrink-0">
@@ -120,11 +174,30 @@ export function QuestionRow({ q }: { q: GradedQuestion }) {
           {isNotAttempted && <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 px-2 py-0.5 rounded">not attempted</span>}
           {q.has_subparts && <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-600 px-2 py-0.5 rounded">{q.subpart_grades.length} parts</span>}
         </div>
-        <span className={`text-gray-400 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}>▾</span>
+        <span className={`text-gray-400 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}><ChevronDown size={16} /></span>
       </div>
+
+      {editing && (
+        <div className="px-6 pb-3 flex flex-wrap items-center gap-2" onClick={e => e.stopPropagation()}>
+          <input type="number" inputMode="decimal" step="0.5" min={0} max={q.max_marks} value={draft} autoFocus
+            onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === "Enter" && save()}
+            className="w-20 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm font-bold" />
+          <span className="text-xs text-gray-500">/ {q.max_marks}</span>
+          <input value={note} onChange={e => setNote(e.target.value)} maxLength={500} placeholder="Note (optional)"
+            className="flex-1 min-w-[140px] rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 text-xs" />
+          <button onClick={save} disabled={saving} className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-bold disabled:opacity-50">
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button onClick={() => setEditing(false)} disabled={saving} className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-600">Cancel</button>
+          {editError && <p className="w-full text-xs text-red-600">{editError}</p>}
+        </div>
+      )}
 
       {expanded && (
         <div className="px-6 pb-4 space-y-3">
+          {overridden && q.teacher_note && (
+            <p className="ml-10 text-xs text-blue-700 dark:text-blue-300">Teacher's note: {q.teacher_note}</p>
+          )}
           {q.needs_review && q.review_reasons && q.review_reasons.length > 0 && (
             <p className="ml-10 text-xs text-orange-600 dark:text-orange-300">Review: {q.review_reasons.join(" · ")}</p>
           )}
@@ -171,12 +244,12 @@ export function QuestionRow({ q }: { q: GradedQuestion }) {
                 <>
                   {q.key_concepts_found.length > 0 && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                      ✓ Found: {q.key_concepts_found.join(", ")}
+                      <Check size={12} className="inline -mt-0.5" /> Found: {q.key_concepts_found.join(", ")}
                     </p>
                   )}
                   {q.key_concepts_missed.length > 0 && (
                     <p className="text-xs text-red-500 dark:text-red-400">
-                      ✕ Missed: {q.key_concepts_missed.join(", ")}
+                      <X size={12} className="inline -mt-0.5" /> Missed: {q.key_concepts_missed.join(", ")}
                     </p>
                   )}
                 </>

@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { compressImage } from "@/lib/imageCompress";
 import type { AiResult } from "./AiGradeBreakdown";
 import { backendUrl } from "@/lib/apiBase";
+import { checkerFetch, humanError } from "./checkerFetch";
 
 export type Strictness = "easy" | "medium" | "hard" | "extreme";
 export type SheetStatus = "pending" | "uploaded" | "checking" | "checked" | "failed" | "approved";
@@ -30,7 +31,7 @@ export interface CheckSession {
 export interface CheckSheet {
   id: string; session_id: string; student_id: string | null; student_name: string; roll_no: string | null;
   pages: string[]; status: SheetStatus; ai_result: AiResult | null; ai_marks: number | null; max_marks: number | null;
-  final_marks: number | null; feedback: string | null; error: string | null; created_at: string;
+  final_marks: number | null; feedback: string | null; error: string | null; created_at: string; updated_at: string;
 }
 
 export const STRICTNESS_LABEL: Record<Strictness, string> = {
@@ -41,18 +42,9 @@ export const MAX_PAGES = 16;
 const BUCKET = "answer-sheets";
 const API = backendUrl("/v1/copy-checker");
 
-async function post(path: string, body?: unknown) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("Session expired. Please log in again.");
-  const res = await fetch(`${API}${path}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Request failed (${res.status})`);
-  return data;
-}
+const request = (method: "POST" | "PATCH", path: string, body?: unknown) => checkerFetch(`${API}${path}`, method, body);
+
+const post = (path: string, body?: unknown) => request("POST", path, body);
 
 export const buildRubric = (sessionId: string, force = false) =>
   post(`/sessions/${sessionId}/rubric`, { force }) as Promise<{ rubric: { status: string; total_marks: number }; full_rubric: Rubric }>;
@@ -60,13 +52,18 @@ export const buildRubric = (sessionId: string, force = false) =>
 export const checkSheet = (sheetId: string) =>
   post(`/sheets/${sheetId}/check`) as Promise<{ sheet: CheckSheet }>;
 
+/** Teacher sets one question's marks (AI marks are kept for comparison; every change is audit-logged). */
+export const overrideMarks = (sheetId: string, qNo: string, marks: number, note?: string) =>
+  request("PATCH", `/sheets/${sheetId}/questions/${encodeURIComponent(qNo)}/marks`,
+    { marks_awarded: marks, teacher_note: note?.trim() || null }) as Promise<{ sheet: Pick<CheckSheet, "id" | "status" | "ai_marks" | "final_marks" | "max_marks" | "ai_result"> }>;
+
 /** Compress (images) and upload one file into the teacher's private folder. Returns the storage path. */
 export async function uploadPage(userId: string, sessionId: string, folder: string, file: File): Promise<string> {
   const { blob, ext, type } = await compressImage(file);
   if (blob.size > 15 * 1024 * 1024) throw new Error(`${file.name} is too large (max 15 MB).`);
   const path = `${userId}/${sessionId}/${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: type, upsert: false });
-  if (error) throw new Error(`Upload failed: ${error.message}`);
+  if (error) throw new Error(`Upload failed: ${humanError(error)}`);
   return path;
 }
 

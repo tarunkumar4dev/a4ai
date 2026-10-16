@@ -4,21 +4,30 @@
 // Checked copies are reviewed point by point and approved; nothing is final until the teacher approves.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ArrowLeft, MoreHorizontal, Trash2, BarChart3, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Download, Eye, EyeOff, FileText, FileUp, RotateCw, ScanSearch, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
-import { AiQuestionList, feedbackFromAi } from "./AiGradeBreakdown";
+import { AiQuestionList, effectiveTotal, feedbackFromAi } from "./AiGradeBreakdown";
 import {
-  buildRubric, checkSheet, removeFiles, signedUrls, uploadPage,
+  buildRubric, checkSheet, overrideMarks, removeFiles, signedUrls, uploadPage,
   MAX_PAGES, STRICTNESS_LABEL, type CheckSession, type CheckSheet, type SheetStatus,
 } from "./copyCheckerApi";
+import { exportSessionResults } from "./checkerExport";
+import { humanError } from "./checkerFetch";
+import CheckSessionAnalytics from "./CheckSessionAnalytics";
+import StudentPicker from "./StudentPicker";
+import CheckSteps, { currentStep } from "./CheckSteps";
+import { useConfirm } from "./useConfirm";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useMyScope } from "@/hooks/useMyScope";
 
 const PARALLEL = 3;
 
 const STATUS: Record<SheetStatus, { label: string; cls: string }> = {
   pending:  { label: "No copy",   cls: "bg-gray-100 text-gray-500" },
   uploaded: { label: "Uploaded",  cls: "bg-blue-50 text-blue-600" },
-  checking: { label: "Checking…", cls: "bg-violet-50 text-violet-600" },
+  checking: { label: "Checking…", cls: "bg-sky-50 text-sky-700" },
   checked:  { label: "Checked",   cls: "bg-amber-50 text-amber-700" },
   failed:   { label: "Failed",    cls: "bg-red-50 text-red-600" },
   approved: { label: "Approved",  cls: "bg-emerald-50 text-emerald-700" },
@@ -26,18 +35,65 @@ const STATUS: Record<SheetStatus, { label: string; cls: string }> = {
 
 type Filter = "all" | "todo" | "review" | "done";
 
-export default function CheckSessionView({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
+/** A copy still "checking" this long after it started lost its request (e.g. the 300 s server limit) —
+ *  nothing will finish it, so it is shown as failed with Retry instead of staying locked. */
+const STUCK_AFTER_MS = 6 * 60 * 1000;
+const STUCK_MESSAGE = "Checking took too long and stopped. Tap Retry.";
+
+function unstick(list: CheckSheet[], inFlight: Set<string>): CheckSheet[] {
+  const now = Date.now();
+  let changed = false;
+  const out = list.map(s => {
+    if (s.status === "checking" && !inFlight.has(s.id) && now - Date.parse(s.updated_at) > STUCK_AFTER_MS) {
+      changed = true;
+      return { ...s, status: "failed" as SheetStatus, error: STUCK_MESSAGE };
+    }
+    return s;
+  });
+  return changed ? out : list;
+}
+
+/** Blind grading is a per-session, per-browser preference (UI only — names are still saved). */
+const blindKey = (sessionId: string) => `a4ai.checker.blind.${sessionId}`;
+function readBlind(sessionId: string): boolean {
+  try { return localStorage.getItem(blindKey(sessionId)) === "1"; } catch { return false; }
+}
+
+export default function CheckSessionView({ sessionId, startWithPicker, onBack }: {
+  sessionId: string;
+  /** just created with a class → open the student picker once, everyone ticked */
+  startWithPicker?: boolean;
+  onBack: () => void;
+}) {
   const { user } = useAuth();
+  const scope = useMyScope();
+  /** Institute teacher with assigned classes → students are picked from those classes. */
+  const usePicker = !scope.loading && scope.batches.length > 0;
+  const [picking, setPicking] = useState(false);
+  const { ask, dialog } = useConfirm();
+  const [pickAll, setPickAll] = useState(false);
+  const autoPicked = useRef(false);
   const [session, setSession] = useState<CheckSession | null>(null);
   const [sheets, setSheets] = useState<CheckSheet[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   const [showScheme, setShowScheme] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [blind, setBlind] = useState(() => readBlind(sessionId));
+
+  function toggleBlind() {
+    const next = !blind;
+    setBlind(next);
+    try { localStorage.setItem(blindKey(sessionId), next ? "1" : "0"); } catch { /* private mode: not remembered */ }
+  }
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newRoll, setNewRoll] = useState("");
   const [rubricBusy, setRubricBusy] = useState(false);
+
+  /** copies whose check request is running in THIS tab (never treated as stuck) */
+  const inFlight = useRef<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     const [{ data: s }, { data: sh }] = await Promise.all([
@@ -45,11 +101,25 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
       supabase.from("check_sheets").select("*").eq("session_id", sessionId).order("roll_no", { nullsFirst: false }).order("created_at"),
     ]);
     setSession(s as CheckSession);
-    setSheets((sh || []) as CheckSheet[]);
+    setSheets(unstick((sh || []) as CheckSheet[], inFlight.current));
     setLoading(false);
   }, [sessionId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // a copy that gets stuck while the page is open (checked from another tab/device) is released too
+  useEffect(() => {
+    const t = setInterval(() => setSheets(prev => unstick(prev, inFlight.current)), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (startWithPicker && usePicker && !loading && !autoPicked.current) {
+      autoPicked.current = true;
+      setPickAll(true);
+      setPicking(true);
+    }
+  }, [startWithPicker, usePicker, loading]);
 
   const patchSheet = (id: string, fields: Partial<CheckSheet>) =>
     setSheets(prev => prev.map(s => s.id === id ? { ...s, ...fields } : s));
@@ -61,16 +131,31 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     while (running.current < PARALLEL && queue.current.length) {
       const id = queue.current.shift()!;
       running.current++;
+      inFlight.current.add(id);
       patchSheet(id, { status: "checking", error: null });
       checkSheet(id)
         .then(({ sheet }) => patchSheet(id, sheet))
         .catch((e: Error) => {
-          patchSheet(id, { status: "failed", error: e.message });
+          patchSheet(id, { status: "failed", error: humanError(e) });
           if (/daily limit|session expired/i.test(e.message)) { queue.current = []; toast.error(e.message); }
         })
-        .finally(() => { running.current--; pump(); });
+        .finally(() => { running.current--; inFlight.current.delete(id); pump(); });
     }
   }, []);
+  // Closing / reloading the tab while copies are queued or checking stops the queue (it runs in this
+  // page) — ask first. Browsers show their own text; the message is for those that still use it.
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (running.current === 0 && queue.current.length === 0) return;
+      const msg = "Copies check ho rahi hain, page band karne se checking ruk jayegi.";
+      e.preventDefault();
+      e.returnValue = msg;
+      return msg;
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
   const enqueue = useCallback((ids: string[]) => {
     const fresh = ids.filter(id => !queue.current.includes(id));
     queue.current.push(...fresh);
@@ -84,8 +169,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
       const r = await buildRubric(sessionId, true);
       setSession(s => s && { ...s, rubric: r.full_rubric, rubric_status: "ready", rubric_error: null, total_marks: r.rubric.total_marks });
     } catch (e: any) {
-      setSession(s => s && { ...s, rubric_status: "failed", rubric_error: e.message });
-      toast.error(e.message);
+      setSession(s => s && { ...s, rubric_status: "failed", rubric_error: humanError(e) }); // banner only, no toast
     }
     setRubricBusy(false);
   }
@@ -95,7 +179,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     const { data, error } = await supabase.from("check_sheets")
       .insert({ session_id: sessionId, student_name: newName.trim().slice(0, 120), roll_no: newRoll.trim() || null })
       .select("*").single();
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     setSheets(prev => [...prev, data as CheckSheet]);
     setNewName(""); setNewRoll("");
     setOpenId((data as CheckSheet).id);   // straight to the camera
@@ -105,21 +189,47 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
   async function approveAllClean() {
     const clean = sheets.filter(s => s.status === "checked" && s.ai_result && !(s.ai_result.needs_review_count || 0));
     if (!clean.length) return toast.info("No checked copies without review flags.");
-    if (!confirm(`Approve AI marks for ${clean.length} student(s)?`)) return;
+    if (!(await ask({
+      title: `Approve AI marks for ${clean.length} student${clean.length > 1 ? "s" : ""}?`,
+      description: "Only copies without review flags are approved. You can still change marks afterwards.",
+      confirmLabel: "Approve",
+    }))) return;
     const now = new Date().toISOString();
     const res = await Promise.all(clean.map(s => supabase.from("check_sheets").update({
-      status: "approved", final_marks: s.ai_marks, feedback: feedbackFromAi(s.ai_result!), approved_at: now, updated_at: now,
+      status: "approved", final_marks: effectiveTotal(s.ai_result!), feedback: feedbackFromAi(s.ai_result!), approved_at: now, updated_at: now,
     }).eq("id", s.id)));
     const failed = res.filter(r => r.error).length;
     if (failed) toast.error(`${failed} could not be saved`); else toast.success(`${clean.length} approved`);
     load();
   }
 
+  async function exportResults() {
+    if (!session) return;
+    const withResult = sheets.filter(s => s.ai_result);
+    if (!withResult.length) return toast.info("No checked copies to export yet.");
+    const notApproved = withResult.filter(s => s.status !== "approved").length;
+    if (notApproved && !(await ask({
+      title: "Export with unapproved copies?",
+      description: `${notApproved} checked ${notApproved > 1 ? "copies are" : "copy is"} not approved yet — their AI marks will be exported.`,
+      confirmLabel: "Export anyway",
+    }))) return;
+    try {
+      await exportSessionResults(session, sheets);
+    } catch (e: any) {
+      toast.error(`Export failed: ${humanError(e)}`);
+    }
+  }
+
   async function deleteSession() {
-    if (!session || !confirm(`Delete “${session.title}” and all its photos? This cannot be undone.`)) return;
+    if (!session || !(await ask({
+      title: `Delete “${session.title}”?`,
+      description: "All students, marks and photos in this check are deleted. This cannot be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    }))) return;
     await removeFiles([...session.qp_paths, ...session.key_paths, ...sheets.flatMap(s => s.pages)]).catch(() => {});
     const { error } = await supabase.from("check_sessions").delete().eq("id", sessionId);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     toast.success("Deleted");
     onBack();
   }
@@ -133,6 +243,11 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     checking: sheets.filter(s => s.status === "checking").length,
     clean: sheets.filter(s => s.status === "checked" && !(s.ai_result?.needs_review_count || 0)).length,
   }), [sheets]);
+
+  /** Name as shown in this view: "Student N" (position in the class list) while blind grading is on. */
+  const nameOf = (s: CheckSheet) => blind ? `Student ${sheets.findIndex(x => x.id === s.id) + 1}` : s.student_name;
+
+  const hasResults = sheets.some(s => !!s.ai_result);
 
   const visible = sheets.filter(s =>
     filter === "all" ? true
@@ -148,20 +263,42 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-32">
+      {dialog}
       {/* Header */}
       <div className="flex items-start gap-3">
-        <button onClick={onBack} className="h-10 w-10 shrink-0 rounded-full bg-white border border-gray-200 text-gray-600 font-bold">←</button>
+        <button onClick={onBack} className="h-10 w-10 shrink-0 rounded-full bg-white border border-gray-200 text-gray-600 font-bold flex items-center justify-center" aria-label="Back"><ArrowLeft size={18} /></button>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-black text-gray-900 leading-tight truncate">{session.title}</h2>
           <p className="text-xs text-gray-500">
             {[session.total_marks && `${session.total_marks} marks`, STRICTNESS_LABEL[session.strictness], session.source === "test" ? "From Test History" : "From photos"].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <button onClick={deleteSession} className="text-xs font-bold text-red-500 px-2 py-2">Delete</button>
+        {/* title on a wrapper: disabled buttons get no hover tooltip in some browsers */}
+        <span title={hasResults ? "Download results as Excel" : "Pehle kam se kam ek copy check karein"}>
+          <button onClick={exportResults} disabled={!hasResults}
+            className="text-xs font-bold text-gray-700 px-2 py-2 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"><Download size={14} /> Export Results</button>
+        </span>
+        {/* rare + destructive → behind "⋯". modal={false} and the setTimeout let the menu close before the
+            confirm dialog opens (otherwise Radix can leave focus / pointer-events stuck). */}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button aria-label="More actions" className="h-10 w-10 shrink-0 rounded-full bg-white border border-gray-200 text-gray-600 flex items-center justify-center">
+              <MoreHorizontal size={18} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setTimeout(() => { void deleteSession(); }, 0)} className="text-red-600 focus:text-red-700 gap-2">
+              <Trash2 size={14} /> Delete check
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
+      {/* What to do next */}
+      <CheckSteps step={currentStep(rubricReady, sheets)} />
+
       {/* Marking scheme status */}
-      <div className={`rounded-2xl border p-4 ${session.rubric_status === "failed" ? "bg-red-50 border-red-200" : rubricReady ? "bg-white border-gray-200" : "bg-violet-50 border-violet-200"}`}>
+      <div className={`rounded-2xl border p-4 ${session.rubric_status === "failed" ? "bg-red-50 border-red-200" : rubricReady ? "bg-white border-gray-200" : "bg-emerald-50 border-emerald-200"}`}>
         {session.rubric_status === "failed" ? (
           <div className="flex items-center gap-3">
             <p className="flex-1 text-sm text-red-700"><b>Marking scheme failed.</b> {session.rubric_error}</p>
@@ -169,18 +306,18 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
           </div>
         ) : !rubricReady ? (
           <div className="flex items-center gap-3">
-            <p className="flex-1 text-sm text-violet-700">Marking scheme not ready yet.</p>
-            <button disabled={rubricBusy} onClick={retryRubric} className="px-4 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold">
+            <p className="flex-1 text-sm text-emerald-900">Marking scheme not ready yet.</p>
+            <button disabled={rubricBusy} onClick={retryRubric} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-60">
               {rubricBusy ? "Preparing…" : "Prepare"}
             </button>
           </div>
         ) : (
           <>
             <button className="w-full flex items-center justify-between" onClick={() => setShowScheme(v => !v)}>
-              <span className="text-sm font-bold text-gray-800">📋 Marking scheme · {session.rubric!.total_questions} questions · {session.rubric!.total_marks} marks</span>
-              <span className="text-gray-400 text-sm">{showScheme ? "▴" : "▾"}</span>
+              <span className="text-sm font-bold text-gray-800 inline-flex items-center gap-1.5"><ClipboardList size={16} className="text-gray-500" /> Marking scheme · {session.rubric!.total_questions} questions · {session.rubric!.total_marks} marks</span>
+              <span className="text-gray-400 text-sm">{showScheme ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
             </button>
-            {session.rubric!.marks_mismatch && <p className="mt-2 text-xs text-amber-700">⚠ {session.rubric!.marks_mismatch}</p>}
+            {session.rubric!.marks_mismatch && <p className="mt-2 text-xs text-amber-700 flex items-start gap-1"><AlertTriangle size={13} className="mt-0.5 shrink-0" /> {session.rubric!.marks_mismatch}</p>}
             {session.rubric!.questions.some(q => q.scheme_source === "estimated") && (
               <p className="mt-2 text-xs text-amber-700">Some marks splits were estimated by AI — open the scheme to check them.</p>
             )}
@@ -204,6 +341,28 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
         ))}
       </div>
 
+      {/* Class analytics — once at least 2 copies are approved */}
+      {counts.done >= 2 && (
+        <div className="rounded-2xl bg-white border border-gray-200 p-4">
+          <button className="w-full flex items-center justify-between" onClick={() => setShowAnalytics(v => !v)}>
+            <span className="text-sm font-bold text-gray-800 inline-flex items-center gap-1.5"><BarChart3 size={16} className="text-gray-500" /> Class analytics · {counts.done} approved</span>
+            <span className="text-gray-400 text-sm">{showAnalytics ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+          </button>
+          {showAnalytics && (
+            <CheckSessionAnalytics session={session} sheets={sheets} nameOf={nameOf} onOpen={setOpenId} />
+          )}
+        </div>
+      )}
+
+      {/* Blind grading */}
+      <label className="flex items-center justify-between gap-3 rounded-2xl bg-white border border-gray-200 px-4 py-3 cursor-pointer">
+        <span>
+          <span className="flex items-center gap-1.5 text-sm font-bold text-gray-800"><EyeOff size={15} className="text-gray-500" /> Hide student names during review</span>
+          <span className="block text-[11px] text-gray-400">Shows "Student 1, 2…" here only — names stay saved and appear in the Excel export.</span>
+        </span>
+        <input type="checkbox" checked={blind} onChange={toggleBlind} className="h-5 w-5 accent-gray-900 shrink-0" />
+      </label>
+
       {/* Filters */}
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
         {([["all", `All ${counts.total}`], ["todo", `To upload ${counts.todo + counts.uploaded}`], ["review", `To review ${counts.review}`], ["done", `Approved ${counts.done}`]] as [Filter, string][]).map(([k, l]) => (
@@ -222,25 +381,47 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
         {visible.map(s => (
           <button key={s.id} onClick={() => setOpenId(s.id)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-gray-50">
             <div className="h-10 w-10 shrink-0 rounded-xl bg-gray-100 flex items-center justify-center font-black text-gray-500 text-sm">
-              {s.roll_no || (s.student_name[0] || "?").toUpperCase()}
+              {blind ? sheets.findIndex(x => x.id === s.id) + 1 : s.roll_no || (s.student_name[0] || "?").toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-gray-900 truncate">{s.student_name}</p>
+              <p className="text-sm font-bold text-gray-900 truncate">{nameOf(s)}</p>
               <p className="text-xs text-gray-400">
                 {s.pages.length ? `${s.pages.length} page${s.pages.length > 1 ? "s" : ""}` : "No pages yet"}
                 {s.status === "checked" && (s.ai_result?.needs_review_count || 0) > 0 && <span className="text-orange-600"> · {s.ai_result!.needs_review_count} to review</span>}
               </p>
             </div>
             {(s.status === "checked" || s.status === "approved") && (
-              <span className="text-sm font-black text-gray-900">{s.status === "approved" ? s.final_marks : s.ai_marks}<span className="text-gray-400 font-bold text-xs">/{s.max_marks}</span></span>
+              <span className="text-sm font-black text-gray-900">{s.status === "approved" ? s.final_marks : s.ai_result ? effectiveTotal(s.ai_result) : s.ai_marks}<span className="text-gray-400 font-bold text-xs">/{s.max_marks}</span></span>
             )}
             <span className={`shrink-0 text-[11px] font-bold px-2 py-1 rounded-lg ${STATUS[s.status].cls}`}>{STATUS[s.status].label}</span>
           </button>
         ))}
       </div>
 
-      {/* Add student */}
-      {adding ? (
+      {/* Add students — institute teachers pick from their own classes */}
+      {usePicker && (
+        <button onClick={() => setPicking(true)} className="w-full py-3.5 rounded-2xl border-2 border-dashed border-gray-300 text-sm font-bold text-gray-600 active:bg-gray-50">
+          + Add students from your class
+        </button>
+      )}
+      {picking && (
+        <StudentPicker
+          session={session}
+          existing={sheets}
+          preselectAll={pickAll}
+          onClose={() => { setPicking(false); setPickAll(false); }}
+          onAdded={(rows, batchId) => {
+            setSheets(prev => [...prev, ...rows]);
+            setSession(s => s && { ...s, batch_id: s.batch_id || batchId });
+            setPicking(false);
+            setPickAll(false);
+            toast.success(`${rows.length} student${rows.length > 1 ? "s" : ""} added`);
+          }}
+        />
+      )}
+
+      {/* Add student by name — only teachers without institute classes (individual teachers) */}
+      {scope.loading || usePicker ? null : adding ? (
         <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-2">
           <div className="grid grid-cols-[1fr_90px] gap-2">
             <input autoFocus value={newName} onChange={e => setNewName(e.target.value)} placeholder="Student name"
@@ -265,13 +446,13 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
           <div className="max-w-2xl mx-auto flex gap-2">
             {counts.uploaded > 0 && (
               <button disabled={!rubricReady} onClick={() => enqueue(sheets.filter(s => s.status === "uploaded").map(s => s.id))}
-                className="flex-1 py-3.5 rounded-2xl bg-violet-600 text-white text-sm font-black disabled:bg-gray-300">
-                ✨ Check {counts.uploaded} uploaded
+                className="flex-1 py-3.5 rounded-2xl bg-gray-900 text-white text-sm font-black disabled:bg-gray-300">
+                <span className="inline-flex items-center justify-center gap-1.5"><ScanSearch size={16} /> Check {counts.uploaded} uploaded</span>
               </button>
             )}
             {counts.clean > 0 && (
               <button onClick={approveAllClean} className="flex-1 py-3.5 rounded-2xl bg-emerald-600 text-white text-sm font-black">
-                ✓ Approve {counts.clean} clean
+                <span className="inline-flex items-center justify-center gap-1.5"><Check size={16} /> Approve {counts.clean} clean</span>
               </button>
             )}
           </div>
@@ -282,6 +463,8 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
         <StudentCopy
           key={open.id}
           sheet={open}
+          displayName={nameOf(open)}
+          blind={blind}
           session={session}
           userId={user.id}
           canCheck={rubricReady}
@@ -328,8 +511,8 @@ function SchemeList({ session }: { session: CheckSession }) {
 }
 
 /* ── One student's copy: camera → pages → check → review → approve ── */
-function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPrev, onNext, onChange, onCheck, onDeleted }: {
-  sheet: CheckSheet; session: CheckSession; userId: string; canCheck: boolean; position: string;
+function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, position, onClose, onPrev, onNext, onChange, onCheck, onDeleted }: {
+  sheet: CheckSheet; displayName: string; blind: boolean; session: CheckSession; userId: string; canCheck: boolean; position: string;
   onClose: () => void; onPrev?: () => void; onNext?: () => void;
   onChange: (f: Partial<CheckSheet>) => void; onCheck: () => void; onDeleted: () => void;
 }) {
@@ -337,10 +520,11 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
   const pick = useRef<HTMLInputElement>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(0);
-  const [marks, setMarks] = useState<string>(String(sheet.final_marks ?? sheet.ai_marks ?? ""));
+  const [marks, setMarks] = useState<string>(String(sheet.final_marks ?? (sheet.ai_result ? effectiveTotal(sheet.ai_result) : sheet.ai_marks) ?? ""));
   const [feedback, setFeedback] = useState(sheet.feedback || (sheet.ai_result ? feedbackFromAi(sheet.ai_result) : ""));
   const [saving, setSaving] = useState(false);
   const [viewer, setViewer] = useState<string | null>(null);
+  const { ask, dialog } = useConfirm();
 
   useEffect(() => {
     const missing = sheet.pages.filter(p => !urls[p] && !p.endsWith(".pdf"));
@@ -350,12 +534,23 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
 
   useEffect(() => {   // AI result arrived while open → prefill
     if (sheet.status === "checked" && sheet.ai_result) {
-      setMarks(String(sheet.ai_marks ?? ""));
+      setMarks(String(effectiveTotal(sheet.ai_result)));
       setFeedback(feedbackFromAi(sheet.ai_result));
     }
-  }, [sheet.status, sheet.ai_result, sheet.ai_marks]);
+  }, [sheet.status, sheet.ai_result]);
+
+  /** ✎ on a question: backend saves it (audit-logged); the total and untouched feedback follow. */
+  async function overrideQuestion(qNo: string, m: number, note: string) {
+    const before = sheet.ai_result;
+    const { sheet: s } = await overrideMarks(sheet.id, qNo, m, note);
+    if (before && feedback === feedbackFromAi(before) && s.ai_result) setFeedback(feedbackFromAi(s.ai_result));
+    onChange({ ai_result: s.ai_result, final_marks: s.final_marks, status: s.status });
+    if (s.ai_result) setMarks(String(effectiveTotal(s.ai_result)));
+  }
 
   const locked = sheet.status === "checking";
+  const imagePages = sheet.pages.filter(p => !p.endsWith(".pdf") && urls[p]);
+  const viewerIndex = viewer ? imagePages.indexOf(viewer) : -1;
 
   async function addPages(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -376,7 +571,7 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
         if (error) throw error;
         onChange({ pages, status });
       } catch (err: any) {
-        toast.error(err.message || "Upload failed");
+        toast.error(humanError(err, "Upload failed"));
       }
       setUploading(n => n - 1);
     }
@@ -386,7 +581,7 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
     const pages = sheet.pages.filter(p => p !== path);
     const status: SheetStatus = pages.length ? (sheet.status === "pending" ? "uploaded" : sheet.status) : "pending";
     const { error } = await supabase.from("check_sheets").update({ pages, status }).eq("id", sheet.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     removeFiles([path]).catch(() => {});
     onChange({ pages, status });
   }
@@ -409,52 +604,64 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
       status: "approved", final_marks: m, feedback: feedback.trim() || null, approved_at: now, updated_at: now,
     }).eq("id", sheet.id);
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     onChange({ status: "approved", final_marks: m, feedback: feedback.trim() || null });
-    toast.success(`${sheet.student_name}: ${m}/${sheet.max_marks}`);
+    toast.success(`${displayName}: ${m}/${sheet.max_marks}`);
     if (onNext) onNext();
   }
 
   async function deleteStudent() {
-    if (!confirm(`Remove ${sheet.student_name} from this check?`)) return;
+    if (!(await ask({
+      title: `Remove ${displayName} from this check?`,
+      description: "Their photos and marks in this check are deleted.",
+      confirmLabel: "Remove",
+      destructive: true,
+    }))) return;
     await removeFiles(sheet.pages).catch(() => {});
     const { error } = await supabase.from("check_sheets").delete().eq("id", sheet.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     onDeleted();
   }
 
   const r = sheet.ai_result;
 
   return (
+    <>
+    {/* outside the overlay: portal clicks bubble through React, and the overlay closes the copy on click */}
+    {dialog}
     <div className="fixed inset-0 z-[60] bg-black/40 flex sm:items-center sm:justify-center" onClick={onClose}>
-      <div className="bg-[#F9FAFB] w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-xl sm:rounded-3xl overflow-y-auto" onClick={e => e.stopPropagation()}>
+      {/* Phone: one scrolling column. Desktop (md+): scan on the left (40%), AI result on the right (60%), each scrolls on its own. */}
+      <div className="bg-[#F9FAFB] w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-xl sm:rounded-3xl overflow-y-auto md:max-w-6xl md:h-[92vh] md:max-h-none md:overflow-hidden md:flex md:flex-col" onClick={e => e.stopPropagation()}>
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 py-2.5 flex items-center gap-2">
-          <button onClick={onClose} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600">✕</button>
+          <button onClick={onClose} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 flex items-center justify-center" aria-label="Close"><X size={18} /></button>
           <div className="min-w-0 flex-1 text-center">
-            <p className="text-sm font-black text-gray-900 truncate">{sheet.student_name}</p>
-            <p className="text-[11px] text-gray-400">{sheet.roll_no ? `Roll ${sheet.roll_no} · ` : ""}{position}</p>
+            <p className="text-sm font-black text-gray-900 truncate">{displayName}</p>
+            <p className="text-[11px] text-gray-400">{sheet.roll_no && !blind ? `Roll ${sheet.roll_no} · ` : ""}{position}</p>
           </div>
-          <button disabled={!onPrev} onClick={onPrev} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30">‹</button>
-          <button disabled={!onNext} onClick={onNext} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30">›</button>
+          <button disabled={!onPrev} onClick={onPrev} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30 flex items-center justify-center" aria-label="Previous student"><ChevronLeft size={18} /></button>
+          <button disabled={!onNext} onClick={onNext} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30 flex items-center justify-center" aria-label="Next student"><ChevronRight size={18} /></button>
         </div>
 
-        <div className="p-4 space-y-4 pb-32">
+        <div className="md:flex-1 md:min-h-0 md:grid md:grid-cols-[2fr_3fr]">
+        {/* Left: the scanned copy (+ its own lightbox on desktop) */}
+        <div className="relative md:min-h-0 md:border-r md:border-gray-200">
+        <div className="p-4 pb-0 md:pb-4 md:h-full md:overflow-y-auto">
           {/* Pages */}
           <div>
             <p className="text-[11px] font-black uppercase tracking-wider text-gray-400 mb-2">
               Copy · {sheet.pages.length} page{sheet.pages.length === 1 ? "" : "s"}{uploading > 0 && ` · uploading ${uploading}…`}
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 md:grid-cols-2 gap-2">
               {sheet.pages.map((p, i) => (
                 <div key={p} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gray-200 border border-gray-200">
                   {p.endsWith(".pdf")
-                    ? <div className="h-full flex items-center justify-center text-3xl">📄</div>
-                    : urls[p] ? <img src={urls[p]} alt={`Page ${i + 1}`} className="h-full w-full object-cover" onClick={() => setViewer(urls[p])} />
+                    ? <div className="h-full flex items-center justify-center text-gray-400"><FileText size={32} /></div>
+                    : urls[p] ? <img src={urls[p]} alt={`Page ${i + 1}`} className="h-full w-full object-cover cursor-zoom-in" onClick={() => setViewer(p)} />
                     : <div className="h-full flex items-center justify-center text-xs text-gray-400">…</div>}
                   <span className="absolute bottom-1 left-1 text-[10px] font-black bg-black/60 text-white rounded px-1.5">{i + 1}</span>
                   {!locked && (
-                    <button onClick={() => removePage(p)} className="absolute top-1 right-1 h-7 w-7 rounded-full bg-black/60 text-white text-xs font-bold">✕</button>
+                    <button onClick={() => removePage(p)} className="absolute top-1 right-1 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center" aria-label="Remove page"><X size={14} /></button>
                   )}
                 </div>
               ))}
@@ -468,12 +675,12 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button onClick={() => cam.current?.click()}
                   className="py-4 rounded-2xl bg-[#111827] text-white flex flex-col items-center justify-center active:scale-[0.98]">
-                  <span className="text-2xl">📷</span>
+                  <Camera size={24} />
                   <span className="text-xs font-bold mt-1">{sheet.pages.length ? "Take next page" : "Take photo"}</span>
                 </button>
                 <button onClick={() => pick.current?.click()}
                   className="py-4 rounded-2xl bg-white border-2 border-gray-200 text-gray-800 flex flex-col items-center justify-center active:scale-[0.98]">
-                  <span className="text-2xl">📄</span>
+                  <FileUp size={24} />
                   <span className="text-xs font-bold mt-1">Upload PDF / images</span>
                 </button>
               </div>
@@ -481,11 +688,37 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
             <input ref={cam} type="file" accept="image/*" capture="environment" className="hidden" onChange={addPages} />
             <input ref={pick} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={addPages} />
           </div>
+        </div>
 
+          {/* Page viewer: full screen on phones, inside the left panel on desktop (the result stays visible) */}
+          {viewer && urls[viewer] && (
+            <div className="fixed inset-0 z-[70] bg-black flex items-center justify-center md:absolute md:z-20 md:bg-black/90"
+              onClick={e => { e.stopPropagation(); setViewer(null); }}>
+              <img src={urls[viewer]} alt="Page" className="max-h-full max-w-full object-contain" />
+              <div className="absolute top-3 inset-x-3 flex items-center justify-between" onClick={e => e.stopPropagation()}>
+                <span className="text-xs font-bold text-white bg-black/60 rounded-full px-3 py-1.5">
+                  Page {viewerIndex + 1} / {imagePages.length}
+                </span>
+                <button onClick={() => setViewer(null)} className="h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center" aria-label="Close"><X size={16} /></button>
+              </div>
+              {viewerIndex > 0 && (
+                <button onClick={e => { e.stopPropagation(); setViewer(imagePages[viewerIndex - 1]); }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/60 text-white flex items-center justify-center" aria-label="Previous page"><ChevronLeft size={22} /></button>
+              )}
+              {viewerIndex < imagePages.length - 1 && (
+                <button onClick={e => { e.stopPropagation(); setViewer(imagePages[viewerIndex + 1]); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/60 text-white flex items-center justify-center" aria-label="Next page"><ChevronRight size={22} /></button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right: AI result, marks, feedback */}
+        <div className="p-4 space-y-4 pb-32 md:pb-6 md:min-h-0 md:overflow-y-auto">
           {/* Status / result */}
           {sheet.status === "checking" && (
-            <div className="rounded-2xl bg-violet-50 border border-violet-200 p-4 text-sm text-violet-700 flex items-center gap-3">
-              <span className="inline-block h-5 w-5 rounded-full border-2 border-violet-300 border-t-violet-600 animate-spin" />
+            <div className="rounded-2xl bg-sky-50 border border-sky-200 p-4 text-sm text-sky-800 flex items-center gap-3">
+              <span className="inline-block h-5 w-5 rounded-full border-2 border-sky-300 border-t-sky-600 animate-spin" />
               AI is checking this copy… you can move to the next student.
             </div>
           )}
@@ -499,18 +732,20 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
           {r && (sheet.status === "checked" || sheet.status === "approved") && (
             <>
               <div className="rounded-2xl bg-white border border-gray-200 p-4">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-black text-gray-900">{r.total_marks_awarded}</span>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-3xl font-black text-gray-900">{effectiveTotal(r)}</span>
                   <span className="text-gray-400 font-bold">/ {r.max_marks}</span>
-                  <span className="text-sm font-bold text-gray-500">AI · {r.percentage}%</span>
+                  {r.teacher_total != null
+                    ? <span className="text-sm font-bold text-blue-700">with your changes · AI gave {r.total_marks_awarded}</span>
+                    : <span className="text-sm font-bold text-gray-500">AI · {r.percentage}%</span>}
                 </div>
                 {r.overall_remarks && <p className="text-xs text-gray-600 mt-1">{r.overall_remarks}</p>}
                 {(r.needs_review_count || 0) > 0 && (
-                  <p className="text-xs text-orange-600 font-bold mt-2">👀 {r.needs_review_count} answer(s) marked “Review” — please look before approving.</p>
+                  <p className="text-xs text-orange-600 font-bold mt-2 flex items-center gap-1.5"><Eye size={14} /> {r.needs_review_count} answer(s) marked “Review” — please look before approving.</p>
                 )}
               </div>
               <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
-                <AiQuestionList questions={r.graded_questions || []} />
+                <AiQuestionList questions={r.graded_questions || []} onOverride={overrideQuestion} />
               </div>
               <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-2">
                 <label className="text-xs font-bold text-gray-500">Final marks (edit if needed)</label>
@@ -525,12 +760,13 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
 
           <button onClick={deleteStudent} className="text-xs font-bold text-red-500">Remove student from this check</button>
         </div>
+        </div>
 
         {/* Bottom action */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
           {sheet.status === "checked" ? (
             <button onClick={approve} disabled={saving} className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm">
-              {saving ? "Saving…" : `✓ Approve ${marks || 0}/${sheet.max_marks}${onNext ? " & next" : ""}`}
+              {saving ? "Saving…" : <span className="inline-flex items-center justify-center gap-1.5"><Check size={16} /> {`Approve ${marks || 0}/${sheet.max_marks}${onNext ? " & next" : ""}`}</span>}
             </button>
           ) : sheet.status === "approved" ? (
             <button onClick={approve} disabled={saving} className="w-full py-4 rounded-2xl bg-gray-900 text-white font-black text-sm">
@@ -539,22 +775,18 @@ function StudentCopy({ sheet, session, userId, canCheck, position, onClose, onPr
           ) : sheet.status === "failed" ? (
             <button onClick={onCheck} disabled={uploading > 0 || sheet.pages.length === 0}
               className="w-full py-4 rounded-2xl bg-red-600 text-white font-black text-sm disabled:bg-gray-300">
-              ↻ Retry check
+              <span className="inline-flex items-center justify-center gap-1.5"><RotateCw size={15} /> Retry check</span>
             </button>
           ) : (
             <button onClick={doneAndNext} disabled={locked || uploading > 0 || sheet.pages.length === 0}
               className="w-full py-4 rounded-2xl bg-[#111827] text-white font-black text-sm disabled:bg-gray-300">
-              {uploading > 0 ? "Uploading…" : sheet.status === "uploaded" || sheet.status === "pending" ? `✨ Done — check this copy${onNext ? " & next" : ""}` : "Checking…"}
+              {uploading > 0 ? "Uploading…" : sheet.status === "uploaded" || sheet.status === "pending" ? `Done — check this copy${onNext ? " & next" : ""}` : "Checking…"}
             </button>
           )}
         </div>
       </div>
 
-      {viewer && (
-        <div className="fixed inset-0 z-[70] bg-black flex items-center justify-center" onClick={e => { e.stopPropagation(); setViewer(null); }}>
-          <img src={viewer} alt="Page" className="max-h-full max-w-full object-contain" />
-        </div>
-      )}
     </div>
+    </>
   );
 }

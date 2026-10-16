@@ -1,5 +1,6 @@
 // src/pages/TestGeneratorPage.tsx
 import React, { useState } from "react";
+import { BookOpen, ClipboardCheck, Wand2, type LucideIcon } from "lucide-react";
 import { ChevronLeft } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import TestGeneratorForm from "@/components/TestGeneratorForm";
@@ -54,7 +55,9 @@ export default function TestGeneratorPage() {
       </div>
 
       {/* TOP HEADER */}
-      <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl sm:backdrop-blur-2xl border-b border-white/60 shadow-[0_2px_18px_rgba(0,0,0,0.04)]">
+      {/* Solid background: lite mode (src/styles/lite.css) turns backdrop blur off, and a see-through header let the
+          tabs show through it while scrolling. */}
+      <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-200 shadow-[0_2px_18px_rgba(0,0,0,0.04)]">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 h-13 sm:h-16 md:h-20 flex items-center justify-between">
 
           {/* LEFT */}
@@ -119,10 +122,10 @@ export default function TestGeneratorPage() {
         {/* TABS */}
         <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-1 px-1">
           {([
-            ["ai", "✨ AI Generator"],
-            ["builder", "📚 NCERT Test Builder"],
-            ["check", "✅ Check Copies"],
-          ] as [Tab, string][]).map(([k, label]) => (
+            ["ai", "AI Generator", Wand2],
+            ["builder", "NCERT Test Builder", BookOpen],
+            ["check", "Check Copies", ClipboardCheck],
+          ] as [Tab, string, LucideIcon][]).map(([k, label, Icon]) => (
             <button
               key={k}
               onClick={() => setActiveTab(k)}
@@ -132,7 +135,7 @@ export default function TestGeneratorPage() {
                   : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400"
               }`}
             >
-              {label}
+              <span className="inline-flex items-center gap-1.5"><Icon size={15} /> {label}</span>
             </button>
           ))}
         </div>
