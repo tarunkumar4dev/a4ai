@@ -10,6 +10,17 @@ import { useMyScope } from "@/hooks/useMyScope";
 import { humanError } from "./checkerFetch";
 import { buildRubric, uploadPage, MAX_PAGES, STRICTNESS_LABEL, type Strictness } from "./copyCheckerApi";
 
+/** A usable check name from a question-paper file, or "" for camera / chat names like IMG_2031.jpg. */
+export function titleFromFile(file?: File): string {
+  if (!file) return "";
+  const base = file.name.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[_\-.]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!base || /^(img|pxl|dsc|dcim|screenshot|whatsapp image|image|photo|scan|scanned|cam|document)\b/i.test(base)) return "";
+  if ((base.match(/[a-z]/gi) || []).length < 3) return "";   // mostly digits / dates
+  return base.slice(0, 80);
+}
+
+const todayLabel = () => new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+
 type SavedTest = { id: string; exam_title: string | null; subject: string | null; class_grade: string | null; total_marks: number | null; created_at: string; usable?: boolean };
 
 export default function NewCheckSession({ initialTestId, onCreated, onCancel }: {
@@ -27,6 +38,8 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
   const [qpFiles, setQpFiles] = useState<File[]>([]);
   const [keyFiles, setKeyFiles] = useState<File[]>([]);
   const [title, setTitle] = useState("");
+  /** once the teacher types a name, we stop auto-filling it */
+  const [titleEdited, setTitleEdited] = useState(false);
   const [batchId, setBatchId] = useState("");
   const [strictness, setStrictness] = useState<Strictness>("medium");
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,10 +73,15 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
   }, [user, initialTestId]);
 
   const chosenTest = tests.find(t => t.id === testId);
+  // Name of the check = the paper's name, kept in sync until the teacher edits it.
   useEffect(() => {
-    if (chosenTest && !title) setTitle(chosenTest.exam_title || `${chosenTest.subject || "Test"} ${chosenTest.class_grade || ""}`.trim());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chosenTest]);
+    if (titleEdited) return;
+    if (source === "test") {
+      setTitle(chosenTest ? (chosenTest.exam_title || `${chosenTest.subject || "Test"} ${chosenTest.class_grade || ""}`.trim()) : "");
+    } else {
+      setTitle(qpFiles.length ? (titleFromFile(qpFiles[0]) || `Check – ${todayLabel()}`) : "");
+    }
+  }, [source, chosenTest, qpFiles, titleEdited]);
 
   const addFiles = (setter: React.Dispatch<React.SetStateAction<File[]>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -198,7 +216,7 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
         <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
           <div>
             <label className="text-xs font-bold text-gray-500">Name of this check</label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Unit Test 2 – Science"
+            <input value={title} onChange={e => { setTitle(e.target.value); setTitleEdited(true); }} placeholder="e.g. Unit Test 2 – Science"
               className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300" />
           </div>
           {scope.batches.length > 0 && (
