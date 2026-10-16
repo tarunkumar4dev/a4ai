@@ -18,6 +18,7 @@ import { humanError } from "./checkerFetch";
 import CheckSessionAnalytics from "./CheckSessionAnalytics";
 import StudentPicker from "./StudentPicker";
 import CheckSteps, { currentStep } from "./CheckSteps";
+import { useConfirm } from "./useConfirm";
 import { useMyScope } from "@/hooks/useMyScope";
 
 const PARALLEL = 3;
@@ -68,6 +69,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
   /** Institute teacher with assigned classes → students are picked from those classes. */
   const usePicker = !scope.loading && scope.batches.length > 0;
   const [picking, setPicking] = useState(false);
+  const { ask, dialog } = useConfirm();
   const [pickAll, setPickAll] = useState(false);
   const autoPicked = useRef(false);
   const [session, setSession] = useState<CheckSession | null>(null);
@@ -172,7 +174,11 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
   async function approveAllClean() {
     const clean = sheets.filter(s => s.status === "checked" && s.ai_result && !(s.ai_result.needs_review_count || 0));
     if (!clean.length) return toast.info("No checked copies without review flags.");
-    if (!confirm(`Approve AI marks for ${clean.length} student(s)?`)) return;
+    if (!(await ask({
+      title: `Approve AI marks for ${clean.length} student${clean.length > 1 ? "s" : ""}?`,
+      description: "Only copies without review flags are approved. You can still change marks afterwards.",
+      confirmLabel: "Approve",
+    }))) return;
     const now = new Date().toISOString();
     const res = await Promise.all(clean.map(s => supabase.from("check_sheets").update({
       status: "approved", final_marks: effectiveTotal(s.ai_result!), feedback: feedbackFromAi(s.ai_result!), approved_at: now, updated_at: now,
@@ -187,7 +193,11 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
     const withResult = sheets.filter(s => s.ai_result);
     if (!withResult.length) return toast.info("No checked copies to export yet.");
     const notApproved = withResult.filter(s => s.status !== "approved").length;
-    if (notApproved && !confirm(`${notApproved} checked ${notApproved > 1 ? "copies are" : "copy is"} not approved yet — their AI marks will be exported. Export anyway?`)) return;
+    if (notApproved && !(await ask({
+      title: "Export with unapproved copies?",
+      description: `${notApproved} checked ${notApproved > 1 ? "copies are" : "copy is"} not approved yet — their AI marks will be exported.`,
+      confirmLabel: "Export anyway",
+    }))) return;
     try {
       await exportSessionResults(session, sheets);
     } catch (e: any) {
@@ -196,7 +206,12 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
   }
 
   async function deleteSession() {
-    if (!session || !confirm(`Delete “${session.title}” and all its photos? This cannot be undone.`)) return;
+    if (!session || !(await ask({
+      title: `Delete “${session.title}”?`,
+      description: "All students, marks and photos in this check are deleted. This cannot be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    }))) return;
     await removeFiles([...session.qp_paths, ...session.key_paths, ...sheets.flatMap(s => s.pages)]).catch(() => {});
     const { error } = await supabase.from("check_sessions").delete().eq("id", sessionId);
     if (error) return toast.error(humanError(error));
@@ -233,6 +248,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-32">
+      {dialog}
       {/* Header */}
       <div className="flex items-start gap-3">
         <button onClick={onBack} className="h-10 w-10 shrink-0 rounded-full bg-white border border-gray-200 text-gray-600 font-bold flex items-center justify-center" aria-label="Back"><ArrowLeft size={18} /></button>
@@ -480,6 +496,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
   const [feedback, setFeedback] = useState(sheet.feedback || (sheet.ai_result ? feedbackFromAi(sheet.ai_result) : ""));
   const [saving, setSaving] = useState(false);
   const [viewer, setViewer] = useState<string | null>(null);
+  const { ask, dialog } = useConfirm();
 
   useEffect(() => {
     const missing = sheet.pages.filter(p => !urls[p] && !p.endsWith(".pdf"));
@@ -566,7 +583,12 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
   }
 
   async function deleteStudent() {
-    if (!confirm(`Remove ${displayName} from this check?`)) return;
+    if (!(await ask({
+      title: `Remove ${displayName} from this check?`,
+      description: "Their photos and marks in this check are deleted.",
+      confirmLabel: "Remove",
+      destructive: true,
+    }))) return;
     await removeFiles(sheet.pages).catch(() => {});
     const { error } = await supabase.from("check_sheets").delete().eq("id", sheet.id);
     if (error) return toast.error(humanError(error));
@@ -576,6 +598,9 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
   const r = sheet.ai_result;
 
   return (
+    <>
+    {/* outside the overlay: portal clicks bubble through React, and the overlay closes the copy on click */}
+    {dialog}
     <div className="fixed inset-0 z-[60] bg-black/40 flex sm:items-center sm:justify-center" onClick={onClose}>
       {/* Phone: one scrolling column. Desktop (md+): scan on the left (40%), AI result on the right (60%), each scrolls on its own. */}
       <div className="bg-[#F9FAFB] w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-xl sm:rounded-3xl overflow-y-auto md:max-w-6xl md:h-[92vh] md:max-h-none md:overflow-hidden md:flex md:flex-col" onClick={e => e.stopPropagation()}>
@@ -734,5 +759,6 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
       </div>
 
     </div>
+    </>
   );
 }
