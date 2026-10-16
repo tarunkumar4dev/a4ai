@@ -32,6 +32,24 @@ const STATUS: Record<SheetStatus, { label: string; cls: string }> = {
 
 type Filter = "all" | "todo" | "review" | "done";
 
+/** A copy still "checking" this long after it started lost its request (e.g. the 300 s server limit) —
+ *  nothing will finish it, so it is shown as failed with Retry instead of staying locked. */
+const STUCK_AFTER_MS = 6 * 60 * 1000;
+const STUCK_MESSAGE = "Checking took too long and stopped. Tap Retry.";
+
+function unstick(list: CheckSheet[], inFlight: Set<string>): CheckSheet[] {
+  const now = Date.now();
+  let changed = false;
+  const out = list.map(s => {
+    if (s.status === "checking" && !inFlight.has(s.id) && now - Date.parse(s.updated_at) > STUCK_AFTER_MS) {
+      changed = true;
+      return { ...s, status: "failed" as SheetStatus, error: STUCK_MESSAGE };
+    }
+    return s;
+  });
+  return changed ? out : list;
+}
+
 /** Blind grading is a per-session, per-browser preference (UI only — names are still saved). */
 const blindKey = (sessionId: string) => `a4ai.checker.blind.${sessionId}`;
 function readBlind(sessionId: string): boolean {
@@ -70,17 +88,26 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
   const [newRoll, setNewRoll] = useState("");
   const [rubricBusy, setRubricBusy] = useState(false);
 
+  /** copies whose check request is running in THIS tab (never treated as stuck) */
+  const inFlight = useRef<Set<string>>(new Set());
+
   const load = useCallback(async () => {
     const [{ data: s }, { data: sh }] = await Promise.all([
       supabase.from("check_sessions").select("*").eq("id", sessionId).single(),
       supabase.from("check_sheets").select("*").eq("session_id", sessionId).order("roll_no", { nullsFirst: false }).order("created_at"),
     ]);
     setSession(s as CheckSession);
-    setSheets((sh || []) as CheckSheet[]);
+    setSheets(unstick((sh || []) as CheckSheet[], inFlight.current));
     setLoading(false);
   }, [sessionId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // a copy that gets stuck while the page is open (checked from another tab/device) is released too
+  useEffect(() => {
+    const t = setInterval(() => setSheets(prev => unstick(prev, inFlight.current)), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     if (startWithPicker && usePicker && !loading && !autoPicked.current) {
@@ -100,6 +127,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
     while (running.current < PARALLEL && queue.current.length) {
       const id = queue.current.shift()!;
       running.current++;
+      inFlight.current.add(id);
       patchSheet(id, { status: "checking", error: null });
       checkSheet(id)
         .then(({ sheet }) => patchSheet(id, sheet))
@@ -107,7 +135,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
           patchSheet(id, { status: "failed", error: humanError(e) });
           if (/daily limit|session expired/i.test(e.message)) { queue.current = []; toast.error(e.message); }
         })
-        .finally(() => { running.current--; pump(); });
+        .finally(() => { running.current--; inFlight.current.delete(id); pump(); });
     }
   }, []);
   const enqueue = useCallback((ids: string[]) => {

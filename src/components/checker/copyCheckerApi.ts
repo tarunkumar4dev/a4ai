@@ -31,7 +31,7 @@ export interface CheckSession {
 export interface CheckSheet {
   id: string; session_id: string; student_id: string | null; student_name: string; roll_no: string | null;
   pages: string[]; status: SheetStatus; ai_result: AiResult | null; ai_marks: number | null; max_marks: number | null;
-  final_marks: number | null; feedback: string | null; error: string | null; created_at: string;
+  final_marks: number | null; feedback: string | null; error: string | null; created_at: string; updated_at: string;
 }
 
 export const STRICTNESS_LABEL: Record<Strictness, string> = {
