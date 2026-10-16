@@ -35,9 +35,9 @@ const TEACHER_TOPICS: Topic[] = [
     question: "How does AI copy checking work?",
     keywords: ["check", "copy", "copies", "sheet", "grade", "grading", "evaluate", "handwritten", "checker"],
     answer:
-      "Go to Test Generator → Check Copies. Choose a saved test (or upload the question paper), then take photos or " +
+      "Go to Test Generator → Check Answer Sheets. Choose a saved test (or upload the question paper), then take photos or " +
       "upload PDFs of each student's copy. The AI suggests marks per question; you review and approve.",
-    actions: [{ label: "Open Check Copies", path: "/dashboard/test-generator?tab=check" }],
+    actions: [{ label: "Open Check Answer Sheets", path: "/dashboard/test-generator?tab=check" }],
   },
   {
     id: "attendance",

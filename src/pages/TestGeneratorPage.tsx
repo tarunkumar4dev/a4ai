@@ -23,7 +23,7 @@ export default function TestGeneratorPage() {
     setShowLoginModal,
   } = useGuestAccess();
 
-  // ?tab=check opens "Check Copies"; &test=<id> starts a check for that saved test (Test History button)
+  // ?tab=check opens "Check Answer Sheets"; &test=<id> starts a check for that saved test (Test History button)
   const [params, setParams] = useSearchParams();
   const [activeTab, setActiveTabState] = useState<Tab>(
     params.get("tab") === "check" ? "check" : params.get("tab") === "builder" ? "builder" : "ai");
@@ -122,9 +122,9 @@ export default function TestGeneratorPage() {
         {/* TABS */}
         <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-1 px-1">
           {([
-            ["ai", "AI Generator", Wand2],
             ["builder", "NCERT Test Builder", BookOpen],
-            ["check", "Check Copies", ClipboardCheck],
+            ["check", "Check Answer Sheets", ClipboardCheck],
+            ["ai", "AI Generator", Wand2],
           ] as [Tab, string, LucideIcon][]).map(([k, label, Icon]) => (
             <button
               key={k}
