@@ -483,11 +483,7 @@ const App = () => {
                       {/* ============================================ */}
                       <Route
                         path="/dashboard/modules"
-                        element={
-                          <PrivateRoute>
-                            <ModulesPage />
-                          </PrivateRoute>
-                        }
+                        element={<ModulesPage />}
                       />
 
                       {/* ============================================ */}

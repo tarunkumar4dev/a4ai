@@ -120,7 +120,7 @@ export default function TestGeneratorPage() {
         <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-1 px-1">
           {([
             ["ai", "✨ AI Generator"],
-            ["builder", "📚 Test Builder"],
+            ["builder", "📚 NCERT Test Builder"],
             ["check", "✅ Check Copies"],
           ] as [Tab, string][]).map(([k, label]) => (
             <button
