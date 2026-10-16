@@ -23,7 +23,7 @@ const PARALLEL = 3;
 const STATUS: Record<SheetStatus, { label: string; cls: string }> = {
   pending:  { label: "No copy",   cls: "bg-gray-100 text-gray-500" },
   uploaded: { label: "Uploaded",  cls: "bg-blue-50 text-blue-600" },
-  checking: { label: "Checking…", cls: "bg-violet-50 text-violet-600" },
+  checking: { label: "Checking…", cls: "bg-sky-50 text-sky-700" },
   checked:  { label: "Checked",   cls: "bg-amber-50 text-amber-700" },
   failed:   { label: "Failed",    cls: "bg-red-50 text-red-600" },
   approved: { label: "Approved",  cls: "bg-emerald-50 text-emerald-700" },
@@ -215,7 +215,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
       </div>
 
       {/* Marking scheme status */}
-      <div className={`rounded-2xl border p-4 ${session.rubric_status === "failed" ? "bg-red-50 border-red-200" : rubricReady ? "bg-white border-gray-200" : "bg-violet-50 border-violet-200"}`}>
+      <div className={`rounded-2xl border p-4 ${session.rubric_status === "failed" ? "bg-red-50 border-red-200" : rubricReady ? "bg-white border-gray-200" : "bg-emerald-50 border-emerald-200"}`}>
         {session.rubric_status === "failed" ? (
           <div className="flex items-center gap-3">
             <p className="flex-1 text-sm text-red-700"><b>Marking scheme failed.</b> {session.rubric_error}</p>
@@ -223,8 +223,8 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
           </div>
         ) : !rubricReady ? (
           <div className="flex items-center gap-3">
-            <p className="flex-1 text-sm text-violet-700">Marking scheme not ready yet.</p>
-            <button disabled={rubricBusy} onClick={retryRubric} className="px-4 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold">
+            <p className="flex-1 text-sm text-emerald-900">Marking scheme not ready yet.</p>
+            <button disabled={rubricBusy} onClick={retryRubric} className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-60">
               {rubricBusy ? "Preparing…" : "Prepare"}
             </button>
           </div>
@@ -277,7 +277,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
           <span className="block text-sm font-bold text-gray-800">🙈 Hide student names during review</span>
           <span className="block text-[11px] text-gray-400">Shows "Student 1, 2…" here only — names stay saved and appear in the Excel export.</span>
         </span>
-        <input type="checkbox" checked={blind} onChange={toggleBlind} className="h-5 w-5 accent-violet-600 shrink-0" />
+        <input type="checkbox" checked={blind} onChange={toggleBlind} className="h-5 w-5 accent-gray-900 shrink-0" />
       </label>
 
       {/* Filters */}
@@ -363,7 +363,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
           <div className="max-w-2xl mx-auto flex gap-2">
             {counts.uploaded > 0 && (
               <button disabled={!rubricReady} onClick={() => enqueue(sheets.filter(s => s.status === "uploaded").map(s => s.id))}
-                className="flex-1 py-3.5 rounded-2xl bg-violet-600 text-white text-sm font-black disabled:bg-gray-300">
+                className="flex-1 py-3.5 rounded-2xl bg-gray-900 text-white text-sm font-black disabled:bg-gray-300">
                 ✨ Check {counts.uploaded} uploaded
               </button>
             )}
@@ -625,8 +625,8 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
         <div className="p-4 space-y-4 pb-32 md:pb-6 md:min-h-0 md:overflow-y-auto">
           {/* Status / result */}
           {sheet.status === "checking" && (
-            <div className="rounded-2xl bg-violet-50 border border-violet-200 p-4 text-sm text-violet-700 flex items-center gap-3">
-              <span className="inline-block h-5 w-5 rounded-full border-2 border-violet-300 border-t-violet-600 animate-spin" />
+            <div className="rounded-2xl bg-sky-50 border border-sky-200 p-4 text-sm text-sky-800 flex items-center gap-3">
+              <span className="inline-block h-5 w-5 rounded-full border-2 border-sky-300 border-t-sky-600 animate-spin" />
               AI is checking this copy… you can move to the next student.
             </div>
           )}

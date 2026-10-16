@@ -62,7 +62,7 @@ export default function CheckSessionAnalytics({ session, sheets, nameOf, onOpen 
         </div>
         <div className="flex-1 pb-2">
           <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
-            <div className="h-full bg-violet-600" style={{ width: `${Math.min(100, stats.avg ?? 0)}%` }} />
+            <div className="h-full bg-gray-900" style={{ width: `${Math.min(100, stats.avg ?? 0)}%` }} />
           </div>
           <p className="text-[11px] text-gray-400 mt-1">from {stats.approved} approved {stats.approved === 1 ? "copy" : "copies"}</p>
         </div>
