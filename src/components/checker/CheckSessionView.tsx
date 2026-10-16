@@ -187,6 +187,8 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
   /** Name as shown in this view: "Student N" (position in the class list) while blind grading is on. */
   const nameOf = (s: CheckSheet) => blind ? `Student ${sheets.findIndex(x => x.id === s.id) + 1}` : s.student_name;
 
+  const hasResults = sheets.some(s => !!s.ai_result);
+
   const visible = sheets.filter(s =>
     filter === "all" ? true
       : filter === "todo" ? (s.status === "pending" || s.status === "failed" || s.status === "uploaded")
@@ -210,7 +212,11 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
             {[session.total_marks && `${session.total_marks} marks`, STRICTNESS_LABEL[session.strictness], session.source === "test" ? "From Test History" : "From photos"].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <button onClick={exportResults} className="text-xs font-bold text-gray-700 px-2 py-2" title="Download results as Excel">⬇ Export Results</button>
+        {/* title on a wrapper: disabled buttons get no hover tooltip in some browsers */}
+        <span title={hasResults ? "Download results as Excel" : "Pehle kam se kam ek copy check karein"}>
+          <button onClick={exportResults} disabled={!hasResults}
+            className="text-xs font-bold text-gray-700 px-2 py-2 disabled:opacity-40 disabled:cursor-not-allowed">⬇ Export Results</button>
+        </span>
         <button onClick={deleteSession} className="text-xs font-bold text-red-500 px-2 py-2">Delete</button>
       </div>
 
