@@ -15,6 +15,8 @@ import {
 import { exportSessionResults } from "./checkerExport";
 import { humanError } from "./checkerFetch";
 import CheckSessionAnalytics from "./CheckSessionAnalytics";
+import StudentPicker from "./StudentPicker";
+import { useMyScope } from "@/hooks/useMyScope";
 
 const PARALLEL = 3;
 
@@ -37,6 +39,10 @@ function readBlind(sessionId: string): boolean {
 
 export default function CheckSessionView({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
   const { user } = useAuth();
+  const scope = useMyScope();
+  /** Institute teacher with assigned classes → students are picked from those classes. */
+  const usePicker = !scope.loading && scope.batches.length > 0;
+  const [picking, setPicking] = useState(false);
   const [session, setSession] = useState<CheckSession | null>(null);
   const [sheets, setSheets] = useState<CheckSheet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -294,7 +300,27 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
         ))}
       </div>
 
-      {/* Add student */}
+      {/* Add students — institute teachers pick from their own classes */}
+      {usePicker && (
+        <button onClick={() => setPicking(true)} className="w-full py-3.5 rounded-2xl border-2 border-dashed border-gray-300 text-sm font-bold text-gray-600 active:bg-gray-50">
+          + Add students from your class
+        </button>
+      )}
+      {picking && (
+        <StudentPicker
+          session={session}
+          existing={sheets}
+          onClose={() => setPicking(false)}
+          onAdded={(rows, batchId) => {
+            setSheets(prev => [...prev, ...rows]);
+            setSession(s => s && { ...s, batch_id: s.batch_id || batchId });
+            setPicking(false);
+            toast.success(`${rows.length} student${rows.length > 1 ? "s" : ""} added`);
+          }}
+        />
+      )}
+
+      {/* Add student (by name) */}
       {adding ? (
         <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-2">
           <div className="grid grid-cols-[1fr_90px] gap-2">
