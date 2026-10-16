@@ -142,6 +142,20 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
         .finally(() => { running.current--; inFlight.current.delete(id); pump(); });
     }
   }, []);
+  // Closing / reloading the tab while copies are queued or checking stops the queue (it runs in this
+  // page) — ask first. Browsers show their own text; the message is for those that still use it.
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (running.current === 0 && queue.current.length === 0) return;
+      const msg = "Copies check ho rahi hain, page band karne se checking ruk jayegi.";
+      e.preventDefault();
+      e.returnValue = msg;
+      return msg;
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
   const enqueue = useCallback((ids: string[]) => {
     const fresh = ids.filter(id => !queue.current.includes(id));
     queue.current.push(...fresh);
