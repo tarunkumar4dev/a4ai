@@ -13,6 +13,7 @@ import {
   MAX_PAGES, STRICTNESS_LABEL, type CheckSession, type CheckSheet, type SheetStatus,
 } from "./copyCheckerApi";
 import { exportSessionResults } from "./checkerExport";
+import { humanError } from "./checkerFetch";
 import CheckSessionAnalytics from "./CheckSessionAnalytics";
 
 const PARALLEL = 3;
@@ -81,7 +82,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
       checkSheet(id)
         .then(({ sheet }) => patchSheet(id, sheet))
         .catch((e: Error) => {
-          patchSheet(id, { status: "failed", error: e.message });
+          patchSheet(id, { status: "failed", error: humanError(e) });
           if (/daily limit|session expired/i.test(e.message)) { queue.current = []; toast.error(e.message); }
         })
         .finally(() => { running.current--; pump(); });
@@ -100,8 +101,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
       const r = await buildRubric(sessionId, true);
       setSession(s => s && { ...s, rubric: r.full_rubric, rubric_status: "ready", rubric_error: null, total_marks: r.rubric.total_marks });
     } catch (e: any) {
-      setSession(s => s && { ...s, rubric_status: "failed", rubric_error: e.message });
-      toast.error(e.message);
+      setSession(s => s && { ...s, rubric_status: "failed", rubric_error: humanError(e) }); // banner only, no toast
     }
     setRubricBusy(false);
   }
@@ -111,7 +111,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     const { data, error } = await supabase.from("check_sheets")
       .insert({ session_id: sessionId, student_name: newName.trim().slice(0, 120), roll_no: newRoll.trim() || null })
       .select("*").single();
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     setSheets(prev => [...prev, data as CheckSheet]);
     setNewName(""); setNewRoll("");
     setOpenId((data as CheckSheet).id);   // straight to the camera
@@ -140,7 +140,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     try {
       await exportSessionResults(session, sheets);
     } catch (e: any) {
-      toast.error(`Export failed: ${e?.message || e}`);
+      toast.error(`Export failed: ${humanError(e)}`);
     }
   }
 
@@ -148,7 +148,7 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
     if (!session || !confirm(`Delete “${session.title}” and all its photos? This cannot be undone.`)) return;
     await removeFiles([...session.qp_paths, ...session.key_paths, ...sheets.flatMap(s => s.pages)]).catch(() => {});
     const { error } = await supabase.from("check_sessions").delete().eq("id", sessionId);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     toast.success("Deleted");
     onBack();
   }
@@ -444,7 +444,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
         if (error) throw error;
         onChange({ pages, status });
       } catch (err: any) {
-        toast.error(err.message || "Upload failed");
+        toast.error(humanError(err, "Upload failed"));
       }
       setUploading(n => n - 1);
     }
@@ -454,7 +454,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
     const pages = sheet.pages.filter(p => p !== path);
     const status: SheetStatus = pages.length ? (sheet.status === "pending" ? "uploaded" : sheet.status) : "pending";
     const { error } = await supabase.from("check_sheets").update({ pages, status }).eq("id", sheet.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     removeFiles([path]).catch(() => {});
     onChange({ pages, status });
   }
@@ -477,7 +477,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
       status: "approved", final_marks: m, feedback: feedback.trim() || null, approved_at: now, updated_at: now,
     }).eq("id", sheet.id);
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     onChange({ status: "approved", final_marks: m, feedback: feedback.trim() || null });
     toast.success(`${displayName}: ${m}/${sheet.max_marks}`);
     if (onNext) onNext();
@@ -487,7 +487,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
     if (!confirm(`Remove ${displayName} from this check?`)) return;
     await removeFiles(sheet.pages).catch(() => {});
     const { error } = await supabase.from("check_sheets").delete().eq("id", sheet.id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(humanError(error));
     onDeleted();
   }
 

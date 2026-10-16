@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
 import { useMyScope } from "@/hooks/useMyScope";
+import { humanError } from "./checkerFetch";
 import { buildRubric, uploadPage, MAX_PAGES, STRICTNESS_LABEL, type Strictness } from "./copyCheckerApi";
 
 type SavedTest = { id: string; exam_title: string | null; subject: string | null; class_grade: string | null; total_marks: number | null; created_at: string; usable?: boolean };
@@ -102,19 +103,19 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
         if (studs?.length) {
           const { error: sErr } = await supabase.from("check_sheets").insert(
             studs.map(st => ({ session_id: s.id, student_id: st.id, student_name: st.name, roll_no: st.roll_no })));
-          if (sErr) toast.warning(`Students not added: ${sErr.message}`);
+          if (sErr) toast.warning(`Students not added: ${humanError(sErr)}`);
         }
       }
 
       setBusy(source === "test" ? "Preparing marking scheme…" : "Reading the paper and preparing the marking scheme…");
       try {
         await buildRubric(s.id);
-      } catch (e: any) {
-        toast.error(e.message); // the session view shows the error with a Retry button
+      } catch {
+        // shown once, in the session view's marking-scheme banner (with Retry) — no toast here
       }
       onCreated(s.id);
     } catch (e: any) {
-      toast.error(e.message || "Could not create");
+      toast.error(humanError(e, "Could not create"));
       setBusy(null);
     }
   }
