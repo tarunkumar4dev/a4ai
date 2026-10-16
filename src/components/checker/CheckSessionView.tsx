@@ -37,12 +37,19 @@ function readBlind(sessionId: string): boolean {
   try { return localStorage.getItem(blindKey(sessionId)) === "1"; } catch { return false; }
 }
 
-export default function CheckSessionView({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
+export default function CheckSessionView({ sessionId, startWithPicker, onBack }: {
+  sessionId: string;
+  /** just created with a class → open the student picker once, everyone ticked */
+  startWithPicker?: boolean;
+  onBack: () => void;
+}) {
   const { user } = useAuth();
   const scope = useMyScope();
   /** Institute teacher with assigned classes → students are picked from those classes. */
   const usePicker = !scope.loading && scope.batches.length > 0;
   const [picking, setPicking] = useState(false);
+  const [pickAll, setPickAll] = useState(false);
+  const autoPicked = useRef(false);
   const [session, setSession] = useState<CheckSession | null>(null);
   const [sheets, setSheets] = useState<CheckSheet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +80,14 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
   }, [sessionId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (startWithPicker && usePicker && !loading && !autoPicked.current) {
+      autoPicked.current = true;
+      setPickAll(true);
+      setPicking(true);
+    }
+  }, [startWithPicker, usePicker, loading]);
 
   const patchSheet = (id: string, fields: Partial<CheckSheet>) =>
     setSheets(prev => prev.map(s => s.id === id ? { ...s, ...fields } : s));
@@ -310,11 +325,13 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
         <StudentPicker
           session={session}
           existing={sheets}
-          onClose={() => setPicking(false)}
+          preselectAll={pickAll}
+          onClose={() => { setPicking(false); setPickAll(false); }}
           onAdded={(rows, batchId) => {
             setSheets(prev => [...prev, ...rows]);
             setSession(s => s && { ...s, batch_id: s.batch_id || batchId });
             setPicking(false);
+            setPickAll(false);
             toast.success(`${rows.length} student${rows.length > 1 ? "s" : ""} added`);
           }}
         />

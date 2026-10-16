@@ -14,7 +14,8 @@ type SavedTest = { id: string; exam_title: string | null; subject: string | null
 
 export default function NewCheckSession({ initialTestId, onCreated, onCancel }: {
   initialTestId?: string | null;
-  onCreated: (sessionId: string) => void;
+  /** pickStudents: a class was chosen → the session opens with its student picker (all ticked) */
+  onCreated: (sessionId: string, pickStudents: boolean) => void;
   onCancel: () => void;
 }) {
   const { user } = useAuth();
@@ -96,24 +97,15 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
         if (uErr) throw uErr;
       }
 
-      if (batchId) {
-        setBusy("Adding students…");
-        const { data: studs } = await supabase.from("students")
-          .select("id, name, roll_no").eq("batch_id", batchId).eq("is_active", true).order("roll_no");
-        if (studs?.length) {
-          const { error: sErr } = await supabase.from("check_sheets").insert(
-            studs.map(st => ({ session_id: s.id, student_id: st.id, student_name: st.name, roll_no: st.roll_no })));
-          if (sErr) toast.warning(`Students not added: ${humanError(sErr)}`);
-        }
-      }
-
       setBusy(source === "test" ? "Preparing marking scheme…" : "Reading the paper and preparing the marking scheme…");
       try {
         await buildRubric(s.id);
       } catch {
         // shown once, in the session view's marking-scheme banner (with Retry) — no toast here
       }
-      onCreated(s.id);
+      // Students are added in the session view: the picker opens for this class with everyone ticked,
+      // so the teacher can untick absentees instead of every student being added silently.
+      onCreated(s.id, !!batchId);
     } catch (e: any) {
       toast.error(humanError(e, "Could not create"));
       setBusy(null);
@@ -211,12 +203,13 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
           </div>
           {scope.batches.length > 0 && (
             <div>
-              <label className="text-xs font-bold text-gray-500">Class (adds all its students)</label>
+              <label className="text-xs font-bold text-gray-500">Class</label>
               <select value={batchId} onChange={e => setBatchId(e.target.value)}
                 className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm bg-white">
-                <option value="">No class — I'll add students myself</option>
+                <option value="">Choose later</option>
                 {scope.batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
+              <p className="text-[11px] text-gray-400 mt-1">Next you'll see its students, all ticked — untick anyone absent.</p>
             </div>
           )}
           <div>
