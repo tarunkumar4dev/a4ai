@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from "react";
+import { Check, ChevronDown, Pencil, X } from "lucide-react";
 
 export type Verdict = "full" | "mostly" | "partial" | "none";
 
@@ -162,7 +163,7 @@ export function QuestionRow({ q, onOverride }: { q: GradedQuestion; onOverride?:
         )}
         {onOverride && !editing && (
           <button onClick={startEdit} title="Change marks" aria-label={`Change marks for Q${q.q_no}`}
-            className="h-7 w-7 shrink-0 rounded-full text-gray-400 hover:text-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm">✎</button>
+            className="h-7 w-7 shrink-0 rounded-full text-gray-400 hover:text-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center"><Pencil size={14} /></button>
         )}
         {!isNotAttempted && <span className={`w-2 h-2 rounded-full shrink-0 ${confDot}`} title={`Confidence: ${q.confidence}`} />}
         <span className="text-sm text-gray-600 dark:text-gray-400 truncate flex-1">{q.feedback}</span>
@@ -173,7 +174,7 @@ export function QuestionRow({ q, onOverride }: { q: GradedQuestion; onOverride?:
           {isNotAttempted && <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-500 px-2 py-0.5 rounded">not attempted</span>}
           {q.has_subparts && <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-600 px-2 py-0.5 rounded">{q.subpart_grades.length} parts</span>}
         </div>
-        <span className={`text-gray-400 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}>▾</span>
+        <span className={`text-gray-400 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}><ChevronDown size={16} /></span>
       </div>
 
       {editing && (
@@ -243,12 +244,12 @@ export function QuestionRow({ q, onOverride }: { q: GradedQuestion; onOverride?:
                 <>
                   {q.key_concepts_found.length > 0 && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                      ✓ Found: {q.key_concepts_found.join(", ")}
+                      <Check size={12} className="inline -mt-0.5" /> Found: {q.key_concepts_found.join(", ")}
                     </p>
                   )}
                   {q.key_concepts_missed.length > 0 && (
                     <p className="text-xs text-red-500 dark:text-red-400">
-                      ✕ Missed: {q.key_concepts_missed.join(", ")}
+                      <X size={12} className="inline -mt-0.5" /> Missed: {q.key_concepts_missed.join(", ")}
                     </p>
                   )}
                 </>

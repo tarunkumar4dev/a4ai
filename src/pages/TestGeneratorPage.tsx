@@ -1,5 +1,6 @@
 // src/pages/TestGeneratorPage.tsx
 import React, { useState } from "react";
+import { BookOpen, ClipboardCheck, Wand2, type LucideIcon } from "lucide-react";
 import { ChevronLeft } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import TestGeneratorForm from "@/components/TestGeneratorForm";
@@ -121,10 +122,10 @@ export default function TestGeneratorPage() {
         {/* TABS */}
         <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-1 px-1">
           {([
-            ["ai", "✨ AI Generator"],
-            ["builder", "📚 NCERT Test Builder"],
-            ["check", "✅ Check Copies"],
-          ] as [Tab, string][]).map(([k, label]) => (
+            ["ai", "AI Generator", Wand2],
+            ["builder", "NCERT Test Builder", BookOpen],
+            ["check", "Check Copies", ClipboardCheck],
+          ] as [Tab, string, LucideIcon][]).map(([k, label, Icon]) => (
             <button
               key={k}
               onClick={() => setActiveTab(k)}
@@ -134,7 +135,7 @@ export default function TestGeneratorPage() {
                   : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400"
               }`}
             >
-              {label}
+              <span className="inline-flex items-center gap-1.5"><Icon size={15} /> {label}</span>
             </button>
           ))}
         </div>

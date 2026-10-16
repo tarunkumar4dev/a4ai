@@ -4,6 +4,7 @@
 // Checked copies are reviewed point by point and approved; nothing is final until the teacher approves.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ArrowLeft, BarChart3, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Download, Eye, EyeOff, FileText, FileUp, RotateCw, ScanSearch, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
@@ -234,7 +235,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
     <div className="max-w-2xl mx-auto space-y-4 pb-32">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <button onClick={onBack} className="h-10 w-10 shrink-0 rounded-full bg-white border border-gray-200 text-gray-600 font-bold">←</button>
+        <button onClick={onBack} className="h-10 w-10 shrink-0 rounded-full bg-white border border-gray-200 text-gray-600 font-bold flex items-center justify-center" aria-label="Back"><ArrowLeft size={18} /></button>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-black text-gray-900 leading-tight truncate">{session.title}</h2>
           <p className="text-xs text-gray-500">
@@ -244,7 +245,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
         {/* title on a wrapper: disabled buttons get no hover tooltip in some browsers */}
         <span title={hasResults ? "Download results as Excel" : "Pehle kam se kam ek copy check karein"}>
           <button onClick={exportResults} disabled={!hasResults}
-            className="text-xs font-bold text-gray-700 px-2 py-2 disabled:opacity-40 disabled:cursor-not-allowed">⬇ Export Results</button>
+            className="text-xs font-bold text-gray-700 px-2 py-2 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"><Download size={14} /> Export Results</button>
         </span>
         <button onClick={deleteSession} className="text-xs font-bold text-red-500 px-2 py-2">Delete</button>
       </div>
@@ -269,10 +270,10 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
         ) : (
           <>
             <button className="w-full flex items-center justify-between" onClick={() => setShowScheme(v => !v)}>
-              <span className="text-sm font-bold text-gray-800">📋 Marking scheme · {session.rubric!.total_questions} questions · {session.rubric!.total_marks} marks</span>
-              <span className="text-gray-400 text-sm">{showScheme ? "▴" : "▾"}</span>
+              <span className="text-sm font-bold text-gray-800 inline-flex items-center gap-1.5"><ClipboardList size={16} className="text-gray-500" /> Marking scheme · {session.rubric!.total_questions} questions · {session.rubric!.total_marks} marks</span>
+              <span className="text-gray-400 text-sm">{showScheme ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
             </button>
-            {session.rubric!.marks_mismatch && <p className="mt-2 text-xs text-amber-700">⚠ {session.rubric!.marks_mismatch}</p>}
+            {session.rubric!.marks_mismatch && <p className="mt-2 text-xs text-amber-700 flex items-start gap-1"><AlertTriangle size={13} className="mt-0.5 shrink-0" /> {session.rubric!.marks_mismatch}</p>}
             {session.rubric!.questions.some(q => q.scheme_source === "estimated") && (
               <p className="mt-2 text-xs text-amber-700">Some marks splits were estimated by AI — open the scheme to check them.</p>
             )}
@@ -300,8 +301,8 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
       {counts.done >= 2 && (
         <div className="rounded-2xl bg-white border border-gray-200 p-4">
           <button className="w-full flex items-center justify-between" onClick={() => setShowAnalytics(v => !v)}>
-            <span className="text-sm font-bold text-gray-800">📊 Class analytics · {counts.done} approved</span>
-            <span className="text-gray-400 text-sm">{showAnalytics ? "▴" : "▾"}</span>
+            <span className="text-sm font-bold text-gray-800 inline-flex items-center gap-1.5"><BarChart3 size={16} className="text-gray-500" /> Class analytics · {counts.done} approved</span>
+            <span className="text-gray-400 text-sm">{showAnalytics ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
           </button>
           {showAnalytics && (
             <CheckSessionAnalytics session={session} sheets={sheets} nameOf={nameOf} onOpen={setOpenId} />
@@ -312,7 +313,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
       {/* Blind grading */}
       <label className="flex items-center justify-between gap-3 rounded-2xl bg-white border border-gray-200 px-4 py-3 cursor-pointer">
         <span>
-          <span className="block text-sm font-bold text-gray-800">🙈 Hide student names during review</span>
+          <span className="flex items-center gap-1.5 text-sm font-bold text-gray-800"><EyeOff size={15} className="text-gray-500" /> Hide student names during review</span>
           <span className="block text-[11px] text-gray-400">Shows "Student 1, 2…" here only — names stay saved and appear in the Excel export.</span>
         </span>
         <input type="checkbox" checked={blind} onChange={toggleBlind} className="h-5 w-5 accent-gray-900 shrink-0" />
@@ -402,12 +403,12 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
             {counts.uploaded > 0 && (
               <button disabled={!rubricReady} onClick={() => enqueue(sheets.filter(s => s.status === "uploaded").map(s => s.id))}
                 className="flex-1 py-3.5 rounded-2xl bg-gray-900 text-white text-sm font-black disabled:bg-gray-300">
-                ✨ Check {counts.uploaded} uploaded
+                <span className="inline-flex items-center justify-center gap-1.5"><ScanSearch size={16} /> Check {counts.uploaded} uploaded</span>
               </button>
             )}
             {counts.clean > 0 && (
               <button onClick={approveAllClean} className="flex-1 py-3.5 rounded-2xl bg-emerald-600 text-white text-sm font-black">
-                ✓ Approve {counts.clean} clean
+                <span className="inline-flex items-center justify-center gap-1.5"><Check size={16} /> Approve {counts.clean} clean</span>
               </button>
             )}
           </div>
@@ -580,13 +581,13 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
       <div className="bg-[#F9FAFB] w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-xl sm:rounded-3xl overflow-y-auto md:max-w-6xl md:h-[92vh] md:max-h-none md:overflow-hidden md:flex md:flex-col" onClick={e => e.stopPropagation()}>
         {/* Top bar */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 py-2.5 flex items-center gap-2">
-          <button onClick={onClose} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600">✕</button>
+          <button onClick={onClose} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 flex items-center justify-center" aria-label="Close"><X size={18} /></button>
           <div className="min-w-0 flex-1 text-center">
             <p className="text-sm font-black text-gray-900 truncate">{displayName}</p>
             <p className="text-[11px] text-gray-400">{sheet.roll_no && !blind ? `Roll ${sheet.roll_no} · ` : ""}{position}</p>
           </div>
-          <button disabled={!onPrev} onClick={onPrev} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30">‹</button>
-          <button disabled={!onNext} onClick={onNext} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30">›</button>
+          <button disabled={!onPrev} onClick={onPrev} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30 flex items-center justify-center" aria-label="Previous student"><ChevronLeft size={18} /></button>
+          <button disabled={!onNext} onClick={onNext} className="h-10 w-10 rounded-full bg-gray-100 font-bold text-gray-600 disabled:opacity-30 flex items-center justify-center" aria-label="Next student"><ChevronRight size={18} /></button>
         </div>
 
         <div className="md:flex-1 md:min-h-0 md:grid md:grid-cols-[2fr_3fr]">
@@ -602,12 +603,12 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
               {sheet.pages.map((p, i) => (
                 <div key={p} className="relative aspect-[3/4] rounded-xl overflow-hidden bg-gray-200 border border-gray-200">
                   {p.endsWith(".pdf")
-                    ? <div className="h-full flex items-center justify-center text-3xl">📄</div>
+                    ? <div className="h-full flex items-center justify-center text-gray-400"><FileText size={32} /></div>
                     : urls[p] ? <img src={urls[p]} alt={`Page ${i + 1}`} className="h-full w-full object-cover cursor-zoom-in" onClick={() => setViewer(p)} />
                     : <div className="h-full flex items-center justify-center text-xs text-gray-400">…</div>}
                   <span className="absolute bottom-1 left-1 text-[10px] font-black bg-black/60 text-white rounded px-1.5">{i + 1}</span>
                   {!locked && (
-                    <button onClick={() => removePage(p)} className="absolute top-1 right-1 h-7 w-7 rounded-full bg-black/60 text-white text-xs font-bold">✕</button>
+                    <button onClick={() => removePage(p)} className="absolute top-1 right-1 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center" aria-label="Remove page"><X size={14} /></button>
                   )}
                 </div>
               ))}
@@ -621,12 +622,12 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <button onClick={() => cam.current?.click()}
                   className="py-4 rounded-2xl bg-[#111827] text-white flex flex-col items-center justify-center active:scale-[0.98]">
-                  <span className="text-2xl">📷</span>
+                  <Camera size={24} />
                   <span className="text-xs font-bold mt-1">{sheet.pages.length ? "Take next page" : "Take photo"}</span>
                 </button>
                 <button onClick={() => pick.current?.click()}
                   className="py-4 rounded-2xl bg-white border-2 border-gray-200 text-gray-800 flex flex-col items-center justify-center active:scale-[0.98]">
-                  <span className="text-2xl">📄</span>
+                  <FileUp size={24} />
                   <span className="text-xs font-bold mt-1">Upload PDF / images</span>
                 </button>
               </div>
@@ -645,15 +646,15 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
                 <span className="text-xs font-bold text-white bg-black/60 rounded-full px-3 py-1.5">
                   Page {viewerIndex + 1} / {imagePages.length}
                 </span>
-                <button onClick={() => setViewer(null)} className="h-9 w-9 rounded-full bg-black/60 text-white font-bold">✕</button>
+                <button onClick={() => setViewer(null)} className="h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center" aria-label="Close"><X size={16} /></button>
               </div>
               {viewerIndex > 0 && (
                 <button onClick={e => { e.stopPropagation(); setViewer(imagePages[viewerIndex - 1]); }}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/60 text-white text-xl font-bold">‹</button>
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/60 text-white flex items-center justify-center" aria-label="Previous page"><ChevronLeft size={22} /></button>
               )}
               {viewerIndex < imagePages.length - 1 && (
                 <button onClick={e => { e.stopPropagation(); setViewer(imagePages[viewerIndex + 1]); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/60 text-white text-xl font-bold">›</button>
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-black/60 text-white flex items-center justify-center" aria-label="Next page"><ChevronRight size={22} /></button>
               )}
             </div>
           )}
@@ -687,7 +688,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
                 </div>
                 {r.overall_remarks && <p className="text-xs text-gray-600 mt-1">{r.overall_remarks}</p>}
                 {(r.needs_review_count || 0) > 0 && (
-                  <p className="text-xs text-orange-600 font-bold mt-2">👀 {r.needs_review_count} answer(s) marked “Review” — please look before approving.</p>
+                  <p className="text-xs text-orange-600 font-bold mt-2 flex items-center gap-1.5"><Eye size={14} /> {r.needs_review_count} answer(s) marked “Review” — please look before approving.</p>
                 )}
               </div>
               <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
@@ -712,7 +713,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
         <div className="sticky bottom-0 bg-white border-t border-gray-200 p-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
           {sheet.status === "checked" ? (
             <button onClick={approve} disabled={saving} className="w-full py-4 rounded-2xl bg-emerald-600 text-white font-black text-sm">
-              {saving ? "Saving…" : `✓ Approve ${marks || 0}/${sheet.max_marks}${onNext ? " & next" : ""}`}
+              {saving ? "Saving…" : <span className="inline-flex items-center justify-center gap-1.5"><Check size={16} /> {`Approve ${marks || 0}/${sheet.max_marks}${onNext ? " & next" : ""}`}</span>}
             </button>
           ) : sheet.status === "approved" ? (
             <button onClick={approve} disabled={saving} className="w-full py-4 rounded-2xl bg-gray-900 text-white font-black text-sm">
@@ -721,12 +722,12 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
           ) : sheet.status === "failed" ? (
             <button onClick={onCheck} disabled={uploading > 0 || sheet.pages.length === 0}
               className="w-full py-4 rounded-2xl bg-red-600 text-white font-black text-sm disabled:bg-gray-300">
-              ↻ Retry check
+              <span className="inline-flex items-center justify-center gap-1.5"><RotateCw size={15} /> Retry check</span>
             </button>
           ) : (
             <button onClick={doneAndNext} disabled={locked || uploading > 0 || sheet.pages.length === 0}
               className="w-full py-4 rounded-2xl bg-[#111827] text-white font-black text-sm disabled:bg-gray-300">
-              {uploading > 0 ? "Uploading…" : sheet.status === "uploaded" || sheet.status === "pending" ? `✨ Done — check this copy${onNext ? " & next" : ""}` : "Checking…"}
+              {uploading > 0 ? "Uploading…" : sheet.status === "uploaded" || sheet.status === "pending" ? `Done — check this copy${onNext ? " & next" : ""}` : "Checking…"}
             </button>
           )}
         </div>

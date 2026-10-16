@@ -3,6 +3,7 @@
 // how strict. The marking scheme is prepared ONCE here, before any student copy is added.
 
 import React, { useEffect, useRef, useState } from "react";
+import { ArrowLeft, BookOpen, Camera, Check, FileText, Image as ImageIcon, Images } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
@@ -146,14 +147,14 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
         <div className="flex flex-wrap gap-2 mb-3">
           {files.map((f, i) => (
             <span key={i} className="text-xs bg-gray-100 rounded-lg px-2 py-1 text-gray-700 max-w-[160px] truncate">
-              {f.type === "application/pdf" ? "📄" : "🖼"} {i + 1}. {f.name}
+              {f.type === "application/pdf" ? <FileText size={12} className="inline -mt-0.5" /> : <ImageIcon size={12} className="inline -mt-0.5" />} {i + 1}. {f.name}
             </span>
           ))}
         </div>
       )}
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => cam.current?.click()} className="py-3 rounded-xl bg-gray-900 text-white text-sm font-bold active:scale-[0.98]">📷 Take photo</button>
-        <button type="button" onClick={() => pick.current?.click()} className="py-3 rounded-xl bg-gray-100 text-gray-800 text-sm font-bold active:scale-[0.98]">🖼 Gallery / PDF</button>
+        <button type="button" onClick={() => cam.current?.click()} className="py-3 rounded-xl bg-gray-900 text-white text-sm font-bold active:scale-[0.98] inline-flex items-center justify-center gap-1.5"><Camera size={16} /> Take photo</button>
+        <button type="button" onClick={() => pick.current?.click()} className="py-3 rounded-xl bg-gray-100 text-gray-800 text-sm font-bold active:scale-[0.98] inline-flex items-center justify-center gap-1.5"><Images size={16} /> Gallery / PDF</button>
       </div>
       <input ref={cam} type="file" accept="image/*" capture="environment" className="hidden" onChange={addFiles(setFiles)} />
       <input ref={pick} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={addFiles(setFiles)} />
@@ -163,7 +164,7 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
   return (
     <div className="max-w-xl mx-auto space-y-4 pb-28">
       <div className="flex items-center gap-3">
-        <button onClick={onCancel} className="h-10 w-10 rounded-full bg-white border border-gray-200 text-gray-600 font-bold">←</button>
+        <button onClick={onCancel} className="h-10 w-10 rounded-full bg-white border border-gray-200 text-gray-600 font-bold flex items-center justify-center" aria-label="Back"><ArrowLeft size={18} /></button>
         <div>
           <h2 className="text-lg font-black text-gray-900 leading-tight">New check</h2>
           <p className="text-xs text-gray-500">The marking scheme is prepared once for the whole class</p>
@@ -174,8 +175,8 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
       <section className="space-y-3">
         <p className="text-[11px] font-black uppercase tracking-wider text-gray-400">1 · Question paper</p>
         <div className="flex gap-2">
-          <button className={chip(source === "test")} onClick={() => setSource("test")}>📚 From my tests</button>
-          <button className={chip(source === "upload")} onClick={() => setSource("upload")}>📷 Photo of paper</button>
+          <button className={chip(source === "test")} onClick={() => setSource("test")}><span className="inline-flex items-center justify-center gap-1.5"><BookOpen size={15} /> From my tests</span></button>
+          <button className={chip(source === "upload")} onClick={() => setSource("upload")}><span className="inline-flex items-center justify-center gap-1.5"><Camera size={15} /> Photo of paper</span></button>
         </div>
 
         {source === "test" ? (
@@ -193,7 +194,7 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
                     </p>
                     {t.usable === false && <p className="text-[11px] font-bold text-amber-700">Questions not saved — use “Photo of paper”</p>}
                   </div>
-                  {testId === t.id && <span className="text-lg">✓</span>}
+                  {testId === t.id && <Check size={18} className="shrink-0" />}
                 </button>
               ))}
           </div>
