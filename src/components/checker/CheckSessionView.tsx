@@ -16,6 +16,7 @@ import { exportSessionResults } from "./checkerExport";
 import { humanError } from "./checkerFetch";
 import CheckSessionAnalytics from "./CheckSessionAnalytics";
 import StudentPicker from "./StudentPicker";
+import CheckSteps, { currentStep } from "./CheckSteps";
 import { useMyScope } from "@/hooks/useMyScope";
 
 const PARALLEL = 3;
@@ -219,6 +220,9 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
         </span>
         <button onClick={deleteSession} className="text-xs font-bold text-red-500 px-2 py-2">Delete</button>
       </div>
+
+      {/* What to do next */}
+      <CheckSteps step={currentStep(rubricReady, sheets)} />
 
       {/* Marking scheme status */}
       <div className={`rounded-2xl border p-4 ${session.rubric_status === "failed" ? "bg-red-50 border-red-200" : rubricReady ? "bg-white border-gray-200" : "bg-emerald-50 border-emerald-200"}`}>
