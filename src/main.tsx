@@ -26,6 +26,16 @@ window.addEventListener("vite:preloadError", (event) => {
   window.location.reload();
 });
 
+// Supabase sends an OAuth login back to the Site URL ("/") when the redirectTo URL isn't in the dashboard's
+// Redirect URLs list (e.g. www.a4ai.in vs a4ai.in) — the user then sat on the landing page, signed in.
+// Hand such a landing on to /auth/callback (exchanges ?code=, saves the role, goes to the dashboard).
+{
+  const params = new URLSearchParams(window.location.search);
+  if (window.location.pathname === "/" && (params.has("code") || params.has("error_description"))) {
+    window.history.replaceState(null, "", `/auth/callback${window.location.search}${window.location.hash}`);
+  }
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
