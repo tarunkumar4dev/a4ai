@@ -320,8 +320,8 @@ export default function CheckSessionView({ sessionId, onBack }: { sessionId: str
         />
       )}
 
-      {/* Add student (by name) */}
-      {adding ? (
+      {/* Add student by name — only teachers without institute classes (individual teachers) */}
+      {scope.loading || usePicker ? null : adding ? (
         <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-2">
           <div className="grid grid-cols-[1fr_90px] gap-2">
             <input autoFocus value={newName} onChange={e => setNewName(e.target.value)} placeholder="Student name"
