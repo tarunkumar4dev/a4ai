@@ -4,7 +4,7 @@
 // Checked copies are reviewed point by point and approved; nothing is final until the teacher approves.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, BarChart3, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Download, Eye, EyeOff, FileText, FileUp, RotateCw, ScanSearch, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MoreHorizontal, Trash2, BarChart3, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Download, Eye, EyeOff, FileText, FileUp, RotateCw, ScanSearch, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
@@ -19,6 +19,7 @@ import CheckSessionAnalytics from "./CheckSessionAnalytics";
 import StudentPicker from "./StudentPicker";
 import CheckSteps, { currentStep } from "./CheckSteps";
 import { useConfirm } from "./useConfirm";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useMyScope } from "@/hooks/useMyScope";
 
 const PARALLEL = 3;
@@ -263,7 +264,20 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
           <button onClick={exportResults} disabled={!hasResults}
             className="text-xs font-bold text-gray-700 px-2 py-2 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"><Download size={14} /> Export Results</button>
         </span>
-        <button onClick={deleteSession} className="text-xs font-bold text-red-500 px-2 py-2">Delete</button>
+        {/* rare + destructive → behind "⋯". modal={false} and the setTimeout let the menu close before the
+            confirm dialog opens (otherwise Radix can leave focus / pointer-events stuck). */}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button aria-label="More actions" className="h-10 w-10 shrink-0 rounded-full bg-white border border-gray-200 text-gray-600 flex items-center justify-center">
+              <MoreHorizontal size={18} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setTimeout(() => { void deleteSession(); }, 0)} className="text-red-600 focus:text-red-700 gap-2">
+              <Trash2 size={14} /> Delete check
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* What to do next */}
