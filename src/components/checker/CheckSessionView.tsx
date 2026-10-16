@@ -15,6 +15,7 @@ import {
 } from "./copyCheckerApi";
 import { exportSessionResults } from "./checkerExport";
 import { humanError } from "./checkerFetch";
+import { downloadMarkedCopy } from "./markedCopyExport";
 import CheckSessionAnalytics from "./CheckSessionAnalytics";
 import StudentPicker from "./StudentPicker";
 import CheckSteps, { currentStep } from "./CheckSteps";
@@ -533,6 +534,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
   const [feedback, setFeedback] = useState(sheet.feedback || (sheet.ai_result ? feedbackFromAi(sheet.ai_result) : ""));
   const [saving, setSaving] = useState(false);
   const [viewer, setViewer] = useState<string | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const { ask, dialog } = useConfirm();
 
   useEffect(() => {
@@ -555,6 +557,16 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
     if (before && feedback === feedbackFromAi(before) && s.ai_result) setFeedback(feedbackFromAi(s.ai_result));
     onChange({ ai_result: s.ai_result, final_marks: s.final_marks, status: s.status });
     if (s.ai_result) setMarks(String(effectiveTotal(s.ai_result)));
+  }
+
+  async function downloadMarked() {
+    setDownloadBusy(true);
+    try {
+      await downloadMarkedCopy(session, sheet, { urls, blind });
+    } catch (e: any) {
+      toast.error(`Download failed: ${humanError(e)}`);
+    }
+    setDownloadBusy(false);
   }
 
   const locked = sheet.status === "checking";
@@ -756,6 +768,12 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
               <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
                 <AiQuestionList questions={r.graded_questions || []} onOverride={overrideQuestion} />
               </div>
+              {imagePages.length > 0 && (
+                <button onClick={downloadMarked} disabled={downloadBusy}
+                  className="w-full py-3 rounded-2xl border border-gray-200 bg-white text-sm font-bold text-gray-700 inline-flex items-center justify-center gap-1.5 disabled:opacity-50">
+                  <FileText size={15} /> {downloadBusy ? "Generating PDF…" : "Download marked copy"}
+                </button>
+              )}
               <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-2">
                 <label className="text-xs font-bold text-gray-500">Final marks (edit if needed)</label>
                 <input type="number" inputMode="decimal" step="0.5" min="0" value={marks} onChange={e => setMarks(e.target.value)}

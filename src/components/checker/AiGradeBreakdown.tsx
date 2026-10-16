@@ -55,6 +55,9 @@ export interface GradedQuestion {
   /** Set when the teacher changed this question's marks (marks_awarded stays the AI's). */
   teacher_marks?: number | null;
   teacher_note?: string | null;
+  /** Red-pen overlay: which page image (0-based) and where on it (0=top, 1000=bottom). */
+  page_index?: number | null;
+  y_start?: number | null;
 }
 
 export const VERDICT_STYLE: Record<Verdict, { label: string; cls: string }> = {
