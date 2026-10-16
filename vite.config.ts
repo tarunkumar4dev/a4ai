@@ -29,6 +29,14 @@ export default defineConfig(({ mode }): UserConfig => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+      // One React for every package. A second copy in the dev deps cache made react-dropzone (Modules
+      // tab → ModuleCreator) throw "Invalid hook call … reading 'useMemo'" and blanked the dashboard.
+      dedupe: ["react", "react-dom"],
+    },
+    optimizeDeps: {
+      // Pre-bundle at server start, together with React. Found late (only when the Modules tab first
+      // opens), Vite re-bundles mid-session and the open page ends up mixing old and new React chunks.
+      include: ["react", "react-dom", "react-dropzone"],
     },
     build: {
       target: "es2020",
