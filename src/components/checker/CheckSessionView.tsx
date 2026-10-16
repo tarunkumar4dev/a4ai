@@ -67,8 +67,12 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
 }) {
   const { user } = useAuth();
   const scope = useMyScope();
+  /** Teacher of an institute (get_my_access returned one) — as opposed to an individual teacher. */
+  const inInstitute = !!scope.instituteId;
   /** Institute teacher with assigned classes → students are picked from those classes. */
-  const usePicker = !scope.loading && scope.batches.length > 0;
+  const usePicker = !scope.loading && inInstitute && scope.batches.length > 0;
+  /** Institute teacher without any assigned class: no way to add students until an admin / HOD assigns one. */
+  const noClassAssigned = !scope.loading && inInstitute && scope.batches.length === 0;
   const [picking, setPicking] = useState(false);
   const { ask, dialog } = useConfirm();
   const [pickAll, setPickAll] = useState(false);
@@ -375,7 +379,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
       <div className="rounded-2xl bg-white border border-gray-200 divide-y divide-gray-100 overflow-hidden">
         {visible.length === 0 && (
           <p className="p-6 text-center text-sm text-gray-500">
-            {sheets.length === 0 ? "Add your students below, then photograph each copy." : "Nobody here."}
+            {sheets.length === 0 ? (noClassAssigned ? "No students yet." : "Add your students below, then photograph each copy.") : "Nobody here."}
           </p>
         )}
         {visible.map(s => (
@@ -399,6 +403,11 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
       </div>
 
       {/* Add students — institute teachers pick from their own classes */}
+      {noClassAssigned && (
+        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">
+          Aapko abhi koi class assign nahi hui hai. Apne admin/HOD se class assign karwayein.
+        </div>
+      )}
       {usePicker && (
         <button onClick={() => setPicking(true)} className="w-full py-3.5 rounded-2xl border-2 border-dashed border-gray-300 text-sm font-bold text-gray-600 active:bg-gray-50">
           + Add students from your class
@@ -420,8 +429,8 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
         />
       )}
 
-      {/* Add student by name — only teachers without institute classes (individual teachers) */}
-      {scope.loading || usePicker ? null : adding ? (
+      {/* Add student by name — only individual teachers (no institute); institute teachers use their classes */}
+      {scope.loading || inInstitute ? null : adding ? (
         <div className="rounded-2xl bg-white border border-gray-200 p-4 space-y-2">
           <div className="grid grid-cols-[1fr_90px] gap-2">
             <input autoFocus value={newName} onChange={e => setNewName(e.target.value)} placeholder="Student name"
