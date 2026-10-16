@@ -54,7 +54,9 @@ export default function TestGeneratorPage() {
       </div>
 
       {/* TOP HEADER */}
-      <header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-xl sm:backdrop-blur-2xl border-b border-white/60 shadow-[0_2px_18px_rgba(0,0,0,0.04)]">
+      {/* Solid background: lite mode (src/styles/lite.css) turns backdrop blur off, and a see-through header let the
+          tabs show through it while scrolling. */}
+      <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-200 shadow-[0_2px_18px_rgba(0,0,0,0.04)]">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 h-13 sm:h-16 md:h-20 flex items-center justify-between">
 
           {/* LEFT */}
