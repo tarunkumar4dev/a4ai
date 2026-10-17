@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   CreditCard, Smartphone, QrCode, Wallet, Shield,
-  CheckCircle, Check, ArrowLeft, Zap, Crown,
+  CheckCircle, Check, ArrowLeft, Zap, Crown, Tag, X,
 } from "lucide-react";
 import { 
   motion, 
@@ -178,6 +178,124 @@ export default function PaymentPage() {
   const [prices, setPrices] = useState<DbPrices | null>(null);
   const [priceError, setPriceError] = useState(false);
 
+  // ── Coupon State ──
+  const [couponInput, setCouponInput] = useState<string>(searchParams.get("coupon") || "");
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [couponQuote, setCouponQuote] = useState<{
+    discountPaise: number;
+    finalPaise: number;
+    percentOff: number;
+    basePaise: number;
+  } | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponSuccessMsg, setCouponSuccessMsg] = useState<string | null>(null);
+
+  const applyCoupon = async (codeToApply: string, cycle: BillingCycle = billingCycle) => {
+    const cleanCode = codeToApply.trim().toUpperCase();
+    if (!cleanCode || !plan) return;
+
+    setCouponLoading(true);
+    setCouponError(null);
+    setCouponSuccessMsg(null);
+
+    try {
+      // 1. Primary: Direct Supabase RPC quote_price (direct to Supabase, works even if backend isn't redeployed yet)
+      const { data: rpcData, error: rpcError } = await supabase.rpc("quote_price", {
+        p_plan_slug: plan.slug,
+        p_cycle: cycle,
+        p_coupon_code: cleanCode,
+      });
+
+      if (!rpcError && rpcData && rpcData.ok) {
+        setAppliedCoupon(rpcData.coupon_code || cleanCode);
+        setCouponQuote({
+          basePaise: rpcData.base_paise,
+          discountPaise: rpcData.discount_paise,
+          finalPaise: rpcData.final_paise,
+          percentOff: rpcData.percent_off,
+        });
+        setCouponSuccessMsg(
+          rpcData.percent_off ? `${rpcData.percent_off}% discount applied!` : "Coupon applied successfully!"
+        );
+        return;
+      }
+
+      // If Supabase RPC returned ok: false with a specific coupon error
+      if (rpcData && !rpcData.ok && rpcData.error) {
+        const errorMessages: Record<string, string> = {
+          coupon_invalid: "Invalid coupon code.",
+          coupon_expired: "This coupon code has expired.",
+          coupon_used: "You have already used this coupon.",
+          coupon_limit_reached: "This coupon has reached its usage limit.",
+          coupon_not_applicable: "This coupon is not applicable to this plan.",
+        };
+        const err = errorMessages[rpcData.error] || `Coupon error: ${rpcData.error}`;
+        setCouponError(err);
+        setAppliedCoupon(null);
+        setCouponQuote(null);
+        return;
+      }
+
+      // 2. Fallback: Backend quote endpoint (if deployed)
+      try {
+        const res = await fetch(joinUrl(RAW_BACKEND_URL, "quote"), {
+          method: "POST",
+          headers: await authHeaders(),
+          body: JSON.stringify({
+            plan_slug: plan.slug,
+            billing_cycle: cycle,
+            coupon_code: cleanCode,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.success) {
+            setAppliedCoupon(data.coupon_code || cleanCode);
+            setCouponQuote({
+              basePaise: data.base_paise,
+              discountPaise: data.discount_paise,
+              finalPaise: data.final_paise,
+              percentOff: data.percent_off,
+            });
+            setCouponSuccessMsg(
+              data.percent_off ? `${data.percent_off}% discount applied!` : "Coupon applied successfully!"
+            );
+            return;
+          }
+        }
+      } catch {
+        // Backend quote fallback failed silently
+      }
+
+      setCouponError(rpcError?.message || "Invalid or expired coupon code.");
+      setAppliedCoupon(null);
+      setCouponQuote(null);
+    } catch (err: any) {
+      setCouponError(err.message || "Failed to validate coupon");
+      setAppliedCoupon(null);
+      setCouponQuote(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponQuote(null);
+    setCouponError(null);
+    setCouponSuccessMsg(null);
+    setCouponInput("");
+  };
+
+  const handleCycleChange = (c: BillingCycle) => {
+    setBillingCycle(c);
+    if (appliedCoupon) {
+      applyCoupon(appliedCoupon, c);
+    }
+  };
+
   useEffect(() => {
     // Institute and unknown plans are not sold online.
     if (!plan) navigate("/contact");
@@ -209,6 +327,14 @@ export default function PaymentPage() {
     };
   }, [plan]);
 
+  // Auto-apply initial coupon from query param if provided
+  useEffect(() => {
+    const initialCoupon = searchParams.get("coupon");
+    if (initialCoupon && plan && prices && !appliedCoupon) {
+      applyCoupon(initialCoupon, billingCycle);
+    }
+  }, [plan, prices]);
+
   const ensureRazorpay = () =>
     new Promise<void>((resolve, reject) => {
       if (window.Razorpay) return resolve();
@@ -221,29 +347,36 @@ export default function PaymentPage() {
     });
 
   const actualPrice = prices ? (billingCycle === "yearly" ? prices.yearly : prices.monthly) : 0;
-  const monthlyEquiv = prices && billingCycle === "yearly" ? Math.round(prices.yearly / 12) : prices?.monthly || 0;
+  const effectivePrice = couponQuote ? couponQuote.finalPaise : actualPrice;
+  const couponDiscount = couponQuote ? couponQuote.discountPaise : 0;
+  const monthlyEquiv = prices && billingCycle === "yearly" ? Math.round(effectivePrice / 12) : effectivePrice;
   const yearlySavings = prices && prices.yearly > 0 ? prices.monthly * 12 - prices.yearly : 0;
   const savings = billingCycle === "yearly" ? yearlySavings : 0;
   const yearlyDiscountPct = prices && prices.monthly > 0 ? Math.round((yearlySavings / (prices.monthly * 12)) * 100) : 0;
   const papersLabel = !prices ? "…" : prices.testLimit < 0 ? "Unlimited" : String(prices.testLimit);
 
   async function handlePay() {
-    if (!plan || !user || !prices || actualPrice <= 0) return;
+    if (!plan || !user || !prices || effectivePrice <= 0) return;
     if (!RZP_KEY) { alert("Razorpay key missing"); return; }
 
     setIsProcessing(true);
     try {
       await ensureRazorpay();
 
+      const orderPayload: Record<string, any> = {
+        amount: effectivePrice,
+        payment_method: selectedMethod,
+        plan_slug: plan.slug,
+        billing_cycle: billingCycle,
+      };
+      if (appliedCoupon) {
+        orderPayload.coupon_code = appliedCoupon;
+      }
+
       const res = await fetch(joinUrl(RAW_BACKEND_URL, "create-order"), {
         method: "POST",
         headers: await authHeaders(),
-        body: JSON.stringify({
-          amount: actualPrice,
-          payment_method: selectedMethod,
-          plan_slug: plan.slug,
-          billing_cycle: billingCycle,
-        }),
+        body: JSON.stringify(orderPayload),
       });
 
       if (!res.ok) {
@@ -425,7 +558,7 @@ export default function PaymentPage() {
                   return (
                     <button
                       key={c}
-                      onClick={() => setBillingCycle(c)}
+                      onClick={() => handleCycleChange(c)}
                       className="relative p-4 rounded-xl border text-left transition-all cursor-pointer"
                       style={{
                         borderColor: active ? accent(isDark) : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"),
@@ -512,6 +645,94 @@ export default function PaymentPage() {
                 </div>
               </div>
 
+              {/* Coupon Code Section */}
+              <div className="mb-4">
+                {!appliedCoupon ? (
+                  <div className="space-y-1.5">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" style={{ color: muted(isDark) }} />
+                        <input
+                          type="text"
+                          value={couponInput}
+                          onChange={(e) => {
+                            setCouponInput(e.target.value);
+                            if (couponError) setCouponError(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              applyCoupon(couponInput);
+                            }
+                          }}
+                          placeholder="Coupon code (e.g. AMANX50)"
+                          className="w-full pl-9 pr-3 py-2 text-xs font-semibold uppercase rounded-xl border transition-all focus:outline-none"
+                          style={{
+                            background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
+                            borderColor: couponError ? "#ef4444" : (isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"),
+                            color: head(isDark),
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => applyCoupon(couponInput)}
+                        disabled={couponLoading || !couponInput.trim()}
+                        className="px-3.5 py-2 text-xs font-bold rounded-xl transition-all disabled:opacity-40 cursor-pointer"
+                        style={{
+                          background: isDark ? "#ffffff" : "#111111",
+                          color: isDark ? "#111111" : "#ffffff",
+                        }}
+                      >
+                        {couponLoading ? "Applying…" : "Apply"}
+                      </button>
+                    </div>
+                    {couponError && (
+                      <p className="text-[11px] text-red-500 font-medium px-1">
+                        {couponError}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className="flex items-center justify-between p-2.5 rounded-xl border text-xs"
+                    style={{
+                      background: isDark ? "rgba(16,185,129,0.08)" : "rgba(16,185,129,0.06)",
+                      borderColor: "rgba(16,185,129,0.3)",
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                        <Check className="h-3 w-3" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 tracking-wider">
+                            {appliedCoupon}
+                          </span>
+                          {couponQuote?.percentOff ? (
+                            <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                              -{couponQuote.percentOff}%
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[10px]" style={{ color: muted(isDark) }}>
+                          {couponSuccessMsg || "Coupon applied"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeCoupon}
+                      className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                      title="Remove coupon"
+                    >
+                      <X className="h-3.5 w-3.5" style={{ color: muted(isDark) }} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Breakdown */}
               <div className="space-y-2.5 text-sm mb-4">
                 <div className="flex justify-between">
@@ -530,6 +751,14 @@ export default function PaymentPage() {
                     <span className="font-medium">-{fmt(savings)}</span>
                   </div>
                 )}
+                {appliedCoupon && couponQuote && couponQuote.discountPaise > 0 && (
+                  <div className="flex justify-between font-medium" style={{ color: "#10b981" }}>
+                    <span className="flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5" /> Coupon ({appliedCoupon})
+                    </span>
+                    <span>-{fmt(couponQuote.discountPaise)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span style={{ color: muted(isDark) }}>AI test papers</span>
                   <span className="font-medium" style={{ color: head(isDark) }}>
@@ -542,21 +771,30 @@ export default function PaymentPage() {
                 <div className="flex justify-between items-baseline">
                   <span className="text-base font-bold" style={{ color: head(isDark) }}>Total</span>
                   <div className="text-right">
-                    <span className="text-2xl font-extrabold" style={{ color: head(isDark) }}>{fmt(actualPrice)}</span>
+                    <div className="flex items-baseline justify-end gap-2">
+                      {appliedCoupon && couponQuote && couponQuote.discountPaise > 0 && (
+                        <span className="text-sm line-through" style={{ color: muted(isDark) }}>
+                          {fmt(actualPrice)}
+                        </span>
+                      )}
+                      <span className="text-2xl font-extrabold" style={{ color: head(isDark) }}>
+                        {fmt(effectivePrice)}
+                      </span>
+                    </div>
                     {billingCycle === "yearly" && (
                       <p className="text-[11px]" style={{ color: muted(isDark) }}>{fmt(monthlyEquiv)}/mo effective</p>
                     )}
                   </div>
                 </div>
                 <p className="text-xs mt-1 text-right" style={{ color: muted(isDark) }}>
-                  That's just {fmtPerDay(actualPrice, billingCycle)}/day
+                  That's just {fmtPerDay(effectivePrice, billingCycle)}/day
                 </p>
               </div>
 
               {/* Pay button */}
               <button
                 onClick={handlePay}
-                disabled={isProcessing || !prices}
+                disabled={isProcessing || !prices || effectivePrice <= 0}
                 className="btn-blk w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {isProcessing ? (
@@ -568,7 +806,7 @@ export default function PaymentPage() {
                     Processing...
                   </>
                 ) : prices ? (
-                  `Pay ${fmt(actualPrice)} Now`
+                  `Pay ${fmt(effectivePrice)} Now`
                 ) : priceError ? (
                   "Price unavailable. Please refresh."
                 ) : (

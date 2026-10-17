@@ -120,7 +120,7 @@ export default function Navbar() {
                 className="font-semibold tracking-tight text-gray-900"
                 style={{ fontSize: "30px", lineHeight: "1.1" }}
               >
-                a4ai
+                AI for All India
               </span>
             </Link>
           </div>

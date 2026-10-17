@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useForm, FormProvider, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
-import {
+import {  
   Library, GraduationCap, Book, ChevronDown, Clock, Zap,
   Loader2, AlertCircle, FileText,
 } from "lucide-react";

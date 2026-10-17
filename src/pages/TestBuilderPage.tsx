@@ -890,7 +890,7 @@ export default function TestBuilderPage() {
   const [chapterStats, setChapterStats] = useState<ChapterStat[]>([]);
   const [libraryQuestions, setLibraryQuestions] = useState<NCERTQuestion[]>([]);
   const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
-  const [examTitle, setExamTitle] = useState("Custom NCERT Test Paper");
+  const [examTitle, setExamTitle] = useState("");
   const [templateTier, setTemplateTier] = useState<"standard" | "premium">("standard");
   const [colorTheme, setColorTheme] = useState<"teal" | "navy" | "dark_green" | "orange">("teal");
   const [instituteName, setInstituteName] = useState("");
@@ -1177,7 +1177,7 @@ export default function TestBuilderPage() {
       const { error: testErr } = await supabase.from("tests").insert({
         id: testId,
         teacher_id: user.id,
-        exam_title: examTitle || "Custom NCERT Test Paper",
+        exam_title: examTitle || `${subject} Class ${classGrade} Test`,
         board: "CBSE",
         class_grade: `Class ${classGrade}`,
         subject: subject,
@@ -1270,7 +1270,8 @@ export default function TestBuilderPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${examTitle.replace(/\s+/g, "_")}.${format}`;
+      const fileTitle = (examTitle || `${subject}_Class_${classGrade}_Test`).replace(/\s+/g, "_");
+      a.download = `${fileTitle}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success("Test Paper downloaded successfully!");
@@ -1280,7 +1281,7 @@ export default function TestBuilderPage() {
           await generateTestPaperPdf(
             {
               id: "temp",
-              exam_title: examTitle || "Custom NCERT Test Paper",
+              exam_title: examTitle || `${subject} Class ${classGrade} Test`,
               board: "CBSE",
               class_grade: `Class ${classGrade}`,
               subject,
@@ -1352,7 +1353,8 @@ export default function TestBuilderPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${examTitle.replace(/\s+/g, "_")}_AnswerKey.${format}`;
+      const fileTitle = (examTitle || `${subject}_Class_${classGrade}_Test`).replace(/\s+/g, "_");
+      a.download = `${fileTitle}_AnswerKey.${format}`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success("Answer Key downloaded successfully!");
@@ -1362,7 +1364,7 @@ export default function TestBuilderPage() {
           await generateAnswerKeyPdf(
             {
               id: "temp",
-              exam_title: examTitle || "Custom NCERT Test Paper",
+              exam_title: examTitle || `${subject} Class ${classGrade} Test`,
               board: "CBSE",
               class_grade: `Class ${classGrade}`,
               subject,
@@ -1512,16 +1514,6 @@ export default function TestBuilderPage() {
                   <span className="hidden sm:inline">Settings</span>
                 </button>
               </div>
-            </div>
-
-            {/* Test Title Input Bar */}
-            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-3">
-              <input
-                value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
-                placeholder="Enter Test Paper Title (e.g. Science Mid-Term Unit Test)..."
-                className="w-full text-sm font-medium text-gray-900 placeholder-gray-400 bg-transparent outline-none focus:ring-0"
-              />
             </div>
           </div>
         </div>
