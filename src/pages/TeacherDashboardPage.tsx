@@ -145,7 +145,7 @@ const customStyles = `
   .dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
 
   .glass-panel {
-    background: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(40px);
     -webkit-backdrop-filter: blur(40px);
     border: 1px solid rgba(0, 0, 0, 0.05);
@@ -153,31 +153,31 @@ const customStyles = `
                 inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
   }
   .dark .glass-panel {
-    background: rgba(15, 15, 15, 0.6);
+    background: rgba(18, 18, 18, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.8),
                 inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
   }
   .glass-overlay {
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(48px);
     border: 1px solid rgba(0, 0, 0, 0.05);
     box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.1),
                 inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
   }
   .dark .glass-overlay {
-    background: rgba(10, 10, 10, 0.92);
+    background: rgba(12, 12, 12, 0.98);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.9);
   }
   .inset-pill {
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.9);
     box-shadow: inset 4px 4px 10px rgba(0, 0, 0, 0.02),
                 inset -4px -4px 10px rgba(255, 255, 255, 0.9);
     border: 1px solid rgba(0, 0, 0, 0.05);
   }
   .dark .inset-pill {
-    background: rgba(20, 20, 20, 0.6);
+    background: rgba(24, 24, 24, 0.9);
     box-shadow: inset 4px 4px 10px rgba(0, 0, 0, 0.5),
                 inset -4px -4px 10px rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -306,14 +306,14 @@ const COLOR_SCHEMES = {
 const SidebarButton = ({ active, Icon, label, colorClass, badge, onClick }: any) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 active:scale-95 ${active
+    className={`w-full flex items-center justify-start px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 active:scale-95 ${active
       ? "bg-slate-200/50 dark:bg-slate-800 shadow-sm text-slate-800 dark:text-white"
       : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60"
       }`}
   >
     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-      <div className={`${active ? "scale-110" : ""} transition-transform shrink-0 ${colorClass}`}>
-        <Icon />
+      <div className={`${active ? "scale-110" : ""} transition-transform shrink-0 ${colorClass || "text-slate-500"}`}>
+        {Icon ? <Icon /> : null}
       </div>
       <span className="truncate tracking-wide">{label}</span>
       {badge && (
@@ -321,9 +321,6 @@ const SidebarButton = ({ active, Icon, label, colorClass, badge, onClick }: any)
           {badge}
         </span>
       )}
-    </div>
-    <div className="text-slate-300 dark:text-slate-600 shrink-0">
-      <Icons.ChevronDown />
     </div>
   </button>
 );
@@ -1330,14 +1327,14 @@ export default function TeacherDashboardPage() {
   const navItems = [
     { id: "dashboard", Icon: Icons.Grid, label: "Dashboard", color: "text-blue-500" },
     { id: "calendar", Icon: Icons.Calendar, label: "Calendar", color: "text-indigo-500" },
-    { id: "assignments", Icon: Icons.FileText, label: "Assignments" },
+    { id: "assignments", Icon: Icons.FileText, label: "Assignments", color: "text-sky-500" },
     { id: "attendance", Icon: Icons.Clock, label: "Attendance", color: "text-violet-500" },
     { id: "students", Icon: Icons.Users, label: "Students", color: "text-orange-500" },
     ...(isProctor ? [{ id: "section", Icon: Icons.Grid, label: "My Section", color: "text-teal-500" }] : []),
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
-    { id: "ai-tools", Icon: Icons.Sparkles, label: "AI Tools", color: "text-amber-500", badge: "MAGICAL" },
+    { id: "ai-tools", Icon: Icons.Sparkles, label: "AI Tools", color: "text-amber-500" },
   ];
 
   const finalNavItems = navItems;
@@ -1378,11 +1375,11 @@ export default function TeacherDashboardPage() {
 
         {/* ===== SIDEBAR ===== */}
         <aside
-          className={`fixed lg:relative top-0 left-0 w-[288px] h-full flex flex-col bg-white/80 dark:bg-black/80 backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5 z-[200] lg:z-50 shrink-0 transform transition-transform duration-300 overflow-y-auto ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          className={`fixed lg:relative top-0 left-0 w-[288px] h-full flex flex-col bg-white/95 dark:bg-black/95 backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5 z-[200] lg:z-50 shrink-0 transform transition-transform duration-300 overflow-y-auto ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
             }`}
         >
           <div className="p-5 pb-2">
-            <div className="flex items-center justify-between mb-8 animate-entrance px-2 border-b border-slate-100 dark:border-white/5 pb-6" style={{ animationDelay: "100ms" }}>
+            <div className="flex items-center justify-between mb-8 px-2 border-b border-slate-100 dark:border-white/5 pb-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-[20px] sm:rounded-[24px] inset-pill border-none flex items-center justify-center shrink-0 overflow-hidden bg-white dark:bg-slate-800">
                   <img
@@ -1410,7 +1407,7 @@ export default function TeacherDashboardPage() {
               </button>
             </div>
 
-            <div className="animate-entrance" style={{ animationDelay: "200ms" }}>
+            <div>
               <nav className="space-y-1.5 mt-2">
                 {finalNavItems.map((item) => {
                   const ItemIcon = item.Icon;
@@ -1436,7 +1433,7 @@ export default function TeacherDashboardPage() {
             </div>
           </div>
 
-          <div className="mt-auto px-5 pb-4 animate-entrance" style={{ animationDelay: "300ms" }}>
+          <div className="mt-auto px-5 pb-4">
             <SubscriptionSidebarWidget navigate={navigate} testsCount={currentMonthTestsCount} />
             <SidebarHelpWidget />
           </div>
@@ -1448,7 +1445,7 @@ export default function TeacherDashboardPage() {
 
             {/* HEADER */}
             <header
-              className="sticky lg:relative top-0 z-[150] lg:z-[100] bg-white/80 dark:bg-black/80 lg:bg-transparent backdrop-blur-xl lg:backdrop-blur-none border-b lg:border-none border-slate-200/50 dark:border-white/5 px-4 sm:px-6 lg:px-0 py-3 lg:py-0 -mx-4 sm:-mx-6 lg:mx-0 mb-6 lg:mb-12 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 lg:gap-6 animate-entrance transition-colors duration-500"
+              className="sticky lg:relative top-0 z-[150] lg:z-[100] bg-white/95 dark:bg-black/95 lg:bg-transparent backdrop-blur-xl lg:backdrop-blur-none border-b lg:border-none border-slate-200/50 dark:border-white/5 px-4 sm:px-6 lg:px-0 py-3 lg:py-0 -mx-4 sm:-mx-6 lg:mx-0 mb-6 lg:mb-12 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 lg:gap-6 animate-entrance transition-colors duration-500"
               style={{ animationDelay: "100ms" }}
             >
               <div className="flex lg:hidden items-center gap-3">

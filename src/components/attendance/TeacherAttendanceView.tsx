@@ -411,9 +411,9 @@ export default function TeacherAttendanceView() {
     @keyframes popIn{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:none}}
     @keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:none}}
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-    .glass{background:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-    .dark .glass{background:rgba(15,23,42,.65);border-color:rgba(255,255,255,.06)}
+    @media(prefers-reduced-motion:reduce){.att-root *{animation:none!important;transition:none!important}}
+    .glass{background:rgba(255,255,255,.95);border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+    .dark .glass{background:rgba(15,23,42,.95);border-color:rgba(255,255,255,.06)}
     .pill{background:rgba(0,0,0,.04)}.dark .pill{background:rgba(255,255,255,.06)}
   `;
 
@@ -423,7 +423,7 @@ export default function TeacherAttendanceView() {
       <>
         <style>{css}</style>
         <Toasts items={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
-        <div className="space-y-4 sm:space-y-6 animate-[popIn_.3s_ease-out]">
+        <div className="att-root space-y-4 sm:space-y-6 animate-[popIn_.3s_ease-out]">
 
           {/* Teacher info (compact on mobile) */}
           <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex items-center gap-4">
@@ -559,9 +559,9 @@ export default function TeacherAttendanceView() {
       <Toasts items={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
       <Confirm open={!!confirm} onClose={() => setConfirm(null)} onOk={() => confirm?.fn()} title={confirm?.title || ""} msg={confirm?.msg || ""} ok={confirm?.ok} warn={confirm?.warn} />
 
-      <div className="space-y-4 sm:space-y-6 animate-[popIn_.25s_ease-out]">
+      <div className="att-root space-y-4 sm:space-y-6 animate-[popIn_.25s_ease-out]">
         {/* Header — sticky on mobile */}
-        <div className="sticky top-0 z-20 -mx-2 px-2 py-2 backdrop-blur-xl bg-white/70 dark:bg-slate-950/70 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:backdrop-blur-none sm:bg-transparent rounded-b-2xl sm:rounded-none">
+        <div className="sticky top-0 z-20 -mx-2 px-2 py-2 backdrop-blur-xl bg-white/95 dark:bg-slate-950/95 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:backdrop-blur-none sm:bg-transparent rounded-b-2xl sm:rounded-none">
           <div className="flex items-start gap-2">
             <button onClick={back} className="p-2 rounded-xl pill text-slate-600 dark:text-slate-300 active:scale-90 touch-manipulation shrink-0 mt-0.5"><Icon.Back /></button>
             <div className="flex-1 min-w-0">
