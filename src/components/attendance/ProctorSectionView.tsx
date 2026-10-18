@@ -107,8 +107,8 @@ const css = `
   @keyframes pvPop{from{opacity:0;transform:scale(.97) translateY(6px)}to{opacity:1;transform:none}}
   @keyframes pvUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:none}}
   @media(prefers-reduced-motion:reduce){.pv *{animation:none!important;transition:none!important}}
-  .pv .glass{background:rgba(255,255,255,.7);border:1px solid rgba(0,0,0,.06);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-  .dark .pv .glass{background:rgba(15,23,42,.7);border-color:rgba(255,255,255,.06)}
+  .pv .glass{background:rgba(255,255,255,.95);border:1px solid rgba(0,0,0,.06);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .dark .pv .glass{background:rgba(15,23,42,.95);border-color:rgba(255,255,255,.06)}
   .pv .pill{background:rgba(0,0,0,.045)}.dark .pv .pill{background:rgba(255,255,255,.07)}
   .pv .grad{background:linear-gradient(135deg,var(--theme-start,#3b82f6),var(--theme-end,#8b5cf6))}
   .pv .atbl{border-collapse:separate;border-spacing:0}
