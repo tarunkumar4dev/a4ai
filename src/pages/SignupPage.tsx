@@ -736,7 +736,7 @@ export default function SignupPage() {
                   ? "Complete Verification Challenge" 
                   : signupMethod === "phone" 
                   ? "Verify & Sign Up" 
-                  : "Get FREE Coins!"}
+                  : "Sign Up"}
               </Button>
 
               <p className={`text-center text-sm font-medium transition-colors ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
