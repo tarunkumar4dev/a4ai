@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ModuleCreator from '../components/ModuleCreator';
 import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/authHeaders';
 import {
   BookOpen,
   FileText,
@@ -161,7 +162,7 @@ export const ModulesPage: React.FC = () => {
         setLoading(false);
         return;
       }
-      const res = await fetch(`${API_URL}/modules/list?teacher_id=${teacherId}`);
+      const res = await fetch(`${API_URL}/modules/list?teacher_id=${teacherId}`, { headers: await authHeaders() });
       const data = await res.json();
       if (data.success) {
         setModules(data.modules || []);
@@ -198,7 +199,7 @@ export const ModulesPage: React.FC = () => {
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const teacherId = sessionData?.session?.user?.id;
-        const res = await fetch(`${API_URL}/modules/${moduleId}?teacher_id=${teacherId}`);
+        const res = await fetch(`${API_URL}/modules/${moduleId}?teacher_id=${teacherId}`, { headers: await authHeaders() });
         const data = await res.json();
         if (data.success && data.summary) {
           setModuleSummary((prev) => ({ ...prev, [moduleId]: data.summary }));
@@ -222,6 +223,7 @@ export const ModulesPage: React.FC = () => {
       const teacherId = sessionData?.session?.user?.id;
       const res = await fetch(`${API_URL}/modules/${moduleId}?teacher_id=${teacherId}`, {
         method: 'DELETE',
+        headers: await authHeaders(),
       });
       const data = await res.json();
       if (data.success) {
@@ -243,7 +245,7 @@ export const ModulesPage: React.FC = () => {
       const teacherId = sessionData?.session?.user?.id;
       const res = await fetch(`${API_URL}/modules/${moduleId}/generate-test`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           teacher_id: teacherId,
           num_questions: 10,

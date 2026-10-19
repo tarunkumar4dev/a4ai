@@ -1,6 +1,7 @@
 // src/components/WorksheetModal.tsx
 import React, { useState, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { authHeaders } from '@/lib/authHeaders';
 import {
   X, FileDown, Loader2, Upload, Image as ImageIcon,
   CheckCircle, FileText, Trash2, Sparkles
@@ -108,7 +109,7 @@ const WorksheetModal: React.FC<WorksheetModalProps> = ({
 
       const res = await fetch(`${API_URL}/modules/${moduleId}/generate-worksheet`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           teacher_id: teacherId,
           num_questions: numQuestions,
@@ -147,7 +148,7 @@ const WorksheetModal: React.FC<WorksheetModalProps> = ({
 
       const res = await fetch(`${API_URL}/modules/${moduleId}/download-worksheet`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           teacher_id: teacherId,
           worksheet_data: worksheetData,
