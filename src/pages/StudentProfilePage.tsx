@@ -6,6 +6,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { useAccess } from "@/context/AccessProvider";
+import { indianMobile10, toStoredParentPhone } from "@/lib/parentNotify";
 
 /* ─── Avatar ─────────────────────────────────────────────────────── */
 function Avatar({ gender, size = 80 }: { gender?: string | null; size?: number }) {
@@ -116,6 +117,69 @@ ${monthly.length > 0 ? `
   w.document.write(html);
   w.document.close();
   setTimeout(() => w.print(), 400);
+}
+
+/* ─── Parent WhatsApp number (students.parent_phone) ─────────────── */
+// RLS lets admin / HOD / proctor update students; a subject teacher gets a clear message instead.
+function ParentWhatsAppField({ studentId, value, onSaved }: {
+  studentId: string; value: string | null; onSaved: (v: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [input, setInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const current = indianMobile10(value);
+
+  async function save() {
+    const raw = input.trim();
+    const stored = raw ? toStoredParentPhone(raw) : null;
+    if (raw && !stored) { setMsg({ ok: false, text: "10 digit ka Indian mobile number daalein (6/7/8/9 se shuru)." }); return; }
+    setSaving(true);
+    const { data, error } = await supabase.from("students").update({ parent_phone: stored }).eq("id", studentId).select("id");
+    setSaving(false);
+    if (error) { setMsg({ ok: false, text: error.message }); return; }
+    if (!data?.length) { setMsg({ ok: false, text: "Aapko ye number badalne ki permission nahi hai — admin, HOD ya class teacher se kahein." }); return; }
+    onSaved(stored);
+    setEditing(false);
+    setMsg({ ok: true, text: "Number save ho gaya" });
+  }
+
+  return (
+    <div style={{ padding: "0 22px 22px" }}>
+      <div style={{ border: "1px solid #E2E8F0", borderRadius: 14, padding: "12px 14px" }}>
+        <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 6 }}>Parent WhatsApp number</div>
+        {!editing ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: current ? "#1E293B" : "#94A3B8" }}>
+              {current ? `+91 ${current.slice(0, 5)} ${current.slice(5)}` : value ? `${value} (galat number)` : "Nahi diya"}
+            </span>
+            <button onClick={() => { setInput(current || ""); setEditing(true); setMsg(null); }}
+              style={{ marginLeft: "auto", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, color: "#475569", cursor: "pointer" }}>
+              {value ? "Badlein" : "Number daalein"}
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", border: "1px solid #CBD5E1", borderRadius: 10, overflow: "hidden", flex: "1 1 200px" }}>
+              <span style={{ padding: "8px 10px", background: "#F1F5F9", fontSize: 13, fontWeight: 700, color: "#475569" }}>+91</span>
+              <input value={input} onChange={e => setInput(e.target.value)} inputMode="numeric" autoFocus
+                placeholder="98765 43210" maxLength={16}
+                onKeyDown={e => { if (e.key === "Enter") save(); }}
+                style={{ flex: 1, minWidth: 0, border: "none", outline: "none", padding: "8px 10px", fontSize: 14 }} />
+            </div>
+            <button onClick={save} disabled={saving}
+              style={{ background: "#25D366", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button onClick={() => { setEditing(false); setMsg(null); }}
+              style={{ background: "none", border: "none", color: "#64748B", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+          </div>
+        )}
+        {msg && <div style={{ fontSize: 12, marginTop: 6, color: msg.ok ? "#16A34A" : "#DC2626" }}>{msg.text}</div>}
+        {editing && <div style={{ fontSize: 11, marginTop: 6, color: "#94A3B8" }}>Khaali chhod ke Save = number hata dein.</div>}
+      </div>
+    </div>
+  );
 }
 
 /* ─── Main Page ──────────────────────────────────────────────────── */
@@ -305,7 +369,6 @@ export default function StudentProfilePage() {
     { label: "Batch", value: student.batchName },
     student.deptName ? { label: "Department", value: student.deptName } : null,
     student.parent_name ? { label: "Parent Name", value: student.parent_name } : null,
-    student.parent_phone ? { label: "Parent Phone", value: student.parent_phone } : null,
     student.phone ? { label: "Student Phone", value: student.phone } : null,
     student.email ? { label: "Email", value: student.email } : null,
     student.address ? { label: "Address", value: student.address } : null,
@@ -373,6 +436,8 @@ export default function StudentProfilePage() {
               ))}
             </div>
           </div>
+          <ParentWhatsAppField studentId={student.id} value={student.parent_phone ?? null}
+            onSaved={v => setStudent((p: any) => ({ ...p, parent_phone: v }))} />
         </motion.div>
 
         {/* ── Attendance Card ── */}

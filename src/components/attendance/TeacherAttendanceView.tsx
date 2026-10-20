@@ -10,6 +10,8 @@
 import React, { useState, useMemo, useCallback, useEffect, memo, useRef } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+import ParentNotifyModal, { type NotifyStudent } from "./ParentNotifyModal";
+import { buildAttendanceMessage } from "@/lib/parentNotify";
 
 /* ───── TYPES ───── */
 type Status = "present" | "absent" | "leave";
@@ -20,6 +22,7 @@ interface Student {
   rollNo?: string;
   status: Status;
   pct?: number;
+  parentPhone?: string | null;
 }
 
 interface SessionTarget {
@@ -176,6 +179,10 @@ export default function TeacherAttendanceView() {
   const [saving, setSaving] = useState(false);
   const [loadingSheet, setLoadingSheet] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  // Attendance as last saved — what the "Parents ko batayein" modal sends
+  const [savedSheet, setSavedSheet] = useState<Student[] | null>(null);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [instName, setInstName] = useState("");
 
   const [instId, setInstId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionTarget[]>([]);
@@ -217,6 +224,8 @@ export default function TeacherAttendanceView() {
 
       if (!targetInstId) { setLoading(false); return; }
       setInstId(targetInstId);
+      supabase.from("institutes").select("name").eq("id", targetInstId).maybeSingle()
+        .then(({ data }) => setInstName(data?.name || ""));
       const ds = toDateStr(date);
 
       const [sessRes, tgtRes, ctRes] = await Promise.all([
@@ -281,10 +290,10 @@ export default function TeacherAttendanceView() {
 
   // ── Open session ──
   const open = useCallback(async (t: SessionTarget) => {
-    setSelected(t); setStudents([]); setDirty(false); setSearch(""); setFilter("all"); setLastSaved(null); setLoadingSheet(true);
+    setSelected(t); setStudents([]); setDirty(false); setSearch(""); setFilter("all"); setLastSaved(null); setSavedSheet(null); setNotifyOpen(false); setLoadingSheet(true);
     try {
       const ds = toDateStr(date);
-      const { data: stu } = await supabase.from("students").select("id, name, roll_no")
+      const { data: stu } = await supabase.from("students").select("id, name, roll_no, parent_phone")
         .eq("batch_id", t.batchId).eq("is_active", true).order("roll_no");
       if (!stu?.length) { toast(`${classLabel(t)} has no students`, "info"); setOriginal([]); setLoadingSheet(false); return; }
 
@@ -310,7 +319,7 @@ export default function TeacherAttendanceView() {
       } catch {}
 
       const loaded: Student[] = stu.map((s: any) => ({
-        id: s.id, name: s.name, rollNo: s.roll_no || undefined,
+        id: s.id, name: s.name, rollNo: s.roll_no || undefined, parentPhone: s.parent_phone,
         status: saved[s.id] || "present", pct: pctMap[s.id] ?? 0,
       }));
       setStudents(loaded); setOriginal(JSON.parse(JSON.stringify(loaded)));
@@ -359,6 +368,7 @@ export default function TeacherAttendanceView() {
 
       setSelected(prev => (prev ? { ...prev, sessionId: sid as string, isMarked: true } : prev));
       setOriginal(JSON.parse(JSON.stringify(students))); setDirty(false);
+      setSavedSheet(students.map(s => ({ ...s })));
       setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
       const ctName = classTeachers[selected.batchId];
       toast(`Saved — ${selected.subjectName} · ${classLabel(selected)}${ctName && ctName !== "you" ? ` · sent to ${ctName}` : ""}`);
@@ -558,6 +568,21 @@ export default function TeacherAttendanceView() {
       <style>{css}</style>
       <Toasts items={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
       <Confirm open={!!confirm} onClose={() => setConfirm(null)} onOk={() => confirm?.fn()} title={confirm?.title || ""} msg={confirm?.msg || ""} ok={confirm?.ok} warn={confirm?.warn} />
+      <ParentNotifyModal
+        key={`${selected.batchId}-${selected.subjectId}-${toDateStr(date)}-${lastSaved}`}
+        open={notifyOpen && !!savedSheet}
+        onClose={() => setNotifyOpen(false)}
+        students={(savedSheet || []) as NotifyStudent[]}
+        messageFor={s => buildAttendanceMessage({
+          instituteName: instName || "aapke institute",
+          studentName: s.name,
+          className: classLabel(selected),
+          date,
+          subject: selected.subjectName,
+          status: s.status,
+          teacherName: name,
+        })}
+      />
 
       <div className="space-y-4 sm:space-y-6 animate-[popIn_.25s_ease-out]">
         {/* Header — sticky on mobile */}
@@ -591,6 +616,12 @@ export default function TeacherAttendanceView() {
               {saving ? "Saving…" : lastSaved ? `Saved ${lastSaved}` : dirty ? `${changed} changed` : "Saved"}
             </span>
           </div>
+          {savedSheet && !dirty && !saving && (
+            <button onClick={() => setNotifyOpen(true)}
+              className="mt-2 w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#25D366] active:scale-95 touch-manipulation">
+              Parents ko batayein (Absent {savedSheet.filter(s => s.status === "absent").length})
+            </button>
+          )}
         </div>
 
         {/* Quick stats */}
