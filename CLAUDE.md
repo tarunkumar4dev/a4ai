@@ -210,6 +210,25 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Works whether VITE_BACKEND_URL / VITE_API_URL end in nothing, /api or /api/v1. Live VITE_BACKEND_URL had no /api → checker
   calls were 404. Don't build backend URLs from env vars directly. (Modules/worksheet still use VITE_API_URL root + /modules.)
 
+- [x] NCERT question quality (18 Oct, code only): live ncert_questions = 91,906 rows but ~31k distinct questions
+  (Class 11 Chemistry 4,187 → 657; most stored 7–8×). Found: options repeated in question_text + "(a)" labels on
+  options (UI/PDF printed "A (a) …" twice); "the following reaction/compounds/statements" with the items missing
+  (they were drawings or a special font); PDF glyph junk (/square6, /unif02b); figure images cropped as half a page
+  (batch_extract_diagrams.py took the bbox of EVERY drawing above the caption).
+  RAG-BACKEND: `app/services/ncert_cleanup.py` (clean_question on /ncert-questions = labels, inline options, glyphs;
+  missing_items_reason / quality_issue) + `scripts/check_ncert_cleanup.py`; /ncert-questions + /ncert-question-stats
+  only return `quality_flag IS NULL` (fallback to unfiltered while 18 isn't applied); AI generator drops MCQs whose
+  statements/columns are missing + prompt rule "the following → items in text". `scripts/ncert_quality_pass.py`
+  (dry run / --apply with backup / --rollback). `ncert-ingestion/recrop_diagrams.py` (tight crop near the caption,
+  new files under ncert-diagrams/v2/, rollback json). Existing `add_question_block_images.py` renders the PDF block
+  for rows whose items were drawings (dry run Class 11 Chem: 50 + 14 rows, previews correct).
+- [ ] NCERT run order: 18_ncert_question_quality.sql → add_question_block_images.py (--mode labels, then --mode items;
+  Class 11/12 Chemistry, 11/12 Physics, 9/10 Science/Maths) → ncert_quality_pass.py --apply → recrop_diagrams.py --apply
+  → deploy backend. All writes need SUPABASE_SERVICE_KEY / DATABASE_URL set in the terminal.
+- Known after NCERT pass: `app/core/db_pool.py` has a DB password as default (committed) — rotate it and remove the
+  default. Saved papers keep the old text (cleanup is at read time). Figures referenced without "Fig. X.Y" in the
+  text still have no image.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
