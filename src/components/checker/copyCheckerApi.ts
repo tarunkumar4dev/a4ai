@@ -39,7 +39,7 @@ export const STRICTNESS_LABEL: Record<Strictness, string> = {
 };
 
 export const MAX_PAGES = 16;
-const BUCKET = "answer-sheets";
+export const BUCKET = "answer-sheets";
 const API = backendUrl("/v1/copy-checker");
 
 const request = (method: "POST" | "PATCH", path: string, body?: unknown) => checkerFetch(`${API}${path}`, method, body);

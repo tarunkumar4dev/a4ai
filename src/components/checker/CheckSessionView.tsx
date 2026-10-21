@@ -15,7 +15,7 @@ import {
 } from "./copyCheckerApi";
 import { exportSessionResults } from "./checkerExport";
 import { humanError } from "./checkerFetch";
-import { downloadMarkedCopy } from "./markedCopyExport";
+import { downloadMarkedCopy, markedCopyPages } from "./markedCopyExport";
 import CheckSessionAnalytics from "./CheckSessionAnalytics";
 import StudentPicker from "./StudentPicker";
 import CheckSteps, { currentStep } from "./CheckSteps";
@@ -768,7 +768,7 @@ function StudentCopy({ sheet, displayName, blind, session, userId, canCheck, pos
               <div className="rounded-2xl bg-white border border-gray-200 overflow-hidden">
                 <AiQuestionList questions={r.graded_questions || []} onOverride={overrideQuestion} />
               </div>
-              {imagePages.length > 0 && (
+              {markedCopyPages(sheet).length > 0 && (
                 <button onClick={downloadMarked} disabled={downloadBusy}
                   className="w-full py-3 rounded-2xl border border-gray-200 bg-white text-sm font-bold text-gray-700 inline-flex items-center justify-center gap-1.5 disabled:opacity-50">
                   <FileText size={15} /> {downloadBusy ? "Generating PDF…" : "Download marked copy"}

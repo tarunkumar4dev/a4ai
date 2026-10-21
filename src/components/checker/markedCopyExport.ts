@@ -2,10 +2,16 @@
 // "Red pen" marked copy: each page image gets a right-margin strip with ✓/✗ + marks at the height where
 // the answer starts (page_index + y_start from the grader), a short red note where marks were lost,
 // and the total on page 1. Plain Canvas + jsPDF; font served from /fonts (no CDN).
+// Pages: the backend's upright, student-ordered page images (ai_result.norm_pages — works for PDF uploads too);
+// older results without them use the uploaded photos. Stopgap until the backend renderer (checker v4, G4).
+// Delivery: the PDF is stored next to the copy and opened through an https signed URL with a download
+// filename — never a blob: URL (the Android WebView app can't save those).
 
+import { supabase } from "@/lib/supabaseClient";
+import { BUCKET, signedUrls } from "./copyCheckerApi";
 import type { CheckSession, CheckSheet } from "./copyCheckerApi";
 import { effectiveMarks, effectiveTotal } from "./AiGradeBreakdown";
-import type { GradedQuestion } from "./AiGradeBreakdown";
+import type { GradedQuestion, SheetFlag } from "./AiGradeBreakdown";
 
 const RED = "#DC2626";
 const RED_LIGHT = "#FCA5A5";
@@ -55,9 +61,22 @@ function shortComment(q: GradedQuestion): string | null {
   return cut.slice(0, cut.lastIndexOf(" ") > 20 ? cut.lastIndexOf(" ") : COMMENT_CHARS).replace(/[,;:.\s]+$/, "") + "…";
 }
 
+type Unplaced = GradedQuestion & { unplaced?: boolean };
+
+/** Sheet-level notes for page 1's margin, a few words each (the strip is narrow). */
+function sheetNotes(flags: SheetFlag[] | undefined): string[] {
+  const notes: string[] = [];
+  for (const f of flags || []) {
+    if (f.code === "PAGES_REORDERED") notes.push("Pages put in order");
+    else if (f.code === "PAGE_ROTATED" && f.page != null) notes.push(`p.${f.page + 1} turned upright`);
+    else if (f.code === "BLANK_PAGE" && f.page != null) notes.push(`p.${f.page + 1} blank`);
+  }
+  return notes;
+}
+
 function annotatePage(
   ctx: CanvasRenderingContext2D, imgW: number, h: number, s: number,
-  questions: GradedQuestion[], totalText: string | null, footer: string,
+  questions: GradedQuestion[], totalText: string | null, footer: string, notes: string[] = [],
 ) {
   const m = Math.round(MARGIN * s);
   const w = imgW + m;
@@ -77,7 +96,9 @@ function annotatePage(
     lastY = y;
     const got = effectiveMarks(q);
     const tick = q.not_attempted ? "" : got >= q.max_marks ? "✓ " : got === 0 ? "✗ " : "";
-    const label = q.not_attempted ? "—" : `${tick}${got}/${q.max_marks}`;
+    const marks = q.not_attempted ? "—" : `${tick}${got}/${q.max_marks}`;
+    // listed on page 1 because the grader couldn't place it: say which question it is
+    const label = (q as Unplaced).unplaced ? `Q${q.q_no} ${marks}` : marks;
 
     ctx.save();
     ctx.translate(imgW + m / 2, y);
@@ -116,6 +137,14 @@ function annotatePage(
     ctx.restore();
   }
 
+  // sheet notes (page 1): bottom of the strip, above the footer, last note lowest
+  ctx.font = `${17 * s}px sans-serif`;
+  ctx.fillStyle = RED;
+  ctx.textAlign = "center";
+  notes.forEach((note, i) => {
+    ctx.fillText(note, w - m / 2, h - (44 + (notes.length - 1 - i) * 22) * s, m - 12 * s);
+  });
+
   ctx.font = `${16 * s}px sans-serif`;
   ctx.fillStyle = "#6B7280";
   ctx.textAlign = "center";
@@ -123,21 +152,37 @@ function annotatePage(
 }
 
 export interface MarkedCopyOptions {
-  /** Signed URL map path→url (from signedUrls()). */
+  /** Signed URL map path→url (from signedUrls()); missing pages are signed on demand. */
   urls: Record<string, string>;
   /** When true, the student's name appears nowhere in the PDF (content or file name). */
   blind: boolean;
 }
 
-/** Builds the marked copy for one checked sheet and downloads it as a PDF. */
-export async function downloadMarkedCopy(session: CheckSession, sheet: CheckSheet, options: MarkedCopyOptions): Promise<void> {
+/** Storage paths of the page images the grader's positions refer to. */
+export function markedCopyPages(sheet: CheckSheet): string[] {
+  const norm = sheet.ai_result?.norm_pages;
+  if (norm?.length) return [...norm].sort((a, b) => a.index - b.index).map(p => p.path);
+  return sheet.pages.filter(p => !p.endsWith(".pdf"));
+}
+
+export function markedCopyFileName(session: CheckSession, sheet: CheckSheet, blind: boolean): string {
+  const clean = (t: string) => t.replace(/[\\/:*?"<>|]+/g, "_").trim().slice(0, 50);
+  const who = blind ? "student" : clean(sheet.student_name) || "student";
+  return `${clean(session.title) || "check"}_${who}_marked.pdf`;
+}
+
+/** Builds the marked copy for one checked sheet (no upload). */
+export async function buildMarkedCopyPdf(session: CheckSession, sheet: CheckSheet, options: MarkedCopyOptions): Promise<Blob> {
   const r = sheet.ai_result;
   if (!r) throw new Error("This copy has not been checked yet.");
   await loadFont();
   const { jsPDF } = await import("jspdf");
 
-  const pages = sheet.pages.filter(p => !p.endsWith(".pdf") && options.urls[p]);
-  if (!pages.length) throw new Error("No page photos to mark.");
+  const all = markedCopyPages(sheet);
+  const missing = all.filter(p => !options.urls[p]);
+  const urls = missing.length ? { ...options.urls, ...(await signedUrls(missing)) } : options.urls;
+  const pages = all.filter(p => urls[p]);
+  if (!pages.length || pages.length < all.length) throw new Error("No page images to mark.");
 
   const byPage = new Map<number, GradedQuestion[]>();
   for (const q of r.graded_questions || []) {
@@ -148,14 +193,15 @@ export async function downloadMarkedCopy(session: CheckSession, sheet: CheckShee
   // Older results (before page_index existed) or answers the grader could not place: list them on page 1
   // in question order rather than dropping their marks from the copy.
   if (unplaced.length) {
-    byPage.set(0, [...(byPage.get(0) || []), ...unplaced.map((q, i) => ({ ...q, y_start: Math.min(950, 120 + i * 45) }))]);
+    byPage.set(0, [...(byPage.get(0) || []), ...unplaced.map((q, i): Unplaced => ({ ...q, unplaced: true, y_start: Math.min(950, 120 + i * 45) }))]);
   }
 
   const totalText = `${effectiveTotal(r)}/${r.max_marks}`;
+  const notes = sheetNotes(r.sheet_flags);
   let pdf: InstanceType<typeof jsPDF> | null = null;
 
   for (let i = 0; i < pages.length; i++) {
-    const img = await loadImage(options.urls[pages[i]]);
+    const img = await loadImage(urls[pages[i]]);
     const imgW = img.naturalWidth, h = img.naturalHeight;
     const s = Math.max(0.5, imgW / BASE_W);
     const canvas = document.createElement("canvas");
@@ -164,7 +210,7 @@ export async function downloadMarkedCopy(session: CheckSession, sheet: CheckShee
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(img, 0, 0, imgW, h);
     const footer = `${options.blind ? "" : `${sheet.student_name} · `}${i + 1}/${pages.length}`;
-    annotatePage(ctx, imgW, h, s, byPage.get(i) || [], i === 0 ? totalText : null, footer);
+    annotatePage(ctx, imgW, h, s, byPage.get(i) || [], i === 0 ? totalText : null, footer, i === 0 ? notes : []);
 
     const pdfW = 210;
     const pdfH = Math.round((h / canvas.width) * pdfW);
@@ -173,7 +219,27 @@ export async function downloadMarkedCopy(session: CheckSession, sheet: CheckShee
     pdf.addImage(canvas.toDataURL("image/jpeg", 0.85), "JPEG", 0, 0, pdfW, pdfH);
   }
 
-  const clean = (t: string) => t.replace(/[\\/:*?"<>|]+/g, "_").trim().slice(0, 50);
-  const who = options.blind ? "student" : clean(sheet.student_name) || "student";
-  pdf!.save(`${clean(session.title) || "check"}_${who}_marked.pdf`);
+  return pdf!.output("blob");
+}
+
+/** Builds the marked copy, stores it next to the copy and downloads it through an https signed URL. */
+export async function downloadMarkedCopy(session: CheckSession, sheet: CheckSheet, options: MarkedCopyOptions): Promise<void> {
+  const blob = await buildMarkedCopyPdf(session, sheet, options);
+  const { data: auth } = await supabase.auth.getSession();
+  const uid = auth.session?.user.id;
+  if (!uid) throw new Error("Please log in again.");
+  const folder = `${uid}/${session.id}/${sheet.id}/rendered`;
+  const path = `${folder}/marked_${Date.now()}.pdf`;
+  const store = supabase.storage.from(BUCKET);
+  const { error } = await store.upload(path, blob, { contentType: "application/pdf", upsert: false });
+  if (error) throw new Error(error.message);
+  // keep only the newest marked copy of this sheet
+  const { data: old } = await store.list(folder);
+  const stale = (old || []).map(f => `${folder}/${f.name}`).filter(p => p !== path && p.endsWith(".pdf"));
+  if (stale.length) await store.remove(stale);
+  const { data: signed, error: signError } = await store.createSignedUrl(path, 600, {
+    download: markedCopyFileName(session, sheet, options.blind),
+  });
+  if (signError || !signed?.signedUrl) throw new Error(signError?.message || "Could not create the download link.");
+  window.location.assign(signed.signedUrl);
 }
