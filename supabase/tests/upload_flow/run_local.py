@@ -35,6 +35,9 @@ FILES = [
     MIGRATIONS / "18_upload_flow.sql",
     MIGRATIONS / "18_upload_flow.sql",          # idempotency
     HERE / "18_upload_flow_test.sql",
+    MIGRATIONS / "19_upload_link_portal.sql",
+    MIGRATIONS / "19_upload_link_portal.sql",    # idempotency
+    HERE / "19_upload_link_portal_test.sql",
 ]
 
 

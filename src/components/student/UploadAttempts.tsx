@@ -3,31 +3,39 @@
 // Used by the portal's assignment page (/student) and the shared link page (/s/:token).
 // Every call is an anon RPC keyed by the access code (src/lib/uploadFlow.ts); nothing here trusts the browser
 // for identity — the ids are only used to build the upload path, which the storage policy re-checks.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Pages go straight to Storage with per-file progress; picked pages + uploaded paths survive a refresh
+// (localStorage draft + IndexedDB blobs), so after a drop only the missing files are uploaded.
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  type Attempt, type CreateResult, type LinkInfo, type PreparedPage, STATUS_TEXT, attemptKey, clearAttemptKey,
-  createSubmission, fmtCountdown, fmtIST, getAssignmentLink, mySubmissions, preparePage, sha256Hex, stateMessage,
-  uploadPage,
+  DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  type Attempt, type CreateResult, type LinkInfo, attemptKey, clearAttemptKey, createSubmission, fmtCountdown, fmtIST,
+  getAssignmentLink, mySubmissions, preparePage, sha256Hex, stateMessage,
 } from "@/lib/uploadFlow";
+import { ACCEPT_ATTR, rotateJpeg90 } from "@/lib/uploadLink/files";
+import { type DraftItem, clearDraft, loadDraft, pendingUploads, resumeItems, saveDraft, totalPages } from "@/lib/uploadLink/session";
+import { deleteBlob, deleteBlobs, getBlob, putBlob } from "@/lib/uploadLink/blobStore";
+import { uploadPath, uploadWithProgress } from "@/lib/uploadLink/storageUpload";
+import { needsPolling, studentBadge } from "@/lib/uploadLink/status";
+import { useOnline } from "@/hooks/useUploadLinkTimers";
+
 
 export type UploadTokens = {
   bg: string; surface: string; border: string; textPrimary: string; textSecondary: string; textMuted: string;
   accent: string; accentHover: string; accentBg: string; teal: string; tealBg: string;
 };
 
-type Page = {
-  id: string;
-  name: string;
-  state: "preparing" | "ready" | "uploading" | "uploaded" | "error";
-  prepared?: PreparedPage;
-  sha256?: string;
-  path?: string;           // kept after a successful upload, so a retry doesn't upload it again
-  error?: string;
-};
-
 type Notice = { text: string; tone: "error" | "ok" | "info"; until?: number };
 
-const POLL_MS = 60_000;
+const POLL_MS = 10_000;
+const BADGE: Record<string, { bg: string; fg: string }> = {
+  amber: { bg: "rgba(245,158,11,0.15)", fg: "#B45309" }, blue: { bg: "rgba(59,130,246,0.15)", fg: "#1D4ED8" },
+  slate: { bg: "rgba(100,116,139,0.15)", fg: "#475569" }, red: { bg: "rgba(239,68,68,0.12)", fg: "#DC2626" },
+  green: { bg: "rgba(34,197,94,0.15)", fg: "#15803D" },
+};
 
 function useNow(active: boolean) {
   const [now, setNow] = useState(Date.now());
@@ -49,16 +57,32 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
   const [link, setLink] = useState<LinkInfo | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
-  const [pages, setPages] = useState<Page[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [items, setItems] = useState<DraftItem[]>([]);
+  const itemsRef = useRef<DraftItem[]>([]);
+  const blobs = useRef(new Map<string, Blob>());
+  const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  const [progress, setProgress] = useState<Record<string, number>>({});
+  const [failed, setFailed] = useState<Record<string, string>>({});
+  const [pickErrors, setPickErrors] = useState<string[]>([]);
+  const [processing, setProcessing] = useState(0);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [openResult, setOpenResult] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const online = useOnline();
   const now = useNow(!!notice?.until);
 
   const asg = link?.assignment;
   const assignmentId = asg?.id;
+  const commit = (next: DraftItem[]) => { itemsRef.current = next; setItems(next); };
+  const addThumb = (id: string, blob: Blob, mime: string) => {
+    if (mime.startsWith("image/")) setThumbs(x => ({ ...x, [id]: URL.createObjectURL(blob) }));
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -78,17 +102,21 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       }
     } catch (e: any) {
       setNotice({ text: e.message, tone: "error" });
+    } finally {
+      setHistoryLoading(false);
     }
   }, [assignmentRef, code]);
 
-  // Anon can't use Realtime: poll every 60 s and when the tab comes back
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // Anon can't use Realtime: poll every 10 s, only while the tab is visible and an attempt can still change
+  const polling = needsPolling(attempts);
   useEffect(() => {
-    refresh();
     const tick = () => { if (document.visibilityState === "visible") refresh(); };
-    const id = window.setInterval(tick, POLL_MS);
     window.addEventListener("focus", tick);
-    return () => { window.clearInterval(id); window.removeEventListener("focus", tick); };
-  }, [refresh]);
+    const id = polling ? window.setInterval(tick, POLL_MS) : undefined;
+    return () => { window.removeEventListener("focus", tick); if (id) window.clearInterval(id); };
+  }, [refresh, polling]);
 
   // countdown finished → the message goes away and the student can try again
   useEffect(() => {
@@ -98,48 +126,115 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     }
   }, [now, notice, refresh]);
 
+  // resume a draft (pages picked / uploaded before a refresh or network drop)
+  useEffect(() => {
+    if (!assignmentId) return;
+    let cancelled = false;
+    (async () => {
+      const draft = loadDraft(assignmentId, code);
+      for (const it of draft) {
+        const b = await getBlob(it.id);
+        if (cancelled) return;
+        if (b) { blobs.current.set(it.id, b); addThumb(it.id, b, it.mime); }
+      }
+      const { kept, lost } = resumeItems(draft, id => blobs.current.has(id));
+      if (cancelled) return;
+      commit(kept);
+      if (kept.length) setNotice({ text: `Pichla upload yaad hai: ${kept.filter(i => i.path).length}/${kept.length} page upload ho chuke. Submit dabao.`, tone: "info" });
+      if (lost) setPickErrors([`${lost} page wapas nahi mil paye — unhe dobara add karo.`]);
+    })();
+    return () => { cancelled = true; };
+  }, [assignmentId, code]);
+
+  useEffect(() => { if (assignmentId) saveDraft(assignmentId, code, items); }, [items, assignmentId, code]);
+  useEffect(() => () => { Object.values(thumbs).forEach(u => URL.revokeObjectURL(u)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const linkClosed = link && !["open", "open_late"].includes(link.state);
   // locked → shown as the countdown notice below; the other states can't be fixed by waiting
   const studentBlocked = link?.student && !["ok", "locked"].includes(link.student.state);
   const noAttemptsLeft = attemptsLeft !== null && attemptsLeft <= 0;
   const locked = !!notice?.until && now < notice.until;
   const canUpload = !!asg && !linkClosed && link?.student?.state === "ok" && !noAttemptsLeft;
-
-  const accept = useMemo(() => {
-    const m = asg?.allowed_mimes || [];
-    // iPhone HEIC is turned into JPEG in the browser, so it's fine whenever JPEG is
-    return [...m, ...(m.includes("image/jpeg") ? ["image/heic", "image/heif", ".heic", ".heif"] : [])].join(",");
-  }, [asg]);
+  const pageCount = totalPages(items);
+  const overPages = !!asg && pageCount > asg.max_pages;
 
   async function addFiles(list: FileList | null) {
     if (!list || !asg) return;
     const files = Array.from(list);
-    const room = asg.max_pages - pages.length;
-    if (files.length > room) {
-      setNotice({ text: `Is assignment mein max ${asg.max_pages} pages/files allowed hain.`, tone: "error" });
-    }
-    const added: Page[] = files.slice(0, Math.max(room, 0)).map(f => ({ id: crypto.randomUUID(), name: f.name, state: "preparing" }));
-    setPages(p => [...p, ...added]);
-    await Promise.all(added.map(async (pg, i) => {
-      const file = files[i];
+    setPickErrors([]);
+    setProcessing(n => n + files.length);
+    const errs: string[] = [];
+    for (const f of files) {
       try {
-        const prepared = await preparePage(file, asg.allowed_mimes, asg.max_mb, pages.length + i + 1);
-        const sha256 = await sha256Hex(prepared.blob);
-        setPages(p => p.map(x => x.id === pg.id ? { ...x, state: "ready", prepared, sha256 } : x));
+        const p = await preparePage(f, asg.allowed_mimes, asg.max_mb);
+        const sha = await sha256Hex(p.blob);
+        if (itemsRef.current.some(i => i.sha256 === sha)) { errs.push(`${f.name}: ye page pehle se add hai`); continue; }
+        const id = crypto.randomUUID();
+        blobs.current.set(id, p.blob);
+        await putBlob(id, p.blob);
+        addThumb(id, p.blob, p.mime);
+        commit([...itemsRef.current, { id, name: f.name, mime: p.mime, ext: p.ext, size: p.size, sha256: sha,
+                                       pages: p.pages, warning: p.warning, path: null }]);
       } catch (e: any) {
-        setPages(p => p.map(x => x.id === pg.id ? { ...x, state: "error", error: e.message } : x));
+        errs.push(e.message || `${f.name}: file khul nahi payi`);
+      } finally {
+        setProcessing(n => n - 1);
       }
-    }));
+    }
+    setPickErrors(errs);
   }
 
-  function move(i: number, d: -1 | 1) {
-    setPages(p => {
-      const j = i + d;
-      if (j < 0 || j >= p.length) return p;
-      const n = [...p];
-      [n[i], n[j]] = [n[j], n[i]];
-      return n;
-    });
+  async function rotate(it: DraftItem) {
+    const blob = blobs.current.get(it.id);
+    if (!blob || !it.mime.startsWith("image/")) return;
+    const out = await rotateJpeg90(blob);
+    const sha = await sha256Hex(out);
+    const id = crypto.randomUUID();
+    blobs.current.set(id, out);
+    await putBlob(id, out);
+    addThumb(id, out, "image/jpeg");
+    // new bytes → new file: new sha256 and a fresh upload
+    commit(itemsRef.current.map(i => i.id === it.id
+      ? { ...i, id, mime: "image/jpeg", ext: "jpg", size: out.size, sha256: sha, path: null } : i));
+    blobs.current.delete(it.id);
+    deleteBlob(it.id);
+  }
+
+  function remove(it: DraftItem) {
+    commit(itemsRef.current.filter(i => i.id !== it.id));
+    blobs.current.delete(it.id);
+    deleteBlob(it.id);
+    setFailed(f => { const n = { ...f }; delete n[it.id]; return n; });
+  }
+
+  async function uploadOne(it: DraftItem): Promise<boolean> {
+    if (!assignmentId) return false;
+    const blob = blobs.current.get(it.id) ?? (await getBlob(it.id));
+    if (!blob) { setFailed(f => ({ ...f, [it.id]: "Ye page phone se hat gaya, dobara add karo." })); return false; }
+    const path = uploadPath(student.institute_id, assignmentId, student.id, it.ext);
+    setFailed(f => { const n = { ...f }; delete n[it.id]; return n; });
+    setProgress(p => ({ ...p, [it.id]: 0 }));
+    try {
+      await uploadWithProgress(path, blob, it.mime, pct => setProgress(p => ({ ...p, [it.id]: pct })));
+      commit(itemsRef.current.map(i => (i.id === it.id ? { ...i, path } : i)));
+      return true;
+    } catch (e: any) {
+      setFailed(f => ({ ...f, [it.id]: e.message || "Upload nahi ho paya." }));
+      return false;
+    }
+  }
+
+  async function uploadPending(): Promise<boolean> {
+    const queue = pendingUploads(itemsRef.current);
+    let ok = true;
+    const worker = async () => {
+      while (queue.length) {
+        const it = queue.shift()!;
+        if (!(await uploadOne(it))) ok = false;
+      }
+    };
+    await Promise.all([worker(), worker()]);       // 2 at a time — kind to slow 4G
+    return ok;
   }
 
   function showResult(r: CreateResult) {
@@ -148,45 +243,45 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
   }
 
   async function submit() {
-    if (!asg || !assignmentId || busy) return;
-    if (pages.length === 0) { setNotice({ text: "Pehle copy ke pages chuno.", tone: "error" }); return; }
-    if (pages.some(p => p.state === "preparing")) { setNotice({ text: "Photos tayyar ho rahi hain, ek second…", tone: "info" }); return; }
-    if (pages.some(p => p.state === "error")) { setNotice({ text: "Laal wale pages hata do ya badal do, phir Submit karo.", tone: "error" }); return; }
+    if (!asg || !assignmentId || busyRef.current) return;            // double tap → one call
+    if (!itemsRef.current.length) { setNotice({ text: "Pehle copy ke pages chuno.", tone: "error" }); return; }
+    if (processing > 0) { setNotice({ text: "Photos tayyar ho rahi hain, ek second…", tone: "info" }); return; }
+    if (!navigator.onLine) { setNotice({ text: "Internet nahi hai. Net aane par Submit dobara dabao.", tone: "error" }); return; }
+    busyRef.current = true;
     setBusy(true);
     setNotice(null);
     setWarnings([]);
-    const key = attemptKey(assignmentId);       // same key on every retry of this attempt
     try {
-      const uploaded: { storage_path: string; mime: string; size: number; sha256: string; page_order: number }[] = [];
-      for (let i = 0; i < pages.length; i++) {
-        const pg = pages[i];
-        let path = pg.path;
-        if (!path) {
-          setPages(p => p.map(x => x.id === pg.id ? { ...x, state: "uploading" } : x));
-          try {
-            path = await uploadPage({ institute_id: student.institute_id, assignment_id: assignmentId, student_id: student.id },
-                                    pg.prepared!);
-          } catch (e: any) {
-            setPages(p => p.map(x => x.id === pg.id ? { ...x, state: "error", error: e.message } : x));
-            throw e;
-          }
-          const done = path;
-          setPages(p => p.map(x => x.id === pg.id ? { ...x, state: "uploaded", path: done } : x));
-        }
-        uploaded.push({ storage_path: path, mime: pg.prepared!.mime, size: pg.prepared!.size, sha256: pg.sha256!, page_order: i + 1 });
+      if (!(await uploadPending())) {
+        setNotice({ text: "Kuch pages upload nahi hue. Unpe Retry dabao, phir Submit.", tone: "error" });
+        return;
       }
-      const r = await createSubmission(code, assignmentId, key, uploaded);
+      const key = attemptKey(assignmentId, code);       // same key on every retry of this attempt
+      const files = itemsRef.current.map((it, i) => ({ storage_path: it.path!, mime: it.mime, size: it.size,
+                                                        sha256: it.sha256, page_order: i + 1 }));
+      const r = await createSubmission(code, assignmentId, key, files);
       if (r.state === "created" || r.state === "replayed") {
-        clearAttemptKey(assignmentId);
-        setPages([]);
+        const ids = itemsRef.current.map(i => i.id);
+        clearAttemptKey(assignmentId, code);
+        clearDraft(assignmentId, code);
+        commit([]);
+        Object.values(thumbs).forEach(u => URL.revokeObjectURL(u));
+        setThumbs({});
+        setProgress({});
+        deleteBlobs(ids);
         setWarnings((r.warnings || []).map(w => w.message));
-        setNotice({ text: `✅ ${r.submission?.label || "Upload"} submit ho gaya. ${STATUS_TEXT[r.submission?.status || ""] || ""}`, tone: "ok" });
+        setNotice({ text: `✅ ${r.submission?.label || "Upload"} submit ho gaya. Check hone ke baad teacher result bhejenge.`, tone: "ok" });
         await refresh();
         onChange?.();
       } else if (r.state === "invalid_files") {
         const byIndex = new Map((r.errors || []).map(e => [e.index, e.message]));
-        // a file the server refused is re-uploaded under a new name on the next try
-        setPages(p => p.map((x, i) => byIndex.has(i + 1) ? { ...x, state: "error", error: byIndex.get(i + 1), path: undefined } : x));
+        // a file the server refused is uploaded again (new name) on the next try
+        commit(itemsRef.current.map((x, i) => (byIndex.has(i + 1) ? { ...x, path: null } : x)));
+        setFailed(f => {
+          const n = { ...f };
+          itemsRef.current.forEach((x, i) => { if (byIndex.has(i + 1)) n[x.id] = byIndex.get(i + 1)!; });
+          return n;
+        });
         setNotice({ text: (r.errors || []).map(e => e.message).join(" "), tone: "error" });
       } else {
         showResult(r);
@@ -194,10 +289,27 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       }
     } catch (e: any) {
       setNotice({ text: e.message || "Upload nahi hua. Dobara Submit dabao.", tone: "error" });
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
-    setBusy(false);
   }
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  function onDragEnd(e: DragEndEvent) {
+    if (!e.over || e.active.id === e.over.id) return;
+    const from = itemsRef.current.findIndex(i => i.id === e.active.id);
+    const to = itemsRef.current.findIndex(i => i.id === e.over!.id);
+    if (from >= 0 && to >= 0) commit(arrayMove(itemsRef.current, from, to));
+  }
+
+  const done = items.filter(i => i.path).length;
+  const overall = items.length ? Math.round(items.reduce((s, i) => s + (i.path ? 100 : progress[i.id] || 0), 0) / items.length) : 0;
+  const uploading = busy && done < items.length;
   const noticeText = notice ? notice.text.replace("{countdown}", fmtCountdown(((notice.until || now) - now) / 1000)) : "";
   const toneStyle = (tone: Notice["tone"]) => tone === "ok"
     ? { background: t.tealBg, color: t.teal, borderColor: `${t.teal}30` }
@@ -208,6 +320,12 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
 
   return (
     <div className="space-y-4">
+      {!online && (
+        <div role="status" className="rounded-lg border px-3 py-2 text-sm font-semibold" style={toneStyle("error")} data-testid="offline">
+          📵 Internet nahi hai, upload ruka hai
+        </div>
+      )}
+
       {/* Rules */}
       {asg && (
         <div className="rounded-lg border p-3 text-xs sm:text-sm space-y-1" style={{ background: t.bg, borderColor: t.border, color: t.textSecondary }}>
@@ -227,8 +345,8 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       )}
 
       {link.state === "open_late" && (
-        <div className="rounded-lg border px-3 py-2 text-sm" style={toneStyle("info")}>
-          Deadline nikal chuki hai. Upload ho jayega par <b>late</b> mark hoga.
+        <div className="rounded-lg border px-3 py-2 text-sm" style={toneStyle("info")} data-testid="late-warning">
+          ⚠️ Deadline nikal chuki hai. Upload ho jayega par <b>Late submit</b> hoga.
         </div>
       )}
       {(linkClosed || studentBlocked) && (
@@ -244,104 +362,192 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       )}
 
       {/* Picker + pages */}
-      {canUpload && (
-        <div className="space-y-2">
-          <input ref={inputRef} type="file" multiple accept={accept} className="hidden"
-            onChange={async e => { await addFiles(e.target.files); if (inputRef.current) inputRef.current.value = ""; }} />
-          <button onClick={() => inputRef.current?.click()} disabled={busy || pages.length >= (asg?.max_pages || 0)}
-            className="w-full py-2.5 rounded-lg border text-sm font-medium disabled:opacity-50"
-            style={{ borderColor: t.border, color: t.accent, background: t.surface }}>
-            + Pages add karo (photo / PDF)
-          </button>
-          {pages.length > 0 && (
-            <ol className="space-y-1.5">
-              {pages.map((p, i) => (
-                <li key={p.id} className="flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs sm:text-sm"
-                  style={{ borderColor: p.state === "error" ? "rgba(239,68,68,0.4)" : t.border, background: t.bg }}>
-                  <span className="w-12 shrink-0 font-semibold" style={{ color: t.textSecondary }}>Page {i + 1}</span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block truncate" style={{ color: t.textPrimary }}>{p.name}</span>
-                    {p.error ? <span className="block text-red-600">{p.error}</span> : (
-                      <span className="block" style={{ color: t.textMuted }}>
-                        {p.state === "preparing" ? "Tayyar ho raha hai…" : p.state === "uploading" ? "Upload ho raha hai…"
-                          : p.state === "uploaded" ? "Upload ho gaya ✓" : `${((p.prepared?.size || 0) / 1024).toFixed(0)} KB`}
-                      </span>
-                    )}
-                  </span>
-                  <button aria-label="Upar" disabled={busy || i === 0} onClick={() => move(i, -1)} className="px-1.5 disabled:opacity-30">▲</button>
-                  <button aria-label="Neeche" disabled={busy || i === pages.length - 1} onClick={() => move(i, 1)} className="px-1.5 disabled:opacity-30">▼</button>
-                  <button aria-label="Hatao" disabled={busy} onClick={() => setPages(x => x.filter(y => y.id !== p.id))} className="px-1.5 text-red-600 disabled:opacity-30">✕</button>
-                </li>
-              ))}
-            </ol>
+      {canUpload && asg && (
+        <div className="space-y-2" ref={pickerRef} data-testid="upload-panel">
+          <div className="flex items-center justify-between text-xs" style={{ color: overPages ? "#DC2626" : t.textMuted }}>
+            <span>Page order: page ko daba ke kheencho</span>
+            <b data-testid="page-counter">{pageCount}/{asg.max_pages} pages</b>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => cameraRef.current?.click()} disabled={busy}
+              className="py-3 rounded-lg text-white text-sm font-semibold disabled:opacity-50"
+              style={{ background: `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}>
+              📷 + Photo lo
+            </button>
+            <button type="button" onClick={() => galleryRef.current?.click()} disabled={busy}
+              className="py-3 rounded-lg border text-sm font-semibold disabled:opacity-50"
+              style={{ borderColor: t.border, color: t.accent, background: t.surface }}>
+              🖼️ + Gallery / PDF
+            </button>
+          </div>
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple className="hidden" data-testid="camera-input"
+            onChange={async e => { await addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={galleryRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" data-testid="gallery-input"
+            onChange={async e => { await addFiles(e.target.files); e.target.value = ""; }} />
+
+          {processing > 0 && <p className="text-xs" style={{ color: t.textMuted }}>Photo tayyar ho rahi hai…</p>}
+          {pickErrors.length > 0 && (
+            <ul className="space-y-0.5" role="alert" data-testid="pick-errors">
+              {pickErrors.map((e, i) => <li key={i} className="text-xs sm:text-sm text-red-600">✗ {e}</li>)}
+            </ul>
           )}
-          <button onClick={submit} disabled={busy || locked || pages.length === 0}
-            className="w-full py-3 rounded-lg text-white font-medium text-sm disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
+
+          {items.length > 0 && (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={items.map(i => i.id)} strategy={rectSortingStrategy}>
+                <ul className="grid grid-cols-3 sm:grid-cols-4 gap-2" data-testid="thumbs">
+                  {items.map((it, i) => (
+                    <Thumb key={it.id} item={it} index={i} url={thumbs[it.id]} progress={progress[it.id]} error={failed[it.id]}
+                      busy={busy} t={t} onRotate={() => rotate(it)} onDelete={() => remove(it)} onRetry={() => uploadOne(it)} />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+          )}
+
+          {uploading && (
+            <div data-testid="overall-progress">
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: t.border }}>
+                <div className="h-full" style={{ width: `${overall}%`, background: t.accent }} />
+              </div>
+              <p className="text-xs mt-1" style={{ color: t.textMuted }}>{done}/{items.length} file upload ho gayi ({overall}%)</p>
+            </div>
+          )}
+          {overPages && <p className="text-xs text-red-600">Max {asg.max_pages} pages allowed — kuch pages hatao.</p>}
+
+          <button onClick={submit} disabled={busy || locked || !items.length || overPages || processing > 0} data-testid="submit-btn"
+            className="w-full py-3 rounded-lg text-white font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
             style={{ background: busy || locked ? "#94A3B8" : `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}>
-            {busy ? "Submit ho raha hai…" : `Submit (${pages.length} page${pages.length === 1 ? "" : "s"})`}
+            {busy ? (uploading ? "Upload ho raha hai…" : "Submit ho raha hai…") : `Submit (${items.length} file${items.length === 1 ? "" : "s"})`}
           </button>
-          {attemptsLeft !== null && <p className="text-center text-xs" style={{ color: t.textMuted }}>{attemptsLeft} attempt baaki</p>}
+          {attemptsLeft !== null && <p className="text-center text-xs" style={{ color: t.textMuted }} data-testid="attempts-left">{attemptsLeft} attempt baaki</p>}
         </div>
       )}
 
       {notice && (
-        <div role="status" className="rounded-lg border px-3 py-2 text-sm" style={toneStyle(notice.tone)}>{noticeText}</div>
+        <div role="status" className="rounded-lg border px-3 py-2 text-sm" style={toneStyle(notice.tone)} data-testid="notice">{noticeText}</div>
       )}
       {warnings.map((w, i) => (
-        <div key={i} className="rounded-lg border px-3 py-2 text-xs" style={toneStyle("info")}>⚠️ {w}</div>
+        <div key={i} className="rounded-lg border px-3 py-2 text-xs" style={toneStyle("info")} data-testid="dup-warning">⚠️ {w}</div>
       ))}
 
       {/* History */}
+      {historyLoading && !attempts.length && link.student?.state === "ok" && (
+        <p className="text-xs" style={{ color: t.textMuted }}>Aapke uploads aa rahe hain…</p>
+      )}
+      {!historyLoading && !attempts.length && link.student?.state === "ok" && (
+        <p className="text-xs text-center" style={{ color: t.textMuted }} data-testid="history-empty">Abhi tak koi upload nahi kiya.</p>
+      )}
       {attempts.length > 0 && (
-        <div>
+        <div data-testid="history">
           <h4 className="text-sm font-semibold mb-2" style={{ color: t.textSecondary }}>Aapke uploads</h4>
           <ul className="space-y-2">
-            {attempts.map(a => (
-              <li key={a.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: t.border, background: t.bg }}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <b style={{ color: t.textPrimary }}>{a.label}</b>
-                  {a.counts && <span className="rounded px-1.5 text-[11px]" style={{ background: t.tealBg, color: t.teal }}>count hoga</span>}
-                  {a.is_late && <span className="rounded px-1.5 text-[11px] bg-amber-100 text-amber-700">late</span>}
-                  <span className="text-xs" style={{ color: t.textMuted }}>{a.submitted_at ? fmtIST(a.submitted_at) : ""} · {a.files.length} page(s)</span>
-                </div>
-                <p className="mt-1" style={{ color: a.status === "rejected" || a.status === "failed" ? "#DC2626" : t.textSecondary }}>
-                  {a.result ? <>Marks: <b style={{ color: t.teal }}>{a.result.marks} / {a.result.max_marks}</b></> : (STATUS_TEXT[a.status] || a.status)}
-                </p>
-                {a.reject_reasons?.length > 0 && (
-                  <ul className="mt-1 list-disc pl-5 text-xs text-red-600">
-                    {a.reject_reasons.map((r, i) => <li key={i}>{r.message}</li>)}
-                  </ul>
-                )}
-                {a.status === "rejected" && <p className="mt-1 text-xs" style={{ color: t.textMuted }}>Ye attempt count nahi hua — sahi file ke saath dobara upload karo.</p>}
-                {a.result && (
-                  <>
-                    {a.result.feedback && <p className="mt-1 text-xs" style={{ color: t.textPrimary }}>💬 {a.result.feedback}</p>}
-                    {a.result.per_question?.length > 0 && (
-                      <button className="mt-1 text-xs underline" style={{ color: t.accent }}
-                        onClick={() => setOpenResult(openResult === a.id ? null : a.id)}>
-                        {openResult === a.id ? "Question-wise chhupao" : "Question-wise marks dekho"}
-                      </button>
-                    )}
-                    {openResult === a.id && (
-                      <table className="mt-2 w-full text-xs">
-                        <tbody>
-                          {a.result.per_question.map(q => (
-                            <tr key={q.q_no} className="border-t" style={{ borderColor: t.border, opacity: q.counted ? 1 : 0.5 }}>
-                              <td className="py-1 pr-2 font-semibold">Q{q.q_no}</td>
-                              <td className="py-1 pr-2 whitespace-nowrap">{q.not_attempted ? "—" : q.marks} / {q.max_marks}</td>
-                              <td className="py-1" style={{ color: t.textSecondary }}>{q.feedback}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </>
-                )}
-              </li>
-            ))}
+            {attempts.map(a => {
+              const b = studentBadge(a.status);
+              return (
+                <li key={a.id} className="rounded-lg border p-3 text-sm" style={{ borderColor: t.border, background: t.bg }} data-testid="attempt">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <b style={{ color: t.textPrimary }}>{a.label}</b>
+                    <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" data-testid="attempt-status"
+                      style={{ background: BADGE[b.tone].bg, color: BADGE[b.tone].fg }}>{b.label}</span>
+                    {a.is_late && <span className="rounded px-1.5 text-[11px] bg-amber-100 text-amber-700">late</span>}
+                    {a.counts && <span className="rounded px-1.5 text-[11px]" style={{ background: t.tealBg, color: t.teal }}>count hoga</span>}
+                  </div>
+                  <p className="mt-0.5 text-xs" style={{ color: t.textMuted }}>
+                    {a.submitted_at ? fmtIST(a.submitted_at) : ""} · {a.files.length} file
+                  </p>
+                  {a.status === "rejected" && (
+                    <div className="mt-1 space-y-1">
+                      <ul className="list-disc pl-5 text-xs text-red-600">
+                        {(a.reject_reasons?.length ? a.reject_reasons : [{ code: "bad_file", message: "File padhi nahi ja saki." }])
+                          .map((r, i) => <li key={i}>{r.page_order ? `Page ${r.page_order}: ` : ""}{r.message}</li>)}
+                      </ul>
+                      {canUpload && (
+                        <button className="rounded-md px-2.5 py-1 text-xs font-semibold text-white bg-red-600"
+                          onClick={() => pickerRef.current?.scrollIntoView({ behavior: "smooth" })}>Dobara upload karo</button>
+                      )}
+                    </div>
+                  )}
+                  {a.status === "published" && a.result && (
+                    <>
+                      <p className="mt-1">Marks: <b style={{ color: t.teal }} data-testid="result-marks">{a.result.marks} / {a.result.max_marks}</b>
+                        {a.result.percentage != null && <span className="text-xs" style={{ color: t.textMuted }}> ({a.result.percentage}%)</span>}</p>
+                      {a.result.feedback && <p className="mt-1 text-xs" style={{ color: t.textPrimary }}>💬 {a.result.feedback}</p>}
+                      {a.result.per_question?.length > 0 && (
+                        <button className="mt-1 text-xs underline" style={{ color: t.accent }} data-testid="result-toggle"
+                          onClick={() => setOpenResult(openResult === a.id ? null : a.id)}>
+                          {openResult === a.id ? "Question-wise chhupao" : "Question-wise marks dekho"}
+                        </button>
+                      )}
+                      {openResult === a.id && (
+                        <>
+                          <table className="mt-2 w-full text-xs" data-testid="result-view">
+                            <tbody>
+                              {a.result.per_question.map(q => (
+                                <tr key={q.q_no} className="border-t align-top" style={{ borderColor: t.border, opacity: q.counted ? 1 : 0.5 }}>
+                                  <td className="py-1 pr-2 font-semibold">Q{q.q_no}</td>
+                                  <td className="py-1 pr-2 whitespace-nowrap">{q.not_attempted ? "—" : q.marks} / {q.max_marks}</td>
+                                  <td className="py-1" style={{ color: t.textSecondary }}>
+                                    {q.not_attempted ? "Attempt nahi kiya" : q.feedback}{!q.counted && " (count nahi hua)"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <p className="mt-1 text-[11px]" style={{ color: t.textMuted }}>
+                            {a.is_late ? "Ye upload late tha. " : ""}
+                            {asg?.count_policy === "best" ? "Sabse achhe marks wala upload count hoga." : "Aakhri upload count hoga."}
+                          </p>
+                        </>
+                      )}
+                    </>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
     </div>
+  );
+}
+
+function Thumb({ item, index, url, progress, error, busy, t, onRotate, onDelete, onRetry }: {
+  item: DraftItem; index: number; url?: string; progress?: number; error?: string; busy: boolean; t: UploadTokens;
+  onRotate: () => void; onDelete: () => void; onRetry: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: busy });
+  return (
+    <li ref={setNodeRef} data-testid="thumb" className="relative rounded-lg border overflow-hidden"
+      style={{ transform: CSS.Transform.toString(transform), transition, borderColor: error ? "#DC2626" : t.border,
+               background: t.surface, zIndex: isDragging ? 10 : undefined }}>
+      <div className="relative aspect-[3/4] touch-none" {...attributes} {...listeners} aria-label={`Page ${index + 1}`}>
+        {url ? <img src={url} alt={`Page ${index + 1}`} className="h-full w-full object-cover" />
+          : <div className="flex h-full flex-col items-center justify-center p-1 text-center text-[10px]" style={{ color: t.textMuted }}>
+              <span className="text-2xl">📄</span>
+              <span className="line-clamp-2 break-all">{item.name}</span>
+              {item.pages > 1 && <b>{item.pages} pages</b>}
+            </div>}
+        <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[11px] font-bold text-white">{index + 1}</span>
+        {item.path && <span className="absolute right-1 bottom-1 rounded-full bg-green-600 px-1.5 text-[11px] text-white" aria-label="Upload ho gaya">✓</span>}
+        {!item.path && progress != null && progress < 100 && !error && (
+          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/30"><div className="h-full" style={{ width: `${progress}%`, background: t.accent }} /></div>
+        )}
+      </div>
+      {item.warning && <p className="bg-amber-100 px-1 py-0.5 text-[10px] text-amber-800">⚠️ {item.warning}</p>}
+      {error && (
+        <div className="bg-red-50 p-1 space-y-1">
+          <p className="text-[10px] text-red-700">{error}</p>
+          <button type="button" onClick={onRetry}
+            className="w-full rounded bg-red-600 py-1 text-[11px] font-semibold text-white">Retry</button>
+        </div>
+      )}
+      <div className="flex border-t" style={{ borderColor: t.border }}>
+        <button type="button" onClick={onRotate} disabled={busy || !item.mime.startsWith("image/")} aria-label="Ghumao 90°"
+          className="flex-1 py-1.5 text-sm disabled:opacity-30" style={{ color: t.textSecondary }}>↻</button>
+        <button type="button" onClick={onDelete} disabled={busy} aria-label="Hatao"
+          className="flex-1 py-1.5 text-sm text-red-600 disabled:opacity-30">✕</button>
+      </div>
+    </li>
   );
 }

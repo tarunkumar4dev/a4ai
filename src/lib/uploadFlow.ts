@@ -4,6 +4,9 @@
 // my_submissions) + a direct upload to the private `submissions` bucket. Identity = the access code only.
 import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
 import { compressImage } from "@/lib/imageCompress";
+import {
+  JPEG_QUALITY, LONG_EDGE, analyzeQuality, classify, formatError, heicToJpeg, pdfPageCount, sizeError,
+} from "@/lib/uploadLink/files";
 
 /* ─── RPC shapes ─────────────────────────────────────────────────── */
 export type LinkState = "not_found" | "inactive" | "not_open" | "closed" | "open" | "open_late";
@@ -140,67 +143,62 @@ export function stateMessage(r: { state: string; scope?: string; opens_at?: stri
   }
 }
 
-/* ─── Idempotency key: one per attempt, kept until the server accepted it ─── */
-const keyName = (assignmentId: string) => `a4ai_upload_key_${assignmentId}`;
+/* ─── Idempotency key: one per attempt (assignment + access code), kept until the server accepted it ─── */
+const keyName = (assignmentId: string, code: string) => `a4ai_upload_key_${assignmentId}_${code}`;
 
-export function attemptKey(assignmentId: string): string {
+export function attemptKey(assignmentId: string, code: string): string {
   try {
-    const saved = localStorage.getItem(keyName(assignmentId));
+    const saved = localStorage.getItem(keyName(assignmentId, code));
     if (saved && /^[A-Za-z0-9_-]{16,128}$/.test(saved)) return saved;
   } catch { /* private mode: a key per page load is still safe (the server dedupes by key) */ }
   const k = crypto.randomUUID().replace(/-/g, "");
-  try { localStorage.setItem(keyName(assignmentId), k); } catch { /* ignore */ }
+  try { localStorage.setItem(keyName(assignmentId, code), k); } catch { /* ignore */ }
   return k;
 }
 
-export function clearAttemptKey(assignmentId: string): void {
-  try { localStorage.removeItem(keyName(assignmentId)); } catch { /* ignore */ }
+export function clearAttemptKey(assignmentId: string, code: string): void {
+  try { localStorage.removeItem(keyName(assignmentId, code)); } catch { /* ignore */ }
 }
 
 /* ─── Files ──────────────────────────────────────────────────────── */
-export type PreparedPage = { blob: Blob; mime: string; ext: string; size: number; name: string };
+export type PreparedPage = {
+  blob: Blob; mime: string; ext: string; size: number; name: string;
+  pages: number;                 // PDF page count (pdf.js), 1 for a photo
+  warning: string | null;        // dark / tiny photo → "Photo saaf nahi lag rahi, dobara lo?"
+};
 
-const isHeic = (f: File) => /image\/hei[cf]/i.test(f.type) || /\.(heic|heif)$/i.test(f.name);
 const MIME_EXT: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png",
                                            "image/webp": "webp" };
 
 /**
- * One picked file → what will be uploaded. HEIC (iPhone) → JPEG in the browser first (the checker can't read
- * HEIC); every photo → ~1600 px JPEG (smaller upload on school Wi-Fi; the canvas re-encode also drops EXIF / GPS).
- * Throws an Error with a Hinglish message the page can show next to the file.
+ * One picked file → what will be uploaded. HEIC (iPhone) → JPEG in the browser first; every photo → ~1600 px JPEG
+ * q 0.8 (smaller upload on school Wi-Fi; the canvas re-encode also drops EXIF / GPS); PDFs as they are.
+ * Throws an Error with a Hinglish message the page shows next to that file ("notes.docx: sirf photo ya PDF chalega").
  */
-export async function preparePage(file: File, allowedMimes: string[], maxMb: number, pageNo: number): Promise<PreparedPage> {
-  let src: Blob = file;
-  if (isHeic(file)) {
-    try {
-      const { default: heic2any } = await import("heic2any");
-      const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
-      src = Array.isArray(out) ? out[0] : out;
-    } catch {
-      throw new Error(`Page ${pageNo}: iPhone (HEIC) photo convert nahi hui. Camera settings → Formats → ` +
-                      `"Most Compatible" chuno, ya photo ka screenshot upload karo.`);
-    }
-  }
-  let blob: Blob = src;
-  let mime = src.type || file.type;
-  if (mime.startsWith("image/")) {
-    const asFile = src instanceof File ? src : new File([src], file.name.replace(/\.\w+$/, ".jpg"), { type: mime || "image/jpeg" });
-    const c = await compressImage(asFile);
-    blob = c.blob;
-    mime = c.type;
-  } else if (!mime && /\.pdf$/i.test(file.name)) {
-    mime = "application/pdf";
-  }
-  if (!MIME_EXT[mime] || !allowedMimes.includes(mime)) {
-    const allowed = allowedMimes.map(m => MIME_EXT[m]?.toUpperCase()).filter(Boolean).join(", ");
-    throw new Error(`Page ${pageNo}: ye file type allowed nahi hai. Allowed: ${allowed || "PDF / photo"}.`);
-  }
+export async function preparePage(file: File, allowedMimes: string[], maxMb: number): Promise<PreparedPage> {
+  const kind = classify(file);
   const limit = Math.min(maxMb || BUCKET_MAX_MB, BUCKET_MAX_MB);
-  if (blob.size === 0) throw new Error(`Page ${pageNo}: file khaali hai (0 bytes).`);
-  if (blob.size > limit * MB) {
-    throw new Error(`Page ${pageNo} bahut badi hai (${(blob.size / MB).toFixed(1)} MB). Max ${limit} MB.`);
+  if (kind === "bad") throw new Error(formatError(file.name));
+  if (kind === "pdf" && !allowedMimes.includes("application/pdf")) throw new Error(`${file.name}: is test mein sirf photo chalegi`);
+  if (kind !== "pdf" && !allowedMimes.some(m => m.startsWith("image/"))) throw new Error(`${file.name}: is test mein sirf PDF chalegi`);
+
+  if (kind === "pdf") {
+    if (file.size === 0) throw new Error(`${file.name}: file khaali hai`);
+    if (file.size > limit * MB) throw new Error(sizeError(file.name, file.size, limit));
+    const pages = await pdfPageCount(file);
+    return { blob: file, mime: "application/pdf", ext: "pdf", size: file.size, name: file.name, pages, warning: null };
   }
-  return { blob, mime, ext: MIME_EXT[mime], size: blob.size, name: file.name };
+
+  const src = kind === "heic"
+    ? new File([await heicToJpeg(file)], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" })
+    : file;
+  const { blob, type: mime } = await compressImage(src, LONG_EDGE, JPEG_QUALITY);
+  if (!MIME_EXT[mime] || !allowedMimes.includes(mime)) throw new Error(formatError(file.name));
+  if (blob.size === 0) throw new Error(`${file.name}: file khaali hai`);
+  if (blob.size > limit * MB) throw new Error(sizeError(file.name, blob.size, limit));
+  const q = await analyzeQuality(blob);
+  return { blob, mime, ext: MIME_EXT[mime], size: blob.size, name: file.name, pages: 1,
+           warning: q.tooSmall || q.tooDark ? "Photo saaf nahi lag rahi, dobara lo?" : null };
 }
 
 export async function sha256Hex(blob: Blob): Promise<string> {
@@ -208,21 +206,8 @@ export async function sha256Hex(blob: Blob): Promise<string> {
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Upload one page to <institute>/<assignment>/<student>/<uuid>.<ext>. A failed try gets a NEW uuid (the old
- * object, if any, is never referenced and is cleaned up after 24 h). Returns the storage path. */
-export async function uploadPage(ids: { institute_id: string; assignment_id: string; student_id: string },
-                                 page: PreparedPage, tries = 3): Promise<string> {
-  let lastErr: unknown = null;
-  for (let i = 0; i < tries; i++) {
-    const path = `${ids.institute_id}/${ids.assignment_id}/${ids.student_id}/${crypto.randomUUID()}.${page.ext}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, page.blob, { upsert: false, contentType: page.mime });
-    if (!error) return path;
-    lastErr = error;
-    await new Promise(r => setTimeout(r, 800 * (i + 1)));
-  }
-  console.error("upload failed", lastErr);
-  throw new Error("Upload nahi hua (network?). Internet check karke dobara Submit dabao.");
-}
+// Uploads: src/lib/uploadLink/storageUpload.ts (same Storage call over XHR, for per-file progress). A failed try
+// gets a NEW uuid; the old object, if any, is never referenced and is cleaned up after 24 h.
 
 /* ─── RPCs ───────────────────────────────────────────────────────── */
 export async function getAssignmentLink(ref: string, code?: string): Promise<LinkInfo> {
