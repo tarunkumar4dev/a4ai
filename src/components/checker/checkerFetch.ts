@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 export const NETWORK_ERROR = "Server se connect nahi ho paya. Dobara try karein.";
 export const SERVER_ERROR = "Server mein dikkat hai, thodi der baad try karein.";
 export const SESSION_ERROR = "Session expired. Please log in again.";
+export const AI_BUSY_ERROR = "AI is busy, please try again in a minute.";
 const GENERIC_ERROR = "Kuch galat ho gaya. Dobara try karein.";
 
 export async function checkerFetch(url: string, method: "POST" | "PATCH", body?: unknown) {
@@ -26,6 +27,8 @@ export async function checkerFetch(url: string, method: "POST" | "PATCH", body?:
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) throw new Error(SESSION_ERROR);
+    // Gemini quota / overload after the backend's one retry
+    if (data?.error?.code === "AI_BUSY") throw new Error(AI_BUSY_ERROR);
     // our backend always sends a readable sentence in `detail`; anything else (Vercel 504 page,
     // validation arrays) is replaced
     if (typeof data.detail === "string" && data.detail.trim()) throw new Error(data.detail);
