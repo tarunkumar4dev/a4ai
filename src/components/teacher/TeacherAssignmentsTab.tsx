@@ -12,6 +12,7 @@ import { useMyScope } from "@/hooks/useMyScope";
 import { AiQuestionList, feedbackFromAi, type AiResult } from "@/components/checker/AiGradeBreakdown";
 import { backendUrl } from "@/lib/apiBase";
 import { checkerFetch } from "@/components/checker/checkerFetch";
+import CopySubmissionsTab from "@/components/teacher/copySubmissions/CopySubmissionsTab";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -123,6 +124,7 @@ const EmptyIcon = ({ type }: { type: "assignments" | "submissions" }) => (
 export default function TeacherAssignmentsTab() {
   const { user } = useAuth();
   const [view, setView] = useState<"list"|"create"|"submissions">("list");
+  const [subTab, setSubTab] = useState<"submissions" | "copies">("submissions");
   const [batches, setBatches] = useState<Batch[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -376,6 +378,7 @@ export default function TeacherAssignmentsTab() {
   async function openSubmissions(assignment: Assignment) {
     setActiveAssignment(assignment);
     setView("submissions");
+    setSubTab("submissions");
     setSelectedSubs(new Set());
     setSubmissions([]);
 
@@ -383,6 +386,7 @@ export default function TeacherAssignmentsTab() {
       .from("submissions")
       .select("*")
       .eq("assignment_id", assignment.id)
+      .is("idempotency_key", null)          // upload-link attempts live in the Copy Submissions tab
       .order("submitted_at", { ascending: false });
 
     if (subs) {
@@ -684,6 +688,15 @@ export default function TeacherAssignmentsTab() {
             </div>
           </div>
 
+          {/* Old single-PDF submissions vs. copies uploaded through the upload link (docs/upload-flow-api.md) */}
+          <div role="tablist" style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            {([["submissions", "📄 Submissions"], ["copies", "📸 Copy Submissions"]] as const).map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={subTab === k} onClick={() => setSubTab(k)}
+                className={subTab === k ? "ta-btn-primary" : "ta-btn-ghost"} data-testid={`subtab-${k}`}>{label}</button>
+            ))}
+          </div>
+
+          {subTab === "submissions" && (<>
           {/* Progress stats */}
           <div className="ta-card" style={{ marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
             {[
@@ -888,6 +901,13 @@ export default function TeacherAssignmentsTab() {
                 ))}
               </div>
             </>
+          )}
+          </>)}
+
+          {subTab === "copies" && (
+            <CopySubmissionsTab
+              assignment={{ id: activeAssignment.id, title: activeAssignment.title, batch_name: activeAssignment.batch_name }}
+              onEditAssignment={() => editAssignment(activeAssignment)} />
           )}
         </div>
       )}
