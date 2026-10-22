@@ -187,43 +187,64 @@ begin
 end $$;
 
 do $$
-declare r jsonb; v_states text[] := '{}';
+declare r jsonb; n_ok int := 0;
 begin
+  -- school WiFi: a whole class behind one IP, all with correct codes → never limited
   perform tst.as_anon('10.0.0.2');
-  for i in 1..6 loop
-    r := public.verify_access_code('WRONG' || i || 'XX');
-    v_states := v_states || (r ->> 'state');
+  for i in 1..40 loop
+    r := public.verify_access_code('AAAA2222');
+    if r ->> 'state' = 'ok' then n_ok := n_ok + 1; end if;
   end loop;
   perform tst.as_admin();
-  perform tst.ok(v_states = array['invalid_code','invalid_code','invalid_code','invalid_code','invalid_code','rate_limited']
-                 and (r ->> 'retry_after_sec')::int between 1 and 60,
-                 'wrong access code 6x from one IP: 5 x invalid_code, then rate_limited', to_jsonb(v_states));
-  -- correct code from the same IP is also refused inside the minute
-  perform tst.as_anon('10.0.0.2');
-  r := public.verify_access_code('AAAA2222');
-  perform tst.as_admin();
-  perform tst.ok(r ->> 'state' = 'rate_limited', 'rate limit applies to a correct code too (per IP)', r);
-  perform tst.ok(not exists (select 1 from public.access_code_attempts where code_hash !~ '^[0-9a-f]{64}$'),
-                 'access_code_attempts stores only hashes', null);
+  perform tst.ok(n_ok = 40 and not exists (select 1 from public.access_code_attempts where ip_hash = tst.ip_hash('10.0.0.2')),
+                 '40 correct verifies from one IP: all ok, nothing logged', to_jsonb(n_ok));
 end $$;
 
 do $$
-declare r jsonb;
+declare r jsonb; v_states text[] := '{}';
 begin
-  -- 10 wrong codes spread over the last 12 minutes (never 5 in one minute) → locked
-  insert into public.access_code_attempts (ip_hash, code_hash, ok, ts)
-  select tst.ip_hash('10.0.0.3'), 'x', false, now() - make_interval(mins => 2 + g) from generate_series(0, 9) g;
+  perform tst.as_anon('10.0.0.3');
+  for i in 1..21 loop
+    r := public.verify_access_code('WRNG' || lpad(i::text, 4, '0'));   -- 21 different wrong codes
+    v_states := v_states || (r ->> 'state');
+  end loop;
+  perform tst.as_admin();
+  perform tst.ok(v_states[1:20] = array_fill('invalid_code'::text, array[20]) and v_states[21] = 'locked'
+                 and r ->> 'scope' = 'ip' and (r ->> 'retry_after_sec')::int between 840 and 900,
+                 '20 wrong codes from one IP: invalid_code; the 21st try: locked (ip, ~15 min)', to_jsonb(v_states));
   perform tst.as_anon('10.0.0.3');
   r := public.verify_access_code('AAAA2222');
   perform tst.as_admin();
-  perform tst.ok(r ->> 'state' = 'locked' and (r ->> 'retry_after_sec')::int between 1 and 900,
-                 '10 wrong codes within 15 min: IP locked (correct code refused)', r);
+  perform tst.ok(r ->> 'state' = 'locked', 'locked IP: a correct code is refused too (no oracle)', r);
+  perform tst.ok((select count(*) from public.access_code_attempts where ip_hash = tst.ip_hash('10.0.0.3')) = 20,
+                 'tries while locked are not logged (lock does not extend itself)', null);
+  perform tst.ok(not exists (select 1 from public.access_code_attempts where code_hash !~ '^[0-9a-f]{64}$'),
+                 'access_code_attempts stores only hashes', null);
   -- 16 minutes later the lock is over
   update public.access_code_attempts set ts = ts - interval '16 minutes' where ip_hash = tst.ip_hash('10.0.0.3');
   perform tst.as_anon('10.0.0.3');
   r := public.verify_access_code('AAAA2222');
   perform tst.as_admin();
-  perform tst.ok(r ->> 'state' = 'ok', 'lockout ends 15 min after the 10th wrong code', r);
+  perform tst.ok(r ->> 'state' = 'ok', 'IP lockout ends 15 min after the 20th wrong code', r);
+end $$;
+
+do $$
+declare r jsonb; v_states text[] := '{}';
+begin
+  -- the same wrong code from 10 different IPs (none of them near its own IP limit)
+  for i in 1..11 loop
+    perform tst.as_anon('10.0.10.' || i);
+    r := public.verify_access_code('QQQQ7777');
+    v_states := v_states || (r ->> 'state');
+  end loop;
+  perform tst.as_admin();
+  perform tst.ok(v_states[1:10] = array_fill('invalid_code'::text, array[10]) and v_states[11] = 'locked'
+                 and r ->> 'scope' = 'code',
+                 'same wrong code 10x (any IPs): the 11th try on that code is locked (code)', to_jsonb(v_states));
+  perform tst.as_anon('10.0.10.11');
+  r := public.verify_access_code('AAAA2222');
+  perform tst.as_admin();
+  perform tst.ok(r ->> 'state' = 'ok', 'code lock does not block other codes from the same IP', r);
 end $$;
 
 -- ════════════════════════════════════════════════════════════════════
@@ -709,7 +730,7 @@ begin
     'select public.a4_enqueue_submission(gen_random_uuid())',
     'select public.publish_results(gen_random_uuid())',
     'select public.override_marks(gen_random_uuid(), ''1'', 1)',
-    'select public.a4_code_gate(''AAAA2222'', null, true)'] loop
+    'select public.a4_code_gate(''AAAA2222'', null)'] loop
     begin
       perform tst.as_anon('10.0.6.1');
       execute v_err;
@@ -780,6 +801,75 @@ begin
       raise notice 'PASS storage refused %', split_part(v_path, '/', 3) || '/' || split_part(v_path, '/', 4);
     end;
   end loop;
+end $$;
+
+-- bucket caps, max_mb upper bound, HEIC only where the link allows it
+do $$
+declare r jsonb; f jsonb;
+begin
+  perform tst.ok((select file_size_limit = 10485760
+                         and allowed_mime_types @> array['image/jpeg','image/png','image/webp','image/heic','application/pdf']
+                         and cardinality(allowed_mime_types) = 5 and not public
+                    from storage.buckets where id = 'submissions'),
+                 'bucket submissions: private, 10 MB, jpeg/png/webp/heic/pdf', null);
+  begin
+    update public.assignments set max_mb = 11 where id = '00000000-0000-0000-0000-00000000d005';
+    raise exception 'FAIL max_mb 11 accepted';
+  exception when check_violation then
+    raise notice 'PASS max_mb above 10 (bucket limit) refused';
+  end;
+  f := tst.files('00000000-0000-0000-0000-00000000d005', '00000000-0000-0000-0000-00000000c001', 1, 'heic', 'image/heic');
+  perform tst.as_anon('10.0.7.2');
+  r := public.create_submission('AAAA2222', '00000000-0000-0000-0000-00000000d005', tst.key(), f);
+  perform tst.as_admin();
+  perform tst.ok(r -> 'errors' -> 0 ->> 'code' = 'bad_format', 'HEIC on a link without image/heic: bad_format', r);
+  update public.assignments set allowed_mimes = allowed_mimes || array['image/heic']
+   where id = '00000000-0000-0000-0000-00000000d005';
+  f := tst.files('00000000-0000-0000-0000-00000000d005', '00000000-0000-0000-0000-00000000c001', 1, 'heic', 'image/heic');
+  perform tst.as_anon('10.0.7.2');
+  r := public.create_submission('AAAA2222', '00000000-0000-0000-0000-00000000d005', tst.key(), f);
+  perform tst.as_admin();
+  perform tst.ok(r ->> 'state' = 'created', 'HEIC on a link that allows it: created', r);
+end $$;
+
+-- uploads nobody attached → listed after 24 h → hourly retention job
+do $$
+declare
+  v_linked text := (select e ->> 'storage_path' from public.submissions s, jsonb_array_elements(s.files) e
+                     where s.id = (select id from tst.ids where name = 's1_a1_1') limit 1);
+  v_orphan text := '00000000-0000-0000-0000-000000001001/00000000-0000-0000-0000-00000000d001/00000000-0000-0000-0000-00000000c001/' || gen_random_uuid() || '.jpg';
+  v_fresh  text := '00000000-0000-0000-0000-000000001001/00000000-0000-0000-0000-00000000d001/00000000-0000-0000-0000-00000000c001/' || gen_random_uuid() || '.jpg';
+  v_legacy text := '00000000-0000-0000-0000-000000001001/00000000-0000-0000-0000-00000000d001/00000000-0000-0000-0000-00000000c001_1761000000000.pdf';
+  v_junk   text := 'not-a-uuid/x/y/z.jpg';
+  v_list text[];
+  j1 uuid; j2 uuid;
+begin
+  insert into storage.objects (bucket_id, name, created_at) values
+    ('submissions', v_orphan, now() - interval '25 hours'),
+    ('submissions', v_fresh,  now() - interval '2 hours'),
+    ('submissions', v_legacy, now() - interval '40 hours'),
+    ('submissions', v_junk,   now() - interval '40 hours');
+  update storage.objects set created_at = now() - interval '25 hours' where bucket_id = 'submissions' and name = v_linked;
+
+  perform tst.as_service();
+  select array_agg(x) into v_list from public.a4_orphan_submission_files(100) x;
+  j1 := public.a4_enqueue_orphan_cleanup();
+  j2 := public.a4_enqueue_orphan_cleanup();
+  perform tst.as_admin();
+  perform tst.ok(v_orphan = any(v_list) and not (v_linked = any(v_list)) and not (v_fresh = any(v_list))
+                 and not (v_legacy = any(v_list)) and not (v_junk = any(v_list)),
+                 'orphans: only unattached upload-link files older than 24 h', to_jsonb(v_list));
+  perform tst.ok(j1 is not null and j2 is null
+                 and (select count(*) from public.check_jobs where kind = 'retention' and state = 'queued') = 1,
+                 'orphan cleanup: one retention job per hour', jsonb_build_array(j1, j2));
+  begin
+    perform tst.as_anon('10.0.7.3');
+    perform public.a4_orphan_submission_files(10);
+    raise exception 'FAIL anon may list orphan files';
+  exception when insufficient_privilege then
+    perform tst.as_admin();
+    raise notice 'PASS anon denied: a4_orphan_submission_files';
+  end;
 end $$;
 
 -- old portal submit can't overwrite an upload-link attempt

@@ -216,13 +216,15 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   'submissions') + check_jobs (queue, claim/finish/sweep); results on check_sheets (per_question, needs_review_reasons,
   published); audit = smart_assignment_checks (publish/unpublish/override). Student RPCs (access code, never student_id):
   get_assignment_link, verify_access_code, create_submission, my_submissions; teacher: publish_results,
-  unpublish_results, override_marks. Access-code limit in Postgres (access_code_attempts). Storage path
+  unpublish_results, override_marks. Access-code limit in Postgres (access_code_attempts, WRONG codes only:
+  20/10 min/IP or 10/10 min/code → 15 min lock; correct codes never limited). Bucket submissions: 10 MB,
+  jpeg/png/webp/heic/pdf (link max_mb ≤ 10); unattached uploads > 24 h → hourly pg_cron → 'retention' job,
+  worker deletes via Storage API (backend can't read HEIC yet — keep it off links). Storage path
   `<inst>/<asg>/<student>/<uuid>.<ext>`. Contract: `docs/upload-flow-api.md`. Local tests (pgserver, no Docker):
-  `supabase/tests/upload_flow/run_local.py` → 92 SQL checks + 3 parallel, all pass. NOT run on staging/live.
+  `supabase/tests/upload_flow/run_local.py` → 102 SQL checks + 3 parallel, all pass. NOT run on staging/live.
 - [ ] Upload flow run: owner enables pg_net + pg_cron, vault secrets checker_job_run_url / checker_job_secret →
   18 on staging → VERIFY → IP header check (§5 of the API doc) → live. Backend G2/G3 worker per API doc §4.
 - Known after 18:
-  - Per-IP code limit (5/min) will trip on school WiFi when a class opens the link together — product decision.
   - Backend `_checks_today` must also exclude publish/auto_publish/unpublish audit rows.
   - Old `submit_assignment` refuses assignments that already have upload-link attempts; portal UI must switch.
 

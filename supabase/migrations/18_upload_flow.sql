@@ -18,7 +18,7 @@
 --   4. results: check_sheets.per_question / confidence / needs_review_reasons / model_version / reviewed_by /
 --      published / published_at. Audit = existing smart_assignment_checks (no marks_history table).
 --   5. check_jobs queue (checker-v4 G2) + claim / finish / sweep functions.
---   6. access_code_attempts: 5 tries / min / IP, 10 wrong → 15 min lockout.
+--   6. access_code_attempts (wrong codes only): 20 wrong / 10 min / IP or 10 wrong / 10 min / code → 15 min lockout.
 --   7. RPCs: get_assignment_link, verify_access_code, create_submission, my_submissions,
 --      publish_results, unpublish_results, override_marks.
 --   8. pg_net kick on new jobs + pg_cron sweep every minute — ONLY if those extensions are already enabled.
@@ -69,12 +69,12 @@ alter table public.assignments
 alter table public.assignments drop constraint if exists assignments_link_rules_check;
 alter table public.assignments add constraint assignments_link_rules_check check (
       max_attempts between 1 and 20
-  and max_mb between 1 and 20
+  and max_mb between 1 and 10                     -- = bucket file_size_limit
   and max_pages between 1 and 30
   and late_policy in ('accept_flag', 'reject')
   and count_policy in ('latest', 'best')
   and cardinality(allowed_mimes) > 0
-  and allowed_mimes <@ array['application/pdf','image/jpeg','image/png','image/webp']::text[]
+  and allowed_mimes <@ array['application/pdf','image/jpeg','image/png','image/webp','image/heic']::text[]
   and link_token ~ '^[A-Za-z0-9_-]{16,64}$'
   and (opens_at is null or deadline is null or opens_at < deadline));
 
@@ -306,16 +306,17 @@ grant select on public.check_jobs to authenticated;
 grant all on public.check_jobs to service_role;
 
 -- ════════════════════════════════════════════════════════════════════
--- 6. Access-code attempts (service side only). The code itself is never stored, only its SHA-256.
+-- 6. Wrong access-code attempts (service side only). Correct codes are never logged. The code itself is never
+--    stored, only its SHA-256.
 -- ════════════════════════════════════════════════════════════════════
 create table if not exists public.access_code_attempts (
   id        bigserial primary key,
   ip_hash   text        not null,
   code_hash text        not null,
-  ok        boolean     not null,
   ts        timestamptz not null default now()
 );
-create index if not exists access_code_attempts_ip_ts_idx on public.access_code_attempts (ip_hash, ts desc);
+create index if not exists access_code_attempts_ip_ts_idx   on public.access_code_attempts (ip_hash, ts desc);
+create index if not exists access_code_attempts_code_ts_idx on public.access_code_attempts (code_hash, ts desc);
 alter table public.access_code_attempts enable row level security;   -- no policies
 revoke all on public.access_code_attempts from anon, authenticated;
 revoke all on sequence public.access_code_attempts_id_seq from anon, authenticated;
@@ -349,60 +350,63 @@ begin
   return 'no-ip';
 end $$;
 
--- Access-code gate shared by every student RPC.
---   limits per IP: 5 counted tries / 60 s → rate_limited; 10 wrong codes within 15 min → locked for 15 min
---   counted try = every verify (p_log_success) + every wrong code anywhere
--- Returns {state: ok, student_id} | {state: invalid_code | rate_limited | locked, retry_after_sec?}
-create or replace function public.a4_code_gate(p_code text, p_ip_hash text, p_log_success boolean)
+-- Access-code gate shared by every student RPC. Only WRONG codes count (a whole class behind one school-WiFi IP
+-- typing correct codes is never limited):
+--   per IP:   20 wrong within 10 min → that IP is locked for 15 min after the 20th
+--   per code: the same wrong code 10 times within 10 min (any IPs) → that code is locked for 15 min
+-- While locked, nothing from that IP / for that code is checked — a correct code is refused too, otherwise the
+-- answer would still tell a guesser which code is right.
+-- Returns {state: ok, student_id} | {state: invalid_code} | {state: locked, scope: ip|code, retry_after_sec}
+create or replace function public.a4_code_gate(p_code text, p_ip_hash text)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
-  c_per_min    constant int := 5;
-  c_fail_max   constant int := 10;
-  c_lock       constant interval := interval '15 minutes';
-  v_ip         text := public.a4_request_ip_hash(p_ip_hash);
-  v_code       text := upper(trim(coalesce(p_code, '')));
-  v_until      timestamptz;
-  v_recent     int;
-  v_oldest     timestamptz;
-  v_id         uuid;
+  c_ip_max      constant int := 20;
+  c_code_max    constant int := 10;
+  c_window      constant interval := interval '10 minutes';
+  c_lock        constant interval := interval '15 minutes';
+  v_ip          text := public.a4_request_ip_hash(p_ip_hash);
+  v_code        text := upper(trim(coalesce(p_code, '')));
+  v_code_hash   text := encode(sha256(convert_to('a4code:' || upper(trim(coalesce(p_code, ''))), 'UTF8')), 'hex');
+  v_until       timestamptz;
+  v_id          uuid;
 begin
-  -- one gate decision per IP at a time (parallel tries can't all slip through)
-  perform pg_advisory_xact_lock(hashtext('a4code:' || v_ip));
+  -- one decision per IP and per code at a time (parallel tries can't all slip under the limit); IP before code
+  perform pg_advisory_xact_lock(hashtext('a4code-ip:' || v_ip));
+  perform pg_advisory_xact_lock(hashtext('a4code-code:' || v_code_hash));
 
-  -- lockout: the latest wrong code that was the 10th within 15 minutes locks the IP for 15 minutes after it
+  -- a wrong try that was the 20th (IP) / 10th (code) within 10 minutes locks for 15 minutes after it
   select max(f.ts) + c_lock into v_until
     from access_code_attempts f
-   where f.ip_hash = v_ip and not f.ok and f.ts > now() - 2 * c_lock
+   where f.ip_hash = v_ip and f.ts > now() - c_lock
      and (select count(*) from access_code_attempts g
-           where g.ip_hash = v_ip and not g.ok and g.ts > f.ts - c_lock and g.ts <= f.ts) >= c_fail_max;
+           where g.ip_hash = v_ip and g.ts > f.ts - c_window and g.ts <= f.ts) >= c_ip_max;
   if v_until > now() then
-    return jsonb_build_object('state', 'locked',
+    return jsonb_build_object('state', 'locked', 'scope', 'ip',
       'retry_after_sec', greatest(1, ceil(extract(epoch from (v_until - now())))::int));
   end if;
 
-  select count(*), min(ts) into v_recent, v_oldest
-    from access_code_attempts where ip_hash = v_ip and ts > now() - interval '60 seconds';
-  if v_recent >= c_per_min then
-    return jsonb_build_object('state', 'rate_limited',
-      'retry_after_sec', greatest(1, ceil(extract(epoch from (v_oldest + interval '60 seconds' - now())))::int));
+  select max(f.ts) + c_lock into v_until
+    from access_code_attempts f
+   where f.code_hash = v_code_hash and f.ts > now() - c_lock
+     and (select count(*) from access_code_attempts g
+           where g.code_hash = v_code_hash and g.ts > f.ts - c_window and g.ts <= f.ts) >= c_code_max;
+  if v_until > now() then
+    return jsonb_build_object('state', 'locked', 'scope', 'code',
+      'retry_after_sec', greatest(1, ceil(extract(epoch from (v_until - now())))::int));
   end if;
 
   if v_code ~ '^[A-Z0-9]{4,16}$' then
     v_id := public.a4_student_id_from_code(v_code);
   end if;
-
-  if v_id is null or p_log_success then
-    insert into access_code_attempts (ip_hash, code_hash, ok)
-    values (v_ip, encode(sha256(convert_to('a4code:' || v_code, 'UTF8')), 'hex'), v_id is not null);
+  if v_id is not null then
+    return jsonb_build_object('state', 'ok', 'student_id', v_id);
   end if;
+
+  insert into access_code_attempts (ip_hash, code_hash) values (v_ip, v_code_hash);
   if random() < 0.01 then
     delete from access_code_attempts where ts < now() - interval '1 day';
   end if;
-
-  if v_id is null then
-    return jsonb_build_object('state', 'invalid_code');
-  end if;
-  return jsonb_build_object('state', 'ok', 'student_id', v_id);
+  return jsonb_build_object('state', 'invalid_code');
 end $$;
 
 -- Same audience as the submissions sub_grade policy (02): institute admin, or staff who see the batch.
@@ -897,7 +901,7 @@ begin
     return v_out;
   end if;
 
-  g := public.a4_code_gate(p_code, p_ip_hash, true);
+  g := public.a4_code_gate(p_code, p_ip_hash);
   if g ->> 'state' <> 'ok' then
     return v_out || jsonb_build_object('student', g);
   end if;
@@ -915,11 +919,11 @@ begin
                            then jsonb_build_object('file_url', a.file_url, 'file_name', a.file_name) end);
 end $$;
 
--- "Ye aap hi ho?" step: name / class / masked email for a code. Counts as a try (rate limit).
+-- "Ye aap hi ho?" step: name / class / masked email for a code. A wrong code counts toward the lockout.
 create or replace function public.verify_access_code(p_code text, p_ip_hash text default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
-  g jsonb := public.a4_code_gate(p_code, p_ip_hash, true);
+  g jsonb := public.a4_code_gate(p_code, p_ip_hash);
   v jsonb;
 begin
   if g ->> 'state' <> 'ok' then
@@ -990,7 +994,7 @@ begin
                               'message', 'idempotency_key: 16-128 characters, A-Z a-z 0-9 _ -');
   end if;
 
-  g := public.a4_code_gate(p_code, p_ip_hash, false);
+  g := public.a4_code_gate(p_code, p_ip_hash);
   if g ->> 'state' <> 'ok' then
     return g;
   end if;
@@ -1077,7 +1081,7 @@ begin
     end;
 
     if v_path is null or left(v_path, length(v_prefix)) <> v_prefix
-       or substr(v_path, length(v_prefix) + 1) !~ '^[0-9a-fA-F-]{36}\.(pdf|jpg|jpeg|png|webp)$' then
+       or substr(v_path, length(v_prefix) + 1) !~ '^[0-9a-fA-F-]{36}\.(pdf|jpg|jpeg|png|webp|heic)$' then
       v_errors := v_errors || jsonb_build_object('index', i, 'code', 'bad_path',
         'message', format('File %s galat jagah upload hui. Page reload karke dobara upload karo.', i));
       continue;
@@ -1096,7 +1100,8 @@ begin
     v_orders := v_orders || v_order;
 
     v_exp_ext := case v_mime when 'application/pdf' then 'pdf' when 'image/jpeg' then 'jpe?g'
-                             when 'image/png' then 'png' when 'image/webp' then 'webp' end;
+                             when 'image/png' then 'png' when 'image/webp' then 'webp'
+                             when 'image/heic' then 'heic' end;
     if v_mime is null or not (v_mime = any(a.allowed_mimes)) or v_exp_ext is null
        or v_path !~* ('\.' || v_exp_ext || '$') then
       v_errors := v_errors || jsonb_build_object('index', i, 'code', 'bad_format',
@@ -1199,7 +1204,7 @@ end $$;
 create or replace function public.my_submissions(p_code text, p_assignment_id uuid, p_ip_hash text default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
-  g         jsonb := public.a4_code_gate(p_code, p_ip_hash, false);
+  g         jsonb := public.a4_code_gate(p_code, p_ip_hash);
   v_student uuid;
   a         assignments%rowtype;
   st        students%rowtype;
@@ -1534,7 +1539,7 @@ begin
          and a.batch_id in (st.batch_id, st.lab_batch_id));
   end if;
 
-  if v_n <> 4 or v_parts[4] !~* '^[0-9a-f-]{36}\.(pdf|jpg|jpeg|png|webp)$' then
+  if v_n <> 4 or v_parts[4] !~* '^[0-9a-f-]{36}\.(pdf|jpg|jpeg|png|webp|heic)$' then
     return false;
   end if;
   begin
@@ -1544,7 +1549,7 @@ begin
   end;
   v_mime := case lower(substring(v_parts[4] from '\.([a-zA-Z]+)$'))
               when 'pdf' then 'application/pdf' when 'jpg' then 'image/jpeg' when 'jpeg' then 'image/jpeg'
-              when 'png' then 'image/png' when 'webp' then 'image/webp' end;
+              when 'png' then 'image/png' when 'webp' then 'image/webp' when 'heic' then 'image/heic' end;
   return exists (
     select 1 from assignments a join students st on st.id = v_student
      where a.id = v_asg and a.institute_id = v_inst and a.status = 'active'
@@ -1575,11 +1580,53 @@ begin
             or a.batch_id in (select public.a4_my_visible_batch_ids())));
 end $$;
 
+-- Bucket-level caps hold even for an anon upload that never becomes an attempt. 10 MB = the highest max_mb a
+-- link may have (assignments_link_rules_check); the link's own max_mb is checked again in create_submission.
 update storage.buckets
    set public = false,
-       allowed_mime_types = array['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
-       file_size_limit = 20971520                                       -- 20 MB; per-assignment max_mb in create_submission
+       allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'],
+       file_size_limit = 10485760
  where id = 'submissions';
+
+-- Uploads nobody attached: upload-link path, older than 24 h, in no attempt's files. Portal v1 files
+-- (<inst>/<asg>/<student>_<ms>.pdf, referenced by submissions.file_url) never match.
+-- Storage files must be deleted through the Storage API (deleting storage.objects rows in SQL leaves the bytes
+-- behind), so SQL only finds them; the worker deletes them in a 'retention' job.
+create or replace function public.a4_orphan_submission_files(p_limit int default 500)
+returns setof text language sql stable security definer set search_path = public as $$
+  with o as (
+    select name, created_at,
+           case when name ~* '^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/){3}[0-9a-f-]{36}\.(pdf|jpg|jpeg|png|webp|heic)$'
+                then true else false end as is_link_upload
+      from storage.objects
+     where bucket_id = 'submissions' and created_at < now() - interval '24 hours')
+  select o.name from o
+   where o.is_link_upload
+     and not exists (
+       select 1 from submissions s
+        where s.assignment_id = (case when o.is_link_upload then split_part(o.name, '/', 2)::uuid end)
+          and s.student_id    = (case when o.is_link_upload then split_part(o.name, '/', 3)::uuid end)
+          and s.files @> jsonb_build_array(jsonb_build_object('storage_path', o.name)))
+   order by o.created_at
+   limit greatest(1, least(coalesce(p_limit, 500), 1000))
+$$;
+
+-- pg_cron (hourly) → one 'retention' job per hour, only when there is something to delete. The insert kicks the
+-- worker like any job.
+create or replace function public.a4_enqueue_orphan_cleanup()
+returns uuid language plpgsql volatile security definer set search_path = public as $$
+declare
+  v_id uuid;
+begin
+  if not exists (select 1 from public.a4_orphan_submission_files(1)) then
+    return null;
+  end if;
+  insert into check_jobs (kind, idempotency_key)
+  values ('retention', 'retention:orphan-uploads:' || to_char(now() at time zone 'UTC', 'YYYYMMDDHH24'))
+  on conflict (idempotency_key) do nothing
+  returning id into v_id;
+  return v_id;
+end $$;
 
 drop policy if exists a4_submissions_insert on storage.objects;
 create policy a4_submissions_insert on storage.objects for insert to anon, authenticated
@@ -1607,12 +1654,13 @@ create policy portal_sheets_staff_read on public.check_sheets for select to auth
 -- ════════════════════════════════════════════════════════════════════
 revoke execute on function
   public.a4_system_write(), public.a4_project_per_question(jsonb),
-  public.a4_request_ip_hash(text), public.a4_code_gate(text, text, boolean),
+  public.a4_request_ip_hash(text), public.a4_code_gate(text, text),
   public.a4_can_grade_assignment(uuid), public.a4_job_backoff(int),
   public.a4_mark_event(uuid, uuid, text, numeric, text, jsonb), public.a4_apply_overrides(jsonb, jsonb),
   public.a4_submission_json(uuid, boolean), public.a4_checker_kick(), public.a4_enqueue_submission(uuid),
   public.a4_publish_submission(uuid, uuid, boolean), public.a4_claim_check_job(int),
   public.a4_finish_check_job(uuid, boolean, text, text, jsonb), public.a4_checker_sweep(),
+  public.a4_orphan_submission_files(int), public.a4_enqueue_orphan_cleanup(),
   public.a4_check_sheet_derive(), public.a4_answer_key_version_bump(), public.a4_answer_key_changed(),
   public.a4_check_job_state_sync(), public.a4_check_jobs_kick_trg(),
   public.get_assignment_link(text, text, text), public.verify_access_code(text, text),
@@ -1638,7 +1686,8 @@ to authenticated;
 
 grant execute on function
   public.a4_claim_check_job(int), public.a4_finish_check_job(uuid, boolean, text, text, jsonb),
-  public.a4_checker_sweep(), public.a4_enqueue_submission(uuid)
+  public.a4_checker_sweep(), public.a4_enqueue_submission(uuid),
+  public.a4_orphan_submission_files(int), public.a4_enqueue_orphan_cleanup()
 to service_role;
 
 grant execute on function public.submit_assignment(text, uuid, text, text, text) to anon, authenticated;
@@ -1650,8 +1699,9 @@ do $$
 begin
   if exists (select 1 from pg_extension where extname = 'pg_cron') then
     perform cron.schedule('a4-checker-sweep', '* * * * *', 'select public.a4_checker_sweep()');
+    perform cron.schedule('a4-orphan-upload-cleanup', '17 * * * *', 'select public.a4_enqueue_orphan_cleanup()');
   else
-    raise notice '18_upload_flow: pg_cron is NOT enabled → the sweep is not scheduled. Enable pg_cron, then re-run this file.';
+    raise notice '18_upload_flow: pg_cron is NOT enabled → the sweep and the hourly orphan-upload cleanup are not scheduled. Enable pg_cron, then re-run this file.';
   end if;
   if not exists (select 1 from pg_extension where extname = 'pg_net') then
     raise notice '18_upload_flow: pg_net is NOT enabled → new jobs do not wake the backend. Enable pg_net and add vault secrets checker_job_run_url + checker_job_secret.';
@@ -1673,6 +1723,10 @@ commit;
 -- union all select 'anon cannot publish', not has_function_privilege('anon', 'public.publish_results(uuid,uuid[])', 'execute')
 -- union all select 'anon can upload-link', has_function_privilege('anon', 'public.create_submission(text,uuid,text,jsonb,text)', 'execute')
 -- union all select 'submissions private', not (select public from storage.buckets where id = 'submissions')
+-- union all select 'submissions 10 MB + 5 types', (select file_size_limit = 10485760 and cardinality(allowed_mime_types) = 5
+--                                                   from storage.buckets where id = 'submissions')
+-- union all select 'orphan cleanup scheduled (needs pg_cron)', exists (select 1 from pg_extension where extname = 'pg_cron')
+--                  and exists (select 1 from cron.job where jobname = 'a4-orphan-upload-cleanup')
 -- union all select 'cron scheduled (needs pg_cron)', exists (select 1 from pg_extension where extname = 'pg_cron')
 -- union all select 'pg_net enabled', exists (select 1 from pg_extension where extname = 'pg_net');
 --

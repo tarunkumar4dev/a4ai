@@ -47,9 +47,19 @@ Call them with `supabasePortal.rpc(name, args)`. Pass `p_ip_hash` only from test
 
 **Shared code states** (`a4_code_gate`):
 - `invalid_code`: the code is wrong.
-- `rate_limited`: more than 5 tries per minute from one IP. Comes with `retry_after_sec`.
-- `locked`: 10 wrong codes within 15 min. The IP is locked for 15 min after the 10th. Comes with `retry_after_sec`.
-- What counts as a try: every `verify_access_code` call, every `get_assignment_link` call with a code, and every wrong code passed to any RPC.
+- `locked`: comes with `scope` (`ip` or `code`) and `retry_after_sec`.
+
+**Only wrong codes count.** A correct code is never logged or limited, so a whole class on one school-WiFi IP can open the link at the same time.
+
+| limit | trigger | effect |
+|---|---|---|
+| per IP | 20 wrong codes within 10 min | that IP is `locked` for 15 min after the 20th, so the 21st try is refused |
+| per code | the same wrong code 10 times within 10 min, from any IPs | that code value is `locked` for 15 min |
+
+- While an IP is locked, **a correct code from that IP is refused too.** If it weren't, the answer would still tell a guesser which code is right.
+- Tries made while locked are not logged, so a lock can't extend itself.
+- `access_code_attempts` stores `(ip_hash, code_hash, ts)` for wrong tries only, as SHA-256 values. Rows are deleted after a day.
+- The per-code lock adds little protection on its own: a wrong code stays wrong whether it is locked or not. It mainly stops one script or person from hammering the same value. The real protection is the code space (8 chars from a 32-letter alphabet, about 10¹² values) together with the per-IP lock.
 
 ### 2.1 `get_assignment_link(p_ref text, p_code text = null, p_ip_hash text = null)`
 `p_ref` is the link token or the assignment id. This RPC never returns the answer key or the rubric.
@@ -68,7 +78,7 @@ Call them with `supabasePortal.rpc(name, args)`. Pass `p_ip_hash` only from test
 { "state": "open", "assignment": { … },
   "student": { "state": "ok", "name": "Asha Verma", "attempts_used": 1, "attempts_left": 1 },
   "question_paper": { "file_url": "https://…/assignments/…", "file_name": "paper.pdf" } }
-// student.state: ok | not_in_class | invalid_code | rate_limited | locked
+// student.state: ok | not_in_class | invalid_code | locked
 ```
 - `inactive` returns only `{state, title}`. `not_found` returns only `{state}`.
 - `open_late` means the deadline plus 2 min of grace has passed and `late_policy = 'accept_flag'`, so uploads are allowed but marked late.
@@ -86,7 +96,7 @@ This is the "Ye aap hi ho?" step.
 **Client steps**
 1. Create `idempotency_key` once per attempt, e.g. `crypto.randomUUID().replace(/-/g,'')` (16–128 chars, `[A-Za-z0-9_-]`). Save it in localStorage under the assignment id. **Do not regenerate it on retry.** Clear it only after a `created` or `replayed` response.
 2. For each page:
-   - Convert HEIC to JPEG. Compress to about 1600 px JPEG.
+   - Convert HEIC to JPEG in the browser (heic2any or canvas). Compress to about 1600 px JPEG. The bucket accepts `image/heic`, but the checker (`preprocess.py`) can't read it yet; a HEIC page ends up `rejected` (BAD_FILE). Don't add `image/heic` to a link's `allowed_mimes` until the backend converts HEIC.
    - Compute `sha256` with `crypto.subtle.digest` on the bytes you upload. The value is hex.
    - Upload to bucket **`submissions`** at `<institute_id>/<assignment_id>/<student_id>/<uuid>.<jpg|jpeg|png|webp|pdf>` with `upsert: false`. The ids come from `get_student_by_code` and the link.
    - A failed upload can be retried with a new uuid. The old object is never referenced.
@@ -108,7 +118,7 @@ Responses:
 { "state": "invalid_files", "errors": [ { "index": 2, "code": "too_large", "message": "Page 2 bahut badi hai (12.4 MB). Max 10 MB." } ] }
 ```
 Other states:
-- `invalid_code`, `rate_limited`, `locked`
+- `invalid_code`, `locked`
 - `not_found`: wrong assignment, or the student is not in its class
 - `inactive`
 - `not_open` (comes with `opens_at`)
@@ -135,6 +145,21 @@ Server guarantees:
 - The unique index `(assignment_id, student_id, attempt_no)` is the safety net. One retry happens on a clash.
 - `rejected` attempts don't count toward `max_attempts`.
 - Same bytes as another student's upload sets `dup_other_student: true` on that file. Only teachers see it.
+
+**Storage rules** (bucket `submissions`, private). These hold even for files that never become an attempt:
+
+| rule | where |
+|---|---|
+| max 10 MB per file | bucket `file_size_limit`. A link's `max_mb` is 1–10, and a constraint keeps it ≤ the bucket limit. |
+| `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `application/pdf` | bucket `allowed_mime_types` |
+| path `<inst>/<asg>/<student>/<uuid>.<jpg\|jpeg\|png\|webp\|heic\|pdf>` | insert policy `a4_valid_submission_path`: student of the link's class, link open (or `accept_flag` late), extension in the link's `allowed_mimes` |
+| no overwrite, no listing | `upsert: false`; anon has no SELECT/UPDATE on objects |
+
+**Unattached uploads are cleaned up.** These are files older than 24 h on the upload-link path that are not in any attempt's `files`, e.g. the student closed the tab, or an upload was retried with a new uuid.
+- Every hour (`17 * * * *`), pg_cron job `a4-orphan-upload-cleanup` runs `a4_enqueue_orphan_cleanup()`. That inserts one `check_jobs` row of kind `retention`, with key `retention:orphan-uploads:<UTC hour>`, but only if there is something to delete.
+- The worker deletes the files (§4.2).
+- Old portal v1 files (`<inst>/<asg>/<student>_<ms>.pdf`) are never touched.
+- The cleanup can't be pure SQL. Deleting `storage.objects` rows in SQL leaves the file bytes in Storage, so files must be removed through the Storage API.
 
 ### 2.4 `my_submissions(p_code, p_assignment_id, p_ip_hash = null)`
 This is the history list for the link page. Marks appear only after the teacher publishes.
@@ -219,6 +244,11 @@ Content-Type: application/json
 ```
 while time_left > 120 s:
     job = rpc('a4_claim_check_job', { p_max_running: MAX_RUNNING_JOBS })   # [] → stop
+    if job.kind == 'retention':                       # hourly unattached-upload cleanup
+        paths = rpc('a4_orphan_submission_files', { p_limit: 500 })     # re-checked at delete time, ≤ 1000
+        storage.from_('submissions').remove(paths)    # Storage API, in batches of 100
+        rpc('a4_finish_check_job', { p_job_id: job.id, p_ok: true, p_usage: { deleted: len(paths) } })
+        continue                                      # anything left → next hour's job
     sheet = check_sheets[job.sheet_id]; sub = submissions[job.submission_id]; session = check_sessions[job.session_id]
     files: bucket = sheet.source_bucket ('submissions' for portal) ; paths = sheet.pages (page order)
     rubric: session.source == 'assignment' → assignment_ai_keys (path in private bucket 'answer-keys')
@@ -263,12 +293,12 @@ while time_left > 120 s:
    select vault.create_secret('<random 32+ bytes>', 'checker_job_secret');
    ```
    Put the same secret in the backend env as `CHECKER_JOB_SECRET`. Set it in the terminal, never in a committed file.
-4. Re-run 18. This schedules `a4-checker-sweep`, and running it again is safe.
+4. Re-run 18. This schedules `a4-checker-sweep` (every minute) and `a4-orphan-upload-cleanup` (hourly), and running it again is safe. Without pg_cron both functions still exist; they are just not scheduled. Check with `select jobname, schedule from cron.job;`.
 5. Check that real client IPs reach Postgres. Make 2 portal calls, then run `select ip_hash, count(*) from access_code_attempts group by 1`. If all rows show `no-ip`, every student shares one rate-limit bucket.
 
 ## 6. Known limits / open points
-- **School WiFi:** limits are per IP, as the spec asks: 5 tries per minute and a lockout after 10 wrong codes. A whole class behind one IP will hit `rate_limited` while opening the link together. The codes are 8 chars from a 32-letter alphabet (about 10¹² values), so a softer rule would still be safe, for example counting only wrong codes. That is a product decision.
+- **School WiFi:** correct codes are never limited (§2). The remaining risk: if one class makes 20 typos within 10 min on one IP, that IP is locked for 15 min, and the lock blocks correct codes too. Raise `c_ip_max` in `a4_code_gate` if this happens in real use.
 - **Storage can't identify the student:** anon uploads carry no identity. Storage only checks that the path belongs to a student of the assignment's class while the link is open. Someone with the class roster could put junk files in another student's folder. They can't attach those files to that student's attempt, because `create_submission` only accepts files from the code holder's own folder. Closing this fully needs signed upload URLs from the backend, which the "no backend for students" rule doesn't allow.
 - The old portal `submit_assignment` now refuses an assignment once the student has an upload-link attempt on it. Switch the portal UI to the new RPCs per assignment.
 - A teacher who owns the check session can still update `check_sheets` / `submissions` directly through RLS, as today. The RPCs are the audited path.
-- Not built (spec 8B / later gates): re-grade RPC, retention/deletion, variants, similarity, watermark, result share links (`share_links`), ZIP export.
+- Not built (spec 8B / later gates): re-grade RPC, retention of checked copies (90-day policy; only the unattached-upload cleanup exists), variants, similarity, watermark, result share links (`share_links`), ZIP export.
