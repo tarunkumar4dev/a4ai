@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
 import { motion, AnimatePresence } from "framer-motion";
 import StudentCalendar, { type CalEvent } from "@/components/student/StudentCalendar";
+import UploadAttempts from "@/components/student/UploadAttempts";
 
 /* ─── Types ────────────────────────────────────────────────────── */
 type StudentData = {
@@ -329,13 +330,10 @@ export default function StudentPortalPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "assignments" | "announcements">("overview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sideView, setSideView] = useState<"dashboard" | "calendar" | "activity" | "chat" | "files" | "tasks">("dashboard");
   const [expandedCourse, setExpandedCourse] = useState(true);
   const [theme, setTheme] = useState<Theme>("light");
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   /* New Interactive State for Files, Tasks, & Chat */
@@ -493,38 +491,8 @@ export default function StudentPortalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, student?.access_code]);
 
-  /* ── Submit (storage upload + submit_assignment RPC) ── */
-  async function handleSubmitFile(assignment: Assignment, file: File) {
-    if (!student) return;
-    setUploading(true);
-    try {
-      // Path must be <institute>/<assignment>/<student>_… — submit_assignment rejects anything else
-      const path = `${student.institute_id}/${assignment.id}/${student.id}_${Date.now()}.pdf`;
-      const { error: upErr } = await supabase.storage.from("submissions").upload(path, file, { upsert: false, contentType: "application/pdf" }); // unique path; upsert would need storage SELECT (removed in 07)
-      if (upErr) throw upErr;
-
-      // Bucket is private (13_role_hardening): this URL isn't directly readable, it's the stored reference that
-      // submit_assignment validates and staff/backend turn back into a path.
-      const { data: { publicUrl } } = supabase.storage.from("submissions").getPublicUrl(path);
-
-      const { error: subErr } = await supabase.rpc("submit_assignment", {
-        p_code: student.access_code,
-        p_assignment_id: assignment.id,
-        p_file_url: publicUrl,
-        p_file_name: file.name,
-      });
-      if (subErr) throw subErr;
-
-      setSubmitSuccess(true);
-      setTimeout(() => setSubmitSuccess(false), 3000);
-      const fresh = await loadDashboard(student);
-      const updated = fresh.find((a) => a.id === assignment.id);
-      if (updated) setActiveAssignment(updated);
-    } catch (e: any) {
-      alert("Upload failed: " + (e.message || "Unknown error"));
-    }
-    setUploading(false);
-  }
+  /* ── Submit: components/student/UploadAttempts (create_submission / my_submissions, docs/upload-flow-api.md).
+     The old submit_assignment refuses an assignment once a student has an upload-link attempt on it. ── */
 
   function logout() {
     localStorage.removeItem("a4ai_student_code");
@@ -816,29 +784,13 @@ export default function StudentPortalPage() {
                   </div>
                 )}
 
-                {submitSuccess && (
-                  <div className="rounded-lg px-4 py-3 text-sm font-medium mb-4 border" style={{ background: t.tealBg, color: t.teal, borderColor: `${t.teal}30` }}>
-                    ✅ Submitted successfully!
-                  </div>
-                )}
-
-                <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
-                  onChange={async e => {
-                    const file = e.target.files?.[0];
-                    if (file) await handleSubmitFile(activeAssignment, file);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
+                <UploadAttempts
+                  code={student.access_code}
+                  assignmentRef={activeAssignment.id}
+                  student={{ id: student.id, institute_id: student.institute_id }}
+                  t={t}
+                  onChange={() => loadDashboard(student)}
                 />
-
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="w-full py-3 rounded-lg text-white font-medium text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
-                  style={{ background: uploading ? "#94A3B8" : `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}
-                >
-                  {uploading ? <><Icons.Loader /> Uploading...</> : sub ? <><Icons.Upload /> Resubmit (PDF only)</> : <><Icons.Upload /> Upload Answer (PDF)</>}
-                </button>
-                <p className="text-center text-xs mt-2" style={{ color: t.textMuted }}>PDF files only · Max 10MB</p>
               </div>
             </div>
           </div>

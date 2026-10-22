@@ -38,6 +38,7 @@ const TestBuilderPage = lazy(() => import("./pages/TestBuilderPage"));
 const LandingDemo = lazy(() => import("@/components/LandingDemo"));
 const FAQ = lazy(() => import("@/components/FAQ"));
 const StudentPortalPage = lazy(() => import("./pages/StudentPortalPage"));
+const AssignmentLinkPage = lazy(() => import("./pages/AssignmentLinkPage"));
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
 const MyCommunityQuizzesPage = lazy(() => import("./pages/teacher/MyCommunityQuizzesPage"));
@@ -344,6 +345,7 @@ const App = () => {
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/student" element={<StudentPortalPage />} />
+                      <Route path="/s/:token" element={<AssignmentLinkPage />} />
                       <Route path="/pricing" element={<PricingPage />} />
                       <Route path="/api" element={<ApiPage />} />
                       <Route path="/about" element={<AboutPage />} />

@@ -225,7 +225,7 @@ Errors: `unauthorized`, `forbidden` (also returned for ids the caller can't see)
 
 ---
 
-## 4. Backend worker contract (checker-v4 G2, not built yet)
+## 4. Backend worker contract (checker-v4 G2; as built: §4.4)
 
 ### 4.1 Kick
 When a job is inserted, Postgres sends one call per INSERT statement:
@@ -283,6 +283,39 @@ while time_left > 120 s:
 4. Map the v4 result to the new columns: `needs_review_reasons`, `confidence`, `model_version`.
 
 ---
+
+### 4.4 As built (backend worker, 23 Oct)
+Where the backend differs from 4.1–4.3 above (the owner's fixed facts win):
+- **URL:** `POST /internal/jobs/run`, no `/api/v1` (that is what the vault `checker_job_run_url` holds). Header `X-Job-Secret`
+  is compared with env **`JOB_SECRET`** (`hmac.compare_digest`); missing / wrong / unset → `401`. `202` + the work runs as a
+  background task of the same invocation.
+- **Queue SQL:** direct Postgres (`DATABASE_URL`, `app/core/db_pool.py`), always through `a4_claim_check_job` /
+  `a4_finish_check_job`, so marks + audit row + checkpoint `graded` are written in one transaction (a retry finishes without Gemini).
+- **Files:** only paths in both `submissions.files` and `check_sheets.pages`, inside `<inst>/<asg>/<student>/`, read with the
+  service key. Checked from their bytes before any Gemini call: magic bytes vs name/mime, PDF password (`needs_pass`) and page
+  count (cap = `assignments.max_pages`, hard 30), photo readable, EXIF/GPS removed (the original in Storage is overwritten
+  without it), sha256 duplicates (same file twice / same as another student: teacher-only `sheet_flags`). Problems →
+  `BAD_FILE`; `reject_reasons` gets one Hinglish entry per file `{code, page_order, message}`.
+- **HEIC:** `preprocess.py` reads HEIC/HEIF (pillow-heif), so `image/heic` may be added to a link's `allowed_mimes`. The portal
+  still converts HEIC to JPEG in the browser.
+- **Long copies:** > 12 pages → Stage A once, pages saved to `answer-sheets/<teacher>/<session>/<sheet>/src/`, then chunk jobs of
+  10–12 pages (`kind='check'`, `submission_id` null, `checkpoint.parent` = the copy's job, so the state triggers ignore them).
+  The copy's job waits as `queued` (retry given back; students see `checking`), is woken when the last chunk ends, and merges
+  by question (answered in two chunks → higher marks + `low_confidence`). A chunk that failed for good fails the copy.
+- **Review:** per question (counted ones only): not attempted → `empty_answer`, `legibility_issue` → `illegible`, confidence
+  below `review_min_confidence` of that rubric question (default env `CHECKER_REVIEW_MIN_CONFIDENCE=medium`) → `low_confidence`,
+  estimated marking split → `key_missing`; blank page → `blank_pages`; `readability_score = poor` → `bad_scan`.
+  `check_sheets.confidence` = mean of high 0.95 / medium 0.75 / low 0.4.
+- **Limits:** quota = teacher's `SMART_CHECKER_DAILY_LIMIT` (100) per **IST** day, counted from `smart_assignment_checks` rows
+  without `result_json.type` in (`teacher_override`, `publish`, `auto_publish`, `unpublish`, `regrade`) + the teacher's other
+  running copies → `QUOTA`. Daily spend cap `CHECKER_DAILY_BUDGET_INR` (sum of `check_jobs.usage.est_cost_inr` today, price env
+  `CHECKER_PRICE_IN_PER_M_INR` / `CHECKER_PRICE_OUT_PER_M_INR`): over it the worker claims nothing (jobs stay `queued`) and logs
+  `ALERT`; it resumes by itself on the next IST day or when the cap is raised. `BUDGET` / `PAUSED` are not used.
+- **Unreadable answer key / question paper** → `KEY_MISSING` (attempt goes to `waiting_key`, re-queued when the key is saved).
+- **Re-grade:** `POST /internal/regrade {assignment_id, submission_ids[]}` with the teacher's Supabase JWT (`a4_can_grade_assignment`).
+  Attempts in `checked | needs_review | published | failed` whose `answer_key_version` is older than the key get a new job via
+  `a4_enqueue_submission`; old marks go to `smart_assignment_checks` (`type: regrade`, previous marks / per_question / key version);
+  published ones are unpublished first with the teacher's JWT (`unpublish_results`, audited). Same key version → `key_unchanged`.
 
 ## 5. Owner setup (staging first, then live)
 1. Run `18_upload_flow.sql`, then the VERIFY block at the end of the file. It needs 10, 11, 12 and 17 to be applied first.

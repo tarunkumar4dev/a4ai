@@ -2,7 +2,8 @@
 // Client for the student portal (/student) ONLY.
 // It never stores or reads a staff session: every request goes out as `anon`, even if a teacher/admin
 // is logged in in the same browser (B2). The portal talks to the DB only through the access-code RPCs
-// in supabase/migrations/05_student_portal.sql (get_student_by_code, get_student_feed, submit_assignment).
+// in supabase/migrations/05_student_portal.sql (get_student_by_code, get_student_feed) and
+// 18_upload_flow.sql (get_assignment_link, verify_access_code, create_submission, my_submissions).
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
