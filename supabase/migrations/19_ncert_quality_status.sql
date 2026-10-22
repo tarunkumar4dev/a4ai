@@ -10,6 +10,7 @@
 --   quality_flags   {"flags": [...], "garble": [...], "fixes": [...], "near_duplicate_of": id, ...}
 --   content_hash    SHA-256 of normalize(question_text) — app/services/ncert_text_hash.py
 --   hash_version    'v2' today; a new normalize() bumps it
+--   quality_rank    generated: 1 for needs_review, else 0 — the builder lists clean/fixed first
 --   ncert_question_fixes  one row per changed field (question id, field, old, new, rule) — every
 --                   deterministic fix is logged here; not exposed to the API
 --
@@ -23,6 +24,13 @@ alter table public.ncert_questions
   add column if not exists quality_flags jsonb not null default '{}'::jsonb,
   add column if not exists content_hash text,
   add column if not exists hash_version text;
+
+-- sort key for the builder: clean / fixed / not audited (NULL) = 0, needs_review = 1. PostgREST cannot order by an
+-- expression; with every row 0 (all classes still NULL) the list order stays exactly as before.
+-- Stored generated column = one table rewrite (~92k rows, a few seconds under an exclusive lock).
+alter table public.ncert_questions
+  add column if not exists quality_rank smallint
+    generated always as (case when quality_status = 'needs_review' then 1 else 0 end) stored;
 
 do $$
 begin
@@ -73,9 +81,9 @@ revoke all on sequence public.ncert_question_fixes_id_seq from anon, authenticat
 
 commit;
 
--- VERIFY (expect 5 columns, 3 constraints, 3 indexes, fixes table with RLS on)
+-- VERIFY (expect 6 columns, 3 constraints, 3 indexes, fixes table with RLS on)
 -- select column_name, data_type from information_schema.columns where table_schema = 'public' and table_name = 'ncert_questions'
---   and column_name in ('quality_status', 'duplicate_of', 'quality_flags', 'content_hash', 'hash_version');
+--   and column_name in ('quality_status', 'duplicate_of', 'quality_flags', 'content_hash', 'hash_version', 'quality_rank');
 -- select conname from pg_constraint where conrelid = 'public.ncert_questions'::regclass and conname like 'ncert_questions_%';
 -- select indexname from pg_indexes where tablename = 'ncert_questions' and indexname like 'ncert_questions_%_idx';
 -- select relrowsecurity from pg_class where oid = 'public.ncert_question_fixes'::regclass;

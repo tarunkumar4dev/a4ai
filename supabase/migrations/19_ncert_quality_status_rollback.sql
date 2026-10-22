@@ -16,6 +16,7 @@ alter table public.ncert_questions
   drop constraint if exists ncert_questions_quality_status_check;
 
 alter table public.ncert_questions
+  drop column if exists quality_rank,  -- generated from quality_status: drop it first
   drop column if exists hash_version,
   drop column if exists content_hash,
   drop column if exists quality_flags,
@@ -26,4 +27,4 @@ commit;
 
 -- VERIFY (expect 0 rows)
 -- select column_name from information_schema.columns where table_schema = 'public' and table_name = 'ncert_questions'
---   and column_name in ('quality_status', 'duplicate_of', 'quality_flags', 'content_hash', 'hash_version');
+--   and column_name in ('quality_status', 'duplicate_of', 'quality_flags', 'content_hash', 'hash_version', 'quality_rank');
