@@ -70,12 +70,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { getBackendApiBase } from "@/lib/apiBase";
+import { contentHash } from "@/lib/ncert/contentHash";
 
 // ── Config ──────────────────────────────────────────────────────
 const API_BASE = `${getBackendApiBase()}/v1`;
 
 const PAGE_SIZE = 30;
 const MOBILE_BREAKPOINT = 1024;
+const PAPER_STORAGE_KEY = "a4ai.testBuilder.paper.v1";
 
 // ── Types ───────────────────────────────────────────────────────
 interface NCERTQuestion {
@@ -96,6 +98,10 @@ interface NCERTQuestion {
   image_url?: string | null;
   /** Accountancy only: text/table segments rebuilt by the backend (same as the exported PDF). */
   structured_segments?: AccSegment[] | null;
+  /** Diagram question / names a figure, but there is no image (backend; computed here for older responses). */
+  figure_missing?: boolean;
+  /** SHA-256 of the normalized text (backend, audited rows only) — same as @/lib/ncert/contentHash. */
+  content_hash?: string | null;
 }
 
 interface QuestionTable {
@@ -106,14 +112,21 @@ interface QuestionTable {
 interface TestQuestion extends NCERTQuestion {
   paperId: string;
   options: string[];
+  /** "Ch 5 · Example 1" — fixed when added, so it survives a subject change and a reload. */
+  label?: string;
+  content_hash?: string;
 }
 
 interface ChapterStat {
   chapter: string;
   total: number;
+  /** From the chapter's numbered sections ("EXERCISE 5.2" → 5); null when the book has none. */
+  chapter_no?: number | null;
   sections: { name: string; count: number }[];
   types: { name: string; count: number }[];
 }
+
+type FigureFilter = "all" | "hide" | "missing";
 
 // ── Constants ───────────────────────────────────────────────────
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
@@ -155,7 +168,8 @@ function questionsUrl(
   chapter: string,
   questionType: string,
   search: string,
-  offset: number
+  offset: number,
+  figure: FigureFilter = "all"
 ): string {
   const params = new URLSearchParams({
     subject,
@@ -166,6 +180,7 @@ function questionsUrl(
   });
   if (questionType !== "all") params.set("question_type", questionType);
   if (search) params.set("search", search);
+  if (figure !== "all") params.set("figure", figure);
   return `${API_BASE}/test-generator/ncert-questions?${params}`;
 }
 
@@ -236,17 +251,51 @@ function compressLogo(file: File): Promise<string> {
   });
 }
 
-function parseOptions(opts: string[] | string | null | undefined): string[] {
-  if (!opts) return [];
-  if (Array.isArray(opts)) return opts;
-  if (typeof opts === "string") {
+const OPTION_LABEL = /^\s*(?:\(\s*([A-Fa-f])\s*\)|([A-Fa-f])\s*[.)])\s*/;
+
+/**
+ * Options arrive as a real array or as a JSON string of one (most NCERT rows are double-encoded). An option's
+ * own "(A)" label is dropped — the card and the PDF print A/B/C/D themselves ("A (A) 60°" otherwise).
+ */
+function parseOptions(opts: unknown): string[] {
+  let value = opts;
+  for (let i = 0; i < 3 && typeof value === "string"; i++) {
     try {
-      return JSON.parse(opts);
+      value = JSON.parse(value);
     } catch {
       return [];
     }
   }
-  return [];
+  if (!Array.isArray(value)) return [];
+  return value.map((raw, idx) => {
+    const opt = String(raw);
+    const m = OPTION_LABEL.exec(opt);
+    const letter = m ? (m[1] || m[2]).toUpperCase() : null;
+    const rest = m ? opt.slice(m[0].length) : opt;
+    return letter === String.fromCharCode(65 + idx) && rest.trim() ? rest : opt;
+  });
+}
+
+function isFigureMissing(q: NCERTQuestion): boolean {
+  if (typeof q.figure_missing === "boolean") return q.figure_missing;
+  return !q.image_url && (q.question_type === "diagram" || !!q.figure_ref);
+}
+
+/** "Ch 5 · Example 1" — a bare "Example 1" repeats in every chapter. */
+function questionLabel(q: NCERTQuestion, chapterNo?: number | null): string {
+  const where = chapterNo ? `Ch ${chapterNo}` : q.chapter;
+  const what = q.question_number || TYPE_LABELS[q.question_type] || q.question_type;
+  return where ? `${where} · ${what}` : what;
+}
+
+function loadSavedPaper(): TestQuestion[] {
+  try {
+    const raw = localStorage.getItem(PAPER_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((q) => q && typeof q.id === "number" && typeof q.paperId === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 function useDebounce<T>(value: T, ms: number): T {
@@ -338,10 +387,14 @@ function DiagramBadge({ figRef, hasImage }: { figRef?: string | null; hasImage?:
       </span>
     );
   }
+  // The question needs a figure we don't have — the teacher has to add it to the paper themselves.
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md">
+    <span
+      className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md"
+      title={figRef ? `${figRef} is not available — add it to the paper yourself` : "The figure is not available"}
+    >
       <Sparkles className="w-3 h-3 text-amber-600" />
-      {figRef ? `Refer ${figRef}` : "Diagram Required"}
+      {figRef ? `${figRef} missing` : "Figure missing"}
     </span>
   );
 }
@@ -456,11 +509,13 @@ function QuestionContent({ question, truncateAt }: { question: NCERTQuestion; tr
 const MemoQuestionContent = React.memo(QuestionContent);
 function DraggableQuestion({
   question,
+  label,
   onAdd,
   isAdded,
   isMobile,
 }: {
   question: NCERTQuestion;
+  label: string;
   onAdd: (q: NCERTQuestion) => void;
   isAdded: boolean;
   isMobile: boolean;
@@ -500,7 +555,7 @@ function DraggableQuestion({
           {/* Header Badges */}
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md">
-              {question.question_number || question.question_type}
+              {label}
             </span>
 
             {question.section && (
@@ -509,7 +564,7 @@ function DraggableQuestion({
               </span>
             )}
 
-            {(question.question_type === "diagram" || !!question.image_url) && (
+            {(!!question.image_url || isFigureMissing(question)) && (
               <DiagramBadge figRef={question.figure_ref} hasImage={!!question.image_url} />
             )}
 
@@ -610,9 +665,12 @@ function SortableTestQuestion({
             <MemoQuestionContent question={question} truncateAt={isMobile ? 160 : 250} />
 
             <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-gray-400">
-              <span className="font-medium text-gray-600">{question.chapter}</span>
+              <span className="font-medium text-gray-600">{question.label || question.chapter}</span>
               <span>•</span>
               <DifficultyBadge difficulty={question.difficulty} />
+              {!question.image_url && isFigureMissing(question) && (
+                <DiagramBadge figRef={question.figure_ref} hasImage={false} />
+              )}
             </div>
           </div>
         </div>
@@ -879,6 +937,7 @@ export default function TestBuilderPage() {
 
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [questionType, setQuestionType] = useState("all");
+  const [figureFilter, setFigureFilter] = useState<FigureFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 250);
 
@@ -889,7 +948,8 @@ export default function TestBuilderPage() {
   // Data
   const [chapterStats, setChapterStats] = useState<ChapterStat[]>([]);
   const [libraryQuestions, setLibraryQuestions] = useState<NCERTQuestion[]>([]);
-  const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
+  // The paper survives a reload / tab close on this device.
+  const [testQuestions, setTestQuestions] = useState<TestQuestion[]>(loadSavedPaper);
   const [examTitle, setExamTitle] = useState("");
   const [templateTier, setTemplateTier] = useState<"standard" | "premium">("standard");
   const [colorTheme, setColorTheme] = useState<"teal" | "navy" | "dark_green" | "orange">("teal");
@@ -970,6 +1030,19 @@ export default function TestBuilderPage() {
     [testQuestions]
   );
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(PAPER_STORAGE_KEY, JSON.stringify(testQuestions));
+    } catch {
+      /* storage full / private mode — the paper still works for this session */
+    }
+  }, [testQuestions]);
+
+  const chapterNoByName = useMemo(
+    () => new Map(chapterStats.map((c) => [c.chapter, c.chapter_no ?? null])),
+    [chapterStats]
+  );
+
   const totalMarks = useMemo(
     () => testQuestions.reduce((sum, q) => sum + (Number(q.marks) || 1), 0),
     [testQuestions]
@@ -1038,7 +1111,7 @@ export default function TestBuilderPage() {
     async (append = false) => {
       if (!selectedChapter) return;
       const currentOffset = append ? offset : 0;
-      const url = questionsUrl(subject, classGrade, selectedChapter, questionType, debouncedSearch, currentOffset);
+      const url = questionsUrl(subject, classGrade, selectedChapter, questionType, debouncedSearch, currentOffset, figureFilter);
       const requestId = ++latestRequest.current;
 
       // Instant render from cache (chapter revisits, prefetched chapters).
@@ -1073,7 +1146,7 @@ export default function TestBuilderPage() {
         setLoadingMore(false);
       }
     },
-    [selectedChapter, questionType, debouncedSearch, classGrade, subject, offset]
+    [selectedChapter, questionType, debouncedSearch, classGrade, subject, offset, figureFilter]
   );
 
   /** Warms the cache for a chapter's first page (hover / idle), so opening it is instant. */
@@ -1097,22 +1170,35 @@ export default function TestBuilderPage() {
       setLibraryQuestions([]);
       fetchQuestions(false);
     }
-  }, [selectedChapter, questionType, debouncedSearch]);
+  }, [selectedChapter, questionType, debouncedSearch, figureFilter]);
 
   // ── Paper Mutation Callbacks ──────────────────────────────────
-  // Stable callback (reads the latest ids from a ref) so memoised cards don't all re-render on add.
+  // Stable callback (reads the latest paper from refs) so memoised cards don't all re-render on add.
   const addedIdsRef = useRef(addedIds);
   addedIdsRef.current = addedIds;
+  const paperRef = useRef(testQuestions);
+  paperRef.current = testQuestions;
+  const chapterNoRef = useRef(chapterNoByName);
+  chapterNoRef.current = chapterNoByName;
   const addToTest = useCallback(
-    (q: NCERTQuestion) => {
+    async (q: NCERTQuestion) => {
       if (addedIdsRef.current.has(q.id)) return;
+      // Same text under another id = a copy the quality pass has not merged (yet): never twice on one paper.
+      const hash = q.content_hash || (await contentHash(q.question_text));
+      const isDuplicate = (p: TestQuestion) => p.id === q.id || p.content_hash === hash;
+      if (paperRef.current.some(isDuplicate)) {
+        toast.info("This question is already in your paper.");
+        return;
+      }
       const testQ: TestQuestion = {
         ...q,
         options: parseOptions(q.options),
         paperId: `paper-${q.id}-${Date.now()}`,
+        content_hash: hash,
+        label: questionLabel(q, chapterNoRef.current.get(q.chapter)),
       };
-      setTestQuestions((prev) => [...prev, testQ]);
-      toast.success(`Added question Q${q.question_number || ""}`);
+      setTestQuestions((prev) => (prev.some(isDuplicate) ? prev : [...prev, testQ]));
+      toast.success(`Added ${testQ.label}`);
     },
     []
   );
@@ -1398,6 +1484,25 @@ export default function TestBuilderPage() {
     }
   };
 
+  const draggedQuestion: NCERTQuestion | undefined = activeId
+    ? activeId.startsWith("lib-")
+      ? libraryQuestions.find((q) => `lib-${q.id}` === activeId)
+      : testQuestions.find((q) => q.paperId === activeId)
+    : undefined;
+
+  const renderFigureFilter = (className: string) => (
+    <select
+      value={figureFilter}
+      onChange={(e) => setFigureFilter(e.target.value as FigureFilter)}
+      className={className}
+      title="Questions whose figure is not available"
+    >
+      <option value="all">All figures</option>
+      <option value="hide">Hide figure missing</option>
+      <option value="missing">Only figure missing</option>
+    </select>
+  );
+
   // ── Render Library Question Stream ────────────────────────────
   const renderLibraryList = () => (
     <div>
@@ -1421,6 +1526,7 @@ export default function TestBuilderPage() {
               <MemoDraggableQuestion
                 key={q.id}
                 question={q}
+                label={questionLabel(q, chapterNoByName.get(q.chapter))}
                 onAdd={addToTest}
                 isAdded={addedIds.has(q.id)}
                 isMobile={isMobile}
@@ -1833,6 +1939,8 @@ export default function TestBuilderPage() {
                           </option>
                         ))}
                       </select>
+
+                      {renderFigureFilter("bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:ring-1 focus:ring-gray-900 cursor-pointer")}
                     </div>
 
                     {renderLibraryList()}
@@ -2017,6 +2125,9 @@ export default function TestBuilderPage() {
                       ))}
                     </select>
                   </div>
+                  <div className="flex justify-end mb-3 -mt-1">
+                    {renderFigureFilter("bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 outline-none shadow-sm")}
+                  </div>
 
                   {renderLibraryList()}
                 </div>
@@ -2138,11 +2249,10 @@ export default function TestBuilderPage() {
 
         {/* Drag Overlay (Smooth Ghost Preview) */}
         <DragOverlay dropAnimation={defaultDropAnimation}>
-          {activeId ? (
-            <div className="p-3 bg-white border-2 border-gray-900 rounded-xl shadow-2xl max-w-xs text-xs font-medium text-gray-800 pointer-events-none truncate">
-              {activeId.startsWith("lib-")
-                ? libraryQuestions.find((q) => `lib-${q.id}` === activeId)?.question_text || "Dragging question..."
-                : testQuestions.find((q) => q.paperId === activeId)?.question_text || "Reordering question..."}
+          {draggedQuestion ? (
+            // Same QuestionContent as the cards (math, options, figure) — not the raw text of the row
+            <div className="p-3 bg-white border-2 border-gray-900 rounded-xl shadow-2xl w-[min(90vw,420px)] max-h-64 overflow-hidden pointer-events-none">
+              <MemoQuestionContent question={draggedQuestion} truncateAt={160} />
             </div>
           ) : null}
         </DragOverlay>
