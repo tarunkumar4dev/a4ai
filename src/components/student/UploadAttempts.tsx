@@ -5,12 +5,7 @@
 // for identity — the ids are only used to build the upload path, which the storage policy re-checks.
 // Pages go straight to Storage with per-file progress; picked pages + uploaded paths survive a refresh
 // (localStorage draft + IndexedDB blobs), so after a drop only the missing files are uploaded.
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent,
-} from "@dnd-kit/core";
-import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import {
   type Attempt, type CreateResult, type LinkInfo, attemptKey, clearAttemptKey, createSubmission, fmtCountdown, fmtIST,
   getAssignmentLink, mySubmissions, preparePage, sha256Hex, stateMessage,
@@ -20,9 +15,14 @@ import { type DraftItem, clearDraft, loadDraft, pendingUploads, resumeItems, sav
 import { deleteBlob, deleteBlobs, getBlob, putBlob } from "@/lib/uploadLink/blobStore";
 import { uploadPath, uploadWithProgress } from "@/lib/uploadLink/storageUpload";
 import { needsPolling, studentBadge } from "@/lib/uploadLink/status";
-import { useOnline } from "@/hooks/useUploadLinkTimers";
+import { useOnline, useSmoothProgress } from "@/hooks/useUploadLinkTimers";
 import { fileErrorText, rejectText, warningText } from "@/lib/uploadLink/messages";
 import { BLACK_BTN } from "@/lib/uploadLink/styles";
+import UploadSkeleton from "./UploadSkeleton";
+
+// thumbnails + drag-reorder (dnd-kit) load only once the first page is added
+const ThumbGrid = lazy(() => import("./ThumbGrid"));
+const UPLOAD_PARALLEL = 3;
 
 
 export type UploadTokens = {
@@ -82,8 +82,29 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
   const asg = link?.assignment;
   const assignmentId = asg?.id;
   const commit = (next: DraftItem[]) => { itemsRef.current = next; setItems(next); };
+  const thumbsRef = useRef<Record<string, string>>({});
   const addThumb = (id: string, blob: Blob, mime: string) => {
-    if (mime.startsWith("image/")) setThumbs(x => ({ ...x, [id]: URL.createObjectURL(blob) }));
+    if (!mime.startsWith("image/")) return;
+    thumbsRef.current = { ...thumbsRef.current, [id]: URL.createObjectURL(blob) };
+    setThumbs(thumbsRef.current);
+  };
+  const dropThumb = (id: string) => {
+    const u = thumbsRef.current[id];
+    if (!u) return;
+    URL.revokeObjectURL(u);
+    const { [id]: _gone, ...rest } = thumbsRef.current;
+    thumbsRef.current = rest;
+    setThumbs(rest);
+  };
+
+  // per-file progress arrives many times a second from 3 uploads: keep it in a ref, re-render once per frame
+  const progressRef = useRef<Record<string, number>>({});
+  const progressRaf = useRef(0);
+  const setFileProgress = (id: string, pct: number) => {
+    progressRef.current = { ...progressRef.current, [id]: pct };
+    if (!progressRaf.current) {
+      progressRaf.current = requestAnimationFrame(() => { progressRaf.current = 0; setProgress(progressRef.current); });
+    }
   };
 
   const refresh = useCallback(async () => {
@@ -111,13 +132,20 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Anon can't use Realtime: poll every 10 s, only while the tab is visible and an attempt can still change
+  // Anon can't use Realtime: poll every 10 s — only while the tab is visible AND an attempt can still change.
+  // A hidden tab stops the timer; coming back refreshes once and restarts it.
   const polling = needsPolling(attempts);
   useEffect(() => {
-    const tick = () => { if (document.visibilityState === "visible") refresh(); };
-    window.addEventListener("focus", tick);
-    const id = polling ? window.setInterval(tick, POLL_MS) : undefined;
-    return () => { window.removeEventListener("focus", tick); if (id) window.clearInterval(id); };
+    if (!polling) return;
+    let id: number | undefined;
+    const start = () => { if (id === undefined) id = window.setInterval(refresh, POLL_MS); };
+    const stop = () => { if (id !== undefined) { window.clearInterval(id); id = undefined; } };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") { refresh(); start(); } else stop();
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { stop(); document.removeEventListener("visibilitychange", onVisibility); };
   }, [refresh, polling]);
 
   // countdown finished → the message goes away and the student can try again
@@ -149,7 +177,10 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
   }, [assignmentId, code]);
 
   useEffect(() => { if (assignmentId) saveDraft(assignmentId, code, items); }, [items, assignmentId, code]);
-  useEffect(() => () => { Object.values(thumbs).forEach(u => URL.revokeObjectURL(u)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => {
+    Object.values(thumbsRef.current).forEach(u => URL.revokeObjectURL(u));
+    cancelAnimationFrame(progressRaf.current);
+  }, []);
 
   const linkClosed = link && !["open", "open_late"].includes(link.state);
   // locked → shown as the countdown notice below; the other states can't be fixed by waiting
@@ -199,12 +230,14 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     commit(itemsRef.current.map(i => i.id === it.id
       ? { ...i, id, mime: "image/jpeg", ext: "jpg", size: out.size, sha256: sha, path: null } : i));
     blobs.current.delete(it.id);
+    dropThumb(it.id);
     deleteBlob(it.id);
   }
 
   function remove(it: DraftItem) {
     commit(itemsRef.current.filter(i => i.id !== it.id));
     blobs.current.delete(it.id);
+    dropThumb(it.id);
     deleteBlob(it.id);
     setFailed(f => { const n = { ...f }; delete n[it.id]; return n; });
   }
@@ -215,9 +248,9 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     if (!blob) { setFailed(f => ({ ...f, [it.id]: "This page is no longer on the phone. Add it again." })); return false; }
     const path = uploadPath(student.institute_id, assignmentId, student.id, it.ext);
     setFailed(f => { const n = { ...f }; delete n[it.id]; return n; });
-    setProgress(p => ({ ...p, [it.id]: 0 }));
+    setFileProgress(it.id, 0);
     try {
-      await uploadWithProgress(path, blob, it.mime, pct => setProgress(p => ({ ...p, [it.id]: pct })));
+      await uploadWithProgress(path, blob, it.mime, pct => setFileProgress(it.id, pct));
       commit(itemsRef.current.map(i => (i.id === it.id ? { ...i, path } : i)));
       return true;
     } catch (e: any) {
@@ -235,7 +268,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
         if (!(await uploadOne(it))) ok = false;
       }
     };
-    await Promise.all([worker(), worker()]);       // 2 at a time — kind to slow 4G
+    await Promise.all(Array.from({ length: UPLOAD_PARALLEL }, worker));   // 3 at a time
     return ok;
   }
 
@@ -267,13 +300,21 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
         clearAttemptKey(assignmentId, code);
         clearDraft(assignmentId, code);
         commit([]);
-        Object.values(thumbs).forEach(u => URL.revokeObjectURL(u));
+        Object.values(thumbsRef.current).forEach(u => URL.revokeObjectURL(u));
+        thumbsRef.current = {};
         setThumbs({});
+        progressRef.current = {};
         setProgress({});
         deleteBlobs(ids);
+        // optimistic: the new attempt shows at the top of the history right away; the refresh confirms it
+        if (r.submission) {
+          const fresh = { ...r.submission, status: r.submission.status || "uploaded", counts: true };
+          setAttempts(prev => [fresh, ...prev.filter(a => a.id !== fresh.id).map(a => ({ ...a, counts: false }))]);
+        }
+        if (typeof r.attempts_left === "number") setAttemptsLeft(r.attempts_left);
         setWarnings((r.warnings || []).map(w => warningText(w)));
         setNotice({ text: `✅ ${r.submission?.label || "Upload"} submitted. Your teacher will share the result after checking.`, tone: "ok" });
-        await refresh();
+        refresh();
         onChange?.();
       } else if (r.state === "invalid_files") {
         const byIndex = new Map((r.errors || []).map(e => [e.index, fileErrorText(e, asg.max_mb)]));
@@ -297,28 +338,34 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     }
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-  function onDragEnd(e: DragEndEvent) {
-    if (!e.over || e.active.id === e.over.id) return;
-    const from = itemsRef.current.findIndex(i => i.id === e.active.id);
-    const to = itemsRef.current.findIndex(i => i.id === e.over!.id);
-    if (from >= 0 && to >= 0) commit(arrayMove(itemsRef.current, from, to));
-  }
+  const onMove = useCallback((fromId: string, toId: string) => {
+    const list = [...itemsRef.current];
+    const from = list.findIndex(i => i.id === fromId), to = list.findIndex(i => i.id === toId);
+    if (from < 0 || to < 0) return;
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    commit(list);
+  }, []);
+  // stable handlers so the memoised thumbnails don't re-render while another one is dragged
+  const handlers = useRef({ rotate, remove, uploadOne });
+  handlers.current = { rotate, remove, uploadOne };
+  const onRotate = useCallback((it: DraftItem) => handlers.current.rotate(it), []);
+  const onDelete = useCallback((it: DraftItem) => handlers.current.remove(it), []);
+  const onRetry = useCallback((it: DraftItem) => { handlers.current.uploadOne(it); }, []);
 
   const done = items.filter(i => i.path).length;
-  const overall = items.length ? Math.round(items.reduce((s, i) => s + (i.path ? 100 : progress[i.id] || 0), 0) / items.length) : 0;
+  // overall progress by bytes (a big PDF weighs more than a small photo), eased per frame, never backwards
+  const totalBytes = items.reduce((s, i) => s + i.size, 0) || 1;
+  const sentBytes = items.reduce((s, i) => s + (i.path ? i.size : (i.size * (progress[i.id] || 0)) / 100), 0);
   const uploading = busy && done < items.length;
+  const overall = Math.round(useSmoothProgress((sentBytes / totalBytes) * 100, uploading));
   const noticeText = notice ? notice.text.replace("{countdown}", fmtCountdown(((notice.until || now) - now) / 1000)) : "";
   const toneStyle = (tone: Notice["tone"]) => tone === "ok"
     ? { background: t.tealBg, color: t.teal, borderColor: `${t.teal}30` }
     : tone === "info" ? { background: "rgba(17,24,39,0.05)", color: t.textPrimary, borderColor: t.border }
       : { background: "rgba(239,68,68,0.08)", color: "#DC2626", borderColor: "rgba(239,68,68,0.3)" };
 
-  if (!link) return <p className="text-sm" style={{ color: t.textMuted }}>Loading…</p>;
+  if (!link) return <UploadSkeleton t={t} />;
 
   return (
     <div className="space-y-4">
@@ -394,22 +441,17 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
           )}
 
           {items.length > 0 && (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={items.map(i => i.id)} strategy={rectSortingStrategy}>
-                <ul className="grid grid-cols-3 sm:grid-cols-4 gap-2" data-testid="thumbs">
-                  {items.map((it, i) => (
-                    <Thumb key={it.id} item={it} index={i} url={thumbs[it.id]} progress={progress[it.id]} error={failed[it.id]}
-                      busy={busy} t={t} onRotate={() => rotate(it)} onDelete={() => remove(it)} onRetry={() => uploadOne(it)} />
-                  ))}
-                </ul>
-              </SortableContext>
-            </DndContext>
+            <Suspense fallback={<ul className="grid grid-cols-3 sm:grid-cols-4 gap-2">{items.map(it => (
+              <li key={it.id} className="aspect-[3/4] rounded-lg animate-pulse" style={{ background: t.border }} />))}</ul>}>
+              <ThumbGrid items={items} thumbs={thumbs} progress={progress} failed={failed} busy={busy} t={t}
+                onMove={onMove} onRotate={onRotate} onDelete={onDelete} onRetry={onRetry} />
+            </Suspense>
           )}
 
           {uploading && (
             <div data-testid="overall-progress">
               <div className="h-2 rounded-full overflow-hidden" style={{ background: t.border }}>
-                <div className="h-full bg-gray-900" style={{ width: `${overall}%` }} />
+                <div className="h-full w-full origin-left bg-gray-900" style={{ transform: `scaleX(${overall / 100})` }} />
               </div>
               <p className="text-xs mt-1" style={{ color: t.textMuted }}>{done} of {items.length} uploaded ({overall}%)</p>
             </div>
@@ -512,42 +554,3 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
   );
 }
 
-function Thumb({ item, index, url, progress, error, busy, t, onRotate, onDelete, onRetry }: {
-  item: DraftItem; index: number; url?: string; progress?: number; error?: string; busy: boolean; t: UploadTokens;
-  onRotate: () => void; onDelete: () => void; onRetry: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: busy });
-  return (
-    <li ref={setNodeRef} data-testid="thumb" className="relative rounded-lg border overflow-hidden"
-      style={{ transform: CSS.Transform.toString(transform), transition, borderColor: error ? "#DC2626" : t.border,
-               background: t.surface, zIndex: isDragging ? 10 : undefined }}>
-      <div className="relative aspect-[3/4] touch-none" {...attributes} {...listeners} aria-label={`Page ${index + 1}`}>
-        {url ? <img src={url} alt={`Page ${index + 1}`} className="h-full w-full object-cover" />
-          : <div className="flex h-full flex-col items-center justify-center p-1 text-center text-[10px]" style={{ color: t.textMuted }}>
-              <span className="text-2xl">📄</span>
-              <span className="line-clamp-2 break-all">{item.name}</span>
-              {item.pages > 1 && <b>{item.pages} pages</b>}
-            </div>}
-        <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[11px] font-bold text-white">{index + 1}</span>
-        {item.path && <span className="absolute right-1 bottom-1 rounded-full bg-green-600 px-1.5 text-[11px] text-white" aria-label="Uploaded">✓</span>}
-        {!item.path && progress != null && progress < 100 && !error && (
-          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/30"><div className="h-full bg-gray-900" style={{ width: `${progress}%` }} /></div>
-        )}
-      </div>
-      {item.warning && <p className="bg-amber-100 px-1 py-0.5 text-[10px] text-amber-800">⚠️ {item.warning}</p>}
-      {error && (
-        <div className="bg-red-50 p-1 space-y-1">
-          <p className="text-[10px] text-red-700">{error}</p>
-          <button type="button" onClick={onRetry}
-            className={`w-full rounded py-1 text-[11px] font-semibold ${BLACK_BTN}`}>Retry</button>
-        </div>
-      )}
-      <div className="flex border-t" style={{ borderColor: t.border }}>
-        <button type="button" onClick={onRotate} disabled={busy || !item.mime.startsWith("image/")} aria-label="Rotate 90°"
-          className="flex-1 py-1.5 text-sm disabled:opacity-30" style={{ color: t.textSecondary }}>↻</button>
-        <button type="button" onClick={onDelete} disabled={busy} aria-label="Remove"
-          className="flex-1 py-1.5 text-sm text-red-600 disabled:opacity-30">✕</button>
-      </div>
-    </li>
-  );
-}

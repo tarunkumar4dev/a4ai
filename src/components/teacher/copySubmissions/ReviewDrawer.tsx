@@ -36,29 +36,29 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
   const [penUrl, setPenUrl] = useState<string | null>(null);
   const [penBusy, setPenBusy] = useState(false);
 
+  // The drawer opens at once; each part (marks, page images, history) shows as soon as its own request returns.
+  const [urlsLoaded, setUrlsLoaded] = useState(false);
   const load = useCallback(async () => {
     if (!attempt) return;
     setLoading(true);
-    try {
-      const [{ data: sh }, signed, hist] = await Promise.all([
-        supabase.from("check_sheets").select("*").eq("submission_id", attempt.id).maybeSingle(),
-        signedSubmissionUrls(attempt.files.map(f => f.storage_path)),
-        markHistory(attempt.id).catch(() => ({ state: "error", events: [] as MarkEvent[] })),
-      ]);
-      setSheet(sh as CheckSheet | null);
-      setUrls(signed);
-      setEvents(hist.events || []);
-      if (sh?.session_id) {
-        const { data: ss } = await supabase.from("check_sessions").select("*").eq("id", sh.session_id).maybeSingle();
-        setSession(ss as CheckSession | null);
-      }
-    } finally {
-      setLoading(false);
-    }
+    const sheetP = supabase.from("check_sheets").select("*").eq("submission_id", attempt.id).maybeSingle()
+      .then(async ({ data: sh }) => {
+        setSheet(sh as CheckSheet | null);
+        setLoading(false);
+        if (sh?.session_id) {
+          const { data: ss } = await supabase.from("check_sessions").select("*").eq("id", sh.session_id).maybeSingle();
+          setSession(ss as CheckSession | null);
+        }
+      });
+    const urlsP = signedSubmissionUrls(attempt.files.map(f => f.storage_path))
+      .then(signed => setUrls(signed)).finally(() => setUrlsLoaded(true));
+    const histP = markHistory(attempt.id).then(h => setEvents(h.events || [])).catch(() => setEvents([]));
+    await Promise.allSettled([sheetP, urlsP, histP]);
+    setLoading(false);
   }, [attempt]);
 
   useEffect(() => {
-    setSheet(null); setSession(null); setUrls({}); setEvents([]);
+    setSheet(null); setSession(null); setUrls({}); setEvents([]); setUrlsLoaded(false);
     if (penUrl) URL.revokeObjectURL(penUrl);
     setPenUrl(null);
     load();
@@ -138,8 +138,9 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
                         <span>Page {f.page_order}</span>
                         {f.dup_other_student && <Chip tone="red">Same file as another student</Chip>}
                       </figcaption>
-                      {!u ? <p className="p-3 text-xs text-muted-foreground">Couldn't open the file (no access or file missing).</p>
-                        : f.mime.startsWith("image/") ? <img src={u} alt={`Page ${f.page_order}`} className="w-full" loading="lazy" />
+                      {!u && !urlsLoaded ? <div className="aspect-[3/4] w-full animate-pulse bg-muted" />
+                        : !u ? <p className="p-3 text-xs text-muted-foreground">Couldn't open the file (no access or file missing).</p>
+                        : f.mime.startsWith("image/") ? <img src={u} alt={`Page ${f.page_order}`} className="w-full bg-muted" loading="lazy" decoding="async" style={{ minHeight: 120 }} />
                           : <a href={u} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 text-sm font-semibold text-gray-900 underline">
                               <FileText className="h-4 w-4" /> Open PDF
                             </a>}

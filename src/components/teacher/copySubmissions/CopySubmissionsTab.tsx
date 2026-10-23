@@ -4,7 +4,7 @@
 // re-grade after a key change, and result sharing on WhatsApp. Checking itself is the backend worker's job —
 // nothing here starts a check except an explicit retry / re-grade. Contract: docs/upload-flow-api.md.
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, MessageCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,10 @@ import ReviewDrawer from "./ReviewDrawer";
 
 type StatusFilter = "all" | "pipeline" | "checked" | "needs_review" | "published" | "problem";
 const POLL_MS = 15_000;
+const VIRTUAL_AFTER = 50;      // students; above this the table is windowed
+const ROW_H = 76;             // estimated px per student row
+const SUB_ROW_H = 44;         // per extra attempt row when a student is expanded
+const OVERSCAN = 600;         // px rendered above / below the visible part
 const STALE_STATUSES = ["checked", "needs_review", "published", "failed"];
 
 const pagesOf = (a: TeacherAttempt) => a.files.length;
@@ -97,6 +101,34 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
   const rows: StudentRow[] = useMemo(
     () => buildStudentRows(attempts, students, settings?.count_policy || "latest"), [attempts, students, settings?.count_policy]);
   const shown = rows.filter(r => matches(r.counted, status, onlyReview, onlyLate));
+
+  // Windowing above 50 students: only the rows in view (+ overscan) are in the DOM; spacer rows keep the scroll
+  // height. Heights are estimated per student (an expanded student adds its attempt rows).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState({ top: 0, height: 700 });
+  const scrollRaf = useRef(0);
+  const virtual = shown.length > VIRTUAL_AFTER;
+  const heights = shown.map(r => ROW_H + (expanded.has(r.student.id) ? (r.attempts.length - 1) * SUB_ROW_H : 0));
+  const offsets: number[] = [];
+  heights.reduce((acc, h, i) => { offsets[i] = acc; return acc + h; }, 0);
+  const totalH = shown.length ? offsets[shown.length - 1] + heights[shown.length - 1] : 0;
+  let first = 0, last = shown.length;
+  if (virtual) {
+    while (first < shown.length - 1 && offsets[first] + heights[first] < view.top - OVERSCAN) first++;
+    last = first;
+    while (last < shown.length && offsets[last] < view.top + view.height + OVERSCAN) last++;
+  }
+  const topPad = virtual ? offsets[first] || 0 : 0;
+  const bottomPad = virtual && last < shown.length ? totalH - offsets[last] : 0;
+  const onScroll = () => {
+    if (scrollRaf.current) return;
+    scrollRaf.current = requestAnimationFrame(() => {
+      scrollRaf.current = 0;
+      const el = scrollRef.current;
+      if (el) setView({ top: el.scrollTop, height: el.clientHeight });
+    });
+  };
+  useEffect(() => () => cancelAnimationFrame(scrollRaf.current), []);
   const stale = attempts.filter(a => keyVersion != null && a.answer_key_version != null
     && a.answer_key_version < keyVersion && STALE_STATUSES.includes(a.status));
   const counts = {
@@ -291,9 +323,10 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
           ) : shown.length === 0 ? (
             <p className="p-4 text-center text-sm text-muted-foreground">No copies match this filter.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div ref={scrollRef} className="overflow-x-auto" onScroll={virtual ? onScroll : undefined}
+              style={virtual ? { maxHeight: "70vh", overflowY: "auto" } : undefined} data-virtual={virtual || undefined}>
               <table className="w-full min-w-[860px] text-sm" data-testid="copies-table">
-                <thead>
+                <thead className={virtual ? "sticky top-0 z-10 bg-card" : undefined}>
                   <tr className="border-b text-left text-xs uppercase text-muted-foreground">
                     <th className="py-2 pr-2">Student</th><th className="pr-2">Class</th><th className="pr-2">Attempt</th>
                     <th className="pr-2">Upload (IST)</th><th className="pr-2">Pages</th><th className="pr-2">Status</th>
@@ -301,7 +334,8 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
                   </tr>
                 </thead>
                 <tbody>
-                  {shown.map(row => {
+                  {topPad > 0 && <tr aria-hidden style={{ height: topPad }}><td colSpan={9} /></tr>}
+                  {shown.slice(first, last).map(row => {
                     const a = row.counted!;
                     const open = expanded.has(row.student.id);
                     const others = row.attempts.filter(x => x.id !== a.id);
@@ -341,6 +375,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
                       </Fragment>
                     );
                   })}
+                  {bottomPad > 0 && <tr aria-hidden style={{ height: bottomPad }}><td colSpan={9} /></tr>}
                 </tbody>
               </table>
             </div>

@@ -261,6 +261,17 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
     MCQ letters relies on the paper PDF for the questions.
   - Not covered by e2e (teacher session). Logic is unit-tested (testLink.test.ts).
 
+- [x] Upload-link polish (23 Oct): A English copy everywhere (server texts shown from codes, src/lib/uploadLink/messages.ts);
+  B black primary buttons (BLACK_BTN, styles.ts — app --primary is purple); C access-code fix (migration 21: O→0,
+  I/L→1, spaces/dashes dropped; live codes are 6 chars, the RPC makes 8); D /s/:token = own entry s.html (56 KB gz JS),
+  fetch-based RPCs, worker compression, 3 parallel uploads, windowed teacher table > 50 rows, progressive review drawer.
+  Lighthouse mobile median 93 (LCP 2.3 s, TBT 220 ms). docs/upload-flow-api.md §7.
+- [ ] Run `21_access_code_normalize.sql` on production, then `notify pgrst, 'reload schema';` + its VERIFY block.
+- [ ] Deploy: vercel.json now rewrites /s/:token → /s.html (must ship with the build that contains s.html).
+- Known after the polish:
+  - index.html (main app) still loads Razorpay checkout.js synchronously (render-blocking on every page) though
+    PaymentPage loads it on demand; Google Fonts CSS is render-blocking. Not changed (outside the upload link).
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

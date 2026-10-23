@@ -2,8 +2,9 @@
 // Student side of the assignment upload flow (contract: docs/upload-flow-api.md, migration 18_upload_flow.sql).
 // Students never call the backend: 4 anon RPCs (get_assignment_link, verify_access_code, create_submission,
 // my_submissions) + a direct upload to the private `submissions` bucket. Identity = the access code only.
-import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
-import { compressImage } from "@/lib/imageCompress";
+// plain fetch, not supabase-js: keeps the student link's first load small (src/lib/uploadLink/anonRpc.ts)
+import { anonRpc } from "@/lib/uploadLink/anonRpc";
+import { compressPhoto } from "@/lib/uploadLink/compressWorker";
 import {
   JPEG_QUALITY, LONG_EDGE, analyzeQuality, blobBytes, classify, formatError, heicToJpeg, pdfPageCount, sizeError,
 } from "@/lib/uploadLink/files";
@@ -192,11 +193,12 @@ export async function preparePage(file: File, allowedMimes: string[], maxMb: num
   const src = kind === "heic"
     ? new File([await heicToJpeg(file)], file.name.replace(/\.(heic|heif)$/i, ".jpg"), { type: "image/jpeg" })
     : file;
-  const { blob, type: mime } = await compressImage(src, LONG_EDGE, JPEG_QUALITY);
+  // Web Worker (OffscreenCanvas) when available, so 20+ photos never freeze the page; else the main thread
+  const { blob, type: mime, tooSmall, tooDark } = await compressPhoto(src, LONG_EDGE, JPEG_QUALITY);
   if (!MIME_EXT[mime] || !allowedMimes.includes(mime)) throw new Error(formatError(file.name));
   if (blob.size === 0) throw new Error(`${file.name}: the file is empty`);
   if (blob.size > limit * MB) throw new Error(sizeError(file.name, blob.size, limit));
-  const q = await analyzeQuality(blob);
+  const q = tooSmall == null || tooDark == null ? await analyzeQuality(blob) : { tooSmall, tooDark };
   return { blob, mime, ext: MIME_EXT[mime], size: blob.size, name: file.name, pages: 1,
            warning: q.tooSmall || q.tooDark ? "Photo looks unclear. Retake?" : null };
 }
@@ -211,29 +213,32 @@ export async function sha256Hex(blob: Blob): Promise<string> {
 
 /* ─── RPCs ───────────────────────────────────────────────────────── */
 export async function getAssignmentLink(ref: string, code?: string): Promise<LinkInfo> {
-  const { data, error } = await supabase.rpc("get_assignment_link", { p_ref: ref, ...(code ? { p_code: code } : {}) });
-  if (error) throw new Error("Couldn't load the link. Check your internet and reload.");
-  return data as LinkInfo;
+  try { return await anonRpc<LinkInfo>("get_assignment_link", { p_ref: ref, ...(code ? { p_code: code } : {}) }); }
+  catch { throw new Error("Couldn't load the link. Check your internet and reload."); }
 }
 
 export async function verifyAccessCode(code: string): Promise<{ state: string; student?: VerifiedStudent;
                                                                   retry_after_sec?: number; scope?: "ip" | "code" }> {
-  const { data, error } = await supabase.rpc("verify_access_code", { p_code: code });
-  if (error) throw new Error("Couldn't check the code. Check your internet and try again.");
-  return data;
+  try { return await anonRpc("verify_access_code", { p_code: code }); }
+  catch { throw new Error("Couldn't check the code. Check your internet and try again."); }
 }
 
 export async function createSubmission(code: string, assignmentId: string, key: string,
                                        files: { storage_path: string; mime: string; size: number; sha256: string;
                                                 page_order: number }[]): Promise<CreateResult> {
-  const { data, error } = await supabase.rpc("create_submission", { p_code: code, p_assignment_id: assignmentId,
-                                                                     p_idempotency_key: key, p_files: files });
-  if (error) throw new Error("No reply from the server. Tap Submit again — it won't be submitted twice.");
-  return data as CreateResult;
+  try {
+    return await anonRpc<CreateResult>("create_submission", { p_code: code, p_assignment_id: assignmentId,
+                                                             p_idempotency_key: key, p_files: files });
+  } catch { throw new Error("No reply from the server. Tap Submit again — it won't be submitted twice."); }
 }
 
 export async function mySubmissions(code: string, assignmentId: string): Promise<MySubmissions> {
-  const { data, error } = await supabase.rpc("my_submissions", { p_code: code, p_assignment_id: assignmentId });
-  if (error) throw new Error("Couldn't load your uploads.");
-  return data as MySubmissions;
+  try { return await anonRpc<MySubmissions>("my_submissions", { p_code: code, p_assignment_id: assignmentId }); }
+  catch { throw new Error("Couldn't load your uploads."); }
+}
+
+/** get_student_by_code (05) — only the ids the Storage path needs; null for a wrong code. */
+export async function getStudentIds(code: string): Promise<{ id: string; institute_id: string } | null> {
+  const row = await anonRpc<{ id: string; institute_id: string } | null>("get_student_by_code", { p_code: code });
+  return row ? { id: row.id, institute_id: row.institute_id } : null;
 }

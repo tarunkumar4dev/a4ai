@@ -8,6 +8,7 @@ import {
   Route,
   Navigate,
   useLocation,
+  useParams,
 } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -39,6 +40,11 @@ const LandingDemo = lazy(() => import("@/components/LandingDemo"));
 const FAQ = lazy(() => import("@/components/FAQ"));
 const StudentPortalPage = lazy(() => import("./pages/StudentPortalPage"));
 const AssignmentLinkPage = lazy(() => import("./pages/AssignmentLinkPage"));
+// /s/:token is normally served by s.html (its own light entry); this route is the fallback inside the app
+function AssignmentLinkRoute() {
+  const { token = "" } = useParams();
+  return <AssignmentLinkPage token={token} />;
+}
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
 const MyCommunityQuizzesPage = lazy(() => import("./pages/teacher/MyCommunityQuizzesPage"));
@@ -345,7 +351,7 @@ const App = () => {
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/student" element={<StudentPortalPage />} />
-                      <Route path="/s/:token" element={<AssignmentLinkPage />} />
+                      <Route path="/s/:token" element={<AssignmentLinkRoute />} />
                       <Route path="/pricing" element={<PricingPage />} />
                       <Route path="/api" element={<ApiPage />} />
                       <Route path="/about" element={<AboutPage />} />

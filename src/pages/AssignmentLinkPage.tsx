@@ -1,12 +1,12 @@
 // src/pages/AssignmentLinkPage.tsx
-// Route: /s/:token — the link a teacher shares on WhatsApp for one assignment.
+// /s/:token — the link a teacher shares on WhatsApp for one assignment. Served by its own light entry (s.html →
+// src/linkMain.tsx); the App's /s/:token route is a fallback. The token comes in as a prop (no router here).
 // Link (get_assignment_link) → access code → "Is this you?" (verify_access_code) → upload + history.
 // No login and no backend: anon RPCs only (docs/upload-flow-api.md §2). The confirmed code is remembered per link.
-import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
-import UploadAttempts, { type UploadTokens } from "@/components/student/UploadAttempts";
-import { type LinkInfo, type VerifiedStudent, fmtCountdown, fmtIST, getAssignmentLink, stateMessage,
+import React, { Suspense, lazy, useEffect, useState } from "react";
+import type { UploadTokens } from "@/components/student/UploadAttempts";
+import UploadSkeleton from "@/components/student/UploadSkeleton";
+import { type LinkInfo, type VerifiedStudent, fmtCountdown, fmtIST, getAssignmentLink, getStudentIds, stateMessage,
          verifyAccessCode } from "@/lib/uploadFlow";
 import { cleanCode, clearCode, loadCode, saveCode } from "@/lib/uploadLink/session";
 import { fmtLeft } from "@/lib/uploadLink/time";
@@ -14,6 +14,9 @@ import { OfflineBanner } from "@/components/uploadLink/ui";
 import { useCountdown } from "@/hooks/useUploadLinkTimers";
 import { BLACK_BTN } from "@/lib/uploadLink/styles";
 
+
+// the upload screen (and its code) loads only after the student confirmed the code
+const UploadAttempts = lazy(() => import("@/components/student/UploadAttempts"));
 
 const T: UploadTokens = {
   bg: "#fafafa", surface: "#ffffff", border: "#e4e4e7", textPrimary: "#18181b", textSecondary: "#52525b",
@@ -32,8 +35,20 @@ function Friendly({ icon, title, children }: { icon: string; title: string; chil
   );
 }
 
-export default function AssignmentLinkPage() {
-  const { token = "" } = useParams();
+/** First paint: the same blocks and heights as the open-link screen (title, deadline line, code box, button). */
+function LinkSkeleton() {
+  const bar = (w: string, h: number, extra = "") => (
+    <div className={`rounded animate-pulse ${extra}`} style={{ width: w, height: h, background: T.border }} />
+  );
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Opening the link" data-testid="link-skeleton">
+      <div className="space-y-2">{bar("75%", 26)}{bar("55%", 16)}{bar("35%", 16)}</div>
+      <div className="space-y-2">{bar("45%", 18)}{bar("100%", 54, "rounded-lg")}{bar("60%", 14)}{bar("100%", 46, "rounded-lg")}</div>
+    </div>
+  );
+}
+
+export default function AssignmentLinkPage({ token }: { token: string }) {
   const [link, setLink] = useState<LinkInfo | null>(null);
   const [loadError, setLoadError] = useState("");
   const [code, setCode] = useState(() => {
@@ -92,9 +107,9 @@ export default function AssignmentLinkPage() {
   async function openWithCode(c: string, remember: boolean) {
     setBusy(true);
     // ids only build the upload path (the storage policy re-checks it); identity stays the code
-    const { data, error } = await supabase.rpc("get_student_by_code", { p_code: c });
+    const data = await getStudentIds(c).catch(() => null);
     setBusy(false);
-    if (error || !data) {
+    if (!data) {
       clearCode(token);
       if (remember) setMsg("Couldn't check the code. Try again.");
       setStep("code");
@@ -122,7 +137,7 @@ export default function AssignmentLinkPage() {
   const shownMsg = msg.replace("{countdown}", fmtCountdown((until - now) / 1000));
 
   let body: React.ReactNode;
-  if (!link && !loadError) body = <p className="text-sm py-6 text-center" style={{ color: T.textMuted }}>Opening the link…</p>;
+  if (!link && !loadError) body = <LinkSkeleton />;
   else if (loadError && !link) body = (
     <Friendly icon="📶" title="Couldn't load the link">
       <p>{loadError}</p>
@@ -157,7 +172,7 @@ export default function AssignmentLinkPage() {
           {asg.closes_at ? `Deadline ${fmtIST(asg.closes_at)}` : "No deadline"}
         </p>
         {link.state === "open" && closesAt && (
-          <p className="text-xs mt-1 font-semibold" style={{ color: leftToClose < 3_600_000 ? "#DC2626" : T.teal }} data-testid="deadline-countdown">
+          <p className="text-xs mt-1 font-semibold tabular-nums" style={{ color: leftToClose < 3_600_000 ? "#DC2626" : T.teal }} data-testid="deadline-countdown">
             ⏳ {fmtLeft(leftToClose)} left
           </p>
         )}
@@ -206,7 +221,9 @@ export default function AssignmentLinkPage() {
               Log out / change code
             </button>
           </div>
-          <UploadAttempts code={code} assignmentRef={token} student={ids} t={T} />
+          <Suspense fallback={<UploadSkeleton t={T} />}>
+            <UploadAttempts code={code} assignmentRef={token} student={ids} t={T} />
+          </Suspense>
         </>
       )}
 

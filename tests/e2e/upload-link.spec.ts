@@ -20,6 +20,7 @@ test("happy path: code → confirm → 2 images (one HEIC) → submit → being 
   await db.install(page);
   await enterCode(page);
   await expect(page.getByTestId("link-header")).toContainText("Physics Unit Test 2");
+  await expect(page).toHaveTitle("Upload your answer copy · a4ai");      // the light s.html entry, not the app shell
   await expect(page.getByTestId("deadline-countdown")).toContainText(/\d+ days? \d+ hours? left/);
 
   await page.getByTestId("gallery-input").setInputFiles([path.join(FIX, "page1.jpg"), path.join(FIX, "page2.heic")]);

@@ -353,3 +353,21 @@ Where the backend differs from 4.1–4.3 above (the owner's fixed facts win):
 - The old portal `submit_assignment` now refuses an assignment once the student has an upload-link attempt on it. Switch the portal UI to the new RPCs per assignment.
 - A teacher who owns the check session can still update `check_sheets` / `submissions` directly through RLS, as today. The RPCs are the audited path.
 - Not built (spec 8B / later gates): re-grade RPC, retention of checked copies (90-day policy; only the unattached-upload cleanup exists), variants, similarity, watermark, result share links (`share_links`), ZIP export.
+
+## 7. Student link performance (/s/:token)
+- **Own light entry.** `/s/<token>` is served by `s.html` → `src/linkMain.tsx` (rewrite in `vercel.json`; the same
+  rewrite for `vite` / `vite preview` in `vite.config.ts`). No app shell, router, auth providers, Google Analytics,
+  Razorpay or web fonts. The App's `/s/:token` route stays as a fallback.
+- **First load (23 Oct, production build):** 56 KB gzip JS + 39.5 KB gzip CSS. The student RPCs use plain `fetch`
+  (`src/lib/uploadLink/anonRpc.ts`), not supabase-js. Loaded only when needed: the upload screen (after the code is
+  confirmed, 6.8 KB), thumbnails + drag-reorder (dnd-kit, 17.6 KB, after the first page), the compression worker,
+  heic2any (333 KB, only for HEIC), pdf.js (104 KB, only for PDFs).
+- **Photos** are compressed in a Web Worker (`compress.worker.ts`, OffscreenCanvas), else on the main thread.
+  3 uploads run in parallel; per-file progress is batched per animation frame; the total bar is by bytes, eased, never
+  backwards. Polling runs only while the tab is visible and an attempt can still change.
+- **Lighthouse mobile** (simulated slow 4G, Supabase mocked): 3 runs → 90 / 93 / 96, LCP 2.3–2.5 s, TBT 150–320 ms,
+  CLS ≤ 0.001 (before: 28, LCP 10.2 s, TBT 2,820 ms). To re-run:
+  ```
+  VITE_SUPABASE_URL=http://localhost:54399 VITE_SUPABASE_ANON_KEY=perf-anon npx vite build --outDir dist-perf
+  CHROME_PATH=<chrome or Playwright's chromium> node tests/perf/lighthouse.mjs
+  ```
