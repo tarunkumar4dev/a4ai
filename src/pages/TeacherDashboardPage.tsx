@@ -1,7 +1,7 @@
 // TeacherDashboardPage.tsx - Updated (removed batch-settings from navItems)
 import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import AttendancePage from "@/components/attendance/AttendancePage";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import StaticSarthi from "@/components/chat/StaticSarthi";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -16,6 +16,9 @@ import ProctorSectionView, { useProctorCheck } from "@/components/attendance/Pro
 import TeacherAnalyticsTab from "@/components/teacher/TeacherAnalyticsTab";
 import { downloadTestDocument, fetchQuestionsForTest, type TestQuestionData } from "@/utils/testPdfExporter";
 import { toast } from "sonner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { CheckingLinkModal } from "@/components/teacher/copySubmissions/CheckingLink";
+import { type TestLinkInfo, testLinks } from "@/lib/uploadLink/testLink";
 
 
 /* ------------------- SCROLL REVEAL HOOK ------------------- */
@@ -667,6 +670,15 @@ function TestHistory({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewTab, setPreviewTab] = useState<"paper" | "key">("paper");
 
+  // "📸 Checking Link" (upload link for students' copies) per saved test
+  const [linkTest, setLinkTest] = useState<SavedTest | null>(null);
+  const [links, setLinks] = useState<Record<string, TestLinkInfo[]>>({});
+  const savedIds = tests.filter(t => t.status === "saved").map(t => t.id).join(",");
+  useEffect(() => {
+    if (!savedIds) return;
+    testLinks(savedIds.split(",")).then(setLinks).catch(() => setLinks({}));
+  }, [savedIds]);
+
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "Recent";
     const d = new Date(dateStr);
@@ -970,12 +982,34 @@ function TestHistory({
                     <span className="text-sm">✅</span>
                     <span>Check copies</span>
                   </button>
+
+                  {t.status === "saved" && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" aria-label="More actions" data-testid="test-more"
+                          className="flex items-center justify-center min-w-[40px] px-3 py-2 rounded-xl text-sm font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all cursor-pointer">⋯</button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setLinkTest(t)}>
+                          📸 {links[t.id]?.length ? "Checking Link ✓" : "Checking Link"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {linkTest && (
+        <CheckingLinkModal open={!!linkTest} onOpenChange={o => { if (!o) setLinkTest(null); }}
+          test={{ id: linkTest.id, title: linkTest.exam_title || "Test Paper", subject: linkTest.subject, class_grade: linkTest.class_grade,
+                  board: linkTest.board, total_marks: linkTest.total_marks }}
+          links={links[linkTest.id] || []}
+          onLinked={l => setLinks(m => ({ ...m, [linkTest.id]: [l, ...(m[linkTest.id] || []).filter(x => x.assignmentId !== l.assignmentId)] }))} />
+      )}
 
       {/* ================= PREVIEW MODAL ================= */}
       <AnimatePresence>
@@ -1230,6 +1264,11 @@ export default function TeacherDashboardPage() {
 
   const { isProctor } = useProctorCheck();
   const [activeTab, setActiveTab] = useState("dashboard");
+  // deep link: /dashboard?tab=assignments&assignment=<id>&view=copies (Checking Link → "Submissions dekho")
+  const location = useLocation();
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("tab") === "assignments") setActiveTab("assignments");
+  }, [location.search]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 

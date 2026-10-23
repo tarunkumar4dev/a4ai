@@ -96,8 +96,9 @@ function parseQuestionOptions(raw: any): string[] {
  */
 export async function generateTestPaperPdf(
   meta: TestPaperMeta,
-  questions: TestQuestionData[]
-): Promise<void> {
+  questions: TestQuestionData[],
+  save = true,                      // false → return the PDF (the Checking Link uploads it)
+): Promise<Blob | void> {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -262,6 +263,7 @@ export async function generateTestPaperPdf(
   }
 
   const safeTitle = (meta.exam_title || "Test_Paper").replace(/[^a-zA-Z0-9_-]/g, "_");
+  if (!save) return doc.output("blob");
   doc.save(`${safeTitle}.pdf`);
 }
 
@@ -270,8 +272,9 @@ export async function generateTestPaperPdf(
  */
 export async function generateAnswerKeyPdf(
   meta: TestPaperMeta,
-  questions: TestQuestionData[]
-): Promise<void> {
+  questions: TestQuestionData[],
+  save = true,
+): Promise<Blob | void> {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -391,6 +394,7 @@ export async function generateAnswerKeyPdf(
   }
 
   const safeTitle = (meta.exam_title || "Test_Paper").replace(/[^a-zA-Z0-9_-]/g, "_");
+  if (!save) return doc.output("blob");
   doc.save(`${safeTitle}_AnswerKey.pdf`);
 }
 
@@ -440,6 +444,77 @@ export async function fetchQuestionsForTest(
   return [];
 }
 
+/** The backend's export (paper or answer key). null when it answered without a document. */
+async function backendExportBlob(test: TestPaperMeta, questions: TestQuestionData[], format: "pdf" | "docx",
+                                 isAnswerKey: boolean): Promise<Blob | null> {
+  const apiBase = getBackendApiBase();
+  const endpoint = isAnswerKey
+    ? `${apiBase}/v1/test-generator/export-answer-key`
+    : `${apiBase}/v1/test-generator/export`;
+  const payload = {
+    examTitle: test.exam_title,
+    board: test.board || "CBSE",
+    classGrade: test.class_grade?.startsWith("Class") ? test.class_grade : `Class ${test.class_grade || "10"}`,
+    subject: test.subject || "Science",
+    format: format,
+    includeAnswers: isAnswerKey,
+    includeExplanations: isAnswerKey,
+    template: "modern",
+    teacher_name: test.teacher_name || undefined,
+    institute_name: test.institute_name || undefined,
+    duration: test.duration || "1.5 Hours",
+    paperDate: test.paper_date || new Date().toLocaleDateString("en-GB"),
+    questions: questions.map((q, idx) => ({
+      id: q.id || `q_${idx + 1}`,
+      position: q.position || idx + 1,
+      text: q.text || q.question_text || q.questionText || "",
+      marks: q.marks || 1,
+      difficulty: q.difficulty || "medium",
+      options: parseQuestionOptions(q.options),
+      correct_answer: q.correct_answer || q.correctAnswer || "",
+      explanation: q.explanation || q.solution || "",
+      format: q.format || "mcq",
+      // Without these a re-downloaded paper lost its sections, data tables, answer
+      // tables and OR (internal choice) markers, and counted OR questions in the marks.
+      chapter: q.chapter || undefined,
+      topic: q.topic || undefined,
+      section: q.section || undefined,
+      bloom_level: q.bloom_level || undefined,
+      image_url: q.image_url || undefined,
+      answer_table: q.answer_table || undefined,
+      question_table: q.question_table || undefined,
+      isOr: Boolean(q.is_or),
+      sub_parts: q.sub_parts || undefined,
+      marking_scheme: q.marking_scheme || undefined,
+      model_answer: q.model_answer || undefined,
+      common_mistakes: q.common_mistakes || undefined,
+    }))
+  };
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) return null;
+  const blob = await res.blob();
+  return blob.size > 200 ? blob : null;
+}
+
+/**
+ * Question paper / answer key as a PDF Blob (no download): backend export, else the client jsPDF generator.
+ * Used by the Checking Link (paper → the assignment, key → the private answer-keys bucket).
+ */
+export async function exportTestPdfBlob(test: TestPaperMeta, questions: TestQuestionData[], isAnswerKey: boolean): Promise<Blob> {
+  try {
+    const blob = await backendExportBlob(test, questions, "pdf", isAnswerKey);
+    if (blob) return blob;
+  } catch (err) {
+    console.warn("Backend export failed, using the client PDF generator:", err);
+  }
+  const out = isAnswerKey ? await generateAnswerKeyPdf(test, questions, false) : await generateTestPaperPdf(test, questions, false);
+  return out as Blob;
+}
+
 /**
  * High-level download controller:
  * Tries backend export first. If backend fails or questions are offline,
@@ -478,74 +553,21 @@ export async function downloadTestDocument({
       }));
     }
 
-    // Step 2: If DOCX or backend is available, try backend export first
-    const apiBase = getBackendApiBase();
-    const endpoint = isAnswerKey
-      ? `${apiBase}/v1/test-generator/export-answer-key`
-      : `${apiBase}/v1/test-generator/export`;
-
+    // Step 2: backend export first (same document as the dashboard / generator downloads)
     try {
-      const payload = {
-        examTitle: test.exam_title,
-        board: test.board || "CBSE",
-        classGrade: test.class_grade?.startsWith("Class") ? test.class_grade : `Class ${test.class_grade || "10"}`,
-        subject: test.subject || "Science",
-        format: format,
-        includeAnswers: isAnswerKey,
-        includeExplanations: isAnswerKey,
-        template: "modern",
-        teacher_name: test.teacher_name || undefined,
-        institute_name: test.institute_name || undefined,
-        duration: test.duration || "1.5 Hours",
-        paperDate: test.paper_date || new Date().toLocaleDateString("en-GB"),
-        questions: questions.map((q, idx) => ({
-          id: q.id || `q_${idx + 1}`,
-          position: q.position || idx + 1,
-          text: q.text || q.question_text || q.questionText || "",
-          marks: q.marks || 1,
-          difficulty: q.difficulty || "medium",
-          options: parseQuestionOptions(q.options),
-          correct_answer: q.correct_answer || q.correctAnswer || "",
-          explanation: q.explanation || q.solution || "",
-          format: q.format || "mcq",
-          // Without these a re-downloaded paper lost its sections, data tables, answer
-          // tables and OR (internal choice) markers, and counted OR questions in the marks.
-          chapter: q.chapter || undefined,
-          topic: q.topic || undefined,
-          section: q.section || undefined,
-          bloom_level: q.bloom_level || undefined,
-          image_url: q.image_url || undefined,
-          answer_table: q.answer_table || undefined,
-          question_table: q.question_table || undefined,
-          isOr: Boolean(q.is_or),
-          sub_parts: q.sub_parts || undefined,
-          marking_scheme: q.marking_scheme || undefined,
-          model_answer: q.model_answer || undefined,
-          common_mistakes: q.common_mistakes || undefined,
-        }))
-      };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const blob = await res.blob();
-        if (blob.size > 200) {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          const safeTitle = (test.exam_title || "Test_Paper").replace(/[^a-zA-Z0-9_-]/g, "_");
-          a.download = `${safeTitle}${isAnswerKey ? "_AnswerKey" : ""}.${format}`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          toast.success(`${isAnswerKey ? "Answer Key" : "Question Paper"} ${format.toUpperCase()} downloaded!`, { id: toastId });
-          return true;
-        }
+      const blob = await backendExportBlob(test, questions, format, isAnswerKey);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const safeTitle = (test.exam_title || "Test_Paper").replace(/[^a-zA-Z0-9_-]/g, "_");
+        a.download = `${safeTitle}${isAnswerKey ? "_AnswerKey" : ""}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success(`${isAnswerKey ? "Answer Key" : "Question Paper"} ${format.toUpperCase()} downloaded!`, { id: toastId });
+        return true;
       }
     } catch (backendErr) {
       console.warn("Backend export endpoint failed, falling back to client PDF generator:", backendErr);

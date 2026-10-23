@@ -210,6 +210,68 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Works whether VITE_BACKEND_URL / VITE_API_URL end in nothing, /api or /api/v1. Live VITE_BACKEND_URL had no /api → checker
   calls were 404. Don't build backend URLs from env vars directly. (Modules/worksheet still use VITE_API_URL root + /modules.)
 
+- [x] Upload flow DB (22 Oct, branch feat/student-upload): `18_upload_flow.sql` — assignment = upload link (link_token,
+  window, attempts, mimes/size/pages, late/count policy, auto_publish); submissions = one row per attempt (attempt_no,
+  idempotency_key, files jsonb, status enum incl. waiting_key/waiting_quota); attempt → check_sheets (source_bucket
+  'submissions') + check_jobs (queue, claim/finish/sweep); results on check_sheets (per_question, needs_review_reasons,
+  published); audit = smart_assignment_checks (publish/unpublish/override). Student RPCs (access code, never student_id):
+  get_assignment_link, verify_access_code, create_submission, my_submissions; teacher: publish_results,
+  unpublish_results, override_marks. Access-code limit in Postgres (access_code_attempts, WRONG codes only:
+  20/10 min/IP or 10/10 min/code → 15 min lock; correct codes never limited). Bucket submissions: 10 MB,
+  jpeg/png/webp/heic/pdf (link max_mb ≤ 10); unattached uploads > 24 h → hourly pg_cron → 'retention' job,
+  worker deletes via Storage API (backend can't read HEIC yet — keep it off links). Storage path
+  `<inst>/<asg>/<student>/<uuid>.<ext>`. Contract: `docs/upload-flow-api.md`. Local tests (pgserver, no Docker):
+  `supabase/tests/upload_flow/run_local.py` → 102 SQL checks + 3 parallel, all pass. NOT run on staging/live.
+- [ ] Upload flow run: owner enables pg_net + pg_cron, vault secrets checker_job_run_url / checker_job_secret →
+  18 on staging → VERIFY → IP header check (§5 of the API doc) → live. Backend G2/G3 worker per API doc §4.
+- Known after 18:
+  - Backend `_checks_today` must also exclude publish/auto_publish/unpublish audit rows.
+  - Old `submit_assignment` refuses assignments that already have upload-link attempts; portal UI must switch.
+
+- [x] Upload flow UI (23 Oct, branch feat/student-upload; built ON TOP of de1668a — another session's portal commit):
+  F1 student: /s/:token = src/pages/AssignmentLinkPage.tsx + src/components/student/UploadAttempts.tsx (also used in the
+  /student portal) + src/lib/uploadFlow.ts (RPCs, preparePage) + src/lib/uploadLink/* (files: HEIC fallback / pdf.js page
+  count / quality hint / rotate; session: per-link code + resume draft; blobStore: IndexedDB; storageUpload: XHR progress;
+  status: badges). Portal: only `upload_link_enabled` assignments use the new flow, the rest keep submit_assignment.
+  F2 teacher: assignment detail → tab "📸 Copy Submissions" (src/components/teacher/copySubmissions/*): link settings + WhatsApp
+  share, per-student table, review drawer (pages, override_marks, history, red-pen), publish/unpublish, retry_checks,
+  regrade banner → POST /internal/regrade. src/lib/whatsapp.ts shared (TeacherStudentsTab uses it).
+  F3: `npm test` (vitest, 40 unit) + `npm run e2e` (Playwright, 7 tests, Supabase mocked in tests/e2e/mockSupabase.ts, runs
+  against a production build in dist-e2e; build alone ~3 min on OneDrive). Lint 0 errors (62 warnings = baseline).
+- [ ] Run `19_upload_link_portal.sql` on production (after 18) + its VERIFY block. Without 19: the teacher's "Submit link
+  banao" save fails (no upload_link_enabled column), Retry + history fail, portal never shows the new flow.
+- Known after the upload-flow UI:
+  - Students can't see a red-pen copy: anon can't sign Storage URLs (answer-sheets is teacher-owned). Needs a backend
+    endpoint or a signed-URL RPC via the worker — not built. Students see marks + per-question comments only.
+  - Per-student result share = the link page (code needed) on WhatsApp; an expiring no-code result link (share_links) is not built.
+  - Red-pen preview in the review drawer works only for the assignment's creator (answer-sheets RLS = owner folder).
+  - Teacher UI is not covered by e2e (needs a mocked staff session); its RPCs are covered by the DB harness.
+
+- [x] Checking Link from a test (23 Oct): "📸 Checking Link" next to "Share as Contest" (GeneratedTestView), in the NCERT
+  Test Builder export deck (desktop + mobile; one Test History row per paper now — re-exports reuse it), and in Test
+  History ⋯. Modal: class (useMyScope batches), deadline IST (default today + 2 days 11:59 PM), attempts 2, late accept+flag,
+  auto publish off, Advanced (MB / pages / formats) → src/lib/uploadLink/testLink.ts reuses the test + class assignment
+  (assignments.test_id, migration 20) or creates it; paper + key PDFs via testPdfExporter.exportTestPdfBlob; key upload +
+  question-paper upload shared with the Assignments form (src/lib/assignments.ts). "✓" when the test already has a link.
+  "Submissions dekho" → /dashboard?tab=assignments&assignment=<id>&view=copies. 53 unit tests, DB harness 113 checks.
+- [ ] Run `20_assignment_test_link.sql` on production (after 19) + VERIFY. Without it the Checking Link can't save
+  (no assignments.test_id column) and the ✓ state never shows.
+- Known after the Checking Link:
+  - The worker builds the rubric from the uploaded paper + key PDFs (AI), not from the saved questions; a key with only
+    MCQ letters relies on the paper PDF for the questions.
+  - Not covered by e2e (teacher session). Logic is unit-tested (testLink.test.ts).
+
+- [x] Upload-link polish (23 Oct): A English copy everywhere (server texts shown from codes, src/lib/uploadLink/messages.ts);
+  B black primary buttons (BLACK_BTN, styles.ts — app --primary is purple); C access-code fix (migration 21: O→0,
+  I/L→1, spaces/dashes dropped; live codes are 6 chars, the RPC makes 8); D /s/:token = own entry s.html (56 KB gz JS),
+  fetch-based RPCs, worker compression, 3 parallel uploads, windowed teacher table > 50 rows, progressive review drawer.
+  Lighthouse mobile median 93 (LCP 2.3 s, TBT 220 ms). docs/upload-flow-api.md §7.
+- [ ] Run `21_access_code_normalize.sql` on production, then `notify pgrst, 'reload schema';` + its VERIFY block.
+- [ ] Deploy: vercel.json now rewrites /s/:token → /s.html (must ship with the build that contains s.html).
+- Known after the polish:
+  - index.html (main app) still loads Razorpay checkout.js synchronously (render-blocking on every page) though
+    PaymentPage loads it on demand; Google Fonts CSS is render-blocking. Not changed (outside the upload link).
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

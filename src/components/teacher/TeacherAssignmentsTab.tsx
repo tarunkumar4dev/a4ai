@@ -6,12 +6,15 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { openSubmissionFile } from "@/lib/submissionFiles";
 import { useMyScope } from "@/hooks/useMyScope";
 import { AiQuestionList, feedbackFromAi, type AiResult } from "@/components/checker/AiGradeBreakdown";
 import { backendUrl } from "@/lib/apiBase";
 import { checkerFetch } from "@/components/checker/checkerFetch";
+import CopySubmissionsTab from "@/components/teacher/copySubmissions/CopySubmissionsTab";
+import { attachAnswerKey, uploadAssignmentFile } from "@/lib/assignments";
 
 /* ─── Types ─────────────────────────────────────────── */
 type Batch = { id: string; name: string; class_level: string };
@@ -123,6 +126,9 @@ const EmptyIcon = ({ type }: { type: "assignments" | "submissions" }) => (
 export default function TeacherAssignmentsTab() {
   const { user } = useAuth();
   const [view, setView] = useState<"list"|"create"|"submissions">("list");
+  const [subTab, setSubTab] = useState<"submissions" | "copies">("submissions");
+  // deep link from the Checking Link: ?assignment=<id>&view=copies opens that assignment once it is loaded
+  const [params, setParams] = useSearchParams();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -292,14 +298,9 @@ export default function TeacherAssignmentsTab() {
     try {
       let fileUrl = null, fileName = null;
       if (form.file) {
-        const path = `${instituteId || user.id}/${Date.now()}_${form.file.name}`;
-        const { error: upErr } = await supabase.storage
-          .from("assignments")
-          .upload(path, form.file, { contentType: "application/pdf" });
-        if (upErr) throw upErr;
-        const { data: { publicUrl } } = supabase.storage.from("assignments").getPublicUrl(path);
-        fileUrl = publicUrl;
-        fileName = form.file.name;
+        const up = await uploadAssignmentFile(instituteId || user.id, form.file, form.file.name);
+        fileUrl = up.url;
+        fileName = up.name;
       }
 
       const payload: any = {
@@ -328,17 +329,7 @@ export default function TeacherAssignmentsTab() {
 
       // Answer key → PRIVATE bucket (students never see it); its row lives in assignment_ai_keys
       if (assignmentId && form.keyFile) {
-        const safe = form.keyFile.name.replace(/[^\w.\-]+/g, "_");
-        const keyPath = `${user.id}/${assignmentId}/${Date.now()}_${safe}`;
-        const { error: kErr } = await supabase.storage.from("answer-keys")
-          .upload(keyPath, form.keyFile, { contentType: form.keyFile.type || "application/pdf", upsert: false });
-        if (kErr) throw new Error(`Answer key upload failed: ${kErr.message}`);
-        const { error: rowErr } = await supabase.from("assignment_ai_keys").upsert({
-          assignment_id: assignmentId, answer_key_path: keyPath, answer_key_name: form.keyFile.name,
-          strictness: form.strictness, rubric: null, rubric_source: null,
-          updated_by: user.id, updated_at: new Date().toISOString(),
-        });
-        if (rowErr) throw new Error(`Answer key save failed: ${rowErr.message}`);
+        await attachAnswerKey(assignmentId, user.id, form.keyFile, form.keyFile.name, form.strictness);
       } else if (assignmentId && editingId) {
         // Strictness can change without a new key (rubric stays valid)
         await supabase.from("assignment_ai_keys").update({ strictness: form.strictness }).eq("assignment_id", assignmentId);
@@ -376,6 +367,7 @@ export default function TeacherAssignmentsTab() {
   async function openSubmissions(assignment: Assignment) {
     setActiveAssignment(assignment);
     setView("submissions");
+    setSubTab("submissions");
     setSelectedSubs(new Set());
     setSubmissions([]);
 
@@ -383,6 +375,7 @@ export default function TeacherAssignmentsTab() {
       .from("submissions")
       .select("*")
       .eq("assignment_id", assignment.id)
+      .is("idempotency_key", null)          // upload-link attempts live in the Copy Submissions tab
       .order("submitted_at", { ascending: false });
 
     if (subs) {
@@ -403,6 +396,20 @@ export default function TeacherAssignmentsTab() {
       })));
     }
   }
+
+  useEffect(() => {
+    const id = params.get("assignment");
+    if (!id || loading) return;
+    const a = assignments.find(x => x.id === id);
+    const view = params.get("view");
+    const next = new URLSearchParams(params);
+    next.delete("assignment");
+    next.delete("view");
+    setParams(next, { replace: true });
+    if (!a) { toast.error("This assignment isn't in your list."); return; }
+    openSubmissions(a).then(() => { if (view === "copies") setSubTab("copies"); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignments, loading]);
 
   /* ── Grade Single ── */
   async function handleGrade(subId: string) {
@@ -684,6 +691,16 @@ export default function TeacherAssignmentsTab() {
             </div>
           </div>
 
+          {/* Old single-PDF submissions vs. copies uploaded through the upload link (docs/upload-flow-api.md) */}
+          <div role="tablist" style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            {([["submissions", "📄 Submissions"], ["copies", "📸 Copy Submissions"]] as const).map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={subTab === k} onClick={() => setSubTab(k)}
+                className="ta-btn-ghost" data-testid={`subtab-${k}`}
+                style={subTab === k ? { background: "#111827", borderColor: "#111827", color: "#fff" } : undefined}>{label}</button>
+            ))}
+          </div>
+
+          {subTab === "submissions" && (<>
           {/* Progress stats */}
           <div className="ta-card" style={{ marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
             {[
@@ -888,6 +905,13 @@ export default function TeacherAssignmentsTab() {
                 ))}
               </div>
             </>
+          )}
+          </>)}
+
+          {subTab === "copies" && (
+            <CopySubmissionsTab
+              assignment={{ id: activeAssignment.id, title: activeAssignment.title, batch_name: activeAssignment.batch_name }}
+              onEditAssignment={() => editAssignment(activeAssignment)} />
           )}
         </div>
       )}
