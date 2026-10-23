@@ -22,6 +22,7 @@ import { uploadPath, uploadWithProgress } from "@/lib/uploadLink/storageUpload";
 import { needsPolling, studentBadge } from "@/lib/uploadLink/status";
 import { useOnline } from "@/hooks/useUploadLinkTimers";
 import { fileErrorText, rejectText, warningText } from "@/lib/uploadLink/messages";
+import { BLACK_BTN } from "@/lib/uploadLink/styles";
 
 
 export type UploadTokens = {
@@ -314,7 +315,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
   const noticeText = notice ? notice.text.replace("{countdown}", fmtCountdown(((notice.until || now) - now) / 1000)) : "";
   const toneStyle = (tone: Notice["tone"]) => tone === "ok"
     ? { background: t.tealBg, color: t.teal, borderColor: `${t.teal}30` }
-    : tone === "info" ? { background: t.accentBg, color: t.accent, borderColor: `${t.accent}30` }
+    : tone === "info" ? { background: "rgba(17,24,39,0.05)", color: t.textPrimary, borderColor: t.border }
       : { background: "rgba(239,68,68,0.08)", color: "#DC2626", borderColor: "rgba(239,68,68,0.3)" };
 
   if (!link) return <p className="text-sm" style={{ color: t.textMuted }}>Loading…</p>;
@@ -371,13 +372,12 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => cameraRef.current?.click()} disabled={busy}
-              className="py-3 rounded-lg text-white text-sm font-semibold disabled:opacity-50"
-              style={{ background: `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}>
+              className={`py-3 rounded-lg text-sm font-semibold ${BLACK_BTN}`}>
               📷 Take photo
             </button>
             <button type="button" onClick={() => galleryRef.current?.click()} disabled={busy}
-              className="py-3 rounded-lg border text-sm font-semibold disabled:opacity-50"
-              style={{ borderColor: t.border, color: t.accent, background: t.surface }}>
+              className="py-3 rounded-lg border text-sm font-semibold active:scale-95 transition-all disabled:opacity-50"
+              style={{ borderColor: t.textPrimary, color: t.textPrimary, background: t.surface }}>
               🖼️ Gallery / PDF
             </button>
           </div>
@@ -409,7 +409,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
           {uploading && (
             <div data-testid="overall-progress">
               <div className="h-2 rounded-full overflow-hidden" style={{ background: t.border }}>
-                <div className="h-full" style={{ width: `${overall}%`, background: t.accent }} />
+                <div className="h-full bg-gray-900" style={{ width: `${overall}%` }} />
               </div>
               <p className="text-xs mt-1" style={{ color: t.textMuted }}>{done} of {items.length} uploaded ({overall}%)</p>
             </div>
@@ -417,8 +417,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
           {overPages && <p className="text-xs text-red-600">Max {asg.max_pages} pages allowed — remove some pages.</p>}
 
           <button onClick={submit} disabled={busy || locked || !items.length || overPages || processing > 0} data-testid="submit-btn"
-            className="w-full py-3 rounded-lg text-white font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
-            style={{ background: busy || locked ? "#94A3B8" : `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}>
+            className={`w-full py-3 rounded-lg font-semibold text-sm shadow-md ${BLACK_BTN}`}>
             {busy ? (uploading ? "Uploading…" : "Submitting…") : `Submit (${items.length} file${items.length === 1 ? "" : "s"})`}
           </button>
           {attemptsLeft !== null && <p className="text-center text-xs" style={{ color: t.textMuted }} data-testid="attempts-left">{attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} left</p>}
@@ -464,7 +463,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
                           .map((r, i) => <li key={i}>{rejectText(r)}</li>)}
                       </ul>
                       {canUpload && (
-                        <button className="rounded-md px-2.5 py-1 text-xs font-semibold text-white bg-red-600"
+                        <button className={`rounded-md px-2.5 py-1 text-xs font-semibold ${BLACK_BTN}`}
                           onClick={() => pickerRef.current?.scrollIntoView({ behavior: "smooth" })}>Upload again</button>
                       )}
                     </div>
@@ -475,7 +474,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
                         {a.result.percentage != null && <span className="text-xs" style={{ color: t.textMuted }}> ({a.result.percentage}%)</span>}</p>
                       {a.result.feedback && <p className="mt-1 text-xs" style={{ color: t.textPrimary }}>💬 {a.result.feedback}</p>}
                       {a.result.per_question?.length > 0 && (
-                        <button className="mt-1 text-xs underline" style={{ color: t.accent }} data-testid="result-toggle"
+                        <button className="mt-1 text-xs font-semibold underline" style={{ color: t.textPrimary }} data-testid="result-toggle"
                           onClick={() => setOpenResult(openResult === a.id ? null : a.id)}>
                           {openResult === a.id ? "Hide marks per question" : "Show marks per question"}
                         </button>
@@ -532,7 +531,7 @@ function Thumb({ item, index, url, progress, error, busy, t, onRotate, onDelete,
         <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[11px] font-bold text-white">{index + 1}</span>
         {item.path && <span className="absolute right-1 bottom-1 rounded-full bg-green-600 px-1.5 text-[11px] text-white" aria-label="Uploaded">✓</span>}
         {!item.path && progress != null && progress < 100 && !error && (
-          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/30"><div className="h-full" style={{ width: `${progress}%`, background: t.accent }} /></div>
+          <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/30"><div className="h-full bg-gray-900" style={{ width: `${progress}%` }} /></div>
         )}
       </div>
       {item.warning && <p className="bg-amber-100 px-1 py-0.5 text-[10px] text-amber-800">⚠️ {item.warning}</p>}
@@ -540,7 +539,7 @@ function Thumb({ item, index, url, progress, error, busy, t, onRotate, onDelete,
         <div className="bg-red-50 p-1 space-y-1">
           <p className="text-[10px] text-red-700">{error}</p>
           <button type="button" onClick={onRetry}
-            className="w-full rounded bg-red-600 py-1 text-[11px] font-semibold text-white">Retry</button>
+            className={`w-full rounded py-1 text-[11px] font-semibold ${BLACK_BTN}`}>Retry</button>
         </div>
       )}
       <div className="flex border-t" style={{ borderColor: t.border }}>

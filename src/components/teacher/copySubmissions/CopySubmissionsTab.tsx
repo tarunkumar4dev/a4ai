@@ -23,6 +23,7 @@ import {
 } from "@/lib/uploadLink/teacher";
 import { openWhatsApp } from "@/lib/whatsapp";
 import { rejectText } from "@/lib/uploadLink/messages";
+import { BLACK_BTN } from "@/lib/uploadLink/styles";
 import { Chip, Spinner, ToneChip } from "@/components/uploadLink/ui";
 import LinkSettingsCard from "./LinkSettingsCard";
 import ReviewDrawer from "./ReviewDrawer";
@@ -192,7 +193,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
       <div className="flex flex-wrap items-center gap-1.5">
         {a.sheet && <Button size="sm" variant="outline" onClick={() => setReviewing(a)}>Review</Button>}
         {["checked", "needs_review"].includes(a.status) && (
-          <Button size="sm" onClick={() => publishOne(a)} disabled={b}>{b ? <Spinner /> : "Publish"}</Button>
+          <Button size="sm" className={BLACK_BTN} onClick={() => publishOne(a)} disabled={b}>{b ? <Spinner /> : "Publish"}</Button>
         )}
         {a.status === "published" && (
           <>
@@ -203,7 +204,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
           </>
         )}
         {a.status === "failed" && (
-          <Button size="sm" variant="destructive" onClick={() => retry(a)} disabled={b}>{b ? <Spinner /> : "Check again"}</Button>
+          <Button size="sm" className={BLACK_BTN} onClick={() => retry(a)} disabled={b}>{b ? <Spinner /> : "Check again"}</Button>
         )}
         {a.status === "waiting_key" && <Button size="sm" variant="outline" onClick={onEditAssignment}>Add answer key</Button>}
       </div>
@@ -237,7 +238,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
     return (
       <div className="rounded-2xl border p-6 text-center">
         <p className="text-sm text-red-600">{error}</p>
-        <Button className="mt-3" onClick={() => load()}>Try again</Button>
+        <Button className={`mt-3 ${BLACK_BTN}`} onClick={() => load()}>Try again</Button>
       </div>
     );
   }
@@ -252,7 +253,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:bg-amber-900/30" data-testid="regrade-banner">
           <p className="flex-1 text-sm"><b>The answer key changed. Re-grade older copies?</b> {stale.length} {stale.length === 1 ? "copy was" : "copies were"} checked with the old key.
             <span className="block text-xs text-muted-foreground">Old marks stay in the change history.</span></p>
-          <Button onClick={regrade} disabled={busy === "regrade"}>{busy === "regrade" ? <Spinner /> : "Re-grade"}</Button>
+          <Button className={BLACK_BTN} onClick={regrade} disabled={busy === "regrade"}>{busy === "regrade" ? <Spinner /> : "Re-grade"}</Button>
         </div>
       )}
 
@@ -265,7 +266,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
               </span>
             </h3>
             <Button variant="ghost" size="sm" onClick={() => load(true)} title="Refresh"><RefreshCw className="h-4 w-4" /></Button>
-            <Button onClick={publishAll} disabled={busy === "all" || (counts.ready === 0 && counts.pipeline === 0)} data-testid="publish-all">
+            <Button className={BLACK_BTN} onClick={publishAll} disabled={busy === "all" || (counts.ready === 0 && counts.pipeline === 0)} data-testid="publish-all">
               {busy === "all" ? <Spinner /> : "Publish all"}
             </Button>
           </div>

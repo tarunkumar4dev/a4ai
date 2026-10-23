@@ -1344,7 +1344,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
               <CheckingLinkButton
                 test={saveStatus === "saved" ? testRef : null}
                 ensureSaved={ensureSavedForLink}
-                className={`${actionBtnBase} bg-violet-600 text-white hover:bg-violet-700 active:bg-violet-800 disabled:opacity-60`}
+                className={`${actionBtnBase} bg-gray-900 text-white border border-gray-900 hover:bg-gray-800 active:bg-black active:scale-95 disabled:opacity-60`}
                 style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
               />
 

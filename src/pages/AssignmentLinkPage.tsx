@@ -12,11 +12,12 @@ import { cleanCode, clearCode, loadCode, saveCode } from "@/lib/uploadLink/sessi
 import { fmtLeft } from "@/lib/uploadLink/time";
 import { OfflineBanner } from "@/components/uploadLink/ui";
 import { useCountdown } from "@/hooks/useUploadLinkTimers";
+import { BLACK_BTN } from "@/lib/uploadLink/styles";
 
 
 const T: UploadTokens = {
   bg: "#fafafa", surface: "#ffffff", border: "#e4e4e7", textPrimary: "#18181b", textSecondary: "#52525b",
-  textMuted: "#a1a1aa", accent: "#4F46E5", accentHover: "#4338ca", accentBg: "rgba(79, 70, 229, 0.08)",
+  textMuted: "#a1a1aa", accent: "#111827", accentHover: "#000000", accentBg: "rgba(17, 24, 39, 0.06)",
   teal: "#0D9488", tealBg: "rgba(13, 148, 136, 0.08)",
 };
 const PORTAL_CODE_KEY = "a4ai_student_code";        // the /student portal's remembered code (prefill only)
@@ -125,7 +126,7 @@ export default function AssignmentLinkPage() {
   else if (loadError && !link) body = (
     <Friendly icon="📶" title="Couldn't load the link">
       <p>{loadError}</p>
-      <button onClick={load} className="mt-3 rounded-lg px-4 py-2 text-white text-sm font-medium" style={{ background: T.accent }}>Try again</button>
+      <button onClick={load} className={`mt-3 rounded-lg px-4 py-2 text-sm font-medium ${BLACK_BTN}`}>Try again</button>
     </Friendly>
   );
   else if (!link || link.state === "not_found" || (!asg && link.state !== "inactive")) body = (
@@ -174,8 +175,7 @@ export default function AssignmentLinkPage() {
           {/* live codes are 6 characters; the "Generate codes" RPC (07) makes 8 — both work (21 also fixes O/0, I/1) */}
           <p id="code-hint" className="text-xs" style={{ color: T.textMuted }}>6 or 8 letters and numbers, from your teacher.</p>
           <button type="submit" disabled={busy || !!until || code.length < 6} data-testid="code-submit"
-            className="w-full py-3 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
-            style={{ background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})` }}>
+            className={`w-full py-3 rounded-lg text-sm font-semibold ${BLACK_BTN}`}>
             {busy ? "Checking…" : until ? `Wait ${fmtCountdown((until - now) / 1000)}` : "Continue"}
           </button>
         </form>
@@ -191,9 +191,9 @@ export default function AssignmentLinkPage() {
             {who.email_masked && <p style={{ color: T.textMuted }}>{who.email_masked}</p>}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => openWithCode(code, true)} disabled={busy} className="flex-1 py-3 rounded-lg text-white text-sm font-semibold"
-              style={{ background: T.teal }}>Yes, that's me</button>
-            <button onClick={changeCode} className="flex-1 py-3 rounded-lg border text-sm" style={{ borderColor: T.border }}>No, that's not me</button>
+            <button onClick={() => openWithCode(code, true)} disabled={busy} className={`flex-1 py-3 rounded-lg text-sm font-semibold ${BLACK_BTN}`}>
+              Yes, that's me</button>
+            <button onClick={changeCode} className="flex-1 py-3 rounded-lg border text-sm active:scale-95 transition-all" style={{ borderColor: T.border }}>No, that's not me</button>
           </div>
         </div>
       )}

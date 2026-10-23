@@ -140,7 +140,7 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
                       </figcaption>
                       {!u ? <p className="p-3 text-xs text-muted-foreground">Couldn't open the file (no access or file missing).</p>
                         : f.mime.startsWith("image/") ? <img src={u} alt={`Page ${f.page_order}`} className="w-full" loading="lazy" />
-                          : <a href={u} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 text-sm text-primary underline">
+                          : <a href={u} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 text-sm font-semibold text-gray-900 underline">
                               <FileText className="h-4 w-4" /> Open PDF
                             </a>}
                     </figure>

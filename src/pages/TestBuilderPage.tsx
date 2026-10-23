@@ -1990,7 +1990,7 @@ export default function TestBuilderPage() {
                     </div>
 
                     <CheckingLinkButton test={linkTest} ensureSaved={ensureSavedForLink}
-                      className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2.5 px-3 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50" />
+                      className="w-full bg-gray-900 hover:bg-gray-800 active:scale-95 border border-gray-900 text-white font-semibold py-2.5 px-3 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all disabled:opacity-50" />
                   </div>
                 )}
               </div>
@@ -2128,7 +2128,7 @@ export default function TestBuilderPage() {
                         </button>
                       </div>
                       <CheckingLinkButton test={linkTest} ensureSaved={ensureSavedForLink}
-                        className="w-full bg-violet-600 text-white font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 disabled:opacity-50" />
+                        className="w-full bg-gray-900 active:scale-95 border border-gray-900 text-white font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50" />
                     </div>
                   )}
                 </div>

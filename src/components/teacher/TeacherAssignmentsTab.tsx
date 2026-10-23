@@ -695,7 +695,8 @@ export default function TeacherAssignmentsTab() {
           <div role="tablist" style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
             {([["submissions", "📄 Submissions"], ["copies", "📸 Copy Submissions"]] as const).map(([k, label]) => (
               <button key={k} role="tab" aria-selected={subTab === k} onClick={() => setSubTab(k)}
-                className={subTab === k ? "ta-btn-primary" : "ta-btn-ghost"} data-testid={`subtab-${k}`}>{label}</button>
+                className="ta-btn-ghost" data-testid={`subtab-${k}`}
+                style={subTab === k ? { background: "#111827", borderColor: "#111827", color: "#fff" } : undefined}>{label}</button>
             ))}
           </div>
 

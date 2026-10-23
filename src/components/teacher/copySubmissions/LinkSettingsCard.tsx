@@ -13,6 +13,7 @@ import { type LinkSettings, linkUrl, saveLinkSettings, shareLinkMessage } from "
 import { isoToIstInput, istInputToIso } from "@/lib/uploadLink/time";
 import { openWhatsApp } from "@/lib/whatsapp";
 import { Spinner } from "@/components/uploadLink/ui";
+import { BLACK_BTN, CHIP_OFF, CHIP_ON } from "@/lib/uploadLink/styles";
 
 const FORMATS: { mime: string; label: string }[] = [
   { mime: "application/pdf", label: "PDF" }, { mime: "image/jpeg", label: "JPG" },
@@ -67,7 +68,7 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
   return (
     <section className="rounded-2xl border bg-card p-4 space-y-4" data-testid="link-settings">
       <div className="flex flex-wrap items-center gap-3">
-        <Link2 className="h-5 w-5 text-primary" />
+        <Link2 className="h-5 w-5 text-gray-900" />
         <h3 className="text-base font-bold flex-1">Copy upload link</h3>
         {settings.upload_link_enabled
           ? <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">On</span>
@@ -122,7 +123,7 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
                 return (
                   <button key={f.mime} type="button" aria-pressed={on}
                     onClick={() => set("allowed_mimes", on ? s.allowed_mimes.filter(m => m !== f.mime) : [...s.allowed_mimes, f.mime])}
-                    className={`rounded-full border px-3 py-1 text-sm ${on ? "border-primary bg-primary/10 font-semibold text-primary" : "text-muted-foreground"}`}>
+                    className={`rounded-full border px-3 py-1 text-sm ${on ? CHIP_ON : CHIP_OFF}`}>
                     {f.label}
                   </button>
                 );
@@ -157,11 +158,11 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             {settings.upload_link_enabled ? (
               <>
-                <Button onClick={() => save()} disabled={saving}>{saving ? <Spinner /> : "Save"}</Button>
+                <Button className={BLACK_BTN} onClick={() => save()} disabled={saving}>{saving ? <Spinner /> : "Save"}</Button>
                 <Button variant="outline" onClick={() => save(false)} disabled={saving}>Turn off upload link</Button>
               </>
             ) : (
-              <Button onClick={() => save(true)} disabled={saving} data-testid="enable-link">{saving ? <Spinner /> : "Create upload link"}</Button>
+              <Button className={BLACK_BTN} onClick={() => save(true)} disabled={saving} data-testid="enable-link">{saving ? <Spinner /> : "Create upload link"}</Button>
             )}
           </div>
         </div>

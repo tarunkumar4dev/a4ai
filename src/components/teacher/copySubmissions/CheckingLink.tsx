@@ -24,6 +24,7 @@ import {
 import { fetchQuestionsForTest } from "@/utils/testPdfExporter";
 import { openWhatsApp } from "@/lib/whatsapp";
 import { Spinner } from "@/components/uploadLink/ui";
+import { BLACK_BTN, CHIP_OFF, CHIP_ON } from "@/lib/uploadLink/styles";
 
 const FORMATS = [
   { mime: "application/pdf", label: "PDF" }, { mime: "image/jpeg", label: "JPG" },
@@ -246,7 +247,7 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
                     return (
                       <button key={f.mime} type="button" aria-pressed={on}
                         onClick={() => setMimes(m => (on ? m.filter(x => x !== f.mime) : [...m, f.mime]))}
-                        className={`rounded-full border px-3 py-1 text-sm ${on ? "border-primary bg-primary/10 font-semibold text-primary" : "text-muted-foreground"}`}>
+                        className={`rounded-full border px-3 py-1 text-sm ${on ? CHIP_ON : CHIP_OFF}`}>
                         {f.label}
                       </button>
                     );
@@ -256,7 +257,7 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button className="h-11 flex-1" onClick={confirm} disabled={busy || !batchId} data-testid="checking-link-confirm">
+              <Button className={`h-11 flex-1 ${BLACK_BTN}`} onClick={confirm} disabled={busy || !batchId} data-testid="checking-link-confirm">
                 {busy ? <><Spinner className="mr-2" /> Creating link…</> : "Create link"}
               </Button>
               {links.length > 0 && <Button variant="ghost" className="h-11" onClick={() => setMode("done")}>Back</Button>}
