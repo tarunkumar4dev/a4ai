@@ -175,6 +175,13 @@ export default function AssignmentLinkPage({ token }: { token: string }) {
   const opensAt = asg?.opens_at ? new Date(asg.opens_at).getTime() : null;
   const leftToClose = useCountdown(link?.state === "open" ? closesAt : null, load);
   const leftToOpen = useCountdown(link?.state === "not_open" ? opensAt : null, load);
+  // not open yet: ask the server again every 30 s too (a phone clock that runs fast or slow can't keep it shut)
+  const notOpen = link?.state === "not_open";
+  useEffect(() => {
+    if (!notOpen) return;
+    const id = window.setInterval(() => { if (document.visibilityState === "visible") load(); }, 30_000);
+    return () => window.clearInterval(id);
+  }, [notOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const shownMsg = msg.replace("{countdown}", fmtCountdown((until - now) / 1000));
 
   let body: React.ReactNode;

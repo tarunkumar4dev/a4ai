@@ -21,8 +21,8 @@
 --                                       (+ 5-part paths), a4_orphan_submission_files (+ guest uploads).
 --   Storage path for guests: {institute}/{assignment}/guest/{submitter_key}/{uuid}.{ext}
 --
--- Limits: open_create_submission 10 per IP per link per hour (a whole class behind one school Wi-Fi IP shares
--- these 10); open_start 30 new submitters per IP per link per hour; 3 submits / minute / submitter (as 18).
+-- Limits: open_create_submission 60 per IP per link per hour (a whole class behind one school Wi-Fi IP shares
+-- these 60); open_start 100 new submitters per IP per link per hour; 3 submits / minute / submitter (as 18).
 -- After running:  notify pgrst, 'reload schema';
 
 begin;
@@ -217,7 +217,7 @@ create or replace function public.open_start(p_token text, p_guest_name text, p_
                                              p_ip_hash text default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
-  c_max_starts constant int := 30;
+  c_max_starts constant int := 100;
   a        assignments%rowtype;
   v_ip     text := public.a4_request_ip_hash(p_ip_hash);
   v_name   text := public.a4_clean_guest_text(p_guest_name);
@@ -274,7 +274,7 @@ end $$;
 -- ════════════════════════════════════════════════════════════════════
 -- 8. open_create_submission — one attempt on an open link. Same rules and answers as 18's create_submission
 --    (window, 3 / min, attempts, file checks, idempotency) with the submitter in place of the student, plus
---    10 submissions per IP per link per hour. Extra states: invalid_submitter (unknown key → start again),
+--    60 submissions per IP per link per hour. Extra states: invalid_submitter (unknown key → start again),
 --    invalid_name, invalid_request.
 -- ════════════════════════════════════════════════════════════════════
 create or replace function public.open_create_submission(p_token text, p_guest_name text, p_guest_roll text,
@@ -283,7 +283,7 @@ create or replace function public.open_create_submission(p_token text, p_guest_n
                                                          p_ip_hash text default null)
 returns jsonb language plpgsql volatile security definer set search_path = public as $$
 declare
-  c_ip_max   constant int := 10;
+  c_ip_max   constant int := 60;
   a          assignments%rowtype;
   v_ip       text := public.a4_request_ip_hash(p_ip_hash);
   v_name     text := public.a4_clean_guest_text(p_guest_name);

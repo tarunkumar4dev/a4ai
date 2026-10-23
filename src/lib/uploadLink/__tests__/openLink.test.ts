@@ -6,7 +6,7 @@ vi.mock("@/components/checker/checkerFetch", () => ({ checkerFetch: vi.fn(), hum
 import { receiptId } from "@/lib/uploadFlow";
 import { cleanName, clearSubmitter, loadSubmitter, saveSubmitter } from "@/lib/uploadLink/session";
 import { uploadPathIn } from "@/lib/uploadLink/storageUpload";
-import { type TeacherAttempt, buildStudentRows, ownerOf, resultMessage, shareLinkMessage } from "@/lib/uploadLink/teacher";
+import { type TeacherAttempt, buildStudentRows, ownerOf, publicAppOrigin, resultMessage, shareLinkMessage } from "@/lib/uploadLink/teacher";
 
 const attempt = (over: Partial<TeacherAttempt>): TeacherAttempt => ({
   id: "00000000-0000-0000-0000-000000000000", student_id: null, owner: "", guest_name: null, guest_roll: null,
@@ -70,5 +70,11 @@ describe("open link (23)", () => {
     expect(open).toContain("Write your name and roll number on every page.");
     expect(open).not.toContain("access code");
     expect(resultMessage("Ravi", "Test", "u", true)).toContain("phone you uploaded from");
+  });
+
+  it("shared links use the public site, never the current (dev / preview) host", () => {
+    expect(publicAppOrigin("https://a4ai.in/", "http://localhost:5173")).toBe("https://a4ai.in");
+    expect(publicAppOrigin("  ", "http://localhost:5173")).toBe("http://localhost:5173");
+    expect(publicAppOrigin(undefined, "https://a4ai.in")).toBe("https://a4ai.in");
   });
 });

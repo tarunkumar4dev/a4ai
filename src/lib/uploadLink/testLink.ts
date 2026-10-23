@@ -72,6 +72,8 @@ export async function createOrReuseCheckingLink(
       title: test.title, description: "Upload your answer copy (all pages) on this link.",
       institute_id: instituteId, batch_id: choice.batchId, created_by: userId, status: "active",
       max_marks: test.total_marks ?? null, deadline: choice.deadline, test_id: test.id,
+      // opens now (a deadline already in the past keeps it unset: opens_at must be before the deadline)
+      opens_at: !choice.deadline || new Date(choice.deadline) > new Date() ? new Date().toISOString() : null,
     });
   }
   if (!asg.file_url) {

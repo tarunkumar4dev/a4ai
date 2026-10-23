@@ -356,8 +356,8 @@ Student (anon):
 - Storage path: `{institute}/{assignment}/guest/{submitter_key}/{uuid}.{ext}` (storage policy checks the submitter
   belongs to this open link, link on, window open, format allowed).
 - Name 2–60 characters after trimming (spaces collapsed), roll ≤ 30, class ≤ 60.
-- Limits: 10 `open_create_submission` per IP per link per hour (a class on one school Wi-Fi IP shares them);
-  30 new submitters per IP per link per hour; 3 submits / minute / submitter; `max_attempts` per submitter.
+- Limits: 60 `open_create_submission` per IP per link per hour (a class on one school Wi-Fi IP shares them);
+  100 new submitters per IP per link per hour; 3 submits / minute / submitter; `max_attempts` per submitter.
 - The browser keeps `{key, prefix, name, roll, cls}` in localStorage `a4ai_open_<token>`; the same device sees its
   uploads and published results. Receipt shown to the student: first 8 hex of the attempt id (`XXXX-XXXX`).
 

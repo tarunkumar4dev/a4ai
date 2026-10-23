@@ -174,7 +174,13 @@ export async function signedSubmissionUrls(paths: string[]): Promise<Record<stri
   return out;
 }
 
-export const linkUrl = (token: string) => `${window.location.origin}/s/${token}`;
+/** Links teachers copy / share: always the public site (VITE_PUBLIC_APP_URL, e.g. https://a4ai.in), never a dev
+ *  or preview host; the current origin only when the variable is missing. */
+export const publicAppOrigin = (envUrl: string | undefined = import.meta.env.VITE_PUBLIC_APP_URL as string | undefined,
+                                fallback: string = window.location.origin) =>
+  (envUrl?.trim() || fallback).replace(/\/+$/, "");
+
+export const linkUrl = (token: string) => `${publicAppOrigin()}/s/${token}`;
 
 export const shareLinkMessage = (title: string, url: string, deadline: string | null, mode: IdentityMode = "access_code") =>
   `📝 ${title}\nUpload photos or a PDF of your answer copy here:\n${url}\n` +

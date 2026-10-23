@@ -280,7 +280,7 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - [x] Open link (23 Oct): `23_open_link.sql` — assignments.link_identity_mode access_code | open; guest rows
   (submissions.student_id null + guest_name/roll/class + submitter_key → private open_submitters); RPCs open_start
   (server-made key + upload folder, needed before the first upload), open_create_submission, open_my_submissions,
-  delete_guest_submissions (teacher); IP limit 10 submits / link / hour (+ 30 starts); guest Storage folder
+  delete_guest_submissions (teacher); IP limit 60 submits / link / hour (+ 100 starts); guest Storage folder
   `<inst>/<asg>/guest/<key>/`. Student page: name form, "write your name + roll on every page" line (both modes),
   receipt XXXX-XXXX, key in localStorage `a4ai_open_<token>`. Teacher: "Who can submit", Guest tag + ID, Delete.
   API doc §8. DB harness 173 PASS.
@@ -288,7 +288,7 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Backend worker must ship first/with it: job_worker._validate builds the folder from student_id (guest copies would
   all be rejected as missing files) and other_students_with compares student_id (no duplicate flags for guests).
 - Known after the open link:
-  - 10 submits / IP / link / hour: a whole class on one school Wi-Fi IP gets only 10 between them.
+  - 60 submits / IP / link / hour: a class on one school Wi-Fi IP shares the 60 (raised from 10 for the 23 Oct launch).
   - A guest who clears the browser loses access to their uploads / result (no code to get back in).
   - Deleting a guest row doesn't block that device; it can submit again.
 - Known after the polish:

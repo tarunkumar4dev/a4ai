@@ -136,11 +136,11 @@ begin
                  'guest sees the published result', r);
 end $$;
 
--- 10 submissions per IP per link per hour (many submitters behind one IP)
+-- 60 submissions per IP per link per hour (many submitters behind one IP; 61 starts < the 100 start limit)
 do $$
 declare r jsonb; k uuid; n_ok int := 0;
 begin
-  for i in 1..11 loop
+  for i in 1..61 loop
     perform tst.as_anon('10.0.23.9');
     r := public.open_start('opentoken23abcdef', 'Guest ' || i);
     k := (r ->> 'submitter_key')::uuid;
@@ -150,8 +150,25 @@ begin
     perform tst.as_admin();
     if r ->> 'state' = 'created' then n_ok := n_ok + 1; end if;
   end loop;
-  perform tst.ok(n_ok = 10 and r ->> 'state' = 'too_many_requests' and (r ->> 'retry_after_sec')::int > 0,
-                 'IP limit: 10 per link per hour, the 11th waits', r);
+  perform tst.ok(n_ok = 60 and r ->> 'state' = 'too_many_requests' and (r ->> 'retry_after_sec')::int > 0,
+                 'IP limit: 60 per link per hour, the 61st waits', r);
+end $$;
+
+-- 100 new submitters per IP per link per hour (61 used above from 10.0.23.9)
+do $$
+declare r jsonb; n_ok int := 0;
+begin
+  for i in 1..40 loop
+    perform tst.as_anon('10.0.23.9');
+    r := public.open_start('opentoken23abcdef', 'Starter ' || i);
+    perform tst.as_admin();
+    if r ->> 'state' = 'ok' then n_ok := n_ok + 1; end if;
+  end loop;
+  perform tst.ok(n_ok = 39 and r ->> 'state' = 'too_many_requests', 'start limit: 100 per IP per link per hour', jsonb_build_object('ok', n_ok, 'last', r));
+  perform tst.as_anon('10.0.23.10');
+  r := public.open_start('opentoken23abcdef', 'Other Wifi');
+  perform tst.as_admin();
+  perform tst.ok(r ->> 'state' = 'ok', 'another IP still starts', r);
 end $$;
 
 -- teacher deletes a guest row; a student row is refused; anon can't call it

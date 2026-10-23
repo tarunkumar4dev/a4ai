@@ -26,13 +26,15 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
   assignmentId: string; title: string; settings: LinkSettings; onSaved: () => void;
 }) {
   const [s, setS] = useState(settings);
-  const [opensAt, setOpensAt] = useState(isoToIstInput(settings.opens_at));
+  // a new link opens now unless the teacher picks a later time
+  const opensDefault = (x: LinkSettings) => isoToIstInput(x.opens_at || (x.upload_link_enabled ? null : new Date().toISOString()));
+  const [opensAt, setOpensAt] = useState(opensDefault(settings));
   const [deadline, setDeadline] = useState(isoToIstInput(settings.deadline));
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(!settings.upload_link_enabled);
   useEffect(() => {
     setS(settings);
-    setOpensAt(isoToIstInput(settings.opens_at));
+    setOpensAt(opensDefault(settings));
     setDeadline(isoToIstInput(settings.deadline));
   }, [settings]);
 
