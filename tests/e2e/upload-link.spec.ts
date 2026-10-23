@@ -2,7 +2,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "path";
 import { fileURLToPath } from "url";
-import { CODE, MockSupabase, TOKEN } from "./mockSupabase";
+import { CODE, GUEST_KEY, MockSupabase, TOKEN } from "./mockSupabase";
 
 const FIX = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -126,4 +126,32 @@ test("after the deadline (accept_flag) the student is warned it will be late", a
   await db.install(page);
   await enterCode(page);
   await expect(page.getByTestId("late-warning")).toContainText("marked late");
+});
+
+test("open link: name form → instruction → 1 photo → submit → receipt → same phone sees the published result", async ({ page }) => {
+  const db = new MockSupabase();
+  db.identityMode = "open";
+  await db.install(page);
+  await page.goto(`/s/${TOKEN}`);
+  await expect(page.getByTestId("code-step")).toHaveCount(0);          // no access code on an open link
+  await page.getByLabel("Full name").fill("  Ravi   Kumar ");
+  await page.getByLabel("Roll number").fill("17");
+  await page.getByLabel("Class / section").fill("12-B");
+  await page.getByTestId("guest-submit").click();
+  await expect(page.getByTestId("guest-header")).toContainText("Submitting as Ravi Kumar · Roll 17 · 12-B");
+  expect(db.startCalls[0]).toMatchObject({ p_guest_name: "Ravi Kumar", p_guest_roll: "17", p_guest_class: "12-B" });
+  await expect(page.getByTestId("name-on-pages")).toHaveText(/Write your full name and roll number at the top of every page/);
+
+  await page.getByTestId("gallery-input").setInputFiles([path.join(FIX, "page1.jpg")]);
+  await expect(page.getByTestId("thumb")).toHaveCount(1, { timeout: 60_000 });
+  await page.getByTestId("submit-btn").click();
+  await expect(page.getByTestId("receipt")).toContainText("Submission ID: 5AB0-C0DE");
+  expect(db.okUploads).toHaveLength(1);
+  expect(db.okUploads[0].path).toMatch(new RegExp(`^inst-1/asg-1/guest/${GUEST_KEY}/[0-9a-f-]{36}\\.jpg$`));
+
+  // same phone, later: no form again; the published result shows
+  db.publish(8, 10);
+  await page.reload();
+  await expect(page.getByTestId("guest-step")).toHaveCount(0);
+  await expect(page.getByTestId("result-marks")).toHaveText("8 / 10", { timeout: 25_000 });
 });

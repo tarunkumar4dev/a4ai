@@ -162,7 +162,7 @@ select ('00000000-0000-0000-0000-00000000d0' || lpad(n::text, 2, '0'))::uuid,
     (7,  'A7 parallel max1', null,                       'active', 1,  'accept_flag', null, false),
     (8,  'A8 parallel key',  null,                       'active', 3,  'accept_flag', null, false),
     (9,  'A9 auto publish',  null,                       'active', 3,  'accept_flag', null, true),
-    (10, 'A10 inactive',     null,                       'closed', 3,  'accept_flag', null, false),
+    (10, 'A10 inactive',     null,                       'archived', 3,  'accept_flag', null, false),
     (11, 'A11 not open',     now() + interval '2 days',  'active', 3,  'accept_flag', now() + interval '1 day', false),
     (12, 'A12 retries',      null,                       'active', 3,  'accept_flag', null, false)
   ) v(n, t, dl, st, ma, lp, op, ap);

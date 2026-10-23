@@ -22,12 +22,17 @@ export interface LinkSettings {
   late_policy: "accept_flag" | "reject";
   count_policy: CountPolicy;
   auto_publish: boolean;
+  link_identity_mode: IdentityMode;   // 23: who can submit
 }
+
+export type IdentityMode = "access_code" | "open";
 
 export interface AttemptFile { storage_path: string; mime: string; size: number; sha256: string; page_order: number; dup_other_student?: boolean }
 
 export interface TeacherAttempt {
-  id: string; student_id: string; attempt_no: number; status: AttemptStatus; is_late: boolean; submitted_at: string;
+  id: string; student_id: string | null;
+  owner: string;                      // student id, or "guest:<submitter_key>" on an open link (23)
+  guest_name: string | null; guest_roll: string | null; guest_class: string | null; submitter_key: string | null; attempt_no: number; status: AttemptStatus; is_late: boolean; submitted_at: string;
   files: AttemptFile[]; reject_reasons: { code: string; message: string; page_order?: number }[];
   grade: number | null; answer_key_version: number | null;
   sheet: {
@@ -38,7 +43,13 @@ export interface TeacherAttempt {
   marks: number | null;               // what counts: final (published) else AI
 }
 
-export interface StudentInfo { id: string; name: string; roll_no: string | null; class_level: string | null; parent_phone: string | null }
+export interface StudentInfo {
+  id: string; name: string; roll_no: string | null; class_level: string | null; parent_phone: string | null;
+  guest?: boolean;                    // typed by the person on an open link — not a roster student
+}
+
+export const ownerOf = (a: { student_id: string | null; submitter_key?: string | null }) =>
+  a.student_id || `guest:${a.submitter_key}`;
 export interface StudentRow { student: StudentInfo; attempts: TeacherAttempt[]; counted: TeacherAttempt | null }
 
 async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
@@ -52,7 +63,7 @@ export async function loadCopySubmissions(assignmentId: string): Promise<{
 }> {
   const [subsRes, keyRes] = await Promise.all([
     supabase.from("submissions")
-      .select("id, student_id, attempt_no, status, is_late, submitted_at, files, reject_reasons, grade, answer_key_version")
+      .select("id, student_id, guest_name, guest_roll, guest_class, submitter_key, attempt_no, status, is_late, submitted_at, files, reject_reasons, grade, answer_key_version")
       .eq("assignment_id", assignmentId).not("idempotency_key", "is", null)
       .order("attempt_no", { ascending: false }),
     supabase.from("assignment_ai_keys").select("version").eq("assignment_id", assignmentId).maybeSingle(),
@@ -60,7 +71,7 @@ export async function loadCopySubmissions(assignmentId: string): Promise<{
   if (subsRes.error) throw new Error(humanError(subsRes.error));
   const subs = subsRes.data || [];
   const ids = subs.map(s => s.id);
-  const studentIds = [...new Set(subs.map(s => s.student_id))];
+  const studentIds = [...new Set(subs.map(s => s.student_id).filter((x): x is string => !!x))];
   const none = ["00000000-0000-0000-0000-000000000000"];
   const [sheetsRes, jobsRes, studentsRes] = await Promise.all([
     supabase.from("check_sheets")
@@ -75,12 +86,20 @@ export async function loadCopySubmissions(assignmentId: string): Promise<{
   (jobsRes.data || []).forEach(j => { if (!jobBy.has(j.submission_id)) jobBy.set(j.submission_id, j); });
   const students: Record<string, StudentInfo> = {};
   (studentsRes.data || []).forEach(s => { students[s.id] = s; });
+  // guests: what they typed on their latest attempt (subs are newest first)
+  subs.forEach(s => {
+    const key = ownerOf(s);
+    if (!s.student_id && !students[key]) {
+      students[key] = { id: key, name: s.guest_name || "Guest", roll_no: s.guest_roll, class_level: s.guest_class,
+                        parent_phone: null, guest: true };
+    }
+  });
 
   const attempts: TeacherAttempt[] = subs.map(s => {
     const sheet = sheetBy.get(s.id) || null;
     const marks = sheet ? (sheet.published ? sheet.final_marks : sheet.ai_marks) : null;
     return {
-      ...s, files: s.files || [], reject_reasons: s.reject_reasons || [],
+      ...s, owner: ownerOf(s), files: s.files || [], reject_reasons: s.reject_reasons || [],
       sheet: sheet ? { ...sheet, needs_review_reasons: sheet.needs_review_reasons || [] } : null,
       job: jobBy.get(s.id) || null, marks: marks == null ? null : Number(marks),
     } as TeacherAttempt;
@@ -91,7 +110,7 @@ export async function loadCopySubmissions(assignmentId: string): Promise<{
 /** One row per student; `counted` = the attempt the count policy picks (latest / best). */
 export function buildStudentRows(attempts: TeacherAttempt[], students: Record<string, StudentInfo>, policy: CountPolicy): StudentRow[] {
   const by = new Map<string, TeacherAttempt[]>();
-  attempts.forEach(a => by.set(a.student_id, [...(by.get(a.student_id) || []), a]));
+  attempts.forEach(a => { const k = a.owner || ownerOf(a); by.set(k, [...(by.get(k) || []), a]); });
   return [...by.entries()].map(([sid, list]) => {
     const sorted = [...list].sort((a, b) => b.attempt_no - a.attempt_no);
     return {
@@ -104,7 +123,7 @@ export function buildStudentRows(attempts: TeacherAttempt[], students: Record<st
 
 export async function loadLinkSettings(assignmentId: string): Promise<LinkSettings> {
   const { data, error } = await supabase.from("assignments")
-    .select("upload_link_enabled, link_token, opens_at, deadline, status, max_attempts, allowed_mimes, max_mb, max_pages, late_policy, count_policy, auto_publish")
+    .select("upload_link_enabled, link_token, opens_at, deadline, status, max_attempts, allowed_mimes, max_mb, max_pages, late_policy, count_policy, auto_publish, link_identity_mode")
     .eq("id", assignmentId).single();
   if (error) throw new Error(humanError(error));
   return data as LinkSettings;
@@ -131,6 +150,10 @@ export const overrideMarks = (submissionId: string, qNo: string, marks: number, 
   rpc<{ state: string; total?: number; published?: boolean; message?: string }>(
     "override_marks", { p_submission_id: submissionId, p_q_no: qNo, p_marks: marks, p_note: note?.trim() || null });
 
+/** 23: spam on an open link. Guest rows only; the server refuses student rows. */
+export const deleteGuestSubmissions = (submissionIds: string[]) =>
+  rpc<{ state: string; deleted?: string[]; skipped?: { id: string; reason: string }[] }>("delete_guest_submissions", { p_submission_ids: submissionIds });
+
 export const retryChecks = (submissionIds: string[]) =>
   rpc<{ state: string; queued?: string[]; skipped?: { id: string; reason: string }[] }>("retry_checks", { p_submission_ids: submissionIds });
 
@@ -151,11 +174,20 @@ export async function signedSubmissionUrls(paths: string[]): Promise<Record<stri
   return out;
 }
 
-export const linkUrl = (token: string) => `${window.location.origin}/s/${token}`;
+/** Links teachers copy / share: always the public site (VITE_PUBLIC_APP_URL, e.g. https://a4ai.in), never a dev
+ *  or preview host; the current origin only when the variable is missing. */
+export const publicAppOrigin = (envUrl: string | undefined = import.meta.env.VITE_PUBLIC_APP_URL as string | undefined,
+                                fallback: string = window.location.origin) =>
+  (envUrl?.trim() || fallback).replace(/\/+$/, "");
 
-export const shareLinkMessage = (title: string, url: string, deadline: string | null) =>
+export const linkUrl = (token: string) => `${publicAppOrigin()}/s/${token}`;
+
+export const shareLinkMessage = (title: string, url: string, deadline: string | null, mode: IdentityMode = "access_code") =>
   `📝 ${title}\nUpload photos or a PDF of your answer copy here:\n${url}\n` +
-  `${deadline ? `⏰ Deadline: ${fmtIST(deadline)}\n` : ""}Keep your access code ready.`;
+  `${deadline ? `⏰ Deadline: ${fmtIST(deadline)}\n` : ""}Write your name and roll number on every page.` +
+  (mode === "open" ? "" : "\nKeep your access code ready.");
 
-export const resultMessage = (studentName: string, title: string, url: string) =>
-  `📊 ${studentName}'s result for "${title}" is ready.\nOpen the link and enter the access code to see it:\n${url}`;
+export const resultMessage = (studentName: string, title: string, url: string, guest = false) =>
+  `📊 ${studentName}'s result for "${title}" is ready.\n` +
+  (guest ? `Open the link on the phone you uploaded from to see it:\n${url}`
+         : `Open the link and enter the access code to see it:\n${url}`);

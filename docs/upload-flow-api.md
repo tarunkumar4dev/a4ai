@@ -335,3 +335,35 @@ Where the backend differs from 4.1–4.3 above (the owner's fixed facts win):
 - The old portal `submit_assignment` now refuses an assignment once the student has an upload-link attempt on it. Switch the portal UI to the new RPCs per assignment.
 - A teacher who owns the check session can still update `check_sheets` / `submissions` directly through RLS, as today. The RPCs are the audited path.
 - Not built (spec 8B / later gates): re-grade RPC, retention of checked copies (90-day policy; only the unattached-upload cleanup exists), variants, similarity, watermark, result share links (`share_links`), ZIP export.
+
+## 8. Open link (migration 23)
+
+`assignments.link_identity_mode` = `access_code` (default) | `open`. An open link takes uploads from anyone with the
+link, no access code. `get_assignment_link` returns `assignment.identity_mode` (`open` only while the upload link is
+on) and, for open links, the question paper.
+
+Student (anon):
+
+| RPC | Args | Returns |
+|---|---|---|
+| `open_start` | `p_token, p_guest_name, p_guest_roll?, p_guest_class?, p_submitter_key?` | `{state: ok, submitter_key, upload_prefix, attempts_used, attempts_left}` · `not_found` · `inactive` · `invalid_name` · `invalid_request` · `too_many_requests` |
+| `open_create_submission` | `p_token, p_guest_name, p_guest_roll, p_guest_class, p_submitter_key, p_idempotency_key, p_files` | as `create_submission` + `invalid_submitter`, `invalid_name` |
+| `open_my_submissions` | `p_token, p_submitter_key` | as `my_submissions` + `guest {name, roll, class}`; `invalid_submitter` |
+
+- The submitter key is made by the server in `open_start` (the "Continue" button) — the Storage path contains it, so it
+  must exist before the first page is uploaded. `open_create_submission` with no / an unknown key → `invalid_submitter`.
+  Same key again in `open_start` = same device: details updated, same key back.
+- Storage path: `{institute}/{assignment}/guest/{submitter_key}/{uuid}.{ext}` (storage policy checks the submitter
+  belongs to this open link, link on, window open, format allowed).
+- Name 2–60 characters after trimming (spaces collapsed), roll ≤ 30, class ≤ 60.
+- Limits: 60 `open_create_submission` per IP per link per hour (a class on one school Wi-Fi IP shares them);
+  100 new submitters per IP per link per hour; 3 submits / minute / submitter; `max_attempts` per submitter.
+- The browser keeps `{key, prefix, name, roll, cls}` in localStorage `a4ai_open_<token>`; the same device sees its
+  uploads and published results. Receipt shown to the student: first 8 hex of the attempt id (`XXXX-XXXX`).
+
+Teacher: guest rows are `submissions` with `student_id` null + `guest_name/guest_roll/guest_class/submitter_key`
+(readable through the usual RLS). Publish / unpublish / override / retry / history are unchanged.
+`delete_guest_submissions(p_submission_ids uuid[])` removes guest rows only (`deleted[]`, `skipped[{id, reason:
+forbidden | not_guest}]`); the files are cleaned up by the hourly orphan job after 24 h.
+
+Worker: a guest attempt's files live under `guest/{submitter_key}/`, not `{student_id}/` (see the backend change below).

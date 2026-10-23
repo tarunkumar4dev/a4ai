@@ -107,7 +107,7 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
           <>
             <SheetHeader>
               <SheetTitle className="flex flex-wrap items-center gap-2">
-                {student?.name || "Student"} · Upload-{attempt.attempt_no}
+                {student?.name || "Student"}{student?.guest ? " (guest)" : ""} · Upload-{attempt.attempt_no}
                 <ToneChip badge={teacherBadge(attempt.status)} />
                 {attempt.is_late && <Chip tone="amber">Late</Chip>}
               </SheetTitle>

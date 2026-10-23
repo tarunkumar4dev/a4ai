@@ -311,6 +311,12 @@ ALTER TABLE public.class_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance_edit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assignments ENABLE ROW LEVEL SECURITY;
+-- legacy check constraints that live had before 18 (definitions as on production; the submissions one was
+-- dropped by hand on 23 Oct and by 22 — exact old value list reconstructed from the pre-18 code: submitted / graded)
+ALTER TABLE public.submissions ADD CONSTRAINT submissions_status_check
+  CHECK (((status)::text = ANY ((ARRAY['submitted'::character varying, 'graded'::character varying, 'late'::character varying])::text[])));
+ALTER TABLE public.assignments ADD CONSTRAINT assignments_status_check
+  CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'archived'::character varying, 'draft'::character varying])::text[])));
 ALTER TABLE public.submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;

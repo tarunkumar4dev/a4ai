@@ -15,11 +15,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useConfirm } from "@/components/checker/useConfirm";
 import { humanError } from "@/components/checker/checkerFetch";
-import { fmtIST } from "@/lib/uploadFlow";
+import { fmtIST, receiptId } from "@/lib/uploadFlow";
 import { IN_PIPELINE, REVIEW_LABEL, teacherBadge } from "@/lib/uploadLink/status";
 import {
-  type LinkSettings, type StudentInfo, type StudentRow, type TeacherAttempt, buildStudentRows, linkUrl,
-  loadCopySubmissions, loadLinkSettings, publishResults, regradeSubmissions, resultMessage, retryChecks, unpublishResults,
+  type LinkSettings, type StudentInfo, type StudentRow, type TeacherAttempt, buildStudentRows, deleteGuestSubmissions,
+  linkUrl, loadCopySubmissions, loadLinkSettings, publishResults, regradeSubmissions, resultMessage, retryChecks, unpublishResults,
 } from "@/lib/uploadLink/teacher";
 import { openWhatsApp } from "@/lib/whatsapp";
 import { rejectText } from "@/lib/uploadLink/messages";
@@ -216,7 +216,22 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
 
   function shareResult(row: StudentRow) {
     if (!settings) return;
-    openWhatsApp(resultMessage(row.student.name, assignment.title, linkUrl(settings.link_token)), row.student.parent_phone);
+    openWhatsApp(resultMessage(row.student.name, assignment.title, linkUrl(settings.link_token), !!row.student.guest),
+                 row.student.parent_phone);
+  }
+
+  async function deleteGuest(row: StudentRow) {
+    if (!(await ask({ title: `Delete ${row.student.name}'s uploads?`, confirmLabel: "Delete",
+      description: `All ${row.attempts.length} upload${row.attempts.length === 1 ? "" : "s"} from this guest are removed, with their marks. This can't be undone.` }))) return;
+    setBusy(`del:${row.student.id}`);
+    try {
+      const r = await deleteGuestSubmissions(row.attempts.map(a => a.id));
+      const n = r.deleted?.length || 0;
+      if (n) toast.success(`${n} upload${n === 1 ? "" : "s"} deleted`);
+      else toast.error("Couldn't delete.");
+      await load(true);
+    } catch (e) { toast.error(humanError(e)); }
+    setBusy(null);
   }
 
   function actions(a: TeacherAttempt, row: StudentRow) {
@@ -239,6 +254,10 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
           <Button size="sm" className={BLACK_BTN} onClick={() => retry(a)} disabled={b}>{b ? <Spinner /> : "Check again"}</Button>
         )}
         {a.status === "waiting_key" && <Button size="sm" variant="outline" onClick={onEditAssignment}>Add answer key</Button>}
+        {row.student.guest && a.id === row.counted?.id && (
+          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => deleteGuest(row)}
+            disabled={busy === `del:${row.student.id}`} data-testid="delete-guest">Delete</Button>
+        )}
       </div>
     );
   }
@@ -351,7 +370,11 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
                                 return n;
                               })}>
                               {others.length ? (open ? <ChevronDown className="mt-0.5 h-4 w-4" /> : <ChevronRight className="mt-0.5 h-4 w-4" />) : <span className="w-4" />}
-                              <span>{row.student.name}{row.student.roll_no && <span className="block text-xs font-normal text-muted-foreground">Roll {row.student.roll_no}</span>}</span>
+                              <span>{row.student.name}
+                                {row.student.guest && <span className="ml-1.5 align-middle"><Chip tone="slate">Guest</Chip></span>}
+                                {row.student.roll_no && <span className="block text-xs font-normal text-muted-foreground">Roll {row.student.roll_no}</span>}
+                                {row.student.guest && <span className="block font-mono text-[11px] font-normal text-muted-foreground">ID {receiptId(a.id)}</span>}
+                              </span>
                             </button>
                           </td>
                           <td className="pr-2">{row.student.class_level || assignment.batch_name || "—"}</td>
@@ -387,7 +410,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
         </section>
       )}
 
-      <ReviewDrawer attempt={reviewing} student={reviewing ? students[reviewing.student_id] || null : null}
+      <ReviewDrawer attempt={reviewing} student={reviewing ? students[reviewing.owner] || null : null}
         onClose={() => setReviewing(null)} onChanged={() => load(true)} />
 
       <AlertDialog open={!!unpub} onOpenChange={o => { if (!o) setUnpub(null); }}>

@@ -26,13 +26,15 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
   assignmentId: string; title: string; settings: LinkSettings; onSaved: () => void;
 }) {
   const [s, setS] = useState(settings);
-  const [opensAt, setOpensAt] = useState(isoToIstInput(settings.opens_at));
+  // a new link opens now unless the teacher picks a later time
+  const opensDefault = (x: LinkSettings) => isoToIstInput(x.opens_at || (x.upload_link_enabled ? null : new Date().toISOString()));
+  const [opensAt, setOpensAt] = useState(opensDefault(settings));
   const [deadline, setDeadline] = useState(isoToIstInput(settings.deadline));
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(!settings.upload_link_enabled);
   useEffect(() => {
     setS(settings);
-    setOpensAt(isoToIstInput(settings.opens_at));
+    setOpensAt(opensDefault(settings));
     setDeadline(isoToIstInput(settings.deadline));
   }, [settings]);
 
@@ -50,6 +52,7 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
         status: s.status, opens_at: opens, deadline: closes,
         max_attempts: clamp(s.max_attempts, 1, 20), max_mb: clamp(s.max_mb, 1, 10), max_pages: clamp(s.max_pages, 1, 30),
         allowed_mimes: s.allowed_mimes, late_policy: s.late_policy, count_policy: s.count_policy, auto_publish: s.auto_publish,
+        link_identity_mode: s.link_identity_mode,
       });
       toast.success(enable ? "Upload link turned on" : "Settings saved");
       setOpen(false);
@@ -83,7 +86,7 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
           <Input readOnly value={url} className="min-w-0 flex-1 font-mono text-xs" onFocus={e => e.target.select()} data-testid="link-url" />
           <Button variant="outline" size="sm" onClick={copy}><Copy className="mr-1 h-4 w-4" /> Copy</Button>
           <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
-            onClick={() => openWhatsApp(shareLinkMessage(title, url, settings.deadline))}>
+            onClick={() => openWhatsApp(shareLinkMessage(title, url, settings.deadline, settings.link_identity_mode))}>
             <MessageCircle className="mr-1 h-4 w-4" /> Share on WhatsApp
           </Button>
         </div>
@@ -91,6 +94,22 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
 
       {open && (
         <div className="grid gap-4 sm:grid-cols-2">
+          <fieldset className="space-y-2 sm:col-span-2" data-testid="who-can-submit">
+            <legend className="text-sm font-medium">Who can submit</legend>
+            <div className="flex flex-wrap gap-2">
+              {([["access_code", "Students with access code"], ["open", "Anyone with the link"]] as const).map(([v, label]) => (
+                <button key={v} type="button" aria-pressed={s.link_identity_mode === v} onClick={() => set("link_identity_mode", v)}
+                  className={`rounded-full border px-3 py-1 text-sm ${s.link_identity_mode === v ? CHIP_ON : CHIP_OFF}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {s.link_identity_mode === "open" && (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-100" data-testid="open-warning">
+                Anyone with this link can upload. Check names before publishing.
+              </p>
+            )}
+          </fieldset>
           <div className="space-y-1">
             <Label htmlFor="ls-open">Uploads open (IST)</Label>
             <Input id="ls-open" type="datetime-local" value={opensAt} onChange={e => setOpensAt(e.target.value)} />
@@ -153,7 +172,7 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
           </label>
           <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
             <span className="text-sm"><b>Link active</b><br /><span className="text-xs text-muted-foreground">Off = students see "uploads closed"</span></span>
-            <Switch checked={s.status === "active"} onCheckedChange={v => set("status", v ? "active" : "closed")} />
+            <Switch checked={s.status === "active"} onCheckedChange={v => set("status", v ? "active" : "archived")} />
           </label>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             {settings.upload_link_enabled ? (

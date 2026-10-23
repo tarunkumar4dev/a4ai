@@ -268,6 +268,29 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Lighthouse mobile median 93 (LCP 2.3 s, TBT 220 ms). docs/upload-flow-api.md §7.
 - [ ] Run `21_access_code_normalize.sql` on production, then `notify pgrst, 'reload schema';` + its VERIFY block.
 - [ ] Deploy: vercel.json now rewrites /s/:token → /s.html (must ship with the build that contains s.html).
+- [x] Fix (23 Oct): production still had the pre-18 `submissions_status_check` (old values only) → every
+  create_submission ('uploaded') failed with 23514. Dropped by hand on prod; `22_drop_legacy_submission_status_check.sql`
+  records it. Harness baseline now carries it + live's `assignments_status_check` (active/archived/draft), so a missing 22
+  fails the tests. Live audit (read-only) of submissions / check_sheets / check_jobs / check_sessions / assignments /
+  smart_assignment_checks: no other legacy check blocks 18-21 values. Found with it: the teacher "Link active" switch
+  wrote status 'closed' (rejected by assignments_status_check) → now 'archived'. Student link: HTTP 4xx/5xx from an RPC
+  → "Something went wrong. Try again or contact your teacher." + console `HTTP <status> code <pg code>`; "No reply"
+  only when nothing came back.
+- [ ] Run `22_drop_legacy_submission_status_check.sql` on staging (prod already done by hand), + its VERIFY.
+- [x] Open link (23 Oct): `23_open_link.sql` — assignments.link_identity_mode access_code | open; guest rows
+  (submissions.student_id null + guest_name/roll/class + submitter_key → private open_submitters); RPCs open_start
+  (server-made key + upload folder, needed before the first upload), open_create_submission, open_my_submissions,
+  delete_guest_submissions (teacher); IP limit 60 submits / link / hour (+ 100 starts); guest Storage folder
+  `<inst>/<asg>/guest/<key>/`. Student page: name form, "write your name + roll on every page" line (both modes),
+  receipt XXXX-XXXX, key in localStorage `a4ai_open_<token>`. Teacher: "Who can submit", Guest tag + ID, Delete.
+  API doc §8. DB harness 173 PASS.
+- [ ] Run `23_open_link.sql` on production (after 19-22) + VERIFY + `notify pgrst, 'reload schema';`.
+  Backend worker must ship first/with it: job_worker._validate builds the folder from student_id (guest copies would
+  all be rejected as missing files) and other_students_with compares student_id (no duplicate flags for guests).
+- Known after the open link:
+  - 60 submits / IP / link / hour: a class on one school Wi-Fi IP shares the 60 (raised from 10 for the 23 Oct launch).
+  - A guest who clears the browser loses access to their uploads / result (no code to get back in).
+  - Deleting a guest row doesn't block that device; it can submit again.
 - Known after the polish:
   - index.html (main app) still loads Razorpay checkout.js synchronously (render-blocking on every page) though
     PaymentPage loads it on demand; Google Fonts CSS is render-blocking. Not changed (outside the upload link).
