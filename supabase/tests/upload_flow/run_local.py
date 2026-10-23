@@ -41,6 +41,9 @@ FILES = [
     MIGRATIONS / "20_assignment_test_link.sql",
     MIGRATIONS / "20_assignment_test_link.sql",  # idempotency
     HERE / "20_assignment_test_link_test.sql",
+    MIGRATIONS / "21_access_code_normalize.sql",
+    MIGRATIONS / "21_access_code_normalize.sql",  # idempotency
+    HERE / "21_access_code_normalize_test.sql",
 ]
 
 

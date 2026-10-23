@@ -170,7 +170,9 @@ export default function AssignmentLinkPage() {
             onPaste={e => { e.preventDefault(); setCode(cleanCode(e.clipboardData.getData("text"))); }}
             autoComplete="off" autoCapitalize="characters" spellCheck={false} inputMode="text"
             className="w-full rounded-lg border px-3 py-3 text-xl text-center tracking-[0.3em] font-mono"
-            style={{ borderColor: T.border }} placeholder="7KQ2M9XA" />
+            style={{ borderColor: T.border }} placeholder="7KQ2M9" aria-describedby="code-hint" />
+          {/* live codes are 6 characters; the "Generate codes" RPC (07) makes 8 — both work (21 also fixes O/0, I/1) */}
+          <p id="code-hint" className="text-xs" style={{ color: T.textMuted }}>6 or 8 letters and numbers, from your teacher.</p>
           <button type="submit" disabled={busy || !!until || code.length < 6} data-testid="code-submit"
             className="w-full py-3 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
             style={{ background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})` }}>
