@@ -179,8 +179,7 @@ This is the history list for the link page. Marks appear only after the teacher 
 - `latest`: the newest attempt that was not rejected.
 - `best`: the published attempt with the highest marks. If none is published yet, it falls back to latest.
 
-Poll this every 10 s while the tab is visible and an attempt can still change (not `published` / `rejected`), and on
-window focus. Anon users can't subscribe to Realtime.
+Poll this every 60 s and on window focus. Anon users can't subscribe to Realtime.
 
 ---
 
@@ -193,23 +192,6 @@ Who can call them: institute admins, plus staff who can see the assignment's bat
 | `publish_results(p_assignment_id uuid = null, p_submission_ids uuid[] = null)`. Pass exactly one. | `{state:"ok", published:[id], blocked:[{id,status}], skipped:[{id,status,reason}]}` |
 | `unpublish_results(p_submission_ids uuid[], p_reason text)`. Reason must be 3–500 chars. | `{state:"ok", unpublished:[id], skipped:[{id,reason}]}` |
 | `override_marks(p_submission_id, p_q_no text, p_marks numeric, p_note text = null)` | `{state:"ok", total, published, question:{…, teacher_marks, counted}}` |
-
-Added by `19_upload_link_portal.sql`:
-
-| RPC / column | Returns / meaning |
-|---|---|
-| `assignments.upload_link_enabled` (default `false`) | the teacher switched the upload link on. The portal sends only these assignments to `/s/<token>` (`get_student_feed` now returns `upload_link_token` for them); every other assignment keeps the old single-PDF `submit_assignment` flow |
-| `retry_checks(p_submission_ids uuid[])` | `{state:"ok", queued:[id], skipped:[{id,status,reason}]}`. Only `failed` attempts; re-opens the failed job of the current key version (same version — `/internal/regrade` is for a NEW key version) |
-| `submission_mark_history(p_submission_id uuid)` | `{state:"ok", events:[{at, type, by, by_me, total, remarks, details}]}` newest first, or `{state:"forbidden"}`. The audit rows for everyone who may grade the class (the table itself is owner-only) |
-
-Added by `20_assignment_test_link.sql`: `assignments.test_id` (nullable, → `tests.id`, on delete set null).
-**"📸 Checking Link" from a test** (generator result page, NCERT Test Builder, Test History ⋯): the test is saved
-first; test + class → the assignment with that `test_id` and `batch_id` is reused, else created (same insert as the
-Assignments form); the question paper (backend export, jsPDF fallback) goes to `assignments.file_url`, the answer
-key PDF to the private `answer-keys` bucket + `assignment_ai_keys` (only when the assignment has no key yet and at
-least one question has `correct_answer` / `model_answer` / `marking_scheme`); then the same update as the Copy
-Submissions tab: `upload_link_enabled = true`, `status = 'active'`, deadline + link settings. Code:
-`src/lib/uploadLink/testLink.ts`.
 
 `publish_results`:
 - **blocks** attempts in `uploaded`, `queued`, `checking`, `waiting_key` or `waiting_quota`
@@ -313,7 +295,7 @@ Where the backend differs from 4.1–4.3 above (the owner's fixed facts win):
   service key. Checked from their bytes before any Gemini call: magic bytes vs name/mime, PDF password (`needs_pass`) and page
   count (cap = `assignments.max_pages`, hard 30), photo readable, EXIF/GPS removed (the original in Storage is overwritten
   without it), sha256 duplicates (same file twice / same as another student: teacher-only `sheet_flags`). Problems →
-  `BAD_FILE`; `reject_reasons` gets one Hinglish entry per file `{code, page_order, message}`.
+  `BAD_FILE`; `reject_reasons` gets one entry per file `{code, page_order, message}`; every message the worker writes (reject reasons, job errors, review notes) is short plain English.
 - **HEIC:** `preprocess.py` reads HEIC/HEIF (pillow-heif), so `image/heic` may be added to a link's `allowed_mimes`. The portal
   still converts HEIC to JPEG in the browser.
 - **Long copies:** > 12 pages → Stage A once, pages saved to `answer-sheets/<teacher>/<session>/<sheet>/src/`, then chunk jobs of
@@ -353,21 +335,3 @@ Where the backend differs from 4.1–4.3 above (the owner's fixed facts win):
 - The old portal `submit_assignment` now refuses an assignment once the student has an upload-link attempt on it. Switch the portal UI to the new RPCs per assignment.
 - A teacher who owns the check session can still update `check_sheets` / `submissions` directly through RLS, as today. The RPCs are the audited path.
 - Not built (spec 8B / later gates): re-grade RPC, retention of checked copies (90-day policy; only the unattached-upload cleanup exists), variants, similarity, watermark, result share links (`share_links`), ZIP export.
-
-## 7. Student link performance (/s/:token)
-- **Own light entry.** `/s/<token>` is served by `s.html` → `src/linkMain.tsx` (rewrite in `vercel.json`; the same
-  rewrite for `vite` / `vite preview` in `vite.config.ts`). No app shell, router, auth providers, Google Analytics,
-  Razorpay or web fonts. The App's `/s/:token` route stays as a fallback.
-- **First load (23 Oct, production build):** 56 KB gzip JS + 39.5 KB gzip CSS. The student RPCs use plain `fetch`
-  (`src/lib/uploadLink/anonRpc.ts`), not supabase-js. Loaded only when needed: the upload screen (after the code is
-  confirmed, 6.8 KB), thumbnails + drag-reorder (dnd-kit, 17.6 KB, after the first page), the compression worker,
-  heic2any (333 KB, only for HEIC), pdf.js (104 KB, only for PDFs).
-- **Photos** are compressed in a Web Worker (`compress.worker.ts`, OffscreenCanvas), else on the main thread.
-  3 uploads run in parallel; per-file progress is batched per animation frame; the total bar is by bytes, eased, never
-  backwards. Polling runs only while the tab is visible and an attempt can still change.
-- **Lighthouse mobile** (simulated slow 4G, Supabase mocked): 3 runs → 90 / 93 / 96, LCP 2.3–2.5 s, TBT 150–320 ms,
-  CLS ≤ 0.001 (before: 28, LCP 10.2 s, TBT 2,820 ms). To re-run:
-  ```
-  VITE_SUPABASE_URL=http://localhost:54399 VITE_SUPABASE_ANON_KEY=perf-anon npx vite build --outDir dist-perf
-  CHROME_PATH=<chrome or Playwright's chromium> node tests/perf/lighthouse.mjs
-  ```
