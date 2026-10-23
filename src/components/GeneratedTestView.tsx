@@ -30,6 +30,7 @@ import MathText from "./MathText";
 import { api } from "@/lib/api";
 import type { GenerateTestResponse, GeneratedQuestion } from "@/lib/api";
 import { CreateContestModal } from "./contest/CreateContestModal";
+import { CheckingLinkButton } from "./teacher/copySubmissions/CheckingLink";
 import { supabase } from "@/lib/supabaseClient";
 import { useGuestAccess } from "@/hooks/useGuestAccess";
 import LoginModal from "@/components/LoginModal";
@@ -1031,7 +1032,8 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   // ═══════════════════════════════════════════════════════════════════════
   // 🚩 v11: Clean save logic — no zero-UUID fallback, no refreshSession
   // ═══════════════════════════════════════════════════════════════════════
-  const performSave = async () => {
+  // stay = true: the Checking Link saves first and keeps the teacher on this page. Returns true when saved.
+  const performSave = async (stay = false): Promise<boolean> => {
     setIsSaving(true);
     setSaveStatus("idle");
 
@@ -1044,7 +1046,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
         toast.error("Please login to save your test");
         setShowLoginModal(true);
         setIsSaving(false);
-        return;
+        return false;
       }
 
       // Valid user — proceed with save
@@ -1053,7 +1055,8 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
       clearStoredProgress();
 
       toast.success("Test saved successfully!");
-      setTimeout(() => navigate("/dashboard"), 1000);
+      if (!stay) setTimeout(() => navigate("/dashboard"), 1000);
+      return true;
 
     } catch (err: any) {
       console.error("Save failed:", err);
@@ -1066,10 +1069,12 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
         toast.error("Network error. Check your connection and try again.");
       } else if (err.message?.includes("duplicate") || err.message?.includes("already exists")) {
         toast.error("This test has already been saved.");
+        if (stay) { setSaveStatus("saved"); return true; }
       } else {
         toast.error("Save failed. Please try again.");
       }
       setSaveStatus("idle");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -1167,6 +1172,18 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   // ── Export ────────────────────────────────────────────────────────
   // 🚩 FIX: Only approved questions go to PDF/Contest/Copy
   const activeQuestions = questions.filter((q) => q.status === "approved");
+
+  // ── Checking Link: the saved test as a TestRef (needs the questions in the DB → save first) ──
+  const testRef = {
+    id: result.testId, title: result.examTitle || "Test Paper", subject: result.meta?.subject || null,
+    class_grade: result.meta?.classGrade || null, board: result.meta?.board || "CBSE", paper_date: paperDate,
+    total_marks: activeQuestions.reduce((n, q) => n + (Number(q.marks) || 0), 0) || null,
+  };
+  const ensureSavedForLink = async () => {
+    if (saveStatus === "saved") return testRef;
+    if (!gateAction("save")) return null;
+    return (await performSave(true)) ? testRef : null;
+  };
 
   const handleExport = async (format: "pdf" | "docx", mode: "student" | "answers" | "teacher" | "standalone_answer_key") => {
     setIsExporting(true);
@@ -1322,6 +1339,14 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
               >
                 <Share2 size={14} /> Share as Contest
               </button>
+
+              {/* Upload link for students' answer copies (saves the test first if needed) */}
+              <CheckingLinkButton
+                test={saveStatus === "saved" ? testRef : null}
+                ensureSaved={ensureSavedForLink}
+                className={`${actionBtnBase} bg-violet-600 text-white hover:bg-violet-700 active:bg-violet-800 disabled:opacity-60`}
+                style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+              />
 
               {/* Download Menu — spans full width on mobile */}
               <div className="relative col-span-2 lg:col-span-1">

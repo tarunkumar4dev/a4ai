@@ -247,6 +247,20 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - Red-pen preview in the review drawer works only for the assignment's creator (answer-sheets RLS = owner folder).
   - Teacher UI is not covered by e2e (needs a mocked staff session); its RPCs are covered by the DB harness.
 
+- [x] Checking Link from a test (23 Oct): "📸 Checking Link" next to "Share as Contest" (GeneratedTestView), in the NCERT
+  Test Builder export deck (desktop + mobile; one Test History row per paper now — re-exports reuse it), and in Test
+  History ⋯. Modal: class (useMyScope batches), deadline IST (default today + 2 days 11:59 PM), attempts 2, late accept+flag,
+  auto publish off, Advanced (MB / pages / formats) → src/lib/uploadLink/testLink.ts reuses the test + class assignment
+  (assignments.test_id, migration 20) or creates it; paper + key PDFs via testPdfExporter.exportTestPdfBlob; key upload +
+  question-paper upload shared with the Assignments form (src/lib/assignments.ts). "✓" when the test already has a link.
+  "Submissions dekho" → /dashboard?tab=assignments&assignment=<id>&view=copies. 53 unit tests, DB harness 113 checks.
+- [ ] Run `20_assignment_test_link.sql` on production (after 19) + VERIFY. Without it the Checking Link can't save
+  (no assignments.test_id column) and the ✓ state never shows.
+- Known after the Checking Link:
+  - The worker builds the rubric from the uploaded paper + key PDFs (AI), not from the saved questions; a key with only
+    MCQ letters relies on the paper PDF for the questions.
+  - Not covered by e2e (teacher session). Logic is unit-tested (testLink.test.ts).
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

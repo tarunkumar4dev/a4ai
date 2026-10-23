@@ -202,6 +202,15 @@ Added by `19_upload_link_portal.sql`:
 | `retry_checks(p_submission_ids uuid[])` | `{state:"ok", queued:[id], skipped:[{id,status,reason}]}`. Only `failed` attempts; re-opens the failed job of the current key version (same version — `/internal/regrade` is for a NEW key version) |
 | `submission_mark_history(p_submission_id uuid)` | `{state:"ok", events:[{at, type, by, by_me, total, remarks, details}]}` newest first, or `{state:"forbidden"}`. The audit rows for everyone who may grade the class (the table itself is owner-only) |
 
+Added by `20_assignment_test_link.sql`: `assignments.test_id` (nullable, → `tests.id`, on delete set null).
+**"📸 Checking Link" from a test** (generator result page, NCERT Test Builder, Test History ⋯): the test is saved
+first; test + class → the assignment with that `test_id` and `batch_id` is reused, else created (same insert as the
+Assignments form); the question paper (backend export, jsPDF fallback) goes to `assignments.file_url`, the answer
+key PDF to the private `answer-keys` bucket + `assignment_ai_keys` (only when the assignment has no key yet and at
+least one question has `correct_answer` / `model_answer` / `marking_scheme`); then the same update as the Copy
+Submissions tab: `upload_link_enabled = true`, `status = 'active'`, deadline + link settings. Code:
+`src/lib/uploadLink/testLink.ts`.
+
 `publish_results`:
 - **blocks** attempts in `uploaded`, `queued`, `checking`, `waiting_key` or `waiting_quota`
 - **publishes** attempts in `checked` or `needs_review`

@@ -38,6 +38,9 @@ FILES = [
     MIGRATIONS / "19_upload_link_portal.sql",
     MIGRATIONS / "19_upload_link_portal.sql",    # idempotency
     HERE / "19_upload_link_portal_test.sql",
+    MIGRATIONS / "20_assignment_test_link.sql",
+    MIGRATIONS / "20_assignment_test_link.sql",  # idempotency
+    HERE / "20_assignment_test_link_test.sql",
 ]
 
 

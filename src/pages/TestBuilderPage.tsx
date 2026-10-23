@@ -70,6 +70,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getBackendApiBase } from "@/lib/apiBase";
+import { CheckingLinkButton } from "@/components/teacher/copySubmissions/CheckingLink";
 
 // ── Config ──────────────────────────────────────────────────────
 const API_BASE = `${getBackendApiBase()}/v1`;
@@ -891,6 +892,7 @@ export default function TestBuilderPage() {
   const [libraryQuestions, setLibraryQuestions] = useState<NCERTQuestion[]>([]);
   const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
   const [examTitle, setExamTitle] = useState("");
+  const [savedPaper, setSavedPaper] = useState<{ id: string; sig: string } | null>(null);
   const [templateTier, setTemplateTier] = useState<"standard" | "premium">("standard");
   const [colorTheme, setColorTheme] = useState<"teal" | "navy" | "dark_green" | "orange">("teal");
   const [instituteName, setInstituteName] = useState("");
@@ -1168,10 +1170,14 @@ export default function TestBuilderPage() {
   };
 
   // ── Export Flow & Auto-save ───────────────────────────────────
-  const autoSaveTestToHistory = async () => {
+  // One Test History row per paper: exporting the same paper again (or opening its Checking Link) reuses it.
+  const paperSignature = () => `${examTitle}|${testQuestions.map((q) => q.paperId ?? q.id).join(",")}`;
+  const autoSaveTestToHistory = async (): Promise<string | null> => {
     try {
+      const sig = paperSignature();
+      if (savedPaper && savedPaper.sig === sig) return savedPaper.id;
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id) return;
+      if (!user?.id) return null;
 
       const testId = crypto.randomUUID();
       const { error: testErr } = await supabase.from("tests").insert({
@@ -1204,12 +1210,30 @@ export default function TestBuilderPage() {
           position: idx + 1,
           image_url: q.image_url || undefined,
         }));
-        await supabase.from("questions").insert(qRows);
+        const { error: qErr } = await supabase.from("questions").insert(qRows);
+        if (!qErr) {
+          setSavedPaper({ id: testId, sig });
+          return testId;
+        }
       }
+      return null;
     } catch {
       // silently proceed
+      return null;
     }
   };
+
+  const linkTestRef = (id: string) => ({
+    id, title: examTitle || `${subject} Class ${classGrade} Test`, subject, class_grade: `Class ${classGrade}`,
+    board: "CBSE", total_marks: totalMarks,
+  });
+  const ensureSavedForLink = async () => {
+    if (testQuestions.length === 0) { toast.error("Please add at least 1 question to the test paper!"); return null; }
+    const id = await autoSaveTestToHistory();
+    if (!id) { toast.error("Test save nahi hua — login check karo aur dobara try karo."); return null; }
+    return linkTestRef(id);
+  };
+  const linkTest = savedPaper && savedPaper.sig === paperSignature() ? linkTestRef(savedPaper.id) : null;
 
   const buildQuestionsPayload = (includeAnswers: boolean) =>
     testQuestions.map((q) => ({
@@ -1964,6 +1988,9 @@ export default function TestBuilderPage() {
                         </button>
                       </div>
                     </div>
+
+                    <CheckingLinkButton test={linkTest} ensureSaved={ensureSavedForLink}
+                      className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-2.5 px-3 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50" />
                   </div>
                 )}
               </div>
@@ -2100,6 +2127,8 @@ export default function TestBuilderPage() {
                           <FileKey className="w-3.5 h-3.5" /> Answer Key
                         </button>
                       </div>
+                      <CheckingLinkButton test={linkTest} ensureSaved={ensureSavedForLink}
+                        className="w-full bg-violet-600 text-white font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 disabled:opacity-50" />
                     </div>
                   )}
                 </div>
