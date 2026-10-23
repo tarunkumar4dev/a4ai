@@ -4,6 +4,7 @@ import type { Page, Route } from "@playwright/test";
 
 export const TOKEN = "tok-1";
 export const CODE = "ABCD2345";
+export const GUEST_KEY = "9b2f6c1e-1111-4222-8333-444455556666";
 const ASG = "asg-1", INST = "inst-1", STUDENT = "stu-1";
 
 type Attempt = {
@@ -13,6 +14,9 @@ type Attempt = {
 
 export class MockSupabase {
   linkState = "open";
+  /** 23: "open" = anyone with the link (name form, no code) */
+  identityMode: "access_code" | "open" = "access_code";
+  startCalls: Record<string, unknown>[] = [];
   maxAttempts = 3;
   verifyLocked = false;
   createDelayMs = 0;
@@ -47,7 +51,7 @@ export class MockSupabase {
       id: ASG, title: "Physics Unit Test 2", instructions: "Upload all pages in order", batch_name: "ECE-2",
       opens_at: null, closes_at: closes, grace_minutes: 2, late_policy: "accept_flag", count_policy: "latest",
       max_attempts: this.maxAttempts, allowed_mimes: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
-      max_mb: 10, max_pages: 30, max_marks: 10,
+      max_mb: 10, max_pages: 30, max_marks: 10, identity_mode: this.identityMode,
     };
   }
 
@@ -70,6 +74,16 @@ export class MockSupabase {
           : { state: "invalid_code" };
       case "get_student_by_code":
         return args.p_code === CODE ? { id: STUDENT, institute_id: INST, name: "Asha Verma" } : null;
+      case "open_start":
+        this.startCalls.push(args);
+        return { state: "ok", submitter_key: GUEST_KEY, upload_prefix: `${INST}/${ASG}/guest/${GUEST_KEY}/`,
+                 attempts_used: this.used(), attempts_left: this.maxAttempts - this.used() };
+      case "open_my_submissions":
+        if (args.p_submitter_key !== GUEST_KEY) return { state: "invalid_submitter" };
+        return this.rpc("my_submissions", args);
+      case "open_create_submission":
+        if (args.p_submitter_key !== GUEST_KEY) return { state: "invalid_submitter" };
+        return this.rpc("create_submission", args);
       case "create_submission": {
         const key = String(args.p_idempotency_key);
         const files = args.p_files as MockSupabase["createCalls"][number]["files"];
@@ -79,7 +93,7 @@ export class MockSupabase {
         if (this.used() >= this.maxAttempts) return { state: "max_attempts", max_attempts: this.maxAttempts, attempts_used: this.used() };
         const n = this.attempts.length + 1;
         const a: Attempt = {
-          id: `sub-${n}`, attempt_no: n, label: `Upload-${n}`, status: "queued", is_late: this.linkState === "open_late",
+          id: `5ab0c0de-0000-4000-8000-00000000000${n}`, attempt_no: n, label: `Upload-${n}`, status: "queued", is_late: this.linkState === "open_late",
           counts: true, submitted_at: new Date().toISOString(),
           files: files.map(f => ({ page_order: f.page_order, mime: f.mime, size: 1000 })), reject_reasons: [], result: null,
         };

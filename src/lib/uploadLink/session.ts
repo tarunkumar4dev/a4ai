@@ -2,6 +2,7 @@
 // What survives a refresh during an upload (localStorage; the page blobs live in IndexedDB, blobStore.ts):
 //   a4ai_link_code_<token>                  the verified + confirmed access code for one shared link
 //   a4ai_upload_draft_<assignment>_<code>   pages picked so far + their Storage path once uploaded
+//   a4ai_open_<token>                       open link (23): this device's submitter key, folder + typed details
 // The idempotency key of the attempt is kept by attemptKey() in src/lib/uploadFlow.ts.
 
 export interface DraftItem {
@@ -52,3 +53,23 @@ export function resumeItems(items: DraftItem[], hasBlob: (id: string) => boolean
 }
 
 export const totalPages = (items: Pick<DraftItem, "pages">[]) => items.reduce((n, i) => n + (i.pages || 1), 0);
+
+/* ─── Open link (23) ─── */
+export interface OpenSubmitter { key: string; prefix: string; name: string; roll: string; cls: string }
+const openKey = (token: string) => `a4ai_open_${token}`;
+
+export function loadSubmitter(token: string): OpenSubmitter | null {
+  try {
+    const v = JSON.parse(safeGet(openKey(token)) || "null");
+    if (v && typeof v.key === "string" && typeof v.prefix === "string" && typeof v.name === "string") {
+      return { key: v.key, prefix: v.prefix, name: v.name, roll: v.roll || "", cls: v.cls || "" };
+    }
+  } catch { /* corrupt → start again */ }
+  return null;
+}
+export const saveSubmitter = (token: string, s: OpenSubmitter) => safeSet(openKey(token), JSON.stringify(s));
+export const clearSubmitter = (token: string) => safeDel(openKey(token));
+
+/** Typed name → one line, trimmed (the server cleans it the same way). */
+export const cleanName = (v: string) =>
+  Array.from(v, c => (c < " " || c === "\u007f" ? " " : c)).join("").replace(/\s+/g, " ").trim();

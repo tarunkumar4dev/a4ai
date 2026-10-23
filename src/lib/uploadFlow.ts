@@ -27,6 +27,7 @@ export type LinkAssignment = {
   max_mb: number;
   max_pages: number;
   max_marks: number | null;
+  identity_mode?: "access_code" | "open";        // 23: open = anyone with the link, name form instead of a code
 };
 
 export type LinkInfo = {
@@ -139,6 +140,8 @@ export function stateMessage(r: { state: string; scope?: string; opens_at?: stri
     case "max_attempts":
       return `You've used all your attempts (${r.attempts_used ?? "?"}/${r.max_attempts ?? "?"}).`;
     case "conflict": return "Two uploads clashed. Tap Submit again.";
+    case "invalid_name": return "Enter your full name (2 to 60 letters).";
+    case "invalid_submitter": return "Your details were reset. Enter your name again.";
     case "invalid_request": return "Something went wrong. Reload the page and try again.";
     default: return "Something went wrong. Try again in a moment.";
   }
@@ -250,6 +253,43 @@ export async function mySubmissions(code: string, assignmentId: string): Promise
   try { return await anonRpc<MySubmissions>("my_submissions", { p_code: code, p_assignment_id: assignmentId }); }
   catch (e) { throw rpcFailure("my_submissions", e, "Couldn't load your uploads."); }
 }
+
+/* ─── Open link (23): no access code; the device keeps a server-made submitter key ─── */
+export type GuestDetails = { name: string; roll: string; cls: string };
+export type OpenStart = { state: string; submitter_key?: string; upload_prefix?: string; attempts_used?: number;
+                          attempts_left?: number; retry_after_sec?: number };
+
+const opt = (v: string) => v.trim() || null;
+
+export async function openStart(token: string, g: GuestDetails, key?: string | null): Promise<OpenStart> {
+  try {
+    return await anonRpc<OpenStart>("open_start", { p_token: token, p_guest_name: g.name, p_guest_roll: opt(g.roll),
+                                                    p_guest_class: opt(g.cls), p_submitter_key: key || null });
+  } catch (e) { throw rpcFailure("open_start", e, "Couldn't continue. Check your internet and try again."); }
+}
+
+export async function openCreateSubmission(token: string, g: GuestDetails, submitterKey: string, key: string,
+                                           files: { storage_path: string; mime: string; size: number; sha256: string;
+                                                    page_order: number }[]): Promise<CreateResult> {
+  try {
+    return await anonRpc<CreateResult>("open_create_submission", {
+      p_token: token, p_guest_name: g.name, p_guest_roll: opt(g.roll), p_guest_class: opt(g.cls),
+      p_submitter_key: submitterKey, p_idempotency_key: key, p_files: files });
+  } catch (e) {
+    throw rpcFailure("open_create_submission", e, "No reply from the server. Tap Submit again — it won't be submitted twice.");
+  }
+}
+
+export async function openMySubmissions(token: string, submitterKey: string): Promise<MySubmissions> {
+  try { return await anonRpc<MySubmissions>("open_my_submissions", { p_token: token, p_submitter_key: submitterKey }); }
+  catch (e) { throw rpcFailure("open_my_submissions", e, "Couldn't load your uploads."); }
+}
+
+/** Short receipt the student can show the teacher: first 8 hex of the attempt id, "XXXX-XXXX". */
+export const receiptId = (submissionId: string) => {
+  const h = submissionId.replace(/-/g, "").slice(0, 8).toUpperCase();
+  return `${h.slice(0, 4)}-${h.slice(4)}`;
+};
 
 /** get_student_by_code (05) — only the ids the Storage path needs; null for a wrong code. */
 export async function getStudentIds(code: string): Promise<{ id: string; institute_id: string } | null> {

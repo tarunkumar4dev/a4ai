@@ -1,19 +1,20 @@
 // src/components/student/UploadAttempts.tsx
 // Upload an answer copy (several photos / PDFs, one attempt) + the attempt history, for one assignment.
 // Used by the portal's assignment page (/student) and the shared link page (/s/:token).
-// Every call is an anon RPC keyed by the access code (src/lib/uploadFlow.ts); nothing here trusts the browser
-// for identity — the ids are only used to build the upload path, which the storage policy re-checks.
+// Every call is an anon RPC keyed by the access code (src/lib/uploadFlow.ts) — or, on an open link (23), by the
+// device's server-made submitter key; nothing here trusts the browser for identity — the ids only build the upload
+// path, which the storage policy re-checks.
 // Pages go straight to Storage with per-file progress; picked pages + uploaded paths survive a refresh
 // (localStorage draft + IndexedDB blobs), so after a drop only the missing files are uploaded.
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import {
   type Attempt, type CreateResult, type LinkInfo, attemptKey, clearAttemptKey, createSubmission, fmtCountdown, fmtIST,
-  getAssignmentLink, mySubmissions, preparePage, sha256Hex, stateMessage,
+  getAssignmentLink, mySubmissions, openCreateSubmission, openMySubmissions, preparePage, receiptId, sha256Hex, stateMessage,
 } from "@/lib/uploadFlow";
 import { ACCEPT_ATTR, rotateJpeg90 } from "@/lib/uploadLink/files";
-import { type DraftItem, clearDraft, loadDraft, pendingUploads, resumeItems, saveDraft, totalPages } from "@/lib/uploadLink/session";
+import { type DraftItem, type OpenSubmitter, clearDraft, loadDraft, pendingUploads, resumeItems, saveDraft, totalPages } from "@/lib/uploadLink/session";
 import { deleteBlob, deleteBlobs, getBlob, putBlob } from "@/lib/uploadLink/blobStore";
-import { uploadPath, uploadWithProgress } from "@/lib/uploadLink/storageUpload";
+import { uploadPath, uploadPathIn, uploadWithProgress } from "@/lib/uploadLink/storageUpload";
 import { needsPolling, studentBadge } from "@/lib/uploadLink/status";
 import { useOnline, useSmoothProgress } from "@/hooks/useUploadLinkTimers";
 import { fileErrorText, rejectText, warningText } from "@/lib/uploadLink/messages";
@@ -49,13 +50,23 @@ function useNow(active: boolean) {
   return now;
 }
 
-export default function UploadAttempts({ code, assignmentRef, student, t, onChange }: {
-  code: string;
+/** Open link (23): no access code — this device's submitter (from open_start) and the typed details. */
+export type GuestIdentity = { token: string; submitter: OpenSubmitter; onLost: () => void };
+
+export default function UploadAttempts({ code, assignmentRef, student, guest, t, onChange }: {
+  code?: string;                                      // access-code mode
   assignmentRef: string;                              // link token or assignment id
-  student: { id: string; institute_id: string };
+  student?: { id: string; institute_id: string };     // access-code mode
+  guest?: GuestIdentity;                              // open link
   t: UploadTokens;
   onChange?: () => void;
 }) {
+  // drafts + idempotency keys are kept per access code, or per submitter on an open link
+  const scope = guest ? `g_${guest.submitter.key}` : code || "";
+  const guestKey = guest?.submitter.key;
+  const guestRef = useRef(guest);
+  guestRef.current = guest;
+  const [receipt, setReceipt] = useState<string | null>(null);
   const [link, setLink] = useState<LinkInfo | null>(null);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
@@ -109,14 +120,16 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
 
   const refresh = useCallback(async () => {
     try {
-      const l = await getAssignmentLink(assignmentRef, code);
+      const g = guestKey ? guestRef.current : undefined;
+      const l = await getAssignmentLink(assignmentRef, g ? undefined : code);
       setLink(l);
       if (l.student?.state === "locked") {
         setNotice({ text: stateMessage(l.student), tone: "error", until: Date.now() + (l.student.retry_after_sec || 60) * 1000 });
       }
       const id = l.assignment?.id;
-      if (!id || l.student?.state !== "ok") return;
-      const h = await mySubmissions(code, id);
+      if (!id || (!g && l.student?.state !== "ok")) return;
+      const h = g ? await openMySubmissions(g.token, g.submitter.key) : await mySubmissions(code || "", id);
+      if (h.state === "invalid_submitter") { g?.onLost(); return; }
       if (h.state === "ok") {
         setAttempts(h.attempts || []);
         setAttemptsLeft(h.attempts_left ?? null);
@@ -128,7 +141,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     } finally {
       setHistoryLoading(false);
     }
-  }, [assignmentRef, code]);
+  }, [assignmentRef, code, guestKey]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -161,7 +174,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     if (!assignmentId) return;
     let cancelled = false;
     (async () => {
-      const draft = loadDraft(assignmentId, code);
+      const draft = loadDraft(assignmentId, scope);
       for (const it of draft) {
         const b = await getBlob(it.id);
         if (cancelled) return;
@@ -174,9 +187,9 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       if (lost) setPickErrors([`${lost} page${lost === 1 ? "" : "s"} couldn't be restored — add ${lost === 1 ? "it" : "them"} again.`]);
     })();
     return () => { cancelled = true; };
-  }, [assignmentId, code]);
+  }, [assignmentId, scope]);
 
-  useEffect(() => { if (assignmentId) saveDraft(assignmentId, code, items); }, [items, assignmentId, code]);
+  useEffect(() => { if (assignmentId) saveDraft(assignmentId, scope, items); }, [items, assignmentId, scope]);
   useEffect(() => () => {
     Object.values(thumbsRef.current).forEach(u => URL.revokeObjectURL(u));
     cancelAnimationFrame(progressRaf.current);
@@ -187,7 +200,8 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
   const studentBlocked = link?.student && !["ok", "locked"].includes(link.student.state);
   const noAttemptsLeft = attemptsLeft !== null && attemptsLeft <= 0;
   const locked = !!notice?.until && now < notice.until;
-  const canUpload = !!asg && !linkClosed && link?.student?.state === "ok" && !noAttemptsLeft;
+  const identOk = !!guest || link?.student?.state === "ok";
+  const canUpload = !!asg && !linkClosed && identOk && !noAttemptsLeft;
   const pageCount = totalPages(items);
   const overPages = !!asg && pageCount > asg.max_pages;
 
@@ -246,7 +260,8 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     if (!assignmentId) return false;
     const blob = blobs.current.get(it.id) ?? (await getBlob(it.id));
     if (!blob) { setFailed(f => ({ ...f, [it.id]: "This page is no longer on the phone. Add it again." })); return false; }
-    const path = uploadPath(student.institute_id, assignmentId, student.id, it.ext);
+    const path = guest ? uploadPathIn(guest.submitter.prefix, it.ext)
+                       : uploadPath(student?.institute_id || "", assignmentId, student?.id || "", it.ext);
     setFailed(f => { const n = { ...f }; delete n[it.id]; return n; });
     setFileProgress(it.id, 0);
     try {
@@ -286,19 +301,22 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     setBusy(true);
     setNotice(null);
     setWarnings([]);
+    setReceipt(null);
     try {
       if (!(await uploadPending())) {
         setNotice({ text: "Some pages didn't upload. Tap Retry on them, then Submit.", tone: "error" });
         return;
       }
-      const key = attemptKey(assignmentId, code);       // same key on every retry of this attempt
+      const key = attemptKey(assignmentId, scope);      // same key on every retry of this attempt
       const files = itemsRef.current.map((it, i) => ({ storage_path: it.path!, mime: it.mime, size: it.size,
                                                         sha256: it.sha256, page_order: i + 1 }));
-      const r = await createSubmission(code, assignmentId, key, files);
+      const r = guest
+        ? await openCreateSubmission(guest.token, guest.submitter, guest.submitter.key, key, files)
+        : await createSubmission(code || "", assignmentId, key, files);
       if (r.state === "created" || r.state === "replayed") {
         const ids = itemsRef.current.map(i => i.id);
-        clearAttemptKey(assignmentId, code);
-        clearDraft(assignmentId, code);
+        clearAttemptKey(assignmentId, scope);
+        clearDraft(assignmentId, scope);
         commit([]);
         Object.values(thumbsRef.current).forEach(u => URL.revokeObjectURL(u));
         thumbsRef.current = {};
@@ -314,6 +332,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
         if (typeof r.attempts_left === "number") setAttemptsLeft(r.attempts_left);
         setWarnings((r.warnings || []).map(w => warningText(w)));
         setNotice({ text: `✅ ${r.submission?.label || "Upload"} submitted. Your teacher will share the result after checking.`, tone: "ok" });
+        if (guest && r.submission) setReceipt(receiptId(r.submission.id));
         refresh();
         onChange?.();
       } else if (r.state === "invalid_files") {
@@ -326,6 +345,8 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
           return n;
         });
         setNotice({ text: (r.errors || []).map(e => fileErrorText(e, asg.max_mb)).join(" "), tone: "error" });
+      } else if (r.state === "invalid_submitter") {
+        guest?.onLost();
       } else {
         showResult(r);
         if (["max_attempts", "closed", "inactive", "not_found"].includes(r.state)) refresh();
@@ -417,6 +438,10 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
             <span>To reorder, press and drag a page</span>
             <b data-testid="page-counter">{pageCount}/{asg.max_pages} pages</b>
           </div>
+          <p className="rounded-lg border-2 px-3 py-2 text-sm font-semibold" data-testid="name-on-pages"
+            style={{ borderColor: "#F59E0B", background: "rgba(245,158,11,0.10)", color: t.textPrimary }}>
+            ✍️ Write your full name and roll number at the top of every page before taking photos.
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => cameraRef.current?.click()} disabled={busy}
               className={`py-3 rounded-lg text-sm font-semibold ${BLACK_BTN}`}>
@@ -469,15 +494,21 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       {notice && (
         <div role="status" className="rounded-lg border px-3 py-2 text-sm" style={toneStyle(notice.tone)} data-testid="notice">{noticeText}</div>
       )}
+      {receipt && (
+        <div className="rounded-lg border px-3 py-2 text-sm" style={toneStyle("info")} data-testid="receipt">
+          Submission ID: <b className="font-mono">{receipt}</b>
+          <span className="block text-xs" style={{ color: t.textMuted }}>Keep it. Show it to your teacher if they ask.</span>
+        </div>
+      )}
       {warnings.map((w, i) => (
         <div key={i} className="rounded-lg border px-3 py-2 text-xs" style={toneStyle("info")} data-testid="dup-warning">⚠️ {w}</div>
       ))}
 
       {/* History */}
-      {historyLoading && !attempts.length && link.student?.state === "ok" && (
+      {historyLoading && !attempts.length && identOk && (
         <p className="text-xs" style={{ color: t.textMuted }}>Loading your uploads…</p>
       )}
-      {!historyLoading && !attempts.length && link.student?.state === "ok" && (
+      {!historyLoading && !attempts.length && identOk && (
         <p className="text-xs text-center" style={{ color: t.textMuted }} data-testid="history-empty">No uploads yet.</p>
       )}
       {attempts.length > 0 && (
@@ -496,7 +527,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
                     {a.counts && <span className="rounded px-1.5 text-[11px]" style={{ background: t.tealBg, color: t.teal }}>counts</span>}
                   </div>
                   <p className="mt-0.5 text-xs" style={{ color: t.textMuted }}>
-                    {a.submitted_at ? fmtIST(a.submitted_at) : ""} · {a.files.length} file
+                    {a.submitted_at ? fmtIST(a.submitted_at) : ""} · {a.files.length} file{guest ? ` · ID ${receiptId(a.id)}` : ""}
                   </p>
                   {a.status === "rejected" && (
                     <div className="mt-1 space-y-1">

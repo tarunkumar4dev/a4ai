@@ -277,6 +277,20 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   → "Something went wrong. Try again or contact your teacher." + console `HTTP <status> code <pg code>`; "No reply"
   only when nothing came back.
 - [ ] Run `22_drop_legacy_submission_status_check.sql` on staging (prod already done by hand), + its VERIFY.
+- [x] Open link (23 Oct): `23_open_link.sql` — assignments.link_identity_mode access_code | open; guest rows
+  (submissions.student_id null + guest_name/roll/class + submitter_key → private open_submitters); RPCs open_start
+  (server-made key + upload folder, needed before the first upload), open_create_submission, open_my_submissions,
+  delete_guest_submissions (teacher); IP limit 10 submits / link / hour (+ 30 starts); guest Storage folder
+  `<inst>/<asg>/guest/<key>/`. Student page: name form, "write your name + roll on every page" line (both modes),
+  receipt XXXX-XXXX, key in localStorage `a4ai_open_<token>`. Teacher: "Who can submit", Guest tag + ID, Delete.
+  API doc §8. DB harness 173 PASS.
+- [ ] Run `23_open_link.sql` on production (after 19-22) + VERIFY + `notify pgrst, 'reload schema';`.
+  Backend worker must ship first/with it: job_worker._validate builds the folder from student_id (guest copies would
+  all be rejected as missing files) and other_students_with compares student_id (no duplicate flags for guests).
+- Known after the open link:
+  - 10 submits / IP / link / hour: a whole class on one school Wi-Fi IP gets only 10 between them.
+  - A guest who clears the browser loses access to their uploads / result (no code to get back in).
+  - Deleting a guest row doesn't block that device; it can submit again.
 - Known after the polish:
   - index.html (main app) still loads Razorpay checkout.js synchronously (render-blocking on every page) though
     PaymentPage loads it on demand; Google Fonts CSS is render-blocking. Not changed (outside the upload link).

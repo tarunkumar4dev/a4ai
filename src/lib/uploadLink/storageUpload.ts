@@ -9,7 +9,10 @@ const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY || "public-anon-key";
 export const BUCKET = "submissions";
 
 export const uploadPath = (instituteId: string, assignmentId: string, studentId: string, ext: string) =>
-  `${instituteId}/${assignmentId}/${studentId}/${crypto.randomUUID()}.${ext}`;
+  uploadPathIn(`${instituteId}/${assignmentId}/${studentId}/`, ext);
+
+/** Open link (23): the folder comes from open_start — <institute>/<assignment>/guest/<submitter_key>/ */
+export const uploadPathIn = (prefix: string, ext: string) => `${prefix}${crypto.randomUUID()}.${ext}`;
 
 export class UploadError extends Error {}
 

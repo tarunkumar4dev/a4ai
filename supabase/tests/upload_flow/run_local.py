@@ -47,6 +47,9 @@ FILES = [
     MIGRATIONS / "21_access_code_normalize.sql",  # idempotency
     HERE / "21_access_code_normalize_test.sql",
     HERE / "22_drop_legacy_submission_status_check_test.sql",
+    MIGRATIONS / "23_open_link.sql",
+    MIGRATIONS / "23_open_link.sql",              # idempotency
+    HERE / "23_open_link_test.sql",
 ]
 
 

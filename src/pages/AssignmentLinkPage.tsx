@@ -2,13 +2,15 @@
 // /s/:token — the link a teacher shares on WhatsApp for one assignment. Served by its own light entry (s.html →
 // src/linkMain.tsx); the App's /s/:token route is a fallback. The token comes in as a prop (no router here).
 // Link (get_assignment_link) → access code → "Is this you?" (verify_access_code) → upload + history.
+// Open link (23, identity_mode "open"): name / roll / class form → open_start → upload + history (this device only).
 // No login and no backend: anon RPCs only (docs/upload-flow-api.md §2). The confirmed code is remembered per link.
 import React, { Suspense, lazy, useEffect, useState } from "react";
 import type { UploadTokens } from "@/components/student/UploadAttempts";
 import UploadSkeleton from "@/components/student/UploadSkeleton";
-import { type LinkInfo, type VerifiedStudent, fmtCountdown, fmtIST, getAssignmentLink, getStudentIds, stateMessage,
-         verifyAccessCode } from "@/lib/uploadFlow";
-import { cleanCode, clearCode, loadCode, saveCode } from "@/lib/uploadLink/session";
+import { type LinkInfo, type VerifiedStudent, fmtCountdown, fmtIST, getAssignmentLink, getStudentIds, openStart,
+         stateMessage, verifyAccessCode } from "@/lib/uploadFlow";
+import { type OpenSubmitter, cleanCode, cleanName, clearCode, clearSubmitter, loadCode, loadSubmitter, saveCode,
+         saveSubmitter } from "@/lib/uploadLink/session";
 import { fmtLeft } from "@/lib/uploadLink/time";
 import { OfflineBanner } from "@/components/uploadLink/ui";
 import { useCountdown } from "@/hooks/useUploadLinkTimers";
@@ -61,6 +63,12 @@ export default function AssignmentLinkPage({ token }: { token: string }) {
   const [until, setUntil] = useState(0);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
+  // open link: this device's submitter + the form
+  const [submitter, setSubmitter] = useState<OpenSubmitter | null>(() => loadSubmitter(token));
+  const [editing, setEditing] = useState(false);
+  const [gName, setGName] = useState(() => submitter?.name || "");
+  const [gRoll, setGRoll] = useState(() => submitter?.roll || "");
+  const [gCls, setGCls] = useState(() => submitter?.cls || "");
 
   const load = () => {
     setLoadError("");
@@ -121,6 +129,38 @@ export default function AssignmentLinkPage({ token }: { token: string }) {
     setStep("upload");
   }
 
+  async function startGuest() {
+    const details = { name: cleanName(gName), roll: cleanName(gRoll), cls: cleanName(gCls) };
+    if (details.name.length < 2 || details.name.length > 60) { setMsg(stateMessage({ state: "invalid_name" })); return; }
+    if (busy || until) return;
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await openStart(token, details, submitter?.key);
+      if (r.state === "ok" && r.submitter_key && r.upload_prefix) {
+        const next = { key: r.submitter_key, prefix: r.upload_prefix, ...details };
+        saveSubmitter(token, next);
+        setSubmitter(next);
+        setEditing(false);
+      } else {
+        setMsg(stateMessage(r));
+        if (r.retry_after_sec) { setUntil(Date.now() + r.retry_after_sec * 1000); setNow(Date.now()); }
+      }
+    } catch (e: any) {
+      setMsg(e.message);
+    }
+    setBusy(false);
+  }
+
+  /** "Not you?" on a shared phone, or the server no longer knows this device's key: a fresh form. */
+  function startOver(lost = false) {
+    clearSubmitter(token);
+    setSubmitter(null);
+    setEditing(false);
+    setGName(""); setGRoll(""); setGCls("");
+    setMsg(lost ? stateMessage({ state: "invalid_submitter" }) : "");
+  }
+
   function changeCode() {
     clearCode(token);
     setCode("");
@@ -130,6 +170,7 @@ export default function AssignmentLinkPage({ token }: { token: string }) {
   }
 
   const asg = link?.assignment;
+  const isOpen = asg?.identity_mode === "open";
   const closesAt = asg?.closes_at ? new Date(asg.closes_at).getTime() : null;
   const opensAt = asg?.opens_at ? new Date(asg.opens_at).getTime() : null;
   const leftToClose = useCountdown(link?.state === "open" ? closesAt : null, load);
@@ -179,7 +220,51 @@ export default function AssignmentLinkPage({ token }: { token: string }) {
         {link.state === "open_late" && <p className="text-xs mt-1 font-semibold text-amber-600">The deadline has passed — uploads will be marked late.</p>}
       </div>
 
-      {step === "code" && (
+      {isOpen && (!submitter || editing) && (
+        <form className="space-y-3" data-testid="guest-step" onSubmit={e => { e.preventDefault(); startGuest(); }}>
+          <div className="space-y-1">
+            <label className="text-sm font-medium" htmlFor="g-name">Full name</label>
+            <input id="g-name" value={gName} onChange={e => setGName(e.target.value)} required minLength={2} maxLength={60}
+              autoComplete="name" className="w-full rounded-lg border px-3 py-3 text-base" style={{ borderColor: T.border }} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium" htmlFor="g-roll">Roll number <span style={{ color: T.textMuted }}>(optional)</span></label>
+              <input id="g-roll" value={gRoll} onChange={e => setGRoll(e.target.value)} maxLength={30} autoComplete="off"
+                className="w-full rounded-lg border px-3 py-3 text-base" style={{ borderColor: T.border }} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium" htmlFor="g-class">Class / section <span style={{ color: T.textMuted }}>(optional)</span></label>
+              <input id="g-class" value={gCls} onChange={e => setGCls(e.target.value)} maxLength={60} autoComplete="off"
+                className="w-full rounded-lg border px-3 py-3 text-base" style={{ borderColor: T.border }} />
+            </div>
+          </div>
+          <button type="submit" disabled={busy || !!until || cleanName(gName).length < 2} data-testid="guest-submit"
+            className={`w-full py-3 rounded-lg text-sm font-semibold ${BLACK_BTN}`}>
+            {busy ? "Please wait…" : until ? `Wait ${fmtCountdown((until - now) / 1000)}` : "Continue"}
+          </button>
+        </form>
+      )}
+
+      {isOpen && submitter && !editing && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: T.bg }} data-testid="guest-header">
+            <span style={{ color: T.textSecondary }}>
+              Submitting as <b>{submitter.name}</b>{submitter.roll ? ` · Roll ${submitter.roll}` : ""}{submitter.cls ? ` · ${submitter.cls}` : ""}
+            </span>
+            <span className="flex gap-3">
+              <button onClick={() => setEditing(true)} className="font-semibold underline" style={{ color: T.accent }}>Change details</button>
+              <button onClick={() => startOver()} className="font-semibold underline" style={{ color: T.accent }}>Not you? Start again</button>
+            </span>
+          </div>
+          <Suspense fallback={<UploadSkeleton t={T} />}>
+            <UploadAttempts assignmentRef={token} t={T}
+              guest={{ token, submitter, onLost: () => startOver(true) }} />
+          </Suspense>
+        </>
+      )}
+
+      {!isOpen && step === "code" && (
         <form className="space-y-2" data-testid="code-step" onSubmit={e => { e.preventDefault(); checkCode(); }}>
           <label className="text-sm font-medium" htmlFor="code">Enter your access code</label>
           <input id="code" value={code} onChange={e => setCode(cleanCode(e.target.value))}
@@ -196,7 +281,7 @@ export default function AssignmentLinkPage({ token }: { token: string }) {
         </form>
       )}
 
-      {step === "confirm" && who && (
+      {!isOpen && step === "confirm" && who && (
         <div className="space-y-3" data-testid="confirm-step">
           <p className="text-base font-semibold">
             Are you <b>{who.name}</b>{who.class_level ? <>, Class {who.class_level}</> : null}{who.section_name || who.batch_name ? <> ({who.section_name || who.batch_name})</> : null}?
@@ -213,7 +298,7 @@ export default function AssignmentLinkPage({ token }: { token: string }) {
         </div>
       )}
 
-      {step === "upload" && ids && (
+      {!isOpen && step === "upload" && ids && (
         <>
           <div className="flex items-center justify-between rounded-lg px-3 py-2 text-xs" style={{ background: T.bg }}>
             <span style={{ color: T.textSecondary }}>Code: <b className="font-mono">{code}</b></span>
