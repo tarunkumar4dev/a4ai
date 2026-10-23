@@ -65,3 +65,7 @@ coverage/
 *.temp
 .cache/
 .sass-cache/
+# Playwright
+test-results/
+playwright-report/
+dist-e2e/

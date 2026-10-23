@@ -179,7 +179,8 @@ This is the history list for the link page. Marks appear only after the teacher 
 - `latest`: the newest attempt that was not rejected.
 - `best`: the published attempt with the highest marks. If none is published yet, it falls back to latest.
 
-Poll this every 60 s and on window focus. Anon users can't subscribe to Realtime.
+Poll this every 10 s while the tab is visible and an attempt can still change (not `published` / `rejected`), and on
+window focus. Anon users can't subscribe to Realtime.
 
 ---
 
@@ -192,6 +193,14 @@ Who can call them: institute admins, plus staff who can see the assignment's bat
 | `publish_results(p_assignment_id uuid = null, p_submission_ids uuid[] = null)`. Pass exactly one. | `{state:"ok", published:[id], blocked:[{id,status}], skipped:[{id,status,reason}]}` |
 | `unpublish_results(p_submission_ids uuid[], p_reason text)`. Reason must be 3–500 chars. | `{state:"ok", unpublished:[id], skipped:[{id,reason}]}` |
 | `override_marks(p_submission_id, p_q_no text, p_marks numeric, p_note text = null)` | `{state:"ok", total, published, question:{…, teacher_marks, counted}}` |
+
+Added by `19_upload_link_portal.sql`:
+
+| RPC / column | Returns / meaning |
+|---|---|
+| `assignments.upload_link_enabled` (default `false`) | the teacher switched the upload link on. The portal sends only these assignments to `/s/<token>` (`get_student_feed` now returns `upload_link_token` for them); every other assignment keeps the old single-PDF `submit_assignment` flow |
+| `retry_checks(p_submission_ids uuid[])` | `{state:"ok", queued:[id], skipped:[{id,status,reason}]}`. Only `failed` attempts; re-opens the failed job of the current key version (same version — `/internal/regrade` is for a NEW key version) |
+| `submission_mark_history(p_submission_id uuid)` | `{state:"ok", events:[{at, type, by, by_me, total, remarks, details}]}` newest first, or `{state:"forbidden"}`. The audit rows for everyone who may grade the class (the table itself is owner-only) |
 
 `publish_results`:
 - **blocks** attempts in `uploaded`, `queued`, `checking`, `waiting_key` or `waiting_quota`

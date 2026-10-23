@@ -228,6 +228,25 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - Backend `_checks_today` must also exclude publish/auto_publish/unpublish audit rows.
   - Old `submit_assignment` refuses assignments that already have upload-link attempts; portal UI must switch.
 
+- [x] Upload flow UI (23 Oct, branch feat/student-upload; built ON TOP of de1668a — another session's portal commit):
+  F1 student: /s/:token = src/pages/AssignmentLinkPage.tsx + src/components/student/UploadAttempts.tsx (also used in the
+  /student portal) + src/lib/uploadFlow.ts (RPCs, preparePage) + src/lib/uploadLink/* (files: HEIC fallback / pdf.js page
+  count / quality hint / rotate; session: per-link code + resume draft; blobStore: IndexedDB; storageUpload: XHR progress;
+  status: badges). Portal: only `upload_link_enabled` assignments use the new flow, the rest keep submit_assignment.
+  F2 teacher: assignment detail → tab "📸 Copy Submissions" (src/components/teacher/copySubmissions/*): link settings + WhatsApp
+  share, per-student table, review drawer (pages, override_marks, history, red-pen), publish/unpublish, retry_checks,
+  regrade banner → POST /internal/regrade. src/lib/whatsapp.ts shared (TeacherStudentsTab uses it).
+  F3: `npm test` (vitest, 40 unit) + `npm run e2e` (Playwright, 7 tests, Supabase mocked in tests/e2e/mockSupabase.ts, runs
+  against a production build in dist-e2e; build alone ~3 min on OneDrive). Lint 0 errors (62 warnings = baseline).
+- [ ] Run `19_upload_link_portal.sql` on production (after 18) + its VERIFY block. Without 19: the teacher's "Submit link
+  banao" save fails (no upload_link_enabled column), Retry + history fail, portal never shows the new flow.
+- Known after the upload-flow UI:
+  - Students can't see a red-pen copy: anon can't sign Storage URLs (answer-sheets is teacher-owned). Needs a backend
+    endpoint or a signed-URL RPC via the worker — not built. Students see marks + per-question comments only.
+  - Per-student result share = the link page (code needed) on WhatsApp; an expiring no-code result link (share_links) is not built.
+  - Red-pen preview in the review drawer works only for the assignment's creator (answer-sheets RLS = owner folder).
+  - Teacher UI is not covered by e2e (needs a mocked staff session); its RPCs are covered by the DB harness.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

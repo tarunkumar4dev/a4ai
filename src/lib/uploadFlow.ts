@@ -5,7 +5,7 @@
 import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
 import { compressImage } from "@/lib/imageCompress";
 import {
-  JPEG_QUALITY, LONG_EDGE, analyzeQuality, classify, formatError, heicToJpeg, pdfPageCount, sizeError,
+  JPEG_QUALITY, LONG_EDGE, analyzeQuality, blobBytes, classify, formatError, heicToJpeg, pdfPageCount, sizeError,
 } from "@/lib/uploadLink/files";
 
 /* ─── RPC shapes ─────────────────────────────────────────────────── */
@@ -202,7 +202,7 @@ export async function preparePage(file: File, allowedMimes: string[], maxMb: num
 }
 
 export async function sha256Hex(blob: Blob): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  const digest = await crypto.subtle.digest("SHA-256", await blobBytes(blob));
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 

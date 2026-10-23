@@ -66,6 +66,20 @@ export async function heicToJpeg(file: File, deps: HeicDeps = defaultHeicDeps): 
 }
 
 
+/** Blob.arrayBuffer() / .text() are missing on older Android WebViews — FileReader works everywhere. */
+function readBlob(blob: Blob, as: "buffer"): Promise<ArrayBuffer>;
+function readBlob(blob: Blob, as: "text"): Promise<string>;
+function readBlob(blob: Blob, as: "buffer" | "text"): Promise<ArrayBuffer | string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as ArrayBuffer | string);
+    r.onerror = () => reject(r.error);
+    if (as === "buffer") r.readAsArrayBuffer(blob); else r.readAsText(blob);
+  });
+}
+export const blobBytes = (blob: Blob) => readBlob(blob, "buffer");
+export const blobText = (blob: Blob) => readBlob(blob, "text");
+
 /** Rough count from the raw bytes — fallback when pdf.js can't load. */
 export function pdfPagesFromBytes(text: string): number {
   const m = text.match(/\/Type\s*\/Page(?!s)\b/g);
@@ -77,13 +91,13 @@ export async function pdfPageCount(blob: Blob): Promise<number> {
     const pdfjs = await import("pdfjs-dist");
     const { default: workerUrl } = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
     pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-    const doc = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await blobBytes(blob)) }).promise;
     const n = doc.numPages;
     await doc.destroy();
     return n;
   } catch (e) {
     if (e instanceof Error && /password/i.test(e.message)) throw new Error("PDF par password hai. Bina password wali PDF bhejo.");
-    return pdfPagesFromBytes(await blob.text());
+    return pdfPagesFromBytes(await blobText(blob));
   }
 }
 
