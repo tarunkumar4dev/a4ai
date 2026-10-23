@@ -3,7 +3,7 @@
 // Students never call the backend: 4 anon RPCs (get_assignment_link, verify_access_code, create_submission,
 // my_submissions) + a direct upload to the private `submissions` bucket. Identity = the access code only.
 // plain fetch, not supabase-js: keeps the student link's first load small (src/lib/uploadLink/anonRpc.ts)
-import { anonRpc } from "@/lib/uploadLink/anonRpc";
+import { RpcError, anonRpc } from "@/lib/uploadLink/anonRpc";
 import { compressPhoto } from "@/lib/uploadLink/compressWorker";
 import {
   JPEG_QUALITY, LONG_EDGE, analyzeQuality, blobBytes, classify, formatError, heicToJpeg, pdfPageCount, sizeError,
@@ -212,15 +212,27 @@ export async function sha256Hex(blob: Blob): Promise<string> {
 // gets a NEW uuid; the old object, if any, is never referenced and is cleaned up after 24 h.
 
 /* ─── RPCs ───────────────────────────────────────────────────────── */
+export const SERVER_ERROR = "Something went wrong. Try again or contact your teacher.";
+
+/** The server answered with an error (4xx/5xx): generic text for the student, status + code in the console
+ *  (never the server's message — it can echo row data). No answer at all: the caller's offline text. */
+export function rpcFailure(name: string, e: unknown, offline: string): Error {
+  if (e instanceof RpcError && e.status > 0) {
+    console.error(`[upload-link] ${name} failed: HTTP ${e.status}${e.code ? ` code ${e.code}` : ""}`);
+    return new Error(SERVER_ERROR);
+  }
+  return new Error(offline);
+}
+
 export async function getAssignmentLink(ref: string, code?: string): Promise<LinkInfo> {
   try { return await anonRpc<LinkInfo>("get_assignment_link", { p_ref: ref, ...(code ? { p_code: code } : {}) }); }
-  catch { throw new Error("Couldn't load the link. Check your internet and reload."); }
+  catch (e) { throw rpcFailure("get_assignment_link", e, "Couldn't load the link. Check your internet and reload."); }
 }
 
 export async function verifyAccessCode(code: string): Promise<{ state: string; student?: VerifiedStudent;
                                                                   retry_after_sec?: number; scope?: "ip" | "code" }> {
   try { return await anonRpc("verify_access_code", { p_code: code }); }
-  catch { throw new Error("Couldn't check the code. Check your internet and try again."); }
+  catch (e) { throw rpcFailure("verify_access_code", e, "Couldn't check the code. Check your internet and try again."); }
 }
 
 export async function createSubmission(code: string, assignmentId: string, key: string,
@@ -229,12 +241,14 @@ export async function createSubmission(code: string, assignmentId: string, key: 
   try {
     return await anonRpc<CreateResult>("create_submission", { p_code: code, p_assignment_id: assignmentId,
                                                              p_idempotency_key: key, p_files: files });
-  } catch { throw new Error("No reply from the server. Tap Submit again — it won't be submitted twice."); }
+  } catch (e) {
+    throw rpcFailure("create_submission", e, "No reply from the server. Tap Submit again — it won't be submitted twice.");
+  }
 }
 
 export async function mySubmissions(code: string, assignmentId: string): Promise<MySubmissions> {
   try { return await anonRpc<MySubmissions>("my_submissions", { p_code: code, p_assignment_id: assignmentId }); }
-  catch { throw new Error("Couldn't load your uploads."); }
+  catch (e) { throw rpcFailure("my_submissions", e, "Couldn't load your uploads."); }
 }
 
 /** get_student_by_code (05) — only the ids the Storage path needs; null for a wrong code. */

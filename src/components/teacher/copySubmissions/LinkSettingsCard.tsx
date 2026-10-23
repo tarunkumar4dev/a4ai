@@ -153,7 +153,7 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
           </label>
           <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
             <span className="text-sm"><b>Link active</b><br /><span className="text-xs text-muted-foreground">Off = students see "uploads closed"</span></span>
-            <Switch checked={s.status === "active"} onCheckedChange={v => set("status", v ? "active" : "closed")} />
+            <Switch checked={s.status === "active"} onCheckedChange={v => set("status", v ? "active" : "archived")} />
           </label>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             {settings.upload_link_enabled ? (

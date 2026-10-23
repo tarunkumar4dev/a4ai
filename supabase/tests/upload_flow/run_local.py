@@ -6,7 +6,7 @@ Local test run for 18_upload_flow.sql on a throw-away Postgres 16 (never the liv
     <that folder>/pgtest/Scripts/python supabase/tests/upload_flow/run_local.py
 
 Builds: 00_supabase_stub.sql → 01_baseline_from_audit.sql → migrations 01, 02, 05, 05b, 10, 11, 12, 17 → 18 (twice:
-re-run must be safe) → 18_upload_flow_test.sql (SQL assertions) → test_parallel.py (two real connections).
+re-run must be safe) → 22 (the baseline has production's legacy submissions_status_check) → 18_upload_flow_test.sql (SQL assertions) → test_parallel.py (two real connections).
 The cluster lives in a temp folder and is deleted at the end.
 """
 
@@ -34,6 +34,8 @@ FILES = [
     MIGRATIONS / "17_check_copies_student_scope.sql",
     MIGRATIONS / "18_upload_flow.sql",
     MIGRATIONS / "18_upload_flow.sql",          # idempotency
+    MIGRATIONS / "22_drop_legacy_submission_status_check.sql",   # production applied it right after 18
+    MIGRATIONS / "22_drop_legacy_submission_status_check.sql",   # idempotency
     HERE / "18_upload_flow_test.sql",
     MIGRATIONS / "19_upload_link_portal.sql",
     MIGRATIONS / "19_upload_link_portal.sql",    # idempotency
@@ -44,6 +46,7 @@ FILES = [
     MIGRATIONS / "21_access_code_normalize.sql",
     MIGRATIONS / "21_access_code_normalize.sql",  # idempotency
     HERE / "21_access_code_normalize_test.sql",
+    HERE / "22_drop_legacy_submission_status_check_test.sql",
 ]
 
 
