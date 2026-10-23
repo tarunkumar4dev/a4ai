@@ -102,11 +102,11 @@ describe("createOrReuseCheckingLink", () => {
 
   it("refuses a test whose questions were never saved", async () => {
     const deps = fakeDeps({ fetchQuestions: vi.fn(async () => []) });
-    await expect(createOrReuseCheckingLink(input, deps)).rejects.toThrow("Test pehle save karo");
+    await expect(createOrReuseCheckingLink(input, deps)).rejects.toThrow("Save the test first");
     expect(deps.insertAssignment).not.toHaveBeenCalled();
   });
 
-  it("'Submissions dekho' opens the assignment's Copy Submissions tab", () => {
+  it("'View submissions' opens the assignment's Copy Submissions tab", () => {
     expect(submissionsHref("asg-1")).toBe("/dashboard?tab=assignments&assignment=asg-1&view=copies");
   });
 });

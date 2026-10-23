@@ -406,7 +406,7 @@ export default function TeacherAssignmentsTab() {
     next.delete("assignment");
     next.delete("view");
     setParams(next, { replace: true });
-    if (!a) { toast.error("Ye assignment aapki list mein nahi mila."); return; }
+    if (!a) { toast.error("This assignment isn't in your list."); return; }
     openSubmissions(a).then(() => { if (view === "copies") setSubTab("copies"); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignments, loading]);

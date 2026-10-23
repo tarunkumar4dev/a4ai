@@ -58,7 +58,7 @@ export async function createOrReuseCheckingLink(
 ): Promise<LinkResult> {
   const { test, choice, userId, instituteId } = input;
   const questions = await deps.fetchQuestions(test.id, userId);
-  if (!questions.length) throw new Error("Is test ke questions save nahi hue. Test pehle save karo.");
+  if (!questions.length) throw new Error("This test's questions aren't saved. Save the test first.");
   const cov = keyCoverage(questions);
   const meta: TestPaperMeta = {
     id: test.id, exam_title: test.title, subject: test.subject || undefined, class_grade: test.class_grade || undefined,
@@ -69,7 +69,7 @@ export async function createOrReuseCheckingLink(
   const reused = !!asg;
   if (!asg) {
     asg = await deps.insertAssignment({
-      title: test.title, description: "Test ki answer copy (saare pages) is link par upload karo.",
+      title: test.title, description: "Upload your answer copy (all pages) on this link.",
       institute_id: instituteId, batch_id: choice.batchId, created_by: userId, status: "active",
       max_marks: test.total_marks ?? null, deadline: choice.deadline, test_id: test.id,
     });
@@ -130,5 +130,5 @@ export async function testLinks(testIds: string[]): Promise<Record<string, TestL
   return out;
 }
 
-/** Where "Submissions dekho" goes: the assignment's Copy Submissions tab. */
+/** Where "View submissions" goes: the assignment's Copy Submissions tab. */
 export const submissionsHref = (assignmentId: string) => `/dashboard?tab=assignments&assignment=${assignmentId}&view=copies`;

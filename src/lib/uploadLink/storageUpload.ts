@@ -30,15 +30,15 @@ export function uploadWithProgress(path: string, blob: Blob, mime: string, onPro
         onProgress(100);
         resolve();
       } else if (xhr.status === 413 || /size/i.test(xhr.responseText)) {
-        reject(new UploadError("File bahut badi hai (max 10 MB)."));
+        reject(new UploadError("File too large (max 10 MB)."));
       } else if (xhr.status === 403 || /row-level security|policy/i.test(xhr.responseText)) {
-        reject(new UploadError("Upload band hai — link ka time khatam ho gaya ya ye format allowed nahi."));
+        reject(new UploadError("Upload refused — the link has closed or this format isn't allowed."));
       } else {
-        reject(new UploadError("Upload nahi ho paya. Retry dabao."));
+        reject(new UploadError("Upload failed. Tap Retry."));
       }
     };
-    xhr.onerror = () => reject(new UploadError("Internet slow hai ya band hai. Retry dabao."));
-    xhr.onabort = () => reject(new UploadError("Upload ruk gaya."));
+    xhr.onerror = () => reject(new UploadError("No internet or a slow connection. Tap Retry."));
+    xhr.onabort = () => reject(new UploadError("Upload stopped."));
     signal?.addEventListener("abort", () => xhr.abort());
     xhr.send(blob);
   });

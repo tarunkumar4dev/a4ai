@@ -1,12 +1,13 @@
 // src/lib/uploadLink/time.ts — server stores UTC, the UI always shows IST (display: fmtIST in src/lib/uploadFlow.ts).
 
-/** "2 din 3 ghante", "45 min", "30 sec" — for countdowns. */
+/** "2 days 3 hours", "45 min 10 sec", "30 sec" — for countdowns. */
 export function fmtLeft(ms: number): string {
   if (ms <= 0) return "0 sec";
   const s = Math.ceil(ms / 1000);
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `${d} din ${h} ghante`;
-  if (h > 0) return `${h} ghante ${m} min`;
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  if (d > 0) return `${plural(d, "day")} ${plural(h, "hour")}`;
+  if (h > 0) return `${plural(h, "hour")} ${m} min`;
   if (m > 0) return `${m} min ${s % 60} sec`;
   return `${s} sec`;
 }

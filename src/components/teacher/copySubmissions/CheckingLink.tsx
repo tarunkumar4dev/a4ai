@@ -1,7 +1,7 @@
 // src/components/teacher/copySubmissions/CheckingLink.tsx
 // "📸 Checking Link" for a test (generator result page, NCERT Test Builder, Test History ⋯ menu): save the test if
 // needed → pick class + deadline (+ advanced link settings) → the class's assignment for this test is reused or
-// created, paper + answer key attached, upload link switched on → link / WhatsApp / "Submissions dekho".
+// created, paper + answer key attached, upload link switched on → link / WhatsApp / "View submissions".
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
@@ -108,10 +108,10 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
   }, [scope.batches, batchId]);
 
   async function confirm() {
-    if (!user || !scope.instituteId) { toast.error("Checking link ke liye aapka institute se juda hona zaroori hai."); return; }
-    if (!batchId) { toast.error("Class / section chuno."); return; }
+    if (!user || !scope.instituteId) { toast.error("Join an institute to create a checking link."); return; }
+    if (!batchId) { toast.error("Choose a class / section."); return; }
     const deadlineIso = istInputToIso(deadline);
-    if (deadlineIso && deadlineIso <= new Date().toISOString()) { toast.error("Deadline aage ki honi chahiye."); return; }
+    if (deadlineIso && deadlineIso <= new Date().toISOString()) { toast.error("The deadline must be in the future."); return; }
     setBusy(true);
     try {
       const r = await createOrReuseCheckingLink({
@@ -131,7 +131,7 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
       setDone(info);
       setKeyMissing(r.keyMissing);
       setMode("done");
-      toast.success(r.reused ? "Is class ka link update ho gaya" : "Checking link ban gaya");
+      toast.success(r.reused ? "Link updated for this class" : "Checking link created");
     } catch (e) {
       toast.error(humanError(e));
     }
@@ -140,8 +140,8 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
 
   const url = done ? linkUrl(done.token) : "";
   async function copy() {
-    try { await navigator.clipboard.writeText(url); toast.success("Link copy ho gaya"); }
-    catch { toast.error("Copy nahi hua — link ko select karke copy karo"); }
+    try { await navigator.clipboard.writeText(url); toast.success("Link copied"); }
+    catch { toast.error("Couldn't copy — select the link and copy it"); }
   }
 
   return (
@@ -156,7 +156,7 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
           <div className="space-y-4" data-testid="checking-link-done">
             {keyMissing && (
               <p className="rounded-lg bg-amber-50 p-3 text-sm font-medium text-amber-800" role="alert">
-                ⚠️ Answer key nahi hai, copies check nahi hongi. Assignment edit karke key add karo.
+                ⚠️ No answer key — copies won't be checked. Edit the assignment to add a key.
               </p>
             )}
             <div className="space-y-1 text-sm">
@@ -169,41 +169,41 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
             <div className="grid gap-2 sm:grid-cols-2">
               <Button className="h-11 bg-green-600 text-white hover:bg-green-700"
                 onClick={() => openWhatsApp(shareLinkMessage(done.title || test.title, url, done.deadline))}>
-                <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp pe bhejo
+                <MessageCircle className="mr-1 h-4 w-4" /> Share on WhatsApp
               </Button>
               <Button variant="outline" className="h-11" onClick={() => { onOpenChange(false); navigate(submissionsHref(done.assignmentId)); }}>
-                Submissions dekho
+                View submissions
               </Button>
             </div>
             {links.length > 1 && (
               <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground">Is test ke baaki links</p>
+                <p className="text-xs font-semibold text-muted-foreground">Other links for this test</p>
                 {links.filter(l => l.assignmentId !== done.assignmentId).map(l => (
                   <button key={l.assignmentId} type="button" className="block w-full rounded-lg border px-3 py-2 text-left text-sm hover:bg-muted"
                     onClick={() => setDone(l)}>{l.batchName || "Class"}{l.deadline ? ` · ${fmtIST(l.deadline)}` : ""}</button>
                 ))}
               </div>
             )}
-            <Button variant="ghost" size="sm" onClick={() => setMode("form")}>+ Doosri class ke liye link</Button>
+            <Button variant="ghost" size="sm" onClick={() => setMode("form")}>+ Link for another class</Button>
           </div>
         ) : (
           <div className="space-y-4" data-testid="checking-link-form">
             {coverage?.withKey === 0 && (
               <p className="rounded-lg bg-amber-50 p-3 text-sm font-medium text-amber-800" role="alert" data-testid="key-warning">
-                ⚠️ Answer key nahi hai, copies check nahi hongi.
+                ⚠️ No answer key — copies won't be checked.
               </p>
             )}
             {coverage && coverage.withKey > 0 && coverage.withKey < coverage.total && (
-              <p className="text-xs text-muted-foreground">{coverage.total - coverage.withKey} questions ka answer nahi hai — AI unka scheme khud banayega.</p>
+              <p className="text-xs text-muted-foreground">{coverage.total - coverage.withKey} questions have no answer — the AI will make their marking scheme.</p>
             )}
             <div className="space-y-1">
               <Label htmlFor="cl-batch">Class / section</Label>
-              {scope.loading ? <p className="text-sm text-muted-foreground"><Spinner /> Classes aa rahi hain…</p>
-                : !scope.batches.length ? <p className="text-sm text-red-600">Aapki koi class nahi hai. Institute se judne ke baad link bana sakte ho.</p>
+              {scope.loading ? <p className="text-sm text-muted-foreground"><Spinner /> Loading classes…</p>
+                : !scope.batches.length ? <p className="text-sm text-red-600">You have no classes. Join an institute to create a link.</p>
                 : (
                   <select id="cl-batch" className="h-11 w-full rounded-md border bg-background px-3 text-sm" value={batchId}
                     onChange={e => setBatchId(e.target.value)}>
-                    <option value="">Select batch</option>
+                    <option value="">Select class</option>
                     {scope.batches.map(b => <option key={b.id} value={b.id}>{b.name} {b.class_level ? `(Class ${b.class_level})` : ""}</option>)}
                   </select>
                 )}
@@ -218,15 +218,15 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
                 <Input id="cl-att" type="number" min={1} max={20} value={maxAttempts} onChange={e => setMaxAttempts(Number(e.target.value))} />
               </div>
               <div className="col-span-2 space-y-1">
-                <Label htmlFor="cl-late">Deadline ke baad</Label>
+                <Label htmlFor="cl-late">After deadline</Label>
                 <select id="cl-late" className="h-11 w-full rounded-md border bg-background px-3 text-sm" value={latePolicy}
                   onChange={e => setLatePolicy(e.target.value as "accept_flag" | "reject")}>
-                  <option value="accept_flag">Lo, par "Late" mark karo</option>
-                  <option value="reject">Upload band</option>
+                  <option value="accept_flag">Accept, mark as late</option>
+                  <option value="reject">Close uploads</option>
                 </select>
               </div>
               <label className="col-span-2 flex items-center justify-between gap-3 rounded-lg border p-3">
-                <span className="text-sm"><b>Auto publish</b><br /><span className="text-xs text-muted-foreground">Saaf result turant student ko</span></span>
+                <span className="text-sm"><b>Auto publish</b><br /><span className="text-xs text-muted-foreground">Send clean results to students right away</span></span>
                 <Switch checked={autoPublish} onCheckedChange={setAutoPublish} />
               </label>
             </div>
@@ -257,9 +257,9 @@ export function CheckingLinkModal({ open, onOpenChange, test, links, onLinked }:
 
             <div className="flex flex-wrap gap-2">
               <Button className="h-11 flex-1" onClick={confirm} disabled={busy || !batchId} data-testid="checking-link-confirm">
-                {busy ? <><Spinner className="mr-2" /> Link ban raha hai…</> : "Link banao"}
+                {busy ? <><Spinner className="mr-2" /> Creating link…</> : "Create link"}
               </Button>
-              {links.length > 0 && <Button variant="ghost" className="h-11" onClick={() => setMode("done")}>Wapas</Button>}
+              {links.length > 0 && <Button variant="ghost" className="h-11" onClick={() => setMode("done")}>Back</Button>}
             </div>
           </div>
         )}

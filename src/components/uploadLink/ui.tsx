@@ -37,7 +37,7 @@ export function OfflineBanner() {
   if (online) return null;
   return (
     <div role="status" className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-red-600 px-4 py-2 text-sm font-semibold text-white">
-      <WifiOff className="h-4 w-4" /> Internet nahi hai, upload ruka hai
+      <WifiOff className="h-4 w-4" /> No internet — upload paused
     </div>
   );
 }

@@ -4,11 +4,11 @@ import type { AttemptStatus } from "../status";
 
 describe("student badge (what the student sees)", () => {
   it.each([
-    ["uploaded", "Check ho raha hai ⏳"], ["queued", "Check ho raha hai ⏳"], ["checking", "Check ho raha hai ⏳"],
-    ["failed", "Check ho raha hai ⏳"],                          // never an error for the student
-    ["checked", "Check ho gaya, teacher result bhejenge"], ["needs_review", "Check ho gaya, teacher result bhejenge"],
-    ["waiting_key", "Teacher ki taraf se pending hai"], ["waiting_quota", "Teacher ki taraf se pending hai"],
-    ["rejected", "File mein problem"], ["published", "Result aa gaya"],
+    ["uploaded", "Being checked ⏳"], ["queued", "Being checked ⏳"], ["checking", "Being checked ⏳"],
+    ["failed", "Being checked ⏳"],                              // never an error for the student
+    ["checked", "Checked — your teacher will share the result"], ["needs_review", "Checked — your teacher will share the result"],
+    ["waiting_key", "Waiting for the teacher"], ["waiting_quota", "Waiting for the teacher"],
+    ["rejected", "Problem with the file"], ["published", "Result ready"],
   ])("%s → %s", (status, label) => {
     expect(studentBadge(status).label).toBe(label);
   });
@@ -22,17 +22,17 @@ describe("student badge (what the student sees)", () => {
 });
 
 describe("teacher side", () => {
-  it("labels review reasons in Hinglish", () => {
+  it("labels review reasons in plain English", () => {
     expect(REVIEW_LABEL).toEqual({
-      empty_answer: "Khaali answer", illegible: "Padh nahi paya", low_confidence: "AI sure nahi",
-      key_missing: "Answer key missing", blank_pages: "Khaali pages", bad_scan: "Photo kharab",
+      empty_answer: "Empty answer", illegible: "Hard to read", low_confidence: "AI not sure",
+      key_missing: "Answer key missing", blank_pages: "Blank pages", bad_scan: "Poor photo",
     });
   });
 
   it("badges every status", () => {
     expect(teacherBadge("failed").tone).toBe("red");
-    expect(teacherBadge("needs_review").label).toBe("Review karein");
-    expect(teacherBadge("waiting_quota").label).toBe("Kal check hoga");
+    expect(teacherBadge("needs_review").label).toBe("Needs review");
+    expect(teacherBadge("waiting_quota").label).toBe("Checks tomorrow");
   });
 
   const a = (attempt_no: number, status: AttemptStatus, marks: number | null = null) => ({ attempt_no, status, marks });

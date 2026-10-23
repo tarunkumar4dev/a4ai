@@ -1,6 +1,6 @@
 // src/components/teacher/copySubmissions/LinkSettingsCard.tsx
-// "Submit link banao / settings" for one assignment (= the upload link, docs/upload-flow-api.md). Times are picked
-// in IST and stored in UTC. Save → link + "WhatsApp pe bhejo".
+// "Create upload link" / settings for one assignment (= the upload link, docs/upload-flow-api.md). Times are picked
+// in IST and stored in UTC. Save → link + "Share on WhatsApp".
 
 import { useEffect, useState } from "react";
 import { Copy, Link2, MessageCircle } from "lucide-react";
@@ -40,8 +40,8 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
 
   async function save(enable?: boolean) {
     const opens = istInputToIso(opensAt), closes = istInputToIso(deadline);
-    if (opens && closes && opens >= closes) { toast.error("Opening time deadline se pehle hona chahiye."); return; }
-    if (!s.allowed_mimes.length) { toast.error("Kam se kam ek format chuno."); return; }
+    if (opens && closes && opens >= closes) { toast.error("The opening time must be before the deadline."); return; }
+    if (!s.allowed_mimes.length) { toast.error("Choose at least one format."); return; }
     setSaving(true);
     try {
       await saveLinkSettings(assignmentId, {
@@ -50,18 +50,18 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
         max_attempts: clamp(s.max_attempts, 1, 20), max_mb: clamp(s.max_mb, 1, 10), max_pages: clamp(s.max_pages, 1, 30),
         allowed_mimes: s.allowed_mimes, late_policy: s.late_policy, count_policy: s.count_policy, auto_publish: s.auto_publish,
       });
-      toast.success(enable ? "Upload link on ho gaya" : "Settings save ho gayi");
+      toast.success(enable ? "Upload link turned on" : "Settings saved");
       setOpen(false);
       onSaved();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Save nahi hua");
+      toast.error(e instanceof Error ? e.message : "Couldn't save");
     }
     setSaving(false);
   }
 
   async function copy() {
-    try { await navigator.clipboard.writeText(url); toast.success("Link copy ho gaya"); }
-    catch { toast.error("Copy nahi hua — link ko select karke copy karo"); }
+    try { await navigator.clipboard.writeText(url); toast.success("Link copied"); }
+    catch { toast.error("Couldn't copy — select the link and copy it"); }
   }
 
   return (
@@ -73,7 +73,7 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
           ? <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">On</span>
           : <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">Off</span>}
         {settings.upload_link_enabled && (
-          <Button variant="ghost" size="sm" onClick={() => setOpen(o => !o)}>{open ? "Settings band karo" : "Settings"}</Button>
+          <Button variant="ghost" size="sm" onClick={() => setOpen(o => !o)}>{open ? "Hide settings" : "Settings"}</Button>
         )}
       </div>
 
@@ -83,7 +83,7 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
           <Button variant="outline" size="sm" onClick={copy}><Copy className="mr-1 h-4 w-4" /> Copy</Button>
           <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
             onClick={() => openWhatsApp(shareLinkMessage(title, url, settings.deadline))}>
-            <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp pe bhejo
+            <MessageCircle className="mr-1 h-4 w-4" /> Share on WhatsApp
           </Button>
         </div>
       )}
@@ -91,14 +91,14 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
       {open && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor="ls-open">Upload kab se (IST)</Label>
+            <Label htmlFor="ls-open">Uploads open (IST)</Label>
             <Input id="ls-open" type="datetime-local" value={opensAt} onChange={e => setOpensAt(e.target.value)} />
-            <p className="text-xs text-muted-foreground">Khaali = abhi se</p>
+            <p className="text-xs text-muted-foreground">Empty = open now</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="ls-deadline">Deadline (IST)</Label>
             <Input id="ls-deadline" type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} />
-            <p className="text-xs text-muted-foreground">2 min ki grace milti hai</p>
+            <p className="text-xs text-muted-foreground">Includes 2 minutes of grace</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="ls-att">Max attempts</Label>
@@ -128,40 +128,40 @@ export default function LinkSettingsCard({ assignmentId, title, settings, onSave
                 );
               })}
             </div>
-            <p className="text-xs text-muted-foreground">iPhone ki HEIC photo browser mein hi JPG ban jaati hai — JPG on rakhein.</p>
+            <p className="text-xs text-muted-foreground">iPhone HEIC photos are converted to JPG in the browser — keep JPG on.</p>
           </fieldset>
           <div className="space-y-1">
-            <Label htmlFor="ls-late">Deadline ke baad</Label>
+            <Label htmlFor="ls-late">After deadline</Label>
             <select id="ls-late" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={s.late_policy}
               onChange={e => set("late_policy", e.target.value as LinkSettings["late_policy"])}>
-              <option value="accept_flag">Lo, par "Late" mark karo</option>
-              <option value="reject">Upload band</option>
+              <option value="accept_flag">Accept, mark as late</option>
+              <option value="reject">Close uploads</option>
             </select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ls-count">Kaunsa attempt count ho</Label>
+            <Label htmlFor="ls-count">Attempt that counts</Label>
             <select id="ls-count" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={s.count_policy}
               onChange={e => set("count_policy", e.target.value as LinkSettings["count_policy"])}>
-              <option value="latest">Aakhri upload (default)</option>
-              <option value="best">Sabse achhe marks</option>
+              <option value="latest">Latest upload (default)</option>
+              <option value="best">Best marks</option>
             </select>
           </div>
           <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
-            <span className="text-sm"><b>Auto publish</b><br /><span className="text-xs text-muted-foreground">Saaf result turant student ko (review wale nahi)</span></span>
+            <span className="text-sm"><b>Auto publish</b><br /><span className="text-xs text-muted-foreground">Send clean results to students right away (not ones needing review)</span></span>
             <Switch checked={s.auto_publish} onCheckedChange={v => set("auto_publish", v)} />
           </label>
           <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
-            <span className="text-sm"><b>Link active</b><br /><span className="text-xs text-muted-foreground">Off = students ko "upload band" dikhega</span></span>
+            <span className="text-sm"><b>Link active</b><br /><span className="text-xs text-muted-foreground">Off = students see "uploads closed"</span></span>
             <Switch checked={s.status === "active"} onCheckedChange={v => set("status", v ? "active" : "closed")} />
           </label>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             {settings.upload_link_enabled ? (
               <>
                 <Button onClick={() => save()} disabled={saving}>{saving ? <Spinner /> : "Save"}</Button>
-                <Button variant="outline" onClick={() => save(false)} disabled={saving}>Upload link band karo</Button>
+                <Button variant="outline" onClick={() => save(false)} disabled={saving}>Turn off upload link</Button>
               </>
             ) : (
-              <Button onClick={() => save(true)} disabled={saving} data-testid="enable-link">{saving ? <Spinner /> : "Submit link banao"}</Button>
+              <Button onClick={() => save(true)} disabled={saving} data-testid="enable-link">{saving ? <Spinner /> : "Create upload link"}</Button>
             )}
           </div>
         </div>

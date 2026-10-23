@@ -22,6 +22,7 @@ import {
   loadCopySubmissions, loadLinkSettings, publishResults, regradeSubmissions, resultMessage, retryChecks, unpublishResults,
 } from "@/lib/uploadLink/teacher";
 import { openWhatsApp } from "@/lib/whatsapp";
+import { rejectText } from "@/lib/uploadLink/messages";
 import { Chip, Spinner, ToneChip } from "@/components/uploadLink/ui";
 import LinkSettingsCard from "./LinkSettingsCard";
 import ReviewDrawer from "./ReviewDrawer";
@@ -111,19 +112,19 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
   }
 
   async function publishAll() {
-    if (!(await ask({ title: "Sab publish karein?", confirmLabel: "Publish karo",
-      description: "Jo copies check ho chuki hain unke marks students ko dikhne lagenge. Jo abhi check ho rahi hain wo baad mein publish hongi." }))) return;
+    if (!(await ask({ title: "Publish all results?", confirmLabel: "Publish all",
+      description: "Students will see the marks of checked copies. Copies still being checked can be published later." }))) return;
     setBusy("all");
     try {
       const r = await publishResults({ assignmentId: assignment.id });
-      if (r.state !== "ok") throw new Error(r.state === "forbidden" ? "Aapko is assignment ka access nahi hai." : "Publish nahi hua.");
+      if (r.state !== "ok") throw new Error(r.state === "forbidden" ? "You don't have access to this assignment." : "Couldn't publish.");
       const n = r.published?.length || 0, b = r.blocked || [];
-      if (n) toast.success(`${n} result publish ho gaye`);
+      if (n) toast.success(`${n} result${n === 1 ? "" : "s"} published`);
       if (b.length) {
-        toast.warning(`${b.length} copies abhi check ho rahi hain, unke baad publish hongi`);
+        toast.warning(`${b.length} ${b.length === 1 ? "copy is" : "copies are"} still being checked — publish ${b.length === 1 ? "it" : "them"} after checking`);
         flagBlocked(b.map(x => x.id));
       }
-      if (!n && !b.length) toast.info("Publish karne ke liye koi checked copy nahi hai.");
+      if (!n && !b.length) toast.info("No checked copies to publish.");
       await load(true);
     } catch (e) { toast.error(humanError(e)); }
     setBusy(null);
@@ -133,9 +134,9 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
     setBusy(a.id);
     try {
       const r = await publishResults({ submissionIds: [a.id] });
-      if (r.blocked?.length) { toast.warning("Ye copy abhi check ho rahi hai, uske baad publish hogi"); flagBlocked([a.id]); }
-      else if (r.published?.length) toast.success("Result publish ho gaya");
-      else toast.error("Publish nahi hua.");
+      if (r.blocked?.length) { toast.warning("This copy is still being checked — publish it after checking"); flagBlocked([a.id]); }
+      else if (r.published?.length) toast.success("Result published");
+      else toast.error("Couldn't publish.");
       await load(true);
     } catch (e) { toast.error(humanError(e)); }
     setBusy(null);
@@ -144,12 +145,12 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
   async function confirmUnpublish() {
     if (!unpub) return;
     const reason = unpub.reason.trim();
-    if (reason.length < 3) { toast.error("Wajah likho (kam se kam 3 akshar)"); return; }
+    if (reason.length < 3) { toast.error("Enter a reason (at least 3 characters)"); return; }
     setBusy("unpub");
     try {
       const r = await unpublishResults(unpub.ids, reason);
-      if (r.state !== "ok") throw new Error(r.message || "Unpublish nahi hua.");
-      toast.success("Result hata diya — student ko ab marks nahi dikhenge");
+      if (r.state !== "ok") throw new Error(r.message || "Couldn't unpublish.");
+      toast.success("Result unpublished — the student no longer sees the marks");
       setUnpub(null);
       await load(true);
     } catch (e) { toast.error(humanError(e)); }
@@ -160,21 +161,21 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
     setBusy(a.id);
     try {
       const r = await retryChecks([a.id]);
-      if (r.queued?.length) toast.success("Dobara check ke liye queue mein daal diya");
-      else toast.error("Retry nahi hua — copy abhi failed status mein nahi hai.");
+      if (r.queued?.length) toast.success("Queued for checking again");
+      else toast.error("Couldn't retry — this copy hasn't failed.");
       await load(true);
     } catch (e) { toast.error(humanError(e)); }
     setBusy(null);
   }
 
   async function regrade() {
-    if (!(await ask({ title: `${stale.length} copies re-grade karein?`, confirmLabel: "Re-grade karo",
-      description: "Nayi answer key se dobara check hoga. Published results pehle unpublish honge. Purane marks change history (audit) mein rahenge." }))) return;
+    if (!(await ask({ title: `Re-grade ${stale.length} ${stale.length === 1 ? "copy" : "copies"}?`, confirmLabel: "Re-grade",
+      description: "They will be checked again with the new answer key. Published results are unpublished first. Old marks stay in the change history." }))) return;
     setBusy("regrade");
     try {
       const r = await regradeSubmissions(assignment.id, stale.map(a => a.id));
       const queued = Array.isArray(r.queued) ? r.queued.length : null;
-      toast.success(queued != null ? `${queued} copies re-grade ke liye queue mein` : "Re-grade shuru ho gaya");
+      toast.success(queued != null ? `${queued} ${queued === 1 ? "copy" : "copies"} queued for re-grading` : "Re-grading started");
       await load(true);
     } catch (e) { toast.error(humanError(e)); }
     setBusy(null);
@@ -196,15 +197,15 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
         {a.status === "published" && (
           <>
             <Button size="sm" variant="outline" onClick={() => setUnpub({ ids: [a.id], reason: "" })}>Unpublish</Button>
-            <Button size="sm" variant="ghost" className="text-green-700" onClick={() => shareResult(row)} title="Result WhatsApp pe bhejo">
+            <Button size="sm" variant="ghost" className="text-green-700" onClick={() => shareResult(row)} title="Share result on WhatsApp">
               <MessageCircle className="h-4 w-4" />
             </Button>
           </>
         )}
         {a.status === "failed" && (
-          <Button size="sm" variant="destructive" onClick={() => retry(a)} disabled={b}>{b ? <Spinner /> : "Dobara check karo"}</Button>
+          <Button size="sm" variant="destructive" onClick={() => retry(a)} disabled={b}>{b ? <Spinner /> : "Check again"}</Button>
         )}
-        {a.status === "waiting_key" && <Button size="sm" variant="outline" onClick={onEditAssignment}>Answer key add karo</Button>}
+        {a.status === "waiting_key" && <Button size="sm" variant="outline" onClick={onEditAssignment}>Add answer key</Button>}
       </div>
     );
   }
@@ -213,10 +214,10 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
     return (
       <div className="space-y-1">
         <ToneChip badge={teacherBadge(a.status)} />
-        {a.status === "failed" && <p className="max-w-[220px] text-xs text-red-600">{a.job?.error || a.sheet?.error || "Check fail ho gaya."}</p>}
-        {a.status === "waiting_quota" && <p className="text-xs text-muted-foreground">Aaj ki check limit poori, kal auto check hoga</p>}
-        {a.status === "waiting_key" && <p className="text-xs text-muted-foreground">Answer key ke bina check nahi hoga</p>}
-        {a.status === "rejected" && a.reject_reasons[0] && <p className="max-w-[220px] text-xs text-red-600">{a.reject_reasons[0].message}</p>}
+        {a.status === "failed" && <p className="max-w-[220px] text-xs text-red-600">{a.job?.error || a.sheet?.error || "The check failed."}</p>}
+        {a.status === "waiting_quota" && <p className="text-xs text-muted-foreground">Today's check limit is used up — it will be checked tomorrow</p>}
+        {a.status === "waiting_key" && <p className="text-xs text-muted-foreground">Can't be checked without an answer key</p>}
+        {a.status === "rejected" && a.reject_reasons[0] && <p className="max-w-[220px] text-xs text-red-600">{rejectText(a.reject_reasons[0])}</p>}
       </div>
     );
   }
@@ -231,12 +232,12 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
     );
   }
 
-  if (loading && !settings) return <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Spinner /> Load ho raha hai…</p>;
+  if (loading && !settings) return <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Spinner /> Loading…</p>;
   if (error && !settings) {
     return (
       <div className="rounded-2xl border p-6 text-center">
         <p className="text-sm text-red-600">{error}</p>
-        <Button className="mt-3" onClick={() => load()}>Dobara try karo</Button>
+        <Button className="mt-3" onClick={() => load()}>Try again</Button>
       </div>
     );
   }
@@ -249,9 +250,9 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
 
       {stale.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:bg-amber-900/30" data-testid="regrade-banner">
-          <p className="flex-1 text-sm"><b>Key badli hai, purani copies re-grade karein?</b> {stale.length} copies purani answer key se check hui hain.
-            <span className="block text-xs text-muted-foreground">Purane marks change history (audit) mein rahenge.</span></p>
-          <Button onClick={regrade} disabled={busy === "regrade"}>{busy === "regrade" ? <Spinner /> : "Re-grade karo"}</Button>
+          <p className="flex-1 text-sm"><b>The answer key changed. Re-grade older copies?</b> {stale.length} {stale.length === 1 ? "copy was" : "copies were"} checked with the old key.
+            <span className="block text-xs text-muted-foreground">Old marks stay in the change history.</span></p>
+          <Button onClick={regrade} disabled={busy === "regrade"}>{busy === "regrade" ? <Spinner /> : "Re-grade"}</Button>
         </div>
       )}
 
@@ -260,23 +261,23 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="flex-1 text-base font-bold">
               Copies <span className="text-sm font-normal text-muted-foreground">
-                · {counts.students} students · {counts.pipeline} check mein · {counts.review} review · {counts.published} published
+                · {counts.students} students · {counts.pipeline} being checked · {counts.review} to review · {counts.published} published
               </span>
             </h3>
             <Button variant="ghost" size="sm" onClick={() => load(true)} title="Refresh"><RefreshCw className="h-4 w-4" /></Button>
             <Button onClick={publishAll} disabled={busy === "all" || (counts.ready === 0 && counts.pipeline === 0)} data-testid="publish-all">
-              {busy === "all" ? <Spinner /> : "Sab publish karo"}
+              {busy === "all" ? <Spinner /> : "Publish all"}
             </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <select className="h-9 rounded-md border bg-background px-2" value={status} onChange={e => setStatus(e.target.value as StatusFilter)} aria-label="Status filter">
-              <option value="all">Sab status</option>
-              <option value="pipeline">Check ho rahe</option>
+              <option value="all">All statuses</option>
+              <option value="pipeline">Being checked</option>
               <option value="checked">Checked</option>
-              <option value="needs_review">Review chahiye</option>
+              <option value="needs_review">Needs review</option>
               <option value="published">Published</option>
-              <option value="problem">Fail / reject</option>
+              <option value="problem">Failed / rejected</option>
             </select>
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={onlyReview} onChange={e => setOnlyReview(e.target.checked)} /> Needs review</label>
             <label className="flex items-center gap-1.5"><input type="checkbox" checked={onlyLate} onChange={e => setOnlyLate(e.target.checked)} /> Late</label>
@@ -284,10 +285,10 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
 
           {rows.length === 0 ? (
             <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground" data-testid="copies-empty">
-              Abhi kisi student ne copy upload nahi ki. Link WhatsApp pe bhejo.
+              No copies uploaded yet. Share the link on WhatsApp.
             </p>
           ) : shown.length === 0 ? (
-            <p className="p-4 text-center text-sm text-muted-foreground">Is filter mein koi copy nahi.</p>
+            <p className="p-4 text-center text-sm text-muted-foreground">No copies match this filter.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[860px] text-sm" data-testid="copies-table">
@@ -344,8 +345,8 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            {settings.count_policy === "best" ? "Har student ka sabse achhe marks wala upload dikh raha hai." : "Har student ka aakhri upload dikh raha hai."}
-            {" "}Purane attempts dekhne ke liye naam pe click karo.
+            {settings.count_policy === "best" ? "Showing each student's best-scoring upload." : "Showing each student's latest upload."}
+            {" "}Click a name to see older attempts.
           </p>
         </section>
       )}
@@ -356,15 +357,15 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
       <AlertDialog open={!!unpub} onOpenChange={o => { if (!o) setUnpub(null); }}>
         <AlertDialogContent className="z-[80] rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Result unpublish karein?</AlertDialogTitle>
-            <AlertDialogDescription>Student ko marks dikhna band ho jayega. Wajah change history mein save hogi.</AlertDialogDescription>
+            <AlertDialogTitle>Unpublish this result?</AlertDialogTitle>
+            <AlertDialogDescription>The student will stop seeing the marks. The reason is saved in the change history.</AlertDialogDescription>
           </AlertDialogHeader>
-          <Textarea autoFocus placeholder="Wajah (jaise: galat key lagi thi)" value={unpub?.reason || ""} maxLength={500}
+          <Textarea autoFocus placeholder="Reason (e.g. the wrong key was used)" value={unpub?.reason || ""} maxLength={500}
             onChange={e => setUnpub(u => (u ? { ...u, reason: e.target.value } : u))} />
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" disabled={busy === "unpub"}
-              onClick={e => { e.preventDefault(); confirmUnpublish(); }}>Unpublish karo</AlertDialogAction>
+              onClick={e => { e.preventDefault(); confirmUnpublish(); }}>Unpublish</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -1,6 +1,6 @@
 // src/pages/AssignmentLinkPage.tsx
 // Route: /s/:token — the link a teacher shares on WhatsApp for one assignment.
-// Link (get_assignment_link) → access code → "Ye aap hi ho?" (verify_access_code) → upload + history.
+// Link (get_assignment_link) → access code → "Is this you?" (verify_access_code) → upload + history.
 // No login and no backend: anon RPCs only (docs/upload-flow-api.md §2). The confirmed code is remembered per link.
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -95,7 +95,7 @@ export default function AssignmentLinkPage() {
     setBusy(false);
     if (error || !data) {
       clearCode(token);
-      if (remember) setMsg("Code check nahi hua. Dobara try karo.");
+      if (remember) setMsg("Couldn't check the code. Try again.");
       setStep("code");
       return;
     }
@@ -121,30 +121,30 @@ export default function AssignmentLinkPage() {
   const shownMsg = msg.replace("{countdown}", fmtCountdown((until - now) / 1000));
 
   let body: React.ReactNode;
-  if (!link && !loadError) body = <p className="text-sm py-6 text-center" style={{ color: T.textMuted }}>Link khul raha hai…</p>;
+  if (!link && !loadError) body = <p className="text-sm py-6 text-center" style={{ color: T.textMuted }}>Opening the link…</p>;
   else if (loadError && !link) body = (
-    <Friendly icon="📶" title="Link load nahi hua">
+    <Friendly icon="📶" title="Couldn't load the link">
       <p>{loadError}</p>
-      <button onClick={load} className="mt-3 rounded-lg px-4 py-2 text-white text-sm font-medium" style={{ background: T.accent }}>Dobara try karo</button>
+      <button onClick={load} className="mt-3 rounded-lg px-4 py-2 text-white text-sm font-medium" style={{ background: T.accent }}>Try again</button>
     </Friendly>
   );
   else if (!link || link.state === "not_found" || (!asg && link.state !== "inactive")) body = (
-    <Friendly icon="🔍" title="Ye link sahi nahi hai">
-      Link poora copy hua hai ya nahi, check karo. Phir bhi na khule to <b>teacher se baat karo</b>.
+    <Friendly icon="🔍" title="This link doesn't work">
+      Check that the whole link was copied. If it still doesn't open, <b>talk to your teacher</b>.
     </Friendly>
   );
   else if (link.state === "inactive") body = (
-    <Friendly icon="⏸️" title={link.title || "Upload band hai"}>Teacher ne abhi ye upload band kiya hua hai. <b>Teacher se baat karo.</b></Friendly>
+    <Friendly icon="⏸️" title={link.title || "Uploads are closed"}>Your teacher has closed uploads for now. <b>Talk to your teacher.</b></Friendly>
   );
   else if (link.state === "not_open" && asg) body = (
     <Friendly icon="🕒" title={asg.title}>
-      <p>Upload abhi shuru nahi hua. {asg.opens_at ? <>Ye <b>{fmtIST(asg.opens_at)}</b> ko khulega.</> : null}</p>
-      {opensAt && <p className="mt-2 font-semibold" data-testid="countdown">Khulne mein: {fmtLeft(leftToOpen)}</p>}
+      <p>Uploads haven't opened yet.{asg.opens_at ? <> They open on <b>{fmtIST(asg.opens_at)}</b>.</> : null}</p>
+      {opensAt && <p className="mt-2 font-semibold" data-testid="countdown">Opens in {fmtLeft(leftToOpen)}</p>}
     </Friendly>
   );
   else if (link.state === "closed" && asg) body = (
     <Friendly icon="⌛" title={asg.title}>
-      Upload ka time {asg.closes_at ? <b>{fmtIST(asg.closes_at)}</b> : null} ko khatam ho gaya. Late upload allowed nahi hai — <b>teacher se baat karo</b>.
+      Uploads closed{asg.closes_at ? <> on <b>{fmtIST(asg.closes_at)}</b></> : null}. Late uploads aren't allowed — <b>talk to your teacher</b>.
     </Friendly>
   );
   else if (asg) body = (
@@ -153,19 +153,19 @@ export default function AssignmentLinkPage() {
         <h1 className="text-lg sm:text-xl font-bold break-words">{asg.title}</h1>
         <p className="text-xs sm:text-sm mt-1" style={{ color: T.textSecondary }}>
           {asg.batch_name ? `${asg.batch_name} · ` : ""}{asg.max_marks ? `${asg.max_marks} marks · ` : ""}
-          {asg.closes_at ? `Deadline ${fmtIST(asg.closes_at)}` : "Koi deadline nahi"}
+          {asg.closes_at ? `Deadline ${fmtIST(asg.closes_at)}` : "No deadline"}
         </p>
         {link.state === "open" && closesAt && (
           <p className="text-xs mt-1 font-semibold" style={{ color: leftToClose < 3_600_000 ? "#DC2626" : T.teal }} data-testid="deadline-countdown">
-            ⏳ Time bacha: {fmtLeft(leftToClose)}
+            ⏳ {fmtLeft(leftToClose)} left
           </p>
         )}
-        {link.state === "open_late" && <p className="text-xs mt-1 font-semibold text-amber-600">Deadline nikal gayi — ab upload late mark hoga.</p>}
+        {link.state === "open_late" && <p className="text-xs mt-1 font-semibold text-amber-600">The deadline has passed — uploads will be marked late.</p>}
       </div>
 
       {step === "code" && (
         <form className="space-y-2" data-testid="code-step" onSubmit={e => { e.preventDefault(); checkCode(); }}>
-          <label className="text-sm font-medium" htmlFor="code">Apna access code daalo</label>
+          <label className="text-sm font-medium" htmlFor="code">Enter your access code</label>
           <input id="code" value={code} onChange={e => setCode(cleanCode(e.target.value))}
             onPaste={e => { e.preventDefault(); setCode(cleanCode(e.clipboardData.getData("text"))); }}
             autoComplete="off" autoCapitalize="characters" spellCheck={false} inputMode="text"
@@ -176,7 +176,7 @@ export default function AssignmentLinkPage() {
           <button type="submit" disabled={busy || !!until || code.length < 6} data-testid="code-submit"
             className="w-full py-3 rounded-lg text-white text-sm font-semibold disabled:opacity-60"
             style={{ background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})` }}>
-            {busy ? "Check ho raha hai…" : until ? `Ruko… ${fmtCountdown((until - now) / 1000)}` : "Aage badho"}
+            {busy ? "Checking…" : until ? `Wait ${fmtCountdown((until - now) / 1000)}` : "Continue"}
           </button>
         </form>
       )}
@@ -184,7 +184,7 @@ export default function AssignmentLinkPage() {
       {step === "confirm" && who && (
         <div className="space-y-3" data-testid="confirm-step">
           <p className="text-base font-semibold">
-            Kya aap <b>{who.name}</b>{who.class_level ? <>, Class {who.class_level}</> : null}{who.section_name || who.batch_name ? <> ({who.section_name || who.batch_name})</> : null} ho?
+            Are you <b>{who.name}</b>{who.class_level ? <>, Class {who.class_level}</> : null}{who.section_name || who.batch_name ? <> ({who.section_name || who.batch_name})</> : null}?
           </p>
           <div className="rounded-lg border p-3 text-sm space-y-0.5" style={{ borderColor: T.border, background: T.bg }}>
             <p style={{ color: T.textSecondary }}>{[who.roll_no && `Roll ${who.roll_no}`, who.institute_name].filter(Boolean).join(" · ")}</p>
@@ -192,8 +192,8 @@ export default function AssignmentLinkPage() {
           </div>
           <div className="flex gap-2">
             <button onClick={() => openWithCode(code, true)} disabled={busy} className="flex-1 py-3 rounded-lg text-white text-sm font-semibold"
-              style={{ background: T.teal }}>Haan, main hi hoon</button>
-            <button onClick={changeCode} className="flex-1 py-3 rounded-lg border text-sm" style={{ borderColor: T.border }}>Nahi, ye main nahi</button>
+              style={{ background: T.teal }}>Yes, that's me</button>
+            <button onClick={changeCode} className="flex-1 py-3 rounded-lg border text-sm" style={{ borderColor: T.border }}>No, that's not me</button>
           </div>
         </div>
       )}
@@ -203,7 +203,7 @@ export default function AssignmentLinkPage() {
           <div className="flex items-center justify-between rounded-lg px-3 py-2 text-xs" style={{ background: T.bg }}>
             <span style={{ color: T.textSecondary }}>Code: <b className="font-mono">{code}</b></span>
             <button onClick={changeCode} className="font-semibold underline" style={{ color: T.accent }} data-testid="change-code">
-              Logout / code badlo
+              Log out / change code
             </button>
           </div>
           <UploadAttempts code={code} assignmentRef={token} student={ids} t={T} />

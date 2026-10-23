@@ -21,6 +21,7 @@ import { deleteBlob, deleteBlobs, getBlob, putBlob } from "@/lib/uploadLink/blob
 import { uploadPath, uploadWithProgress } from "@/lib/uploadLink/storageUpload";
 import { needsPolling, studentBadge } from "@/lib/uploadLink/status";
 import { useOnline } from "@/hooks/useUploadLinkTimers";
+import { fileErrorText, rejectText, warningText } from "@/lib/uploadLink/messages";
 
 
 export type UploadTokens = {
@@ -140,8 +141,8 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       const { kept, lost } = resumeItems(draft, id => blobs.current.has(id));
       if (cancelled) return;
       commit(kept);
-      if (kept.length) setNotice({ text: `Pichla upload yaad hai: ${kept.filter(i => i.path).length}/${kept.length} page upload ho chuke. Submit dabao.`, tone: "info" });
-      if (lost) setPickErrors([`${lost} page wapas nahi mil paye — unhe dobara add karo.`]);
+      if (kept.length) setNotice({ text: `Your last upload was saved: ${kept.filter(i => i.path).length} of ${kept.length} pages uploaded. Tap Submit.`, tone: "info" });
+      if (lost) setPickErrors([`${lost} page${lost === 1 ? "" : "s"} couldn't be restored — add ${lost === 1 ? "it" : "them"} again.`]);
     })();
     return () => { cancelled = true; };
   }, [assignmentId, code]);
@@ -168,7 +169,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       try {
         const p = await preparePage(f, asg.allowed_mimes, asg.max_mb);
         const sha = await sha256Hex(p.blob);
-        if (itemsRef.current.some(i => i.sha256 === sha)) { errs.push(`${f.name}: ye page pehle se add hai`); continue; }
+        if (itemsRef.current.some(i => i.sha256 === sha)) { errs.push(`${f.name}: this page is already added`); continue; }
         const id = crypto.randomUUID();
         blobs.current.set(id, p.blob);
         await putBlob(id, p.blob);
@@ -176,7 +177,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
         commit([...itemsRef.current, { id, name: f.name, mime: p.mime, ext: p.ext, size: p.size, sha256: sha,
                                        pages: p.pages, warning: p.warning, path: null }]);
       } catch (e: any) {
-        errs.push(e.message || `${f.name}: file khul nahi payi`);
+        errs.push(e.message || `${f.name}: couldn't open this file`);
       } finally {
         setProcessing(n => n - 1);
       }
@@ -210,7 +211,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
   async function uploadOne(it: DraftItem): Promise<boolean> {
     if (!assignmentId) return false;
     const blob = blobs.current.get(it.id) ?? (await getBlob(it.id));
-    if (!blob) { setFailed(f => ({ ...f, [it.id]: "Ye page phone se hat gaya, dobara add karo." })); return false; }
+    if (!blob) { setFailed(f => ({ ...f, [it.id]: "This page is no longer on the phone. Add it again." })); return false; }
     const path = uploadPath(student.institute_id, assignmentId, student.id, it.ext);
     setFailed(f => { const n = { ...f }; delete n[it.id]; return n; });
     setProgress(p => ({ ...p, [it.id]: 0 }));
@@ -219,7 +220,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       commit(itemsRef.current.map(i => (i.id === it.id ? { ...i, path } : i)));
       return true;
     } catch (e: any) {
-      setFailed(f => ({ ...f, [it.id]: e.message || "Upload nahi ho paya." }));
+      setFailed(f => ({ ...f, [it.id]: e.message || "Upload failed." }));
       return false;
     }
   }
@@ -244,16 +245,16 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
 
   async function submit() {
     if (!asg || !assignmentId || busyRef.current) return;            // double tap → one call
-    if (!itemsRef.current.length) { setNotice({ text: "Pehle copy ke pages chuno.", tone: "error" }); return; }
-    if (processing > 0) { setNotice({ text: "Photos tayyar ho rahi hain, ek second…", tone: "info" }); return; }
-    if (!navigator.onLine) { setNotice({ text: "Internet nahi hai. Net aane par Submit dobara dabao.", tone: "error" }); return; }
+    if (!itemsRef.current.length) { setNotice({ text: "Add the pages of your answer copy first.", tone: "error" }); return; }
+    if (processing > 0) { setNotice({ text: "Preparing photos, one moment…", tone: "info" }); return; }
+    if (!navigator.onLine) { setNotice({ text: "No internet. Tap Submit again when you're back online.", tone: "error" }); return; }
     busyRef.current = true;
     setBusy(true);
     setNotice(null);
     setWarnings([]);
     try {
       if (!(await uploadPending())) {
-        setNotice({ text: "Kuch pages upload nahi hue. Unpe Retry dabao, phir Submit.", tone: "error" });
+        setNotice({ text: "Some pages didn't upload. Tap Retry on them, then Submit.", tone: "error" });
         return;
       }
       const key = attemptKey(assignmentId, code);       // same key on every retry of this attempt
@@ -269,12 +270,12 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
         setThumbs({});
         setProgress({});
         deleteBlobs(ids);
-        setWarnings((r.warnings || []).map(w => w.message));
-        setNotice({ text: `✅ ${r.submission?.label || "Upload"} submit ho gaya. Check hone ke baad teacher result bhejenge.`, tone: "ok" });
+        setWarnings((r.warnings || []).map(w => warningText(w)));
+        setNotice({ text: `✅ ${r.submission?.label || "Upload"} submitted. Your teacher will share the result after checking.`, tone: "ok" });
         await refresh();
         onChange?.();
       } else if (r.state === "invalid_files") {
-        const byIndex = new Map((r.errors || []).map(e => [e.index, e.message]));
+        const byIndex = new Map((r.errors || []).map(e => [e.index, fileErrorText(e, asg.max_mb)]));
         // a file the server refused is uploaded again (new name) on the next try
         commit(itemsRef.current.map((x, i) => (byIndex.has(i + 1) ? { ...x, path: null } : x)));
         setFailed(f => {
@@ -282,13 +283,13 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
           itemsRef.current.forEach((x, i) => { if (byIndex.has(i + 1)) n[x.id] = byIndex.get(i + 1)!; });
           return n;
         });
-        setNotice({ text: (r.errors || []).map(e => e.message).join(" "), tone: "error" });
+        setNotice({ text: (r.errors || []).map(e => fileErrorText(e, asg.max_mb)).join(" "), tone: "error" });
       } else {
         showResult(r);
         if (["max_attempts", "closed", "inactive", "not_found"].includes(r.state)) refresh();
       }
     } catch (e: any) {
-      setNotice({ text: e.message || "Upload nahi hua. Dobara Submit dabao.", tone: "error" });
+      setNotice({ text: e.message || "Upload failed. Tap Submit again.", tone: "error" });
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -316,13 +317,13 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
     : tone === "info" ? { background: t.accentBg, color: t.accent, borderColor: `${t.accent}30` }
       : { background: "rgba(239,68,68,0.08)", color: "#DC2626", borderColor: "rgba(239,68,68,0.3)" };
 
-  if (!link) return <p className="text-sm" style={{ color: t.textMuted }}>Load ho raha hai…</p>;
+  if (!link) return <p className="text-sm" style={{ color: t.textMuted }}>Loading…</p>;
 
   return (
     <div className="space-y-4">
       {!online && (
         <div role="status" className="rounded-lg border px-3 py-2 text-sm font-semibold" style={toneStyle("error")} data-testid="offline">
-          📵 Internet nahi hai, upload ruka hai
+          📵 No internet — upload paused
         </div>
       )}
 
@@ -332,13 +333,13 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
           {asg.instructions && <p style={{ color: t.textPrimary }}>{asg.instructions}</p>}
           <p>
             {asg.closes_at ? <>Deadline: <b>{fmtIST(asg.closes_at)}</b> · </> : null}
-            Max {asg.max_pages} pages · har file max {Math.min(asg.max_mb, 10)} MB · PDF ya photos (JPG/PNG/WEBP/HEIC)
+            Max {asg.max_pages} pages · max {Math.min(asg.max_mb, 10)} MB per file · PDF or photos (JPG/PNG/WEBP/HEIC)
             · {asg.max_attempts} attempt{asg.max_attempts > 1 ? "s" : ""}
-            {asg.max_attempts > 1 ? ` (${asg.count_policy === "best" ? "best marks wala" : "latest wala"} count hoga)` : ""}
+            {asg.max_attempts > 1 ? ` (your ${asg.count_policy === "best" ? "best" : "latest"} upload counts)` : ""}
           </p>
           {link.question_paper?.file_url && (
             <a href={link.question_paper.file_url} target="_blank" rel="noreferrer" className="font-medium underline" style={{ color: t.teal }}>
-              Question paper dekho
+              View question paper
             </a>
           )}
         </div>
@@ -346,7 +347,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
 
       {link.state === "open_late" && (
         <div className="rounded-lg border px-3 py-2 text-sm" style={toneStyle("info")} data-testid="late-warning">
-          ⚠️ Deadline nikal chuki hai. Upload ho jayega par <b>Late submit</b> hoga.
+          ⚠️ The deadline has passed. You can still upload, but it will be marked <b>late</b>.
         </div>
       )}
       {(linkClosed || studentBlocked) && (
@@ -357,7 +358,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       )}
       {noAttemptsLeft && !linkClosed && (
         <div className="rounded-lg border px-3 py-2 text-sm" style={toneStyle("info")}>
-          Aapke saare attempts use ho gaye. Neeche history mein status dekho.
+          You've used all your attempts. See their status below.
         </div>
       )}
 
@@ -365,19 +366,19 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
       {canUpload && asg && (
         <div className="space-y-2" ref={pickerRef} data-testid="upload-panel">
           <div className="flex items-center justify-between text-xs" style={{ color: overPages ? "#DC2626" : t.textMuted }}>
-            <span>Page order: page ko daba ke kheencho</span>
+            <span>To reorder, press and drag a page</span>
             <b data-testid="page-counter">{pageCount}/{asg.max_pages} pages</b>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" onClick={() => cameraRef.current?.click()} disabled={busy}
               className="py-3 rounded-lg text-white text-sm font-semibold disabled:opacity-50"
               style={{ background: `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}>
-              📷 + Photo lo
+              📷 Take photo
             </button>
             <button type="button" onClick={() => galleryRef.current?.click()} disabled={busy}
               className="py-3 rounded-lg border text-sm font-semibold disabled:opacity-50"
               style={{ borderColor: t.border, color: t.accent, background: t.surface }}>
-              🖼️ + Gallery / PDF
+              🖼️ Gallery / PDF
             </button>
           </div>
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple className="hidden" data-testid="camera-input"
@@ -385,7 +386,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
           <input ref={galleryRef} type="file" accept={ACCEPT_ATTR} multiple className="hidden" data-testid="gallery-input"
             onChange={async e => { await addFiles(e.target.files); e.target.value = ""; }} />
 
-          {processing > 0 && <p className="text-xs" style={{ color: t.textMuted }}>Photo tayyar ho rahi hai…</p>}
+          {processing > 0 && <p className="text-xs" style={{ color: t.textMuted }}>Preparing photos…</p>}
           {pickErrors.length > 0 && (
             <ul className="space-y-0.5" role="alert" data-testid="pick-errors">
               {pickErrors.map((e, i) => <li key={i} className="text-xs sm:text-sm text-red-600">✗ {e}</li>)}
@@ -410,17 +411,17 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
               <div className="h-2 rounded-full overflow-hidden" style={{ background: t.border }}>
                 <div className="h-full" style={{ width: `${overall}%`, background: t.accent }} />
               </div>
-              <p className="text-xs mt-1" style={{ color: t.textMuted }}>{done}/{items.length} file upload ho gayi ({overall}%)</p>
+              <p className="text-xs mt-1" style={{ color: t.textMuted }}>{done} of {items.length} uploaded ({overall}%)</p>
             </div>
           )}
-          {overPages && <p className="text-xs text-red-600">Max {asg.max_pages} pages allowed — kuch pages hatao.</p>}
+          {overPages && <p className="text-xs text-red-600">Max {asg.max_pages} pages allowed — remove some pages.</p>}
 
           <button onClick={submit} disabled={busy || locked || !items.length || overPages || processing > 0} data-testid="submit-btn"
             className="w-full py-3 rounded-lg text-white font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
             style={{ background: busy || locked ? "#94A3B8" : `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}>
-            {busy ? (uploading ? "Upload ho raha hai…" : "Submit ho raha hai…") : `Submit (${items.length} file${items.length === 1 ? "" : "s"})`}
+            {busy ? (uploading ? "Uploading…" : "Submitting…") : `Submit (${items.length} file${items.length === 1 ? "" : "s"})`}
           </button>
-          {attemptsLeft !== null && <p className="text-center text-xs" style={{ color: t.textMuted }} data-testid="attempts-left">{attemptsLeft} attempt baaki</p>}
+          {attemptsLeft !== null && <p className="text-center text-xs" style={{ color: t.textMuted }} data-testid="attempts-left">{attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} left</p>}
         </div>
       )}
 
@@ -433,14 +434,14 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
 
       {/* History */}
       {historyLoading && !attempts.length && link.student?.state === "ok" && (
-        <p className="text-xs" style={{ color: t.textMuted }}>Aapke uploads aa rahe hain…</p>
+        <p className="text-xs" style={{ color: t.textMuted }}>Loading your uploads…</p>
       )}
       {!historyLoading && !attempts.length && link.student?.state === "ok" && (
-        <p className="text-xs text-center" style={{ color: t.textMuted }} data-testid="history-empty">Abhi tak koi upload nahi kiya.</p>
+        <p className="text-xs text-center" style={{ color: t.textMuted }} data-testid="history-empty">No uploads yet.</p>
       )}
       {attempts.length > 0 && (
         <div data-testid="history">
-          <h4 className="text-sm font-semibold mb-2" style={{ color: t.textSecondary }}>Aapke uploads</h4>
+          <h4 className="text-sm font-semibold mb-2" style={{ color: t.textSecondary }}>Your uploads</h4>
           <ul className="space-y-2">
             {attempts.map(a => {
               const b = studentBadge(a.status);
@@ -451,7 +452,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
                     <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" data-testid="attempt-status"
                       style={{ background: BADGE[b.tone].bg, color: BADGE[b.tone].fg }}>{b.label}</span>
                     {a.is_late && <span className="rounded px-1.5 text-[11px] bg-amber-100 text-amber-700">late</span>}
-                    {a.counts && <span className="rounded px-1.5 text-[11px]" style={{ background: t.tealBg, color: t.teal }}>count hoga</span>}
+                    {a.counts && <span className="rounded px-1.5 text-[11px]" style={{ background: t.tealBg, color: t.teal }}>counts</span>}
                   </div>
                   <p className="mt-0.5 text-xs" style={{ color: t.textMuted }}>
                     {a.submitted_at ? fmtIST(a.submitted_at) : ""} · {a.files.length} file
@@ -459,12 +460,12 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
                   {a.status === "rejected" && (
                     <div className="mt-1 space-y-1">
                       <ul className="list-disc pl-5 text-xs text-red-600">
-                        {(a.reject_reasons?.length ? a.reject_reasons : [{ code: "bad_file", message: "File padhi nahi ja saki." }])
-                          .map((r, i) => <li key={i}>{r.page_order ? `Page ${r.page_order}: ` : ""}{r.message}</li>)}
+                        {(a.reject_reasons?.length ? a.reject_reasons : [{ code: "bad_file" }])
+                          .map((r, i) => <li key={i}>{rejectText(r)}</li>)}
                       </ul>
                       {canUpload && (
                         <button className="rounded-md px-2.5 py-1 text-xs font-semibold text-white bg-red-600"
-                          onClick={() => pickerRef.current?.scrollIntoView({ behavior: "smooth" })}>Dobara upload karo</button>
+                          onClick={() => pickerRef.current?.scrollIntoView({ behavior: "smooth" })}>Upload again</button>
                       )}
                     </div>
                   )}
@@ -476,7 +477,7 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
                       {a.result.per_question?.length > 0 && (
                         <button className="mt-1 text-xs underline" style={{ color: t.accent }} data-testid="result-toggle"
                           onClick={() => setOpenResult(openResult === a.id ? null : a.id)}>
-                          {openResult === a.id ? "Question-wise chhupao" : "Question-wise marks dekho"}
+                          {openResult === a.id ? "Hide marks per question" : "Show marks per question"}
                         </button>
                       )}
                       {openResult === a.id && (
@@ -488,15 +489,15 @@ export default function UploadAttempts({ code, assignmentRef, student, t, onChan
                                   <td className="py-1 pr-2 font-semibold">Q{q.q_no}</td>
                                   <td className="py-1 pr-2 whitespace-nowrap">{q.not_attempted ? "—" : q.marks} / {q.max_marks}</td>
                                   <td className="py-1" style={{ color: t.textSecondary }}>
-                                    {q.not_attempted ? "Attempt nahi kiya" : q.feedback}{!q.counted && " (count nahi hua)"}
+                                    {q.not_attempted ? "Not attempted" : q.feedback}{!q.counted && " (not counted)"}
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                           <p className="mt-1 text-[11px]" style={{ color: t.textMuted }}>
-                            {a.is_late ? "Ye upload late tha. " : ""}
-                            {asg?.count_policy === "best" ? "Sabse achhe marks wala upload count hoga." : "Aakhri upload count hoga."}
+                            {a.is_late ? "This upload was late. " : ""}
+                            {asg?.count_policy === "best" ? "Your best-scoring upload counts." : "Your latest upload counts."}
                           </p>
                         </>
                       )}
@@ -529,7 +530,7 @@ function Thumb({ item, index, url, progress, error, busy, t, onRotate, onDelete,
               {item.pages > 1 && <b>{item.pages} pages</b>}
             </div>}
         <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[11px] font-bold text-white">{index + 1}</span>
-        {item.path && <span className="absolute right-1 bottom-1 rounded-full bg-green-600 px-1.5 text-[11px] text-white" aria-label="Upload ho gaya">✓</span>}
+        {item.path && <span className="absolute right-1 bottom-1 rounded-full bg-green-600 px-1.5 text-[11px] text-white" aria-label="Uploaded">✓</span>}
         {!item.path && progress != null && progress < 100 && !error && (
           <div className="absolute inset-x-0 bottom-0 h-1.5 bg-black/30"><div className="h-full" style={{ width: `${progress}%`, background: t.accent }} /></div>
         )}
@@ -543,9 +544,9 @@ function Thumb({ item, index, url, progress, error, busy, t, onRotate, onDelete,
         </div>
       )}
       <div className="flex border-t" style={{ borderColor: t.border }}>
-        <button type="button" onClick={onRotate} disabled={busy || !item.mime.startsWith("image/")} aria-label="Ghumao 90°"
+        <button type="button" onClick={onRotate} disabled={busy || !item.mime.startsWith("image/")} aria-label="Rotate 90°"
           className="flex-1 py-1.5 text-sm disabled:opacity-30" style={{ color: t.textSecondary }}>↻</button>
-        <button type="button" onClick={onDelete} disabled={busy} aria-label="Hatao"
+        <button type="button" onClick={onDelete} disabled={busy} aria-label="Remove"
           className="flex-1 py-1.5 text-sm text-red-600 disabled:opacity-30">✕</button>
       </div>
     </li>

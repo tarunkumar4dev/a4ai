@@ -12,7 +12,7 @@ export interface DraftItem {
   size: number;
   sha256: string;
   pages: number;              // PDF page count (pdf.js); 1 for a photo
-  warning: string | null;     // "Photo saaf nahi lag rahi, dobara lo?"
+  warning: string | null;     // "Photo looks unclear. Retake?"
   path: string | null;        // Storage path once uploaded — a retry / refresh never uploads it again
 }
 

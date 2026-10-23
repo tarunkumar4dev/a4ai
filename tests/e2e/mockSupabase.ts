@@ -30,10 +30,10 @@ export class MockSupabase {
     for (const a of this.attempts) {
       a.status = "published";
       a.result = {
-        marks, max_marks: max, percentage: Math.round((marks / max) * 100), feedback: "Achha likha hai",
+        marks, max_marks: max, percentage: Math.round((marks / max) * 100), feedback: "Well written",
         published_at: new Date().toISOString(),
         per_question: [
-          { q_no: "1", max_marks: 4, marks: 3, counted: true, not_attempted: false, feedback: "Formula sahi", confidence: "high" },
+          { q_no: "1", max_marks: 4, marks: 3, counted: true, not_attempted: false, feedback: "Correct formula", confidence: "high" },
           { q_no: "2", max_marks: 6, marks: marks - 3, counted: true, not_attempted: false, feedback: "Unit missing", confidence: "medium" },
         ],
       };
@@ -44,7 +44,7 @@ export class MockSupabase {
     const closes = this.linkState === "open_late" || this.linkState === "closed"
       ? new Date(Date.now() - 3_600_000).toISOString() : new Date(Date.now() + 2 * 86_400_000).toISOString();
     return {
-      id: ASG, title: "Physics Unit Test 2", instructions: "Saare pages order mein upload karo", batch_name: "ECE-2",
+      id: ASG, title: "Physics Unit Test 2", instructions: "Upload all pages in order", batch_name: "ECE-2",
       opens_at: null, closes_at: closes, grace_minutes: 2, late_policy: "accept_flag", count_policy: "latest",
       max_attempts: this.maxAttempts, allowed_mimes: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
       max_mb: 10, max_pages: 30, max_marks: 10,

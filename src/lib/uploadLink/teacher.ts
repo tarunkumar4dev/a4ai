@@ -113,7 +113,7 @@ export async function loadLinkSettings(assignmentId: string): Promise<LinkSettin
 export async function saveLinkSettings(assignmentId: string, patch: Partial<LinkSettings>): Promise<void> {
   const { error } = await supabase.from("assignments").update(patch).eq("id", assignmentId);
   if (error) throw new Error(/check constraint/i.test(error.message)
-    ? "Settings galat hain: opens_at deadline se pehle ho, max 10 MB, max 30 pages, kam se kam ek format."
+    ? "Check the settings: opening time before the deadline, max 10 MB, max 30 pages, at least one format."
     : humanError(error));
 }
 
@@ -154,8 +154,8 @@ export async function signedSubmissionUrls(paths: string[]): Promise<Record<stri
 export const linkUrl = (token: string) => `${window.location.origin}/s/${token}`;
 
 export const shareLinkMessage = (title: string, url: string, deadline: string | null) =>
-  `📝 ${title}\nApni answer copy ki photos / PDF yahan upload karo:\n${url}\n` +
-  `${deadline ? `⏰ Deadline: ${fmtIST(deadline)}\n` : ""}Apna access code ready rakhein.`;
+  `📝 ${title}\nUpload photos or a PDF of your answer copy here:\n${url}\n` +
+  `${deadline ? `⏰ Deadline: ${fmtIST(deadline)}\n` : ""}Keep your access code ready.`;
 
 export const resultMessage = (studentName: string, title: string, url: string) =>
-  `📊 ${studentName} ka "${title}" ka result aa gaya hai.\nDekhne ke liye link kholo aur access code daalo:\n${url}`;
+  `📊 ${studentName}'s result for "${title}" is ready.\nOpen the link and enter the access code to see it:\n${url}`;

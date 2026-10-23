@@ -4,11 +4,11 @@
 
 import { supabase } from "@/lib/supabaseClient";
 
-export const NETWORK_ERROR = "Server se connect nahi ho paya. Dobara try karein.";
-export const SERVER_ERROR = "Server mein dikkat hai, thodi der baad try karein.";
+export const NETWORK_ERROR = "Couldn't reach the server. Try again.";
+export const SERVER_ERROR = "The server has a problem. Try again in a moment.";
 export const SESSION_ERROR = "Session expired. Please log in again.";
 export const AI_BUSY_ERROR = "AI is busy, please try again in a minute.";
-const GENERIC_ERROR = "Kuch galat ho gaya. Dobara try karein.";
+const GENERIC_ERROR = "Something went wrong. Try again.";
 
 export async function checkerFetch(url: string, method: "POST" | "PATCH", body?: unknown) {
   const { data: { session } } = await supabase.auth.getSession();

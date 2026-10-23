@@ -1230,7 +1230,7 @@ export default function TestBuilderPage() {
   const ensureSavedForLink = async () => {
     if (testQuestions.length === 0) { toast.error("Please add at least 1 question to the test paper!"); return null; }
     const id = await autoSaveTestToHistory();
-    if (!id) { toast.error("Test save nahi hua — login check karo aur dobara try karo."); return null; }
+    if (!id) { toast.error("Couldn't save the test. Check that you're logged in and try again."); return null; }
     return linkTestRef(id);
   };
   const linkTest = savedPaper && savedPaper.sig === paperSignature() ? linkTestRef(savedPaper.id) : null;

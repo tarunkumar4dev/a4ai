@@ -16,15 +16,15 @@ export interface StudentBadge { kind: StudentBadgeKind; label: string; tone: "am
 export function studentBadge(status: string): StudentBadge {
   switch (status) {
     case "published": case "graded":
-      return { kind: "published", label: "Result aa gaya", tone: "green" };
+      return { kind: "published", label: "Result ready", tone: "green" };
     case "checked": case "needs_review":
-      return { kind: "checked", label: "Check ho gaya, teacher result bhejenge", tone: "blue" };
+      return { kind: "checked", label: "Checked — your teacher will share the result", tone: "blue" };
     case "waiting_key": case "waiting_quota":
-      return { kind: "teacher", label: "Teacher ki taraf se pending hai", tone: "slate" };
+      return { kind: "teacher", label: "Waiting for the teacher", tone: "slate" };
     case "rejected":
-      return { kind: "rejected", label: "File mein problem", tone: "red" };
+      return { kind: "rejected", label: "Problem with the file", tone: "red" };
     default:            // uploaded, queued, checking, failed, submitted
-      return { kind: "pending", label: "Check ho raha hai ⏳", tone: "amber" };
+      return { kind: "pending", label: "Being checked ⏳", tone: "amber" };
   }
 }
 
@@ -34,27 +34,27 @@ export const isFinal = (s: string) => (FINAL as string[]).includes(s);
 export const needsPolling = (attempts: { status: string }[]) => attempts.some(a => !isFinal(a.status));
 
 export const REVIEW_LABEL: Record<ReviewReason, string> = {
-  empty_answer: "Khaali answer",
-  illegible: "Padh nahi paya",
-  low_confidence: "AI sure nahi",
+  empty_answer: "Empty answer",
+  illegible: "Hard to read",
+  low_confidence: "AI not sure",
   key_missing: "Answer key missing",
-  blank_pages: "Khaali pages",
-  bad_scan: "Photo kharab",
+  blank_pages: "Blank pages",
+  bad_scan: "Poor photo",
 };
 
 export interface TeacherBadge { label: string; tone: "amber" | "blue" | "slate" | "red" | "green" | "violet" }
 
 export function teacherBadge(status: string): TeacherBadge {
   switch (status) {
-    case "uploaded": case "queued": return { label: "Queue mein", tone: "amber" };
-    case "checking": return { label: "Check ho raha hai", tone: "amber" };
+    case "uploaded": case "queued": return { label: "Queued", tone: "amber" };
+    case "checking": return { label: "Checking", tone: "amber" };
     case "checked": return { label: "Checked", tone: "blue" };
-    case "needs_review": return { label: "Review karein", tone: "violet" };
+    case "needs_review": return { label: "Needs review", tone: "violet" };
     case "published": case "graded": return { label: "Published", tone: "green" };
-    case "failed": return { label: "Check fail", tone: "red" };
-    case "rejected": return { label: "File reject", tone: "red" };
-    case "waiting_key": return { label: "Key ka wait", tone: "slate" };
-    case "waiting_quota": return { label: "Kal check hoga", tone: "slate" };
+    case "failed": return { label: "Check failed", tone: "red" };
+    case "rejected": return { label: "File rejected", tone: "red" };
+    case "waiting_key": return { label: "Needs answer key", tone: "slate" };
+    case "waiting_quota": return { label: "Checks tomorrow", tone: "slate" };
     default: return { label: status, tone: "slate" };
   }
 }

@@ -92,18 +92,18 @@ export const BUCKET = "submissions";
 export const BUCKET_MAX_MB = 10;              // bucket file_size_limit; a link's max_mb is 1–10
 const MB = 1024 * 1024;
 
-/* ─── Status text (what the student sees, docs §1) ───────────────── */
+/* ─── Status text (what the student sees, docs §1; a failed check is still "being checked" for them) ─── */
 export const STATUS_TEXT: Record<string, string> = {
-  uploaded: "Upload ho gaya",
-  waiting_key: "Teacher ki answer key ka wait hai",
-  queued: "Checking jaldi shuru hogi",
-  checking: "Check ho raha hai",
-  waiting_quota: "Checking kal tak",
-  checked: "Checked — result teacher publish karenge",
-  needs_review: "Checked — result teacher publish karenge",
-  published: "Result aa gaya",
-  failed: "Dobara upload karo ya teacher se baat karo",
-  rejected: "File padhi nahi ja saki",
+  uploaded: "Uploaded",
+  waiting_key: "Waiting for the teacher's answer key",
+  queued: "Checking will start soon",
+  checking: "Being checked",
+  waiting_quota: "Will be checked tomorrow",
+  checked: "Checked. Your teacher will share the result.",
+  needs_review: "Checked. Your teacher will share the result.",
+  published: "Result ready",
+  failed: "Being checked",
+  rejected: "Problem with the file",
   submitted: "Submitted",
   graded: "Graded",
 };
@@ -120,26 +120,26 @@ export function fmtCountdown(sec: number): string {
   return m > 0 ? `${m} min ${String(s % 60).padStart(2, "0")} sec` : `${s} sec`;
 }
 
-/** Friendly Hinglish line for every non-success state. `{countdown}` is filled live by the caller. */
+/** A short line for every non-success state. `{countdown}` is filled live by the caller. */
 export function stateMessage(r: { state: string; scope?: string; opens_at?: string | null; closes_at?: string | null;
                                   max_attempts?: number; attempts_used?: number }): string {
   switch (r.state) {
-    case "invalid_code": return "Access code galat hai. Teacher se apna sahi code check karo.";
+    case "invalid_code": return "Wrong access code. Check with your teacher.";
     case "locked":
       return r.scope === "code"
-        ? "Is code pe bahut baar galat try hua. {countdown} baad dobara try karo."
-        : "Is network se bahut galat codes try hue. {countdown} baad dobara try karo.";
-    case "too_many_requests": return "Bahut jaldi-jaldi submit ho raha hai. {countdown} baad dobara try karo.";
-    case "not_found": return "Ye link / assignment aapki class ke liye nahi mila. Teacher se sahi link maango.";
-    case "not_in_class": return "Aap is assignment ki class mein nahi ho. Teacher se baat karo.";
-    case "inactive": return "Ye link abhi band hai. Teacher se baat karo.";
-    case "not_open": return `Upload ${r.opens_at ? fmtIST(r.opens_at) : "baad mein"} se khulega.`;
-    case "closed": return `Deadline${r.closes_at ? ` (${fmtIST(r.closes_at)})` : ""} nikal gayi. Ab upload nahi ho sakta.`;
+        ? "Too many wrong tries for this code. Try again in {countdown}."
+        : "Too many wrong codes from this network. Try again in {countdown}.";
+    case "too_many_requests": return "Too many submits. Try again in {countdown}.";
+    case "not_found": return "This link isn't for your class. Ask your teacher for the right link.";
+    case "not_in_class": return "You're not in this class. Talk to your teacher.";
+    case "inactive": return "This link is closed. Talk to your teacher.";
+    case "not_open": return r.opens_at ? `Uploads open on ${fmtIST(r.opens_at)}.` : "Uploads aren't open yet.";
+    case "closed": return `The deadline${r.closes_at ? ` (${fmtIST(r.closes_at)})` : ""} has passed. Uploads are closed.`;
     case "max_attempts":
-      return `Aap saare attempts use kar chuke ho (${r.attempts_used ?? "?"}/${r.max_attempts ?? "?"}).`;
-    case "conflict": return "Ek saath do upload ho rahe the. Ek baar aur Submit dabao.";
-    case "invalid_request": return "Kuch gadbad hui. Page reload karke dobara try karo.";
-    default: return "Kuch gadbad hui. Thodi der baad dobara try karo.";
+      return `You've used all your attempts (${r.attempts_used ?? "?"}/${r.max_attempts ?? "?"}).`;
+    case "conflict": return "Two uploads clashed. Tap Submit again.";
+    case "invalid_request": return "Something went wrong. Reload the page and try again.";
+    default: return "Something went wrong. Try again in a moment.";
   }
 }
 
@@ -164,7 +164,7 @@ export function clearAttemptKey(assignmentId: string, code: string): void {
 export type PreparedPage = {
   blob: Blob; mime: string; ext: string; size: number; name: string;
   pages: number;                 // PDF page count (pdf.js), 1 for a photo
-  warning: string | null;        // dark / tiny photo → "Photo saaf nahi lag rahi, dobara lo?"
+  warning: string | null;        // dark / tiny photo → "Photo looks unclear. Retake?"
 };
 
 const MIME_EXT: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png",
@@ -173,17 +173,17 @@ const MIME_EXT: Record<string, string> = { "application/pdf": "pdf", "image/jpeg
 /**
  * One picked file → what will be uploaded. HEIC (iPhone) → JPEG in the browser first; every photo → ~1600 px JPEG
  * q 0.8 (smaller upload on school Wi-Fi; the canvas re-encode also drops EXIF / GPS); PDFs as they are.
- * Throws an Error with a Hinglish message the page shows next to that file ("notes.docx: sirf photo ya PDF chalega").
+ * Throws an Error with a short message the page shows next to that file ("notes.docx: only photos or PDF allowed").
  */
 export async function preparePage(file: File, allowedMimes: string[], maxMb: number): Promise<PreparedPage> {
   const kind = classify(file);
   const limit = Math.min(maxMb || BUCKET_MAX_MB, BUCKET_MAX_MB);
   if (kind === "bad") throw new Error(formatError(file.name));
-  if (kind === "pdf" && !allowedMimes.includes("application/pdf")) throw new Error(`${file.name}: is test mein sirf photo chalegi`);
-  if (kind !== "pdf" && !allowedMimes.some(m => m.startsWith("image/"))) throw new Error(`${file.name}: is test mein sirf PDF chalegi`);
+  if (kind === "pdf" && !allowedMimes.includes("application/pdf")) throw new Error(`${file.name}: only photos are allowed for this test`);
+  if (kind !== "pdf" && !allowedMimes.some(m => m.startsWith("image/"))) throw new Error(`${file.name}: only PDF is allowed for this test`);
 
   if (kind === "pdf") {
-    if (file.size === 0) throw new Error(`${file.name}: file khaali hai`);
+    if (file.size === 0) throw new Error(`${file.name}: the file is empty`);
     if (file.size > limit * MB) throw new Error(sizeError(file.name, file.size, limit));
     const pages = await pdfPageCount(file);
     return { blob: file, mime: "application/pdf", ext: "pdf", size: file.size, name: file.name, pages, warning: null };
@@ -194,11 +194,11 @@ export async function preparePage(file: File, allowedMimes: string[], maxMb: num
     : file;
   const { blob, type: mime } = await compressImage(src, LONG_EDGE, JPEG_QUALITY);
   if (!MIME_EXT[mime] || !allowedMimes.includes(mime)) throw new Error(formatError(file.name));
-  if (blob.size === 0) throw new Error(`${file.name}: file khaali hai`);
+  if (blob.size === 0) throw new Error(`${file.name}: the file is empty`);
   if (blob.size > limit * MB) throw new Error(sizeError(file.name, blob.size, limit));
   const q = await analyzeQuality(blob);
   return { blob, mime, ext: MIME_EXT[mime], size: blob.size, name: file.name, pages: 1,
-           warning: q.tooSmall || q.tooDark ? "Photo saaf nahi lag rahi, dobara lo?" : null };
+           warning: q.tooSmall || q.tooDark ? "Photo looks unclear. Retake?" : null };
 }
 
 export async function sha256Hex(blob: Blob): Promise<string> {
@@ -212,14 +212,14 @@ export async function sha256Hex(blob: Blob): Promise<string> {
 /* ─── RPCs ───────────────────────────────────────────────────────── */
 export async function getAssignmentLink(ref: string, code?: string): Promise<LinkInfo> {
   const { data, error } = await supabase.rpc("get_assignment_link", { p_ref: ref, ...(code ? { p_code: code } : {}) });
-  if (error) throw new Error("Link load nahi hua. Internet check karke page reload karo.");
+  if (error) throw new Error("Couldn't load the link. Check your internet and reload.");
   return data as LinkInfo;
 }
 
 export async function verifyAccessCode(code: string): Promise<{ state: string; student?: VerifiedStudent;
                                                                   retry_after_sec?: number; scope?: "ip" | "code" }> {
   const { data, error } = await supabase.rpc("verify_access_code", { p_code: code });
-  if (error) throw new Error("Code check nahi hua. Internet check karke dobara try karo.");
+  if (error) throw new Error("Couldn't check the code. Check your internet and try again.");
   return data;
 }
 
@@ -228,12 +228,12 @@ export async function createSubmission(code: string, assignmentId: string, key: 
                                                 page_order: number }[]): Promise<CreateResult> {
   const { data, error } = await supabase.rpc("create_submission", { p_code: code, p_assignment_id: assignmentId,
                                                                      p_idempotency_key: key, p_files: files });
-  if (error) throw new Error("Submit ka jawab nahi aaya (network?). Dobara Submit dabao — duplicate nahi banega.");
+  if (error) throw new Error("No reply from the server. Tap Submit again — it won't be submitted twice.");
   return data as CreateResult;
 }
 
 export async function mySubmissions(code: string, assignmentId: string): Promise<MySubmissions> {
   const { data, error } = await supabase.rpc("my_submissions", { p_code: code, p_assignment_id: assignmentId });
-  if (error) throw new Error("History load nahi hui.");
+  if (error) throw new Error("Couldn't load your uploads.");
   return data as MySubmissions;
 }

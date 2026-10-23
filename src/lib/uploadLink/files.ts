@@ -1,6 +1,6 @@
 // src/lib/uploadLink/files.ts
 // Page helpers for the upload flow (src/lib/uploadFlow.ts preparePage uses them): HEIC/HEIF → JPEG with a
-// native-decoder fallback, PDF page count (pdf.js), a "photo saaf nahi" hint, rotate 90°, Hinglish file errors.
+// native-decoder fallback, PDF page count (pdf.js), an "unclear photo" hint, rotate 90°, file error messages.
 
 import { compressImage } from "@/lib/imageCompress";
 
@@ -23,8 +23,8 @@ export function classify(file: { name: string; type: string }): FileKind {
 }
 
 export const mb = (bytes: number) => Math.round((bytes / 1048576) * 10) / 10;
-export const formatError = (name: string) => `${name}: sirf photo ya PDF chalega`;
-export const sizeError = (name: string, bytes: number, maxMb: number) => `${name} ${mb(bytes)} MB hai, max ${maxMb} MB`;
+export const formatError = (name: string) => `${name}: only photos or PDF allowed`;
+export const sizeError = (name: string, bytes: number, maxMb: number) => `${name} is ${mb(bytes)} MB. Max ${maxMb} MB.`;
 
 /** Long edge scaled down to `maxSide` (never up). */
 export function scaledSize(w: number, h: number, maxSide = LONG_EDGE): { w: number; h: number } {
@@ -47,7 +47,7 @@ const defaultHeicDeps: HeicDeps = {
   },
 };
 
-export const HEIC_ERROR = "HEIC photo convert nahi ho payi. Camera setting mein 'Most compatible' (JPEG) karke photo lo, ya screenshot bhejo.";
+export const HEIC_ERROR = "Couldn't convert this iPhone (HEIC) photo. Set the camera to 'Most Compatible' (JPEG) or upload a screenshot.";
 
 /** HEIC/HEIF → JPEG: heic2any first, then the browser's own decoder, else a clear error. */
 export async function heicToJpeg(file: File, deps: HeicDeps = defaultHeicDeps): Promise<Blob> {
@@ -96,7 +96,7 @@ export async function pdfPageCount(blob: Blob): Promise<number> {
     await doc.destroy();
     return n;
   } catch (e) {
-    if (e instanceof Error && /password/i.test(e.message)) throw new Error("PDF par password hai. Bina password wali PDF bhejo.");
+    if (e instanceof Error && /password/i.test(e.message)) throw new Error("This PDF has a password. Upload a PDF without one.");
     return pdfPagesFromBytes(await blobText(blob));
   }
 }
@@ -134,6 +134,6 @@ export async function rotateJpeg90(blob: Blob): Promise<Blob> {
   ctx.drawImage(img, 0, 0);
   img.close();
   const out: Blob | null = await new Promise(res => c.toBlob(res, "image/jpeg", JPEG_QUALITY));
-  if (!out) throw new Error("Photo ghuma nahi paye.");
+  if (!out) throw new Error("Couldn't rotate the photo.");
   return out;
 }

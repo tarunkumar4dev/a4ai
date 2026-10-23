@@ -41,7 +41,7 @@ describe("HEIC → JPEG", () => {
     expect(native).toHaveBeenCalledOnce();
   });
 
-  it("gives a clear Hinglish error when both fail", async () => {
+  it("gives a clear error when both fail", async () => {
     await expect(heicToJpeg(heic, {
       heic2any: async () => { throw new Error("x"); }, nativeToJpeg: async () => { throw new Error("y"); },
     })).rejects.toThrow(HEIC_ERROR);
@@ -57,8 +57,8 @@ describe("file checks", () => {
   });
 
   it("messages name the file", () => {
-    expect(formatError("notes.docx")).toBe("notes.docx: sirf photo ya PDF chalega");
-    expect(sizeError("page3.jpg", 12 * MB, 10)).toBe("page3.jpg 12 MB hai, max 10 MB");
+    expect(formatError("notes.docx")).toBe("notes.docx: only photos or PDF allowed");
+    expect(sizeError("page3.jpg", 12 * MB, 10)).toBe("page3.jpg is 12 MB. Max 10 MB.");
   });
 
   it("scales the long edge to 1600 px and never up", () => {
@@ -86,24 +86,24 @@ describe("preparePage (compress + limits)", () => {
 
   it("refuses a photo still too big after compressing", async () => {
     compressMock.mockImplementation(async () => ({ blob: new Blob([new Uint8Array(12 * MB)]), ext: "jpg", type: "image/jpeg" }));
-    await expect(preparePage(file("page3.jpg", "image/jpeg", 20 * MB), link.mimes, link.mb)).rejects.toThrow("page3.jpg 12 MB hai, max 10 MB");
+    await expect(preparePage(file("page3.jpg", "image/jpeg", 20 * MB), link.mimes, link.mb)).rejects.toThrow("page3.jpg is 12 MB. Max 10 MB.");
   });
 
   it("keeps PDFs as they are and checks their size against the link's max_mb", async () => {
-    await expect(preparePage(file("big.pdf", "application/pdf", 11 * MB), link.mimes, 10)).rejects.toThrow("big.pdf 11 MB hai, max 10 MB");
-    await expect(preparePage(file("small.pdf", "application/pdf", 4 * MB), link.mimes, 3)).rejects.toThrow("max 3 MB");
+    await expect(preparePage(file("big.pdf", "application/pdf", 11 * MB), link.mimes, 10)).rejects.toThrow("big.pdf is 11 MB. Max 10 MB.");
+    await expect(preparePage(file("small.pdf", "application/pdf", 4 * MB), link.mimes, 3)).rejects.toThrow("Max 3 MB.");
     const ok = await preparePage(file("copy.pdf", "application/pdf", 1 * MB), link.mimes, 10);
     expect(ok.mime).toBe("application/pdf");
     expect(compressMock).not.toHaveBeenCalled();
   });
 
   it("never allows more than the 10 MB bucket limit, whatever max_mb says", async () => {
-    await expect(preparePage(file("big.pdf", "application/pdf", 10.5 * MB), link.mimes, 50)).rejects.toThrow("max 10 MB");
+    await expect(preparePage(file("big.pdf", "application/pdf", 10.5 * MB), link.mimes, 50)).rejects.toThrow("Max 10 MB.");
   });
 
   it("rejects formats the link doesn't allow", async () => {
-    await expect(preparePage(file("notes.docx", "application/msword", 1000), link.mimes, 10)).rejects.toThrow("notes.docx: sirf photo ya PDF chalega");
-    await expect(preparePage(file("a.pdf", "application/pdf", 1000), ["image/jpeg"], 10)).rejects.toThrow("sirf photo chalegi");
-    await expect(preparePage(file("a.jpg", "image/jpeg", 1000), ["application/pdf"], 10)).rejects.toThrow("sirf PDF chalegi");
+    await expect(preparePage(file("notes.docx", "application/msword", 1000), link.mimes, 10)).rejects.toThrow("notes.docx: only photos or PDF allowed");
+    await expect(preparePage(file("a.pdf", "application/pdf", 1000), ["image/jpeg"], 10)).rejects.toThrow("only photos are allowed");
+    await expect(preparePage(file("a.jpg", "image/jpeg", 1000), ["application/pdf"], 10)).rejects.toThrow("only PDF is allowed");
   });
 });
