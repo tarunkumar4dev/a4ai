@@ -1,7 +1,7 @@
 // src/pages/ContestPage.tsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { contestApi, ContestData } from "@/lib/contestApi";
+import { contestApi, ContestData, startErrorMessage } from "@/lib/contestApi";
 import ContestAttemptPage from "@/components/contest/ContestAttemptPage";
 
 export default function ContestPage() {
@@ -15,12 +15,12 @@ export default function ContestPage() {
     
     contestApi.startAttempt(shortCode)
       .then(setContestData)
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(startErrorMessage(err)))
       .finally(() => setLoading(false));
   }, [shortCode]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading contest...</div>;
-  if (error) return <div className="min-h-screen flex items-center justify-center text-red-500">Error: {error}</div>;
+  if (error) return <div className="min-h-screen flex items-center justify-center text-gray-700 text-center px-4">{error}</div>;
   if (!contestData) return <div className="min-h-screen flex items-center justify-center text-gray-500">Contest not found</div>;
 
   return (

@@ -42,6 +42,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { getBackendApiBase } from "@/lib/apiBase";
+import { detailMessage, errorFromResponse, startErrorMessage } from "@/lib/contestApi";
 
 /**
  * ContestLivePage — BACKEND-WIRED
@@ -338,10 +339,7 @@ export default function ContestLivePage() {
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Could not start the contest.");
-      }
+      if (!res.ok) throw await errorFromResponse(res, "Could not start the contest");
 
       const data = await res.json(); // ContestDataResponse
 
@@ -352,7 +350,7 @@ export default function ContestLivePage() {
       setPermissionsOpen(false);
     } catch (e: any) {
       console.error("start error:", e);
-      toast.error(e?.message || "Could not start the contest.");
+      toast.error(startErrorMessage(e), { duration: 8000 });
     } finally {
       setStarting(false);
       setLoading(false);
@@ -411,7 +409,7 @@ export default function ContestLivePage() {
 
       // If the attempt was already submitted on a prior try, treat as success.
       const err = await res.json().catch(() => ({}));
-      if (res.status === 400 && String(err.detail || "").toLowerCase().includes("already submitted")) {
+      if (res.status === 400 && String(detailMessage(err) || "").toLowerCase().includes("already submitted")) {
         stopStreams();
         setSubmitState("done");
         setSubmitMsg("✅ Already submitted.");
@@ -419,7 +417,7 @@ export default function ContestLivePage() {
         return true;
       }
 
-      throw new Error(err.detail || `Submit failed (${res.status})`);
+      throw new Error(detailMessage(err) || `Submit failed (${res.status})`);
     };
 
     try {

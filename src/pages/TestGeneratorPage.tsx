@@ -1,6 +1,6 @@
 // src/pages/TestGeneratorPage.tsx
-import React, { useState } from "react";
-import { BookOpen, ClipboardCheck, Wand2, type LucideIcon } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { BookOpen, ClipboardCheck, FileUp, Wand2, type LucideIcon } from "lucide-react";
 import { ChevronLeft } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import TestGeneratorForm from "@/components/TestGeneratorForm";
@@ -9,8 +9,10 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useGuestAccess } from "@/hooks/useGuestAccess";
 import LoginModal from "@/components/LoginModal";
 import CopyChecker from "@/components/checker/CopyChecker";
+import ImportContestFromPdf from "@/components/contest/ImportContestFromPdf";
 
-type Tab = "ai" | "builder" | "check";
+type Tab = "ai" | "builder" | "check" | "contest-pdf";
+const TABS: Tab[] = ["ai", "builder", "check", "contest-pdf"];
 
 export default function TestGeneratorPage() {
   const { user } = useAuth();
@@ -24,9 +26,12 @@ export default function TestGeneratorPage() {
   } = useGuestAccess();
 
   // ?tab=check opens "Check Answer Sheets"; &test=<id> starts a check for that saved test (Test History button)
+  // ?tab=contest-pdf opens "Contest from PDF" (also linked from /contests)
   const [params, setParams] = useSearchParams();
-  const [activeTab, setActiveTabState] = useState<Tab>(
-    params.get("tab") === "check" ? "check" : params.get("tab") === "builder" ? "builder" : "ai");
+  const [activeTab, setActiveTabState] = useState<Tab>(() => {
+    const t = params.get("tab") as Tab | null;
+    return t && TABS.includes(t) ? t : "ai";
+  });
   const checkTestId = params.get("test");
   const setActiveTab = (t: Tab) => {
     setActiveTabState(t);
@@ -35,6 +40,12 @@ export default function TestGeneratorPage() {
     next.delete("test");
     setParams(next, { replace: true });
   };
+
+  // phones: the 4th tab sits off-screen in the scrolling tab bar — keep the active one visible
+  const tabBar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    tabBar.current?.querySelector<HTMLElement>(`[data-tab="${activeTab}"]`)?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [activeTab]);
 
   const displayName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
@@ -120,14 +131,16 @@ export default function TestGeneratorPage() {
       <main className="relative z-10 w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-6 md:py-10 pb-28 sm:pb-36 md:pb-40">
 
         {/* TABS */}
-        <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-1 px-1">
+        <div ref={tabBar} className="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-1 px-1">
           {([
             ["builder", "NCERT Test Builder", BookOpen],
             ["check", "Check Answer Sheets", ClipboardCheck],
             ["ai", "AI Generator", Wand2],
+            ["contest-pdf", "Contest from PDF", FileUp],
           ] as [Tab, string, LucideIcon][]).map(([k, label, Icon]) => (
             <button
               key={k}
+              data-tab={k}
               onClick={() => setActiveTab(k)}
               className={`shrink-0 px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
                 activeTab === k
@@ -172,6 +185,8 @@ export default function TestGeneratorPage() {
           </>
         ) : activeTab === "builder" ? (
           <TestBuilderPage />
+        ) : activeTab === "contest-pdf" ? (
+          <ImportContestFromPdf />
         ) : (
           <CopyChecker
             initialTestId={checkTestId}

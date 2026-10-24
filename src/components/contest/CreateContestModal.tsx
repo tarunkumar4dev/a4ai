@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Link2, Copy, Clock, Eye, EyeOff,
   Camera, Monitor, Check, MessageCircle,
-  Zap, Unlock, BookOpen,
+  Zap, Unlock, BookOpen, CalendarClock,
 } from "lucide-react";
+import { toast } from "sonner";
+import type { CreateContestResponse } from "@/lib/contestApi";
 
 // ==================== TYPES ====================
 interface CreateContestProps {
@@ -15,7 +17,12 @@ interface CreateContestProps {
   testTitle: string;
   subject: string;
   classGrade: string;
+  /** board of the paper (test meta / PDF); defaults to CBSE */
+  board?: string | null;
   logoBase64?: string | null;
+  /** minutes to start with (e.g. from an imported PDF); the backend accepts 5–180 */
+  initialDuration?: number | null;
+  onCreated?: (res: CreateContestResponse) => void;
 }
 
 interface ContestSettings {
@@ -27,7 +34,9 @@ interface ContestSettings {
   enableTabDetection: boolean;
   allowBackNavigation: boolean;
   maxWarnings: number;
+  /** datetime-local values ("2026-10-24T10:00"), local time */
   scheduledAt: string | null;
+  expiresAt: string | null;
   maxAttempts: number;
 }
 
@@ -66,7 +75,13 @@ const Toggle = ({ enabled, onChange, label, description, icon: Icon }: {
 );
 
 // ==================== MAIN ====================
-export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subject, classGrade, logoBase64 }: CreateContestProps) => {
+const toIso = (local: string | null) => {
+  if (!local) return null;
+  const d = new Date(local);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+};
+
+export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subject, classGrade, board, logoBase64, initialDuration, onCreated }: CreateContestProps) => {
   const [step, setStep] = useState<"configure" | "share">("configure");
   const [contestLink, setContestLink] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -74,7 +89,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
 
   const [settings, setSettings] = useState<ContestSettings>({
     title: testTitle || "Test Paper",
-    duration: 30,
+    duration: initialDuration ? Math.min(180, Math.max(5, Math.round(initialDuration))) : 30,
     answerMode: "after_test",
     showExplanation: true,
     enableCamera: true,
@@ -82,6 +97,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
     allowBackNavigation: true,
     maxWarnings: 3,
     scheduledAt: null,
+    expiresAt: null,
     maxAttempts: 1,
   });
 
@@ -92,7 +108,21 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
     []
   );
 
+  const durationOptions = useMemo(() =>
+    DURATION_OPTIONS.some((o) => o.value === settings.duration)
+      ? DURATION_OPTIONS
+      : [...DURATION_OPTIONS, { value: settings.duration, label: `${settings.duration} min` }].sort((a, b) => a.value - b.value),
+  [settings.duration]);
+
+  const scheduleError = useMemo(() => {
+    const start = toIso(settings.scheduledAt), end = toIso(settings.expiresAt);
+    if (end && new Date(end).getTime() <= Date.now()) return "End time is in the past.";
+    if (start && end && end <= start) return "End time must be after the start time.";
+    return null;
+  }, [settings.scheduledAt, settings.expiresAt]);
+
   const handleCreate = useCallback(async () => {
+    if (scheduleError) { toast.error(scheduleError); return; }
     setIsCreating(true);
     try {
       const { contestApi } = await import("@/lib/contestApi");
@@ -101,7 +131,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
         title: settings.title,
         subject,
         class_grade: classGrade,
-        board: "CBSE",
+        board: board?.trim() || "CBSE",
         logo_base64: logoBase64 || undefined,
         duration_minutes: settings.duration,
         answer_mode: settings.answerMode,
@@ -111,6 +141,8 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
         allow_back_navigation: settings.allowBackNavigation,
         max_warnings: settings.maxWarnings,
         max_attempts: settings.maxAttempts,
+        scheduled_at: toIso(settings.scheduledAt),
+        expires_at: toIso(settings.expiresAt),
         questions: questions.map((q: any) => {
           // Fix question_type: "mcq" → "MCQ", "short" → "Short", "long" → "Long"
           const rawType = q.type || q.format || q.question_type || "MCQ";
@@ -129,6 +161,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
             return opt; // already a dict
           });
 
+          // correct_answer is passed through as-is: the grader matches "B" and "B) text" alike
           return {
             question_text: q.question_text || q.text || "",
             question_type: questionType,
@@ -144,13 +177,14 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
 
       setContestLink(res.share_link);
       setStep("share");
+      onCreated?.(res);
     } catch (err: any) {
       console.error("Failed to create contest:", err);
-      alert("Failed to create contest. Please try again.");
+      toast.error(err?.message || "Failed to create contest. Please try again.");
     } finally {
       setIsCreating(false);
     }
-  }, [settings, questions, subject, classGrade, logoBase64]);
+  }, [settings, questions, subject, classGrade, board, logoBase64, scheduleError, onCreated]);
 
   const handleCopy = useCallback(() => {
     if (!contestLink) return;
@@ -204,13 +238,34 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
                 <Clock size={10} className="inline mr-1" /> Duration
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {DURATION_OPTIONS.map((opt) => (
+                {durationOptions.map((opt) => (
                   <button key={opt.value} onClick={() => updateSetting("duration", opt.value)}
                     className={`py-3 rounded-xl text-xs font-bold transition-all border ${settings.duration === opt.value ? "bg-gray-900 text-white border-gray-900 shadow-md" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"}`}>
                     {opt.label}
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
+                <CalendarClock size={10} className="inline mr-1" /> Schedule <span className="normal-case font-medium">(optional)</span>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="text-xs text-gray-500">Opens at</span>
+                  <input type="datetime-local" value={settings.scheduledAt || ""} onChange={(e) => updateSetting("scheduledAt", e.target.value || null)}
+                    className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 outline-none focus:border-gray-400 bg-white" />
+                </label>
+                <label className="block">
+                  <span className="text-xs text-gray-500">Closes at</span>
+                  <input type="datetime-local" value={settings.expiresAt || ""} min={settings.scheduledAt || undefined} onChange={(e) => updateSetting("expiresAt", e.target.value || null)}
+                    className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 outline-none focus:border-gray-400 bg-white" />
+                </label>
+              </div>
+              <p className={`text-[11px] mt-1 ${scheduleError ? "text-red-600 font-semibold" : "text-gray-400"}`}>
+                {scheduleError || "Leave empty to open the contest right away with no end time."}
+              </p>
             </div>
 
             <div>
@@ -260,7 +315,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
               </div>
             </div>
 
-            <button onClick={handleCreate} disabled={isCreating}
+            <button onClick={handleCreate} disabled={isCreating || !!scheduleError}
               className="w-full py-4 bg-gray-900 text-white font-bold text-sm rounded-2xl hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg">
               {isCreating ? (<><Zap size={18} className="animate-spin" /> Creating Contest...</>) : (<><Zap size={18} className="fill-yellow-400 text-yellow-400" /> Create & Get Link</>)}
             </button>

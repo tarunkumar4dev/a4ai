@@ -117,13 +117,78 @@ export interface SubmitResponse {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Errors: FastAPI "detail" can be a string, an object ({code, message, ...}) or a 422 list
+// ([{loc, msg}]) — turn any of them into one readable line.
+// ═══════════════════════════════════════════════════════════
+
+export class ContestApiError extends Error {
+  status: number;
+  code: string | null;
+  /** the JSON body (top-level fields, e.g. {code, scheduled_at, detail}) */
+  body: Record<string, any>;
+  /** `detail` when it is an object ({code, message, scheduled_at, ...}), else {} */
+  detail: Record<string, any>;
+  constructor(message: string, status: number, code: string | null = null, body: Record<string, any> = {}, detail: Record<string, any> = {}) {
+    super(message);
+    this.name = "ContestApiError";
+    this.status = status;
+    this.code = code;
+    this.body = body;
+    this.detail = detail;
+  }
+}
+
+export function detailMessage(body: any): string | null {
+  const d = body?.detail ?? body;
+  if (!d) return null;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) {
+    const msgs = d.map((e) => (typeof e === "string" ? e : e?.msg ? `${e.msg}${Array.isArray(e.loc) ? ` (${e.loc.filter((x: any) => x !== "body").join(".")})` : ""}` : null)).filter(Boolean);
+    return msgs.length ? msgs.join("; ") : null;
+  }
+  if (typeof d === "object") return d.message || d.msg || d.error || (typeof body?.message === "string" ? body.message : null);
+  return null;
+}
+
+/** Read a failed Response into a ContestApiError (never throws while reading). */
+export async function errorFromResponse(res: Response, fallback: string): Promise<ContestApiError> {
+  const raw = await res.json().catch(() => ({} as any));
+  const body = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const d = body.detail;
+  const obj = d && typeof d === "object" && !Array.isArray(d) ? d : {};
+  // top-level first ({"code": "...", "detail": "<string>"}), then the object form ({"detail": {"code": ...}})
+  const code = body.code || obj.code || null;
+  return new ContestApiError(detailMessage(body) || `${fallback} (${res.status})`, res.status, code, body, obj);
+}
+
+/** "25 Oct 2026, 10:00 am IST". A timestamp without an offset ("2026-10-25T04:30:00") is read as UTC. */
+export function formatIst(iso: string): string {
+  const t = iso.trim();
+  const noZone = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(t);
+  const d = new Date(noZone ? `${t.replace(" ", "T")}Z` : t);
+  if (isNaN(d.getTime())) return iso;
+  return `${d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })} IST`;
+}
+
+/** Text for a failed /start: a scheduled contest that hasn't opened shows its opening time. */
+export function startErrorMessage(err: unknown, fallback = "Could not start the contest."): string {
+  if (err instanceof ContestApiError && err.code === "CONTEST_NOT_STARTED") {
+    const keys = ["scheduled_at", "starts_at", "start_time", "opens_at"];
+    const at = [err.body.scheduled_at, err.detail.scheduled_at, ...keys.slice(1).flatMap((k) => [err.body[k], err.detail[k]])]
+      .find((v) => typeof v === "string" && v.trim());
+    return at ? `This contest opens on ${formatIst(String(at))}. Please come back then.` : "This contest hasn't started yet. Please come back later.";
+  }
+  return (err as any)?.message || fallback;
+}
+
+// ═══════════════════════════════════════════════════════════
 // FIX: Auth helper — correct import path
 // BUG WAS: import("@/integrations/supabase/client")
 //          → module not found → catch swallowed error
 //          → no auth token → backend rejected request
 // ═══════════════════════════════════════════════════════════
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -153,9 +218,9 @@ export const contestApi = {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error("[contestApi] createContest failed:", res.status, err);
-      throw new Error(err.detail || `Failed to create contest (${res.status})`);
+      const err = await errorFromResponse(res, "Failed to create contest");
+      console.error("[contestApi] createContest failed:", res.status, err.message);
+      throw err;
     }
     return res.json();
   },
@@ -166,7 +231,11 @@ export const contestApi = {
     });
     if (res.status === 404) throw new Error("Contest not found");
     if (res.status === 410) throw new Error("This contest has ended");
-    if (res.status === 403) throw new Error("This contest is paused");
+    if (res.status === 403) {
+      const err = await errorFromResponse(res, "This contest is paused");
+      if (err.code === "CONTEST_NOT_STARTED") throw err;   // startErrorMessage() shows the opening time
+      throw new ContestApiError("This contest is paused", 403, err.code);
+    }
     if (!res.ok) throw new Error("Failed to load contest");
     return res.json();
   },
@@ -184,10 +253,7 @@ export const contestApi = {
         student_email: studentEmail,
       }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || "Failed to start contest");
-    }
+    if (!res.ok) throw await errorFromResponse(res, "Failed to start contest");
     return res.json();
   },
 
@@ -203,10 +269,7 @@ export const contestApi = {
       headers,
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || "Failed to submit");
-    }
+    if (!res.ok) throw await errorFromResponse(res, "Failed to submit");
     return res.json();
   },
 
