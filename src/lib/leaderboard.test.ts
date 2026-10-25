@@ -54,3 +54,19 @@ describe("display helpers", () => {
     expect(scoreTone(10).bar).toBe("#B91C1C");
   });
 });
+
+describe("resultsCsv", () => {
+  it("ranked rows first, unfinished last, quotes escaped", async () => {
+    const { resultsCsv } = await import("./leaderboard");
+    const csv = resultsCsv([
+      row("b", 30, 900, { student_name: 'Riya "R" Das', student_email: "r@x.in", warning_count: 2, submitted_via: "manual" }),
+      row("a", 45, 1000, { student_name: "Aarav, S" }),
+      { attempt_id: "run", student_name: "Still", status: "in_progress", score: null, total_marks: 50 },
+    ]);
+    const lines = csv.split("\n");
+    expect(lines[0].startsWith("rank,name,email,score")).toBe(true);
+    expect(lines[1].startsWith('1,"Aarav, S"')).toBe(true);
+    expect(lines[2]).toContain('"Riya ""R"" Das",r@x.in,30,50,60,15:00,900');
+    expect(lines[3].startsWith(",Still,")).toBe(true);
+  });
+});

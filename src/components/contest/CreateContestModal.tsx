@@ -107,6 +107,7 @@ const toIso = localToIso;
 export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subject, classGrade, board, logoBase64, initialDuration, onCreated }: CreateContestProps) => {
   const [step, setStep] = useState<"configure" | "share">("configure");
   const [contestLink, setContestLink] = useState<string | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -180,6 +181,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
       }
 
       setContestLink(res.share_link);
+      setCreatedId(res.contest_id);
       setStep("share");
       onCreated?.(res);
     } catch (err: any) {
@@ -396,9 +398,16 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
                 </div>
               </div>
 
-              <Link to="/contests/mine" onClick={onClose} className="flex items-center justify-center w-full min-h-[48px] text-sm font-bold text-gray-800 rounded-2xl border border-gray-300 hover:bg-gray-50">
-                See results{settings.answerMode === "teacher_release" ? " & publish them" : ""} in My contests →
-              </Link>
+              <div className="grid grid-cols-2 gap-3">
+                <Link to={createdId ? `/contests/mine?open=${encodeURIComponent(createdId)}` : "/contests/mine"} onClick={onClose}
+                  className="flex items-center justify-center gap-2 min-h-[48px] text-sm font-bold text-white rounded-2xl"
+                  style={{ background: "linear-gradient(135deg, #4F46E5, #7C3AED)" }}>
+                  <Trophy size={16} /> Results
+                </Link>
+                <Link to="/contests/mine" onClick={onClose} className="flex items-center justify-center min-h-[48px] text-sm font-bold text-gray-800 rounded-2xl border border-gray-300 hover:bg-gray-50">
+                  My contests{settings.answerMode === "teacher_release" ? " · publish" : ""}
+                </Link>
+              </div>
             </div>
             <div className="shrink-0 border-t border-gray-200 px-5 pt-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
               <button onClick={onClose} className="w-full min-h-[48px] bg-gray-900 text-white font-bold text-sm rounded-xl">Done</button>

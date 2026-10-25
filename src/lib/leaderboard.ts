@@ -96,3 +96,23 @@ export function myAttemptId(code: string): string | null {
 
 export const leaderboardHref = (code: string, contestId?: string | null) =>
   `/contests/leaderboard?c=${encodeURIComponent(code)}${contestId ? `&id=${encodeURIComponent(contestId)}` : ""}`;
+
+// ── teacher CSV ──
+const csvCell = (v: unknown) => {
+  const s = v == null ? "" : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+/** Teacher results as CSV: finished rows ranked, then unfinished attempts (rank empty). */
+export function resultsCsv(rows: LeaderboardRow[]): string {
+  const ranked = rankRows(rows);
+  const unfinished = rows.filter((r) => r.status === "in_progress" || r.score == null);
+  const head = ["rank", "name", "email", "score", "total", "percent", "time_mm_ss", "time_seconds", "correct", "wrong", "left",
+    "tab_switches", "submitted_via", "retry", "late", "status", "submitted_at"];
+  const line = (r: LeaderboardRow, rank: number | "") => [
+    rank, displayName(r), r.student_email ?? "", r.score ?? "", r.total_marks, r.score != null ? Math.round(percentOf(r)) : "",
+    r.time_taken_seconds != null ? mmss(r.time_taken_seconds) : "", r.time_taken_seconds ?? "", r.correct ?? "", r.wrong ?? "", r.left ?? "",
+    r.warning_count ?? "", r.submitted_via ?? "", r.retry ? "yes" : "", r.late ? "yes" : "", r.status, r.submitted_at ?? "",
+  ].map(csvCell).join(",");
+  return [head.join(","), ...ranked.map((r) => line(r, r.rank)), ...unfinished.map((r) => line(r, ""))].join("\n");
+}
