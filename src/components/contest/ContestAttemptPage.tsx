@@ -24,7 +24,9 @@ import {
 } from "lucide-react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
-import { contestApi, ContestApiError, type SubmitResponse } from "@/lib/contestApi";
+import { contestApi, ContestApiError, type LeaderboardResponse, type SubmitResponse } from "@/lib/contestApi";
+import ContestResultCard from "@/components/contest/results/ContestResultCard";
+import { badgesFor, leaderboardHref, rankRows } from "@/lib/leaderboard";
 import { setContestActive } from "@/lib/contestGuard";
 import { CONTEST_FONT_STACK, CONTEST_NAVY, useContestFont } from "@/lib/contestFont";
 import { supabase } from "@/lib/supabaseClient";
@@ -127,6 +129,8 @@ interface ContestConfig {
   snapshotsEnabled?: boolean;
   /** camera stream already opened (and allowed) in the lobby */
   cameraStream?: MediaStream | null;
+  /** the contest link's code (leaderboard link, remembered warnings) */
+  shortCode?: string;
   /** this attempt replaces one that ended on a technical issue (backend: retry_of) */
   retryOf?: string | null;
   /** answer_mode teacher_release: no score / answers until the teacher publishes */
@@ -607,7 +611,9 @@ export const ContestAttemptPage = ({
     syncRef.current?.stop();
     clearLocal(config.attemptId);
     camStreamRef.current?.getTracks().forEach((t) => t.stop());
-    setSubmitResult(result && (result.score !== undefined || result.questions_with_answers) ? result : null);
+    setSubmitResult(result && (result.score !== undefined || result.questions_with_answers || result.results_pending !== undefined) ? result : null);
+    // for the "Zero tab switches" badge (students never get warning counts from the leaderboard)
+    if (config.shortCode) { try { localStorage.setItem(`a4_contest_warnings_${config.shortCode}`, String(warningCountRef.current)); } catch { /* ignore */ } }
     setShowWarning(false);
     setShowSubmitModal(false);
     setSubmitPhase("idle");
@@ -988,6 +994,15 @@ export const ContestAttemptPage = ({
     return () => window.removeEventListener("keydown", h);
   }, []);
 
+  // ── After submit: rank, correct / wrong / left and the full board for badges ──
+  const [board, setBoard] = useState<LeaderboardResponse | null>(null);
+  useEffect(() => {
+    if (!isSubmitted || config.resultsByTeacher && (submitResult?.results_pending ?? true)) return;
+    let alive = true;
+    contestApi.getLeaderboard(config.contestId, config.attemptId).then((b) => { if (alive) setBoard(b); }).catch(() => {});
+    return () => { alive = false; };
+  }, [isSubmitted, submitResult, config.contestId, config.attemptId, config.resultsByTeacher]);
+
   // ── Stats ──
   const answeredCount = useMemo(
     () => answers.filter((a) => a.selectedOption || a.textAnswer).length,
@@ -1137,57 +1152,46 @@ export const ContestAttemptPage = ({
 
     // ── RESULT SUMMARY VIEW ──
     const leftCount = questions.length - answeredCount;
-    const hideScore = !!config.resultsByTeacher;
+    const pending = !!config.resultsByTeacher && (submitResult?.results_pending ?? true);
+    const ranked = rankRows(board?.attempts || []);
+    const mine = ranked.find((r) => r.is_me) || null;
+    // correct / wrong from the answer key when the server sent it, else from my leaderboard row
+    let correct: number | null = mine?.correct ?? null;
+    let wrong: number | null = mine?.wrong ?? null;
+    if (correct == null && questionsWithAnswers.length) {
+      correct = 0; wrong = 0;
+      questionsWithAnswers.forEach((q: any, idx: number) => {
+        const sel = answers[idx]?.selectedOption;
+        if (!sel) return;
+        if (sel.toUpperCase() === String(q.correct_answer || "").trim().charAt(0).toUpperCase()) correct!++; else wrong!++;
+      });
+    }
+    const hasScore = !pending && submitResult && submitResult.score != null;
     return (
-      <div className="min-h-screen bg-[#F4F6FA] flex items-start sm:items-center justify-center p-4" style={{ fontFamily: CONTEST_FONT_STACK }}>
-        <div className="bg-white rounded-xl max-w-lg w-full shadow-lg overflow-hidden text-center">
-          <div className="px-6 py-4 text-white text-left" style={{ background: NAVY }}>
-            <p className="text-sm font-bold truncate">{config.title}</p>
-            <p className="text-xs text-blue-100">{config.subject} · {config.classGrade}</p>
-          </div>
-          <div className="p-6 md:p-8">
-            <CheckCircle2 size={44} className="text-emerald-600 mx-auto mb-3" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-1">Test submitted</h2>
-            <p className="text-gray-700 text-sm mb-6">Your answers have been recorded.</p>
-
-            {submitResult && !hideScore && (
-              <div className="rounded-xl p-5 mb-6 text-white" style={{ background: NAVY }}>
-                <p className="text-4xl font-bold tabular-nums">{score}<span className="text-lg text-blue-100">/{totalMarks}</span></p>
-                <p className="text-sm text-blue-100 mt-1">Your score · {percentage}%</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="rounded-lg bg-emerald-50 border border-emerald-200 py-3"><p className="text-xl font-bold text-emerald-800 tabular-nums">{answeredCount}</p><p className="text-[11px] font-semibold text-emerald-900">Attempted</p></div>
-              <div className="rounded-lg bg-amber-50 border border-amber-200 py-3"><p className="text-xl font-bold text-amber-800 tabular-nums">{flaggedCount}</p><p className="text-[11px] font-semibold text-amber-900">Flagged</p></div>
-              <div className="rounded-lg bg-gray-50 border border-gray-200 py-3"><p className="text-xl font-bold text-gray-800 tabular-nums">{leftCount}</p><p className="text-[11px] font-semibold text-gray-700">Left</p></div>
-            </div>
-            {config.enableTabDetection && (
-              <p className="text-xs text-gray-700 mb-6">Tab switches: {warningCount}/{maxWarnings}</p>
-            )}
-
-            {hideScore ? (
-              <p className="text-sm font-semibold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">Your teacher will publish the results.</p>
-            ) : (
-              <>
-                {config.showAnswersAfterTest && questionsWithAnswers.length > 0 && (
-                  <button
-                    onClick={() => setShowAnswersView(true)}
-                    className={`w-full min-h-[48px] text-white font-bold text-sm rounded-lg flex items-center justify-center gap-2 ${FOCUS}`}
-                    style={{ background: NAVY }}
-                  >
-                    <BookOpen size={16} />
-                    View Answers & Explanations
-                  </button>
-                )}
-                {config.showNoAnswers && (
-                  <p className="text-xs text-gray-600 mt-4">Results will be shared by your teacher.</p>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      <ContestResultCard
+        title={config.title}
+        subtitle={`${config.subject} · ${config.classGrade}`}
+        pending={pending}
+        score={hasScore ? score : null}
+        total={totalMarks}
+        percentage={hasScore ? percentage : null}
+        rank={mine?.rank ?? board?.my_rank ?? null}
+        participants={board?.total_participants || ranked.length || null}
+        correct={pending ? null : correct}
+        wrong={wrong}
+        left={correct != null ? (mine?.left ?? leftCount) : leftCount}
+        attempted={answeredCount}
+        timeSec={submitResult?.time_taken_seconds ?? mine?.time_taken_seconds ?? null}
+        badges={mine ? badgesFor(mine, ranked, { myWarnings: warningCount }) : []}
+        leaderboardHref={config.shortCode && !config.showNoAnswers ? leaderboardHref(config.shortCode, config.contestId) : null}
+        onReview={config.showAnswersAfterTest && questionsWithAnswers.length > 0 ? () => setShowAnswersView(true) : null}
+        extra={
+          <>
+            <p className="text-xs text-gray-700">Flagged {flaggedCount}{config.enableTabDetection ? ` · Tab switches ${warningCount}/${maxWarnings}` : ""}</p>
+            {config.showNoAnswers && !pending && <p className="text-xs text-gray-700">Results will be shared by your teacher.</p>}
+          </>
+        }
+      />
     );
   }
 

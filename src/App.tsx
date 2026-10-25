@@ -9,6 +9,7 @@ import {
   Navigate,
   useLocation,
   useParams,
+  useSearchParams,
 } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -101,6 +102,13 @@ const CreateContestPage = lazy(() => import("./pages/CreateContestPage"));
 const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
 const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const ContestLeaderboardPage = lazy(() => import("./pages/ContestLeaderboardPage"));
+
+/** ?c=<short_code> / ?id=<contest_id> → a contest's leaderboard; plain /contests/leaderboard stays the old page */
+function LeaderboardRoute() {
+  const [params] = useSearchParams();
+  return params.get("c") || params.get("id") ? <ContestLeaderboardPage /> : <LeaderboardPage />;
+}
 const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
 
 const ContestPage = lazy(() => import("./pages/ContestPage"));
@@ -467,7 +475,7 @@ const App = () => {
                       <Route path="/contests/mine" element={<PrivateRoute><MyContestsPage /></PrivateRoute>} />
                       <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
                       <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
-                      <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />
+                      <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardRoute /></PrivateRoute>} />
                       <Route path="/contests/preview/:contestId" element={<PrivateRoute><ContestPreviewPage /></PrivateRoute>} />
                       <Route path="/contest/:shortCode" element={<PrivateRoute><ContestPage /></PrivateRoute>} />
                       <Route path="/mega-contest/:contestId" element={<PrivateRoute><MegaContestLivePage /></PrivateRoute>} />

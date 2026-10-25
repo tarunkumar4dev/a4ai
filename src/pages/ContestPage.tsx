@@ -12,6 +12,9 @@ import { CONTEST_FONT_STACK, CONTEST_NAVY, useContestFont } from "@/lib/contestF
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { cleanName, isRealName, isValidName, loadSavedName, saveName } from "@/lib/studentName";
+import { type LeaderboardResponse } from "@/lib/contestApi";
+import ContestResultCard from "@/components/contest/results/ContestResultCard";
+import { badgesFor, leaderboardHref, rankRows, rememberContestId, rememberedContestId } from "@/lib/leaderboard";
 
 const attemptMarker = (code: string) => `a4_contest_attempt_${code}`;
 const readMarker = (code: string) => { try { return localStorage.getItem(attemptMarker(code)); } catch { return null; } };
@@ -52,7 +55,8 @@ export default function ContestPage() {
   const [notStarted, setNotStarted] = useState<{ opensAt: number | null; nextCheckMs: number } | null>(null);
   const [, setTick] = useState(0);
   const [contestData, setContestData] = useState<(ContestData & { receivedAt: number }) | null>(null);
-  const [already, setAlready] = useState<{ score?: number | null; total_marks?: number; percentage?: number | null } | null>(null);
+  const [already, setAlready] = useState<{ score?: number | null; total_marks?: number; percentage?: number | null; attemptId?: string | null } | null>(null);
+  const [alreadyBoard, setAlreadyBoard] = useState<LeaderboardResponse | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [cam, setCam] = useState<CamState>("idle");
@@ -129,6 +133,15 @@ export default function ContestPage() {
     }
   };
 
+  // reopening a submitted contest: my score / rank / answer counts from the leaderboard
+  const alreadyContestId = already ? (shortCode && rememberedContestId(shortCode)) || info?.contest_id || null : null;
+  useEffect(() => {
+    if (!already || !alreadyContestId) return;
+    let alive = true;
+    contestApi.getLeaderboard(alreadyContestId, already.attemptId).then((b) => { if (alive) setAlreadyBoard(b); }).catch(() => {});
+    return () => { alive = false; };
+  }, [already, alreadyContestId]);
+
   const needCamera = !!info?.enable_camera;
   const canStart = !starting && !blocker && nameChecked && nameOk && (!needCamera || cam === "on");
 
@@ -147,12 +160,14 @@ export default function ContestPage() {
       }
       const data = await contestApi.startAttempt(shortCode, studentName, user?.email || undefined);
       writeMarker(shortCode, data.attempt_id);
+      rememberContestId(shortCode, data.contest_id);
       handedOver.current = !!stream;
       setContestData({ ...data, receivedAt: Date.now() });
     } catch (err: any) {
       if (err instanceof ContestApiError && (err.code === "ALREADY_SUBMITTED" || err.status === 409)) {
         const r = err.body?.result || err.detail?.result || err.body;
-        setAlready({ score: r?.score, total_marks: r?.total_marks, percentage: r?.percentage });
+        setAlready({ score: r?.score, total_marks: r?.total_marks, percentage: r?.percentage, attemptId: err.body?.attempt_id || readMarker(shortCode) });
+        if (err.body?.attempt_id) writeMarker(shortCode, err.body.attempt_id);
       } else if (err instanceof ContestApiError && (err.code === "CONTEST_NOT_STARTED" || err.status === 410)) {
         setBlocker(err.status === 410 ? "This contest has ended." : startErrorMessage(err));
         if (err.code === "CONTEST_NOT_STARTED") setNotStarted(notStartedTiming(err, Date.now()));
@@ -202,6 +217,7 @@ export default function ContestPage() {
           // the server sends plain strings for warning types; the attempt page only appends / counts them
           progress: (contestData.progress ?? null) as Partial<AttemptProgress> | null,
           snapshotsEnabled: contestData.snapshots_enabled,
+          shortCode,
           cameraStream: stream,
         }}
       />
@@ -209,17 +225,32 @@ export default function ContestPage() {
   }
 
   if (already) {
+    const ranked = rankRows(alreadyBoard?.attempts || []);
+    const mine = ranked.find((r) => r.is_me) || null;
+    const pending = !!alreadyBoard?.results_pending;
+    const score = mine?.score ?? already.score ?? null;
+    const total = mine?.total_marks ?? already.total_marks ?? info?.total_marks ?? null;
+    let myWarnings: number | null = null;
+    try { const w = localStorage.getItem(`a4_contest_warnings_${shortCode}`); myWarnings = w == null ? null : Number(w); } catch { /* ignore */ }
     return (
-      <Shell>
-        <div className="text-center space-y-3">
-          <CheckCircle2 size={44} className="mx-auto text-emerald-500" />
-          <h1 className="text-xl font-extrabold text-gray-900">You have already submitted</h1>
-          {already.score != null && already.total_marks != null ? (
-            <p className="text-3xl font-extrabold text-gray-900">{already.score}<span className="text-base text-gray-600">/{already.total_marks}</span></p>
-          ) : null}
-          <p className="text-sm text-gray-500">Your answers were recorded. Your teacher will share the results.</p>
-        </div>
-      </Shell>
+      <ContestResultCard
+        heading="You have already submitted"
+        title={info?.title || alreadyBoard?.title || "Contest"}
+        subtitle={info ? `${info.subject} · ${info.class_grade}` : undefined}
+        pending={pending}
+        score={score}
+        total={total}
+        percentage={mine?.percentage ?? already.percentage ?? null}
+        rank={mine?.rank ?? alreadyBoard?.my_rank ?? null}
+        participants={alreadyBoard?.total_participants || ranked.length || null}
+        correct={mine?.correct ?? null}
+        wrong={mine?.wrong ?? null}
+        left={mine?.left ?? null}
+        timeSec={mine?.time_taken_seconds ?? null}
+        badges={mine ? badgesFor(mine, ranked, { myWarnings }) : []}
+        leaderboardHref={shortCode && alreadyContestId ? leaderboardHref(shortCode, alreadyContestId) : null}
+        extra={!mine && !pending && score == null ? <p className="text-sm text-gray-700">Your answers were recorded. Your teacher will share the results.</p> : null}
+      />
     );
   }
 

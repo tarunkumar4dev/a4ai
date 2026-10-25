@@ -55,19 +55,47 @@ export interface MyContest {
   status: string;
   created_at: string;
   results_published?: boolean;
+  // newer backend (feat/contest-results)
+  attempts_count?: number;
+  scheduled_at?: string | null;
+  expires_at?: string | null;
+  results_published_at?: string | null;
 }
 
+/** One leaderboard row. Students get only names / scores / time; the contest's teacher also gets the rest. */
 export interface LeaderboardRow {
   attempt_id: string;
+  /** null: still running (teacher view only) */
+  rank?: number | null;
   student_name?: string | null;
-  student_email?: string | null;
   status: string;
   score?: number | null;
   total_marks: number;
   percentage?: number | null;
   time_taken_seconds?: number | null;
-  warning_count: number;
+  correct?: number | null;
+  wrong?: number | null;
+  left?: number | null;
   submitted_at?: string | null;
+  is_me?: boolean;
+  retry?: boolean;
+  retry_of?: string | null;
+  // teacher only
+  student_email?: string | null;
+  warning_count?: number | null;
+  submitted_via?: string | null;
+  late?: boolean | null;
+}
+
+export interface LeaderboardResponse {
+  contest_id: string;
+  title: string;
+  total_attempts: number;
+  attempts: LeaderboardRow[];
+  /** teacher_release, not published, caller isn't the teacher: no rows */
+  results_pending?: boolean;
+  total_participants?: number;
+  my_rank?: number | null;
 }
 
 export interface CreateContestResponse {
@@ -175,6 +203,16 @@ export interface SubmitResponse {
   answered_count: number;
   total_questions: number;
   questions_with_answers?: any[];
+  // newer backend (feat/contest-results)
+  submitted_at?: string | null;
+  submitted_via?: string | null;
+  late?: boolean;
+  /** server-measured, capped at the duration */
+  time_taken_seconds?: number | null;
+  retry_of?: string | null;
+  retry?: boolean;
+  /** teacher_release, not published yet: score / answers withheld */
+  results_pending?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -377,12 +415,20 @@ export const contestApi = {
     if (!res.ok) throw await errorFromResponse(res, "Failed to save snapshot");
   },
 
-  async getLeaderboard(contestId: string) {
-    const res = await fetch(`${API_V1}/contests/${contestId}/leaderboard`, {
-      headers: await getAuthHeaders(),
-    });
+  /** attemptId (X-Attempt-Id) marks the caller's own row (is_me / my_rank) */
+  async getLeaderboard(contestId: string, attemptId?: string | null): Promise<LeaderboardResponse> {
+    const headers = await getAuthHeaders();
+    if (attemptId) headers["X-Attempt-Id"] = attemptId;
+    const res = await fetch(`${API_V1}/contests/${contestId}/leaderboard`, { headers, cache: "no-store" });
     if (!res.ok) throw await errorFromResponse(res, "Failed to load results");
     return res.json();
+  },
+
+  /** Hide published results again (backend: POST /contests/{id}/unpublish-results — not built yet → 404/405) */
+  async unpublishResults(contestId: string): Promise<{ ok?: boolean }> {
+    const res = await fetch(`${API_V1}/contests/${contestId}/unpublish-results`, { method: "POST", headers: await getAuthHeaders() });
+    if (!res.ok) throw await errorFromResponse(res, "Failed to hide results");
+    return res.json().catch(() => ({ ok: true }));
   },
 
   async listMyContests(): Promise<{ contests: MyContest[] }> {
