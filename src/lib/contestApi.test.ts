@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { ContestApiError, detailMessage, errorFromResponse, formatIst, startErrorMessage } from "./contestApi";
+import { describe, expect, it, vi } from "vitest";
+import { ContestApiError, contestApi, detailMessage, errorFromResponse, formatIst, notStartedTiming, startErrorMessage } from "./contestApi";
 
 const res = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
@@ -41,5 +41,37 @@ describe("backend error text", () => {
     const e = await errorFromResponse(new Response("oops", { status: 502 }), "Failed to start contest");
     expect(e.message).toBe("Failed to start contest (502)");
     expect(startErrorMessage(e)).toBe("Failed to start contest (502)");
+  });
+});
+
+describe("not started: when to look again (server time, not the phone clock)", () => {
+  const notStarted = (body: Record<string, unknown>) => errorFromResponse(res(403, body), "x");
+
+  it("opens at receivedAt + (scheduled_at − server_now), even if the phone clock is 10 min wrong", async () => {
+    const e = await notStarted({ code: "CONTEST_NOT_STARTED", scheduled_at: "2026-10-25T06:06:00Z", server_now: "2026-10-25T06:05:00Z", detail: "Not yet" });
+    const phoneNow = Date.parse("2026-10-25T06:15:00Z");          // phone is 10 min fast
+    const t = notStartedTiming(e, phoneNow);
+    expect(t.opensAt).toBe(phoneNow + 60_000);                    // still 1 minute away
+    expect(t.nextCheckMs).toBe(15_000);                           // 15 s poll is sooner
+  });
+  it("re-checks right after it opens when that is sooner than 15 s", async () => {
+    const e = await notStarted({ code: "CONTEST_NOT_STARTED", scheduled_at: "2026-10-25T06:06:00Z", server_now: "2026-10-25T06:05:55Z" });
+    expect(notStartedTiming(e, 1_000_000).nextCheckMs).toBe(5_300);
+  });
+  it("detail-object shape works too; no server_now → only the 15 s poll", async () => {
+    const e1 = await notStarted({ detail: { code: "CONTEST_NOT_STARTED", scheduled_at: "2026-10-25T06:06:00Z", server_now: "2026-10-25T06:06:10Z" } });
+    expect(notStartedTiming(e1, 0).nextCheckMs).toBe(500);       // already open by the server's clock
+    const e2 = await notStarted({ code: "CONTEST_NOT_STARTED", scheduled_at: "2026-10-25T06:06:00Z" });
+    expect(notStartedTiming(e2, 0)).toEqual({ opensAt: null, nextCheckMs: 15_000 });
+  });
+  it("/info is never served from the browser cache", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(res(200, { title: "x" }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await contestApi.getContestInfo("abc");
+      expect(fetchMock.mock.calls[0][1]).toMatchObject({ cache: "no-store" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

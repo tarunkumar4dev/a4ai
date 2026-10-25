@@ -229,6 +229,23 @@ export function formatIst(iso: string): string {
   return `${d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })} IST`;
 }
 
+const NOT_STARTED_POLL_MS = 15000;
+
+/**
+ * When to look again after 403 CONTEST_NOT_STARTED. The opening moment comes from the SERVER
+ * (scheduled_at − server_now, placed on this device's clock at receivedAt), never from the phone's own clock.
+ * opensAt = null when the server sent no server_now (then only the 15 s poll).
+ */
+export function notStartedTiming(err: unknown, receivedAt: number, now = receivedAt): { opensAt: number | null; nextCheckMs: number } {
+  const pick = (k: string) => (err instanceof ContestApiError ? err.body?.[k] ?? err.detail?.[k] : undefined);
+  const sched = Date.parse(String(pick("scheduled_at") ?? pick("starts_at") ?? ""));
+  const server = Date.parse(String(pick("server_now") ?? ""));
+  if (isNaN(sched) || isNaN(server)) return { opensAt: null, nextCheckMs: NOT_STARTED_POLL_MS };
+  const opensAt = receivedAt + (sched - server);
+  // re-check just after it opens (+300 ms), but never wait longer than the 15 s poll
+  return { opensAt, nextCheckMs: Math.min(NOT_STARTED_POLL_MS, Math.max(500, opensAt - now + 300)) };
+}
+
 /** Text for a failed /start: a scheduled contest that hasn't opened shows its opening time. */
 export function startErrorMessage(err: unknown, fallback = "Could not start the contest."): string {
   if (err instanceof ContestApiError && err.code === "CONTEST_NOT_STARTED") {
@@ -285,8 +302,10 @@ export const contestApi = {
   },
 
   async getContestInfo(shortCode: string): Promise<ContestInfo> {
+    // no-store: "Check again" / the auto re-check must reach the server, never a cached "not started"
     const res = await fetch(`${API_V1}/contests/${shortCode}/info`, {
       headers: { "Content-Type": "application/json" },
+      cache: "no-store",
     });
     if (res.status === 404) throw new Error("Contest not found");
     if (res.status === 410) throw new Error("This contest has ended");

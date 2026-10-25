@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Camera, CheckCircle2, Clock, FileText, Loader2, ShieldAlert } from "lucide-react";
-import { contestApi, ContestApiError, ContestData, ContestInfo, startErrorMessage } from "@/lib/contestApi";
+import { contestApi, ContestApiError, ContestData, ContestInfo, notStartedTiming, startErrorMessage } from "@/lib/contestApi";
 import ContestAttemptPage from "@/components/contest/ContestAttemptPage";
 import type { AttemptProgress } from "@/lib/contestProgress";
 import { CONTEST_FONT_STACK, CONTEST_NAVY, useContestFont } from "@/lib/contestFont";
@@ -45,6 +45,9 @@ export default function ContestPage() {
   const [info, setInfo] = useState<ContestInfo | null>(null);
   const [infoLoading, setInfoLoading] = useState(true);
   const [blocker, setBlocker] = useState<string | null>(null);   // not started / ended / not found
+  /** contest not open yet: when it opens (server time on this device's clock) and when to look again */
+  const [notStarted, setNotStarted] = useState<{ opensAt: number | null; nextCheckMs: number } | null>(null);
+  const [, setTick] = useState(0);
   const [contestData, setContestData] = useState<(ContestData & { receivedAt: number }) | null>(null);
   const [already, setAlready] = useState<{ score?: number | null; total_marks?: number; percentage?: number | null } | null>(null);
   const [starting, setStarting] = useState(false);
@@ -56,20 +59,32 @@ export default function ContestPage() {
   const resumable = shortCode ? !!readMarker(shortCode) : false;
   useContestFont();
 
-  const loadInfo = useCallback(() => {
+  // silent: the automatic re-check keeps the "opens in" screen up instead of flashing "Loading…"
+  const loadInfo = useCallback((silent = false) => {
     if (!shortCode) return;
-    setInfoLoading(true);
-    setBlocker(null);
+    if (!silent) { setInfoLoading(true); setBlocker(null); }
     contestApi.getContestInfo(shortCode)
-      .then(setInfo)
+      .then((i) => { setInfo(i); setNotStarted(null); setBlocker(null); })
       .catch((err) => {
-        if (err instanceof ContestApiError && err.code === "CONTEST_NOT_STARTED") setBlocker(startErrorMessage(err));
+        if (err instanceof ContestApiError && err.code === "CONTEST_NOT_STARTED") {
+          setBlocker(startErrorMessage(err));
+          setNotStarted(notStartedTiming(err, Date.now()));
+        }
         else if (/not found|ended|paused/i.test(err?.message || "")) setBlocker(err.message);
         // anything else (network, old backend): the lobby still works without /info
       })
       .finally(() => setInfoLoading(false));
   }, [shortCode]);
-  useEffect(loadInfo, [loadInfo]);
+  useEffect(() => loadInfo(), [loadInfo]);
+
+  // Not open yet: look again right when the server says it opens (and every 15 s anyway); the lobby then
+  // appears by itself. The countdown ticks once a second.
+  useEffect(() => {
+    if (!notStarted) return;
+    const again = setTimeout(() => loadInfo(true), notStarted.nextCheckMs);
+    const tick = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => { clearTimeout(again); clearInterval(tick); };
+  }, [notStarted, loadInfo]);
 
   // lobby camera preview; stopped on leave unless it was handed to the attempt
   useEffect(() => {
@@ -110,6 +125,7 @@ export default function ContestPage() {
         setAlready({ score: r?.score, total_marks: r?.total_marks, percentage: r?.percentage });
       } else if (err instanceof ContestApiError && (err.code === "CONTEST_NOT_STARTED" || err.status === 410)) {
         setBlocker(err.status === 410 ? "This contest has ended." : startErrorMessage(err));
+        if (err.code === "CONTEST_NOT_STARTED") setNotStarted(notStartedTiming(err, Date.now()));
       } else {
         setStartError(startErrorMessage(err, "Could not start the contest. Check your internet and try again."));
       }
@@ -187,7 +203,13 @@ export default function ContestPage() {
         <div className="text-center space-y-3">
           <Clock size={40} className="mx-auto text-gray-600" />
           <p className="text-base font-bold text-gray-900">{blocker}</p>
-          <button onClick={loadInfo} className={`px-5 min-h-[48px] rounded-lg text-sm font-bold ${NAVY_BTN}`}>Check again</button>
+          {notStarted?.opensAt != null && notStarted.opensAt > Date.now() && (
+            <p className="text-2xl font-bold tabular-nums text-[#1F3A68]" aria-live="polite">
+              Opens in {(() => { const s = Math.ceil((notStarted.opensAt - Date.now()) / 1000); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); return `${h ? `${h}:` : ""}${String(m).padStart(h ? 2 : 1, "0")}:${String(s % 60).padStart(2, "0")}`; })()}
+            </p>
+          )}
+          {notStarted && <p className="text-xs text-gray-600">This page opens the test by itself when it starts.</p>}
+          <button onClick={() => loadInfo()} className={`px-5 min-h-[48px] rounded-lg text-sm font-bold ${NAVY_BTN}`}>Check again</button>
         </div>
       </Shell>
     );
