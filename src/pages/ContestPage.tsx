@@ -9,6 +9,9 @@ import { contestApi, ContestApiError, ContestData, ContestInfo, notStartedTiming
 import ContestAttemptPage from "@/components/contest/ContestAttemptPage";
 import type { AttemptProgress } from "@/lib/contestProgress";
 import { CONTEST_FONT_STACK, CONTEST_NAVY, useContestFont } from "@/lib/contestFont";
+import { useAuth } from "@/providers/AuthProvider";
+import { supabase } from "@/lib/supabaseClient";
+import { cleanName, isRealName, isValidName, loadSavedName, saveName } from "@/lib/studentName";
 
 const attemptMarker = (code: string) => `a4_contest_attempt_${code}`;
 const readMarker = (code: string) => { try { return localStorage.getItem(attemptMarker(code)); } catch { return null; } };
@@ -59,6 +62,25 @@ export default function ContestPage() {
   const resumable = shortCode ? !!readMarker(shortCode) : false;
   useContestFont();
 
+  // ── Leaderboard name: profile full_name, else asked once here (remembered on this device + saved to the profile) ──
+  const { user } = useAuth();
+  const [profileName, setProfileName] = useState<string | null>(() => {
+    const meta = user?.user_metadata?.full_name;
+    return isRealName(meta) ? cleanName(meta) : null;
+  });
+  const [nameChecked, setNameChecked] = useState(!!profileName);
+  const [typedName, setTypedName] = useState(loadSavedName);
+  useEffect(() => {
+    if (profileName || !user?.id) { setNameChecked(true); return; }
+    let alive = true;
+    supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle()
+      .then(({ data }) => { if (alive && isRealName(data?.full_name)) setProfileName(cleanName(data!.full_name)); })
+      .then(() => { if (alive) setNameChecked(true); }, () => { if (alive) setNameChecked(true); });
+    return () => { alive = false; };
+  }, [user?.id, profileName]);
+  const needName = nameChecked && !profileName;
+  const nameOk = !needName || isValidName(typedName);
+
   // silent: the automatic re-check keeps the "opens in" screen up instead of flashing "Loading…"
   const loadInfo = useCallback((silent = false) => {
     if (!shortCode) return;
@@ -108,14 +130,22 @@ export default function ContestPage() {
   };
 
   const needCamera = !!info?.enable_camera;
-  const canStart = !starting && !blocker && (!needCamera || cam === "on");
+  const canStart = !starting && !blocker && nameChecked && nameOk && (!needCamera || cam === "on");
 
   const start = async () => {
     if (!shortCode || !canStart) return;
     setStarting(true);
     setStartError(null);
     try {
-      const data = await contestApi.startAttempt(shortCode);
+      const studentName = profileName || cleanName(typedName);
+      if (needName) {
+        saveName(studentName);
+        if (user?.id) {
+          // best effort: next time the profile already has it
+          supabase.from("profiles").update({ full_name: studentName }).eq("id", user.id).then(() => {}, () => {});
+        }
+      }
+      const data = await contestApi.startAttempt(shortCode, studentName, user?.email || undefined);
       writeMarker(shortCode, data.attempt_id);
       handedOver.current = !!stream;
       setContestData({ ...data, receivedAt: Date.now() });
@@ -239,6 +269,18 @@ export default function ContestPage() {
         <p>• Don't refresh or close this page. If it happens, open the link again and tap Continue — your answers are kept.</p>
         <p>• The timer keeps running even if you leave.</p>
       </div>
+
+      {needName && (
+        <label className="block">
+          <span className="text-sm font-bold text-gray-900">Your name for the leaderboard <span className="text-red-600">*</span></span>
+          <input value={typedName} onChange={(e) => setTypedName(e.target.value)} maxLength={40} autoComplete="name"
+            placeholder="e.g. Priya Sharma"
+            className="mt-1 w-full min-h-[48px] rounded-lg border-2 border-gray-300 px-3 text-base text-gray-900 focus:border-[#1F3A68] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F3A68]" />
+          <span className={`text-xs ${typedName && !isValidName(typedName) ? "text-red-700 font-semibold" : "text-gray-600"}`}>
+            {typedName && !isValidName(typedName) ? "Use 2–40 characters." : "Your classmates will see this name."}
+          </span>
+        </label>
+      )}
 
       {needCamera && (
         <div className="space-y-2">
