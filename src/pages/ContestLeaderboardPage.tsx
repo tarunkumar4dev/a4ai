@@ -34,7 +34,9 @@ function PodiumBlock({ row, place, height, delay }: { row: Ranked; place: 1 | 2 
     <div className="flex flex-col items-center justify-end min-w-0 flex-1" data-testid={`podium-${place}`}>
       {place === 1 && <Crown size={26} className="text-amber-400 mb-0.5" aria-hidden />}
       <div className={`rounded-full p-0.5 ${row.is_me ? "ring-4 ring-amber-300" : ""}`}><Avatar name={name} size={place === 1 ? 60 : 50} /></div>
-      <p className="mt-1.5 text-sm font-bold text-white text-center truncate max-w-full px-1">{name}{row.is_me ? " (You)" : ""}</p>
+      {/* up to 2 lines; "You" is a pill so it is never cut off with the name */}
+      <p className="mt-1.5 text-sm font-bold text-white text-center line-clamp-2 break-words max-w-full px-1 leading-tight" title={name}>{name}</p>
+      {row.is_me && <span className="mt-1 px-2 py-0.5 rounded-full bg-amber-300 text-[11px] font-bold text-amber-950" data-testid="podium-you">You</span>}
       <p className="text-xs text-indigo-100 tabular-nums">{Math.round(score)}/{row.total_marks} · {Math.round(p)}% · {mmss(row.time_taken_seconds)}</p>
       <div className="mt-2 w-full rounded-t-2xl flex items-start justify-center pt-2 font-black text-2xl text-[#1F3A68]"
         style={{ height: Math.max(8, h), background: place === 1 ? "#FDE68A" : place === 2 ? "#E0E7FF" : "#FBCFE8" }}>
@@ -221,7 +223,9 @@ export default function ContestLeaderboardPage() {
               {ranked.length === 0 ? (
                 <p className="rounded-2xl bg-white border border-gray-200 p-6 text-sm text-gray-700 text-center">No results yet — be the first to finish!</p>
               ) : listRows.length === 0 ? (
-                <p className="rounded-2xl bg-white border border-gray-200 p-6 text-sm text-gray-700 text-center">No one matches “{q}”.</p>
+                <p className="rounded-2xl bg-white border border-gray-200 p-6 text-sm text-gray-700 text-center" data-testid="list-empty">
+                  {searching ? `No one matches “${q.trim()}”.` : showPodium ? "Everyone is on the podium 🎉" : "No one here yet."}
+                </p>
               ) : (
                 <ol className="space-y-2" aria-label="Ranking">
                   {listRows.map((r) => {
