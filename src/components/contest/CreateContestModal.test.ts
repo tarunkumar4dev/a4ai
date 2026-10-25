@@ -12,8 +12,8 @@ vi.mock("@/lib/contestApi", async (orig) => ({
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), warning: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 
-// @ts-expect-error React act() environment flag
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+// React act() environment flag
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const base: ContestFormSettings = {
   title: "T", duration: 60, answerMode: "after_test", showExplanation: true, enableCamera: true, enableTabDetection: true,
