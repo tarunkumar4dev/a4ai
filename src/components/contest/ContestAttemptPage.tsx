@@ -10,12 +10,13 @@
 //   5. Multi-device responsive (mobile + laptop)
 //   6. Question navigation sidebar
 //   7. Anti-cheating: right-click disabled, copy-paste disabled
-//   8. Auto-save progress
+//   8. Auto-save progress (localStorage every change + PUT progress, see src/lib/contestProgress.ts)
 //   9. Clean, exam-like UI
+//  10. Resume after refresh: server deadline timer, merged local/server answers, no reload while active
 // ──────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useIsPresent } from "framer-motion";
 import {
   Camera, CameraOff, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   Send, Shield, Eye, MonitorSmartphone, Maximize, Flag,
@@ -23,6 +24,13 @@ import {
 } from "lucide-react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { contestApi, ContestApiError, type SubmitResponse } from "@/lib/contestApi";
+import { setContestActive } from "@/lib/contestGuard";
+import { supabase } from "@/lib/supabaseClient";
+import {
+  answersFor, clearLocal, clientDeadline, createAwayTracker, createProgressSync, loadLocal, mergeProgress, saveLocal,
+  secondsLeft, submitWithRetry, type AttemptProgress, type SyncState, type WarningEntry, type WarningType,
+} from "@/lib/contestProgress";
 
 // ==================== MATH TEXT (LaTeX renderer) ====================
 const MathText = ({ text }: { text: string }) => {
@@ -108,6 +116,16 @@ interface ContestConfig {
   enableTabDetection: boolean;
   maxWarnings: number;
   questions: ContestQuestion[];
+  // ── from /start on the newer backend (all optional) ──
+  startedAt?: string | null;
+  deadlineAt?: string | null;
+  serverNow?: string | null;
+  /** Date.now() when the /start response arrived (pairs with serverNow for clock skew) */
+  receivedAt?: number;
+  progress?: Partial<AttemptProgress> | null;
+  snapshotsEnabled?: boolean;
+  /** camera stream already opened (and allowed) in the lobby */
+  cameraStream?: MediaStream | null;
 }
 
 interface StudentAnswer {
@@ -119,50 +137,31 @@ interface StudentAnswer {
 }
 
 // ==================== CONSTANTS ====================
-const MAX_WARNINGS = 3;
-const AUTOSAVE_INTERVAL = 30000; // 30 seconds
+const MAX_WARNINGS = 5;             // fallback only — the contest's own max_warnings wins
+const AUTOSAVE_INTERVAL = 15000;    // PUT progress every 15 s (plus 2 s after a change)
+const SNAPSHOT_INTERVAL = 60000;
+const SNAPSHOT_BUCKET = "contest-snapshots";
+const SNAPSHOTS_BUILD_FLAG = import.meta.env.VITE_CONTEST_SNAPSHOTS === "1";
+const CAMERA_CONSTRAINTS: MediaStreamConstraints = { video: { width: 320, height: 240, facingMode: "user" }, audio: false };
 
 // ==================== PROCTORING: CAMERA FEED ====================
 const CameraFeed = ({
-  isActive,
-  onToggle,
-  onError,
+  stream,
+  recording,
 }: {
-  isActive: boolean;
-  onToggle: () => void;
-  onError: (msg: string) => void;
+  /** null = camera off / lost */
+  stream: MediaStream | null;
+  /** snapshots are really being taken → "REC", else "Camera on" */
+  recording: boolean;
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
+  // display only: the attempt page owns the stream (no toggle for the student, no extra getUserMedia per feed)
   useEffect(() => {
-    if (isActive) {
-      navigator.mediaDevices
-        .getUserMedia({ video: { width: 320, height: 240, facingMode: "user" }, audio: false })
-        .then((stream) => {
-          streamRef.current = stream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-        })
-        .catch((err) => {
-          console.error("Camera error:", err);
-          onError("Camera access denied. Please enable camera to continue.");
-        });
-    } else {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-    }
+    if (videoRef.current) videoRef.current.srcObject = stream;
+  }, [stream]);
 
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
-    };
-  }, [isActive, onError]);
-
+  const isActive = !!stream;
   return (
     <div className="relative group">
       <div
@@ -187,12 +186,11 @@ const CameraFeed = ({
           </div>
         )}
       </div>
-      {/* Recording indicator */}
       {isActive && (
         <div className="absolute top-2 left-2 flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <div className={`w-2 h-2 rounded-full ${recording ? "bg-red-500 animate-pulse" : "bg-emerald-400"}`} />
           <span className="text-[9px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded-full backdrop-blur-sm">
-            REC
+            {recording ? "REC" : "Camera on"}
           </span>
         </div>
       )}
@@ -339,25 +337,33 @@ const SubmitModal = ({
 // ==================== TIMER ====================
 const ContestTimer = ({
   totalSeconds,
+  deadline,
   onTimeUp,
 }: {
   totalSeconds: number;
+  /** ms epoch on this device's clock */
+  deadline: number;
   onTimeUp: () => void;
 }) => {
-  const [remaining, setRemaining] = useState(totalSeconds);
+  const [remaining, setRemaining] = useState(() => secondsLeft(deadline));
+  const firedRef = useRef(false);
+  const onTimeUpRef = useRef(onTimeUp);
+  onTimeUpRef.current = onTimeUp;
 
   useEffect(() => {
-    if (remaining <= 0) {
-      onTimeUp();
-      return;
-    }
-    const timer = setInterval(() => setRemaining((r) => r - 1), 1000);
+    const tick = () => {
+      const left = secondsLeft(deadline);
+      setRemaining(left);
+      if (left <= 0 && !firedRef.current) { firedRef.current = true; onTimeUpRef.current(); }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [remaining, onTimeUp]);
+  }, [deadline]);
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
-  const percentage = (remaining / totalSeconds) * 100;
+  const percentage = Math.min(100, (remaining / Math.max(1, totalSeconds)) * 100);
 
   const isLow = remaining < 300; // < 5 min
   const isCritical = remaining < 60; // < 1 min
@@ -406,10 +412,14 @@ const QuestionCard = ({
   showInstantAnswer: boolean;
 }) => {
   const correctOption = null; // will come from API if showInstantAnswer
+  // the previous card stays on screen while it animates out — a fast tap must not change ITS answer
+  const present = useIsPresent();
 
   return (
     <motion.div
       key={question.id}
+      style={present ? undefined : { pointerEvents: "none" }}
+      aria-hidden={!present}
       initial={{ opacity: 0, x: 40 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -40 }}
@@ -579,53 +589,335 @@ export const ContestAttemptPage = ({
 }) => {
   const { questions } = config;
 
+  const maxWarnings = config.maxWarnings > 0 ? config.maxWarnings : MAX_WARNINGS;
+  const durationSec = config.durationMinutes * 60;
+
+  // ── Restore once: this device's copy merged with the server's (resumed attempt); deadline from the server ──
+  const [boot] = useState(() => {
+    const local = loadLocal(config.attemptId);
+    const merged = mergeProgress(local, config.progress ?? null);
+    const localDeadline = local?.local_deadline ?? Date.now() + durationSec * 1000;
+    const serverDeadline = clientDeadline(config.deadlineAt, config.serverNow, config.receivedAt ?? Date.now());
+    return { merged, localDeadline, deadline: serverDeadline ?? localDeadline };
+  });
+  const deadline = boot.deadline;
+
   // ── State ──
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<StudentAnswer[]>(
-    questions.map((q) => ({
-      questionId: q.id,
-      selectedOption: null,
-      textAnswer: "",
-      timeSpent: 0,
-      flagged: false,
-    }))
-  );
-  const [cameraActive, setCameraActive] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(() =>
+    Math.min(Math.max(0, boot.merged?.current_index ?? 0), Math.max(0, questions.length - 1)));
+  const [answers, setAnswers] = useState<StudentAnswer[]>(() =>
+    answersFor(questions.map((q) => q.id), boot.merged?.answers).map((a) => ({
+      questionId: a.questionId, selectedOption: a.selected, textAnswer: a.textAnswer, timeSpent: a.timeSpent, flagged: a.flagged,
+    })));
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [warningCount, setWarningCount] = useState(0);
+  const [camStream, setCamStream] = useState<MediaStream | null>(config.enableCamera ? config.cameraStream ?? null : null);
+  const [cameraLost, setCameraLost] = useState(false);
+  const [warningCount, setWarningCount] = useState(boot.merged?.warning_count ?? 0);
   const [showWarning, setShowWarning] = useState(false);
   const [warningReason, setWarningReason] = useState("");
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<"idle" | "submitting" | "failed">("idle");
+  const [submitTry, setSubmitTry] = useState(0);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [syncState, setSyncState] = useState<SyncState | "local">("saved");
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [submitResult, setSubmitResult] = useState<any>(null);
   const [showAnswersView, setShowAnswersView] = useState(false);
   const questionTimerRef = useRef<number>(0);
+  const isSubmitting = submitPhase === "submitting";
+
+  // Latest values for event handlers / timers (no stale closures)
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+  const currentIndexRef = useRef(currentIndex);
+  currentIndexRef.current = currentIndex;
+  const warningCountRef = useRef(warningCount);
+  const warningLogRef = useRef<WarningEntry[]>(boot.merged?.warning_log ?? []);
+  const submittingRef = useRef(false);   // single flight: timer + warnings + button
+  const submittedRef = useRef(false);
+  const camStreamRef = useRef(camStream);
+  camStreamRef.current = camStream;
+  const syncRef = useRef<ReturnType<typeof createProgressSync> | null>(null);
+  /** the page is being refreshed / closed: its "hidden" is not a tab switch (the attempt resumes from the lobby) */
+  const unloadingRef = useRef(false);
+  const markUnloading = () => {
+    unloadingRef.current = true;
+    setTimeout(() => { unloadingRef.current = false; }, 3000);   // the student cancelled "Leave page?"
+  };
+  const progressUnsupported = useRef(false);   // old backend: no PUT progress → local copy only
 
   const currentQuestion = questions[currentIndex];
   const currentAnswer = answers[currentIndex];
 
-  // ── Anti-cheat: Tab visibility ──
+  const snapshot = (): AttemptProgress => ({
+    answers: answersRef.current.map((a) => ({
+      questionId: a.questionId, selected: a.selectedOption, textAnswer: a.textAnswer, timeSpent: a.timeSpent, flagged: a.flagged,
+    })),
+    current_index: currentIndexRef.current,
+    warning_count: warningCountRef.current,
+    warning_log: warningLogRef.current,
+  });
+  const persistLocal = () =>
+    saveLocal(config.attemptId, { ...snapshot(), updated_at: Date.now(), local_deadline: boot.localDeadline });
+
+  // ── Done: only when the server confirmed (submit, repeat submit, or a finalized progress save) ──
+  const finishSubmitted = (result: Partial<SubmitResponse> | null) => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    syncRef.current?.stop();
+    clearLocal(config.attemptId);
+    camStreamRef.current?.getTracks().forEach((t) => t.stop());
+    setSubmitResult(result && (result.score !== undefined || result.questions_with_answers) ? result : null);
+    setShowWarning(false);
+    setShowSubmitModal(false);
+    setSubmitPhase("idle");
+    setIsSubmitted(true);
+  };
+
+  // ── Save time spent on the current question (synchronous, so submit sends it) ──
+  const saveQuestionTime = useCallback(() => {
+    const add = questionTimerRef.current;
+    questionTimerRef.current = 0;
+    if (!add) return;
+    const idx = currentIndexRef.current;
+    const next = answersRef.current.map((a, i) => (i === idx ? { ...a, timeSpent: a.timeSpent + add } : a));
+    answersRef.current = next;
+    setAnswers(next);
+  }, []);
+
+  // ── Submit: retried with backoff; the attempt stays open until the server answers ──
+  const isAlreadySubmitted = (e: unknown) =>
+    e instanceof ContestApiError && (e.code === "ALREADY_SUBMITTED" || e.status === 409 || /already submitted/i.test(e.message));
+  const handleSubmit = async () => {
+    if (submittedRef.current || submittingRef.current) return;
+    submittingRef.current = true;
+    saveQuestionTime();
+    setShowSubmitModal(false);
+    setShowWarning(false);
+    setSubmitError(null);
+    setSubmitTry(0);
+    setSubmitPhase("submitting");
+    persistLocal();
+    const p = snapshot();
+    const payload = {
+      answers: p.answers.map((a) => ({ questionId: a.questionId, selected: a.selected, textAnswer: a.textAnswer, timeSpent: a.timeSpent, flagged: a.flagged })),
+      warning_count: p.warning_count,
+      warning_log: p.warning_log,
+      time_taken_seconds: Math.min(durationSec, Math.max(0, durationSec - secondsLeft(deadline))),
+    };
+    try {
+      const result = await submitWithRetry(() => contestApi.submitAttempt(config.contestId, config.attemptId, payload), {
+        // a retry can't fix these; 401 is retried (the session refreshes itself)
+        isFinal: (e) => isAlreadySubmitted(e) || (e instanceof ContestApiError && [400, 403, 404, 410, 422].includes(e.status)),
+        onRetry: (n) => setSubmitTry(n),
+      });
+      finishSubmitted(result);
+    } catch (e: any) {
+      if (isAlreadySubmitted(e)) finishSubmitted(e.body?.result ?? e.body ?? null);
+      else {
+        console.error("Submit failed:", e);
+        setSubmitError(e instanceof ContestApiError && e.status !== 401 ? e.message : null);
+        setSubmitPhase("failed");   // never "submitted" on failure — answers stay on this device
+      }
+    } finally {
+      submittingRef.current = false;
+    }
+  };
+  const submitRef = useRef(handleSubmit);
+  submitRef.current = handleSubmit;
+
+  // ── Warnings (one per away episode / camera loss) ──
+  const addWarning = (type: WarningType, reason: string, detail?: string) => {
+    if (submittedRef.current || submittingRef.current) return;
+    const n = warningCountRef.current + 1;
+    warningCountRef.current = n;
+    warningLogRef.current = [...warningLogRef.current, { type, at: new Date().toISOString(), ...(detail ? { detail } : {}) }];
+    setWarningCount(n);
+    setWarningReason(reason);
+    persistLocal();
+    syncRef.current?.changed();
+    if (n >= maxWarnings) submitRef.current();   // auto-submit with the LATEST answers
+    else setShowWarning(true);
+  };
+  const addWarningRef = useRef(addWarning);
+  addWarningRef.current = addWarning;
+  const trackerRef = useRef(createAwayTracker((type) =>
+    addWarningRef.current(type, type === "tab_hidden" ? "You left the test page (another app or tab)." : "The test window lost focus. Do not switch windows.")));
+
+  // ── Local copy on every change + server sync ──
   useEffect(() => {
-    const handleVisibility = () => {
+    if (submittedRef.current) return;
+    persistLocal();
+    syncRef.current?.changed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, currentIndex, warningCount]);
+
+  useEffect(() => {
+    const sync = createProgressSync({
+      snapshot,
+      intervalMs: AUTOSAVE_INTERVAL,
+      send: async (p, keepalive) => {
+        if (progressUnsupported.current) return null;
+        try {
+          return await contestApi.saveProgress(config.contestId, config.attemptId, p, keepalive);
+        } catch (e) {
+          if (e instanceof ContestApiError && (e.status === 404 || e.status === 405)) { progressUnsupported.current = true; return null; }
+          if (isAlreadySubmitted(e)) return { finalized: true };
+          throw e;
+        }
+      },
+      onState: (st) => setSyncState(st === "saved" && progressUnsupported.current ? "local" : st),
+      onResult: (res: any) => { if (res?.finalized) finishSubmitted(res); },
+    });
+    syncRef.current = sync;
+    sync.changed();
+    return () => sync.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Anti-cheat: tab / window switching → one warning per away episode ──
+  useEffect(() => {
+    const t = trackerRef.current;
+    const onVisibility = () => {
       if (document.hidden) {
-        triggerWarning("Tab switch detected. Stay on this page.");
+        persistLocal();
+        syncRef.current?.flush();   // keepalive: the page may not come back
+        if (config.enableTabDetection && !unloadingRef.current) t.hidden();
+      } else {
+        t.back();
       }
     };
-
-    const handleBlur = () => {
-      triggerWarning("Window lost focus. Do not switch windows.");
+    const onBlur = () => {
+      if (!config.enableTabDetection) return;
+      // focus moved into an iframe of our own page (or never really left): not a switch
+      setTimeout(() => {
+        if (unloadingRef.current || document.hasFocus() || document.activeElement?.tagName === "IFRAME") return;
+        t.blur();
+      }, 0);
     };
-
-    document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("blur", handleBlur);
-
+    const onFocus = () => t.back();
+    const onFullscreen = () => t.suppress();
+    const onPageHide = () => { markUnloading(); persistLocal(); syncRef.current?.flush(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("fullscreenchange", onFullscreen);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("fullscreenchange", onFullscreen);
+      window.removeEventListener("pagehide", onPageHide);
     };
-  }, [warningCount]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.enableTabDetection]);
+
+  // ── While attempting: no reloads, no pull-to-refresh, confirm before leaving ──
+  useEffect(() => {
+    if (isSubmitted) return;
+    setContestActive(true);
+    const html = document.documentElement, body = document.body;
+    const prev = [html.style.overscrollBehaviorY, body.style.overscrollBehaviorY];
+    html.style.overscrollBehaviorY = "contain";
+    body.style.overscrollBehaviorY = "contain";
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      markUnloading();
+      persistLocal();
+      syncRef.current?.flush();
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      setContestActive(false);
+      html.style.overscrollBehaviorY = prev[0];
+      body.style.overscrollBehaviorY = prev[1];
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSubmitted]);
+
+  // a failed submit tries again as soon as the network is back
+  useEffect(() => {
+    if (submitPhase !== "failed") return;
+    const onOnline = () => submitRef.current();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [submitPhase]);
+
+  // ── Camera: one stream for every preview; a lost camera blocks the test and counts one warning ──
+  const requestCamera = useCallback(async () => {
+    trackerRef.current.suppress(120000);   // the permission prompt takes focus — not a switch
+    try {
+      const s = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+      setCamStream(s);
+      setCameraLost(false);
+      setCameraError(null);
+    } catch {
+      setCameraLost(true);
+      setCameraError("Camera access is blocked. Allow the camera for this site in your browser settings, then tap “Turn camera on”.");
+    } finally {
+      trackerRef.current.suppress(1500);
+    }
+  }, []);
+
+  const askedCamera = useRef(false);
+  useEffect(() => {
+    if (config.enableCamera && !camStreamRef.current && !askedCamera.current) { askedCamera.current = true; requestCamera(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const track = camStream?.getVideoTracks()[0];
+    if (!track) return;
+    const onEnded = () => {
+      if (submittedRef.current) return;
+      setCamStream(null);
+      setCameraLost(true);
+      addWarningRef.current("camera_lost", "Your camera turned off. Keep it on for the whole test.");
+    };
+    if (track.readyState === "ended") { onEnded(); return; }
+    track.addEventListener("ended", onEnded);
+    return () => track.removeEventListener("ended", onEnded);
+  }, [camStream]);
+
+  // stop the camera only on a real unmount (StrictMode's test unmount/remount must not kill the lobby's stream)
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      setTimeout(() => { if (!mountedRef.current) camStreamRef.current?.getTracks().forEach((t) => t.stop()); }, 0);
+    };
+  }, []);
+
+  // ── P1 snapshots: VITE_CONTEST_SNAPSHOTS=1 AND the backend allows it; 320×240 JPEG every 60 s ──
+  const snapshotsOn = SNAPSHOTS_BUILD_FLAG && !!config.snapshotsEnabled && config.enableCamera;
+  useEffect(() => {
+    if (!snapshotsOn || !camStream || isSubmitted) return;
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = camStream;
+    video.play().catch(() => {});
+    const canvas = document.createElement("canvas");
+    canvas.width = 320;
+    canvas.height = 240;
+    const shoot = async () => {
+      try {
+        canvas.getContext("2d")?.drawImage(video, 0, 0, 320, 240);
+        const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.6));
+        if (!blob) return;
+        const path = `${config.contestId}/${config.attemptId}/${Date.now()}.jpg`;
+        const { error } = await supabase.storage.from(SNAPSHOT_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
+        if (!error) await contestApi.postSnapshot(config.contestId, config.attemptId, path);
+      } catch { /* snapshots are best effort */ }
+    };
+    const t = setInterval(shoot, SNAPSHOT_INTERVAL);
+    return () => { clearInterval(t); video.srcObject = null; };
+  }, [snapshotsOn, camStream, isSubmitted, config.contestId, config.attemptId]);
 
   // ── Anti-cheat: Right-click + copy disabled ──
   useEffect(() => {
@@ -665,35 +957,6 @@ export const ContestAttemptPage = ({
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  // Save time when navigating away from question
-  const saveQuestionTime = useCallback(() => {
-    setAnswers((prev) => {
-      const updated = [...prev];
-      updated[currentIndex] = {
-        ...updated[currentIndex],
-        timeSpent: updated[currentIndex].timeSpent + questionTimerRef.current,
-      };
-      return updated;
-    });
-    questionTimerRef.current = 0;
-  }, [currentIndex]);
-
-  // ── Warning trigger ──
-  const triggerWarning = useCallback(
-    (reason: string) => {
-      const newCount = warningCount + 1;
-      setWarningCount(newCount);
-      setWarningReason(reason);
-
-      if (newCount >= MAX_WARNINGS) {
-        handleSubmit(); // Auto-submit on max warnings
-      } else {
-        setShowWarning(true);
-      }
-    },
-    [warningCount]
-  );
 
   // ── Navigation ──
   const goToQuestion = useCallback(
@@ -746,44 +1009,9 @@ export const ContestAttemptPage = ({
     [currentIndex]
   );
 
-  // ── Submit ──
-  const handleSubmit = useCallback(async () => {
-    saveQuestionTime();
-    setIsSubmitting(true);
-
-    try {
-      const { contestApi } = await import("@/lib/contestApi");
-
-      const result = await contestApi.submitAttempt(
-        config.contestId,
-        config.attemptId,
-        {
-          answers: answers.map((a) => ({
-            questionId: a.questionId,
-            selected: a.selectedOption,
-            textAnswer: a.textAnswer,
-            timeSpent: a.timeSpent,
-          })),
-          warning_count: warningCount,
-          warning_log: [],
-          time_taken_seconds: config.durationMinutes * 60,
-        }
-      );
-
-      setSubmitResult(result);
-      setIsSubmitted(true);
-    } catch (err) {
-      console.error("Submit failed:", err);
-      // Still mark as submitted locally so student isn't stuck
-      setIsSubmitted(true);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [answers, saveQuestionTime, warningCount, config]);
-
   const handleTimeUp = useCallback(() => {
-    handleSubmit();
-  }, [handleSubmit]);
+    submitRef.current();
+  }, []);
 
   // ── Stats ──
   const answeredCount = useMemo(
@@ -1041,26 +1269,28 @@ export const ContestAttemptPage = ({
               <p className="text-[10px] text-gray-400 font-medium">
                 {config.subject} · {config.classGrade} · {config.totalQuestions} Qs · {config.totalMarks} marks
               </p>
+              <p className={`text-[10px] font-bold ${syncState === "offline" ? "text-amber-600" : "text-emerald-600"}`} aria-live="polite">
+                {syncState === "saving" ? "Saving…" : syncState === "offline" ? "Offline – answers kept on this device" : syncState === "local" ? "Saved on this device ✓" : "Saved ✓"}
+              </p>
             </div>
           </div>
 
           {/* Center — Timer */}
           <ContestTimer
-            totalSeconds={config.durationMinutes * 60}
+            totalSeconds={durationSec}
+            deadline={deadline}
             onTimeUp={handleTimeUp}
           />
 
           {/* Right — Camera + Proctoring */}
           <div className="hidden md:flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
-              <Shield size={10} />
-              Proctored
-            </div>
-            <CameraFeed
-              isActive={cameraActive}
-              onToggle={() => setCameraActive(!cameraActive)}
-              onError={(msg) => setCameraError(msg)}
-            />
+            {(config.enableCamera || config.enableTabDetection) && (
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
+                <Shield size={10} />
+                Proctored
+              </div>
+            )}
+            {config.enableCamera && <CameraFeed stream={camStream} recording={snapshotsOn} />}
           </div>
         </div>
       </header>
@@ -1089,7 +1319,8 @@ export const ContestAttemptPage = ({
       </AnimatePresence>
 
       {/* ── MAIN CONTENT ── */}
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-6 p-4 md:p-8">
+      {/* mobile: room below the card for the floating camera, so it never covers Next / Submit */}
+      <div className={`max-w-7xl mx-auto flex flex-col md:flex-row gap-6 p-4 md:p-8 ${config.enableCamera ? "pb-36 md:pb-8" : ""}`}>
         {/* Question area */}
         <div className="flex-1 min-w-0">
           <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6 md:p-10">
@@ -1204,13 +1435,11 @@ export const ContestAttemptPage = ({
           </div>
 
           {/* Camera feed (desktop sidebar) */}
-          <div className="mt-4 flex justify-center">
-            <CameraFeed
-              isActive={cameraActive}
-              onToggle={() => setCameraActive(!cameraActive)}
-              onError={(msg) => setCameraError(msg)}
-            />
-          </div>
+          {config.enableCamera && (
+            <div className="mt-4 flex justify-center">
+              <CameraFeed stream={camStream} recording={snapshotsOn} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1246,20 +1475,31 @@ export const ContestAttemptPage = ({
       </AnimatePresence>
 
       {/* ── MOBILE: Camera (floating) ── */}
-      <div className="md:hidden fixed bottom-20 right-4 z-40">
-        <CameraFeed
-          isActive={cameraActive}
-          onToggle={() => setCameraActive(!cameraActive)}
-          onError={(msg) => setCameraError(msg)}
-        />
-      </div>
+      {config.enableCamera && (
+        <div className="md:hidden fixed bottom-3 right-3 z-40">
+          <CameraFeed stream={camStream} recording={snapshotsOn} />
+        </div>
+      )}
+
+      {/* ── Camera lost: blocking until it is back on ── */}
+      {config.enableCamera && cameraLost && !isSubmitted && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-white rounded-3xl p-7 max-w-sm w-full text-center space-y-4">
+            <CameraOff size={36} className="mx-auto text-red-500" />
+            <h3 className="text-lg font-extrabold text-gray-900">Turn your camera back on</h3>
+            <p className="text-sm text-gray-600">The camera must stay on during this test. The timer is still running.</p>
+            {cameraError && <p className="text-xs text-red-700 bg-red-50 rounded-xl px-3 py-2">{cameraError}</p>}
+            <button onClick={requestCamera} className="w-full py-3.5 bg-gray-900 text-white font-bold text-sm rounded-2xl">Turn camera on</button>
+          </div>
+        </div>
+      )}
 
       {/* ── MODALS ── */}
       <AnimatePresence>
         {showWarning && (
           <WarningModal
             warningCount={warningCount}
-            maxWarnings={MAX_WARNINGS}
+            maxWarnings={maxWarnings}
             onAcknowledge={() => setShowWarning(false)}
             reason={warningReason}
           />
@@ -1269,7 +1509,7 @@ export const ContestAttemptPage = ({
       <AnimatePresence>
         {showSubmitModal && (
           <SubmitModal
-            onConfirm={handleSubmit}
+            onConfirm={() => submitRef.current()}
             onCancel={() => setShowSubmitModal(false)}
             answeredCount={answeredCount}
             totalCount={questions.length}
@@ -1286,14 +1526,30 @@ export const ContestAttemptPage = ({
             animate={{ opacity: 1 }}
             className="fixed inset-0 z-[200] flex items-center justify-center bg-white/90 backdrop-blur-sm"
           >
-            <div className="text-center">
+            <div className="text-center px-6">
               <Loader2 size={40} className="animate-spin text-gray-400 mx-auto mb-4" />
-              <p className="text-sm font-bold text-gray-600">Submitting your test...</p>
-              <p className="text-xs text-gray-400 mt-1">Please don't close this page</p>
+              <p className="text-sm font-bold text-gray-600">Submitting… don't close this page</p>
+              {submitTry > 0 && <p className="text-xs text-amber-600 mt-1">Weak connection — trying again ({submitTry})…</p>}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Submit failed: answers are kept on this device; retry (also automatic when back online) */}
+      {submitPhase === "failed" && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-white/95 p-6">
+          <div className="text-center max-w-sm space-y-3">
+            <AlertTriangle size={40} className="mx-auto text-amber-500" />
+            <p className="text-base font-extrabold text-gray-900">Not submitted yet</p>
+            <p className="text-sm text-gray-600">Your answers are saved on this device. Check your internet and tap Retry — don't close this page.</p>
+            {submitError && <p className="text-xs text-red-700 bg-red-50 rounded-xl px-3 py-2">{submitError}</p>}
+            <button onClick={() => submitRef.current()} className="w-full py-3.5 bg-gray-900 text-white font-bold text-sm rounded-2xl">Retry submit</button>
+            {secondsLeft(deadline) > 0 && (
+              <button onClick={() => setSubmitPhase("idle")} className="w-full py-3 text-sm font-bold text-gray-600">Back to the test</button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

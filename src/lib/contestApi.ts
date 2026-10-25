@@ -89,7 +89,30 @@ export interface ContestData {
   answer_mode: string;
   show_explanation: boolean;
   questions: ContestQuestion[];
+  // ── newer backend (all optional: an old backend sends none of them) ──
+  started_at?: string | null;
+  deadline_at?: string | null;
+  server_now?: string | null;
+  /** present when /start resumes the same attempt */
+  progress?: {
+    answers?: { questionId: string; selected: string | null; textAnswer?: string; timeSpent: number; flagged?: boolean }[];
+    current_index?: number;
+    warning_count?: number;
+    warning_log?: { type: string; at: string; detail?: string }[];
+  } | null;
+  /** periodic camera snapshots are allowed for this contest (also needs VITE_CONTEST_SNAPSHOTS=1) */
+  snapshots_enabled?: boolean;
 }
+
+export interface ProgressPayload {
+  answers: { questionId: string; selected: string | null; textAnswer?: string; timeSpent: number; flagged: boolean }[];
+  current_index: number;
+  warning_count: number;
+  warning_log: { type: string; at: string; detail?: string }[];
+}
+
+/** PUT progress → {ok} or, when the server already closed the attempt (deadline), the submit result */
+export type ProgressResponse = { ok?: boolean; finalized?: boolean } & Partial<SubmitResponse>;
 
 export interface SubmitPayload {
   student_name?: string;
@@ -99,9 +122,10 @@ export interface SubmitPayload {
     selected: string | null;
     textAnswer?: string;
     timeSpent: number;
+    flagged?: boolean;
   }[];
   warning_count: number;
-  warning_log: { reason: string; at: string }[];
+  warning_log: { type?: string; reason?: string; at: string; detail?: string }[];
   time_taken_seconds: number;
 }
 
@@ -271,6 +295,30 @@ export const contestApi = {
     });
     if (!res.ok) throw await errorFromResponse(res, "Failed to submit");
     return res.json();
+  },
+
+  /** keepalive: the page is hiding/closing — the browser finishes the request after the page is gone */
+  async saveProgress(contestId: string, attemptId: string, payload: ProgressPayload, keepalive = false): Promise<ProgressResponse> {
+    const headers = await getAuthHeaders();
+    headers["X-Attempt-Id"] = attemptId;
+    const res = await fetch(`${API_V1}/contests/${contestId}/attempts/${attemptId}/progress`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(payload),
+      keepalive,
+    });
+    if (!res.ok) throw await errorFromResponse(res, "Failed to save progress");
+    return res.json().catch(() => ({ ok: true }));
+  },
+
+  /** P1, off by default (VITE_CONTEST_SNAPSHOTS=1 + snapshots_enabled): register an uploaded camera snapshot */
+  async postSnapshot(contestId: string, attemptId: string, path: string): Promise<void> {
+    const headers = await getAuthHeaders();
+    headers["X-Attempt-Id"] = attemptId;
+    const res = await fetch(`${API_V1}/contests/${contestId}/attempts/${attemptId}/snapshots`, {
+      method: "POST", headers, body: JSON.stringify({ path }),
+    });
+    if (!res.ok) throw await errorFromResponse(res, "Failed to save snapshot");
   },
 
   async getLeaderboard(contestId: string) {

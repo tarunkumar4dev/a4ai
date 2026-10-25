@@ -95,7 +95,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
     enableCamera: true,
     enableTabDetection: true,
     allowBackNavigation: true,
-    maxWarnings: 3,
+    maxWarnings: 5,
     scheduledAt: null,
     expiresAt: null,
     maxAttempts: 1,

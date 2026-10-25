@@ -1,56 +1,238 @@
 // src/pages/ContestPage.tsx
-import { useEffect, useState } from "react";
+// /contest/:shortCode — lobby first (rules, camera check), /start only when the student taps Start.
+// The camera permission prompt happens HERE, so its focus loss is never counted as a tab switch, and the
+// working stream is handed to the attempt page (no second prompt).
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { contestApi, ContestData, startErrorMessage } from "@/lib/contestApi";
+import { Camera, CheckCircle2, Clock, FileText, Loader2, ShieldAlert } from "lucide-react";
+import { contestApi, ContestApiError, ContestData, ContestInfo, startErrorMessage } from "@/lib/contestApi";
 import ContestAttemptPage from "@/components/contest/ContestAttemptPage";
+import type { AttemptProgress } from "@/lib/contestProgress";
+
+const attemptMarker = (code: string) => `a4_contest_attempt_${code}`;
+const readMarker = (code: string) => { try { return localStorage.getItem(attemptMarker(code)); } catch { return null; } };
+const writeMarker = (code: string, id: string) => { try { localStorage.setItem(attemptMarker(code), id); } catch { /* ignore */ } };
+
+type CamState = "idle" | "asking" | "on" | "denied" | "missing" | "busy" | "error";
+
+function cameraHelp(state: CamState): string | null {
+  if (state === "denied") {
+    return "Camera is blocked. Android (Chrome): tap the 🔒 / ⓘ icon left of the address bar → Permissions → Camera → Allow, then tap “Try again”. iPhone (Safari): tap “aA” in the address bar → Website Settings → Camera → Allow (or Settings → Safari → Camera → Allow), then tap “Try again”.";
+  }
+  if (state === "missing") return "No camera was found on this device. Use a phone or laptop with a front camera.";
+  if (state === "busy") return "The camera is being used by another app (video call, camera app). Close it and tap “Try again”.";
+  if (state === "error") return "The camera could not start. Tap “Try again”, or restart the browser.";
+  return null;
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-3xl border border-gray-200 shadow-sm p-6 space-y-5">{children}</div>
+    </div>
+  );
+}
 
 export default function ContestPage() {
   const { shortCode } = useParams<{ shortCode: string }>();
-  const [contestData, setContestData] = useState<ContestData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<ContestInfo | null>(null);
+  const [infoLoading, setInfoLoading] = useState(true);
+  const [blocker, setBlocker] = useState<string | null>(null);   // not started / ended / not found
+  const [contestData, setContestData] = useState<(ContestData & { receivedAt: number }) | null>(null);
+  const [already, setAlready] = useState<{ score?: number | null; total_marks?: number; percentage?: number | null } | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [cam, setCam] = useState<CamState>("idle");
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const handedOver = useRef(false);
+  const resumable = shortCode ? !!readMarker(shortCode) : false;
 
-  useEffect(() => {
+  const loadInfo = useCallback(() => {
     if (!shortCode) return;
-    
-    contestApi.startAttempt(shortCode)
-      .then(setContestData)
-      .catch((err) => setError(startErrorMessage(err)))
-      .finally(() => setLoading(false));
+    setInfoLoading(true);
+    setBlocker(null);
+    contestApi.getContestInfo(shortCode)
+      .then(setInfo)
+      .catch((err) => {
+        if (err instanceof ContestApiError && err.code === "CONTEST_NOT_STARTED") setBlocker(startErrorMessage(err));
+        else if (/not found|ended|paused/i.test(err?.message || "")) setBlocker(err.message);
+        // anything else (network, old backend): the lobby still works without /info
+      })
+      .finally(() => setInfoLoading(false));
   }, [shortCode]);
+  useEffect(loadInfo, [loadInfo]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading contest...</div>;
-  if (error) return <div className="min-h-screen flex items-center justify-center text-gray-700 text-center px-4">{error}</div>;
-  if (!contestData) return <div className="min-h-screen flex items-center justify-center text-gray-500">Contest not found</div>;
+  // lobby camera preview; stopped on leave unless it was handed to the attempt
+  useEffect(() => {
+    if (videoRef.current && stream) videoRef.current.srcObject = stream;
+  }, [stream, cam]);
+  useEffect(() => () => { if (!handedOver.current) stream?.getTracks().forEach((t) => t.stop()); }, [stream]);
+
+  const askCamera = async () => {
+    setCam("asking");
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: "user" }, audio: false });
+      setStream(s);
+      setCam("on");
+      s.getVideoTracks()[0]?.addEventListener("ended", () => { setCam("error"); setStream(null); });
+    } catch (e: any) {
+      const name = e?.name || "";
+      setCam(name === "NotAllowedError" || name === "SecurityError" ? "denied"
+        : name === "NotFoundError" || name === "OverconstrainedError" ? "missing"
+        : name === "NotReadableError" || name === "AbortError" ? "busy" : "error");
+    }
+  };
+
+  const needCamera = !!info?.enable_camera;
+  const canStart = !starting && !blocker && (!needCamera || cam === "on");
+
+  const start = async () => {
+    if (!shortCode || !canStart) return;
+    setStarting(true);
+    setStartError(null);
+    try {
+      const data = await contestApi.startAttempt(shortCode);
+      writeMarker(shortCode, data.attempt_id);
+      handedOver.current = !!stream;
+      setContestData({ ...data, receivedAt: Date.now() });
+    } catch (err: any) {
+      if (err instanceof ContestApiError && (err.code === "ALREADY_SUBMITTED" || err.status === 409)) {
+        const r = err.body?.result || err.detail?.result || err.body;
+        setAlready({ score: r?.score, total_marks: r?.total_marks, percentage: r?.percentage });
+      } else if (err instanceof ContestApiError && (err.code === "CONTEST_NOT_STARTED" || err.status === 410)) {
+        setBlocker(err.status === 410 ? "This contest has ended." : startErrorMessage(err));
+      } else {
+        setStartError(startErrorMessage(err, "Could not start the contest. Check your internet and try again."));
+      }
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  if (contestData) {
+    return (
+      <ContestAttemptPage
+        config={{
+          contestId: contestData.contest_id,
+          attemptId: contestData.attempt_id,
+          title: contestData.title,
+          subject: contestData.subject,
+          classGrade: contestData.class_grade,
+          totalMarks: contestData.questions.reduce((s, q) => s + q.marks, 0),
+          totalQuestions: contestData.questions.length,
+          durationMinutes: contestData.duration_minutes,
+          teacherName: "",
+          showInstantAnswers: contestData.answer_mode === "instant",
+          showAnswersAfterTest: contestData.answer_mode === "after_test",
+          showNoAnswers: contestData.answer_mode === "none",
+          showExplanation: contestData.show_explanation,
+          allowBackNavigation: contestData.allow_back_navigation,
+          enableCamera: contestData.enable_camera,
+          enableTabDetection: contestData.enable_tab_detection,
+          maxWarnings: contestData.max_warnings,
+          questions: contestData.questions.map((q) => ({
+            ...q,
+            questionNumber: q.question_number,
+            questionText: q.question_text,
+            difficulty: q.difficulty as any,
+            type: q.question_type as any,
+            options: q.options || [],
+          })),
+          startedAt: contestData.started_at,
+          deadlineAt: contestData.deadline_at,
+          serverNow: contestData.server_now,
+          receivedAt: contestData.receivedAt,
+          // the server sends plain strings for warning types; the attempt page only appends / counts them
+          progress: (contestData.progress ?? null) as Partial<AttemptProgress> | null,
+          snapshotsEnabled: contestData.snapshots_enabled,
+          cameraStream: stream,
+        }}
+      />
+    );
+  }
+
+  if (already) {
+    return (
+      <Shell>
+        <div className="text-center space-y-3">
+          <CheckCircle2 size={44} className="mx-auto text-emerald-500" />
+          <h1 className="text-xl font-extrabold text-gray-900">You have already submitted</h1>
+          {already.score != null && already.total_marks != null ? (
+            <p className="text-3xl font-extrabold text-gray-900">{already.score}<span className="text-base text-gray-400">/{already.total_marks}</span></p>
+          ) : null}
+          <p className="text-sm text-gray-500">Your answers were recorded. Your teacher will share the results.</p>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (infoLoading) {
+    return <div className="min-h-screen flex items-center justify-center text-gray-500 gap-2"><Loader2 size={18} className="animate-spin" /> Loading contest…</div>;
+  }
+
+  if (blocker) {
+    return (
+      <Shell>
+        <div className="text-center space-y-3">
+          <Clock size={40} className="mx-auto text-gray-400" />
+          <p className="text-base font-bold text-gray-900">{blocker}</p>
+          <button onClick={loadInfo} className="px-5 py-3 rounded-2xl bg-gray-900 text-white text-sm font-bold">Check again</button>
+        </div>
+      </Shell>
+    );
+  }
+
+  const maxWarnings = info?.max_warnings || 5;
+  const help = cameraHelp(cam);
 
   return (
-    <ContestAttemptPage
-      config={{
-        contestId: contestData.contest_id,
-        attemptId: contestData.attempt_id,
-        title: contestData.title,
-        subject: contestData.subject,
-        classGrade: contestData.class_grade,
-        totalMarks: contestData.questions.reduce((s, q) => s + q.marks, 0),
-        totalQuestions: contestData.questions.length,
-        durationMinutes: contestData.duration_minutes,
-        teacherName: "",
-        showInstantAnswers: contestData.answer_mode === "instant",
-        showAnswersAfterTest: contestData.answer_mode === "after_test",
-        showNoAnswers: contestData.answer_mode === "none",
-        showExplanation: contestData.show_explanation,
-        allowBackNavigation: contestData.allow_back_navigation,
-        enableCamera: contestData.enable_camera,
-        enableTabDetection: contestData.enable_tab_detection,
-        maxWarnings: contestData.max_warnings,
-        questions: contestData.questions.map((q) => ({
-          ...q,
-          questionNumber: q.question_number,
-          questionText: q.question_text,
-          type: q.question_type as any,
-          options: q.options || [],
-        })),
-      }}
-    />
+    <Shell>
+      <div>
+        <h1 className="text-xl font-extrabold text-gray-900 leading-tight">{info?.title || "Contest"}</h1>
+        {info && <p className="text-xs text-gray-500 mt-1">{[info.subject, info.class_grade, info.teacher_name && `by ${info.teacher_name}`].filter(Boolean).join(" · ")}</p>}
+      </div>
+
+      {info && (
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-2xl bg-gray-50 py-3"><p className="text-lg font-extrabold text-gray-900 inline-flex items-center gap-1"><Clock size={16} />{info.duration_minutes} min</p><p className="text-[10px] font-bold uppercase text-gray-400">Duration</p></div>
+          <div className="rounded-2xl bg-gray-50 py-3"><p className="text-lg font-extrabold text-gray-900 inline-flex items-center gap-1"><FileText size={16} />{info.total_questions}</p><p className="text-[10px] font-bold uppercase text-gray-400">Questions</p></div>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-1.5 text-sm text-amber-900">
+        <p className="font-bold flex items-center gap-1.5"><ShieldAlert size={16} /> Rules</p>
+        {(info?.enable_tab_detection ?? true) && <p>• Stay on this page. Leaving it (other app / tab) gives a warning — after {maxWarnings} warnings the test is submitted automatically.</p>}
+        {needCamera && <p>• Keep your camera on for the whole test.</p>}
+        <p>• Don't refresh or close this page. If it happens, open the link again and tap Continue — your answers are kept.</p>
+        <p>• The timer keeps running even if you leave.</p>
+      </div>
+
+      {needCamera && (
+        <div className="space-y-2">
+          <div className="rounded-2xl overflow-hidden bg-gray-900 aspect-[4/3] flex items-center justify-center">
+            {cam === "on" && stream
+              ? <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} />
+              : <Camera size={32} className="text-gray-500" />}
+          </div>
+          {cam !== "on" && (
+            <button onClick={askCamera} disabled={cam === "asking"}
+              className="w-full py-3 rounded-2xl bg-white border-2 border-gray-900 text-gray-900 text-sm font-bold disabled:opacity-50">
+              {cam === "asking" ? "Waiting for permission…" : cam === "idle" ? "Turn on camera" : "Try again"}
+            </button>
+          )}
+          {cam === "on" && <p className="text-xs font-semibold text-emerald-700">✓ Camera is working</p>}
+          {help && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 leading-relaxed">{help}</p>}
+        </div>
+      )}
+
+      {startError && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{startError}</p>}
+
+      <button onClick={start} disabled={!canStart}
+        className="w-full py-4 rounded-2xl bg-gray-900 text-white font-extrabold text-sm disabled:bg-gray-300 inline-flex items-center justify-center gap-2">
+        {starting ? <><Loader2 size={16} className="animate-spin" /> Starting…</> : resumable ? "Continue test" : "Start test"}
+      </button>
+      {needCamera && cam !== "on" && <p className="text-[11px] text-center text-gray-400">Start unlocks once your camera works.</p>}
+    </Shell>
   );
 }

@@ -256,7 +256,7 @@ export default function ContestLivePage() {
         title: data.title,
         durationMinutes: data.duration_minutes || 30,
         answerMode: data.answer_mode || "after_test",
-        maxWarnings: data.max_warnings || 3,
+        maxWarnings: data.max_warnings || 5,
       });
 
       const now = new Date();

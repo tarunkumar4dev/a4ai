@@ -2,10 +2,13 @@
 // exist. Reload once so the browser picks up the new HTML instead of showing a blank page. Used by both entries
 // (src/main.tsx and src/linkMain.tsx).
 
+import { isContestActive } from "./contestGuard";
+
 const CHUNK_RELOAD_KEY = "a4ai:chunk-reload";
 
 export function installChunkReload(): void {
   window.addEventListener("vite:preloadError", (event) => {
+    if (isContestActive()) return; // never reload during a contest attempt; the attempt page has everything it needs
     try {
       if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) return; // already retried in this tab; let the error surface
       sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
