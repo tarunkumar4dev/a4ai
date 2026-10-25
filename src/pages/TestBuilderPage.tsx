@@ -41,6 +41,7 @@ import { CSS } from "@dnd-kit/utilities";
 import "katex/dist/katex.min.css";
 import { InlineMath, BlockMath } from "react-katex";
 import { supabase } from "@/lib/supabaseClient";
+import { isoDate } from "@/lib/localDate";
 import { generateTestPaperPdf, generateAnswerKeyPdf } from "@/utils/testPdfExporter";
 import { getQuestionSegments, hasTable, type AccSegment } from "@/utils/accountancyTables";
 import { AccountancySegments } from "@/components/AccountancyTableView";
@@ -1191,7 +1192,7 @@ export default function TestBuilderPage() {
         total_questions: testQuestions.length,
         total_marks: totalMarks,
         created_at: new Date().toISOString(),
-        paper_date: new Date().toLocaleDateString("en-GB"),
+        paper_date: isoDate(),   // `date` column, DateStyle MDY: "25/10/2026" was rejected
         cbse_pattern: false,
       });
 

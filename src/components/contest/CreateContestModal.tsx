@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Link2, Copy, Clock, Eye, EyeOff,
   Camera, Monitor, Check, MessageCircle,
-  Zap, Unlock, BookOpen, CalendarClock,
+  Zap, Unlock, BookOpen, CalendarClock, ChevronDown, Trophy, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -66,19 +66,40 @@ const ANSWER_MODE_SHORT: Record<AnswerMode, string> = {
 const Toggle = ({ enabled, onChange, label, description, icon: Icon }: {
   enabled: boolean; onChange: (v: boolean) => void; label: string; description: string; icon: React.FC<any>;
 }) => (
-  <div className="flex items-start gap-4 py-4">
-    <div className={`p-2.5 rounded-xl transition-colors ${enabled ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-400"}`}>
-      <Icon size={18} />
-    </div>
-    <div className="flex-1">
-      <p className="text-sm font-bold text-gray-900">{label}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{description}</p>
-    </div>
-    <button onClick={() => onChange(!enabled)} className={`w-12 h-7 rounded-full transition-all flex-shrink-0 ${enabled ? "bg-gray-900" : "bg-gray-200"}`}>
-      <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform mx-1 mt-1 ${enabled ? "translate-x-5" : "translate-x-0"}`} />
-    </button>
-  </div>
+  <button type="button" role="switch" aria-checked={enabled} onClick={() => onChange(!enabled)}
+    className="w-full flex items-center gap-3 py-3 min-h-[56px] text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900">
+    <span className={`p-2.5 rounded-xl ${enabled ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"}`}><Icon size={18} /></span>
+    <span className="flex-1 min-w-0">
+      <span className="block text-sm font-bold text-gray-900">{label}</span>
+      <span className="block text-xs text-gray-600 mt-0.5">{description}</span>
+    </span>
+    <span className={`w-12 h-7 rounded-full flex-shrink-0 relative ${enabled ? "bg-gray-900" : "bg-gray-300"}`} aria-hidden>
+      <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-sm ${enabled ? "left-6" : "left-1"}`} />
+    </span>
+  </button>
 );
+
+/** Collapsible settings section: the header shows the current choice, so a closed section still says what it holds. */
+const Section = ({ title, summary, open, onToggle, children, icon: Icon }: {
+  title: string; summary: string; open: boolean; onToggle: () => void; children: React.ReactNode; icon: React.FC<any>;
+}) => (
+  <section className="border border-gray-200 rounded-2xl">
+    <button type="button" onClick={onToggle} aria-expanded={open}
+      className="w-full flex items-center gap-3 px-4 min-h-[56px] text-left rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900">
+      <Icon size={18} className="text-gray-700 shrink-0" />
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-bold text-gray-900">{title}</span>
+        {!open && <span className="block text-xs text-gray-600 truncate">{summary}</span>}
+      </span>
+      <ChevronDown size={18} className={`text-gray-500 shrink-0 ${open ? "rotate-180" : ""}`} />
+    </button>
+    {/* kept mounted (hidden) so a half-filled field never resets */}
+    <div hidden={!open} className="px-4 pb-4 space-y-4">{children}</div>
+  </section>
+);
+
+const chip = (active: boolean) =>
+  `min-h-[44px] rounded-xl text-sm font-bold border ${active ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-700 border-gray-300 hover:border-gray-500"} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-gray-900`;
 
 // ==================== MAIN ====================
 const toIso = localToIso;
@@ -118,6 +139,9 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
     updateSetting("duration", value);
   };
 
+  const [openSection, setOpenSection] = useState<Record<string, boolean>>({ basics: true });
+  const toggleSection = (k: string) => setOpenSection((o) => ({ ...o, [k]: !o[k] }));
+
   const durationOptions = useMemo(() =>
     DURATION_OPTIONS.some((o) => o.value === settings.duration)
       ? DURATION_OPTIONS
@@ -150,6 +174,11 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
         toast.warning(`“Publish results later” isn't available on the server yet (${err.message}). Saved as “Never show answers”.`);
       }
 
+      if (res.teacher_attached === false) {
+        // the backend couldn't read our login: the contest has no owner, so it won't show in My contests
+        toast.warning("Contest created without your account — log in again", { duration: 10000 });
+      }
+
       setContestLink(res.share_link);
       setStep("share");
       onCreated?.(res);
@@ -180,180 +209,203 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
 
   if (!isOpen) return null;
 
+  const durationLabel = durationOptions.find((o) => o.value === settings.duration)?.label || `${settings.duration} min`;
+  const fmtLocal = (v: string | null) => (v ? new Date(v).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : null);
+  const scheduleSummary = settings.scheduledAt || settings.expiresAt
+    ? [fmtLocal(settings.scheduledAt) && `Opens ${fmtLocal(settings.scheduledAt)}`, fmtLocal(settings.expiresAt) && `closes ${fmtLocal(settings.expiresAt)}`].filter(Boolean).join(", ")
+    : "Opens right away, no end time";
+  const proctorSummary = [settings.enableCamera ? "Camera on" : "Camera off",
+    settings.enableTabDetection ? `${settings.maxWarnings} tab switches` : "Tab switches not counted",
+    settings.allowBackNavigation ? "back allowed" : "no going back"].join(" · ");
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/60 sm:p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }}
-        className="bg-white rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+      {/* phone: full-screen bottom sheet · desktop: dialog up to 90vh. One scroll area; header + footer fixed. */}
+      <div role="dialog" aria-modal="true" aria-labelledby="create-contest-title"
+        className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden">
 
         {/* HEADER */}
-        <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 px-6 py-4 rounded-t-3xl flex items-center justify-between z-10">
-          <div>
-            <h2 className="text-lg font-extrabold text-gray-900">{step === "configure" ? "Create Contest" : "Share Contest"}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{questions.length} questions · {totalMarks} marks · {subject}</p>
+        <div className="shrink-0 border-b border-gray-100 px-5 py-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 id="create-contest-title" className="text-lg font-extrabold text-gray-900">{step === "configure" ? "Create contest" : "Share contest"}</h2>
+            <p className="text-xs text-gray-600 mt-0.5 truncate">{questions.length} questions · {totalMarks} marks · {subject}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+          <button onClick={onClose} aria-label="Close" className="h-11 w-11 rounded-xl hover:bg-gray-100 text-gray-600 flex items-center justify-center shrink-0">
             <X size={20} />
           </button>
         </div>
 
         {/* STEP 1: CONFIGURE */}
         {step === "configure" && (
-          <div className="p-6 space-y-6">
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Contest Title</label>
-              <input type="text" value={settings.title} onChange={(e) => updateSetting("title", e.target.value)}
-                className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 text-sm font-semibold text-gray-900 outline-none focus:border-gray-400 transition-colors"
-                placeholder="Enter contest title..." />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                <Clock size={10} className="inline mr-1" /> Duration
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {durationOptions.map((opt) => (
-                  <button key={opt.value} type="button" aria-pressed={settings.duration === opt.value}
-                    onPointerUp={(e) => { if (e.pointerType === "mouse" && e.button !== 0) return; pickDuration(opt.value); }}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickDuration(opt.value); } }}
-                    className={`py-3 rounded-xl text-xs font-bold transition-all border ${settings.duration === opt.value ? "bg-gray-900 text-white border-gray-900 shadow-md" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"}`}>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                <CalendarClock size={10} className="inline mr-1" /> Schedule <span className="normal-case font-medium">(optional)</span>
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <>
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-3">
+              <Section title="Basics" summary={`${settings.title || "Untitled"} · ${durationLabel}`} open={!!openSection.basics} onToggle={() => toggleSection("basics")} icon={Clock}>
                 <label className="block">
-                  <span className="text-xs text-gray-500">Opens at</span>
-                  <input type="datetime-local" value={settings.scheduledAt || ""} onChange={(e) => { tapGuard.block(); updateSetting("scheduledAt", e.target.value || null); }}
-                    onBlur={() => tapGuard.block()}
-                    className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 outline-none focus:border-gray-400 bg-white" />
+                  <span className="text-xs font-bold text-gray-700">Contest title</span>
+                  <input type="text" value={settings.title} onChange={(e) => updateSetting("title", e.target.value)}
+                    className="mt-1 w-full px-4 min-h-[48px] rounded-xl border border-gray-300 text-sm font-semibold text-gray-900 outline-none focus:border-gray-900"
+                    placeholder="Enter contest title..." />
                 </label>
-                <label className="block">
-                  <span className="text-xs text-gray-500">Closes at</span>
-                  <input type="datetime-local" value={settings.expiresAt || ""} min={settings.scheduledAt || undefined} onChange={(e) => { tapGuard.block(); updateSetting("expiresAt", e.target.value || null); }}
-                    onBlur={() => tapGuard.block()}
-                    className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 outline-none focus:border-gray-400 bg-white" />
-                </label>
-              </div>
-              <p className={`text-[11px] mt-1 ${scheduleError ? "text-red-600 font-semibold" : "text-gray-400"}`}>
-                {scheduleError || "Leave empty to open the contest right away with no end time."}
-              </p>
-            </div>
+                <div>
+                  <span className="text-xs font-bold text-gray-700">Duration</span>
+                  <div className="mt-1 grid grid-cols-3 gap-2" role="group" aria-label="Duration">
+                    {durationOptions.map((opt) => (
+                      <button key={opt.value} type="button" aria-pressed={settings.duration === opt.value}
+                        onPointerUp={(e) => { if (e.pointerType === "mouse" && e.button !== 0) return; pickDuration(opt.value); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickDuration(opt.value); } }}
+                        className={chip(settings.duration === opt.value)}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </Section>
 
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Answer Visibility</label>
-              <div className="space-y-2">
-                {ANSWER_MODES.map((mode) => {
-                  const Icon = mode.icon;
-                  const isActive = settings.answerMode === mode.value;
-                  return (
-                    <button key={mode.value} onClick={() => updateSetting("answerMode", mode.value)}
-                      className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${isActive ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-300"}`}>
-                      <div className={`p-2 rounded-xl ${isActive ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-400"}`}><Icon size={18} /></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-gray-900">{mode.label}</p>
-                        <p className="text-xs text-gray-400">{mode.desc}</p>
-                      </div>
-                      {isActive && <div className="w-5 h-5 rounded-full bg-gray-900 flex items-center justify-center"><Check size={12} className="text-white" /></div>}
+              <Section title="Schedule (optional)" summary={scheduleSummary} open={!!openSection.schedule} onToggle={() => toggleSection("schedule")} icon={CalendarClock}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-xs font-bold text-gray-700">Opens at</span>
+                    <input type="datetime-local" value={settings.scheduledAt || ""} onChange={(e) => { tapGuard.block(); updateSetting("scheduledAt", e.target.value || null); }}
+                      onBlur={() => tapGuard.block()}
+                      className="mt-1 w-full px-3 min-h-[48px] rounded-xl border border-gray-300 text-sm text-gray-900 outline-none focus:border-gray-900 bg-white" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold text-gray-700">Closes at</span>
+                    <input type="datetime-local" value={settings.expiresAt || ""} min={settings.scheduledAt || undefined} onChange={(e) => { tapGuard.block(); updateSetting("expiresAt", e.target.value || null); }}
+                      onBlur={() => tapGuard.block()}
+                      className="mt-1 w-full px-3 min-h-[48px] rounded-xl border border-gray-300 text-sm text-gray-900 outline-none focus:border-gray-900 bg-white" />
+                  </label>
+                </div>
+                <p className={`text-xs ${scheduleError ? "text-red-700 font-semibold" : "text-gray-600"}`}>
+                  {scheduleError || "Leave empty to open the contest right away with no end time."}
+                </p>
+              </Section>
+
+              <Section title="Results" summary={ANSWER_MODE_SHORT[settings.answerMode] === "Never" ? "Answers never shown" : `Answers: ${ANSWER_MODE_SHORT[settings.answerMode].toLowerCase()}`}
+                open={!!openSection.results} onToggle={() => toggleSection("results")} icon={Trophy}>
+                <div className="space-y-2" role="radiogroup" aria-label="Answer visibility">
+                  {ANSWER_MODES.map((mode) => {
+                    const Icon = mode.icon;
+                    const isActive = settings.answerMode === mode.value;
+                    return (
+                      <button key={mode.value} type="button" role="radio" aria-checked={isActive} onClick={() => updateSetting("answerMode", mode.value)}
+                        className={`w-full flex items-center gap-3 p-3 min-h-[56px] rounded-xl border-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 ${isActive ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-400"}`}>
+                        <span className={`p-2 rounded-xl ${isActive ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-500"}`}><Icon size={18} /></span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-bold text-gray-900">{mode.label}</span>
+                          <span className="block text-xs text-gray-600">{mode.desc}</span>
+                        </span>
+                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isActive ? "bg-gray-900 border-gray-900" : "border-gray-400"}`}>
+                          {isActive && <Check size={12} className="text-white" />}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {settings.answerMode !== "none" && (
+                  <Toggle enabled={settings.showExplanation} onChange={(v) => updateSetting("showExplanation", v)} label="Show explanations" description="Explanations appear with the answers" icon={BookOpen} />
+                )}
+              </Section>
+
+              <Section title="Proctoring" summary={proctorSummary} open={!!openSection.proctoring} onToggle={() => toggleSection("proctoring")} icon={Camera}>
+                <div className="divide-y divide-gray-100">
+                  <Toggle enabled={settings.enableCamera} onChange={(v) => updateSetting("enableCamera", v)} label="Camera" description="Students keep the front camera on" icon={Camera} />
+                  <Toggle enabled={settings.enableTabDetection} onChange={(v) => updateSetting("enableTabDetection", v)} label="Count tab switches" description="Leaving the test page counts; at the limit it auto-submits" icon={Monitor} />
+                  <Toggle enabled={settings.allowBackNavigation} onChange={(v) => updateSetting("allowBackNavigation", v)} label="Allow going back" description="Students can return to earlier questions" icon={Unlock} />
+                </div>
+                {settings.enableTabDetection && (
+                  <div>
+                    <span className="text-xs font-bold text-gray-700">Max tab switches before auto-submit</span>
+                    <div className="mt-1 grid grid-cols-4 gap-2">
+                      {[2, 3, 5, 10].map((n) => (
+                        <button key={n} type="button" aria-pressed={settings.maxWarnings === n} onClick={() => updateSetting("maxWarnings", n)} className={chip(settings.maxWarnings === n)}>{n}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Attempts" summary={settings.maxAttempts === 1 ? "1 attempt per student" : `${settings.maxAttempts} attempts per student`}
+                open={!!openSection.attempts} onToggle={() => toggleSection("attempts")} icon={Users}>
+                <div className="grid grid-cols-3 gap-2" role="group" aria-label="Attempts per student">
+                  {[1, 2, 3].map((n) => (
+                    <button key={n} type="button" aria-pressed={settings.maxAttempts === n} onClick={() => updateSetting("maxAttempts", n)} className={chip(settings.maxAttempts === n)}>
+                      {n} {n === 1 ? "attempt" : "attempts"}
                     </button>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              </Section>
             </div>
 
-            {settings.answerMode !== "none" && (
-              <Toggle enabled={settings.showExplanation} onChange={(v) => updateSetting("showExplanation", v)} label="Show Explanations" description="Display detailed explanations with answers" icon={BookOpen} />
-            )}
-
-            <div className="border-t border-gray-100 pt-2">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Proctoring & Security</p>
+            {/* FOOTER — always visible */}
+            <div className="shrink-0 border-t border-gray-200 bg-white px-4 sm:px-5 pt-3 flex gap-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+              <button type="button" onClick={onClose} className="flex-1 min-h-[48px] rounded-xl border-2 border-gray-300 text-gray-800 font-bold text-sm">Cancel</button>
+              <button type="button" onClick={handleCreate} disabled={isCreating || !!scheduleError}
+                className="flex-[2] min-h-[48px] bg-gray-900 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 disabled:opacity-50">
+                {isCreating ? (<><Zap size={18} className="animate-spin" /> Creating…</>) : (<><Zap size={18} className="fill-yellow-400 text-yellow-400" /> Create contest · {durationLabel}</>)}
+              </button>
             </div>
-
-            <div className="space-y-1 divide-y divide-gray-50">
-              <Toggle enabled={settings.enableCamera} onChange={(v) => updateSetting("enableCamera", v)} label="Camera Proctoring" description="Monitor student via webcam during test" icon={Camera} />
-              <Toggle enabled={settings.enableTabDetection} onChange={(v) => updateSetting("enableTabDetection", v)} label="Tab Switch Detection" description="Warn students if they leave the test page" icon={Monitor} />
-              <Toggle enabled={settings.allowBackNavigation} onChange={(v) => updateSetting("allowBackNavigation", v)} label="Allow Back Navigation" description="Let students go back to previous questions" icon={Unlock} />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Max Warnings Before Auto-Submit</label>
-              <div className="flex gap-2">
-                {[2, 3, 5, 10].map((n) => (
-                  <button key={n} onClick={() => updateSetting("maxWarnings", n)}
-                    className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all border ${settings.maxWarnings === n ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"}`}>
-                    {n}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button onClick={handleCreate} disabled={isCreating || !!scheduleError}
-              className="w-full py-4 bg-gray-900 text-white font-bold text-sm rounded-2xl hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg">
-              {isCreating ? (<><Zap size={18} className="animate-spin" /> Creating Contest...</>) : (<><Zap size={18} className="fill-yellow-400 text-yellow-400" /> Create & Get Link</>)}
-            </button>
-          </div>
+          </>
         )}
 
         {/* STEP 2: SHARE */}
         {step === "share" && contestLink && (
-          <div className="p-6 space-y-6">
-            <div className="text-center py-4">
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.2 }}
-                className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-                <Check size={32} className="text-emerald-500" />
-              </motion.div>
-              <h3 className="text-lg font-extrabold text-gray-900">Contest Created!</h3>
-              <p className="text-xs text-gray-400 mt-1">Share the link with your students</p>
-            </div>
-
-            <div className="bg-gray-50 rounded-2xl p-4 flex items-center gap-3 border border-gray-200">
-              <Link2 size={18} className="text-gray-400 flex-shrink-0" />
-              <span className="text-sm font-mono text-gray-700 truncate flex-1">{contestLink}</span>
-              <button onClick={handleCopy}
-                className={`p-2.5 rounded-xl transition-all flex-shrink-0 ${copied ? "bg-emerald-100 text-emerald-600" : "bg-white text-gray-600 hover:bg-gray-200 border border-gray-200"}`}>
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={shareWhatsApp}
-                className="flex items-center gap-3 p-4 rounded-2xl border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50 transition-all text-left">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center"><MessageCircle size={20} /></div>
-                <div><p className="text-sm font-bold text-gray-900">WhatsApp</p><p className="text-[10px] text-gray-400">Share to groups</p></div>
-              </button>
-              <button onClick={handleCopy}
-                className="flex items-center gap-3 p-4 rounded-2xl border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all text-left">
-                <div className="w-10 h-10 rounded-xl bg-blue-500 text-white flex items-center justify-center"><Link2 size={20} /></div>
-                <div><p className="text-sm font-bold text-gray-900">Copy Link</p><p className="text-[10px] text-gray-400">Share anywhere</p></div>
-              </button>
-            </div>
-
-            <div className="bg-gray-50 rounded-2xl p-5 space-y-3">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contest Summary</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-xs text-gray-400">Questions</p><p className="text-sm font-bold text-gray-900">{questions.length}</p></div>
-                <div><p className="text-xs text-gray-400">Duration</p><p className="text-sm font-bold text-gray-900">{settings.duration} min</p></div>
-                <div><p className="text-xs text-gray-400">Total Marks</p><p className="text-sm font-bold text-gray-900">{totalMarks}</p></div>
-                <div><p className="text-xs text-gray-400">Answers</p><p className="text-sm font-bold text-gray-900">{ANSWER_MODE_SHORT[settings.answerMode]}</p></div>
-                <div><p className="text-xs text-gray-400">Camera</p><p className="text-sm font-bold text-gray-900">{settings.enableCamera ? "On" : "Off"}</p></div>
-                <div><p className="text-xs text-gray-400">Tab Detection</p><p className="text-sm font-bold text-gray-900">{settings.enableTabDetection ? "On" : "Off"}</p></div>
+          <>
+            <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-5">
+              <div className="text-center py-2">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+                  <Check size={32} className="text-emerald-600" />
+                </div>
+                <h3 className="text-lg font-extrabold text-gray-900">Contest created!</h3>
+                <p className="text-xs text-gray-600 mt-1">Share the link with your students</p>
               </div>
-            </div>
 
-            <Link to="/contests/mine" onClick={onClose} className="block w-full py-3 text-center text-sm font-bold text-gray-700 rounded-2xl border border-gray-200 hover:bg-gray-50">
-              See results{settings.answerMode === "teacher_release" ? " & publish them" : ""} in My contests →
-            </Link>
-            <button onClick={onClose} className="w-full py-4 bg-gray-900 text-white font-bold text-sm rounded-2xl hover:bg-gray-800 transition-colors">Done</button>
-          </div>
+              <div className="bg-gray-50 rounded-2xl p-3 flex items-center gap-3 border border-gray-200">
+                <Link2 size={18} className="text-gray-500 flex-shrink-0" />
+                <span className="text-sm font-mono text-gray-800 truncate flex-1">{contestLink}</span>
+                <button onClick={handleCopy} aria-label="Copy link"
+                  className={`h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 ${copied ? "bg-emerald-100 text-emerald-700" : "bg-white text-gray-700 hover:bg-gray-200 border border-gray-200"}`}>
+                  {copied ? <Check size={16} /> : <Copy size={16} />}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={shareWhatsApp}
+                  className="flex items-center gap-3 p-4 min-h-[64px] rounded-2xl border-2 border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 text-left">
+                  <span className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center"><MessageCircle size={20} /></span>
+                  <span><span className="block text-sm font-bold text-gray-900">WhatsApp</span><span className="block text-[11px] text-gray-600">Share to groups</span></span>
+                </button>
+                <button onClick={handleCopy}
+                  className="flex items-center gap-3 p-4 min-h-[64px] rounded-2xl border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 text-left">
+                  <span className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center"><Link2 size={20} /></span>
+                  <span><span className="block text-sm font-bold text-gray-900">Copy link</span><span className="block text-[11px] text-gray-600">Share anywhere</span></span>
+                </button>
+              </div>
+
+              <div className="bg-gray-50 rounded-2xl p-4">
+                <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-2">Contest summary</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><p className="text-xs text-gray-600">Questions</p><p className="text-sm font-bold text-gray-900">{questions.length}</p></div>
+                  <div><p className="text-xs text-gray-600">Duration</p><p className="text-sm font-bold text-gray-900">{settings.duration} min</p></div>
+                  <div><p className="text-xs text-gray-600">Total marks</p><p className="text-sm font-bold text-gray-900">{totalMarks}</p></div>
+                  <div><p className="text-xs text-gray-600">Answers</p><p className="text-sm font-bold text-gray-900">{ANSWER_MODE_SHORT[settings.answerMode]}</p></div>
+                  <div><p className="text-xs text-gray-600">Camera</p><p className="text-sm font-bold text-gray-900">{settings.enableCamera ? "On" : "Off"}</p></div>
+                  <div><p className="text-xs text-gray-600">Tab switches</p><p className="text-sm font-bold text-gray-900">{settings.enableTabDetection ? `Max ${settings.maxWarnings}` : "Off"}</p></div>
+                </div>
+              </div>
+
+              <Link to="/contests/mine" onClick={onClose} className="flex items-center justify-center w-full min-h-[48px] text-sm font-bold text-gray-800 rounded-2xl border border-gray-300 hover:bg-gray-50">
+                See results{settings.answerMode === "teacher_release" ? " & publish them" : ""} in My contests →
+              </Link>
+            </div>
+            <div className="shrink-0 border-t border-gray-200 px-5 pt-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+              <button onClick={onClose} className="w-full min-h-[48px] bg-gray-900 text-white font-bold text-sm rounded-xl">Done</button>
+            </div>
+          </>
         )}
-      </motion.div>
+      </div>
     </motion.div>
   );
 };

@@ -71,6 +71,8 @@ export interface LeaderboardRow {
 }
 
 export interface CreateContestResponse {
+  /** false: the backend could not read the teacher's login — the contest has no owner (newer backend) */
+  teacher_attached?: boolean;
   contest_id: string;
   short_code: string;
   share_link: string;

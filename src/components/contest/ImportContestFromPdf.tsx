@@ -10,6 +10,7 @@ import MathText from "@/components/MathText";
 import LoginModal from "@/components/LoginModal";
 import { CreateContestModal } from "./CreateContestModal";
 import { supabase } from "@/lib/supabaseClient";
+import { isoDate } from "@/lib/localDate";
 import { useAuth } from "@/providers/AuthProvider";
 import { useGuestAccess } from "@/hooks/useGuestAccess";
 import {
@@ -332,16 +333,23 @@ export default function ImportContestFromPdf() {
       id: testId, teacher_id: user.id, exam_title: meta.title || "Imported test", board: meta.board || "CBSE",
       class_grade: asClassLabel(classGrade), subject, status: "saved",
       total_questions: items.length, total_marks: totalMarks, created_at: new Date().toISOString(),
-      paper_date: new Date().toLocaleDateString("en-GB"), cbse_pattern: false,
+      paper_date: isoDate(), cbse_pattern: false,
     });
-    if (testErr) { toast.warning("Contest created, but saving to Test History failed."); return; }
+    if (testErr) {
+      console.error("[test history] tests insert failed:", testErr);
+      toast.warning(`Contest created, but saving to Test History failed (${testErr.message}).`);
+      return;
+    }
     const { error: qErr } = await supabase.from("questions").insert(items.map(({ q }, idx) => ({
       test_id: testId, text: q.question_text, options: q.options.map((o) => `${o.label}) ${o.text}`),
       correct_answer: q.correct_answer, explanation: q.explanation || "", marks: q.marks || 1,
       difficulty: (q.difficulty || "medium").toLowerCase(), chapter: q.chapter || "", topic: "",
       format: isMcq(q) ? "mcq" : "short_answer", position: idx + 1,
     })));
-    if (qErr) toast.warning("Contest created, but its questions weren't saved to Test History.");
+    if (qErr) {
+      console.error("[test history] questions insert failed:", qErr);
+      toast.warning(`Contest created, but its questions weren't saved to Test History (${qErr.message}).`);
+    }
     else toast.success("Also saved in your Test History.");
   };
 

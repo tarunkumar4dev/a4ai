@@ -75,7 +75,7 @@ describe("CreateContestModal (rendered)", { timeout: 30000 }, () => {
   const button = (label: string) => Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.trim() === label)!;
   const tap = (el: Element) => act(() => { el.dispatchEvent(new MouseEvent("pointerup", { bubbles: true })); });
   const create = async () => {
-    const btn = Array.from(host.querySelectorAll("button")).find((b) => /Create & Get Link/.test(b.textContent || ""))!;
+    const btn = Array.from(host.querySelectorAll("button")).find((b) => /Create contest/.test(b.textContent || ""))!;
     await act(async () => { btn.click(); });
   };
 
