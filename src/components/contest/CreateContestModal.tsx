@@ -1,5 +1,5 @@
 // src/components/contest/CreateContestModal.tsx
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Link2, Copy, Clock, Eye, EyeOff,
@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { ContestApiError, type AnswerMode, type CreateContestPayload, type CreateContestResponse } from "@/lib/contestApi";
+import { ContestApiError, type AnswerMode, type CreateContestResponse } from "@/lib/contestApi";
+import { buildContestPayload, clampDuration, createTapGuard, localToIso } from "./contestPayload";
 
 // ==================== TYPES ====================
 interface CreateContestProps {
@@ -80,11 +81,7 @@ const Toggle = ({ enabled, onChange, label, description, icon: Icon }: {
 );
 
 // ==================== MAIN ====================
-const toIso = (local: string | null) => {
-  if (!local) return null;
-  const d = new Date(local);
-  return isNaN(d.getTime()) ? null : d.toISOString();
-};
+const toIso = localToIso;
 
 export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subject, classGrade, board, logoBase64, initialDuration, onCreated }: CreateContestProps) => {
   const [step, setStep] = useState<"configure" | "share">("configure");
@@ -94,7 +91,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
 
   const [settings, setSettings] = useState<ContestSettings>({
     title: testTitle || "Test Paper",
-    duration: initialDuration ? Math.min(180, Math.max(5, Math.round(initialDuration))) : 30,
+    duration: clampDuration(initialDuration),
     answerMode: "after_test",
     showExplanation: true,
     enableCamera: true,
@@ -112,6 +109,14 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
     },
     []
   );
+
+  // Duration: pointerup / keyboard only, and never within 400 ms after a date picker closed (phone ghost taps
+  // once picked "15 min" under the finger while "1 hour" had been chosen).
+  const tapGuard = useRef(createTapGuard(400)).current;
+  const pickDuration = (value: number) => {
+    if (!tapGuard.allowed()) return;
+    updateSetting("duration", value);
+  };
 
   const durationOptions = useMemo(() =>
     DURATION_OPTIONS.some((o) => o.value === settings.duration)
@@ -132,53 +137,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
     try {
       const { contestApi } = await import("@/lib/contestApi");
 
-      const payload: CreateContestPayload = {
-        title: settings.title,
-        subject,
-        class_grade: classGrade,
-        board: board?.trim() || "CBSE",
-        logo_base64: logoBase64 || undefined,
-        duration_minutes: settings.duration,
-        answer_mode: settings.answerMode,
-        show_explanation: settings.showExplanation,
-        enable_camera: settings.enableCamera,
-        enable_tab_detection: settings.enableTabDetection,
-        allow_back_navigation: settings.allowBackNavigation,
-        max_warnings: settings.maxWarnings,
-        max_attempts: settings.maxAttempts,
-        scheduled_at: toIso(settings.scheduledAt),
-        expires_at: toIso(settings.expiresAt),
-        questions: questions.map((q: any) => {
-          // Fix question_type: "mcq" → "MCQ", "short" → "Short", "long" → "Long"
-          const rawType = q.type || q.format || q.question_type || "MCQ";
-          const typeMap: Record<string, string> = { mcq: "MCQ", short: "Short", long: "Long", essay: "Long" };
-          const questionType = typeMap[rawType.toLowerCase()] || rawType;
-
-          // Fix options: convert strings to {label, text} dicts
-          const rawOptions = q.options || [];
-          const options = rawOptions.map((opt: any, idx: number) => {
-            if (typeof opt === "string") {
-              const labels = ["A", "B", "C", "D"];
-              // Remove "A) " prefix if present
-              const cleaned = opt.replace(/^[A-D]\)\s*/i, "");
-              return { label: labels[idx] || String(idx + 1), text: cleaned };
-            }
-            return opt; // already a dict
-          });
-
-          // correct_answer is passed through as-is: the grader matches "B" and "B) text" alike
-          return {
-            question_text: q.question_text || q.text || "",
-            question_type: questionType,
-            options,
-            correct_answer: q.correct_answer || q.correctAnswer || "",
-            explanation: q.explanation || "",
-            marks: q.marks || 1,
-            difficulty: q.difficulty || "Medium",
-            chapter: q.chapter || "",
-          };
-        }),
-      };
+      const payload = buildContestPayload({ settings, subject, classGrade, board, logoBase64, questions });
 
       let res: CreateContestResponse;
       try {
@@ -255,7 +214,9 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {durationOptions.map((opt) => (
-                  <button key={opt.value} onClick={() => updateSetting("duration", opt.value)}
+                  <button key={opt.value} type="button" aria-pressed={settings.duration === opt.value}
+                    onPointerUp={(e) => { if (e.pointerType === "mouse" && e.button !== 0) return; pickDuration(opt.value); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pickDuration(opt.value); } }}
                     className={`py-3 rounded-xl text-xs font-bold transition-all border ${settings.duration === opt.value ? "bg-gray-900 text-white border-gray-900 shadow-md" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"}`}>
                     {opt.label}
                   </button>
@@ -270,12 +231,14 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label className="block">
                   <span className="text-xs text-gray-500">Opens at</span>
-                  <input type="datetime-local" value={settings.scheduledAt || ""} onChange={(e) => updateSetting("scheduledAt", e.target.value || null)}
+                  <input type="datetime-local" value={settings.scheduledAt || ""} onChange={(e) => { tapGuard.block(); updateSetting("scheduledAt", e.target.value || null); }}
+                    onBlur={() => tapGuard.block()}
                     className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 outline-none focus:border-gray-400 bg-white" />
                 </label>
                 <label className="block">
                   <span className="text-xs text-gray-500">Closes at</span>
-                  <input type="datetime-local" value={settings.expiresAt || ""} min={settings.scheduledAt || undefined} onChange={(e) => updateSetting("expiresAt", e.target.value || null)}
+                  <input type="datetime-local" value={settings.expiresAt || ""} min={settings.scheduledAt || undefined} onChange={(e) => { tapGuard.block(); updateSetting("expiresAt", e.target.value || null); }}
+                    onBlur={() => tapGuard.block()}
                     className="mt-1 w-full px-3 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 outline-none focus:border-gray-400 bg-white" />
                 </label>
               </div>
