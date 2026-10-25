@@ -8,6 +8,7 @@ import { Camera, CheckCircle2, Clock, FileText, Loader2, ShieldAlert } from "luc
 import { contestApi, ContestApiError, ContestData, ContestInfo, startErrorMessage } from "@/lib/contestApi";
 import ContestAttemptPage from "@/components/contest/ContestAttemptPage";
 import type { AttemptProgress } from "@/lib/contestProgress";
+import { CONTEST_FONT_STACK, CONTEST_NAVY, useContestFont } from "@/lib/contestFont";
 
 const attemptMarker = (code: string) => `a4_contest_attempt_${code}`;
 const readMarker = (code: string) => { try { return localStorage.getItem(attemptMarker(code)); } catch { return null; } };
@@ -27,11 +28,17 @@ function cameraHelp(state: CamState): string | null {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-3xl border border-gray-200 shadow-sm p-6 space-y-5">{children}</div>
+    <div className="min-h-screen bg-[#F4F6FA] flex flex-col items-center" style={{ fontFamily: CONTEST_FONT_STACK }}>
+      <div className="w-full text-white" style={{ background: CONTEST_NAVY }}>
+        <p className="max-w-md mx-auto px-4 py-3 text-sm font-bold">a4ai · Online test</p>
+      </div>
+      <div className="w-full max-w-md p-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">{children}</div>
+      </div>
     </div>
   );
 }
+const NAVY_BTN = "bg-[#1F3A68] text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1F3A68]";
 
 export default function ContestPage() {
   const { shortCode } = useParams<{ shortCode: string }>();
@@ -47,6 +54,7 @@ export default function ContestPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const handedOver = useRef(false);
   const resumable = shortCode ? !!readMarker(shortCode) : false;
+  useContestFont();
 
   const loadInfo = useCallback(() => {
     if (!shortCode) return;
@@ -126,6 +134,8 @@ export default function ContestPage() {
           showInstantAnswers: contestData.answer_mode === "instant",
           showAnswersAfterTest: contestData.answer_mode === "after_test",
           showNoAnswers: contestData.answer_mode === "none",
+          resultsByTeacher: contestData.answer_mode === "teacher_release",
+          retryOf: contestData.retry_of ?? null,
           showExplanation: contestData.show_explanation,
           allowBackNavigation: contestData.allow_back_navigation,
           enableCamera: contestData.enable_camera,
@@ -159,7 +169,7 @@ export default function ContestPage() {
           <CheckCircle2 size={44} className="mx-auto text-emerald-500" />
           <h1 className="text-xl font-extrabold text-gray-900">You have already submitted</h1>
           {already.score != null && already.total_marks != null ? (
-            <p className="text-3xl font-extrabold text-gray-900">{already.score}<span className="text-base text-gray-400">/{already.total_marks}</span></p>
+            <p className="text-3xl font-extrabold text-gray-900">{already.score}<span className="text-base text-gray-600">/{already.total_marks}</span></p>
           ) : null}
           <p className="text-sm text-gray-500">Your answers were recorded. Your teacher will share the results.</p>
         </div>
@@ -175,9 +185,9 @@ export default function ContestPage() {
     return (
       <Shell>
         <div className="text-center space-y-3">
-          <Clock size={40} className="mx-auto text-gray-400" />
+          <Clock size={40} className="mx-auto text-gray-600" />
           <p className="text-base font-bold text-gray-900">{blocker}</p>
-          <button onClick={loadInfo} className="px-5 py-3 rounded-2xl bg-gray-900 text-white text-sm font-bold">Check again</button>
+          <button onClick={loadInfo} className={`px-5 min-h-[48px] rounded-lg text-sm font-bold ${NAVY_BTN}`}>Check again</button>
         </div>
       </Shell>
     );
@@ -195,14 +205,14 @@ export default function ContestPage() {
 
       {info && (
         <div className="grid grid-cols-2 gap-2 text-center">
-          <div className="rounded-2xl bg-gray-50 py-3"><p className="text-lg font-extrabold text-gray-900 inline-flex items-center gap-1"><Clock size={16} />{info.duration_minutes} min</p><p className="text-[10px] font-bold uppercase text-gray-400">Duration</p></div>
-          <div className="rounded-2xl bg-gray-50 py-3"><p className="text-lg font-extrabold text-gray-900 inline-flex items-center gap-1"><FileText size={16} />{info.total_questions}</p><p className="text-[10px] font-bold uppercase text-gray-400">Questions</p></div>
+          <div className="rounded-2xl bg-gray-50 py-3"><p className="text-lg font-extrabold text-gray-900 inline-flex items-center gap-1"><Clock size={16} />{info.duration_minutes} min</p><p className="text-[11px] font-bold uppercase text-gray-600">Duration</p></div>
+          <div className="rounded-2xl bg-gray-50 py-3"><p className="text-lg font-extrabold text-gray-900 inline-flex items-center gap-1"><FileText size={16} />{info.total_questions}</p><p className="text-[11px] font-bold uppercase text-gray-600">Questions</p></div>
         </div>
       )}
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-1.5 text-sm text-amber-900">
         <p className="font-bold flex items-center gap-1.5"><ShieldAlert size={16} /> Rules</p>
-        {(info?.enable_tab_detection ?? true) && <p>• Stay on this page. Leaving it (other app / tab) gives a warning — after {maxWarnings} warnings the test is submitted automatically.</p>}
+        {(info?.enable_tab_detection ?? true) && <p>• Stay on this page. Leaving it (other app / tab) counts as a tab switch — after {maxWarnings} tab switches the test is submitted automatically.</p>}
         {needCamera && <p>• Keep your camera on for the whole test.</p>}
         <p>• Don't refresh or close this page. If it happens, open the link again and tap Continue — your answers are kept.</p>
         <p>• The timer keeps running even if you leave.</p>
@@ -217,7 +227,7 @@ export default function ContestPage() {
           </div>
           {cam !== "on" && (
             <button onClick={askCamera} disabled={cam === "asking"}
-              className="w-full py-3 rounded-2xl bg-white border-2 border-gray-900 text-gray-900 text-sm font-bold disabled:opacity-50">
+              className="w-full min-h-[48px] rounded-lg bg-white border-2 border-[#1F3A68] text-[#1F3A68] text-sm font-bold disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1F3A68]">
               {cam === "asking" ? "Waiting for permission…" : cam === "idle" ? "Turn on camera" : "Try again"}
             </button>
           )}
@@ -229,10 +239,10 @@ export default function ContestPage() {
       {startError && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{startError}</p>}
 
       <button onClick={start} disabled={!canStart}
-        className="w-full py-4 rounded-2xl bg-gray-900 text-white font-extrabold text-sm disabled:bg-gray-300 inline-flex items-center justify-center gap-2">
+        className={`w-full min-h-[52px] rounded-lg font-bold text-sm disabled:bg-gray-300 disabled:text-gray-600 inline-flex items-center justify-center gap-2 ${NAVY_BTN}`}>
         {starting ? <><Loader2 size={16} className="animate-spin" /> Starting…</> : resumable ? "Continue test" : "Start test"}
       </button>
-      {needCamera && cam !== "on" && <p className="text-[11px] text-center text-gray-400">Start unlocks once your camera works.</p>}
+      {needCamera && cam !== "on" && <p className="text-[11px] text-center text-gray-600">Start unlocks once your camera works.</p>}
     </Shell>
   );
 }

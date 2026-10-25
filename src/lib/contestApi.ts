@@ -16,7 +16,8 @@ export interface CreateContestPayload {
   board?: string;
   logo_base64?: string | null;
   duration_minutes: number;
-  answer_mode: "instant" | "after_test" | "none";
+  /** teacher_release = hidden until the teacher publishes (newer backend; older ones reject it → caller falls back to "none") */
+  answer_mode: AnswerMode;
   show_explanation: boolean;
   enable_camera: boolean;
   enable_tab_detection: boolean;
@@ -35,6 +36,38 @@ export interface CreateContestPayload {
     difficulty: string;
     chapter?: string;
   }[];
+}
+
+export type AnswerMode = "instant" | "after_test" | "teacher_release" | "none";
+
+export interface MyContest {
+  contest_id: string;
+  title: string;
+  subject: string;
+  class_grade: string;
+  short_code: string;
+  share_link: string;
+  total_questions: number;
+  total_marks: number;
+  total_attempts: number;
+  duration_minutes: number;
+  answer_mode: string;
+  status: string;
+  created_at: string;
+  results_published?: boolean;
+}
+
+export interface LeaderboardRow {
+  attempt_id: string;
+  student_name?: string | null;
+  student_email?: string | null;
+  status: string;
+  score?: number | null;
+  total_marks: number;
+  percentage?: number | null;
+  time_taken_seconds?: number | null;
+  warning_count: number;
+  submitted_at?: string | null;
 }
 
 export interface CreateContestResponse {
@@ -102,6 +135,8 @@ export interface ContestData {
   } | null;
   /** periodic camera snapshots are allowed for this contest (also needs VITE_CONTEST_SNAPSHOTS=1) */
   snapshots_enabled?: boolean;
+  /** a NEW attempt the backend opened because the previous one ended on a technical issue */
+  retry_of?: string | null;
 }
 
 export interface ProgressPayload {
@@ -325,16 +360,26 @@ export const contestApi = {
     const res = await fetch(`${API_V1}/contests/${contestId}/leaderboard`, {
       headers: await getAuthHeaders(),
     });
-    if (!res.ok) throw new Error("Failed to load leaderboard");
+    if (!res.ok) throw await errorFromResponse(res, "Failed to load results");
     return res.json();
   },
 
-  async listMyContests() {
+  async listMyContests(): Promise<{ contests: MyContest[] }> {
     const res = await fetch(`${API_V1}/contests/my`, {
       headers: await getAuthHeaders(),
     });
-    if (!res.ok) throw new Error("Failed to load contests");
+    if (!res.ok) throw await errorFromResponse(res, "Failed to load contests");
     return res.json();
+  },
+
+  /** teacher_release contests: make scores + answers visible to students (backend: POST /contests/{id}/publish-results) */
+  async publishResults(contestId: string): Promise<{ ok?: boolean; published_at?: string }> {
+    const res = await fetch(`${API_V1}/contests/${contestId}/publish-results`, {
+      method: "POST",
+      headers: await getAuthHeaders(),
+    });
+    if (!res.ok) throw await errorFromResponse(res, "Failed to publish results");
+    return res.json().catch(() => ({ ok: true }));
   },
 };
 

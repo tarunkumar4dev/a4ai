@@ -576,6 +576,12 @@ const ContestLandingPage: React.FC = () => {
             <ChevronRight size={20} className="shrink-0 text-slate-400" />
           </button>
         )}
+        {role !== "student" && (
+          <button onClick={() => navigate("/contests/mine")}
+            className="w-full text-left flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-white border border-slate-200 text-sm font-bold text-slate-800">
+            My contests — results &amp; publish <ChevronRight size={18} className="text-slate-400" />
+          </button>
+        )}
 
         {/* 2. Hero FlashCards - Mega Contests */}
         <section>

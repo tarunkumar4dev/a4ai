@@ -7,7 +7,8 @@ import {
   Zap, Unlock, BookOpen, CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { CreateContestResponse } from "@/lib/contestApi";
+import { Link } from "react-router-dom";
+import { ContestApiError, type AnswerMode, type CreateContestPayload, type CreateContestResponse } from "@/lib/contestApi";
 
 // ==================== TYPES ====================
 interface CreateContestProps {
@@ -28,7 +29,7 @@ interface CreateContestProps {
 interface ContestSettings {
   title: string;
   duration: number;
-  answerMode: "instant" | "after_test" | "none";
+  answerMode: AnswerMode;
   showExplanation: boolean;
   enableCamera: boolean;
   enableTabDetection: boolean;
@@ -50,11 +51,15 @@ const DURATION_OPTIONS = [
   { value: 120, label: "2 hours" },
 ];
 
-const ANSWER_MODES = [
-  { value: "instant" as const, label: "Instant Answers", desc: "Show correct answer after each question", icon: Eye },
-  { value: "after_test" as const, label: "After Submission", desc: "Show all answers after test is submitted", icon: BookOpen },
-  { value: "none" as const, label: "No Answers", desc: "Only teacher sees the results", icon: EyeOff },
+const ANSWER_MODES: { value: AnswerMode; label: string; desc: string; icon: React.FC<any> }[] = [
+  { value: "instant", label: "Show correct answer after each question", desc: "Students see if they were right as they go", icon: Eye },
+  { value: "after_test", label: "Show answers after submitting", desc: "Score + answer key right after they submit", icon: BookOpen },
+  { value: "teacher_release", label: "Don't show — I'll publish results later", desc: "Students see results when you tap “Publish results” in My contests", icon: Clock },
+  { value: "none", label: "Never show answers", desc: "Only you see the results", icon: EyeOff },
 ];
+const ANSWER_MODE_SHORT: Record<AnswerMode, string> = {
+  instant: "After each question", after_test: "After submitting", teacher_release: "When you publish", none: "Never",
+};
 
 // ==================== TOGGLE ====================
 const Toggle = ({ enabled, onChange, label, description, icon: Icon }: {
@@ -127,7 +132,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
     try {
       const { contestApi } = await import("@/lib/contestApi");
 
-      const res = await contestApi.createContest({
+      const payload: CreateContestPayload = {
         title: settings.title,
         subject,
         class_grade: classGrade,
@@ -173,7 +178,18 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
             chapter: q.chapter || "",
           };
         }),
-      });
+      };
+
+      let res: CreateContestResponse;
+      try {
+        res = await contestApi.createContest(payload);
+      } catch (err) {
+        // older backends only know instant / after_test / none
+        if (payload.answer_mode !== "teacher_release" || !(err instanceof ContestApiError) || ![400, 422].includes(err.status)) throw err;
+        res = await contestApi.createContest({ ...payload, answer_mode: "none" });
+        updateSetting("answerMode", "none");
+        toast.warning(`“Publish results later” isn't available on the server yet (${err.message}). Saved as “Never show answers”.`);
+      }
 
       setContestLink(res.share_link);
       setStep("share");
@@ -184,7 +200,7 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
     } finally {
       setIsCreating(false);
     }
-  }, [settings, questions, subject, classGrade, board, logoBase64, scheduleError, onCreated]);
+  }, [settings, questions, subject, classGrade, board, logoBase64, scheduleError, onCreated, updateSetting]);
 
   const handleCopy = useCallback(() => {
     if (!contestLink) return;
@@ -362,12 +378,15 @@ export const CreateContestModal = ({ isOpen, onClose, questions, testTitle, subj
                 <div><p className="text-xs text-gray-400">Questions</p><p className="text-sm font-bold text-gray-900">{questions.length}</p></div>
                 <div><p className="text-xs text-gray-400">Duration</p><p className="text-sm font-bold text-gray-900">{settings.duration} min</p></div>
                 <div><p className="text-xs text-gray-400">Total Marks</p><p className="text-sm font-bold text-gray-900">{totalMarks}</p></div>
-                <div><p className="text-xs text-gray-400">Answers</p><p className="text-sm font-bold text-gray-900 capitalize">{settings.answerMode === "after_test" ? "After Test" : settings.answerMode}</p></div>
+                <div><p className="text-xs text-gray-400">Answers</p><p className="text-sm font-bold text-gray-900">{ANSWER_MODE_SHORT[settings.answerMode]}</p></div>
                 <div><p className="text-xs text-gray-400">Camera</p><p className="text-sm font-bold text-gray-900">{settings.enableCamera ? "On" : "Off"}</p></div>
                 <div><p className="text-xs text-gray-400">Tab Detection</p><p className="text-sm font-bold text-gray-900">{settings.enableTabDetection ? "On" : "Off"}</p></div>
               </div>
             </div>
 
+            <Link to="/contests/mine" onClick={onClose} className="block w-full py-3 text-center text-sm font-bold text-gray-700 rounded-2xl border border-gray-200 hover:bg-gray-50">
+              See results{settings.answerMode === "teacher_release" ? " & publish them" : ""} in My contests →
+            </Link>
             <button onClick={onClose} className="w-full py-4 bg-gray-900 text-white font-bold text-sm rounded-2xl hover:bg-gray-800 transition-colors">Done</button>
           </div>
         )}

@@ -104,6 +104,7 @@ const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
 
 const ContestPage = lazy(() => import("./pages/ContestPage"));
+const MyContestsPage = lazy(() => import("./pages/teacher/MyContestsPage"));
 
 /* ---------- Mega Contest Pages ---------- */
 const MegaContestLivePage = lazy(() =>
@@ -463,6 +464,7 @@ const App = () => {
                       {/* Contests */}
                       <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
                       <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
+                      <Route path="/contests/mine" element={<PrivateRoute><MyContestsPage /></PrivateRoute>} />
                       <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
                       <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
                       <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />

@@ -26,6 +26,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import { contestApi, ContestApiError, type SubmitResponse } from "@/lib/contestApi";
 import { setContestActive } from "@/lib/contestGuard";
+import { CONTEST_FONT_STACK, CONTEST_NAVY, useContestFont } from "@/lib/contestFont";
 import { supabase } from "@/lib/supabaseClient";
 import {
   answersFor, clearLocal, clientDeadline, createAwayTracker, createProgressSync, loadLocal, mergeProgress, saveLocal,
@@ -126,6 +127,10 @@ interface ContestConfig {
   snapshotsEnabled?: boolean;
   /** camera stream already opened (and allowed) in the lobby */
   cameraStream?: MediaStream | null;
+  /** this attempt replaces one that ended on a technical issue (backend: retry_of) */
+  retryOf?: string | null;
+  /** answer_mode teacher_release: no score / answers until the teacher publishes */
+  resultsByTeacher?: boolean;
 }
 
 interface StudentAnswer {
@@ -142,10 +147,14 @@ const AUTOSAVE_INTERVAL = 15000;    // PUT progress every 15 s (plus 2 s after a
 const SNAPSHOT_INTERVAL = 60000;
 const SNAPSHOT_BUCKET = "contest-snapshots";
 const SNAPSHOTS_BUILD_FLAG = import.meta.env.VITE_CONTEST_SNAPSHOTS === "1";
+const TEXT_SCALES = [0.9, 1, 1.15];
+const TEXT_SCALE_KEY = "a4_contest_text_scale";
+const NAVY = CONTEST_NAVY;
+const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#1F3A68]";
 const CAMERA_CONSTRAINTS: MediaStreamConstraints = { video: { width: 320, height: 240, facingMode: "user" }, audio: false };
 
 // ==================== PROCTORING: CAMERA FEED ====================
-const CameraFeed = ({
+const CameraFeed = React.memo(function CameraFeed({
   stream,
   recording,
 }: {
@@ -153,54 +162,62 @@ const CameraFeed = ({
   stream: MediaStream | null;
   /** snapshots are really being taken → "REC", else "Camera on" */
   recording: boolean;
-}) => {
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // display only: the attempt page owns the stream (no toggle for the student, no extra getUserMedia per feed)
+  // display only: never getUserMedia / stop() here — the attempt page owns the one stream.
+  // srcObject is set only when the stream object changes, so answering / navigating never restarts the video.
   useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream;
+    const v = videoRef.current;
+    if (v && v.srcObject !== stream) v.srcObject = stream;
   }, [stream]);
 
   const isActive = !!stream;
   return (
-    <div className="relative group">
-      <div
-        className={`w-[140px] h-[105px] md:w-[180px] md:h-[135px] rounded-2xl overflow-hidden border-2 transition-all shadow-lg ${
-          isActive
-            ? "border-emerald-400/60 shadow-emerald-500/20"
-            : "border-red-400/60 shadow-red-500/20 bg-gray-900"
-        }`}
-      >
-        {isActive ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full h-full object-cover mirror"
-            style={{ transform: "scaleX(-1)" }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-900">
-            <CameraOff size={24} className="text-red-400" />
-          </div>
-        )}
+    <div className="relative shrink-0" data-testid="camera-feed">
+      <div className={`w-[56px] h-[42px] md:w-[96px] md:h-[72px] rounded-lg overflow-hidden border-2 bg-gray-900 ${isActive ? "border-emerald-400" : "border-red-400"}`}>
+        <video ref={videoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${isActive ? "" : "hidden"}`} style={{ transform: "scaleX(-1)" }} />
+        {!isActive && <div className="w-full h-full flex items-center justify-center"><CameraOff size={16} className="text-red-300" /></div>}
       </div>
       {isActive && (
-        <div className="absolute top-2 left-2 flex items-center gap-1.5">
-          <div className={`w-2 h-2 rounded-full ${recording ? "bg-red-500 animate-pulse" : "bg-emerald-400"}`} />
-          <span className="text-[9px] font-bold text-white bg-black/50 px-1.5 py-0.5 rounded-full backdrop-blur-sm">
-            {recording ? "REC" : "Camera on"}
-          </span>
-        </div>
+        <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] md:text-[9px] font-bold text-white bg-black/80 px-1 rounded">
+          {recording ? "● REC" : "Camera on"}
+        </span>
       )}
-      {/* Shield badge */}
-      <div className="absolute -bottom-1 -right-1 bg-emerald-500 text-white p-1 rounded-full shadow-md">
-        <Shield size={10} />
-      </div>
     </div>
   );
-};
+});
+
+// ==================== LIVE COUNTERS ====================
+const AttemptCounters = ({ attempted, flagged, left, dark = false }: { attempted: number; flagged: number; left: number; dark?: boolean }) => (
+  <p className={`text-xs md:text-[13px] font-semibold tabular-nums ${dark ? "text-white" : "text-gray-800"}`} aria-live="polite" data-testid="attempt-counters">
+    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden />Attempted {attempted}</span>
+    <span className={dark ? "text-blue-200" : "text-gray-600"}> · </span>
+    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" aria-hidden />Flagged {flagged}</span>
+    <span className={dark ? "text-blue-200" : "text-gray-600"}> · </span>
+    <span className="inline-flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${dark ? "bg-gray-300" : "bg-gray-400"}`} aria-hidden />Left {left}</span>
+  </p>
+);
+
+const PaletteLegend = () => (
+  <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-700">
+    <span className="inline-flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-emerald-700" />Answered</span>
+    <span className="inline-flex items-center gap-1.5"><span className="relative w-4 h-4 rounded bg-amber-100 border border-amber-500"><span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" /></span>Flagged</span>
+    <span className="inline-flex items-center gap-1.5"><span className="w-4 h-4 rounded bg-gray-100 border border-gray-300" />Not answered</span>
+    <span className="inline-flex items-center gap-1.5"><span className="w-4 h-4 rounded" style={{ background: NAVY }} />Current</span>
+  </div>
+);
+
+const TextSizeControl = ({ step, onChange }: { step: number; onChange: (s: number) => void }) => (
+  <div role="group" aria-label="Text size" className="inline-flex rounded-md overflow-hidden border border-white/40">
+    {["A-", "A", "A+"].map((l, i) => (
+      <button key={l} onClick={() => onChange(i)} aria-pressed={step === i} aria-label={["Smaller text", "Normal text", "Larger text"][i]}
+        className={`px-2.5 min-h-[32px] text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${step === i ? "bg-white text-[#1F3A68]" : "text-white"}`}>
+        {l}
+      </button>
+    ))}
+  </div>
+);
 
 // ==================== WARNING MODAL ====================
 const WarningModal = ({
@@ -277,62 +294,38 @@ const SubmitModal = ({
   answeredCount: number;
   totalCount: number;
   flaggedCount: number;
-}) => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-  >
-    <motion.div
-      initial={{ scale: 0.8, y: 30 }}
-      animate={{ scale: 1, y: 0 }}
-      className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl"
-    >
-      <h3 className="text-xl font-extrabold text-gray-900 mb-6 text-center">
-        Submit Test?
-      </h3>
-
-      <div className="space-y-3 mb-6">
-        <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-xl">
-          <span className="text-sm text-gray-600">Answered</span>
-          <span className="text-sm font-bold text-emerald-600">{answeredCount}/{totalCount}</span>
+}) => {
+  const left = totalCount - answeredCount;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="submit-title"
+      style={{ fontFamily: CONTEST_FONT_STACK }}>
+      <div className="bg-white rounded-xl max-w-md w-full shadow-2xl overflow-hidden">
+        <div className="px-6 py-4 text-white" style={{ background: NAVY }}>
+          <h3 id="submit-title" className="text-lg font-bold">Submit test?</h3>
         </div>
-        <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-xl">
-          <span className="text-sm text-gray-600">Unanswered</span>
-          <span className="text-sm font-bold text-amber-600">{totalCount - answeredCount}</span>
-        </div>
-        {flaggedCount > 0 && (
-          <div className="flex items-center justify-between py-3 px-4 bg-amber-50 rounded-xl border border-amber-200">
-            <span className="text-sm text-amber-700">Flagged for Review</span>
-            <span className="text-sm font-bold text-amber-600">{flaggedCount}</span>
+        <div className="p-6 space-y-3">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 py-3"><p className="text-xl font-bold text-emerald-800 tabular-nums">{answeredCount}</p><p className="text-[11px] font-semibold text-emerald-900">Attempted</p></div>
+            <div className="rounded-lg bg-amber-50 border border-amber-200 py-3"><p className="text-xl font-bold text-amber-800 tabular-nums">{flaggedCount}</p><p className="text-[11px] font-semibold text-amber-900">Flagged</p></div>
+            <div className="rounded-lg bg-gray-50 border border-gray-200 py-3"><p className="text-xl font-bold text-gray-800 tabular-nums">{left}</p><p className="text-[11px] font-semibold text-gray-700">Left</p></div>
           </div>
-        )}
+          {left > 0 ? (
+            <p className="text-sm font-semibold text-red-700 text-center">You have {left} unanswered question{left === 1 ? "" : "s"}.</p>
+          ) : (
+            <p className="text-sm text-gray-700 text-center">All {totalCount} questions attempted.</p>
+          )}
+          <p className="text-xs text-gray-600 text-center">You can't change answers after submitting.</p>
+          <div className="flex gap-3 pt-2">
+            <button onClick={onCancel} className={`flex-1 min-h-[48px] rounded-lg border-2 border-gray-300 text-gray-800 font-bold text-sm ${FOCUS}`}>Go back</button>
+            <button onClick={onConfirm} className={`flex-1 min-h-[48px] rounded-lg text-white font-bold text-sm inline-flex items-center justify-center gap-2 ${FOCUS}`} style={{ background: NAVY }}>
+              <Send size={16} /> Submit
+            </button>
+          </div>
+        </div>
       </div>
-
-      {totalCount - answeredCount > 0 && (
-        <p className="text-xs text-red-500 text-center mb-4 font-medium">
-          You have {totalCount - answeredCount} unanswered question(s)!
-        </p>
-      )}
-
-      <div className="flex gap-3">
-        <button
-          onClick={onCancel}
-          className="flex-1 py-3.5 bg-gray-100 text-gray-700 font-bold text-sm rounded-2xl hover:bg-gray-200 transition-colors"
-        >
-          Go Back
-        </button>
-        <button
-          onClick={onConfirm}
-          className="flex-1 py-3.5 bg-gray-900 text-white font-bold text-sm rounded-2xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-        >
-          <Send size={16} /> Submit
-        </button>
-      </div>
-    </motion.div>
-  </motion.div>
-);
+    </div>
+  );
+};
 
 // ==================== TIMER ====================
 const ContestTimer = ({
@@ -363,34 +356,20 @@ const ContestTimer = ({
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
-  const percentage = Math.min(100, (remaining / Math.max(1, totalSeconds)) * 100);
-
   const isLow = remaining < 300; // < 5 min
-  const isCritical = remaining < 60; // < 1 min
+  void totalSeconds;
 
   return (
     <div
-      className={`flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border transition-all ${
-        isCritical
-          ? "bg-red-50 border-red-200 text-red-600 animate-pulse"
-          : isLow
-          ? "bg-amber-50 border-amber-200 text-amber-600"
-          : "bg-gray-50 border-gray-200 text-gray-700"
-      }`}
+      data-testid="timer"
+      role="timer"
+      aria-label={`Time left ${minutes} minutes ${seconds} seconds`}
+      className={`flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-lg font-bold tabular-nums ${isLow ? "bg-red-600 text-white" : "bg-white/10 text-white"}`}
     >
-      <Clock size={16} />
-      <span className="font-mono font-extrabold text-sm tabular-nums tracking-wide">
+      <Clock size={16} aria-hidden />
+      <span className="text-base md:text-lg tracking-wide">
         {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
       </span>
-      {/* Mini progress bar */}
-      <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden hidden md:block">
-        <div
-          className={`h-full rounded-full transition-all duration-1000 ${
-            isCritical ? "bg-red-500" : isLow ? "bg-amber-500" : "bg-emerald-500"
-          }`}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
     </div>
   );
 };
@@ -403,6 +382,7 @@ const QuestionCard = ({
   onToggleFlag,
   onTextAnswer,
   showInstantAnswer,
+  scale = 1,
 }: {
   question: ContestQuestion;
   answer: StudentAnswer;
@@ -410,130 +390,86 @@ const QuestionCard = ({
   onToggleFlag: () => void;
   onTextAnswer?: (text: string) => void;
   showInstantAnswer: boolean;
+  scale?: number;
 }) => {
-  const correctOption = null; // will come from API if showInstantAnswer
+  void showInstantAnswer;
   // the previous card stays on screen while it animates out — a fast tap must not change ITS answer
   const present = useIsPresent();
+  const typeLabel = question.type === "MCQ" ? "Single Choice" : question.type === "Short" ? "Short Answer" : "Long Answer";
+  const optionLetters = ["A", "B", "C", "D"];
 
   return (
     <motion.div
       key={question.id}
       style={present ? undefined : { pointerEvents: "none" }}
       aria-hidden={!present}
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -40 }}
-      transition={{ type: "spring", stiffness: 200, damping: 25 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.12 }}
       className="w-full"
     >
-      {/* Question header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-extrabold text-white bg-gray-900 px-3 py-1.5 rounded-xl">
-            Q{question.questionNumber}
-          </span>
-          <span
-            className={`text-[10px] font-bold px-2.5 py-1 rounded-lg uppercase tracking-wider ${
-              question.difficulty === "Easy"
-                ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                : question.difficulty === "Medium"
-                ? "bg-amber-50 text-amber-600 border border-amber-200"
-                : "bg-red-50 text-red-600 border border-red-200"
-            }`}
-          >
-            {question.difficulty}
-          </span>
-          <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
-            {question.marks} mark{question.marks > 1 ? "s" : ""}
-          </span>
-        </div>
-
-        {/* Flag button */}
+      {/* header strip: Q. 12 · Single Choice · 1 mark */}
+      <div className="flex items-center justify-between gap-3 border-b border-gray-200 pb-3 mb-4">
+        <p className="text-sm md:text-[15px] text-gray-800">
+          <span className="font-bold" style={{ color: NAVY }}>Q. {question.questionNumber}</span>
+          <span className="text-gray-500"> · </span>{typeLabel}
+          <span className="text-gray-500"> · </span>{question.marks} mark{question.marks > 1 ? "s" : ""}
+        </p>
         <button
           onClick={onToggleFlag}
-          className={`p-2 rounded-xl transition-all ${
-            answer.flagged
-              ? "bg-amber-50 text-amber-500 border border-amber-200"
-              : "bg-gray-50 text-gray-400 border border-gray-200 hover:text-amber-500 hover:border-amber-200"
+          aria-pressed={answer.flagged}
+          className={`inline-flex items-center gap-1.5 min-h-[40px] px-3 rounded-lg border text-xs font-bold ${FOCUS} ${
+            answer.flagged ? "bg-amber-100 border-amber-500 text-amber-900" : "bg-white border-gray-300 text-gray-700"
           }`}
-          title={answer.flagged ? "Remove flag" : "Flag for review"}
         >
-          <Flag size={16} fill={answer.flagged ? "currentColor" : "none"} />
+          <Flag size={14} fill={answer.flagged ? "currentColor" : "none"} /> {answer.flagged ? "Flagged" : "Flag for review"}
         </button>
       </div>
 
-      {/* Question text */}
-      <div className="mb-8">
-        <p className="text-base md:text-lg font-semibold text-gray-900 leading-relaxed">
+      {/* question text: 17px phone / 18px desktop × text size, 1.6, 500, #111 */}
+      <div className="[--q-base:17px] md:[--q-base:18px]">
+        <p style={{ fontSize: `calc(var(--q-base) * ${scale})`, lineHeight: 1.6, fontWeight: 500, color: "#111" }}>
           <MathText text={question.questionText} />
         </p>
       </div>
 
-      {/* Options for MCQ */}
       {question.type === "MCQ" && (
-        <div className="space-y-3">
+        <div role="radiogroup" aria-label={`Options for question ${question.questionNumber}`} className="mt-5 space-y-3">
           {question.options.map((opt, idx) => {
             const isSelected = answer.selectedOption === opt.label;
-            const optionLetters = ["A", "B", "C", "D"];
-
             return (
-              <motion.button
+              <button
                 key={opt.label}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
+                role="radio"
+                aria-checked={isSelected}
                 onClick={() => onSelectOption(opt.label)}
-                className={`w-full flex items-center gap-4 p-4 md:p-5 rounded-2xl border-2 transition-all text-left group ${
-                  isSelected
-                    ? "border-gray-900 bg-gray-900 text-white shadow-lg"
-                    : "border-gray-200 bg-white hover:border-gray-400 hover:shadow-md text-gray-700"
+                className={`w-full min-h-[48px] flex items-center gap-3 px-4 py-3 rounded-lg border-2 text-left ${FOCUS} ${
+                  isSelected ? "border-[#1F3A68] bg-[#E8F0FE]" : "border-gray-300 bg-white hover:border-gray-500"
                 }`}
               >
-                {/* Option letter badge */}
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center font-extrabold text-sm flex-shrink-0 transition-all ${
-                    isSelected
-                      ? "bg-white text-gray-900"
-                      : "bg-gray-100 text-gray-500 group-hover:bg-gray-200"
-                  }`}
-                >
-                  {optionLetters[idx]}
-                </div>
-
-                {/* Option text */}
-                <span className={`text-sm md:text-base font-medium flex-1 ${
-                  isSelected ? "text-white" : "text-gray-700"
-                }`}>
+                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected ? "border-[#1F3A68]" : "border-gray-500"}`} aria-hidden>
+                  {isSelected && <span className="w-2.5 h-2.5 rounded-full" style={{ background: NAVY }} />}
+                </span>
+                <span className="font-bold text-gray-900 w-5 shrink-0">{optionLetters[idx]}</span>
+                <span className="flex-1" style={{ fontSize: `${16 * scale}px`, lineHeight: 1.5, color: "#111" }}>
                   <MathText text={opt.text} />
                 </span>
-
-                {/* Selected indicator */}
-                {isSelected && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="w-6 h-6 rounded-full bg-emerald-400 flex items-center justify-center flex-shrink-0"
-                  >
-                    <CheckCircle2 size={14} className="text-white" />
-                  </motion.div>
-                )}
-              </motion.button>
+              </button>
             );
           })}
         </div>
       )}
 
-      {/* Text answer for Short/Long */}
       {(question.type === "Short" || question.type === "Long") && (
         <textarea
           value={answer.textAnswer || ""}
           onChange={(e) => onTextAnswer?.(e.target.value)}
-          placeholder={
-            question.type === "Short"
-              ? "Write your answer in 2-3 sentences..."
-              : "Write your detailed answer here..."
-          }
+          aria-label="Your answer"
+          placeholder={question.type === "Short" ? "Write your answer in 2-3 sentences..." : "Write your detailed answer here..."}
           rows={question.type === "Short" ? 4 : 8}
-          className="w-full p-5 rounded-2xl border-2 border-gray-200 focus:border-gray-900 outline-none text-sm font-medium text-gray-700 placeholder:text-gray-300 resize-none transition-colors"
+          style={{ fontSize: `${16 * scale}px` }}
+          className={`mt-5 w-full p-4 rounded-lg border-2 border-gray-300 focus:border-[#1F3A68] outline-none text-gray-900 placeholder:text-gray-500 resize-none ${FOCUS}`}
         />
       )}
     </motion.div>
@@ -552,29 +488,32 @@ const QuestionNav = ({
   currentIndex: number;
   onNavigate: (index: number) => void;
 }) => (
-  <div className="grid grid-cols-5 md:grid-cols-4 gap-2">
+  <div className="grid grid-cols-6 md:grid-cols-5 gap-2">
     {questions.map((q, idx) => {
       const ans = answers[idx];
       const isCurrent = idx === currentIndex;
-      const isAnswered = !!ans?.selectedOption || !!ans?.textAnswer;
-      const isFlagged = ans?.flagged;
-
+      const isAnswered = !!ans?.selectedOption || !!ans?.textAnswer?.trim();
+      const isFlagged = !!ans?.flagged;
+      const state = isAnswered ? "answered" : isFlagged ? "flagged" : "not answered";
       return (
         <button
           key={q.id}
           onClick={() => onNavigate(idx)}
-          className={`relative w-10 h-10 rounded-xl text-xs font-bold transition-all ${
+          aria-label={`Question ${idx + 1}, ${state}${isAnswered && isFlagged ? ", flagged" : ""}${isCurrent ? ", current" : ""}`}
+          aria-current={isCurrent ? "step" : undefined}
+          className={`relative h-10 rounded-md text-xs font-bold ${FOCUS} ${
             isCurrent
-              ? "bg-gray-900 text-white shadow-lg scale-110"
+              ? "text-white ring-2 ring-offset-1 ring-[#1F3A68]"
               : isAnswered
-              ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
-              : "bg-gray-100 text-gray-500 border border-gray-200 hover:border-gray-400"
+              ? "bg-emerald-700 text-white"
+              : isFlagged
+              ? "bg-amber-100 text-amber-900 border border-amber-500"
+              : "bg-gray-100 text-gray-700 border border-gray-300"
           }`}
+          style={isCurrent ? { background: NAVY } : undefined}
         >
           {idx + 1}
-          {isFlagged && (
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white" />
-          )}
+          {isFlagged && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border border-white" aria-hidden />}
         </button>
       );
     })}
@@ -1013,6 +952,42 @@ export const ContestAttemptPage = ({
     submitRef.current();
   }, []);
 
+  // ── Exam look: font, text size (remembered), keyboard ──
+  useContestFont();
+  const [textStep, setTextStep] = useState(() => {
+    try {
+      const v = localStorage.getItem(TEXT_SCALE_KEY);
+      return v === "0" || v === "1" || v === "2" ? Number(v) : 1;
+    } catch { return 1; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(TEXT_SCALE_KEY, String(textStep)); } catch { /* ignore */ }
+  }, [textStep]);
+  const textScale = TEXT_SCALES[textStep] ?? 1;
+
+  // 1–4 picks an option, ←/→ moves (desktop); never while typing or a dialog is open
+  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  keyHandlerRef.current = (e: KeyboardEvent) => {
+    if (isSubmitted || showSubmitModal || showWarning || submitPhase !== "idle" || cameraLost) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.isContentEditable)) return;
+    if (/^[1-4]$/.test(e.key) && currentQuestion?.type === "MCQ") {
+      const opt = currentQuestion.options[Number(e.key) - 1];
+      if (opt) { e.preventDefault(); selectOption(opt.label); }
+      return;
+    }
+    const desktop = typeof window.matchMedia === "function" && window.matchMedia("(min-width: 768px)").matches;
+    if (!desktop) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => keyHandlerRef.current(e);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
   // ── Stats ──
   const answeredCount = useMemo(
     () => answers.filter((a) => a.selectedOption || a.textAnswer).length,
@@ -1041,7 +1016,7 @@ export const ContestAttemptPage = ({
             <div className="max-w-4xl mx-auto flex items-center justify-between">
               <div>
                 <h1 className="text-sm font-extrabold text-gray-900">{config.title} — Answer Key</h1>
-                <p className="text-[10px] text-gray-400">Score: {score}/{totalMarks} ({percentage}%)</p>
+                <p className="text-[10px] text-gray-600">Score: {score}/{totalMarks} ({percentage}%)</p>
               </div>
               <button
                 onClick={() => setShowAnswersView(false)}
@@ -1078,11 +1053,11 @@ export const ContestAttemptPage = ({
                         ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
                         : studentSelected
                         ? "bg-red-50 text-red-600 border border-red-200"
-                        : "bg-gray-50 text-gray-400 border border-gray-200"
+                        : "bg-gray-50 text-gray-600 border border-gray-200"
                     }`}>
                       {isCorrect ? "Correct" : studentSelected ? "Wrong" : "Skipped"}
                     </span>
-                    <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
+                    <span className="text-[10px] font-bold text-gray-600 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
                       {q.marks} mark{q.marks > 1 ? "s" : ""}
                     </span>
                   </div>
@@ -1161,83 +1136,57 @@ export const ContestAttemptPage = ({
     }
 
     // ── RESULT SUMMARY VIEW ──
+    const leftCount = questions.length - answeredCount;
+    const hideScore = !!config.resultsByTeacher;
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-6">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="bg-white rounded-3xl p-10 max-w-lg w-full shadow-2xl text-center"
-        >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.3, type: "spring" }}
-            className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-6"
-          >
-            <CheckCircle2 size={40} className="text-emerald-500" />
-          </motion.div>
-
-          <h2 className="text-2xl font-extrabold text-gray-900 mb-2">
-            Test Submitted!
-          </h2>
-          <p className="text-gray-500 text-sm mb-6">
-            Your answers have been recorded successfully.
-          </p>
-
-          {/* Score card */}
-          {submitResult && (
-            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-6 mb-6 text-white">
-              <p className="text-4xl font-extrabold">{score}<span className="text-lg text-gray-400">/{totalMarks}</span></p>
-              <p className="text-sm text-gray-300 mt-1">Your Score</p>
-              <div className="w-full h-2 bg-gray-700 rounded-full mt-4 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${percentage}%` }}
-                  transition={{ delay: 0.5, duration: 1, ease: "easeOut" }}
-                  className={`h-full rounded-full ${
-                    percentage >= 80 ? "bg-emerald-400" :
-                    percentage >= 50 ? "bg-yellow-400" :
-                    "bg-red-400"
-                  }`}
-                />
-              </div>
-              <p className="text-right text-xs text-gray-400 mt-1">{percentage}%</p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="bg-gray-50 rounded-2xl p-4">
-              <p className="text-2xl font-extrabold text-gray-900">{answeredCount}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase">Answered</p>
-            </div>
-            <div className="bg-gray-50 rounded-2xl p-4">
-              <p className="text-2xl font-extrabold text-gray-900">
-                {questions.length - answeredCount}
-              </p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase">Skipped</p>
-            </div>
-            <div className="bg-gray-50 rounded-2xl p-4">
-              <p className="text-2xl font-extrabold text-amber-600">{warningCount}</p>
-              <p className="text-[10px] font-bold text-gray-400 uppercase">Warnings</p>
-            </div>
+      <div className="min-h-screen bg-[#F4F6FA] flex items-start sm:items-center justify-center p-4" style={{ fontFamily: CONTEST_FONT_STACK }}>
+        <div className="bg-white rounded-xl max-w-lg w-full shadow-lg overflow-hidden text-center">
+          <div className="px-6 py-4 text-white text-left" style={{ background: NAVY }}>
+            <p className="text-sm font-bold truncate">{config.title}</p>
+            <p className="text-xs text-blue-100">{config.subject} · {config.classGrade}</p>
           </div>
+          <div className="p-6 md:p-8">
+            <CheckCircle2 size={44} className="text-emerald-600 mx-auto mb-3" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">Test submitted</h2>
+            <p className="text-gray-700 text-sm mb-6">Your answers have been recorded.</p>
 
-          {config.showAnswersAfterTest && questionsWithAnswers.length > 0 && (
-            <button
-              onClick={() => setShowAnswersView(true)}
-              className="w-full py-3.5 bg-gray-900 text-white font-bold text-sm rounded-2xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
-            >
-              <BookOpen size={16} />
-              View Answers & Explanations
-            </button>
-          )}
+            {submitResult && !hideScore && (
+              <div className="rounded-xl p-5 mb-6 text-white" style={{ background: NAVY }}>
+                <p className="text-4xl font-bold tabular-nums">{score}<span className="text-lg text-blue-100">/{totalMarks}</span></p>
+                <p className="text-sm text-blue-100 mt-1">Your score · {percentage}%</p>
+              </div>
+            )}
 
-          {config.showNoAnswers && (
-            <p className="text-xs text-gray-400 mt-4">
-              Results will be shared by your teacher.
-            </p>
-          )}
-        </motion.div>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 py-3"><p className="text-xl font-bold text-emerald-800 tabular-nums">{answeredCount}</p><p className="text-[11px] font-semibold text-emerald-900">Attempted</p></div>
+              <div className="rounded-lg bg-amber-50 border border-amber-200 py-3"><p className="text-xl font-bold text-amber-800 tabular-nums">{flaggedCount}</p><p className="text-[11px] font-semibold text-amber-900">Flagged</p></div>
+              <div className="rounded-lg bg-gray-50 border border-gray-200 py-3"><p className="text-xl font-bold text-gray-800 tabular-nums">{leftCount}</p><p className="text-[11px] font-semibold text-gray-700">Left</p></div>
+            </div>
+            {config.enableTabDetection && (
+              <p className="text-xs text-gray-700 mb-6">Tab switches: {warningCount}/{maxWarnings}</p>
+            )}
+
+            {hideScore ? (
+              <p className="text-sm font-semibold text-gray-800 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">Your teacher will publish the results.</p>
+            ) : (
+              <>
+                {config.showAnswersAfterTest && questionsWithAnswers.length > 0 && (
+                  <button
+                    onClick={() => setShowAnswersView(true)}
+                    className={`w-full min-h-[48px] text-white font-bold text-sm rounded-lg flex items-center justify-center gap-2 ${FOCUS}`}
+                    style={{ background: NAVY }}
+                  >
+                    <BookOpen size={16} />
+                    View Answers & Explanations
+                  </button>
+                )}
+                {config.showNoAnswers && (
+                  <p className="text-xs text-gray-600 mt-4">Results will be shared by your teacher.</p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -1245,106 +1194,64 @@ export const ContestAttemptPage = ({
   // ════════════════════════════════════════════════════════════════════
   // MAIN QUIZ UI
   // ════════════════════════════════════════════════════════════════════
+  const leftCount = questions.length - answeredCount;
+  const syncText = syncState === "saving" ? "Saving…" : syncState === "offline" ? "Offline – answers kept on this device" : syncState === "local" ? "Saved on this device ✓" : "Saved ✓";
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 select-none"
+      className="min-h-screen bg-[#F4F6FA] select-none"
+      style={{ fontFamily: CONTEST_FONT_STACK }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* ── TOP BAR ── */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-gray-200 px-4 md:px-8 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Left — contest info */}
-          <div className="flex items-center gap-3">
-            {config.logoBase64 && (
-              <img
-                src={config.logoBase64}
-                alt="Logo"
-                className="w-8 h-8 rounded-lg object-cover"
-              />
-            )}
-            <div>
-              <h1 className="text-sm font-extrabold text-gray-900 leading-tight">
-                {config.title || "Test Paper"}
-              </h1>
-              <p className="text-[10px] text-gray-400 font-medium">
-                {config.subject} · {config.classGrade} · {config.totalQuestions} Qs · {config.totalMarks} marks
-              </p>
-              <p className={`text-[10px] font-bold ${syncState === "offline" ? "text-amber-600" : "text-emerald-600"}`} aria-live="polite">
-                {syncState === "saving" ? "Saving…" : syncState === "offline" ? "Offline – answers kept on this device" : syncState === "local" ? "Saved on this device ✓" : "Saved ✓"}
-              </p>
-            </div>
+      {/* ── TOP BAR (navy): title · camera · timer · Submit ── */}
+      <header className="sticky top-0 z-50 text-white shadow-md" style={{ background: NAVY }}>
+        <div className="max-w-7xl mx-auto px-3 md:px-6 py-2 flex items-center gap-2 md:gap-4">
+          {config.logoBase64 && <img src={config.logoBase64} alt="" className="w-8 h-8 rounded object-cover bg-white" />}
+          <div className="min-w-0 flex-1">
+            <h1 className="text-sm md:text-base font-bold leading-tight truncate">{config.title || "Test Paper"}</h1>
+            <p className="text-[11px] text-blue-100 truncate">
+              <span className="hidden sm:inline">{config.subject} · {config.classGrade} · {config.totalQuestions} Qs · {config.totalMarks} marks · </span>
+              <span className={syncState === "offline" ? "text-amber-300 font-semibold" : ""} aria-live="polite">{syncText}</span>
+            </p>
           </div>
-
-          {/* Center — Timer */}
-          <ContestTimer
-            totalSeconds={durationSec}
-            deadline={deadline}
-            onTimeUp={handleTimeUp}
-          />
-
-          {/* Right — Camera + Proctoring */}
-          <div className="hidden md:flex items-center gap-3">
-            {(config.enableCamera || config.enableTabDetection) && (
-              <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200">
-                <Shield size={10} />
-                Proctored
-              </div>
+          {config.enableCamera && <CameraFeed stream={camStream} recording={snapshotsOn} />}
+          <ContestTimer totalSeconds={durationSec} deadline={deadline} onTimeUp={handleTimeUp} />
+          <button
+            onClick={() => setShowSubmitModal(true)}
+            className="min-h-[40px] px-3 md:px-4 rounded-lg bg-white text-[#1F3A68] font-bold text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#1F3A68]"
+          >
+            Submit
+          </button>
+        </div>
+        <div className="border-t border-white/15">
+          <div className="max-w-7xl mx-auto px-3 md:px-6 py-1.5 flex items-center gap-3 flex-wrap">
+            <div className="md:hidden"><AttemptCounters attempted={answeredCount} flagged={flaggedCount} left={leftCount} dark /></div>
+            {config.enableTabDetection && (
+              <span className={`text-xs font-semibold tabular-nums ${warningCount > 0 ? "text-amber-300" : "text-blue-100"}`} data-testid="tab-switches">
+                Tab switches: {warningCount}/{maxWarnings}
+              </span>
             )}
-            {config.enableCamera && <CameraFeed stream={camStream} recording={snapshotsOn} />}
+            <div className="ml-auto"><TextSizeControl step={textStep} onChange={setTextStep} /></div>
           </div>
         </div>
       </header>
 
-      {/* Camera error banner */}
-      <AnimatePresence>
-        {cameraError && (
-          <motion.div
-            initial={{ y: -20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -20, opacity: 0 }}
-            className="bg-red-50 border-b border-red-200 px-6 py-3 flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2 text-red-600 text-sm font-medium">
-              <CameraOff size={16} />
-              {cameraError}
-            </div>
-            <button
-              onClick={() => setCameraError(null)}
-              className="text-red-400 hover:text-red-600"
-            >
-              <X size={16} />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {config.retryOf && (
+        <div className="bg-amber-50 border-b border-amber-300 px-4 py-2.5 text-sm font-semibold text-amber-900 text-center" role="status">
+          Your previous attempt ended because of a technical issue. This is your second and last attempt.
+        </div>
+      )}
 
-      {/* ── MAIN CONTENT ── */}
-      {/* mobile: room below the card for the floating camera, so it never covers Next / Submit */}
-      <div className={`max-w-7xl mx-auto flex flex-col md:flex-row gap-6 p-4 md:p-8 ${config.enableCamera ? "pb-36 md:pb-8" : ""}`}>
-        {/* Question area */}
-        <div className="flex-1 min-w-0">
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6 md:p-10">
-            {/* Progress bar */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                  Question {currentIndex + 1} of {questions.length}
-                </span>
-                <span className="text-[10px] font-bold text-emerald-600">
-                  {answeredCount} answered
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-gray-900 rounded-full"
-                  initial={false}
-                  animate={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
-                  transition={{ type: "spring", stiffness: 200 }}
-                />
-              </div>
-            </div>
+      {cameraError && !cameraLost && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2.5 flex items-center justify-between gap-3 text-sm text-red-800">
+          <span className="inline-flex items-center gap-2"><CameraOff size={16} /> {cameraError}</span>
+          <button onClick={() => setCameraError(null)} aria-label="Dismiss" className={`text-red-700 ${FOCUS}`}><X size={16} /></button>
+        </div>
+      )}
 
-            {/* Question */}
+      {/* ── MAIN ── */}
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row gap-4 md:gap-6 p-3 md:p-6">
+        <main className="flex-1 min-w-0">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-8">
             <AnimatePresence mode="wait">
               <QuestionCard
                 key={currentQuestion.id}
@@ -1354,142 +1261,89 @@ export const ContestAttemptPage = ({
                 onToggleFlag={toggleFlag}
                 onTextAnswer={setTextAnswer}
                 showInstantAnswer={config.showInstantAnswers}
+                scale={textScale}
               />
             </AnimatePresence>
 
-            {/* Navigation buttons */}
-            <div className="flex items-center justify-between mt-10 pt-6 border-t border-gray-100">
+            <div className="flex items-center justify-between gap-2 mt-8 pt-4 border-t border-gray-200">
               <button
                 onClick={goPrev}
                 disabled={currentIndex === 0}
-                className="flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className={`inline-flex items-center gap-1.5 min-h-[48px] px-4 rounded-lg text-sm font-bold text-gray-800 border-2 border-gray-300 bg-white disabled:opacity-40 disabled:cursor-not-allowed ${FOCUS}`}
               >
                 <ChevronLeft size={18} /> Previous
               </button>
-
-              {/* Mobile nav toggle */}
               <button
-                onClick={() => setShowMobileNav(!showMobileNav)}
-                className="md:hidden px-4 py-3 rounded-2xl text-xs font-bold text-gray-600 bg-gray-100"
+                onClick={() => setShowMobileNav(true)}
+                className={`md:hidden min-h-[48px] px-3 rounded-lg text-xs font-bold text-gray-800 bg-gray-100 border border-gray-300 ${FOCUS}`}
+                aria-label="Open question palette"
               >
-                {currentIndex + 1}/{questions.length}
+                Q {currentIndex + 1}/{questions.length} ▦
               </button>
-
               {currentIndex < questions.length - 1 ? (
-                <button
-                  onClick={goNext}
-                  className="flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold text-white bg-gray-900 hover:bg-gray-800 transition-all"
-                >
+                <button onClick={goNext} className={`inline-flex items-center gap-1.5 min-h-[48px] px-5 rounded-lg text-sm font-bold text-white ${FOCUS}`} style={{ background: NAVY }}>
                   Next <ChevronRight size={18} />
                 </button>
               ) : (
-                <button
-                  onClick={() => setShowSubmitModal(true)}
-                  className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg"
-                >
-                  <Send size={16} /> Submit Test
+                <button onClick={() => setShowSubmitModal(true)} className={`inline-flex items-center gap-1.5 min-h-[48px] px-5 rounded-lg text-sm font-bold text-white bg-emerald-700 ${FOCUS}`}>
+                  <Send size={16} /> Submit test
                 </button>
               )}
             </div>
+            <p className="hidden md:block text-[11px] text-gray-600 mt-3">Keyboard: 1–4 choose an option · ← → previous / next</p>
           </div>
-        </div>
+        </main>
 
-        {/* ── SIDEBAR: Question Navigation (Desktop) ── */}
-        <div className="hidden md:block w-64 flex-shrink-0">
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-5 sticky top-24">
-            <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-wider mb-4">
-              Questions
-            </h3>
-            <QuestionNav
-              questions={questions}
-              answers={answers}
-              currentIndex={currentIndex}
-              onNavigate={goToQuestion}
-            />
-
-            {/* Legend */}
-            <div className="mt-5 pt-4 border-t border-gray-100 space-y-2">
-              <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                <div className="w-4 h-4 rounded bg-gray-900" />
-                <span>Current</span>
-              </div>
-              <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                <div className="w-4 h-4 rounded bg-emerald-100 border border-emerald-300" />
-                <span>Answered</span>
-              </div>
-              <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                <div className="w-4 h-4 rounded bg-gray-100 border border-gray-200 relative">
-                  <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />
-                </div>
-                <span>Flagged</span>
-              </div>
+        {/* ── Palette (desktop) ── */}
+        <aside className="hidden md:block w-72 shrink-0">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sticky top-28 space-y-4">
+            <AttemptCounters attempted={answeredCount} flagged={flaggedCount} left={leftCount} />
+            <div>
+              <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Question palette</h3>
+              <QuestionNav questions={questions} answers={answers} currentIndex={currentIndex} onNavigate={goToQuestion} />
             </div>
-
-            {/* Submit button in sidebar */}
+            <PaletteLegend />
             <button
               onClick={() => setShowSubmitModal(true)}
-              className="w-full mt-5 py-3 bg-gray-900 text-white font-bold text-xs rounded-2xl hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+              className={`w-full min-h-[44px] text-white font-bold text-sm rounded-lg flex items-center justify-center gap-2 ${FOCUS}`}
+              style={{ background: NAVY }}
             >
-              <Send size={14} /> Submit Test
+              <Send size={14} /> Submit test
             </button>
           </div>
-
-          {/* Camera feed (desktop sidebar) */}
-          {config.enableCamera && (
-            <div className="mt-4 flex justify-center">
-              <CameraFeed stream={camStream} recording={snapshotsOn} />
-            </div>
-          )}
-        </div>
+        </aside>
       </div>
 
-      {/* ── MOBILE: Bottom Question Nav ── */}
-      <AnimatePresence>
-        {showMobileNav && (
-          <motion.div
-            initial={{ y: 300 }}
-            animate={{ y: 0 }}
-            exit={{ y: 300 }}
-            className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 rounded-t-3xl shadow-2xl p-6 z-50 md:hidden"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-extrabold text-gray-900">Questions</h3>
-              <button
-                onClick={() => setShowMobileNav(false)}
-                className="p-1.5 rounded-lg bg-gray-100"
-              >
-                <X size={16} />
-              </button>
+      {/* ── MOBILE: palette sheet ── */}
+      {showMobileNav && (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Question palette">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowMobileNav(false)} />
+          <div className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-2xl p-4 space-y-4 max-h-[80vh] overflow-y-auto" style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-900">Question palette</h3>
+              <button onClick={() => setShowMobileNav(false)} aria-label="Close" className={`p-2 rounded-lg bg-gray-100 ${FOCUS}`}><X size={16} /></button>
             </div>
+            <AttemptCounters attempted={answeredCount} flagged={flaggedCount} left={leftCount} />
             <QuestionNav
               questions={questions}
               answers={answers}
               currentIndex={currentIndex}
-              onNavigate={(idx) => {
-                goToQuestion(idx);
-                setShowMobileNav(false);
-              }}
+              onNavigate={(idx) => { goToQuestion(idx); setShowMobileNav(false); }}
             />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── MOBILE: Camera (floating) ── */}
-      {config.enableCamera && (
-        <div className="md:hidden fixed bottom-3 right-3 z-40">
-          <CameraFeed stream={camStream} recording={snapshotsOn} />
+            <PaletteLegend />
+          </div>
         </div>
       )}
 
       {/* ── Camera lost: blocking until it is back on ── */}
       {config.enableCamera && cameraLost && !isSubmitted && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-white rounded-3xl p-7 max-w-sm w-full text-center space-y-4">
-            <CameraOff size={36} className="mx-auto text-red-500" />
-            <h3 className="text-lg font-extrabold text-gray-900">Turn your camera back on</h3>
-            <p className="text-sm text-gray-600">The camera must stay on during this test. The timer is still running.</p>
-            {cameraError && <p className="text-xs text-red-700 bg-red-50 rounded-xl px-3 py-2">{cameraError}</p>}
-            <button onClick={requestCamera} className="w-full py-3.5 bg-gray-900 text-white font-bold text-sm rounded-2xl">Turn camera on</button>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 p-4" role="alertdialog" aria-modal="true">
+          <div className="bg-white rounded-xl p-7 max-w-sm w-full text-center space-y-4">
+            <CameraOff size={36} className="mx-auto text-red-600" />
+            <h3 className="text-lg font-bold text-gray-900">Turn your camera back on</h3>
+            <p className="text-sm text-gray-700">The camera must stay on during this test. The timer is still running.</p>
+            {cameraError && <p className="text-xs text-red-800 bg-red-50 rounded-lg px-3 py-2">{cameraError}</p>}
+            <button onClick={requestCamera} className={`w-full min-h-[48px] text-white font-bold text-sm rounded-lg ${FOCUS}`} style={{ background: NAVY }}>Turn camera on</button>
           </div>
         </div>
       )}
@@ -1506,46 +1360,37 @@ export const ContestAttemptPage = ({
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showSubmitModal && (
-          <SubmitModal
-            onConfirm={() => submitRef.current()}
-            onCancel={() => setShowSubmitModal(false)}
-            answeredCount={answeredCount}
-            totalCount={questions.length}
-            flaggedCount={flaggedCount}
-          />
-        )}
-      </AnimatePresence>
+      {showSubmitModal && (
+        <SubmitModal
+          onConfirm={() => submitRef.current()}
+          onCancel={() => setShowSubmitModal(false)}
+          answeredCount={answeredCount}
+          totalCount={questions.length}
+          flaggedCount={flaggedCount}
+        />
+      )}
 
-      {/* Submitting overlay */}
-      <AnimatePresence>
-        {isSubmitting && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-white/90 backdrop-blur-sm"
-          >
-            <div className="text-center px-6">
-              <Loader2 size={40} className="animate-spin text-gray-400 mx-auto mb-4" />
-              <p className="text-sm font-bold text-gray-600">Submitting… don't close this page</p>
-              {submitTry > 0 && <p className="text-xs text-amber-600 mt-1">Weak connection — trying again ({submitTry})…</p>}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isSubmitting && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-white/95" role="status">
+          <div className="text-center px-6">
+            <Loader2 size={40} className="animate-spin text-gray-500 mx-auto mb-4" />
+            <p className="text-sm font-bold text-gray-800">Submitting… don't close this page</p>
+            {submitTry > 0 && <p className="text-xs text-amber-800 mt-1">Weak connection — trying again ({submitTry})…</p>}
+          </div>
+        </div>
+      )}
 
       {/* Submit failed: answers are kept on this device; retry (also automatic when back online) */}
       {submitPhase === "failed" && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-white/95 p-6">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-white/95 p-6" role="alertdialog" aria-modal="true">
           <div className="text-center max-w-sm space-y-3">
-            <AlertTriangle size={40} className="mx-auto text-amber-500" />
-            <p className="text-base font-extrabold text-gray-900">Not submitted yet</p>
-            <p className="text-sm text-gray-600">Your answers are saved on this device. Check your internet and tap Retry — don't close this page.</p>
-            {submitError && <p className="text-xs text-red-700 bg-red-50 rounded-xl px-3 py-2">{submitError}</p>}
-            <button onClick={() => submitRef.current()} className="w-full py-3.5 bg-gray-900 text-white font-bold text-sm rounded-2xl">Retry submit</button>
+            <AlertTriangle size={40} className="mx-auto text-amber-600" />
+            <p className="text-base font-bold text-gray-900">Not submitted yet</p>
+            <p className="text-sm text-gray-700">Your answers are saved on this device. Check your internet and tap Retry — don't close this page.</p>
+            {submitError && <p className="text-xs text-red-800 bg-red-50 rounded-lg px-3 py-2">{submitError}</p>}
+            <button onClick={() => submitRef.current()} className={`w-full min-h-[48px] text-white font-bold text-sm rounded-lg ${FOCUS}`} style={{ background: NAVY }}>Retry submit</button>
             {secondsLeft(deadline) > 0 && (
-              <button onClick={() => setSubmitPhase("idle")} className="w-full py-3 text-sm font-bold text-gray-600">Back to the test</button>
+              <button onClick={() => setSubmitPhase("idle")} className={`w-full min-h-[44px] text-sm font-bold text-gray-700 ${FOCUS}`}>Back to the test</button>
             )}
           </div>
         </div>
