@@ -14,11 +14,11 @@ interface Member {
 }
 
 const CORE_TEAM: Member[] = [
-  { slug: "tarun-kumar-pathak", name: "Tarun Kumar Pathak", role: "Founder & CEO", tint: "#FFE7E7" },
-  { slug: "yash-dubey", name: "Yash Dubey", role: "Co-Founder", tint: "#EFEDFF" },
-  { slug: "aakash-singh", name: "Aakash Singh", role: "Co-Founder", tint: "#E4F8F3" },
+  { slug: "tarun-kumar-pathak", name: "Tarun Kumar Pathak", role: "Co-founder & Product", tint: "#FFE7E7" },
+  { slug: "yash-dubey", name: "Yash Dubey", role: "Co-founder & Backend", tint: "#EFEDFF" },
+  { slug: "aakash-singh", name: "Aakash Singh", role: "Co-founder & Marketing", tint: "#E4F8F3" },
   { slug: "nitin-kumar", name: "Nitin Kumar", role: "Founding Engineer", tint: "#FFF1E3" },
-  { slug: "durgesh", name: "Durgesh", role: "Marketing", tint: "#FFF0BF" },
+  { slug: "durgesh", name: "Durgesh", role: "Dev", tint: "#FFF0BF" },
 ];
 const MENTOR: Member = { slug: "aman-singh", name: "Aman Singh", role: "Mentor", tint: "#EFEDFF" };
 
@@ -57,7 +57,7 @@ function Portrait({ member, eager, small }: { member: Member; eager?: boolean; s
   return (
     <div
       className={`relative shrink-0 overflow-hidden rounded-full ${
-        small ? "h-14 w-14" : "h-24 w-24 sm:h-28 sm:w-28 ring-4 ring-white shadow-[0_6px_20px_rgba(17,17,17,0.10)]"
+        small ? "h-20 w-20 sm:h-[88px] sm:w-[88px]" : "h-24 w-24 sm:h-28 sm:w-28 ring-4 ring-white shadow-[0_6px_20px_rgba(17,17,17,0.10)]"
       }`}
       style={{ backgroundColor: member.tint }}
     >
@@ -76,7 +76,7 @@ function Portrait({ member, eager, small }: { member: Member; eager?: boolean; s
       ) : (
         <span
           aria-hidden="true"
-          className={`absolute inset-0 flex items-center justify-center font-halenoir font-bold text-[#1B1B1B]/70 ${small ? "text-lg" : "text-[1.75rem]"}`}
+          className={`absolute inset-0 flex items-center justify-center font-halenoir font-bold text-[#1B1B1B]/70 ${small ? "text-2xl" : "text-[1.75rem]"}`}
         >
           {initials(member.name)}
         </span>
@@ -157,11 +157,11 @@ export default function AboutPage() {
             ))}
           </ul>
 
-          <div className="mx-auto mt-12 flex w-fit items-center gap-4 rounded-full bg-white border border-[#E5E7EB] py-2 pl-2 pr-6 shadow-[0_6px_20px_rgba(17,17,17,0.05)]">
+          <div className="mx-auto mt-12 flex w-fit items-center gap-5 rounded-full bg-white border border-[#E5E7EB] py-3 pl-3 pr-9 shadow-[0_6px_20px_rgba(17,17,17,0.06)]">
             <Portrait member={MENTOR} small />
             <div className="text-left">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#D93F4D]">{MENTOR.role}</p>
-              <h3 className="text-base font-bold text-[#1B1B1B]">{MENTOR.name}</h3>
+              <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#D93F4D]">{MENTOR.role}</p>
+              <h3 className="text-[22px] font-bold leading-tight text-[#1B1B1B]">{MENTOR.name}</h3>
             </div>
           </div>
         </Container>
