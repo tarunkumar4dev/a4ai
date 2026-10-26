@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Menu, X, ArrowRight, User, Settings, LayoutDashboard, LogOut, ChevronRight } from "lucide-react";
+import { Search, Menu, X, ArrowRight, User, Settings, LogOut, ChevronRight } from "lucide-react";
 
 const navItems = [
   { name: "Home", path: "/" },
@@ -45,7 +45,6 @@ export default function Navbar() {
       path: "/profile",
       subOptions: [
         { name: "Settings", path: "/dashboard/settings", icon: Settings },
-        { name: "My Dashboard", path: "/dashboard", icon: LayoutDashboard },
         { name: "Sign out", path: "/logout", icon: LogOut }
       ]
     },

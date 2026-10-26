@@ -1,6 +1,7 @@
 // src/pages/product/PricingPage.tsx
 import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import PageShell from "@/components/site/PageShell";
 import {
   Check,
   Users,
@@ -37,7 +38,6 @@ const GlobalStyles = () => {
 
     const s = document.createElement("style");
     s.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
       .lp-pricing-wrapper, .lp-pricing-wrapper * {
         font-family: 'Plus Jakarta Sans', 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
@@ -411,29 +411,17 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="lp-pricing-wrapper min-h-screen w-full relative bg-white">
+    <PageShell
+      meta={{
+        title: "Pricing — a4ai",
+        description: "a4ai plans for teachers, coaching institutes and colleges. Start free with 1 test paper a month; paid plans from ₹199/month.",
+        path: "/pricing",
+      }}
+    >
+    <div className="lp-pricing-wrapper w-full relative bg-white">
       <GlobalStyles />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.025] [background-image:linear-gradient(to_right,#000_1px,transparent_1px),linear-gradient(to_bottom,#000_1px,transparent_1px)] [background-size:48px_48px]" />
 
-      {/* ── FLOATING TOP NAV ── */}
-      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
-        <nav className="mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl force-light-dock">
-          <div className="flex items-center justify-between px-4 py-3 sm:px-6 bg-transparent">
-            <Link to="/" className="group flex items-center gap-2.5 text-lg font-semibold tracking-tight bg-transparent">
-              <img src="/ICON.ico" alt="Logo" className="h-6 w-6 object-contain" />
-              <span style={{ color: "#111111" }}>
-                a4ai{" "}
-                <span className="text-xs font-normal opacity-60 ml-1">Pricing</span>
-              </span>
-            </Link>
-            <Link to="/resources" className="text-sm font-semibold text-neutral-500 hover:text-neutral-800">
-              Resources
-            </Link>
-          </div>
-        </nav>
-      </div>
-
-      <div className="relative mx-auto max-w-6xl px-4 pt-24 pb-16 bg-white">
+      <div className="relative mx-auto max-w-6xl px-4 pt-12 sm:pt-16 pb-16 bg-white">
         {/* ── HEADER ── */}
         <div className="mx-auto max-w-3xl text-center bg-white">
           <h1 className="text-3xl md:text-4xl tracking-tight text-neutral-900" style={hx}>
@@ -976,5 +964,6 @@ export default function PricingPage() {
         </div>
       </div>
     </div>
+    </PageShell>
   );
 }
