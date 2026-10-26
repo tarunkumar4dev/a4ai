@@ -14,11 +14,11 @@ interface Member {
 }
 
 const CORE_TEAM: Member[] = [
-  { slug: "tarun-kumar-pathak", name: "Tarun Kumar Pathak", role: "Founder & CEO", tint: "#FFE7E7" },
-  { slug: "yash-dubey", name: "Yash Dubey", role: "Co-Founder", tint: "#EFEDFF" },
-  { slug: "aakash-singh", name: "Aakash Singh", role: "Co-Founder", tint: "#E4F8F3" },
+  { slug: "tarun-kumar-pathak", name: "Tarun Kumar Pathak", role: "Co-founder & Product", tint: "#FFE7E7" },
+  { slug: "yash-dubey", name: "Yash Dubey", role: "Co-founder & Backend", tint: "#EFEDFF" },
+  { slug: "aakash-singh", name: "Aakash Singh", role: "Co-founder & Marketing", tint: "#E4F8F3" },
   { slug: "nitin-kumar", name: "Nitin Kumar", role: "Founding Engineer", tint: "#FFF1E3" },
-  { slug: "durgesh", name: "Durgesh", role: "Marketing", tint: "#FFF0BF" },
+  { slug: "durgesh", name: "Durgesh", role: "Dev", tint: "#FFF0BF" },
 ];
 const MENTOR: Member = { slug: "aman-singh", name: "Aman Singh", role: "Mentor", tint: "#EFEDFF" };
 
@@ -52,17 +52,22 @@ const initials = (name: string) =>
     .slice(0, 2)
     .toUpperCase();
 
-function Portrait({ member, sizes, eager }: { member: Member; sizes: string; eager?: boolean }) {
+function Portrait({ member, eager, small }: { member: Member; eager?: boolean; small?: boolean }) {
   const img = portrait(member.slug);
   return (
-    <div className="relative aspect-square w-full overflow-hidden rounded-2xl" style={{ backgroundColor: member.tint }}>
+    <div
+      className={`relative shrink-0 overflow-hidden rounded-full ${
+        small ? "h-20 w-20 sm:h-[88px] sm:w-[88px]" : "h-24 w-24 sm:h-28 sm:w-28 ring-4 ring-white shadow-[0_6px_20px_rgba(17,17,17,0.10)]"
+      }`}
+      style={{ backgroundColor: member.tint }}
+    >
       {img ? (
         <img
           src={img.src}
           srcSet={img.srcSet}
-          sizes={sizes}
-          width={640}
-          height={640}
+          sizes="112px"
+          width={320}
+          height={320}
           alt={member.name}
           loading={eager ? "eager" : "lazy"}
           decoding="async"
@@ -71,7 +76,7 @@ function Portrait({ member, sizes, eager }: { member: Member; sizes: string; eag
       ) : (
         <span
           aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center font-halenoir text-[2.5rem] font-bold text-[#1B1B1B]/70"
+          className={`absolute inset-0 flex items-center justify-center font-halenoir font-bold text-[#1B1B1B]/70 ${small ? "text-2xl" : "text-[1.75rem]"}`}
         >
           {initials(member.name)}
         </span>
@@ -142,23 +147,21 @@ export default function AboutPage() {
         <Container>
           <SectionHeading id="team-heading" eyebrow="Team" title="The people behind a4ai" />
 
-          <ul className="mx-auto mt-10 flex max-w-[960px] flex-wrap justify-center gap-5">
+          <ul className="mx-auto mt-10 flex max-w-[1000px] flex-wrap justify-center gap-x-4 gap-y-8">
             {CORE_TEAM.map((m) => (
-              <li key={m.slug} className="w-full min-[480px]:w-[calc(50%-0.625rem)] lg:w-[calc(33.333%-0.84rem)] rounded-[24px] bg-white border border-[#E5E7EB] p-4 shadow-[0_8px_30px_rgba(17,17,17,0.05)]">
-                <Portrait member={m} sizes="(min-width: 1024px) 300px, (min-width: 480px) 45vw, 90vw" eager />
-                <h3 className="mt-4 px-1 text-lg font-bold text-[#1B1B1B]">{m.name}</h3>
-                <p className="px-1 pb-1 text-[15px] font-medium text-[#5D6570]">{m.role}</p>
+              <li key={m.slug} className="w-[calc(50%-0.5rem)] sm:w-[calc(33.333%-0.7rem)] lg:w-[calc(20%-0.8rem)] flex flex-col items-center text-center">
+                <Portrait member={m} eager />
+                <h3 className="mt-3 text-[15px] sm:text-base font-bold leading-snug text-[#1B1B1B]">{m.name}</h3>
+                <p className="text-[13px] sm:text-sm font-medium text-[#5D6570]">{m.role}</p>
               </li>
             ))}
           </ul>
 
-          <div className="mx-auto mt-5 max-w-[960px] rounded-[24px] bg-white border border-[#E5E7EB] p-4 sm:p-5 shadow-[0_8px_30px_rgba(17,17,17,0.05)] flex items-center gap-4 sm:gap-6">
-            <div className="w-20 sm:w-24 shrink-0">
-              <Portrait member={MENTOR} sizes="96px" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#D93F4D]">{MENTOR.role}</p>
-              <h3 className="mt-1 text-lg font-bold text-[#1B1B1B]">{MENTOR.name}</h3>
+          <div className="mx-auto mt-12 flex w-fit items-center gap-5 rounded-full bg-white border border-[#E5E7EB] py-3 pl-3 pr-9 shadow-[0_6px_20px_rgba(17,17,17,0.06)]">
+            <Portrait member={MENTOR} small />
+            <div className="text-left">
+              <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[#D93F4D]">{MENTOR.role}</p>
+              <h3 className="text-[22px] font-bold leading-tight text-[#1B1B1B]">{MENTOR.name}</h3>
             </div>
           </div>
         </Container>

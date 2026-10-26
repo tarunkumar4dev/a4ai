@@ -143,7 +143,7 @@ export default function LoginPage() {
     // 1. WAF & Honeypot Check
     const wafCheck = WAF.inspectPayload({ phone: phoneRaw, honeypot });
     if (!wafCheck.isSafe) {
-      toast({ title: "Blocked by Shield", description: wafCheck.threatDetails || "Invalid input detected", variant: "destructive" });
+      toast({ title: "Something in the form isn't allowed", description: "Remove unusual characters and try again.", variant: "destructive" });
       return;
     }
 
@@ -152,8 +152,8 @@ export default function LoginPage() {
     if (lockoutStatus.isLocked) {
       setLockoutSec(lockoutStatus.remainingSec);
       toast({
-        title: "Account Locked",
-        description: `Too many attempts. Cooldown: ${RiskEngine.formatTime(lockoutStatus.remainingSec)}`,
+        title: "Too many tries",
+        description: `Please try again in ${RiskEngine.formatTime(lockoutStatus.remainingSec)}.`,
         variant: "destructive",
       });
       return;
@@ -163,7 +163,7 @@ export default function LoginPage() {
     const otpCheck = RateLimiter.checkOtpLimit(phoneRaw);
     if (!otpCheck.allowed) {
       toast({
-        title: "OTP Rate Limit",
+        title: "Please wait before asking for another OTP",
         description: otpCheck.reason || "Please wait before requesting another OTP.",
         variant: "destructive",
       });
@@ -176,8 +176,8 @@ export default function LoginPage() {
     // 4. Smart CAPTCHA requirement if risk detected
     if (requiresCaptcha && !captchaToken) {
       toast({
-        title: "Verification Required",
-        description: "Please complete the security challenge below.",
+        title: "One quick check",
+        description: "Complete the check below, then continue.",
         variant: "destructive",
       });
       return;
@@ -258,8 +258,8 @@ export default function LoginPage() {
     // 1. Check if account is in temporary lockout
     if (lockoutSec > 0) {
       toast({
-        title: "Account In Cooldown",
-        description: `Please wait ${RiskEngine.formatTime(lockoutSec)} before trying again.`,
+        title: "Please wait",
+        description: `You can try again in ${RiskEngine.formatTime(lockoutSec)}.`,
         variant: "destructive",
       });
       return;
@@ -274,8 +274,8 @@ export default function LoginPage() {
     });
     if (!wafCheck.isSafe) {
       toast({
-        title: "Security Shield Block",
-        description: wafCheck.threatDetails || "Unsafe request detected",
+        title: "Something in the form isn't allowed",
+        description: "Remove unusual characters and try again.",
         variant: "destructive",
       });
       return;
@@ -285,8 +285,8 @@ export default function LoginPage() {
     const rlCheck = RateLimiter.checkRateLimit(`login_${identifier}`, 5, 5 * 60 * 1000);
     if (!rlCheck.allowed) {
       toast({
-        title: "Too Many Requests",
-        description: `Rate limit reached. Try again in ${rlCheck.retryAfterSec}s.`,
+        title: "Too many tries",
+        description: `Please try again in ${rlCheck.retryAfterSec} seconds.`,
         variant: "destructive",
       });
       return;
@@ -302,8 +302,8 @@ export default function LoginPage() {
     if (risk.requiresCaptcha && !captchaToken) {
       setRequiresCaptcha(true);
       toast({
-        title: "Verification Challenge Required",
-        description: "Suspicious activity detected. Please complete the security verification below.",
+        title: "One quick check",
+        description: "Complete the check below, then sign in.",
         variant: "destructive",
       });
       return;
@@ -376,16 +376,16 @@ export default function LoginPage() {
       if (riskResult.isLocked) {
         setLockoutSec(riskResult.lockoutRemainingSec);
         toast({
-          title: "Account Temporarily Locked",
-          description: `Too many failed attempts. Cooldown enforced: ${RiskEngine.formatTime(riskResult.lockoutRemainingSec)}`,
+          title: "Too many wrong tries",
+          description: `Please try again in ${RiskEngine.formatTime(riskResult.lockoutRemainingSec)}.`,
           variant: "destructive",
         });
       } else if (riskResult.requiresCaptcha) {
         setRequiresCaptcha(true);
         setCaptchaToken(null);
         toast({
-          title: "Login Failed",
-          description: `${err.message}. Security verification is now required.`,
+          title: "Login failed",
+          description: `${err.message} Complete the quick check below to try again.`,
           variant: "destructive",
         });
       } else {
@@ -464,9 +464,9 @@ export default function LoginPage() {
                 <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 flex items-center gap-3 text-xs font-semibold animate-in fade-in duration-200">
                   <Lock className="w-5 h-5 flex-shrink-0 animate-pulse" />
                   <div>
-                    <p className="font-bold">Account Temporarily Locked</p>
+                    <p className="font-bold">Too many wrong tries</p>
                     <p className="font-normal opacity-90">
-                      Too many failed login attempts. Cooldown remaining: {RiskEngine.formatTime(lockoutSec)}
+                      You can try again in {RiskEngine.formatTime(lockoutSec)}.
                     </p>
                   </div>
                 </div>
@@ -599,7 +599,7 @@ export default function LoginPage() {
                   : lockoutSec > 0 
                   ? `Locked (${RiskEngine.formatTime(lockoutSec)})` 
                   : requiresCaptcha && !captchaToken 
-                  ? "Solve CAPTCHA to Sign In" 
+                  ? "Complete the check to sign in"
                   : "Sign In"}
               </Button>
 
@@ -632,7 +632,7 @@ export default function LoginPage() {
         </div>
 
         {/* Right side illustration */}
-        <div className="hidden lg:flex items-center justify-center p-10 h-[560px] rounded-[28px] border border-black/[0.04]" style={{ backgroundImage: "linear-gradient(135deg, #EFEDFF 0%, #FFE7E7 100%)" }}>
+        <div className="hidden lg:flex items-center justify-center p-10 h-[560px] rounded-[28px] bg-[#7CC6FE]">
           <AuthCharacters shakeSignal={shakeSignal} />
         </div>
       </main>

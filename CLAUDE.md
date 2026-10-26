@@ -316,6 +316,16 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Pathak / Yash Dubey / Aakash Singh / Nitin Kumar / Durgesh / Aman Singh (mentor); portraits via `scripts/build-team-photos.py`, initials when
   missing (Nitin, Durgesh, Aman have no photo). Login + Signup: white, labelled inputs, shared `src/components/auth/AuthCharacters.tsx`, aria-live error (login), eye tracking without
   React re-renders, "no" shake only on Supabase `invalid_credentials`. Audit `NOTES.md`, results `REDESIGN_REPORT.md`.
+- [x] Polish (27 Oct, branch feat/site-polish): /pricing on PageShell (landing Navbar + Footer, no Google Fonts import,
+  content and payment flow unchanged); About team = small circular avatars (Tarun, Yash, Aakash, Nitin, Durgesh + mentor
+  pill); navbar search lists Dashboard once. Note: PR #10 merged only 5717c61 — d7a2898 (About/Features/Resources/
+  Login/Signup) was cherry-picked onto this branch.
+- [x] Round 3 (26 Oct, feat/site-polish): team photos for Nitin/Durgesh/Aman; login/signup characters on solid sky
+  blue, plain-language CAPTCHA/security toasts; hero swipe on the whole panel; Contact compact (no free-domain offer);
+  Terms + Cookie Policy rewritten (`src/pages/legal/LegalLayout.tsx`). Teacher dashboard: tabs lazy-loaded
+  (main chunk 345 KB → 92 KB; JS on first load 1405 KB → ~520 KB), no framer-motion / Google Fonts / scroll-reveal
+  observer / animate-* classes, What's New buttons no longer truncate. Student dashboard rebuilt: only real student
+  routes, no sample stats, bottom nav on phones (old sidebar links /dashboard/messages|leaderboard|subscription were 404).
 - Known after the landing redesign: landing LCP ≈ 5 s on throttled mobile (1.6 Mbps/150 ms/4× CPU) — SPA renders nothing
   until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
   `Magical_FREE_AI_Tools.jpeg` are not used.

@@ -110,7 +110,12 @@ export default function FeatureShowcase({ slides = VISIBLE_SLIDES, initialId }: 
     if (focus) tabsRef.current?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
   };
 
+  // Swipe anywhere on the panel except the tab row (that row scrolls sideways on phones).
   const onTouchStart = (e: TouchEvent) => {
+    if ((e.target as HTMLElement).closest('[role="tablist"]')) {
+      touch.current = null;
+      return;
+    }
     const t = e.touches[0];
     touch.current = { x: t.clientX, y: t.clientY };
   };
@@ -145,6 +150,8 @@ export default function FeatureShowcase({ slides = VISIBLE_SLIDES, initialId }: 
       data-testid="hero-preview"
       className="w-full min-w-0 rounded-[28px] p-3 sm:p-5 border border-black/[0.04]"
       style={{ backgroundImage: `linear-gradient(135deg, ${theme.from} 0%, ${theme.to} 100%)` }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       onPointerEnter={(e) => e.pointerType === "mouse" && setHovering(true)}
       onPointerLeave={(e) => e.pointerType === "mouse" && setHovering(false)}
       onFocus={(e) => setKeyboardFocus(e.target.matches(":focus-visible"))}
@@ -202,9 +209,7 @@ export default function FeatureShowcase({ slides = VISIBLE_SLIDES, initialId }: 
           </div>
 
           <div
-            className="a4-showcase-media relative aspect-[4/3] sm:aspect-[16/10] touch-pan-y"
-            onTouchStart={onTouchStart}
-            onTouchEnd={onTouchEnd}
+            className="a4-showcase-media relative aspect-[4/3] sm:aspect-[16/10]"
             style={{ backgroundColor: slide.canvas ?? "#F7F8FA" }}
           >
             {slide.builtIn === "test-generator" ? (

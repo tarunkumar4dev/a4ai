@@ -19,14 +19,15 @@ OUT = ROOT / "src" / "assets" / "team"
 SIZES = (320, 640)
 BUDGET_KB = 40
 
-# slug: file-name prefixes to look for (case-insensitive, first match wins)
+# slug: (file-name prefixes, case-insensitive, first match wins; optional square crop box
+#        (left, top, right, bottom) in source pixels when the face is small in the photo)
 JOBS = {
-    "tarun-kumar-pathak": ["tarun"],
-    "yash-dubey": ["yash"],
-    "aakash-singh": ["aakash"],
-    "nitin-kumar": ["nitin"],
-    "durgesh": ["durgesh"],
-    "aman-singh": ["aman"],
+    "tarun-kumar-pathak": (["tarun"], None),
+    "yash-dubey": (["yash"], None),
+    "aakash-singh": (["aakash"], None),
+    "nitin-kumar": (["nitin"], None),
+    "durgesh": (["durgesh"], (370, 10, 820, 460)),
+    "aman-singh": (["aman"], None),
 }
 
 
@@ -42,12 +43,14 @@ def find(prefixes):
     return None
 
 
-def build(slug, prefixes):
+def build(slug, prefixes, box=None):
     src = find(prefixes)
     if not src:
         print(f"skip  {slug:20} (no photo yet — initials are shown)")
         return
     img = ImageOps.exif_transpose(Image.open(src)).convert("RGB")
+    if box:
+        img = img.crop(box)
     side = min(img.size)
     # centre horizontally, keep the top (faces sit in the upper part of portraits)
     left = (img.width - side) // 2
@@ -64,5 +67,5 @@ def build(slug, prefixes):
 
 
 if __name__ == "__main__":
-    for slug, prefixes in JOBS.items():
-        build(slug, prefixes)
+    for slug, (prefixes, box) in JOBS.items():
+        build(slug, prefixes, box)

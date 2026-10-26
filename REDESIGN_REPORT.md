@@ -24,11 +24,11 @@ Fonts and colours as in `NOTES.md`. Navbar: no item highlighted on pages outside
 ## 3. Team
 | Person | Role | Photo |
 |---|---|---|
-| Tarun Kumar Pathak | Founder & CEO | `tarun_a4ai.jpeg` → 4 KB / 12 KB WebP |
-| Yash Dubey | Co-Founder | `yash_a4ai.jpg` → 5 KB / 12 KB WebP |
-| Aakash Singh | Co-Founder | `aakash_a4ai.jpg` → 5 KB / 11 KB WebP |
+| Tarun Kumar Pathak | Co-founder & Product | `tarun_a4ai.jpeg` → 4 KB / 12 KB WebP |
+| Yash Dubey | Co-founder & Backend | `yash_a4ai.jpg` → 5 KB / 12 KB WebP |
+| Aakash Singh | Co-founder & Marketing | `aakash_a4ai.jpg` → 5 KB / 11 KB WebP |
 | Nitin Kumar | Founding Engineer | **missing** → initials "NK" |
-| Durgesh | Marketing | **missing** → initials "D" |
+| Durgesh | Dev | **missing** → initials "D" |
 | Aman Singh | Mentor (separate card) | **missing** → initials "AS" |
 
 Add a photo: `design/source-images/nitin*.jpg` (or `durgesh*`, `aman*`) → `python scripts/build-team-photos.py`.

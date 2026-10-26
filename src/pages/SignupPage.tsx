@@ -152,7 +152,7 @@ export default function SignupPage() {
     // 1. WAF & Bot Honeypot Check
     const wafCheck = WAF.inspectPayload({ phone: phoneRaw, honeypot });
     if (!wafCheck.isSafe) {
-      toast({ title: "Blocked by Shield", description: wafCheck.threatDetails || "Invalid input detected", variant: "destructive" });
+      toast({ title: "Something in the form isn't allowed", description: "Remove unusual characters and try again.", variant: "destructive" });
       return;
     }
 
@@ -160,7 +160,7 @@ export default function SignupPage() {
     const otpCheck = RateLimiter.checkOtpLimit(phoneRaw);
     if (!otpCheck.allowed) {
       toast({
-        title: "OTP Rate Limit",
+        title: "Please wait before asking for another OTP",
         description: otpCheck.reason || "Please wait before requesting another OTP.",
         variant: "destructive",
       });
@@ -173,8 +173,8 @@ export default function SignupPage() {
     // 3. Smart CAPTCHA challenge if risk detected
     if (requiresCaptcha && !captchaToken) {
       toast({
-        title: "Verification Required",
-        description: "Please complete the security challenge below.",
+        title: "One quick check",
+        description: "Complete the check below, then continue.",
         variant: "destructive",
       });
       return;
@@ -260,8 +260,8 @@ export default function SignupPage() {
     });
     if (!wafCheck.isSafe) {
       toast({
-        title: "Security Shield Block",
-        description: wafCheck.threatDetails || "Unsafe input detected",
+        title: "Something in the form isn't allowed",
+        description: "Remove unusual characters and try again.",
         variant: "destructive",
       });
       return;
@@ -271,8 +271,8 @@ export default function SignupPage() {
     const rlCheck = RateLimiter.checkRateLimit("signup_attempt", 5, 10 * 60 * 1000);
     if (!rlCheck.allowed) {
       toast({
-        title: "Rate Limit Exceeded",
-        description: `Too many signup attempts. Please wait ${rlCheck.retryAfterSec}s.`,
+        title: "Too many tries",
+        description: `Please try again in ${rlCheck.retryAfterSec} seconds.`,
         variant: "destructive",
       });
       return;
@@ -289,8 +289,8 @@ export default function SignupPage() {
     if (risk.requiresCaptcha && !captchaToken) {
       setRequiresCaptcha(true);
       toast({
-        title: "Security Challenge Required",
-        description: "Please complete the verification below to proceed with registration.",
+        title: "One quick check",
+        description: "Complete the check below, then sign up.",
         variant: "destructive",
       });
       return;
@@ -684,7 +684,7 @@ export default function SignupPage() {
                 {isLoading 
                   ? "Creating..." 
                   : requiresCaptcha && !captchaToken 
-                  ? "Complete Verification Challenge" 
+                  ? "Complete the check to sign up"
                   : signupMethod === "phone" 
                   ? "Verify & Sign Up" 
                   : "Sign Up"}
@@ -698,7 +698,7 @@ export default function SignupPage() {
           </div>
         </div>
 
-        <div className="hidden lg:flex items-center justify-center p-10 h-[560px] rounded-[28px] border border-black/[0.04]" style={{ backgroundImage: "linear-gradient(135deg, #EFEDFF 0%, #FFE7E7 100%)" }}>
+        <div className="hidden lg:flex items-center justify-center p-10 h-[560px] rounded-[28px] bg-[#7CC6FE]">
           <AuthCharacters />
         </div>
       </main>
