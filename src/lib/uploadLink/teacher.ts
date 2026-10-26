@@ -38,6 +38,7 @@ export interface TeacherAttempt {
   sheet: {
     id: string; session_id: string; status: string; ai_marks: number | null; max_marks: number | null;
     final_marks: number | null; needs_review_reasons: ReviewReason[]; published: boolean; error: string | null;
+    model_version?: string | null; review_approved_at?: string | null;    // 26
   } | null;
   job: { state: string; last_error_code: string | null; error: string | null; updated_at: string } | null;
   marks: number | null;               // what counts: final (published) else AI
@@ -75,7 +76,7 @@ export async function loadCopySubmissions(assignmentId: string): Promise<{
   const none = ["00000000-0000-0000-0000-000000000000"];
   const [sheetsRes, jobsRes, studentsRes] = await Promise.all([
     supabase.from("check_sheets")
-      .select("id, session_id, submission_id, status, ai_marks, max_marks, final_marks, needs_review_reasons, published, error")
+      .select("id, session_id, submission_id, status, ai_marks, max_marks, final_marks, needs_review_reasons, published, error, model_version, review_approved_at")
       .in("submission_id", ids.length ? ids : none),
     supabase.from("check_jobs").select("submission_id, state, last_error_code, error, updated_at")
       .in("submission_id", ids.length ? ids : none).order("updated_at", { ascending: false }),
@@ -136,11 +137,16 @@ export async function saveLinkSettings(assignmentId: string, patch: Partial<Link
     : humanError(error));
 }
 
-export type PublishResult = { state: string; published?: string[]; blocked?: { id: string; status: string }[];
+// blocked: still in the pipeline, or (26) reason "needs_review" = flagged and not approved / edited in the review drawer
+export type PublishResult = { state: string; published?: string[]; blocked?: { id: string; status: string; reason?: string }[];
                               skipped?: { id: string; status: string | null; reason: string }[] };
 
 export const publishResults = (args: { assignmentId?: string; submissionIds?: string[] }) =>
   rpc<PublishResult>("publish_results", args.assignmentId ? { p_assignment_id: args.assignmentId } : { p_submission_ids: args.submissionIds });
+
+/** 26: approve one flagged copy in the review drawer and publish it. */
+export const approveReview = (submissionId: string) =>
+  rpc<{ state: string; total?: number; message?: string }>("approve_review", { p_submission_id: submissionId });
 
 export const unpublishResults = (submissionIds: string[], reason: string) =>
   rpc<{ state: string; unpublished?: string[]; skipped?: { id: string; reason: string }[]; message?: string }>(

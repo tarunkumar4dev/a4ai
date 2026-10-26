@@ -13,12 +13,13 @@ import { buildMarkedCopyPdf, downloadMarkedCopy } from "@/components/checker/mar
 import type { CheckSession, CheckSheet } from "@/components/checker/copyCheckerApi";
 import { supabase } from "@/lib/supabaseClient";
 import { fmtIST } from "@/lib/uploadFlow";
-import { REVIEW_LABEL, teacherBadge } from "@/lib/uploadLink/status";
+import { REVIEW_LABEL, awaitingReview, markedByBackupModel, teacherBadge } from "@/lib/uploadLink/status";
 import {
-  type MarkEvent, type StudentInfo, type TeacherAttempt, markHistory, overrideMarks, signedSubmissionUrls,
+  type MarkEvent, type StudentInfo, type TeacherAttempt, approveReview, markHistory, overrideMarks, signedSubmissionUrls,
 } from "@/lib/uploadLink/teacher";
 import { Chip, Spinner, ToneChip } from "@/components/uploadLink/ui";
 import { rejectText } from "@/lib/uploadLink/messages";
+import { BLACK_BTN } from "@/lib/uploadLink/styles";
 
 const EVENT_LABEL: Record<string, string> = {
   publish: "Published", auto_publish: "Auto-published", unpublish: "Unpublished",
@@ -35,6 +36,8 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
   const [loading, setLoading] = useState(false);
   const [penUrl, setPenUrl] = useState<string | null>(null);
   const [penBusy, setPenBusy] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [approved, setApproved] = useState(false);      // approved / edited here (the parent's row reloads later)
 
   // The drawer opens at once; each part (marks, page images, history) shows as soon as its own request returns.
   const [urlsLoaded, setUrlsLoaded] = useState(false);
@@ -58,7 +61,7 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
   }, [attempt]);
 
   useEffect(() => {
-    setSheet(null); setSession(null); setUrls({}); setEvents([]); setUrlsLoaded(false);
+    setSheet(null); setSession(null); setUrls({}); setEvents([]); setUrlsLoaded(false); setApproved(false);
     if (penUrl) URL.revokeObjectURL(penUrl);
     setPenUrl(null);
     load();
@@ -70,8 +73,23 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
     const r = await overrideMarks(attempt.id, qNo, marks, note);
     if (r.state !== "ok") throw new Error(r.message || "Couldn't save the marks.");
     toast.success(r.published ? `Marks changed — the student now sees ${r.total}` : "Marks changed");
+    setApproved(true);                                  // an edit counts as the review (26)
     await load();
     onChanged();
+  }
+
+  async function approve() {
+    if (!attempt) return;
+    setApproving(true);
+    try {
+      const r = await approveReview(attempt.id);
+      if (r.state !== "ok") throw new Error(r.message || (r.state === "already_published" ? "Already published." : "Couldn't approve."));
+      toast.success(`Approved — the student now sees ${r.total}`);
+      setApproved(true);
+      await load();
+      onChanged();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Couldn't approve."); }
+    setApproving(false);
   }
 
   async function previewRedPen() {
@@ -99,6 +117,7 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
 
   const r = sheet?.ai_result;
   const reasons = attempt?.sheet?.needs_review_reasons || [];
+  const mustApprove = !!attempt && awaitingReview(attempt) && !approved;
 
   return (
     <Sheet open={!!attempt} onOpenChange={o => { if (!o) onClose(); }}>
@@ -110,6 +129,7 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
                 {student?.name || "Student"}{student?.guest ? " (guest)" : ""} · Upload-{attempt.attempt_no}
                 <ToneChip badge={teacherBadge(attempt.status)} />
                 {attempt.is_late && <Chip tone="amber">Late</Chip>}
+                {markedByBackupModel(attempt.sheet) && attempt.sheet?.model_version && <Chip tone="red">AI: {attempt.sheet.model_version}</Chip>}
               </SheetTitle>
               <SheetDescription>
                 {fmtIST(attempt.submitted_at)} · {attempt.files.length} file
@@ -119,6 +139,14 @@ export default function ReviewDrawer({ attempt, student, onClose, onChanged }: {
 
             {reasons.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">{reasons.map(x => <Chip key={x} tone="violet">{REVIEW_LABEL[x] || x}</Chip>)}</div>
+            )}
+            {mustApprove && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-violet-300 bg-violet-50 p-3 dark:bg-violet-900/30" data-testid="approve-bar">
+                <p className="flex-1 text-sm">The AI flagged this copy. <b>The student doesn't see these marks</b> until you approve them or change one.</p>
+                <Button size="sm" className={BLACK_BTN} onClick={approve} disabled={approving} data-testid="approve-publish">
+                  {approving ? <Spinner /> : "Approve & publish"}
+                </Button>
+              </div>
             )}
             {attempt.reject_reasons.length > 0 && (
               <ul className="mt-3 list-disc rounded-lg bg-red-50 p-3 pl-6 text-sm text-red-700">
