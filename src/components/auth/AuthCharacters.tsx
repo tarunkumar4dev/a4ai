@@ -111,7 +111,7 @@ export default function AuthCharacters({ shakeSignal = 0 }: { shakeSignal?: numb
 
   return (
     <svg ref={svgRef} viewBox="0 0 460 330" className="w-full h-full select-none" aria-hidden="true">
-      <ellipse cx="230" cy="305" rx="170" ry="10" fill="#cbd5e1" opacity="0.6" />
+      <ellipse cx="230" cy="305" rx="170" ry="10" fill="#0F0F12" opacity="0.14" />
       {FACES.map((f, i) => (
         <g key={i}>
           {f.body}
