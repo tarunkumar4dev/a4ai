@@ -1,56 +1,37 @@
 // TeacherDashboardPage.tsx - Updated (removed batch-settings from navItems)
 import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
-import AttendancePage from "@/components/attendance/AttendancePage";
 import { useLocation, useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
 import StaticSarthi from "@/components/chat/StaticSarthi";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
-import InstituteTeacherPanel from "@/components/institute/InstituteTeacherPanel";
-import TeacherAssignmentsTab from "@/components/teacher/TeacherAssignmentsTab";
-import WorksheetGenerator from "@/components/teacher/WorksheetGenerator";
-import TeacherCalendarTab from "@/components/teacher/TeacherCalendarTab";
-import TeacherStudentsTab from "@/components/teacher/TeacherStudentsTab";
 import ProctorSectionView, { useProctorCheck } from "@/components/attendance/ProctorSectionView";
-import TeacherAnalyticsTab from "@/components/teacher/TeacherAnalyticsTab";
 import { downloadTestDocument, fetchQuestionsForTest, type TestQuestionData } from "@/utils/testPdfExporter";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { CheckingLinkModal } from "@/components/teacher/copySubmissions/CheckingLink";
 import { type TestLinkInfo, testLinks } from "@/lib/uploadLink/testLink";
 
+// Each tab is its own chunk: opening the dashboard downloads only what the
+// first screen needs; a tab's code is fetched the first time it is opened.
+const AttendancePage = lazy(() => import("@/components/attendance/AttendancePage"));
+const InstituteTeacherPanel = lazy(() => import("@/components/institute/InstituteTeacherPanel"));
+const TeacherAssignmentsTab = lazy(() => import("@/components/teacher/TeacherAssignmentsTab"));
+const WorksheetGenerator = lazy(() => import("@/components/teacher/WorksheetGenerator"));
+const TeacherCalendarTab = lazy(() => import("@/components/teacher/TeacherCalendarTab"));
+const TeacherStudentsTab = lazy(() => import("@/components/teacher/TeacherStudentsTab"));
+const TeacherAnalyticsTab = lazy(() => import("@/components/teacher/TeacherAnalyticsTab"));
+const CheckingLinkModal = lazy(() =>
+  import("@/components/teacher/copySubmissions/CheckingLink").then((m) => ({ default: m.CheckingLinkModal })),
+);
+const TabFallback = () => (
+  <div className="flex justify-center py-16">
+    <div className="h-8 w-8 rounded-full border-4 border-slate-200 border-t-slate-500 animate-spin" />
+  </div>
+);
 
-/* ------------------- SCROLL REVEAL HOOK ------------------- */
-function useScrollReveal(dependency?: any) {
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) entry.target.classList.add("is-visible");
-        });
-      },
-      { threshold: 0.01, rootMargin: "60px" }
-    );
-    const update = () => {
-      const els = document.querySelectorAll(".scroll-reveal");
-      els.forEach((el) => {
-        el.classList.add("is-visible");
-        observer.observe(el);
-      });
-    };
-    update();
-    const timer = setTimeout(update, 60);
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, [dependency]);
-}
 
 /* ------------------- STYLES ------------------- */
 const customStyles = `
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
 
   .dashboard-root {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -309,7 +290,7 @@ const COLOR_SCHEMES = {
 const SidebarButton = ({ active, Icon, label, colorClass, badge, onClick }: any) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center justify-start px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 active:scale-95 ${active
+    className={`w-full flex items-center justify-start px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 ${active
       ? "bg-slate-200/50 dark:bg-slate-800 shadow-sm text-slate-800 dark:text-white"
       : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60"
       }`}
@@ -342,25 +323,25 @@ const GlossyButton = ({
   <button
     onClick={disabled ? undefined : onClick}
     disabled={disabled}
-    className={`relative flex items-center justify-center gap-2 sm:gap-3 rounded-[28px] transform transition-all duration-300 ease-out ${disabled
+    className={`relative flex items-center justify-start gap-3 rounded-[22px] ${disabled
       ? "opacity-60 cursor-not-allowed filter grayscale"
-      : "hover:-translate-y-1 active:scale-[0.98]"
+      : "hover:-translate-y-1"
       } ${isStartupsStyle ? "btn-startups" : "btn-glossy-theme"
       } ${fullWidth ? "w-full" : "w-auto"
       } ${small
         ? "px-4 sm:px-5 py-2.5 sm:py-3 min-h-[44px] sm:min-h-[48px]"
-        : "px-5 sm:px-8 py-4 sm:py-5 min-h-[56px] sm:min-h-[64px] text-base sm:text-lg"
+        : "px-4 sm:px-5 py-3.5 min-h-[60px] text-[15px] sm:text-base"
       } overflow-hidden group`}
   >
     {Icon && (
       <div
-        className={`flex items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md ${small ? "h-7 w-7 sm:h-8 sm:w-8" : "h-8 w-8 sm:h-10 sm:w-10"} border border-white/40 shadow-inner ${disabled ? "" : "group-hover:scale-110"} transition-transform shrink-0`}
+        className={`flex items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md ${small ? "h-7 w-7 sm:h-8 sm:w-8" : "h-8 w-8 sm:h-10 sm:w-10"} border border-white/40 shadow-inner  transition-transform shrink-0`}
       >
         <Icon size={small ? 14 : 18} />
       </div>
     )}
-    <div className="flex flex-col text-left min-w-0">
-      <span className="font-bold leading-none tracking-tight truncate flex items-center gap-2 text-white">
+    <div className="flex flex-1 flex-col text-left min-w-0">
+      <span className="font-bold leading-tight tracking-tight flex flex-wrap items-center gap-x-2 gap-y-1 text-white">
         {label}
         {showNewBadge && (
           <span className="new-badge bg-white/30 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider text-white">
@@ -369,11 +350,11 @@ const GlossyButton = ({
         )}
       </span>
       {subLabel && !small && (
-        <span className="mt-1 sm:mt-1.5 text-xs font-medium text-white/80 truncate">{subLabel}</span>
+        <span className="mt-1 text-xs font-medium leading-snug text-white/85">{subLabel}</span>
       )}
     </div>
     {!small && (
-      <div className={`ml-auto pl-2 sm:pl-4 text-white/50 ${disabled ? "" : "group-hover:translate-x-1"} transition-transform shrink-0`}>
+      <div className={`ml-auto pl-2 sm:pl-4 text-white/50  transition-transform shrink-0`}>
         <Icons.ChevronRight />
       </div>
     )}
@@ -763,7 +744,7 @@ function TestHistory({
   const draftCount = useMemo(() => tests.filter((t) => t.status === "draft").length, [tests]);
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-pop">
+    <div className="space-y-6 sm:space-y-8">
       <div className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12">
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -844,7 +825,7 @@ function TestHistory({
         {loading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="animate-pulse h-24 bg-black/5 dark:bg-white/5 rounded-[24px]" />
+              <div key={i} className="h-24 bg-black/5 dark:bg-white/5 rounded-[24px]" />
             ))}
           </div>
         ) : filteredTests.length === 0 ? (
@@ -895,7 +876,7 @@ function TestHistory({
                       </h4>
                       {t.status === "saved" ? (
                         <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-700/60 shadow-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           PDF Saved & Ready
                         </span>
                       ) : (
@@ -921,7 +902,7 @@ function TestHistory({
                   {/* Preview Button */}
                   <button
                     onClick={() => handleOpenPreview(t)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95 cursor-pointer shadow-xs"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all cursor-pointer shadow-xs"
                     title="Preview Test Questions"
                   >
                     <span className="text-sm">👁️</span>
@@ -932,7 +913,7 @@ function TestHistory({
                   <button
                     onClick={() => handleDownload(t, "pdf", false)}
                     disabled={downloadingId === t.id}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 hover:border-indigo-300 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 hover:border-indigo-300 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                     title="Download Question Paper PDF"
                   >
                     {downloadingId === t.id && downloadingType === "paper" ? (
@@ -947,7 +928,7 @@ function TestHistory({
                   <button
                     onClick={() => handleDownload(t, "pdf", true)}
                     disabled={downloadingId === t.id}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 hover:border-emerald-300 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 hover:border-emerald-300 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                     title="Download Official Answer Key & Solutions PDF"
                   >
                     {downloadingId === t.id && downloadingType === "key" ? (
@@ -962,7 +943,7 @@ function TestHistory({
                   <button
                     onClick={() => handleDownload(t, "docx", false)}
                     disabled={downloadingId === t.id}
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                     title="Download in Word (DOCX) format"
                   >
                     {downloadingId === t.id && downloadingType === "docx" ? (
@@ -976,7 +957,7 @@ function TestHistory({
                   {/* Check students' copies of this test (rubric comes from the saved answers) */}
                   <button
                     onClick={() => navigateTo(`/dashboard/test-generator?tab=check&test=${t.id}`)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-gray-900 text-white border border-gray-900 hover:bg-gray-800 transition-all shadow-xs active:scale-95 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-gray-900 text-white border border-gray-900 hover:bg-gray-800 transition-all shadow-xs cursor-pointer"
                     title="Photograph students' answer copies and check them with AI"
                   >
                     <span className="text-sm">✅</span>
@@ -1004,21 +985,17 @@ function TestHistory({
       </div>
 
       {linkTest && (
-        <CheckingLinkModal open={!!linkTest} onOpenChange={o => { if (!o) setLinkTest(null); }}
+        <Suspense fallback={null}><CheckingLinkModal open={!!linkTest} onOpenChange={o => { if (!o) setLinkTest(null); }}
           test={{ id: linkTest.id, title: linkTest.exam_title || "Test Paper", subject: linkTest.subject, class_grade: linkTest.class_grade,
                   board: linkTest.board, total_marks: linkTest.total_marks }}
           links={links[linkTest.id] || []}
-          onLinked={l => setLinks(m => ({ ...m, [linkTest.id]: [l, ...(m[linkTest.id] || []).filter(x => x.assignmentId !== l.assignmentId)] }))} />
+          onLinked={l => setLinks(m => ({ ...m, [linkTest.id]: [l, ...(m[linkTest.id] || []).filter(x => x.assignmentId !== l.assignmentId)] }))} /></Suspense>
       )}
 
       {/* ================= PREVIEW MODAL ================= */}
-      <AnimatePresence>
-        {previewTest && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+      {previewTest && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-sm">
+            <div
               className="bg-white dark:bg-slate-900 rounded-[28px] sm:rounded-[36px] w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl border border-black/10 dark:border-white/10 overflow-hidden"
             >
               {/* Modal Header */}
@@ -1092,7 +1069,7 @@ function TestHistory({
                 {previewLoading ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="animate-pulse h-28 bg-slate-100 dark:bg-slate-800 rounded-2xl" />
+                      <div key={i} className="h-28 bg-slate-100 dark:bg-slate-800 rounded-2xl" />
                     ))}
                   </div>
                 ) : previewQuestions.length === 0 ? (
@@ -1202,10 +1179,9 @@ function TestHistory({
                   })
                 )}
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -1255,7 +1231,7 @@ function AssignmentsWithWorksheet({ initialSubTab = 'assignments' }: { initialSu
   }, [initialSubTab]);
 
   return (
-    <div className="space-y-4 animate-pop">
+    <div className="space-y-4">
       <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-2xl p-1.5 border border-slate-200/80 dark:border-slate-700 w-fit shadow-xs mb-2">
         <button
           onClick={() => setSubTab('assignments')}
@@ -1278,8 +1254,10 @@ function AssignmentsWithWorksheet({ initialSubTab = 'assignments' }: { initialSu
           <span>📝 Worksheet Generator</span>
         </button>
       </div>
-      {subTab === 'assignments' && <TeacherAssignmentsTab />}
-      {subTab === 'worksheet' && <WorksheetGenerator />}
+      <Suspense fallback={<TabFallback />}>
+        {subTab === 'assignments' && <TeacherAssignmentsTab />}
+        {subTab === 'worksheet' && <WorksheetGenerator />}
+      </Suspense>
     </div>
   );
 }
@@ -1320,7 +1298,6 @@ export default function TeacherDashboardPage() {
   const [assignmentsSubTab, setAssignmentsSubTab] = useState<'assignments' | 'worksheet'>('assignments');
   const [downloadingRecentId, setDownloadingRecentId] = useState<string | null>(null);
 
-  useScrollReveal(activeTab);
 
   useEffect(() => {
     if (!user) return;
@@ -1421,15 +1398,15 @@ export default function TeacherDashboardPage() {
 
         <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
           <div
-            className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animate-blob"
+            className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05]"
             style={{ background: 'var(--theme-start)' }}
           />
           <div
-            className="absolute top-[20%] right-[-10%] w-[40vw] h-[40vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animate-blob animation-delay-2000"
+            className="absolute top-[20%] right-[-10%] w-[40vw] h-[40vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animation-delay-2000"
             style={{ background: 'var(--theme-end)' }}
           />
           <div
-            className="absolute bottom-[-20%] left-[20%] w-[60vw] h-[60vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animate-blob animation-delay-4000"
+            className="absolute bottom-[-20%] left-[20%] w-[60vw] h-[60vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animation-delay-4000"
             style={{ background: 'var(--theme-start)' }}
           />
         </div>
@@ -1513,7 +1490,7 @@ export default function TeacherDashboardPage() {
 
             {/* HEADER */}
             <header
-              className="sticky lg:relative top-0 z-[150] lg:z-[100] bg-white/95 dark:bg-black/95 lg:bg-transparent backdrop-blur-xl lg:backdrop-blur-none border-b lg:border-none border-slate-200/50 dark:border-white/5 px-4 sm:px-6 lg:px-0 py-3 lg:py-0 -mx-4 sm:-mx-6 lg:mx-0 mb-6 lg:mb-12 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 lg:gap-6 animate-entrance transition-colors duration-500"
+              className="sticky lg:relative top-0 z-[150] lg:z-[100] bg-white/95 dark:bg-black/95 lg:bg-transparent backdrop-blur-xl lg:backdrop-blur-none border-b lg:border-none border-slate-200/50 dark:border-white/5 px-4 sm:px-6 lg:px-0 py-3 lg:py-0 -mx-4 sm:-mx-6 lg:mx-0 mb-6 lg:mb-12 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 sm:gap-4 lg:gap-6 transition-colors duration-500"
               style={{ animationDelay: "100ms" }}
             >
               <div className="flex lg:hidden items-center gap-3">
@@ -1565,14 +1542,14 @@ export default function TeacherDashboardPage() {
                   <div className="relative shrink-0" ref={notifRef}>
                     <button
                       onClick={() => setIsNotifOpen(!isNotifOpen)}
-                      className={`p-2.5 sm:p-3 rounded-[20px] sm:rounded-[24px] inset-pill transition-all relative active:scale-95 ${isNotifOpen ? "text-slate-800 dark:text-white" : "text-slate-500 dark:text-slate-400"
+                      className={`p-2.5 sm:p-3 rounded-[20px] sm:rounded-[24px] inset-pill transition-all relative ${isNotifOpen ? "text-slate-800 dark:text-white" : "text-slate-500 dark:text-slate-400"
                         }`}
                     >
                       <Icons.Bell />
                       <span className="absolute top-2 sm:top-2.5 right-2 sm:right-2.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-black" style={{ background: "var(--theme-start)" }} />
                     </button>
                     {isNotifOpen && (
-                      <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-4 sm:p-5 flex flex-col gap-2 animate-pop z-[150]">
+                      <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-4 sm:p-5 flex flex-col gap-2 z-[150]">
                         <div className="flex justify-between items-center mb-3 px-2">
                           <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">
                             Notifications
@@ -1613,7 +1590,7 @@ export default function TeacherDashboardPage() {
                         setIsProfileOpen(!isProfileOpen);
                         if (isProfileOpen) setShowAppearance(false);
                       }}
-                      className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[24px] glass-panel transition-all duration-200 hover:shadow-md active:scale-95 group ${isProfileOpen ? "ring-2 ring-slate-400/50" : ""
+                      className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-[24px] glass-panel transition-all duration-200 hover:shadow-md group ${isProfileOpen ? "ring-2 ring-slate-400/50" : ""
                         }`}
                     >
                       <div
@@ -1634,7 +1611,7 @@ export default function TeacherDashboardPage() {
                     </button>
 
                     {isProfileOpen && (
-                      <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-3 flex flex-col gap-1 animate-pop z-[150]">
+                      <div className="absolute right-0 top-full mt-3 w-72 sm:w-80 glass-overlay rounded-[32px] sm:rounded-[40px] p-3 flex flex-col gap-1 z-[150]">
                         <div className="px-4 sm:px-5 py-4 sm:py-5 mb-1 inset-pill rounded-[28px] sm:rounded-[32px] border-none flex items-center gap-4">
                           <div
                             className="w-12 h-12 rounded-[20px] flex items-center justify-center text-white shrink-0 shadow-md"
@@ -1657,7 +1634,7 @@ export default function TeacherDashboardPage() {
                           <div className="flex items-center gap-3">
                             <Icons.User /> My Profile
                           </div>
-                          <div className="text-slate-400 group-hover:translate-x-0.5 transition-transform">
+                          <div className="text-slate-400 transition-transform">
                             <Icons.ChevronRight />
                           </div>
                         </button>
@@ -1668,7 +1645,7 @@ export default function TeacherDashboardPage() {
                           <div className="flex items-center gap-3">
                             <Icons.Globe /> Language
                           </div>
-                          <div className="text-slate-400 group-hover:translate-x-0.5 transition-transform">
+                          <div className="text-slate-400 transition-transform">
                             <Icons.ChevronRight />
                           </div>
                         </button>
@@ -1687,7 +1664,7 @@ export default function TeacherDashboardPage() {
                           </button>
 
                           {showAppearance && (
-                            <div className="px-4 sm:px-5 pb-4 pt-1 flex flex-col gap-4 animate-entrance bg-black/5 dark:bg-white/5">
+                            <div className="px-4 sm:px-5 pb-4 pt-1 flex flex-col gap-4 bg-black/5 dark:bg-white/5">
                               <div className="flex items-center justify-between pt-2">
                                 <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Dark Mode</span>
                                 <button
@@ -1709,7 +1686,7 @@ export default function TeacherDashboardPage() {
                                     <button
                                       key={key}
                                       onClick={(e) => { e.stopPropagation(); setActiveTheme(key); }}
-                                      className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center transition-transform hover:scale-110 shadow-sm border-2 ${activeTheme === key ? "border-slate-800 dark:border-white scale-110" : "border-transparent"
+                                      className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center transition-transform shadow-sm border-2 ${activeTheme === key ? "border-slate-800 dark:border-white scale-110" : "border-transparent"
                                         }`}
                                       style={{ background: COLOR_SCHEMES[key].start }}
                                       title={key}
@@ -1737,7 +1714,7 @@ export default function TeacherDashboardPage() {
             </header>
 
             {/* MOBILE GREETING */}
-            <div className="lg:hidden mb-6 sm:mb-8 px-1 animate-entrance" style={{ animationDelay: "150ms" }}>
+            <div className="lg:hidden mb-6 sm:mb-8 px-1" style={{ animationDelay: "150ms" }}>
               <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">
                 Welcome, {getFirstName()}
               </h1>
@@ -1746,15 +1723,16 @@ export default function TeacherDashboardPage() {
               </p>
             </div>
 
+            <Suspense fallback={<TabFallback />}>
             {/* ===== DASHBOARD TAB ===== */}
             {activeTab === "dashboard" && (
               <div className="space-y-6 sm:space-y-8">
-                <div className="scroll-reveal" style={{ transitionDelay: "0ms" }}>
+                <div>
                   <InstituteTeacherPanel userId={user?.id} userEmail={user?.email} />
                 </div>
 
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 sm:gap-8 scroll-reveal" style={{ transitionDelay: "60ms" }}>
-                  <div className="xl:col-span-2 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 lg:p-14 relative overflow-hidden flex flex-col justify-center group">
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 sm:gap-8">
+                  <div className="glass-panel rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 lg:p-12 relative overflow-hidden flex flex-col justify-center group">
                     <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-white/30 to-transparent pointer-events-none rounded-[48px]" />
                     <div className="relative z-10 max-w-xl">
                       <div className="flex items-center gap-2 mb-4 sm:mb-6 bg-white/60 dark:bg-black/50 border border-white/40 dark:border-white/10 w-fit px-3 sm:px-5 py-1.5 sm:py-2 rounded-[20px] sm:rounded-[24px] shadow-sm">
@@ -1778,7 +1756,7 @@ export default function TeacherDashboardPage() {
                     </div>
                   </div>
 
-                  <div className="xl:col-span-1 glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 flex flex-col relative overflow-hidden">
+                  <div className="glass-panel rounded-[32px] sm:rounded-[40px] p-5 sm:p-6 flex flex-col relative overflow-hidden">
                     <div className="flex items-center gap-3 sm:gap-5 mb-6 sm:mb-8">
                       <div className="w-12 h-12 sm:w-14 sm:h-14 inset-pill border-none flex items-center justify-center shadow-inner rounded-[24px] sm:rounded-[28px] shrink-0" style={{ color: "var(--theme-start)" }}>
                         <Icons.Sparkles />
@@ -1814,7 +1792,7 @@ export default function TeacherDashboardPage() {
                       />
                       <button
                         onClick={() => navigate("/join-institute")}
-                        className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-[28px] font-bold text-white transition-all duration-300 hover:-translate-y-1 active:scale-[0.98] btn-join-black group"
+                        className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-[28px] font-bold text-white transition-all duration-300 btn-join-black group"
                       >
                         <div className="flex items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md h-8 w-8 border border-white/40 shadow-inner shrink-0">
                           <Icons.Users />
@@ -1823,7 +1801,7 @@ export default function TeacherDashboardPage() {
                           <span className="font-bold leading-none tracking-tight truncate text-white">Join Institute</span>
                           <span className="text-xs font-medium text-white/60 truncate">Enter code to join</span>
                         </div>
-                        <div className="ml-auto pl-2 text-white/30 group-hover:translate-x-1 transition-transform shrink-0">
+                        <div className="ml-auto pl-2 text-white/30 transition-transform shrink-0">
                           <Icons.ChevronRight />
                         </div>
                       </button>
@@ -1839,8 +1817,7 @@ export default function TeacherDashboardPage() {
                 </div>
 
                 <div
-                  className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-8 scroll-reveal"
-                  style={{ transitionDelay: "80ms" }}
+                  className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-8"
                 >
                   {[
                     { t: "Active Students", v: "156", c: "+12%", Icon: Icons.Users },
@@ -1852,7 +1829,7 @@ export default function TeacherDashboardPage() {
                     return (
                       <div
                         key={i}
-                        className="glass-panel rounded-[24px] sm:rounded-[40px] p-4 sm:p-8 flex flex-col items-center text-center hover:-translate-y-1 sm:hover:-translate-y-2 transition-all duration-300"
+                        className="glass-panel rounded-[24px] sm:rounded-[40px] p-4 sm:p-8 flex flex-col items-center text-center sm:hover:-translate-y-2 transition-all duration-300"
                       >
                         <div className="mb-3 sm:mb-5 inset-pill p-2.5 sm:p-4 rounded-[16px] sm:rounded-[24px] border-none shrink-0" style={{ color: "var(--theme-start)" }}>
                           <StatIcon />
@@ -1873,8 +1850,7 @@ export default function TeacherDashboardPage() {
 
                 {/* ===== AI TOOLS QUICK SECTION ===== */}
                 <div
-                  className="glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 scroll-reveal"
-                  style={{ transitionDelay: "150ms" }}
+                  className="glass-panel rounded-[32px] sm:rounded-[48px] p-6 sm:p-10"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
                     <div>
@@ -1964,7 +1940,7 @@ export default function TeacherDashboardPage() {
                         <div
                           key={idx}
                           onClick={tool.action}
-                          className={`glass-panel p-5 sm:p-7 rounded-[24px] sm:rounded-[36px] flex flex-col justify-between hover:-translate-y-1 transition-all duration-300 cursor-pointer group hover:shadow-xl border ${
+                          className={`glass-panel p-5 sm:p-7 rounded-[24px] sm:rounded-[36px] flex flex-col justify-between transition-all duration-300 cursor-pointer group hover:shadow-xl border ${
                             tool.highlight
                               ? "border-amber-400/50 bg-amber-500/5 dark:bg-amber-500/10"
                               : "hover:border-blue-500/30"
@@ -1973,7 +1949,7 @@ export default function TeacherDashboardPage() {
                           <div>
                             <div className="flex items-center justify-between gap-2 mb-4">
                               <div
-                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-[16px] sm:rounded-[20px] inset-pill border-none flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform"
+                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-[16px] sm:rounded-[20px] inset-pill border-none flex items-center justify-center shrink-0 transition-transform"
                                 style={{ color: "var(--theme-start)" }}
                               >
                                 <ToolIcon />
@@ -1995,7 +1971,7 @@ export default function TeacherDashboardPage() {
                             <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 transition-colors">
                               {tool.btnLabel}
                             </span>
-                            <div className="text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all">
+                            <div className="text-slate-400 group-hover:text-blue-600 transition-all">
                               <Icons.ChevronRight className="w-4 h-4" />
                             </div>
                           </div>
@@ -2006,8 +1982,7 @@ export default function TeacherDashboardPage() {
                 </div>
 
                 <div
-                  className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12 scroll-reveal"
-                  style={{ transitionDelay: "200ms" }}
+                  className="glass-panel rounded-[32px] sm:rounded-[48px] p-5 sm:p-8 lg:p-12"
                 >
                   <div className="flex justify-between items-center mb-5 sm:mb-8">
                     <h3 className="font-black text-slate-900 dark:text-white text-xl sm:text-3xl tracking-tight">
@@ -2024,7 +1999,7 @@ export default function TeacherDashboardPage() {
                   {testsLoading ? (
                     <div className="space-y-3">
                       {[1, 2, 3].map((i) => (
-                        <div key={i} className="animate-pulse h-20 bg-black/5 dark:bg-white/5 rounded-[20px]" />
+                        <div key={i} className="h-20 bg-black/5 dark:bg-white/5 rounded-[20px]" />
                       ))}
                     </div>
                   ) : recentTests.length === 0 ? (
@@ -2071,7 +2046,7 @@ export default function TeacherDashboardPage() {
                                 }
                               }}
                               disabled={downloadingRecentId === test.id + "_paper"}
-                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 hover:bg-indigo-100 transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 hover:bg-indigo-100 transition-all cursor-pointer shadow-xs disabled:opacity-50"
                               title="Download Question Paper PDF"
                             >
                               {downloadingRecentId === test.id + "_paper" ? (
@@ -2091,7 +2066,7 @@ export default function TeacherDashboardPage() {
                                 }
                               }}
                               disabled={downloadingRecentId === test.id + "_key"}
-                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer shadow-xs active:scale-95 disabled:opacity-50"
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 hover:bg-emerald-100 transition-all cursor-pointer shadow-xs disabled:opacity-50"
                               title="Download Answer Key PDF"
                             >
                               {downloadingRecentId === test.id + "_key" ? (
@@ -2119,7 +2094,7 @@ export default function TeacherDashboardPage() {
 
             {/* ===== STUDENTS TAB ===== */}
             {activeTab === "students" && (
-              <div className="space-y-6 sm:space-y-8 animate-pop">
+              <div className="space-y-6 sm:space-y-8">
                 <InstituteTeacherPanel userId={user?.id} userEmail={user?.email} />
                 <TeacherStudentsTab
                   userId={user?.id}
@@ -2130,7 +2105,7 @@ export default function TeacherDashboardPage() {
             )}
 
             {activeTab === "section" && (
-              <div className="space-y-6 sm:space-y-8 animate-pop">
+              <div className="space-y-6 sm:space-y-8">
                 <ProctorSectionView />
               </div>
             )}
@@ -2141,7 +2116,7 @@ export default function TeacherDashboardPage() {
 
             {/* ===== ATTENDANCE TAB ===== */}
             {activeTab === "attendance" && (
-              <div className="space-y-6 sm:space-y-8 animate-pop">
+              <div className="space-y-6 sm:space-y-8">
                 <AttendancePage />
               </div>
             )}
@@ -2168,9 +2143,11 @@ export default function TeacherDashboardPage() {
               />
             )}
 
+            </Suspense>
+
             {/* ===== AI TOOLS TAB ===== */}
             {activeTab === "ai-tools" && (
-              <div className="space-y-6 sm:space-y-8 animate-entrance">
+              <div className="space-y-6 sm:space-y-8">
                 <div className="glass-panel rounded-[28px] sm:rounded-[40px] p-6 sm:p-10 relative overflow-hidden">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
                     <div>
@@ -2271,7 +2248,7 @@ export default function TeacherDashboardPage() {
                       <div
                         key={i}
                         onClick={tool.action}
-                        className={`glass-panel p-6 sm:p-8 rounded-[28px] sm:rounded-[36px] flex flex-col justify-between hover:-translate-y-1.5 transition-all duration-300 relative overflow-hidden group cursor-pointer hover:shadow-2xl ${
+                        className={`glass-panel p-6 sm:p-8 rounded-[28px] sm:rounded-[36px] flex flex-col justify-between transition-all duration-300 relative overflow-hidden group cursor-pointer hover:shadow-2xl ${
                           tool.highlight
                             ? "border-amber-400/60 ring-1 ring-amber-400/20 bg-amber-500/[0.03] dark:bg-amber-500/[0.08]"
                             : "hover:border-blue-500/40"
@@ -2280,7 +2257,7 @@ export default function TeacherDashboardPage() {
                         <div>
                           <div className="flex items-center justify-between gap-2 mb-5">
                             <div
-                              className="w-12 h-12 rounded-[18px] inset-pill border-none flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"
+                              className="w-12 h-12 rounded-[18px] inset-pill border-none flex items-center justify-center shrink-0 transition-transform"
                               style={{ color: "var(--theme-start)" }}
                             >
                               <ToolIcon className="w-6 h-6" />
@@ -2325,7 +2302,7 @@ export default function TeacherDashboardPage() {
                             }`}
                           >
                             <span>{tool.btnLabel}</span>
-                            <Icons.ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            <Icons.ChevronRight className="w-4 h-4 transition-transform" />
                           </button>
                         </div>
                       </div>
@@ -2342,7 +2319,7 @@ export default function TeacherDashboardPage() {
 
         {/* ===== INVITE MODAL ===== */}
         {showInviteModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 animate-pop">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center px-4">
             <div
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-md"
               onClick={() => setShowInviteModal(false)}
