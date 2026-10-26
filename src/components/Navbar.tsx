@@ -32,8 +32,11 @@ export default function Navbar() {
   const searchRef = useRef<HTMLDivElement>(null);
 
   const { pathname } = useLocation();
-  const activeName =
-    navItems.find((n) => (n.path === "/" ? pathname === "/" : pathname.startsWith(n.path)))?.name ?? "Home";
+  // Pages outside the nav (login, signup…) highlight nothing; the Resources sub-pages highlight Resources.
+  const RESOURCE_PAGES = ["/docs", "/help", "/faq", "/blog", "/case-studies"];
+  const activeName = RESOURCE_PAGES.some((p) => pathname.startsWith(p))
+    ? "Resources"
+    : navItems.find((n) => (n.path === "/" ? pathname === "/" : pathname.startsWith(n.path)))?.name ?? null;
 
   const searchSuggestions: SuggestionItem[] = useMemo(() => [
     { name: "Dashboard", path: "/dashboard" },

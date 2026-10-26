@@ -1,177 +1,93 @@
-// src/pages/resources/ResourcesLayout.tsx
-import React, { useEffect, type ReactNode } from "react";
+// src/pages/resources/ResourcesLayout.tsx — shared frame for the Resources
+// section (landing Navbar/Footer, page header, section tabs).
+import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { motion, useMotionTemplate, useMotionValue, useReducedMotion } from "framer-motion";
+import PageShell, { Container } from "@/components/site/PageShell";
 
-const BRAND_GRADIENT = "#f75961";
+const NAV = [
+  { to: "/resources", label: "All resources" },
+  { to: "/docs", label: "Docs" },
+  { to: "/help", label: "Help Center" },
+  { to: "/faq", label: "FAQ" },
+  { to: "/blog", label: "Blog" },
+];
 
 export default function ResourcesLayout({
   title,
   subtitle,
+  description,
   children,
 }: {
   title: string;
   subtitle?: string;
+  /** meta description; defaults to the subtitle */
+  description?: string;
   children: ReactNode;
 }) {
   const { pathname } = useLocation();
-  const prefersReducedMotion = useReducedMotion();
-
-  // CSS Injection to completely force clean light mode execution layers universally
-  useEffect(() => {
-    document.documentElement.style.background = "#ffffff !important";
-    document.documentElement.style.backgroundColor = "#ffffff !important";
-    document.documentElement.style.colorScheme = "light only !important";
-    document.documentElement.classList.remove("dark");
-
-    const s = document.createElement("style");
-    s.textContent = `
-      .running-gradient-text {
-        color: #f75961 !important;
-        -webkit-text-fill-color: #f75961 !important;
-        background: none !important;
-        display: inline-block;
-        forced-color-adjust: none !important;
-      }
-      
-      /* Immutable Global Light Background Enforcements */
-      .layout-forced-light-bg, .layout-forced-light-bg * {
-        color-scheme: light only !important;
-        forced-color-adjust: none !important;
-      }
-
-      /* Clean White Frosted Nav Dock Bar Element */
-      .force-light-layout-dock {
-        background-color: rgba(255, 255, 255, 0.45) !important;
-        background: rgba(255, 255, 255, 0.45) !important;
-        backdrop-filter: blur(24px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.5) !important;
-        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 32px rgba(0, 0, 0, 0.03) !important;
-      }
-
-      /* Active Link Navigation Pill State */
-      .active-pill-forced {
-        background: #fff0f1 !important;
-        border-color: #fecdd3 !important;
-        color: #f75961 !important;
-      }
-    `;
-    document.head.appendChild(s);
-    return () => {
-      if (document.head.contains(s)) document.head.removeChild(s);
-    };
-  }, []);
-
-  const mx = useMotionValue(360);
-  const my = useMotionValue(180);
-  const onMove = (e: React.MouseEvent<HTMLElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    mx.set(e.clientX - r.left);
-    my.set(e.clientY - r.top);
-  };
-
-  const bgGlow = useMotionTemplate`
-    radial-gradient(1000px 520px at ${mx}px ${my}px, rgba(59,130,246,0.04), transparent 70%),
-    radial-gradient(1000px 520px at calc(${mx}px + 260px) calc(${my}px + 140px), rgba(96,165,250,0.04), transparent 70%)
-  `;
-
-  const nav = [
-    { to: "/resources", label: "All resources" },
-    { to: "/docs", label: "Docs" },
-    { to: "/help", label: "Help Center" },
-    { to: "/blog", label: "Blog" },
-    { to: "/case-studies", label: "Case Studies" },
-  ];
-
-  const isActive = (to: string) =>
-    pathname === to || (to !== "/resources" && pathname.startsWith(to));
-
-  const headColor = "#111111";
-  const mutedColor = "#5f6368";
+  const isActive = (to: string) => pathname === to || (to !== "/resources" && pathname.startsWith(to));
 
   return (
-    <div 
-      onMouseMove={onMove} 
-      className="layout-forced-light-bg min-h-screen relative overflow-hidden pb-20 bg-white"
+    <PageShell
+      meta={{
+        title: title === "Resources" ? "Resources — a4ai" : `${title} — a4ai Resources`,
+        description: description ?? subtitle ?? "Guides, help and updates for teachers using a4ai.",
+        path: pathname,
+        jsonLd: { "@context": "https://schema.org", "@type": "CollectionPage", name: `a4ai ${title}`, url: `https://a4ai.in${pathname}` },
+      }}
     >
-      {/* Background Glow Elements */}
-      <div className="hidden sm:block pointer-events-none">
-        <div className="absolute" style={{ width: 600, height: 600, right: -150, top: -100, background: "rgba(59,130,246,0.03)", filter: "blur(50px)", borderRadius: "50%" }} />
-        <div className="absolute" style={{ width: 500, height: 500, left: -100, bottom: "10%", background: "rgba(129,140,248,0.03)", filter: "blur(50px)", borderRadius: "50%" }} />
-      </div>
-
-      <div
-        className="absolute inset-0 -z-20 pointer-events-none"
-        style={{
-          opacity: 0.015,
-          backgroundImage: `linear-gradient(to right, #000000 1px, transparent 1px), linear-gradient(to bottom, #000000 1px, transparent 1px)`,
-          backgroundSize: "48px 48px",
-        }}
-      />
-      
-      {!prefersReducedMotion && (
-        <motion.div
-          aria-hidden
-          className="pointer-events-none fixed inset-0 -z-10 opacity-100"
-          style={{ backgroundImage: bgGlow as any }}
-        />
-      )}
-
-      {/* DETACHED FLOATING TOP BAR DOCK */}
-      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
-        <nav 
-          className="mx-auto max-w-7xl rounded-2xl border transition-all duration-300 relative overflow-hidden force-light-layout-dock"
-        >
-          <div className="flex items-center justify-between px-4 py-3 sm:px-6">
-            <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight active:opacity-90">
-              <img src="/ICON.ico" alt="Logo" className="h-6 w-6 object-contain rounded transition-transform duration-200 group-hover:scale-105" />
-              <span style={{ color: headColor }}>
-                a4ai <span className="text-xs font-normal opacity-60 ml-1">Hub</span>
-              </span>
-            </Link>
-
-            <div className="flex items-center gap-5">
-              <Link to="/docs" className="text-sm font-semibold transition-colors" style={{ color: mutedColor }}>Docs</Link>
-              <Link to="/login" className="text-sm font-semibold transition-colors" style={{ color: mutedColor }}>Sign In</Link>
-            </div>
-          </div>
-        </nav>
-      </div>
-
-      {/* Header Container Banner */}
-      <header className="relative z-10 border-b pt-24 border-neutral-100 bg-white">
-        <div className="max-w-6xl mx-auto px-6 py-10 bg-transparent">
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-            <span className="running-gradient-text">{title}</span>
-          </h1>
-          {subtitle && (
-            <p className="text-base mt-2 max-w-3xl leading-relaxed text-neutral-500">
-              {subtitle}
-            </p>
-          )}
-
-          {/* Navigation Bar Pills */}
-          <nav aria-label="Resources navigation" className="mt-8 flex flex-wrap gap-2.5">
-            {nav.map((item) => {
-              const active = isActive(item.to);
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 border ${
-                    active ? "active-pill-forced" : "border-neutral-200/70 bg-transparent text-neutral-500"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+      <header
+        className="border-b border-[#E5E7EB]"
+        style={{ background: "radial-gradient(900px 360px at 50% 0%, #FFF1EC 0%, rgba(255,255,255,0) 70%)" }}
+      >
+        <Container className="py-12 sm:py-16">
+          <nav aria-label="Breadcrumb" className="text-[13px] font-medium text-[#5D6570]">
+            <Link to="/" className="hover:text-[#1B1B1B]">Home</Link>
+            <span aria-hidden="true" className="mx-2">/</span>
+            {title === "Resources" ? (
+              <span aria-current="page" className="text-[#1B1B1B]">Resources</span>
+            ) : (
+              <>
+                <Link to="/resources" className="hover:text-[#1B1B1B]">Resources</Link>
+                <span aria-hidden="true" className="mx-2">/</span>
+                <span aria-current="page" className="text-[#1B1B1B]">{title}</span>
+              </>
+            )}
           </nav>
-        </div>
+          <h1
+            className="mt-4 font-halenoir font-bold tracking-[-0.02em] text-[#1B1B1B]"
+            style={{ fontSize: "clamp(2rem, 1.4rem + 2.4vw, 3rem)", lineHeight: 1.1 }}
+          >
+            {title}
+          </h1>
+          {subtitle && <p className="mt-3 max-w-2xl text-[16px] sm:text-[18px] leading-relaxed text-[#5D6570]">{subtitle}</p>}
+
+          <nav aria-label="Resources sections" className="mt-7">
+            <ul className="flex flex-wrap gap-2">
+              {NAV.map((item) => {
+                const active = isActive(item.to);
+                return (
+                  <li key={item.to}>
+                    <Link
+                      to={item.to}
+                      aria-current={active ? "page" : undefined}
+                      className={`inline-flex min-h-[40px] items-center rounded-full border px-4 text-[14px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] ${
+                        active
+                          ? "bg-[#111111] border-[#111111] text-white"
+                          : "bg-white border-[#E5E7EB] text-[#374151] hover:border-[#111111]"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </Container>
       </header>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-6 py-10 bg-white">{children}</main>
-    </div>
+      <Container className="py-10 sm:py-14">{children}</Container>
+    </PageShell>
   );
 }
