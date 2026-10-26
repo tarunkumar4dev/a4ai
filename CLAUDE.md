@@ -295,6 +295,25 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - index.html (main app) still loads Razorpay checkout.js synchronously (render-blocking on every page) though
     PaymentPage loads it on demand; Google Fonts CSS is render-blocking. Not changed (outside the upload link).
 
+- [x] Landing redesign (26 Oct, uncommitted, on top of an earlier uncommitted redesign of Navbar/Hero/LandingPage/Footer):
+  hero right side = `src/components/landing/FeatureShowcase.tsx` (tabs + prev/next, wraps, no autoplay/animation, only the
+  current slide's image in the DOM). Slides in `featureSlides.ts`; screenshots auto-detected from `src/assets/features/<id>-<w>.webp`,
+  built by `python scripts/build-feature-images.py` from `design/source-images/*` (crop, blur PII, WebP). Guide:
+  `docs/landing-screenshots.md`. Contests/leaderboard slides hidden until screenshots exist. Slide 1 = coded Test Generator
+  preview (em-sized, `.a4-tg-preview` in index.css). Fonts: Plus Jakarta Sans self-hosted (`public/fonts`, the earlier
+  redesign had dropped the Google Fonts link that dashboards/pricing rely on; Halenoir woff2 is 0 bytes → font-halenoir
+  maps to Jakarta). index.html: Razorpay checkout.js removed (PaymentPage loads it on demand), gtag.js injected after `load`.
+  vercel.json: `/assets/*` immutable, `/fonts/*` 7 days. Navbar desktop links from `lg` (was overlapping at 768).
+  Fixes: `/select-role` crashed (missing useEffect import); Modules: AI values rendered via `asText` (objects crashed the
+  dashboard), tab wrapped in an error boundary, `/dashboard/modules` → `/dashboard?tab=modules`.
+- [x] Landing round 2 (26 Oct): showcase autoplay 2 s (+ swipe, pause button; stops on hover/keyboard focus/off screen/
+  hidden tab; starts paused for reduced-motion / Save-Data), Toddle-style gradient panels (themes in featureSlides.ts,
+  incl. lime green + light orange). Landing pricing preview removed → "Our partners" logo wall
+  (`src/components/landing/Partners.tsx`, logos via `scripts/build-partner-logos.py`).
+- Known after the landing redesign: landing LCP ≈ 5 s on throttled mobile (1.6 Mbps/150 ms/4× CPU) — SPA renders nothing
+  until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
+  `Magical_FREE_AI_Tools.jpeg` are not used.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

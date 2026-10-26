@@ -19,7 +19,8 @@ export default {
     extend: {
       /* add Halenoir + keep your Apple/system stack */
       fontFamily: {
-        halenoir: ['"Halenoir Expanded"', "ui-sans-serif", "system-ui", "sans-serif"],
+        // Halenoir's file in public/fonts is empty (0 bytes); headlines use the self-hosted Plus Jakarta Sans.
+        halenoir: ['"Plus Jakarta Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
         sans: [
           "-apple-system",
           "SF Pro Text",
@@ -78,6 +79,19 @@ export default {
           "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
+        },
+        a4ai: {
+          coral: "#F95D6A",
+          "coral-deep": "#D93F4D",
+          "text-primary": "#1B1B1B",
+          "text-secondary": "#5D6570",
+          alt: "#F7F8FA",
+          border: "#E5E7EB",
+          cta: "#111111",
+          peach: "#FFF1EC",
+          mint: "#E8F6F1",
+          lavender: "#F0EDFF",
+          butter: "#FFF7E0",
         },
         zolvio: {
           purple: "#7323E5",

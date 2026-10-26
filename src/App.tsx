@@ -73,8 +73,6 @@ const InstituteDashboardPage = lazy(() => import("./pages/institute/InstituteDas
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
-/* ---------- NEW MODULE PAGE ---------- */
-const ModulesPage = lazy(() => import("./pages/ModulesPage"));
 /* ---------- TEST CHECKER ---------- */
 
 
@@ -485,14 +483,8 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  MODULES ROUTE - NAYA ADD KIYA HAI           */}
                       {/* ============================================ */}
-                      <Route
-                        path="/dashboard/modules"
-                        element={
-                          <PrivateRoute>
-                            <ModulesPage />
-                          </PrivateRoute>
-                        }
-                      />
+                      {/* Modules lives inside the teacher dashboard (sidebar + layout); the bare page had neither */}
+                      <Route path="/dashboard/modules" element={<Navigate to="/dashboard?tab=modules" replace />} />
 
                       {/* ============================================ */}
                       {/*  REDIRECTS (old paths → new paths)           */}

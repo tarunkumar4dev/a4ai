@@ -39,28 +39,32 @@
     <meta name="twitter:image" content="https://a4ai.in/bg.jpg" />
 
     <!-- Nice to have -->
-    <meta name="theme-color" content="#0a0f1f" />
+    <meta name="theme-color" content="#ffffff" />
     <link rel="icon" href="/ICON.ico" />
 
-    <!-- Fonts Preconnect -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Main UI font (self-hosted, see src/index.css) -->
+    <link rel="preload" href="/fonts/PlusJakartaSans-latin.woff2" as="font" type="font/woff2" crossorigin />
 
-    <!-- ✅ Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-ZWBNL12SRZ"></script>
+    <!-- Razorpay prefetch (loaded on demand by PaymentPage) -->
+    <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
+
+    <!-- Google Analytics -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'G-ZWBNL12SRZ');
+      // gtag.js (~180 KB) is fetched after the page has loaded so it doesn't compete with the app on slow
+      // connections; events queued in dataLayer before that are still sent.
+      window.addEventListener('load', function () {
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-ZWBNL12SRZ';
+        document.head.appendChild(s);
+      });
     </script>
 
-    <!-- ✅ Organization JSON-LD -->
+    <!-- Organization JSON-LD -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -80,7 +84,7 @@
       }
     </script>
 
-    <!-- ✅ WebSite JSON-LD -->
+    <!-- WebSite JSON-LD -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -98,8 +102,6 @@
   <body>
     <div id="root"></div>
 
-    <!-- Core Scripts -->
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
