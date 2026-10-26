@@ -5,7 +5,8 @@ export type AttemptStatus =
   | "checked" | "needs_review" | "published" | "failed" | "rejected"
   | "submitted" | "graded";                       // legacy portal v1 rows
 
-export type ReviewReason = "empty_answer" | "illegible" | "low_confidence" | "key_missing" | "blank_pages" | "bad_scan";
+export type ReviewReason = "empty_answer" | "illegible" | "low_confidence" | "key_missing" | "blank_pages" | "bad_scan"
+  | "fallback_model";                              // 25: marked by a backup AI model
 export type CountPolicy = "latest" | "best";
 
 export type StudentBadgeKind = "pending" | "checked" | "teacher" | "rejected" | "published";
@@ -40,7 +41,20 @@ export const REVIEW_LABEL: Record<ReviewReason, string> = {
   key_missing: "Answer key missing",
   blank_pages: "Blank pages",
   bad_scan: "Poor photo",
+  fallback_model: "Backup AI model",
 };
+
+/** The checker's primary model (backend CHECKER_GEMINI_MODEL in production). A copy marked by any other model shows
+ *  a model badge — also the copies of 23–24 Oct, which were marked before the fallback_model reason existed. */
+export const PRIMARY_CHECKER_MODEL = "gemini-3.8-flash";
+
+export const markedByBackupModel = (sheet: { model_version?: string | null; needs_review_reasons?: string[] } | null) =>
+  !!sheet && ((sheet.needs_review_reasons || []).includes("fallback_model")
+    || (!!sheet.model_version && sheet.model_version !== PRIMARY_CHECKER_MODEL && sheet.model_version !== "mock"));
+
+/** 26: a flagged copy the teacher hasn't approved or edited yet — hidden from the student until then. */
+export const awaitingReview = (a: { status: string; sheet: { review_approved_at?: string | null } | null }) =>
+  a.status === "needs_review" && !a.sheet?.review_approved_at;
 
 export interface TeacherBadge { label: string; tone: "amber" | "blue" | "slate" | "red" | "green" | "violet" }
 
