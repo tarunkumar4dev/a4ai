@@ -72,6 +72,8 @@ const Footer = () => {
             <Link to="/" className="flex items-center gap-2.5">
               <img
                 src="/ICON.ico"
+                width={36}
+                height={36}
                 alt="a4ai"
                 className="object-contain flex-shrink-0"
                 style={{ width: "36px", height: "36px" }}

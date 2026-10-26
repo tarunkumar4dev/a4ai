@@ -310,6 +310,12 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   hidden tab; starts paused for reduced-motion / Save-Data), Toddle-style gradient panels (themes in featureSlides.ts,
   incl. lime green + light orange). Landing pricing preview removed → "Our partners" logo wall
   (`src/components/landing/Partners.tsx`, logos via `scripts/build-partner-logos.py`).
+- [x] Marketing pages (26 Oct, branch feat/landing-showcase, uncommitted): About / Features / Resources / Login on the
+  shared shell `src/components/site/PageShell.tsx` (landing Navbar + Footer). Fabricated stats/testimonials/case studies
+  removed; Features lists only capabilities found in code. "a4ai Hub" → "Resources" (display only). Team = Tarun Kumar
+  Pathak / Yash Dubey / Aakash Singh / Nitin Kumar / Durgesh / Aman Singh (mentor); portraits via `scripts/build-team-photos.py`, initials when
+  missing (Nitin, Durgesh, Aman have no photo). Login + Signup: white, labelled inputs, shared `src/components/auth/AuthCharacters.tsx`, aria-live error (login), eye tracking without
+  React re-renders, "no" shake only on Supabase `invalid_credentials`. Audit `NOTES.md`, results `REDESIGN_REPORT.md`.
 - Known after the landing redesign: landing LCP ≈ 5 s on throttled mobile (1.6 Mbps/150 ms/4× CPU) — SPA renders nothing
   until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
   `Magical_FREE_AI_Tools.jpeg` are not used.

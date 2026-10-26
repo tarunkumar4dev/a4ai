@@ -333,7 +333,7 @@ export default function ApiPage() {
             </Link>
             <div className="flex items-center gap-5 bg-transparent">
               <Link to="/docs" className="text-sm font-semibold text-neutral-500 hover:text-neutral-800">Docs</Link>
-              <Link to="/resources" className="text-sm font-semibold text-neutral-500 hover:text-neutral-800">Hub</Link>
+              <Link to="/resources" className="text-sm font-semibold text-neutral-500 hover:text-neutral-800">Resources</Link>
             </div>
           </div>
         </nav>
