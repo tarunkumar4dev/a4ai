@@ -176,3 +176,21 @@
 .a4-no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Login characters shake "no" on a wrong password (LoginPage.tsx). The only
+   keyframe animation on the marketing/auth pages: 2 × 160 ms, transform only.
+   !important beats src/styles/lite.css, which zeroes every other animation. */
+@keyframes a4-no {
+  0%, 100% { transform: none; }
+  33% { transform: translateX(-4px) rotate(-7deg); }
+  66% { transform: translateX(4px) rotate(7deg); }
+}
+.a4-face {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .a4-no .a4-face {
+    animation: a4-no 160ms ease-in-out 2 !important;
+  }
+}

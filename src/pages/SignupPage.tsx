@@ -13,8 +13,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Eye, EyeOff, User, Mail, ArrowLeft, Phone,
   GraduationCap, School, Building2, ChevronDown,
-  CheckCircle2, Sun, Moon, Gift, ShieldAlert, MailCheck
+  CheckCircle2, Gift, ShieldAlert, MailCheck
 } from "lucide-react";
+import { Helmet } from "react-helmet";
+import Navbar from "@/components/Navbar";
+import AuthCharacters from "@/components/auth/AuthCharacters";
 import { RateLimiter } from "@/lib/security/rateLimiter";
 import { RiskEngine } from "@/lib/security/riskEngine";
 import { WAF } from "@/lib/security/waf";
@@ -27,22 +30,6 @@ type Role = "student" | "teacher" | "institute";
 // Format 10-digit Indian number to +91XXXXXXXXXX (shared normaliser; sendOtp validates first)
 const formatPhoneForIndia = (phone: string): string => normalizeIndianPhone(phone) || phone.trim();
 
-/* ──────────────────────────────────────────────────────────────
-   ROBUST VECTOR FALLBACK LOGO
-   ────────────────────────────────────────────────────────────── */
-const InlineVectorLogo = () => (
-  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2L2 22H22L12 2Z" fill="url(#signup-logo-grad)" />
-    <path d="M12 6L5 19H19L12 6Z" fill="#ffffff" opacity="0.2" />
-    <defs>
-      <linearGradient id="signup-logo-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#10b981" />
-        <stop offset="100%" stopColor="#0ea5e9" />
-      </linearGradient>
-    </defs>
-  </svg>
-);
-
 export default function SignupPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,11 +39,11 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // The page is always light (white background); kept as a constant for the shared auth widgets' props.
+  const isDarkMode = false;
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [signupMethod, setSignupMethod] = useState<"email" | "phone">("email"); // new accounts: Google or email (no new phone/OTP signups)
-  const [logoFailed, setLogoFailed] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   // Phone OTP states
@@ -76,7 +63,6 @@ export default function SignupPage() {
   const [showScratchCard, setShowScratchCard] = useState(false);
   const [coinsScratched, setCoinsScratched] = useState(false);
   const [scratchProgress, setScratchProgress] = useState(0);
-  const [pointer, setPointer] = useState({ x: 0, y: 0 });
 
   const [formValues, setFormValues] = useState({
     name: "", email: "", password: "", confirmPassword: "", acceptTerms: false, phone: "",
@@ -107,12 +93,6 @@ export default function SignupPage() {
     if (location.state?.role) setSelectedRole(location.state.role);
     if (location.state?.email) setFormValues((p) => ({ ...p, email: location.state.email }));
   }, [location.state]);
-
-  useEffect(() => {
-    const onMove = (e: PointerEvent) => setPointer({ x: e.clientX, y: e.clientY });
-    window.addEventListener("pointermove", onMove, { passive: true });
-    return () => window.removeEventListener("pointermove", onMove);
-  }, []);
 
   // Timer countdown
   useEffect(() => {
@@ -406,45 +386,13 @@ export default function SignupPage() {
   ];
 
   return (
-    <div className={`min-h-screen w-full flex flex-col items-center justify-center p-6 font-sans transition-colors duration-500 overflow-x-hidden ${isDarkMode ? "bg-[#0f172a]" : "bg-[#E0E6F7]"}`}>
-      
-      {/* DETACHED FLOATING TOP BAR */}
-      <div className="fixed top-4 left-0 right-0 z-50 w-full px-4 sm:px-6 lg:px-8">
-        <nav 
-          className={`mx-auto max-w-7xl rounded-2xl border backdrop-blur-xl relative overflow-hidden transition-colors duration-500 ${
-            isDarkMode ? "bg-slate-900/10 border-white/10" : "bg-white/10 border-black/5"
-          }`}
-          style={{ 
-            boxShadow: isDarkMode 
-              ? "0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)" 
-              : "0 8px 32px rgba(0,0,0,0.02), inset 0 1px 0 rgba(255,255,255,0.4)"
-          }}
-        >
-          <div className="flex items-center justify-between px-4 py-3 sm:px-6">
-            <Link to="/" className="group flex items-center gap-2.5 select-none text-lg font-semibold tracking-tight transition-opacity active:opacity-90">
-              <div className="h-6 w-6 flex items-center justify-center rounded bg-emerald-500/10 border border-emerald-500/20 overflow-hidden">
-                {!logoFailed ? (
-                  <img 
-                    src="/ICON.ico" 
-                    alt="Logo" 
-                    className="h-full w-full object-contain"
-                    onError={() => setLogoFailed(true)}
-                  />
-                ) : (
-                  <InlineVectorLogo />
-                )}
-              </div>
-              <span className={`transition-colors duration-500 ${isDarkMode ? "text-white" : "text-slate-900"}`}>
-                a4ai <span className="text-xs font-normal opacity-60 ml-1">Account</span>
-              </span>
-            </Link>
-          </div>
-        </nav>
-      </div>
-
-      <button onClick={() => setIsDarkMode(!isDarkMode)} className={`fixed top-24 right-8 p-3 rounded-2xl backdrop-blur-md border transition-all z-40 shadow-lg ${isDarkMode ? "bg-white/10 border-white/20 text-yellow-400" : "bg-black/5 border-black/10 text-slate-700"}`}>
-        {isDarkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
-      </button>
+    <div className="min-h-screen w-full flex flex-col items-center bg-white px-4 sm:px-6 overflow-x-hidden">
+      <Helmet>
+        <title>Create your account — a4ai</title>
+        <meta name="description" content="Sign up for a4ai as a student, teacher or institute. Create test papers, check copies and run classes." />
+        <link rel="canonical" href="https://a4ai.in/signup" />
+      </Helmet>
+      <Navbar />
 
       {/* Scratch Card Modal */}
       <AnimatePresence>
@@ -470,14 +418,14 @@ export default function SignupPage() {
         )}
       </AnimatePresence>
 
-      <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-[460px_1fr] gap-8 items-center relative z-10 pt-24 pb-6">
-        <div className={`backdrop-blur-[30px] saturate-[180%] border rounded-[3rem] shadow-2xl p-10 flex flex-col transition-all duration-500 max-h-[85vh] overflow-y-auto ${isDarkMode ? "bg-slate-900/60 border-white/10" : "bg-white/40 border-white/50 shadow-slate-300/50"}`}>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className={`mb-6 -ml-2 rounded-full w-fit ${isDarkMode ? "text-slate-400 hover:bg-white/10" : "text-slate-600 hover:bg-white/20"}`}>
+      <main id="main-content" className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-[440px_1fr] gap-8 lg:gap-12 items-center pt-24 sm:pt-28 pb-10">
+        <div className="w-full max-w-[440px] mx-auto rounded-[24px] border border-[#E5E7EB] bg-white p-6 sm:p-8 shadow-[0_8px_30px_rgba(17,17,17,0.06)] flex flex-col">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className="mb-4 -ml-2 rounded-full w-fit text-[#5D6570] hover:bg-[#F7F8FA]">
             <ArrowLeft className="w-4 h-4 mr-2" /> Back
           </Button>
 
           <div className="mb-6">
-            <h1 className={`text-4xl font-bold tracking-tight ${isDarkMode ? "text-white" : "text-slate-900"}`}>Create Account</h1>
+            <h1 className="font-halenoir text-3xl sm:text-4xl font-bold tracking-[-0.02em] text-[#1B1B1B]">Create Account</h1>
             <p className={`text-sm font-semibold mt-2 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
               Already have an account?{" "}
               <Link to="/login" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>Sign in</Link>
@@ -487,9 +435,9 @@ export default function SignupPage() {
           <div className="space-y-4">
             {/* Role Selector */}
             <div className="space-y-2">
-              <button type="button" onClick={() => setIsExpanded(!isExpanded)} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all duration-200 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/30 border-white/50 shadow-sm"}`}>
+              <button type="button" onClick={() => setIsExpanded(!isExpanded)} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all duration-200 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white border-[#E5E7EB]"}`}>
                 <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDarkMode ? "bg-slate-800" : "bg-white/80 shadow-inner"}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isDarkMode ? "bg-slate-800" : "bg-[#F7F8FA]"}`}>
                     {selectedRole === "student" && <GraduationCap className="w-5 h-5 text-blue-500" />}
                     {selectedRole === "teacher" && <School className={`w-5 h-5 ${isDarkMode ? "text-white" : "text-black"}`} />}
                     {selectedRole === "institute" && <Building2 className="w-5 h-5 text-green-500" />}
@@ -506,7 +454,7 @@ export default function SignupPage() {
               <div className={`grid transition-all duration-200 ease-out ${isExpanded ? "grid-rows-[1fr] opacity-100 mb-2" : "grid-rows-[0fr] opacity-0"}`}>
                 <div className="overflow-hidden space-y-2">
                   {roles.map((r) => (
-                    <button key={r.id} onClick={() => { setSelectedRole(r.id as Role); setIsExpanded(false); }} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border duration-150 ${selectedRole === r.id ? (isDarkMode ? "bg-white/20 border-white/40" : "bg-white/80 border-black shadow-md scale-[1.01]") : (isDarkMode ? "bg-white/5 border-white/5 hover:bg-white/10" : "bg-white/10 border-white/10 hover:bg-white/30")}`}>
+                    <button key={r.id} onClick={() => { setSelectedRole(r.id as Role); setIsExpanded(false); }} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all border duration-150 ${selectedRole === r.id ? (isDarkMode ? "bg-white/20 border-white/40" : "bg-white border-[#111111]") : (isDarkMode ? "bg-white/5 border-white/5 hover:bg-white/10" : "bg-white border-[#E5E7EB] hover:bg-[#F7F8FA]")}`}>
                       <div className="flex items-center gap-4">
                         <r.icon className={`w-5 h-5 ${r.id === "teacher" ? (isDarkMode ? "text-white" : "text-black") : r.color}`} />
                         <div className="text-left">
@@ -526,7 +474,7 @@ export default function SignupPage() {
                 variant="outline"
                 onClick={handleGoogleSignup}
                 disabled={isLoading}
-                className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white/40 border-white/50 text-slate-700 hover:bg-white/60 shadow-sm"}`}
+                className={`w-full h-12 rounded-2xl font-bold gap-3 text-sm transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white hover:bg-white/10" : "bg-white border-[#E5E7EB] text-[#1B1B1B] hover:bg-[#F7F8FA]"}`}
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -577,14 +525,15 @@ export default function SignupPage() {
                 /* ── Phone OTP Signup ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Phone Number</Label>
+                    <Label htmlFor="signup-phone" className="text-[12px] font-semibold text-[#374151] ml-1">Phone Number</Label>
                     <div className="flex gap-2">
                       <Input
+                        id="signup-phone"
                         type="tel"
                         name="phone"
                         value={formValues.phone}
                         onChange={onChange}
-                        className={`h-11 rounded-xl flex-1 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/40 border-white/40 focus:bg-white/60"}`}
+                        className={`h-11 rounded-xl flex-1 transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white border-[#E5E7EB] text-[#1B1B1B]"}`}
                         placeholder="9593457XXX"
                         maxLength={10}
                       />
@@ -629,7 +578,7 @@ export default function SignupPage() {
                                 className={`w-10 sm:w-11 h-12 text-center text-lg font-bold rounded-xl border transition-all ${
                                   isDarkMode
                                     ? "bg-white/5 border-white/10 text-white focus:bg-white/10"
-                                    : "bg-white/40 border-white/40 text-slate-900 focus:bg-white/60"
+                                    : "bg-white border-[#E5E7EB] text-slate-900"
                                 }`}
                               />
                             ))}
@@ -649,57 +598,61 @@ export default function SignupPage() {
                 /* ── Email Signup ── */
                 <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Full Name</Label>
+                    <Label htmlFor="signup-name" className="text-[12px] font-semibold text-[#374151] ml-1">Full Name</Label>
                     <div className="relative">
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <Input name="name" autoComplete="name" required value={formValues.name} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="John Doe" />
+                      <Input id="signup-name" name="name" autoComplete="name" required value={formValues.name} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white border-[#E5E7EB] text-[#1B1B1B]"}`} placeholder="John Doe" />
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Email</Label>
+                    <Label htmlFor="signup-email" className="text-[12px] font-semibold text-[#374151] ml-1">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <Input type="email" name="email" autoComplete="username" required value={formValues.email} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} placeholder="john@example.com" />
+                      <Input id="signup-email" type="email" name="email" autoComplete="username" required value={formValues.email} onChange={onChange} className={`h-11 rounded-xl pl-11 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white border-[#E5E7EB] text-[#1B1B1B]"}`} placeholder="john@example.com" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Password</Label>
+                      <Label htmlFor="signup-password" className="text-[12px] font-semibold text-[#374151] ml-1">Password</Label>
                       <div className="relative">
                         <Input 
+                          id="signup-password"
                           type={showPw ? "text" : "password"} 
                           name="password" 
                           autoComplete="new-password"
                           required 
                           value={formValues.password} 
                           onChange={onChange} 
-                          className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} 
+                          className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white border-[#E5E7EB] text-[#1B1B1B]"}`} 
                         />
                         <button 
                           type="button" 
-                          onClick={() => setShowPw(!showPw)} 
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                          onClick={() => setShowPw(!showPw)}
+                          aria-label={showPw ? "Hide password" : "Show password"}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center text-[#6B7280] hover:text-[#111111]"
                         >
                           {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Confirm</Label>
+                      <Label htmlFor="signup-confirm" className="text-[12px] font-semibold text-[#374151] ml-1">Confirm</Label>
                       <div className="relative">
                         <Input 
+                          id="signup-confirm"
                           type={showConfirmPw ? "text" : "password"} 
                           name="confirmPassword" 
                           autoComplete="new-password"
                           required 
                           value={formValues.confirmPassword} 
                           onChange={onChange} 
-                          className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white/40 border-white/40"}`} 
+                          className={`h-11 rounded-xl pr-10 ${isDarkMode ? "bg-white/5 border-white/10 text-white" : "bg-white border-[#E5E7EB] text-[#1B1B1B]"}`} 
                         />
                         <button 
                           type="button" 
-                          onClick={() => setShowConfirmPw(!showConfirmPw)} 
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                          onClick={() => setShowConfirmPw(!showConfirmPw)}
+                          aria-label={showConfirmPw ? "Hide password" : "Show password"}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center text-[#6B7280] hover:text-[#111111]"
                         >
                           {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -726,9 +679,7 @@ export default function SignupPage() {
               <Button 
                 type="submit" 
                 disabled={isLoading || (requiresCaptcha && !captchaToken)} 
-                className={`w-full h-14 rounded-[1.5rem] font-bold shadow-lg transition-transform active:scale-[0.98] mt-2 ${
-                  isDarkMode ? "bg-white text-black hover:bg-slate-100" : "bg-black text-white hover:bg-slate-900"
-                } ${requiresCaptcha && !captchaToken ? "opacity-60 cursor-not-allowed" : ""}`}
+                className={`w-full h-12 rounded-xl font-bold text-base mt-2 bg-[#111111] text-white hover:bg-[#222222] ${requiresCaptcha && !captchaToken ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 {isLoading 
                   ? "Creating..." 
@@ -747,57 +698,10 @@ export default function SignupPage() {
           </div>
         </div>
 
-        <div className={`hidden lg:flex items-center justify-center p-10 h-[600px] rounded-[3.5rem] transition-all duration-500 ${isDarkMode ? "bg-slate-800/40" : "bg-white/40 shadow-inner"}`}>
-          <RubberHoseShapes pointer={pointer} isDarkMode={isDarkMode} />
+        <div className="hidden lg:flex items-center justify-center p-10 h-[560px] rounded-[28px] border border-black/[0.04]" style={{ backgroundImage: "linear-gradient(135deg, #EFEDFF 0%, #FFE7E7 100%)" }}>
+          <AuthCharacters />
         </div>
-      </div>
+      </main>
     </div>
-  );
-}
-
-// ---- RubberHoseShapes ----
-interface EyeItemProps {
-  x: number;
-  y: number;
-  r?: number;
-  pr?: number;
-  w?: string;
-  p?: string;
-}
-
-function RubberHoseShapes({ pointer, isDarkMode }: { pointer: { x: number; y: number }; isDarkMode: boolean }) {
-  const ref = useRef<SVGSVGElement>(null);
-
-  const getMove = (baseX: number, baseY: number, max = 5) => {
-    if (!ref.current) return { x: 0, y: 0 };
-    const r = ref.current.getBoundingClientRect();
-    const centerX = r.left + baseX * (r.width / 460);
-    const centerY = r.top + baseY * (r.height / 330);
-    const dx = pointer.x - centerX;
-    const dy = pointer.y - centerY;
-    const dist = Math.hypot(dx, dy) || 1;
-    return { x: (dx / dist) * max, y: (dy / dist) * max };
-  };
-
-  const EyeItem = ({ x, y, r = 7, pr = 3.5, w = "#0F0F12", p = "#FFF" }: EyeItemProps) => {
-    const m = getMove(x, y, 3);
-    return (
-      <g>
-        <circle cx={x} cy={y} r={r} fill={w} />
-        <circle cx={x + m.x} cy={y + m.y} r={pr} fill={p} />
-      </g>
-    );
-  };
-
-  return (
-    <svg ref={ref} viewBox="0 0 460 330" className="w-full h-full drop-shadow-2xl select-none">
-      <ellipse cx="230" cy="305" rx="170" ry="10" fill={isDarkMode ? "#1e293b" : "#cbd5e1"} opacity="0.6" />
-      <g><path d="M60 300 A110 110 0 0 1 280 300 L60 300 Z" fill="#FF7A2B" /><g transform={`translate(${getMove(170, 270).x}, ${getMove(170, 270).y})`}><EyeItem x={155} y={270} /><EyeItem x={185} y={270} /><path d="M150 282 Q170 294 190 282" stroke="#0F0F12" strokeWidth="3" fill="none" strokeLinecap="round" /></g></g>
-      <g><rect x="190" y="110" width="95" height="140" rx="18" fill="#7B48FF" /><g transform={`translate(${getMove(240, 145).x}, ${getMove(240, 145).y})`}><EyeItem x={225} y={145} r={6.5} /><EyeItem x={255} y={145} r={6.5} /><path d="M225 160 Q240 168 255 160" stroke="#0F0F12" strokeWidth="2.5" fill="none" strokeLinecap="round" /></g></g>
-      <g><rect x="280" y="200" width="75" height="90" rx="15" fill="#0F0F12" /><g transform={`translate(${getMove(315, 240, 3).x}, ${getMove(315, 240, 3).y})`}><EyeItem x={300} y={240} r={7.5} w="#FFF" p="#0F0F12" /><EyeItem x={330} y={240} r={7.5} w="#FFF" p="#0F0F12" /><line x1="300" y1="255" x2="330" y2="255" stroke="#FFF" strokeWidth="3" strokeLinecap="round" /></g></g>
-      <g><path d="M320 80 L390 140 L250 140 Z" fill="#4ECDC4" /><g transform={`translate(${getMove(320, 120).x}, ${getMove(320, 120).y})`}><EyeItem x={310} y={120} r={5} pr={2} /><EyeItem x={335} y={120} r={5} pr={2} /><path d="M315 130 L323 135 L331 130" stroke="#0F0F12" strokeWidth="2" fill="none" /></g></g>
-      <g><rect x="350" y="180" width="95" height="110" rx="28" fill="#F2C500" /><g transform={`translate(${getMove(400, 220).x}, ${getMove(400, 220).y})`}><EyeItem x={385} y={225} r={7} /><EyeItem x={415} y={225} r={7} /><path d="M385 240 q14 10 28 0" stroke="#0F0F12" strokeWidth="3" fill="none" strokeLinecap="round" /></g></g>
-      <g><circle cx="120" cy="110" r="28" fill="#FF6B6B" /><g transform={`translate(${getMove(120, 110).x}, ${getMove(120, 110).y})`}><EyeItem x={110} y={105} r={5} pr={2} /><EyeItem x={130} y={105} r={5} pr={2} /><path d="M115 112 a5 5 0 0 0 10 0" fill="#0F0F12" /></g></g>
-    </svg>
   );
 }
