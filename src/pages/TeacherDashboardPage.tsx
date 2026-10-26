@@ -1212,11 +1212,39 @@ function TestHistory({
 
 /* ------------------- MODULES TAB COMPONENT ------------------- */
 const ModulesPageComponent = lazy(() => import("../pages/ModulesPage"));
+// A render error inside Modules (e.g. unexpected AI output) must not blank the whole dashboard.
+class TabErrorBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(err: unknown) {
+    console.error("[a4ai] dashboard tab crashed:", err);
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+        <p className="font-bold text-slate-900">This section could not be shown.</p>
+        <p className="mt-1 text-sm text-slate-500">Reload the page to try again.</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"
+        >
+          Reload
+        </button>
+      </div>
+    );
+  }
+}
+
 function ModulesTab() {
   return (
-    <Suspense fallback={<div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>}>
-      <ModulesPageComponent />
-    </Suspense>
+    <TabErrorBoundary>
+      <Suspense fallback={<div className="flex justify-center py-12"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>}>
+        <ModulesPageComponent />
+      </Suspense>
+    </TabErrorBoundary>
   );
 }
 function AssignmentsWithWorksheet({ initialSubTab = 'assignments' }: { initialSubTab?: 'assignments' | 'worksheet' }) {
@@ -1267,7 +1295,8 @@ export default function TeacherDashboardPage() {
   // deep link: /dashboard?tab=assignments&assignment=<id>&view=copies (Checking Link → "Submissions dekho")
   const location = useLocation();
   useEffect(() => {
-    if (new URLSearchParams(location.search).get("tab") === "assignments") setActiveTab("assignments");
+    const tab = new URLSearchParams(location.search).get("tab");
+    if (tab === "assignments" || tab === "modules") setActiveTab(tab);
   }, [location.search]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
