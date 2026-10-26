@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { REVIEW_LABEL, isFinal, needsPolling, pickCounted, studentBadge, teacherBadge } from "../status";
+import { PRIMARY_CHECKER_MODEL, REVIEW_LABEL, awaitingReview, isFinal, markedByBackupModel, needsPolling, pickCounted, studentBadge, teacherBadge } from "../status";
 import type { AttemptStatus } from "../status";
 
 describe("student badge (what the student sees)", () => {
@@ -26,6 +26,7 @@ describe("teacher side", () => {
     expect(REVIEW_LABEL).toEqual({
       empty_answer: "Empty answer", illegible: "Hard to read", low_confidence: "AI not sure",
       key_missing: "Answer key missing", blank_pages: "Blank pages", bad_scan: "Poor photo",
+      fallback_model: "Backup AI model",
     });
   });
 
@@ -44,5 +45,24 @@ describe("teacher side", () => {
   it("count policy best = highest published marks, else latest", () => {
     expect(pickCounted([a(1, "published", 8), a(2, "published", 6), a(3, "checking")], "best")?.attempt_no).toBe(1);
     expect(pickCounted([a(1, "checked", 9), a(2, "queued")], "best")?.attempt_no).toBe(2);
+  });
+});
+
+describe("fix/checker-p0: backup model badge + review gate", () => {
+  it("badges copies not marked by the primary model (also old rows without the reason)", () => {
+    expect(markedByBackupModel({ model_version: "gemini-3-flash-preview", needs_review_reasons: [] })).toBe(true);
+    expect(markedByBackupModel({ model_version: PRIMARY_CHECKER_MODEL, needs_review_reasons: ["fallback_model"] })).toBe(true);
+    expect(markedByBackupModel({ model_version: PRIMARY_CHECKER_MODEL, needs_review_reasons: ["low_confidence"] })).toBe(false);
+    expect(markedByBackupModel({ model_version: null })).toBe(false);
+    expect(markedByBackupModel(null)).toBe(false);
+    expect(REVIEW_LABEL.fallback_model).toBe("Backup AI model");
+  });
+
+  it("a flagged copy waits for review until approved or edited", () => {
+    expect(awaitingReview({ status: "needs_review", sheet: { review_approved_at: null } })).toBe(true);
+    expect(awaitingReview({ status: "needs_review", sheet: {} })).toBe(true);
+    expect(awaitingReview({ status: "needs_review", sheet: { review_approved_at: "2026-10-27T10:00:00Z" } })).toBe(false);
+    expect(awaitingReview({ status: "checked", sheet: null })).toBe(false);
+    expect(awaitingReview({ status: "published", sheet: { review_approved_at: null } })).toBe(false);
   });
 });

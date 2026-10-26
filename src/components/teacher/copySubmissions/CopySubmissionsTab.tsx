@@ -16,7 +16,7 @@ import {
 import { useConfirm } from "@/components/checker/useConfirm";
 import { humanError } from "@/components/checker/checkerFetch";
 import { fmtIST, receiptId } from "@/lib/uploadFlow";
-import { IN_PIPELINE, REVIEW_LABEL, teacherBadge } from "@/lib/uploadLink/status";
+import { IN_PIPELINE, REVIEW_LABEL, awaitingReview, markedByBackupModel, teacherBadge } from "@/lib/uploadLink/status";
 import {
   type LinkSettings, type StudentInfo, type StudentRow, type TeacherAttempt, buildStudentRows, deleteGuestSubmissions,
   linkUrl, loadCopySubmissions, loadLinkSettings, publishResults, regradeSubmissions, resultMessage, retryChecks, unpublishResults,
@@ -46,7 +46,7 @@ function matches(a: TeacherAttempt | null, status: StatusFilter, onlyReview: boo
   switch (status) {
     case "pipeline": return IN_PIPELINE.includes(a.status);
     case "checked": return a.status === "checked";
-    case "needs_review": return a.status === "needs_review";
+    case "needs_review": return awaitingReview(a);       // flagged and not approved / edited yet
     case "published": return a.status === "published";
     case "problem": return a.status === "failed" || a.status === "rejected";
     default: return true;
@@ -134,7 +134,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
   const counts = {
     students: rows.length,
     pipeline: rows.filter(r => r.counted && IN_PIPELINE.includes(r.counted.status)).length,
-    review: rows.filter(r => r.counted?.status === "needs_review").length,
+    review: rows.filter(r => r.counted && awaitingReview(r.counted)).length,
     ready: rows.filter(r => r.counted && ["checked", "needs_review"].includes(r.counted.status)).length,
     published: rows.filter(r => r.counted?.status === "published").length,
   };
@@ -146,18 +146,24 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
 
   async function publishAll() {
     if (!(await ask({ title: "Publish all results?", confirmLabel: "Publish all",
-      description: "Students will see the marks of checked copies. Copies still being checked can be published later." }))) return;
+      description: "Students will see the marks of checked copies. Copies that need review stay hidden until you approve them in Review." }))) return;
     setBusy("all");
     try {
       const r = await publishResults({ assignmentId: assignment.id });
       if (r.state !== "ok") throw new Error(r.state === "forbidden" ? "You don't have access to this assignment." : "Couldn't publish.");
-      const n = r.published?.length || 0, b = r.blocked || [];
+      const n = r.published?.length || 0;
+      const flagged = (r.blocked || []).filter(x => x.reason === "needs_review");
+      const b = (r.blocked || []).filter(x => x.reason !== "needs_review");
       if (n) toast.success(`${n} result${n === 1 ? "" : "s"} published`);
+      if (flagged.length) {
+        toast.warning(`${flagged.length} ${flagged.length === 1 ? "copy needs" : "copies need"} your review first — not shown to students yet`);
+        flagBlocked(flagged.map(x => x.id));
+      }
       if (b.length) {
         toast.warning(`${b.length} ${b.length === 1 ? "copy is" : "copies are"} still being checked — publish ${b.length === 1 ? "it" : "them"} after checking`);
         flagBlocked(b.map(x => x.id));
       }
-      if (!n && !b.length) toast.info("No checked copies to publish.");
+      if (!n && !b.length && !flagged.length) toast.info("No checked copies to publish.");
       await load(true);
     } catch (e) { toast.error(humanError(e)); }
     setBusy(null);
@@ -167,7 +173,8 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
     setBusy(a.id);
     try {
       const r = await publishResults({ submissionIds: [a.id] });
-      if (r.blocked?.length) { toast.warning("This copy is still being checked — publish it after checking"); flagBlocked([a.id]); }
+      if (r.blocked?.some(x => x.reason === "needs_review")) { toast.warning("Review this copy first — open Review and approve it"); setReviewing(a); }
+      else if (r.blocked?.length) { toast.warning("This copy is still being checked — publish it after checking"); flagBlocked([a.id]); }
       else if (r.published?.length) toast.success("Result published");
       else toast.error("Couldn't publish.");
       await load(true);
@@ -238,8 +245,11 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
     const b = busy === a.id;
     return (
       <div className="flex flex-wrap items-center gap-1.5">
-        {a.sheet && <Button size="sm" variant="outline" onClick={() => setReviewing(a)}>Review</Button>}
-        {["checked", "needs_review"].includes(a.status) && (
+        {a.sheet && !awaitingReview(a) && <Button size="sm" variant="outline" onClick={() => setReviewing(a)}>Review</Button>}
+        {awaitingReview(a) && (
+          <Button size="sm" className={BLACK_BTN} onClick={() => setReviewing(a)} data-testid="review-approve">Review &amp; approve</Button>
+        )}
+        {["checked", "needs_review"].includes(a.status) && !awaitingReview(a) && (
           <Button size="sm" className={BLACK_BTN} onClick={() => publishOne(a)} disabled={b}>{b ? <Spinner /> : "Publish"}</Button>
         )}
         {a.status === "published" && (
@@ -267,6 +277,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
       <div className="space-y-1">
         <ToneChip badge={teacherBadge(a.status)} />
         {a.status === "failed" && <p className="max-w-[220px] text-xs text-red-600">{a.job?.error || a.sheet?.error || "The check failed."}</p>}
+        {a.job?.state === "failed_retryable" && <p className="max-w-[220px] text-xs text-amber-700">AI not available — it will be checked again automatically</p>}
         {a.status === "waiting_quota" && <p className="text-xs text-muted-foreground">Today's check limit is used up — it will be checked tomorrow</p>}
         {a.status === "waiting_key" && <p className="text-xs text-muted-foreground">Can't be checked without an answer key</p>}
         {a.status === "rejected" && a.reject_reasons[0] && <p className="max-w-[220px] text-xs text-red-600">{rejectText(a.reject_reasons[0])}</p>}
@@ -279,6 +290,7 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
       <div className="flex flex-wrap gap-1">
         {a.is_late && <Chip tone="amber">Late</Chip>}
         {isDup(a) && <Chip tone="red">Duplicate</Chip>}
+        {markedByBackupModel(a.sheet) && a.sheet?.model_version && <Chip tone="red">AI: {a.sheet.model_version}</Chip>}
         {(a.sheet?.needs_review_reasons || []).map(x => <Chip key={x} tone="violet">{REVIEW_LABEL[x] || x}</Chip>)}
       </div>
     );
@@ -313,9 +325,14 @@ export default function CopySubmissionsTab({ assignment, onEditAssignment }: {
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="flex-1 text-base font-bold">
               Copies <span className="text-sm font-normal text-muted-foreground">
-                · {counts.students} students · {counts.pipeline} being checked · {counts.review} to review · {counts.published} published
+                · {counts.students} students · {counts.pipeline} being checked · {counts.published} published
               </span>
             </h3>
+            <button type="button" onClick={() => setStatus(s => (s === "needs_review" ? "all" : "needs_review"))}
+              className={`rounded-full border px-3 py-1 text-sm font-semibold ${counts.review ? "border-violet-300 bg-violet-50 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200" : "text-muted-foreground"} ${status === "needs_review" ? "ring-2 ring-violet-400" : ""}`}
+              title="Flagged copies stay hidden from students until you approve or edit them" data-testid="needs-review-count">
+              Needs review: {counts.review}
+            </button>
             <Button variant="ghost" size="sm" onClick={() => load(true)} title="Refresh"><RefreshCw className="h-4 w-4" /></Button>
             <Button className={BLACK_BTN} onClick={publishAll} disabled={busy === "all" || (counts.ready === 0 && counts.pipeline === 0)} data-testid="publish-all">
               {busy === "all" ? <Spinner /> : "Publish all"}
