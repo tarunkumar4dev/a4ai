@@ -50,24 +50,21 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
       const instId = scope.instituteId;
       if (!instId) { setLoading(false); return; }
 
-      // 1. Own membership rows — only for the role / department label. Multi-row safe (HOD + teacher etc.).
-      const { data: memData } = await supabase
-        .from("institute_members")
-        .select("role, status, department_id")
-        .eq("user_id", userId)
-        .eq("institute_id", instId)
-        .eq("status", "active");
+      // 1 + 3 in parallel (independent): own membership rows — only for the role / department
+      // label, multi-row safe (HOD + teacher etc.) — and the institute name.
+      const [{ data: memData }, { data: inst }] = await Promise.all([
+        supabase
+          .from("institute_members")
+          .select("role, status, department_id")
+          .eq("user_id", userId)
+          .eq("institute_id", instId)
+          .eq("status", "active"),
+        supabase.from("institutes").select("id, name").eq("id", instId).maybeSingle(),
+      ]);
       const myRow = (memData || []).find(m => m.role === "hod") || (memData || [])[0];
       const memberRole = scope.isAdmin ? "admin" : myRow?.role || "teacher";
       const memberStatus = myRow?.status || "active";
       const departmentId: string | null = myRow?.department_id || null;
-
-      // 3. Get institute details
-      const { data: inst } = await supabase
-        .from("institutes")
-        .select("id, name")
-        .eq("id", instId)
-        .single();
 
       if (!inst) { setLoading(false); return; }
       setInstitute(inst);
@@ -118,16 +115,9 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
         setTotalStudents(Object.values(countMap).reduce((a, b) => a + b, 0));
       }
 
-      // 6. Try logo
-      try {
-        const { data: logoData } = supabase.storage
-          .from("institute-assets")
-          .getPublicUrl(`${inst.id}/logo`);
-        const res = await fetch(logoData.publicUrl, { method: "HEAD" });
-        if (res.ok && res.headers.get("content-type")?.startsWith("image")) {
-          setLogoUrl(logoData.publicUrl + `?t=${Date.now()}`);
-        }
-      } catch { /* no logo */ }
+      // 6. Logo: the <img> just tries the public URL and hides itself if there is none —
+      //    no extra HEAD round trip, and no ?t= cache-buster so the browser/CDN can cache it.
+      setLogoUrl(supabase.storage.from("institute-assets").getPublicUrl(`${inst.id}/logo`).data.publicUrl);
 
     } catch (e) { console.error("InstituteTeacherPanel:", e); }
     setLoading(false);
@@ -199,7 +189,7 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
           border: "2px solid rgba(255,255,255,0.3)", flexShrink: 0,
         }}>
           {logoUrl
-            ? <img src={logoUrl} alt="logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            ? <img src={logoUrl} alt="logo" width={64} height={64} decoding="async" onError={() => setLogoUrl(null)} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
             : <span style={{ fontSize: 20, fontWeight: 900, color: "#fff" }}>
                 {institute.name.slice(0, 2).toUpperCase()}
               </span>

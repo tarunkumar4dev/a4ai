@@ -1299,20 +1299,30 @@ export default function TeacherDashboardPage() {
   const [downloadingRecentId, setDownloadingRecentId] = useState<string | null>(null);
 
 
+  // Keyed on the id (the user object changes on every session refresh). Newest 50 only.
+  const userId = user?.id;
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
+    let cancelled = false;
     setTestsLoading(true);
     supabase
       .from("tests")
       .select("id, exam_title, board, class_grade, subject, status, total_questions, total_marks, created_at")
-      .eq("teacher_id", user.id)
+      .eq("teacher_id", userId)
       .order("created_at", { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        if (data) setAllTests(data as SavedTest[]);
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("[a4ai] test history:", error.message);
+          toast.error("Couldn't load your tests. Check your connection and refresh.");
+        } else if (data) setAllTests(data as SavedTest[]);
         setTestsLoading(false);
       });
-  }, [user]);
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const recentTests = allTests.slice(0, 3);
 

@@ -239,14 +239,18 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
   ]);
 
   const { user } = useAuth();
+  const userId = user?.id;
 
+  // Keyed on the user id, not the user object: AuthProvider hands out a new
+  // object on every session/profile refresh, which used to load coins 3x per page.
   useEffect(() => {
-    if (user) {
+    if (userId) {
       loadCoinData();
     } else {
       setIsLoading(false);
     }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const loadCoinData = async () => {
     if (!user || !isValidUUID(user.id)) {
@@ -275,7 +279,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
 
       const { data: txData, error: txError } = await supabase
         .from('coin_transactions')
-        .select('*')
+        .select('id, user_id, type, amount, description, contest_id, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20);
