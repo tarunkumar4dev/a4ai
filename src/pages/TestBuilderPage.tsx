@@ -71,13 +71,16 @@ import {
 } from "lucide-react";
 import { getBackendApiBase } from "@/lib/apiBase";
 import { contentHash } from "@/lib/ncert/contentHash";
+import { parseOptions } from "@/lib/ncert/optionLabel";
 
 // ── Config ──────────────────────────────────────────────────────
 const API_BASE = `${getBackendApiBase()}/v1`;
 
 const PAGE_SIZE = 30;
 const MOBILE_BREAKPOINT = 1024;
-const PAPER_STORAGE_KEY = "a4ai.testBuilder.paper.v1";
+// The paper on this device: [{id, content_hash, marks}] only — the questions are fetched again on load.
+const SELECTION_STORAGE_KEY = "ncert_builder_selection_v2";
+const MAX_PAPER_QUESTIONS = 200;
 
 // ── Types ───────────────────────────────────────────────────────
 interface NCERTQuestion {
@@ -112,9 +115,14 @@ interface QuestionTable {
 interface TestQuestion extends NCERTQuestion {
   paperId: string;
   options: string[];
-  /** "Ch 5 · Example 1" — fixed when added, so it survives a subject change and a reload. */
-  label?: string;
   content_hash?: string;
+}
+
+interface SavedSelectionItem {
+  id: number;
+  content_hash?: string;
+  /** the teacher can edit marks on the paper — kept so a reload does not reset them */
+  marks?: number;
 }
 
 interface ChapterStat {
@@ -251,48 +259,35 @@ function compressLogo(file: File): Promise<string> {
   });
 }
 
-const OPTION_LABEL = /^\s*(?:\(\s*([A-Fa-f])\s*\)|([A-Fa-f])\s*[.)])\s*/;
-
-/**
- * Options arrive as a real array or as a JSON string of one (most NCERT rows are double-encoded). An option's
- * own "(A)" label is dropped — the card and the PDF print A/B/C/D themselves ("A (A) 60°" otherwise).
- */
-function parseOptions(opts: unknown): string[] {
-  let value = opts;
-  for (let i = 0; i < 3 && typeof value === "string"; i++) {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(value)) return [];
-  return value.map((raw, idx) => {
-    const opt = String(raw);
-    const m = OPTION_LABEL.exec(opt);
-    const letter = m ? (m[1] || m[2]).toUpperCase() : null;
-    const rest = m ? opt.slice(m[0].length) : opt;
-    return letter === String.fromCharCode(65 + idx) && rest.trim() ? rest : opt;
-  });
-}
-
 function isFigureMissing(q: NCERTQuestion): boolean {
   if (typeof q.figure_missing === "boolean") return q.figure_missing;
   return !q.image_url && (q.question_type === "diagram" || !!q.figure_ref);
 }
 
-/** "Ch 5 · Example 1" — a bare "Example 1" repeats in every chapter. */
-function questionLabel(q: NCERTQuestion, chapterNo?: number | null): string {
-  const where = chapterNo ? `Ch ${chapterNo}` : q.chapter;
-  const what = q.question_number || TYPE_LABELS[q.question_type] || q.question_type;
-  return where ? `${where} · ${what}` : what;
+function questionWhat(q: NCERTQuestion): string {
+  return q.question_number || TYPE_LABELS[q.question_type] || q.question_type;
 }
 
-function loadSavedPaper(): TestQuestion[] {
+/** "Circles · Example 1" — a bare "Example 1" repeats in every chapter. A long chapter name ends in "…" (CSS). */
+function QuestionLabel({ q }: { q: NCERTQuestion }) {
+  const what = questionWhat(q);
+  if (!q.chapter) return <>{what}</>;
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-baseline gap-1">
+      <span className="truncate max-w-[11rem] sm:max-w-[16rem]" title={q.chapter}>
+        {q.chapter}
+      </span>
+      <span className="flex-shrink-0">· {what}</span>
+    </span>
+  );
+}
+
+function loadSavedSelection(): SavedSelectionItem[] {
   try {
-    const raw = localStorage.getItem(PAPER_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((q) => q && typeof q.id === "number" && typeof q.paperId === "string") : [];
+    const parsed = JSON.parse(localStorage.getItem(SELECTION_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((s) => s && Number.isInteger(s.id)).slice(0, MAX_PAPER_QUESTIONS)
+      : [];
   } catch {
     return [];
   }
@@ -509,13 +504,11 @@ function QuestionContent({ question, truncateAt }: { question: NCERTQuestion; tr
 const MemoQuestionContent = React.memo(QuestionContent);
 function DraggableQuestion({
   question,
-  label,
   onAdd,
   isAdded,
   isMobile,
 }: {
   question: NCERTQuestion;
-  label: string;
   onAdd: (q: NCERTQuestion) => void;
   isAdded: boolean;
   isMobile: boolean;
@@ -554,8 +547,8 @@ function DraggableQuestion({
         <div className="flex-1 min-w-0">
           {/* Header Badges */}
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md">
-              {label}
+            <span className="max-w-full min-w-0 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md">
+              <QuestionLabel q={question} />
             </span>
 
             {question.section && (
@@ -665,7 +658,9 @@ function SortableTestQuestion({
             <MemoQuestionContent question={question} truncateAt={isMobile ? 160 : 250} />
 
             <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-gray-400">
-              <span className="font-medium text-gray-600">{question.label || question.chapter}</span>
+              <span className="min-w-0 max-w-full font-medium text-gray-600">
+                <QuestionLabel q={question} />
+              </span>
               <span>•</span>
               <DifficultyBadge difficulty={question.difficulty} />
               {!question.image_url && isFigureMissing(question) && (
@@ -948,8 +943,12 @@ export default function TestBuilderPage() {
   // Data
   const [chapterStats, setChapterStats] = useState<ChapterStat[]>([]);
   const [libraryQuestions, setLibraryQuestions] = useState<NCERTQuestion[]>([]);
-  // The paper survives a reload / tab close on this device.
-  const [testQuestions, setTestQuestions] = useState<TestQuestion[]>(loadSavedPaper);
+  const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
+  // The paper survives a reload on this device: ids are restored through /ncert-questions/by-ids, so a question
+  // hidden since (duplicate / junk) or deleted drops out instead of coming back from a stale copy.
+  const [restoreState, setRestoreState] = useState<"loading" | "done" | "failed">(() =>
+    loadSavedSelection().length ? "loading" : "done"
+  );
   const [examTitle, setExamTitle] = useState("");
   const [templateTier, setTemplateTier] = useState<"standard" | "premium">("standard");
   const [colorTheme, setColorTheme] = useState<"teal" | "navy" | "dark_green" | "orange">("teal");
@@ -957,7 +956,6 @@ export default function TestBuilderPage() {
   const [teacherName, setTeacherName] = useState("");
   const [duration, setDuration] = useState("");
   const [topic, setTopic] = useState("");
-  const [includeExplanations, setIncludeExplanations] = useState(false);
   // Branding: logo is remembered on this device so teachers upload it once.
   const [logoBase64, setLogoBase64] = useState<string | null>(() => {
     try {
@@ -1031,17 +1029,67 @@ export default function TestBuilderPage() {
   );
 
   useEffect(() => {
+    const saved = loadSavedSelection();
+    if (!saved.length) return;
+    let cancelled = false;
+    fetch(`${API_BASE}/test-generator/ncert-questions/by-ids?ids=${saved.map((s) => s.id).join(",")}`, {
+      headers: getAuthHeaders(),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.ok) throw new Error("NCERT fetch failed");
+        if (cancelled) return;
+        const byId = new Map<number, NCERTQuestion>((data.questions || []).map((q: NCERTQuestion) => [q.id, q]));
+        const restored: TestQuestion[] = [];
+        for (const s of saved) {
+          const q = byId.get(s.id);
+          if (!q) continue;
+          restored.push({
+            ...q,
+            options: parseOptions(q.options),
+            paperId: `paper-${q.id}-restored`,
+            content_hash: s.content_hash || q.content_hash || undefined,
+            marks: typeof s.marks === "number" ? s.marks : q.marks,
+          });
+        }
+        // anything added while this was loading goes after the restored paper
+        setTestQuestions((prev) =>
+          [...restored, ...prev.filter((p) => !restored.some((r) => r.id === p.id))].slice(0, MAX_PAPER_QUESTIONS)
+        );
+        const gone = saved.length - restored.length;
+        if (gone > 0) {
+          toast.info(
+            `${gone} question${gone === 1 ? "" : "s"} in your saved selection ${gone === 1 ? "is" : "are"} no longer available`
+          );
+        }
+        setRestoreState("done");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRestoreState("failed");
+        toast.error("Could not load your saved paper. It is kept for your next visit.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Not while restoring (the empty paper would overwrite the saved one); after a failed restore, keep the
+    // saved selection until the teacher starts a new paper.
+    if (restoreState === "loading" || (restoreState === "failed" && testQuestions.length === 0)) return;
     try {
-      localStorage.setItem(PAPER_STORAGE_KEY, JSON.stringify(testQuestions));
+      const items: SavedSelectionItem[] = testQuestions.map((q) => ({
+        id: q.id,
+        content_hash: q.content_hash,
+        marks: q.marks,
+      }));
+      localStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify(items));
     } catch {
       /* storage full / private mode — the paper still works for this session */
     }
-  }, [testQuestions]);
-
-  const chapterNoByName = useMemo(
-    () => new Map(chapterStats.map((c) => [c.chapter, c.chapter_no ?? null])),
-    [chapterStats]
-  );
+  }, [testQuestions, restoreState]);
 
   const totalMarks = useMemo(
     () => testQuestions.reduce((sum, q) => sum + (Number(q.marks) || 1), 0),
@@ -1178,12 +1226,17 @@ export default function TestBuilderPage() {
   addedIdsRef.current = addedIds;
   const paperRef = useRef(testQuestions);
   paperRef.current = testQuestions;
-  const chapterNoRef = useRef(chapterNoByName);
-  chapterNoRef.current = chapterNoByName;
   const addToTest = useCallback(
     async (q: NCERTQuestion) => {
       if (addedIdsRef.current.has(q.id)) return;
-      // Same text under another id = a copy the quality pass has not merged (yet): never twice on one paper.
+      if (paperRef.current.length >= MAX_PAPER_QUESTIONS) {
+        toast.error(`Max ${MAX_PAPER_QUESTIONS} questions per test. Remove some to add more.`);
+        return;
+      }
+      // Dedupe: same id always. Same content_hash = a copy the quality pass has not merged (yet). The hash is the
+      // backend's (audited rows: Class 10 Maths today) or computed here with the same v2 normalize
+      // (@/lib/ncert/contentHash), so both sides of the comparison always have one. Only text is compared, not
+      // class/subject — cross-class near-duplicates are future work.
       const hash = q.content_hash || (await contentHash(q.question_text));
       const isDuplicate = (p: TestQuestion) => p.id === q.id || p.content_hash === hash;
       if (paperRef.current.some(isDuplicate)) {
@@ -1195,10 +1248,11 @@ export default function TestBuilderPage() {
         options: parseOptions(q.options),
         paperId: `paper-${q.id}-${Date.now()}`,
         content_hash: hash,
-        label: questionLabel(q, chapterNoRef.current.get(q.chapter)),
       };
-      setTestQuestions((prev) => (prev.some(isDuplicate) ? prev : [...prev, testQ]));
-      toast.success(`Added ${testQ.label}`);
+      setTestQuestions((prev) =>
+        prev.some(isDuplicate) || prev.length >= MAX_PAPER_QUESTIONS ? prev : [...prev, testQ]
+      );
+      toast.success(`Added ${q.chapter ? `${q.chapter} · ` : ""}${questionWhat(q)}`);
     },
     []
   );
@@ -1416,7 +1470,9 @@ export default function TestBuilderPage() {
         classGrade: `Class ${classGrade}`,
         subject,
         format,
-        includeExplanations,
+        // TODO: explanation column needed before re-enabling — ncert_questions has no explanation/solution
+        // column, so the builder can only send explanation: "" (the "With Explanations" box printed nothing).
+        includeExplanations: false,
         template: templateTier === "premium" ? `${colorTheme}_premium` : colorTheme,
         teacher_name: teacherName || undefined,
         institute_name: instituteName || undefined,
@@ -1526,7 +1582,6 @@ export default function TestBuilderPage() {
               <MemoDraggableQuestion
                 key={q.id}
                 question={q}
-                label={questionLabel(q, chapterNoByName.get(q.chapter))}
                 onAdd={addToTest}
                 isAdded={addedIds.has(q.id)}
                 isMobile={isMobile}
@@ -2044,15 +2099,8 @@ export default function TestBuilderPage() {
                         <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
                           Answer Key & Solutions
                         </div>
-                        <label className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={includeExplanations}
-                            onChange={(e) => setIncludeExplanations(e.target.checked)}
-                            className="rounded border-gray-300 text-gray-900 focus:ring-0 cursor-pointer"
-                          />
-                          With Explanations
-                        </label>
+                        {/* "With Explanations" hidden for NCERT library papers.
+                            TODO: explanation column needed before re-enabling. */}
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
@@ -2251,8 +2299,10 @@ export default function TestBuilderPage() {
         <DragOverlay dropAnimation={defaultDropAnimation}>
           {draggedQuestion ? (
             // Same QuestionContent as the cards (math, options, figure) — not the raw text of the row
-            <div className="p-3 bg-white border-2 border-gray-900 rounded-xl shadow-2xl w-[min(90vw,420px)] max-h-64 overflow-hidden pointer-events-none">
-              <MemoQuestionContent question={draggedQuestion} truncateAt={160} />
+            // No truncateAt and no small fixed height: the whole question, options and math (G5 #6).
+            // pointer-events-none so the ghost never blocks the drop target under it.
+            <div className="p-3 bg-white border-2 border-gray-900 rounded-xl shadow-2xl w-[min(90vw,420px)] max-h-[70vh] overflow-hidden pointer-events-none">
+              <MemoQuestionContent question={draggedQuestion} />
             </div>
           ) : null}
         </DragOverlay>
