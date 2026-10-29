@@ -210,6 +210,28 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Works whether VITE_BACKEND_URL / VITE_API_URL end in nothing, /api or /api/v1. Live VITE_BACKEND_URL had no /api → checker
   calls were 404. Don't build backend URLs from env vars directly. (Modules/worksheet still use VITE_API_URL root + /modules.)
 
+- [x] NCERT builder quality — G0–G4.4 (22 Oct, branch `fix/ncert-builder-quality` in both repos; the old
+  `feat/ncert-quality` + migration 18 are superseded, leave 18 unapplied). Audit report + baselines:
+  RAG-BACKEND `test-generator-backend/docs/ncert-audit-class10-maths.md` (Class 10 Maths 10,793 rows → ~2.6k distinct;
+  Symbol-font glyphs, flattened math, figure_ref cut to one digit, chapter ILIKE bug). One normalize()/content_hash
+  (v2) per repo, shared fixtures `src/lib/ncert/ncert_normalize_fixtures.json` = backend `scripts/fixtures/…`.
+  G4.1 backend: exact chapter match, ORDER BY …, id, stats fallback pages through all rows. G4.2: backup
+  `a4_backup_20261022.ncert_questions_backup_20261022` APPLIED on live (91,906 rows, md5 equal; RESTORE line in
+  `19_ncert_backup_20261022.sql`). G4.3: `19_ncert_quality_status.sql` (+ rollback) tested on a copy, NOT applied.
+  G4.4: `scripts/ncert_quality_pass.py` dry run on copy `a4_backup_20261022.ncert_q_c10m_copy`: 1,657 visible.
+- [x] G4.5 (22 Oct): migration 19 (+ generated `quality_rank`) APPLIED on live; quality pass APPLIED to Class 10 Maths
+  only — counts = dry run (clean 470, fixed 93, needs_review 1,094, duplicate 9,136; 1,657 visible). Every other class:
+  quality_status NULL = visible, unchanged. Log: RAG-BACKEND `docs/audit/g45-apply-class10-maths.md`.
+- [x] G4.6 backend + G4.7 frontend committed on `fix/ncert-builder-quality` (both repos, pushed; NOT merged/deployed —
+  prod deploys from `main` via the Vercel GitHub integration). Verified with the new backend run locally on prod data:
+  3 NULL-class combos identical (rows, ids, stats); Class 10 Maths Circles 93 = stats, "Example 1" 62 → 2.
+- [ ] Deploy: merge RAG-BACKEND PR first, then a4ai PR. Browser max-age=300 → ≤ 5 min stale; open builder tabs keep
+  their in-memory lists until reload. CDN cache is per deployment (new deployment = cold cache).
+- [ ] After deploy: anon INSERT policy lockdown on ncert_questions (separate branch). Rule 6 (granularity) undecided.
+- Known: never write a new table into `public` for backups/copies (anon gets REST grants) — use an `a4_backup_*`
+  schema. The Supabase Management API (`db query --linked -f`) rejects bodies > ~4 MB (413): split SQL per statement.
+  `ncert_questions_insert_service` lets anon INSERT into ncert_questions — lockdown is a separate commit.
+  Drop `a4_backup_20261022` (copy tables + full backup) after G5.
 - [x] Upload flow DB (22 Oct, branch feat/student-upload): `18_upload_flow.sql` — assignment = upload link (link_token,
   window, attempts, mimes/size/pages, late/count policy, auto_publish); submissions = one row per attempt (attempt_no,
   idempotency_key, files jsonb, status enum incl. waiting_key/waiting_quota); attempt → check_sheets (source_bucket

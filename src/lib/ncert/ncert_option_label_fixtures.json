@@ -1,0 +1,28 @@
+{
+  "_about": "Shared by app/services/ncert_options.py (tests/unit/test_ncert_options.py) and the frontend copy src/lib/ncert/optionLabel.ts (node scripts/check_ncert_option_label.ts). Keep the two copies of this file identical.",
+  "normalize_option_label": [
+    {"input": "(A) (A) text", "expected": "(A) text", "note": "doubled label"},
+    {"input": "(A) (a) text", "expected": "(A) text", "note": "OCR case mismatch, first label wins"},
+    {"input": "(A)(A) text", "expected": "(A) text", "note": "no space between the labels"},
+    {"input": "(A) (A) (A) text", "expected": "(A) text", "note": "tripled label"},
+    {"input": "(1) (1) text", "expected": "(1) text", "note": "numeric labels"},
+    {"input": "(अ) (अ) text", "expected": "(अ) text", "note": "Hindi labels"},
+    {"input": "( B ) (B)  60°", "expected": "( B ) 60°", "note": "spaces inside the brackets; first label kept as written"},
+    {"input": "(A) (B) text", "expected": "(A) (B) text", "note": "different labels are not a repeat"},
+    {"input": "(A) text", "expected": "(A) text", "note": "single label unchanged"},
+    {"input": "(A)text", "expected": "(A)text", "note": "nothing repeated: not rewritten"},
+    {"input": "text (A) (A)", "expected": "text (A) (A)", "note": "only leading labels"},
+    {"input": "(A) (A) (A) (A) (A) text", "expected": "(A) (A) text", "note": "at most 3 repeats removed"},
+    {"input": "(A) (A)", "expected": "(A)", "note": "labels only"},
+    {"input": "", "expected": "", "note": "empty"}
+  ],
+  "strip_option_labels": [
+    {"input": ["(A) 60°", "(B) 45°", "(C) 30°", "(D) 90°"], "expected": ["60°", "45°", "30°", "90°"], "note": "own letters dropped (the card and the PDF print A/B/C/D)"},
+    {"input": ["(A) (A) 60°", "(b) (B) 45°", "(C)(C) 30°", "(D) (D) (D) 90°"], "expected": ["60°", "45°", "30°", "90°"], "note": "repeats collapsed, then the own letter dropped"},
+    {"input": ["A. 2", "B) 3", "c) 4", "(D) 5"], "expected": ["2", "3", "4", "5"], "note": "A. / B) / lower-case forms"},
+    {"input": ["(B) 60°", "(A) 45°"], "expected": ["(B) 60°", "(A) 45°"], "note": "label is not the option's own letter: kept"},
+    {"input": ["(A)", "(B) x"], "expected": ["(A)", "x"], "note": "label with nothing after it: kept"},
+    {"input": ["(1) (1) 7", "(2) 8"], "expected": ["(1) 7", "(2) 8"], "note": "numeric labels are collapsed but never dropped"},
+    {"input": ["Area of (A) is 5"], "expected": ["Area of (A) is 5"], "note": "label not at the start"}
+  ]
+}

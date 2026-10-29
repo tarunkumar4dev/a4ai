@@ -1,0 +1,86 @@
+[
+  {
+    "input": "Q1. Find the value of $x$ .",
+    "normalized": "find the value of x",
+    "sha256": "99724e7479075b68818d2818568720c438e518040eb373be0050611ccffb4446",
+    "note": "Q-numbering, $ delimiters, trailing ' .'"
+  },
+  {
+    "input": "1) Solve: \\(2x + 3 = 7\\)",
+    "normalized": "solve: 2x + 3 = 7",
+    "sha256": "e5cb904499744b22e22357bdb3f39c87eaa239f3121f19b9a77882b6abc9f247",
+    "note": "'1)' numbering, \\( \\) delimiters"
+  },
+  {
+    "input": "(i) Is 0.5 a rational number?",
+    "normalized": "is 0.5 a rational number",
+    "sha256": "f2843ebafa850516eaf288724c7a119e902f9fdafc88665c740eed9ae9e80664",
+    "note": "roman numbering, trailing '?'"
+  },
+  {
+    "input": "  Example   1 :  Find   the HCF of 96 and 404.  ",
+    "normalized": "find the hcf of 96 and 404",
+    "sha256": "9ac162d6a460dabf7e2830ba92c38ad77863ce575a7ad800f46a1f4a00f42220",
+    "note": "v2: leading 'Example 1 :' label is stripped"
+  },
+  {
+    "input": "1.5 is greater than 1.",
+    "normalized": "1.5 is greater than 1",
+    "sha256": "7d34d239a334dafc14ba105a044cac93edf0d14d2acbdcd0bc9fbeaf2bc8c318",
+    "note": "a decimal at the start is not numbering"
+  },
+  {
+    "input": "Café area",
+    "normalized": "café area",
+    "sha256": "ab5f543659eb501562e25cbf033da853a43af4960f94464b31aacdeb04c6586b",
+    "note": "NFC: e + combining acute -> e-acute"
+  },
+  {
+    "input": "\\[x^2\\]\n\n = 4!!!",
+    "normalized": "x^2 = 4",
+    "sha256": "75938d2bbf0602f72350c3575dcfe61f1ec31f99723ed57440b5894792e7bb1f",
+    "note": "\\[ \\] delimiters, newlines, '!!!'"
+  },
+  {
+    "input": "Q 12. (ii) Prove that √2 is irrational.",
+    "normalized": "prove that √2 is irrational",
+    "sha256": "35bb789e2032fda588974710a16cd9e2b2e110af09d3ad10530992892fa076b0",
+    "note": "two numbering prefixes"
+  },
+  {
+    "input": "",
+    "normalized": "",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "note": "empty text"
+  },
+  {
+    "input": "Tick the correct answer :\tPQ = 12 cm…",
+    "normalized": "tick the correct answer : pq = 12 cm",
+    "sha256": "34a1d2704404f3aef0208fac45870c29e5ca287862f4d9a0b3159a6cf3c99da0",
+    "note": "tab, NBSP, trailing ellipsis"
+  },
+  {
+    "input": "Example 1 : Find x",
+    "normalized": "find x",
+    "sha256": "a6d57905c765867492403c544c42847e0088a1fbd840ec42a71dea7c4f751d53",
+    "note": "v2: 'Example 1 : Find x' == 'Find x'"
+  },
+  {
+    "input": "Find x",
+    "normalized": "find x",
+    "sha256": "a6d57905c765867492403c544c42847e0088a1fbd840ec42a71dea7c4f751d53",
+    "note": "v2: same hash as the 'Example 1 :' copy"
+  },
+  {
+    "input": "Example 1 :",
+    "normalized": "",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "note": "v2: label only -> empty -> junk, not a duplicate"
+  },
+  {
+    "input": "(i) Example 2 : Find x",
+    "normalized": "find x",
+    "sha256": "a6d57905c765867492403c544c42847e0088a1fbd840ec42a71dea7c4f751d53",
+    "note": "v2: prefixes in any order -> same hash as Find x"
+  }
+]
