@@ -1,0 +1,687 @@
+{
+ "about": "Real rows from public.ncert_questions (Class 10 Mathematics, quality_status in clean/fixed/needs_review), read 28 Oct 2026. 'expected' is the reviewer's judgement from reading the question text, not a model output. Source: NCERT textbook text already stored in the repo's fixtures.",
+ "groups": [
+  {
+   "name": "F1_same_question_5_extraction_runs",
+   "description": "OCR / formatting variants of ONE question (Statistics Example 2, table text)",
+   "expected": {
+    "visible_count": 1,
+    "prefer": 7678,
+    "why": "7678 is the only row with status clean"
+   },
+   "rows": [
+    {
+     "id": 2988,
+     "chapter": "Statistics",
+     "question_number": "Example 2",
+     "question_type": "example",
+     "question_text": "The table below gives the percentage distribution of female teachers in the primary schools of rural areas of various states and union territories (U.T.) of India. Find the mean percentage of female teachers by all the three methods discussed in this section.\nPercentage of female teachers: 15 - 25 25 - 35 35 - 45 45 - 55 55 - 65 65 - 75 75 - 85\nNumber of States/U.T.: 6 11 7 4 4 2 1",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5302,
+     "created_at": "2026-08-27 05:00:14.496661+00"
+    },
+    {
+     "id": 4423,
+     "chapter": "Statistics",
+     "question_number": "Example 2",
+     "question_type": "example",
+     "question_text": "The table below gives the percentage distribution of female teachers in the primary schools of rural areas of various states and union territories (U.T.) of India. Find the mean percentage of female teachers by all the three methods discussed in this section.\n\nPercentage of female teachers: 15 - 25 | 25 - 35 | 35 - 45 | 45 - 55 | 55 - 65 | 65 - 75 | 75 - 85\nNumber of States/U.T. (fi): 6 | 11 | 7 | 4 | 4 | 2 | 1\nSource : Seventh All India School Education Survey conducted by NCERT",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 2988,
+     "garble": null,
+     "source_chunk_id": 5302,
+     "created_at": "2026-08-27 19:35:50.525309+00"
+    },
+    {
+     "id": 7678,
+     "chapter": "Statistics",
+     "question_number": "Example 2",
+     "question_type": "example",
+     "question_text": "The table below gives the percentage distribution of female teachers in the primary schools of rural areas of various states and union territories (U.T.) of India. Find the mean percentage of female teachers by all the three methods discussed in this section.\n\nPercentage of female teachers | Number of States/U.T.\n15 - 25 | 6\n25 - 35 | 11\n35 - 45 | 7\n45 - 55 | 4\n55 - 65 | 4\n65 - 75 | 2\n75 - 85 | 1",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "clean",
+     "flags": [],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5302,
+     "created_at": "2026-08-31 03:04:03.336609+00"
+    },
+    {
+     "id": 16457,
+     "chapter": "Statistics",
+     "question_number": "Example 2",
+     "question_type": "example",
+     "question_text": "The table below gives the percentage distribution of female teachers in the primary schools of rural areas of various states and union territories (U.T.) of India. Find the mean percentage of female teachers by all the three methods discussed in this section. Percentage of 15 - 25 25 - 35 35 - 45 45 - 55 55 - 65 65 - 75 75 - 85 female teachers Number of 6 1 1 74421 States/U.T. Source : Seventh All India School Education Survey conducted by NCERT",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 2988,
+     "garble": null,
+     "source_chunk_id": 5302,
+     "created_at": "2026-09-18 07:51:33.51342+00"
+    },
+    {
+     "id": 25137,
+     "chapter": "Statistics",
+     "question_number": "Example 2",
+     "question_type": "example",
+     "question_text": "The table below gives the percentage distribution of female teachers in the primary schools of rural areas of various states and union territories (U.T.) of India. Find the mean percentage of female teachers by all the three methods discussed in this section. Percentage of 15 - 25 25 - 35 35 - 45 45 - 55 55 - 65 65 - 75 75 - 85 female teachers Number of 6 1 1 74421 States/U.T.",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 2988,
+     "garble": null,
+     "source_chunk_id": 5302,
+     "created_at": "2026-09-18 18:01:10.025594+00"
+    }
+   ]
+  },
+  {
+   "name": "F2_same_question_figure_reference",
+   "description": "Same question; one copy keeps '(see Fig. 10.1)'",
+   "expected": {
+    "visible_count": 1
+   },
+   "rows": [
+    {
+     "id": 1493,
+     "chapter": "Circles",
+     "question_number": "Example 3",
+     "question_type": "diagram",
+     "question_text": "PQ is a chord of length 8 cm of a circle of radius 5 cm. The tangents at P and Q intersect at a point T (see Fig. 10.10). Find the length TP .",
+     "has_answer": true,
+     "has_image": true,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5187,
+     "created_at": "2026-08-26 18:49:28.955472+00"
+    },
+    {
+     "id": 46223,
+     "chapter": "Circles",
+     "question_number": "Example 3",
+     "question_type": "example",
+     "question_text": "PQ is a chord of length 8 cm of a circle of radius 5 cm. The tangents at P and Q intersect at a point T. Find the length TP.",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 1493,
+     "garble": null,
+     "source_chunk_id": 5187,
+     "created_at": "2026-09-19 09:10:15.864138+00"
+    }
+   ]
+  },
+  {
+   "name": "F3_label_noise_same_question",
+   "description": "Same question, labels 'Q.11' / 'Exercise 5.3 Q11'; n^2 vs n2 vs n²",
+   "expected": {
+    "visible_count": 1,
+    "needs": "label normalisation (Q.11 == Exercise 5.3 Q11)"
+   },
+   "rows": [
+    {
+     "id": 6397,
+     "chapter": "Arithmetic Progressions",
+     "question_number": "Q.11",
+     "question_type": "exercise",
+     "question_text": "If the sum of the first n terms of an AP is 4 n – n², what is the first term (that is S1)? What is the sum of first two terms? What is the second term? Similarly, find the 3rd, the 10th and the nth terms.",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5179,
+     "created_at": "2026-08-30 11:23:24.142052+00"
+    },
+    {
+     "id": 47100,
+     "chapter": "Arithmetic Progressions",
+     "question_number": "Exercise 5.3 Q11",
+     "question_type": "exercise",
+     "question_text": "If the sum of the first n terms of an AP is 4 n – n^2, what is the first term (that is S1)? What is the sum of first two terms? What is the second term? Similarly, find the 3rd, the 10th and the nth terms.",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 6397,
+     "garble": null,
+     "source_chunk_id": 5170,
+     "created_at": "2026-09-19 09:10:38.19564+00"
+    },
+    {
+     "id": 1469,
+     "chapter": "Arithmetic Progressions",
+     "question_number": "Exercise 5.3 Q11",
+     "question_type": "exercise",
+     "question_text": "11.If the sum of the first n terms of an AP is 4 n – n2, what is the first term (that is S1)? What is the sum of first two terms? What is the second term? Similarly, find the 3rd, the 10th andthe nth terms.",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 6397,
+     "garble": null,
+     "source_chunk_id": 7579,
+     "created_at": "2026-08-26 18:49:00.620995+00"
+    }
+   ]
+  },
+  {
+   "name": "F4_template_cluster_different_subparts",
+   "description": "Coordinate Geometry Exercise 7.1 Q1: (i) twice, (ii) different points",
+   "expected": {
+    "visible_count": 2,
+    "must_keep": [
+     45619
+    ],
+    "either_of": [
+     2006,
+     45618
+    ],
+    "why": "45619 is Q1(ii) with different points; a naive 'hide near_duplicate copies' removes it"
+   },
+   "rows": [
+    {
+     "id": 2006,
+     "chapter": "Coordinate Geometry",
+     "question_number": "Q 1(i)",
+     "question_type": "exercise",
+     "question_text": "Find the distance between the following pairs of points : (2, 3), (4, 1)",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5198,
+     "created_at": "2026-08-26 19:39:05.706807+00"
+    },
+    {
+     "id": 45618,
+     "chapter": "Coordinate Geometry",
+     "question_number": "Exercise 7.1 Q1 (i)",
+     "question_type": "exercise",
+     "question_text": "Find the distance between the following pair of points: (2, 3), (4, 1)",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 2006,
+     "garble": null,
+     "source_chunk_id": 5198,
+     "created_at": "2026-09-19 09:10:04.093106+00"
+    },
+    {
+     "id": 45619,
+     "chapter": "Coordinate Geometry",
+     "question_number": "Exercise 7.1 Q1 (ii)",
+     "question_type": "exercise",
+     "question_text": "Find the distance between the following pair of points: (– 5, 7), (– 1, 3)",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 2006,
+     "garble": null,
+     "source_chunk_id": 5198,
+     "created_at": "2026-09-19 09:10:04.093106+00"
+    }
+   ]
+  },
+  {
+   "name": "F5_different_subparts_short_fragments",
+   "description": "Arithmetic Progressions Example 14 (i) / (ii): different sub-questions",
+   "expected": {
+    "visible_count": 2,
+    "must_keep": [
+     25756,
+     25757
+    ]
+   },
+   "rows": [
+    {
+     "id": 25756,
+     "chapter": "Arithmetic Progressions",
+     "question_number": "Example 14 (i)",
+     "question_type": "example",
+     "question_text": "the first 1000 positive integers",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5170,
+     "created_at": "2026-09-18 18:02:22.614567+00"
+    },
+    {
+     "id": 25757,
+     "chapter": "Arithmetic Progressions",
+     "question_number": "Example 14 (ii)",
+     "question_type": "example",
+     "question_text": "the first n positive integers",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 25756,
+     "garble": null,
+     "source_chunk_id": 5170,
+     "created_at": "2026-09-18 18:02:22.614567+00"
+    }
+   ]
+  },
+  {
+   "name": "F6_same_template_different_values",
+   "description": "Areas Related to Circles, labels '6' and '7': r=15 cm / 60 deg vs r=12 cm / 120 deg",
+   "expected": {
+    "visible_count": 2,
+    "must_keep": [
+     1349,
+     1350
+    ]
+   },
+   "rows": [
+    {
+     "id": 1349,
+     "chapter": "Areas Related to Circles",
+     "question_number": "6",
+     "question_type": "exercise",
+     "question_text": "A chord of a circle of radius 15 cm subtends an angle of 60° at the centre. Find the areas of the corresponding minor and major segments of the circle. (Use π = 3.14 and √3 = 1.73)",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5158,
+     "created_at": "2026-08-26 18:40:57.058561+00"
+    },
+    {
+     "id": 1350,
+     "chapter": "Areas Related to Circles",
+     "question_number": "7",
+     "question_type": "exercise",
+     "question_text": "A chord of a circle of radius 12 cm subtends an angle of 120° at the centre. Find the area of the corresponding segment of the circle. (Use π = 3.14 and √3 = 1.73)",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 1349,
+     "garble": null,
+     "source_chunk_id": 5158,
+     "created_at": "2026-08-26 18:40:57.058561+00"
+    }
+   ]
+  },
+  {
+   "name": "F7_canonical_lost_the_blank",
+   "description": "Triangles 1.(iii): the stored canonical lost the blank, the copy keeps it",
+   "expected": {
+    "visible_count": 1,
+    "prefer": 7866,
+    "why": "'All triangles are similar. (isosceles, equilateral)' has no blank; 7866 has '________'"
+   },
+   "rows": [
+    {
+     "id": 4585,
+     "chapter": "Triangles",
+     "question_number": "1.(iii)",
+     "question_type": "exercise",
+     "question_text": "Fill in the blanks using the correct word given in brackets : All triangles are similar. (isosceles, equilateral)",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "mcq_no_answer",
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5348,
+     "created_at": "2026-08-28 11:41:33.223962+00"
+    },
+    {
+     "id": 7866,
+     "chapter": "Triangles",
+     "question_number": "1.(iii)",
+     "question_type": "exercise",
+     "question_text": "Fill in the blanks using the correct word given in brackets : (iii) All ________ triangles are similar. (isosceles, equilateral)",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "mcq_no_answer",
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 4585,
+     "garble": null,
+     "source_chunk_id": 7736,
+     "created_at": "2026-08-31 03:12:07.223666+00"
+    }
+   ]
+  },
+  {
+   "name": "F8_solution_text_not_a_duplicate",
+   "description": "Circles Example 1: second row is the worked solution ('We are given two concentric circles ...')",
+   "expected": {
+    "visible_count": 2,
+    "note": "not a duplicate; a separate fragment/solution rule would handle 12735"
+   },
+   "rows": [
+    {
+     "id": 1491,
+     "chapter": "Circles",
+     "question_number": "Example 1",
+     "question_type": "example",
+     "question_text": "Prove that in two concentric circles, the chord of the larger circle, which touches the smaller circle, is bisected at the point of contact.",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "clean",
+     "flags": [],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5187,
+     "created_at": "2026-08-26 18:49:28.955472+00"
+    },
+    {
+     "id": 12735,
+     "chapter": "Circles",
+     "question_number": "Example 1",
+     "question_type": "diagram",
+     "question_text": "We are given two concentric circles C1 and C2 with centre O and a chord AB of the larger circle C1 which touches the smaller circle C2 at the point P (see Fig. 10.8). We need to prove that AP = BP .",
+     "has_answer": true,
+     "has_image": true,
+     "quality_status": "clean",
+     "flags": [],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 7593,
+     "created_at": "2026-09-02 12:05:48.495704+00"
+    }
+   ]
+  },
+  {
+   "name": "F9_fragment_not_a_duplicate",
+   "description": "Probability Example 1: second row is the fragment '(Why ?)'",
+   "expected": {
+    "visible_count": 2,
+    "note": "not a duplicate; short_text rule, out of scope for dedupe"
+   },
+   "rows": [
+    {
+     "id": 2762,
+     "chapter": "Probability",
+     "question_number": "Example 1",
+     "question_type": "example",
+     "question_text": "Find the probability of getting a head when a coin is tossed once. Also find the probability of getting a tail.",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "clean",
+     "flags": [],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5255,
+     "created_at": "2026-08-27 04:52:35.946011+00"
+    },
+    {
+     "id": 22102,
+     "chapter": "Probability",
+     "question_number": "Example 1",
+     "question_type": "intext",
+     "question_text": "(Why ?)",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "short_text"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5255,
+     "created_at": "2026-09-18 09:10:31.77108+00"
+    }
+   ]
+  },
+  {
+   "name": "F10_whole_vs_stem_only",
+   "description": "Arithmetic Progressions Example 14: whole question vs stem-only 'Find the sum of :'",
+   "expected": {
+    "visible_count": 2,
+    "note": "granularity (rule 6) is undecided; dedupe must not decide it"
+   },
+   "rows": [
+    {
+     "id": 1456,
+     "chapter": "Arithmetic Progressions",
+     "question_number": "Example 14",
+     "question_type": "example",
+     "question_text": "Find the sum of : (i) the first 1000 positive integers (ii) the first n positive integers",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "clean",
+     "flags": [],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 7579,
+     "created_at": "2026-08-26 18:49:00.620995+00"
+    },
+    {
+     "id": 25755,
+     "chapter": "Arithmetic Progressions",
+     "question_number": "Example 14",
+     "question_type": "example",
+     "question_text": "Find the sum of :",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "short_text"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5170,
+     "created_at": "2026-09-18 18:02:22.614567+00"
+    }
+   ]
+  },
+  {
+   "name": "F11_same_question_variants_sub_part",
+   "description": "Quadratic Equations Example 1 (i): three variants of one sub-part",
+   "expected": {
+    "visible_count": 1
+   },
+   "rows": [
+    {
+     "id": 4264,
+     "chapter": "Quadratic Equations",
+     "question_number": "Example 1 (i)",
+     "question_type": "example",
+     "question_text": "John and Jivanti together have 45 marbles. Both of them lost 5 marbles each, and the product of the number of marbles they now have is 124. We would like to find out how many marbles they had to start with.",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "clean",
+     "flags": [],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5271,
+     "created_at": "2026-08-27 19:29:23.325547+00"
+    },
+    {
+     "id": 24894,
+     "chapter": "Quadratic Equations",
+     "question_number": "Example 1 (i)",
+     "question_type": "example",
+     "question_text": "Represent the following situations mathematically: John and Jivanti together have 45 marbles. Both of them lost 5 marbles each, and the product of the number of marbles they now have is 124. We would like to find out how many marbles they had to start with.",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 45873,
+     "garble": null,
+     "source_chunk_id": 5271,
+     "created_at": "2026-09-18 18:00:57.180046+00"
+    },
+    {
+     "id": 45873,
+     "chapter": "Quadratic Equations",
+     "question_number": "Example 1 (i)",
+     "question_type": "example",
+     "question_text": "Represent the following situation mathematically:\nJohn and Jivanti together have 45 marbles. Both of them lost 5 marbles each, and the product of the number of marbles they now have is 124. We would like to find out how many marbles they had to start with.",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5271,
+     "created_at": "2026-09-19 09:10:06.801645+00"
+    }
+   ]
+  },
+  {
+   "name": "F12_uncertain_short_intext",
+   "description": "Coordinate Geometry in-text prompts 'Can we/you find the distance between them'",
+   "expected": {
+    "visible_count": 2,
+    "note": "short_text, may be two prompts in the book; never auto-hide short_text pairs"
+   },
+   "rows": [
+    {
+     "id": 16421,
+     "chapter": "Coordinate Geometry",
+     "question_number": "",
+     "question_type": "intext",
+     "question_text": "Can we find the distance between them?",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": null,
+     "source_chunk_id": 5198,
+     "created_at": "2026-09-18 07:51:30.167253+00"
+    },
+    {
+     "id": 16422,
+     "chapter": "Coordinate Geometry",
+     "question_number": "",
+     "question_type": "intext",
+     "question_text": "Can you find the distance between them.",
+     "has_answer": true,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 16421,
+     "garble": null,
+     "source_chunk_id": 5198,
+     "created_at": "2026-09-18 07:51:30.167253+00"
+    }
+   ]
+  },
+  {
+   "name": "F13_exact_text_still_visible",
+   "description": "Polynomials Exercise 2.2 Q1: byte-identical text, different hash (garbled math guard)",
+   "expected": {
+    "visible_count": 1
+   },
+   "rows": [
+    {
+     "id": 2759,
+     "chapter": "Polynomials",
+     "question_number": "EXERCISE 2.2 Q1",
+     "question_type": "exercise",
+     "question_text": "1. Find the zeroes of the following quadratic polynomials and verify the relationship between the zeroes and the coefficients.\n(i) x2 – 2x – 8\n(ii) 4 s2 – 4s + 1\n(iii) 6 x2 – 3 – 7 x\n(iv) 4 u2 + 8u\n(v) t2 – 15\n(vi) 3 x2 – x – 4",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "garbled_math",
+      "near_duplicate"
+     ],
+     "near_duplicate_of": null,
+     "garble": [
+      "flattened_power"
+     ],
+     "source_chunk_id": 7647,
+     "created_at": "2026-08-27 04:52:01.036582+00"
+    },
+    {
+     "id": 4180,
+     "chapter": "Polynomials",
+     "question_number": "1",
+     "question_type": "exercise",
+     "question_text": "1.Find the zeroes of the following quadratic polynomials and verify the relationship between the zeroes and the coefficients.\n(i)x2 – 2x – 8 (ii) 4 s2 – 4s + 1 (iii) 6 x2 – 3 – 7 x (iv) 4 u2 + 8u (v)t2 – 15 (vi) 3 x2 – x – 4",
+     "has_answer": false,
+     "has_image": false,
+     "quality_status": "needs_review",
+     "flags": [
+      "garbled_math",
+      "near_duplicate"
+     ],
+     "near_duplicate_of": 2759,
+     "garble": [
+      "flattened_power"
+     ],
+     "source_chunk_id": 7647,
+     "created_at": "2026-08-27 19:25:29.062927+00"
+    }
+   ]
+  }
+ ]
+}
