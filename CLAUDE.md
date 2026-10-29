@@ -335,6 +335,23 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
 - Known after the teacher dashboard audit: users can UPDATE own profiles.coins and INSERT own coin_transactions; coins
   redeem (client-side) for ₹100–250 vouchers → needs a server-side coin ledger before any voucher is fulfilled.
   a4ai.in → www is a 307 (make it 308 in Vercel). Storage logo was served `private, no-cache`.
+- [x] Teacher dashboard Stage 3 + 3b (28 Oct, perf/teacher-dashboard, uncommitted): Test Generator. Reports
+  `docs/TEACHER_DASHBOARD_PARITY_STAGE3.md` (§K = 3b). Draft = `src/lib/testGenDraft.ts` (per user, fields validated,
+  30 days, cleared on SIGNED_OUT in AuthProvider); form mounts after auth with the draft as first values (restoring
+  after mount wiped every row's chapter). TestRowEditor renders one layout (was both, display:none) + named controls.
+  Export checked locally (`scripts/stage3-export-check.py` → backend render functions): Teacher DOCX (answers +
+  explanations) is EMPTY of answers on modern/teal/navy/dark_green/orange — backend `export_service.py:5166`, not fixed.
+  Next stage: Attendance.
+- [x] Teacher dashboard Stage 4 (28 Oct, uncommitted): Attendance tab (`TeacherAttendanceView.tsx`), report
+  `docs/TEACHER_DASHBOARD_PARITY_STAGE4.md`. A never-saved class said "Saved" with Save disabled; a failed load of saved
+  marks showed everyone Present (a save would overwrite absences) — both fixed, plus load-error / no-institute states,
+  compact layout, sonner + ui/alert-dialog. Help bubble hidden on the sheet via `body:has(.att-sheet) .a4-help`
+  (index.css). Window Esc handlers must skip `e.defaultPrevented` (Radix dialogs use Esc first, else they reopen).
+  Component inventory: `docs/TEACHER_DASHBOARD_COMPONENT_INVENTORY.md`. Next: Test History.
+- [x] Stage 4 verification gate (28 Oct): `docs/TEACHER_DASHBOARD_PARITY_STAGE4_VERIFICATION.md` = PARTIALLY VERIFIED
+  (mock browser + read-only live function defs; no test account). Live `get_monthly_attendance` returns 0.00 when
+  total_held = 0 → show % only when total_held > 0. Dashboard `<header>` is sticky below 1024 px; the sheet header
+  sticks under it (`useStickyOffset`). Server: teacher edit window 2 days, proctor 7, HOD/admin none, IST.
 - Known after the landing redesign: landing LCP ≈ 5 s on throttled mobile (1.6 Mbps/150 ms/4× CPU) — SPA renders nothing
   until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
   `Magical_FREE_AI_Tools.jpeg` are not used.

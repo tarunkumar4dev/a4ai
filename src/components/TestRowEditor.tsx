@@ -595,7 +595,7 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
   }, [isAccountancy, currentFormat, index, setValue]);
 
   return (
-    <div className="flex gap-1.5 flex-wrap">
+    <div role="group" aria-label={`Section ${index + 1} question type`} className="flex gap-1.5 flex-wrap">
       {visibleFormats.map((fmt) => {
         const isActive = currentFormat === fmt.value;
         const Icon = fmt.icon;
@@ -603,6 +603,7 @@ const FormatSelector = memo(({ index, subject }: { index: number; subject: strin
           <button
             key={fmt.value}
             type="button"
+            aria-pressed={isActive}
             onClick={() => setValue(`simpleData.${index}.format`, fmt.value)}
             className={`min-h-[36px] px-3 py-2 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all border ${
               isActive ? `${fmt.color} border-transparent shadow-sm` : "bg-white text-gray-500 border-[#E5E7EB]"
@@ -625,6 +626,7 @@ const MobileCard = memo(({
   index, field, availableTopics, chapterGroups, subtopicsMap, chaptersLoading, remove, isCbseMode,
 }: RowProps) => {
   const { control, watch, setValue } = useFormContext<FormValues>();
+  const uid = React.useId();
 
   // Read-only derivations (for subtopic options + disabled logic).
   // NOTE: every <select> binding is via <Controller> below — NOT this watch —
@@ -653,6 +655,7 @@ const MobileCard = memo(({
         <button
           type="button"
           onClick={() => remove(index)}
+          aria-label={`Remove section ${index + 1}`}
           className="min-w-[36px] min-h-[36px] p-2 rounded-full text-gray-400 active:bg-red-50 active:text-red-500 transition-colors"
           style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
         >
@@ -662,13 +665,14 @@ const MobileCard = memo(({
 
       {/* ✅ v8: Chapter — Controller (no snap-back on mobile) */}
       <div>
-        <label className={labelClass}>Chapter</label>
+        <label htmlFor={`${uid}-chapter`} className={labelClass}>Chapter</label>
         <div className="relative">
           <Controller
             name={`simpleData.${index}.topic`}
             control={control}
             render={({ field: f }) => (
               <select
+                id={`${uid}-chapter`}
                 value={f.value ?? ""}
                 onChange={(e) => {
                   f.onChange(e.target.value);
@@ -696,12 +700,13 @@ const MobileCard = memo(({
 
       {/* ✅ v8: Subtopic — Controller */}
       <div>
-        <label className={labelClass}>Subtopic (optional)</label>
+        <label htmlFor={`${uid}-subtopic`} className={labelClass}>Subtopic (optional)</label>
         <Controller
           name={`simpleData.${index}.subtopic`}
           control={control}
           render={({ field: f }) => (
             <select
+              id={`${uid}-subtopic`}
               value={f.value ?? ""}
               onChange={(e) => f.onChange(e.target.value)}
               onBlur={f.onBlur}
@@ -730,12 +735,13 @@ const MobileCard = memo(({
           {/* ✅ v9: Quantity + Marks — Controller (no snap-back on mobile) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Quantity</label>
+              <label htmlFor={`${uid}-quantity`} className={labelClass}>Quantity</label>
               <Controller
                 name={`simpleData.${index}.quantity`}
                 control={control}
                 render={({ field: f }) => (
                   <select
+                    id={`${uid}-quantity`}
                     value={f.value ?? 5}
                     onChange={(e) => f.onChange(Number(e.target.value))}
                     onBlur={f.onBlur}
@@ -747,12 +753,13 @@ const MobileCard = memo(({
               />
             </div>
             <div>
-              <label className={labelClass}>Marks each</label>
+              <label htmlFor={`${uid}-marks`} className={labelClass}>Marks each</label>
               <Controller
                 name={`simpleData.${index}.marks`}
                 control={control}
                 render={({ field: f }) => (
                   <select
+                    id={`${uid}-marks`}
                     value={f.value ?? 1}
                     onChange={(e) => f.onChange(Number(e.target.value))}
                     onBlur={f.onBlur}
@@ -767,12 +774,13 @@ const MobileCard = memo(({
 
           {/* ✅ v9: Difficulty — Controller */}
           <div>
-            <label className={labelClass}>Difficulty</label>
+            <label htmlFor={`${uid}-difficulty`} className={labelClass}>Difficulty</label>
             <Controller
               name={`simpleData.${index}.difficulty`}
               control={control}
               render={({ field: f }) => (
                 <select
+                  id={`${uid}-difficulty`}
                   value={f.value ?? "Medium"}
                   onChange={(e) => f.onChange(e.target.value)}
                   onBlur={f.onBlur}
@@ -789,7 +797,7 @@ const MobileCard = memo(({
 
           {/* Format */}
           <div>
-            <label className={labelClass}>Question Type</label>
+            <span className={labelClass}>Question Type</span>
             <FormatSelector index={index} subject={subject} />
           </div>
         </>
@@ -835,6 +843,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
               control={control}
               render={({ field: f }) => (
                 <select
+                  aria-label={`Section ${index + 1} chapter`}
                   value={f.value ?? ""}
                   onChange={(e) => {
                     f.onChange(e.target.value);
@@ -862,6 +871,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
               control={control}
               render={({ field: f }) => (
                 <select
+                  aria-label={`Section ${index + 1} subtopic (optional)`}
                   value={f.value ?? ""}
                   onChange={(e) => f.onChange(e.target.value)}
                   onBlur={f.onBlur}
@@ -895,6 +905,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
               control={control}
               render={({ field: f }) => (
                 <select
+                  aria-label={`Section ${index + 1} quantity`}
                   value={f.value ?? 5}
                   onChange={(e) => f.onChange(Number(e.target.value))}
                   onBlur={f.onBlur}
@@ -913,6 +924,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
               control={control}
               render={({ field: f }) => (
                 <select
+                  aria-label={`Section ${index + 1} marks each`}
                   value={f.value ?? 1}
                   onChange={(e) => f.onChange(Number(e.target.value))}
                   onBlur={f.onBlur}
@@ -931,6 +943,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
               control={control}
               render={({ field: f }) => (
                 <select
+                  aria-label={`Section ${index + 1} difficulty`}
                   value={f.value ?? "Medium"}
                   onChange={(e) => f.onChange(e.target.value)}
                   onBlur={f.onBlur}
@@ -957,6 +970,7 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
           whileTap={{ scale: 0.9 }}
           type="button"
           onClick={() => remove(index)}
+          aria-label={`Remove section ${index + 1}`}
           className="p-2 rounded-full bg-white border border-transparent hover:border-red-100 hover:bg-red-50 text-gray-300 hover:text-red-500 transition-all shadow-sm"
         >
           <Trash2 size={16} />
@@ -967,10 +981,27 @@ const TableRow = memo(forwardRef<HTMLTableRowElement, RowProps>(({
 }));
 TableRow.displayName = "TableRow";
 
+// One layout in the DOM at a time. Both used to render (one hidden by CSS), so every row's long chapter list
+// was built twice. Same switch point as before: Tailwind `sm` (640px). Read on the first render, so phones
+// don't flash the table first.
+const WIDE_QUERY = "(min-width: 640px)";
+function useIsWide() {
+  const [wide, setWide] = useState(() => typeof window !== "undefined" && window.matchMedia(WIDE_QUERY).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(WIDE_QUERY);
+    const onChange = () => setWide(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return wide;
+}
+
 // ==================== SIMPLE MODE VIEW ====================
 const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false }) => {
   const { control, watch, setValue: setFormValue } = useFormContext<FormValues>();
   const { fields, append, remove } = useFieldArray({ control, name: "simpleData" });
+  const isWide = useIsWide();
 
   const classLevel     = watch("classGrade") ?? "";
   const currentSubject = watch("subject") ?? "";
@@ -1079,7 +1110,8 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
       {classLevel && currentSubject && finalChapters.length > 0 && (
         <>
           {/* MOBILE */}
-          <div className="block sm:hidden p-3 space-y-3">
+          {!isWide && (
+          <div className="p-3 space-y-3">
             <AnimatePresence>
               {fields.map((field, index) => (
                 <MobileCard
@@ -1096,9 +1128,11 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
               ))}
             </AnimatePresence>
           </div>
+          )}
 
           {/* DESKTOP */}
-          <div className="hidden sm:block overflow-x-auto">
+          {isWide && (
+          <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <caption className="sr-only">Test configuration table</caption>
               <thead>
@@ -1140,6 +1174,7 @@ const SimpleModeView: React.FC<{ isCbseMode?: boolean }> = ({ isCbseMode = false
               </tbody>
             </table>
           </div>
+          )}
 
           <motion.button
             whileTap={{ scale: 0.99 }}

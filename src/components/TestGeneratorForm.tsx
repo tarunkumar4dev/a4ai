@@ -18,6 +18,7 @@ import { SummaryStats } from "./SummaryStats";
 import GeneratedTestView from "./GeneratedTestView";
 import { useTestGenerator } from "@/hooks/useTestGenerator";
 import { useAuth } from "@/providers/AuthProvider";
+import { loadDraft, saveDraft } from "@/lib/testGenDraft";
 
 // ═══════════════════════════════════════════════════════════════════════
 // SUBJECT CONFIG
@@ -36,161 +37,50 @@ const ALL_BOARDS = [
 
 const CLASS_OPTIONS = ["Class 9", "Class 10", "Class 11", "Class 12"];
 
-// ═══════════════════════════════════════════════════════════════════════
-// PROGRESS ENGINE
-// 5s → 5%  |  25s → 17%  |  40s → 37%  |  60s → 75%
-// 60s ke baad 75% pe hold, API response aate hi seedha 100%.
-// ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════
+// GENERATION STATUS
+// The generate call returns one response when the paper is finished. There is no progress feed,
+// so this shows elapsed time only: no percentage, no invented estimate.
+// ═══════════════════════════════════════
 
-const PROGRESS_STEPS: { t: number; p: number }[] = [
-  { t: 0,  p: 0 },
-  { t: 5,  p: 5 },
-  { t: 25, p: 17 },
-  { t: 40, p: 37 },
-  { t: 60, p: 75 },
-];
-
-function progressForElapsed(seconds: number): number {
-  const last = PROGRESS_STEPS[PROGRESS_STEPS.length - 1];
-  if (seconds >= last.t) return last.p;
-
-  for (let i = 1; i < PROGRESS_STEPS.length; i++) {
-    const prev = PROGRESS_STEPS[i - 1];
-    const next = PROGRESS_STEPS[i];
-    if (seconds <= next.t) {
-      const ratio = (seconds - prev.t) / (next.t - prev.t);
-      return prev.p + (next.p - prev.p) * ratio;
-    }
+// Collects every validation message (nested rows included) so the teacher sees what to fix after a failed submit.
+function collectMessages(node: unknown, out: string[] = []): string[] {
+  if (!node || typeof node !== "object") return out;
+  const rec = node as Record<string, unknown>;
+  if (typeof rec.message === "string" && rec.message && !out.includes(rec.message)) out.push(rec.message);
+  for (const key of Object.keys(rec)) {
+    if (key !== "message" && key !== "ref" && key !== "type") collectMessages(rec[key], out);
   }
-  return 0;
+  return out;
 }
 
-function statusForProgress(p: number): string {
-  if (p >= 100) return "Paper ready";
-  if (p >= 75)  return "Formatting the paper";
-  if (p >= 37)  return "Writing questions and answers";
-  if (p >= 17)  return "Reading NCERT chapters";
-  return "Setting up the blueprint";
-}
-
-function useGenerationProgress(isRunning: boolean, hasError: boolean) {
-  const [progress, setProgress] = useState(0);
-  const [visible, setVisible] = useState(false);
-  const tickRef = useRef<number | null>(null);
-  const hideRef = useRef<number | null>(null);
-  const wasRunning = useRef(false);
-  const errorRef = useRef(hasError);
-  errorRef.current = hasError;
-
+function useElapsedSeconds(isRunning: boolean) {
+  const [seconds, setSeconds] = useState(0);
   useEffect(() => {
-    const stopTick = () => {
-      if (tickRef.current !== null) {
-        window.clearInterval(tickRef.current);
-        tickRef.current = null;
-      }
-    };
-
-    if (isRunning) {
-      if (hideRef.current !== null) {
-        window.clearTimeout(hideRef.current);
-        hideRef.current = null;
-      }
-      wasRunning.current = true;
-      setVisible(true);
-      setProgress(0);
-
-      const startedAt = Date.now();
-      tickRef.current = window.setInterval(() => {
-        setProgress(progressForElapsed((Date.now() - startedAt) / 1000));
-      }, 100);
-    } else {
-      stopTick();
-      if (wasRunning.current) {
-        wasRunning.current = false;
-        if (errorRef.current) {
-          // fail hua toh 100% dikhane ka koi matlab nahi
-          setVisible(false);
-          setProgress(0);
-        } else {
-          setProgress(100);
-          hideRef.current = window.setTimeout(() => {
-            setVisible(false);
-            setProgress(0);
-          }, 900);
-        }
-      }
-    }
-
-    return stopTick;
+    if (!isRunning) return;
+    const startedAt = Date.now();
+    setSeconds(0);
+    const id = window.setInterval(() => setSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => window.clearInterval(id);
   }, [isRunning]);
-
-  useEffect(() => () => {
-    if (hideRef.current !== null) window.clearTimeout(hideRef.current);
-  }, []);
-
-  return { progress, visible };
+  return seconds;
 }
 
-const GenerationProgress = ({ progress, visible }: { progress: number; visible: boolean }) => (
-  <AnimatePresence>
-    {visible && (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        className="fixed inset-0 z-[100] flex items-center justify-center px-5 bg-[#F9FAFB]/80 backdrop-blur-md"
-        role="status"
-        aria-live="polite"
-      >
-        <style>{`
-          @keyframes a4aiSheen { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
-          @media (prefers-reduced-motion: reduce) { .a4ai-sheen { animation: none !important; } }
-        `}</style>
-
-        <motion.div
-          initial={{ y: 12, scale: 0.98 }}
-          animate={{ y: 0, scale: 1 }}
-          transition={{ type: "spring", stiffness: 140, damping: 20 }}
-          className="w-full max-w-md bg-white rounded-2xl sm:rounded-[24px] border border-white/60
-            shadow-[0_20px_60px_rgba(0,0,0,0.10)] px-5 py-6 sm:px-8 sm:py-8"
-        >
-          <div className="flex items-end justify-between gap-3 mb-4">
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                Generating
-              </p>
-              <p className="text-[13px] sm:text-sm font-bold text-[#111827] mt-1 truncate">
-                {statusForProgress(progress)}
-              </p>
-            </div>
-            <p className="text-3xl sm:text-4xl font-black tabular-nums leading-none text-[#1E5BD6] flex-shrink-0">
-              {Math.round(progress)}
-              <span className="text-lg sm:text-xl font-bold">%</span>
-            </p>
-          </div>
-
-          <div className="relative h-3.5 w-full rounded-full bg-gray-100 overflow-hidden">
-            <div
-              className="relative h-full rounded-full bg-gradient-to-r from-[#1E5BD6] to-[#4F86F7]
-                transition-[width] duration-300 ease-out"
-              style={{ width: `${Math.max(progress, 3)}%` }}
-            >
-              <div
-                className="a4ai-sheen absolute inset-0 bg-gradient-to-r from-transparent via-white/45 to-transparent"
-                style={{ animation: "a4aiSheen 1.6s linear infinite" }}
-              />
-            </div>
-          </div>
-
-          <p className="mt-4 text-[11px] sm:text-xs text-gray-400 text-center">
-            Keep this tab open — a full paper usually takes 60–120 seconds.
-          </p>
-        </motion.div>
-      </motion.div>
-    )}
-  </AnimatePresence>
-);
+const GenerationStatus = ({ running, seconds }: { running: boolean; seconds: number }) => {
+  if (!running) return null;
+  return (
+    <div role="status" aria-live="polite" className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4">
+      <Loader2 size={18} className="mt-0.5 flex-shrink-0 animate-spin text-[#111111]" aria-hidden="true" />
+      <div className="min-w-0">
+        <p className="text-sm font-bold text-[#1B1B1B]">Generating your paper…</p>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Elapsed {seconds}s. The paper is sent only when it is finished, so there is no partial progress to show.
+          You can leave this page open; your settings stay filled in.
+        </p>
+      </div>
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════
 // STYLED COMPONENTS
@@ -315,7 +205,16 @@ type TestGeneratorFormProps = {
   onGenerated?: () => void;
 };
 
-export default function TestGeneratorForm({
+// Waits for auth so this user's draft is part of the form's FIRST values. Restoring it after mount made the row
+// editor see a class/subject change and clear every chapter. The key remounts the form when the account changes,
+// so nothing typed by one user stays on screen for the next.
+export default function TestGeneratorForm(props: TestGeneratorFormProps) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-[60vh]" aria-busy="true" />;
+  return <GeneratorForm key={user?.id ?? "guest"} {...props} />;
+}
+
+function GeneratorForm({
   canGenerate = true,
   onBlocked,
   onGenerated,
@@ -327,8 +226,7 @@ export default function TestGeneratorForm({
   const { generate, isLoading, result, error, reset } = useTestGenerator();
   const { user } = useAuth();
 
-  // progress bar state
-  const { progress, visible: progressVisible } = useGenerationProgress(isLoading, !!error);
+  const elapsed = useElapsedSeconds(isLoading);
 
   // success hone par ek hi baar parent ko batao
   const notifiedRef = useRef(false);
@@ -340,20 +238,39 @@ export default function TestGeneratorForm({
     if (!result) notifiedRef.current = false;
   }, [result, onGenerated]);
 
-  const methods = useForm<FormSchema>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
+  // Signed-in users get their local draft (src/lib/testGenDraft.ts) as the starting values; guests start blank.
+  const userId = user?.id ?? null;
+  const [initialValues] = useState(() => {
+    const draft = userId ? loadDraft(userId) : null;
+    // a class this form doesn't offer would leave no subject and no rows
+    if (draft?.classGrade && !CLASS_OPTIONS.includes(draft.classGrade)) {
+      delete draft.classGrade;
+      delete draft.subject;
+    }
+    return {
       examTitle: "",
       paperDate: new Date().toISOString().split("T")[0],
       board: "CBSE",
       classGrade: "Class 10",
       subject: "Science",
       mode: "Simple",
-      simpleData: [{ id: "1", topic: "", quantity: 5, marks: 1, difficulty: "Medium", format: "MCQ" }],
+      simpleData: [{ id: "1", topic: "", quantity: 5, marks: 1, difficulty: "Medium" as const, format: "MCQ" }],
       useNCERT: true,
       ncertChapters: [],
-    },
+      ...draft,
+    };
   });
+
+  const methods = useForm<FormSchema>({
+    resolver: zodResolver(formSchema),
+    defaultValues: initialValues,
+  });
+
+  useEffect(() => {
+    if (!userId) return;
+    const sub = methods.watch((values) => saveDraft(userId, values as Record<string, unknown>));
+    return () => sub.unsubscribe();
+  }, [userId, methods]);
 
   const classGrade = useWatch({ control: methods.control, name: "classGrade" });
   const subject    = useWatch({ control: methods.control, name: "subject" });
@@ -389,7 +306,7 @@ export default function TestGeneratorForm({
   if (result) {
     return (
       <>
-        <GenerationProgress progress={progress} visible={progressVisible} />
+        <GenerationStatus running={isLoading} seconds={elapsed} />
         <div className="space-y-4 sm:space-y-6 pb-28 sm:pb-32">
           <GeneratedTestView result={result} onReset={reset} logoBase64={logoBase64} />
         </div>
@@ -409,8 +326,9 @@ export default function TestGeneratorForm({
 
   return (
     <FormProvider {...methods}>
-      {/* PROGRESS OVERLAY — purana timer/loader iske neeche chhup jata hai */}
-      <GenerationProgress progress={progress} visible={progressVisible} />
+      <div className="mb-4">
+        <GenerationStatus running={isLoading} seconds={elapsed} />
+      </div>
 
       <motion.form
         onSubmit={methods.handleSubmit(onSubmit)}
@@ -533,6 +451,18 @@ export default function TestGeneratorForm({
           </motion.div>
         )}
 
+        {/* VALIDATION SUMMARY: a failed submit used to fail silently */}
+        {methods.formState.submitCount > 0 && collectMessages(methods.formState.errors).length > 0 && (
+          <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-bold">Fill in these fields to generate the paper:</p>
+            <ul className="mt-1 list-disc pl-5">
+              {collectMessages(methods.formState.errors).slice(0, 6).map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* ERROR DISPLAY */}
         <AnimatePresence>
           {error && (
@@ -546,6 +476,16 @@ export default function TestGeneratorForm({
               <div className="min-w-0">
                 <p className="text-[13px] sm:text-sm font-bold text-red-800">Generation Failed</p>
                 <p className="text-[12px] sm:text-sm text-red-600 mt-1 break-words">{error}</p>
+                {canGenerate && (
+                  <button
+                    type="button"
+                    onClick={() => { void methods.handleSubmit(onSubmit)(); }}
+                    disabled={isLoading}
+                    className="mt-3 inline-flex min-h-[44px] items-center rounded-xl bg-[#111111] px-4 text-sm font-bold text-white hover:bg-[#222222] disabled:opacity-50"
+                  >
+                    Try again with the same settings
+                  </button>
+                )}
               </div>
             </motion.div>
           )}
@@ -570,10 +510,6 @@ export default function TestGeneratorForm({
           >
             <div className="flex items-center justify-center sm:justify-start px-1 sm:px-0">
               <div className="flex items-center gap-1.5 sm:gap-2 text-gray-400">
-                <Clock size={14} className="flex-shrink-0" />
-                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">
-                  Est: <span className="text-white">{cbsePattern ? "60-120s" : "30-90s"}</span>
-                </span>
                 {cbsePattern && (
                   <span className="text-[9px] sm:text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold hidden xs:inline">CBSE</span>
                 )}
@@ -599,7 +535,7 @@ export default function TestGeneratorForm({
                 type="submit"
                 disabled={isLoading}
                 className="px-5 sm:px-8 py-3 sm:py-3.5
-                  bg-gradient-to-br from-gray-700 to-gray-900
+                  bg-[#111111] hover:bg-[#222222]
                   rounded-xl font-bold text-[13px] sm:text-sm text-white
                   shadow-[0_4px_14px_rgba(0,0,0,0.4)]
                   active:shadow-[0_2px_8px_rgba(0,0,0,0.5)]

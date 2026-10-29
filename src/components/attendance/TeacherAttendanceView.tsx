@@ -1,15 +1,28 @@
 // src/components/attendance/TeacherAttendanceView.tsx
 // Mobile-first teacher attendance — session-based schema
-// Flow: Calendar + Today's classes / Manual pick → Attendance sheet → Save via save_class_attendance() RPC
+// Flow: Date + the day's classes / Manual pick → Attendance sheet → Save via save_class_attendance() RPC
 //
 // ACCESS (enforced server-side in attendance_access.sql):
 //   Teacher → only the (batch, subject) pairs assigned to them (teaching_assignments / timetable_slots)
 //   HOD     → + every class in their department     Admin/owner → + every class in the institute
 //   Legacy subject-named batches (no section) are hidden in 'full' hierarchy institutes.
+//
+// SAVE STATE (what the teacher is told must match the server):
+//   • A class with no saved marks opens with everyone on Present. That is a starting point, not a record:
+//     it says "Not saved yet" and Save is enabled until the server confirms.
+//   • If saved marks can't be loaded, the sheet does not open (it would show everyone Present and a save
+//     would overwrite the real marks).
+//   • A failed save stays on screen until the next save works.
 
 import React, { useState, useMemo, useCallback, useEffect, memo, useRef } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /* ───── TYPES ───── */
 type Status = "present" | "absent" | "leave";
@@ -19,6 +32,7 @@ interface Student {
   name: string;
   rollNo?: string;
   status: Status;
+  /** this month's %, only when the server returned one */
   pct?: number;
 }
 
@@ -43,141 +57,112 @@ const classLabel = (t: { batchName: string; sectionName?: string | null }) =>
   t.sectionName && t.sectionName !== t.batchName ? `${t.sectionName} · ${t.batchName}` : t.batchName;
 
 /* ───── CONSTANTS ───── */
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
-const DAYS_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-const STATUS_CFG: Record<Status, { label: string; full: string; bg: string; text: string; ring: string; dot: string; rowBg: string }> = {
-  present: { label: "P", full: "Present", bg: "bg-emerald-500", text: "text-white", ring: "ring-emerald-400/60", dot: "bg-emerald-500", rowBg: "bg-emerald-50/60 dark:bg-emerald-950/20" },
-  absent:  { label: "A", full: "Absent",  bg: "bg-red-500",     text: "text-white", ring: "ring-red-400/60",     dot: "bg-red-500",     rowBg: "bg-red-50/60 dark:bg-red-950/20" },
-  leave:   { label: "L", full: "Leave",   bg: "bg-blue-500",    text: "text-white", ring: "ring-blue-400/60",    dot: "bg-blue-500",    rowBg: "bg-blue-50/60 dark:bg-blue-950/20" },
+const STATUS_CFG: Record<Status, { short: string; full: string; on: string; edge: string }> = {
+  present: { short: "P", full: "Present", on: "bg-emerald-600 text-white border-emerald-600", edge: "border-l-transparent" },
+  absent:  { short: "A", full: "Absent",  on: "bg-red-600 text-white border-red-600",         edge: "border-l-red-500" },
+  leave:   { short: "L", full: "Leave",   on: "bg-blue-600 text-white border-blue-600",       edge: "border-l-blue-500" },
 };
+const STATUSES: Status[] = ["present", "absent", "leave"];
+
+const LOAD_ERROR = "Couldn't load your classes. Check your connection and try again.";
+const SHEET_ERROR = "Couldn't load this class. Nothing was changed. Try again.";
 
 function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const fromDateStr = (s: string) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+
+const CARD = "rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-slate-900";
+const BTN_PRIMARY = "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-[#111111] px-4 text-sm font-semibold text-white hover:bg-[#222222] disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-[#111111] dark:hover:bg-gray-200";
+const BTN_SECONDARY = "inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-[#1B1B1B] hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800";
+const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2 dark:focus-visible:ring-white";
 
 /* ───── INLINE SVG ICONS ───── */
 const Icon = {
-  Back: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>,
-  Calendar: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
-  Users: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-  ChevL: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>,
-  ChevR: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>,
-  Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
-  Clock: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-  Search: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
-  Save: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
-  Undo: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>,
-  Spin: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
-  X: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  Book: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+  Back: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>,
+  ChevL: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>,
+  ChevR: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>,
+  Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>,
+  Search: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+  Spin: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+  X: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
 };
 
-/* ───── TOAST ───── */
-type Toast = { id: number; msg: string; type: string };
-let _tid = 0;
-
-function Toasts({ items, onDismiss }: { items: Toast[]; onDismiss: (id: number) => void }) {
-  if (!items.length) return null;
-  return (
-    <div className="fixed top-3 left-3 right-3 sm:left-auto sm:right-4 sm:top-4 sm:w-80 z-[9999] flex flex-col gap-2 pointer-events-none">
-      {items.map(t => (
-        <div key={t.id} onClick={() => onDismiss(t.id)}
-          className={`rounded-2xl px-4 py-3 text-[13px] font-semibold shadow-xl pointer-events-auto cursor-pointer flex items-center gap-2 ${
-            t.type === "error" ? "bg-red-900 text-red-100" : t.type === "info" ? "bg-slate-800 text-slate-100" : "bg-emerald-800 text-emerald-100"
-          }`}>
-          <span>{t.type === "error" ? "⚠️" : t.type === "info" ? "ℹ️" : "✅"}</span>
-          <span className="flex-1 min-w-0">{t.msg}</span>
-        </div>
-      ))}
-    </div>
-  );
+// The teacher dashboard's own header is sticky below 1024 px (TeacherDashboardPage <main> > … > <header>).
+// The sheet header sticks just under it instead of sliding behind it. 0 when that header isn't sticky or isn't found.
+function useStickyOffset(ref: React.RefObject<HTMLElement>, active: boolean) {
+  const [top, setTop] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const header = ref.current?.closest("main")?.querySelector("header") as HTMLElement | null;
+    if (!header) return;
+    const update = () => setTop(getComputedStyle(header).position === "sticky" ? header.offsetHeight : 0);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(header);
+    window.addEventListener("resize", update);
+    return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+  }, [ref, active]);
+  return top;
 }
 
-/* ───── CONFIRM MODAL ───── */
-function Confirm({ open, onClose, onOk, title, msg, ok = "Confirm", warn = false }: {
-  open: boolean; onClose: () => void; onOk: () => void; title: string; msg: string; ok?: string; warn?: boolean;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4" onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
-        className="bg-white dark:bg-slate-900 w-full sm:max-w-sm sm:rounded-2xl rounded-t-3xl p-6 shadow-2xl animate-[slideUp_0.25s_ease-out] sm:animate-[popIn_0.2s_ease-out]">
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h3>
-        <p className="text-sm text-slate-500 mt-2">{msg}</p>
-        <div className="flex gap-3 mt-6 justify-end">
-          <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 active:bg-slate-100 dark:active:bg-slate-800 touch-manipulation">Cancel</button>
-          <button onClick={() => { onOk(); onClose(); }}
-            className={`px-5 py-2.5 rounded-xl text-sm font-bold text-white touch-manipulation active:scale-95 ${warn ? "bg-red-500" : "bg-blue-500"}`}>{ok}</button>
-        </div>
-      </div>
+/* ───── STUDENT ROW ───── */
+const StudentRow = memo(({ s, n, onMark }: { s: Student; n: number; onMark: (id: string, st: Status) => void }) => (
+  <li className={`flex items-center gap-3 border-l-4 px-3 py-2.5 sm:px-4 ${STATUS_CFG[s.status].edge}`}>
+    <span className="w-6 shrink-0 text-right text-xs font-medium tabular-nums text-gray-400">{n}</span>
+    <div className="min-w-0 flex-1">
+      <p className="truncate text-sm font-semibold text-[#1B1B1B] dark:text-white">{s.name}</p>
+      <p className="truncate text-xs text-gray-500 dark:text-slate-400">
+        {s.rollNo || "No roll no."}
+        {s.pct !== undefined && <> · {s.pct}% this month</>}
+      </p>
     </div>
-  );
-}
-
-/* ───── STUDENT CARD (mobile + desktop) ───── */
-const StudentCard = memo(({ s, idx, onMark }: { s: Student; idx: number; onMark: (id: string, st: Status) => void }) => {
-  const initials = s.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  const hue = (idx * 37) % 360;
-  const pct = s.pct ?? 0;
-  const cfg = STATUS_CFG[s.status];
-
-  return (
-    <div className={`rounded-2xl p-3 sm:p-4 border border-slate-200/60 dark:border-white/5 transition-colors ${cfg.rowBg}`}>
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0"
-          style={{ background: `hsl(${hue}, 50%, 50%)` }}>{initials}</div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-sm text-slate-800 dark:text-white truncate">{s.name}</p>
-          <p className="text-[11px] text-slate-400 font-medium">
-            #{idx + 1}{s.rollNo ? ` · ${s.rollNo}` : ""} ·{" "}
-            <span className={pct >= 75 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-red-500"}>{pct}% this month</span>
-          </p>
-        </div>
-        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />
-      </div>
-      <div className="flex gap-2">
-        {(["present", "absent", "leave"] as Status[]).map(st => {
-          const active = s.status === st;
-          const c = STATUS_CFG[st];
-          return (
-            <button key={st} onClick={() => onMark(s.id, st)}
-              className={`flex-1 h-12 rounded-xl font-bold text-sm transition-all active:scale-[0.96] touch-manipulation select-none ${
-                active ? `${c.bg} ${c.text} shadow-md ring-2 ${c.ring}` : "bg-white/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-              }`}>{c.full}</button>
-          );
-        })}
-      </div>
+    <div role="group" aria-label={`Attendance for ${s.name}`} className="flex shrink-0 gap-1">
+      {STATUSES.map(st => {
+        const c = STATUS_CFG[st];
+        const active = s.status === st;
+        return (
+          <button key={st} type="button" onClick={() => onMark(s.id, st)} aria-pressed={active} aria-label={c.full}
+            className={`h-11 min-w-[44px] rounded-lg border px-2 text-sm font-semibold touch-manipulation select-none sm:min-w-[76px] ${FOCUS} ${
+              active ? c.on : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-400"
+            }`}>
+            <span className="sm:hidden">{c.short}</span>
+            <span className="hidden sm:inline">{c.full}</span>
+          </button>
+        );
+      })}
     </div>
-  );
-});
-StudentCard.displayName = "StudentCard";
+  </li>
+));
+StudentRow.displayName = "StudentRow";
 
 /* ═══════════════════════════════════════════════════════════
    MAIN
 ═══════════════════════════════════════════════════════════ */
 export default function TeacherAttendanceView() {
   const { user } = useAuth();
-  const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
 
   const [selected, setSelected] = useState<SessionTarget | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [original, setOriginal] = useState<Student[]>([]);
   const [date, setDate] = useState(() => new Date());
-  const [calM, setCalM] = useState(() => new Date().getMonth());
-  const [calY, setCalY] = useState(() => new Date().getFullYear());
 
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const [confirm, setConfirm] = useState<{ title: string; msg: string; ok: string; warn: boolean; fn: () => void } | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; msg: string; ok: string; fn: () => void } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Status | "all">("all");
   const [saving, setSaving] = useState(false);
   const [loadingSheet, setLoadingSheet] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  /** the server has marks for this class + date */
+  const [hasSaved, setHasSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
 
   const [instId, setInstId] = useState<string | null>(null);
+  const [noInstitute, setNoInstitute] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionTarget[]>([]);
   const [assigns, setAssigns] = useState<SessionTarget[]>([]);
   // batch_id → class teacher (proctor) name, so the teacher knows who receives the marks
@@ -186,36 +171,36 @@ export default function TeacherAttendanceView() {
   const [pickBatch, setPickBatch] = useState("");
   const [pickSubj, setPickSubj] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-
-  const toast = useCallback((msg: string, type = "success") => {
-    const id = ++_tid;
-    setToasts(p => [...p.slice(-3), { id, msg, type }]);
-    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
-  }, []);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const stickyTop = useStickyOffset(sheetRef, !!selected);
 
   // ── Load data (scope decided by the server from the caller's role) ──
   const load = useCallback(async () => {
     if (!user?.id) return;
     setLoading(true);
+    setLoadError(null);
     try {
       let targetInstId: string | null = null;
 
-      const { data: mem } = await supabase.from("institute_members")
+      const { data: mem, error: memErr } = await supabase.from("institute_members")
         .select("institute_id")
         .eq("user_id", user.id)
         .eq("status", "active")
         .limit(1)
         .maybeSingle();
+      if (memErr) throw memErr;
 
       if (mem?.institute_id) {
         targetInstId = mem.institute_id;
       } else {
-        const { data: ownedInst } = await supabase.from("institutes")
+        const { data: ownedInst, error: ownErr } = await supabase.from("institutes")
           .select("id").eq("owner_id", user.id).limit(1).maybeSingle();
+        if (ownErr) throw ownErr;
         targetInstId = ownedInst?.id ?? null;
       }
 
-      if (!targetInstId) { setLoading(false); return; }
+      setNoInstitute(!targetInstId);
+      if (!targetInstId) { setSessions([]); setAssigns([]); setLoading(false); return; }
       setInstId(targetInstId);
       const ds = toDateStr(date);
 
@@ -227,9 +212,10 @@ export default function TeacherAttendanceView() {
         // 3. Who is the class teacher (proctor) of each of my classes — proctor_dashboard.sql
         supabase.rpc("get_my_class_teachers", { p_institute_id: targetInstId }),
       ]);
-      if (sessRes.error) console.error("get_teacher_day_sessions:", sessRes.error);
-      if (tgtRes.error) console.error("get_my_teaching_targets:", tgtRes.error);
-      if (ctRes.error) console.error("get_my_class_teachers:", ctRes.error);
+      // An empty list after a failed call would read as "no classes assigned"; show the failure instead.
+      if (sessRes.error) throw sessRes.error;
+      if (tgtRes.error) throw tgtRes.error;
+      if (ctRes.error) console.error("get_my_class_teachers:", ctRes.error); // names only; the page works without them
       const ct: Record<string, string> = {};
       (ctRes.data || []).forEach((r: any) => {
         if (r.proctor_user_id) ct[r.batch_id] = r.proctor_user_id === user.id ? "you" : (r.proctor_name || "—");
@@ -250,9 +236,12 @@ export default function TeacherAttendanceView() {
         subjectId: r.subject_id, subjectName: r.subject_name, subjectCode: r.subject_code || undefined,
         studentCount: Number(r.student_count) || 0, isMine: !!r.is_mine,
       })));
-    } catch (e) { console.error(e); toast("Failed to load", "error"); }
+    } catch (e) {
+      console.error("attendance load:", e);
+      setLoadError(LOAD_ERROR);
+    }
     setLoading(false);
-  }, [user?.id, date, toast]);
+  }, [user?.id, date]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -267,7 +256,9 @@ export default function TeacherAttendanceView() {
   }, [assigns]);
   const myBatches = useMemo(() => batches.filter(b => b.mine), [batches]);
   const otherBatches = useMemo(() => batches.filter(b => !b.mine), [batches]);
-  const isFuture = toDateStr(date) > toDateStr(new Date());
+  const todayStr = toDateStr(new Date());
+  const isToday = toDateStr(date) === todayStr;
+  const isFuture = toDateStr(date) > todayStr;
   const myCount = useMemo(() => assigns.filter(a => a.isMine).length, [assigns]);
 
   const subjects = useMemo(() => assigns.filter(a => a.batchId === pickBatch), [assigns, pickBatch]);
@@ -281,70 +272,94 @@ export default function TeacherAttendanceView() {
 
   // ── Open session ──
   const open = useCallback(async (t: SessionTarget) => {
-    setSelected(t); setStudents([]); setDirty(false); setSearch(""); setFilter("all"); setLastSaved(null); setLoadingSheet(true);
+    setSelected(t); setStudents([]); setOriginal([]); setDirty(false); setSearch(""); setFilter("all");
+    setLastSaved(null); setSaveError(null); setSheetError(null); setHasSaved(false); setLoadingSheet(true);
     try {
       const ds = toDateStr(date);
-      const { data: stu } = await supabase.from("students").select("id, name, roll_no")
+      const { data: stu, error: stuErr } = await supabase.from("students").select("id, name, roll_no")
         .eq("batch_id", t.batchId).eq("is_active", true).order("roll_no");
-      if (!stu?.length) { toast(`${classLabel(t)} has no students`, "info"); setOriginal([]); setLoadingSheet(false); return; }
+      if (stuErr) throw stuErr;
+      if (!stu?.length) { setLoadingSheet(false); return; }
 
       let sid = t.sessionId ?? null;
       if (!sid) {
-        const { data: s } = await supabase.from("class_sessions").select("id")
+        const { data: s, error: sErr } = await supabase.from("class_sessions").select("id")
           .eq("batch_id", t.batchId).eq("subject_id", t.subjectId).eq("session_date", ds)
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (sErr) throw sErr;
         sid = s?.id ?? null;
       }
       const saved: Record<string, Status> = {};
       if (sid) {
-        const { data: recs } = await supabase.from("attendance_records").select("student_id, status").eq("session_id", sid);
+        // must succeed: without the saved marks everyone would show as Present, and a save would overwrite them
+        const { data: recs, error: recErr } = await supabase.from("attendance_records").select("student_id, status").eq("session_id", sid);
+        if (recErr) throw recErr;
         recs?.forEach((r: any) => { saved[r.student_id] = r.status as Status; });
       }
 
+      // this month's %: optional, shown only when the server returns it
       const pctMap: Record<string, number> = {};
       try {
         const { data: mon } = await supabase.rpc("get_monthly_attendance", {
           p_batch_id: t.batchId, p_month: date.getMonth() + 1, p_year: date.getFullYear(), p_subject_id: t.subjectId,
         });
-        mon?.forEach((m: any) => { pctMap[m.student_id] = Number(m.percentage) || 0; });
-      } catch {}
+        mon?.forEach((m: any) => {
+          // the RPC returns 0.00 when no class was held this month: that is "no data", not 0%
+          const held = Number(m.total_held), p = Number(m.percentage);
+          if (held > 0 && m.percentage !== null && Number.isFinite(p)) pctMap[m.student_id] = Math.round(p);
+        });
+      } catch { /* the sheet works without it */ }
 
       const loaded: Student[] = stu.map((s: any) => ({
         id: s.id, name: s.name, rollNo: s.roll_no || undefined,
-        status: saved[s.id] || "present", pct: pctMap[s.id] ?? 0,
+        status: saved[s.id] || "present", pct: pctMap[s.id],
       }));
-      setStudents(loaded); setOriginal(JSON.parse(JSON.stringify(loaded)));
+      setStudents(loaded); setOriginal(loaded.map(s => ({ ...s })));
+      setHasSaved(Object.keys(saved).length > 0);
       if (sid) setSelected(prev => (prev ? { ...prev, sessionId: sid } : prev));
-      toast(`${classLabel(t)} · ${t.subjectName} — ${loaded.length} students${sid && Object.keys(saved).length ? " (previously marked)" : ""}`, "info");
-    } catch (e: any) { console.error(e); toast("Failed to load students", "error"); }
+    } catch (e) {
+      console.error("attendance sheet:", e);
+      setStudents([]);
+      setSheetError(SHEET_ERROR);
+    }
     setLoadingSheet(false);
-  }, [date, user?.id, toast]);
+  }, [date]);
 
   const openManual = useCallback(() => {
     const t = assigns.find(a => a.batchId === pickBatch && a.subjectId === pickSubj);
-    if (!t) { toast("Pick batch & subject first", "info"); return; }
+    if (!t) { toast.info("Pick a class and a subject first"); return; }
     open(t);
-  }, [assigns, pickBatch, pickSubj, open, toast]);
+  }, [assigns, pickBatch, pickSubj, open]);
 
+  const unsaved = dirty || (!hasSaved && students.length > 0 && !sheetError);
   const back = useCallback(() => {
-    if (dirty) { setConfirm({ title: "Discard changes?", msg: "Unsaved attendance will be lost.", ok: "Discard", warn: true, fn: () => { setSelected(null); setDirty(false); } }); }
-    else { setSelected(null); load(); }
-  }, [dirty, load]);
+    if (unsaved && !isFuture) {
+      setConfirm({
+        title: "Leave without saving?",
+        msg: "Attendance for this class is not saved. If you leave now, nothing is recorded.",
+        ok: "Leave without saving",
+        fn: () => { setSelected(null); setDirty(false); load(); },
+      });
+    } else { setSelected(null); load(); }
+  }, [unsaved, isFuture, load]);
 
   const mark = useCallback((id: string, st: Status) => { setStudents(p => p.map(s => s.id === id ? { ...s, status: st } : s)); setDirty(true); }, []);
 
   const markAll = useCallback(() => {
-    setConfirm({ title: "Mark all present?", msg: `All ${students.length} students will be marked present.`, ok: "Mark All", warn: false,
-      fn: () => { setStudents(p => p.map(s => ({ ...s, status: "present" as Status }))); setDirty(true); toast("All marked present"); }
+    setConfirm({ title: "Mark everyone present?", msg: `All ${students.length} students will be set to Present. You still need to save.`, ok: "Mark all present",
+      fn: () => { setStudents(p => p.map(s => ({ ...s, status: "present" as Status }))); setDirty(true); }
     });
-  }, [students.length, toast]);
+  }, [students.length]);
 
-  const undo = useCallback(() => { if (original.length) { setStudents(JSON.parse(JSON.stringify(original))); setDirty(false); toast("Reverted", "info"); } }, [original, toast]);
+  const undo = useCallback(() => { if (original.length) { setStudents(original.map(s => ({ ...s }))); setDirty(false); } }, [original]);
+
+  const canSave = !!selected && students.length > 0 && !saving && !isFuture && !sheetError && (dirty || !hasSaved);
 
   const save = useCallback(async () => {
     if (!selected || !instId) return;
-    if (isFuture) { toast("Can't mark attendance for a future date", "error"); return; }
+    if (isFuture) { setSaveError("You can't mark attendance for a future date."); return; }
     setSaving(true);
+    setSaveError(null);
     try {
       const { data: sid, error } = await supabase.rpc("save_class_attendance", {
         p_institute_id: instId,
@@ -358,47 +373,39 @@ export default function TeacherAttendanceView() {
       if (error) throw new Error(error.message);
 
       setSelected(prev => (prev ? { ...prev, sessionId: sid as string, isMarked: true } : prev));
-      setOriginal(JSON.parse(JSON.stringify(students))); setDirty(false);
+      setOriginal(students.map(s => ({ ...s }))); setDirty(false); setHasSaved(true);
       setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
       const ctName = classTeachers[selected.batchId];
-      toast(`Saved — ${selected.subjectName} · ${classLabel(selected)}${ctName && ctName !== "you" ? ` · sent to ${ctName}` : ""}`);
-    } catch (e: any) { toast(e.message || "Save failed", "error"); }
+      toast.success(`Saved: ${selected.subjectName} · ${classLabel(selected)}${ctName && ctName !== "you" ? ` · sent to ${ctName}` : ""}`);
+    } catch (e: any) {
+      const msg = e?.message || "Save failed";
+      setSaveError(msg);
+      toast.error("Attendance not saved");
+    }
     setSaving(false);
-  }, [students, selected, instId, date, isFuture, toast, classTeachers]);
+  }, [students, selected, instId, date, isFuture, classTeachers]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (not while the confirm dialog is open; it handles its own keys)
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || confirm) return;
     const h = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (dirty && !saving && !isFuture) save(); }
-      if (e.key === "Escape") back();
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (canSave) save(); }
+      // defaultPrevented: the dialog already used this Escape to close itself (else it would reopen at once)
+      if (e.key === "Escape" && !e.defaultPrevented) back();
       if ((e.ctrlKey || e.metaKey) && e.key === "f") { e.preventDefault(); searchRef.current?.focus(); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [selected, dirty, saving, isFuture, save, back]);
-
-  // Calendar
-  const calDays = useMemo(() => {
-    const first = new Date(calY, calM, 1);
-    const last = new Date(calY, calM + 1, 0);
-    const pad = first.getDay();
-    const cells: (number | null)[] = Array(pad).fill(null);
-    for (let d = 1; d <= last.getDate(); d++) cells.push(d);
-    while (cells.length % 7) cells.push(null);
-    return cells;
-  }, [calM, calY]);
-
-  const isToday = (d: number) => { const n = new Date(); return d === n.getDate() && calM === n.getMonth() && calY === n.getFullYear(); };
-  const isSel = (d: number) => d === date.getDate() && calM === date.getMonth() && calY === date.getFullYear();
+  }, [selected, confirm, canSave, save, back]);
 
   // Filtered students
   const filtered = useMemo(() => {
     let f = students;
     if (filter !== "all") f = f.filter(s => s.status === filter);
-    if (search.trim()) { const q = search.toLowerCase(); f = f.filter(s => s.name.toLowerCase().includes(q)); }
+    if (search.trim()) { const q = search.toLowerCase(); f = f.filter(s => s.name.toLowerCase().includes(q) || (s.rollNo || "").toLowerCase().includes(q)); }
     return f;
   }, [students, filter, search]);
+  const position = useMemo(() => new Map(students.map((s, i) => [s.id, i + 1])), [students]);
 
   const pCount = useMemo(() => students.filter(s => s.status === "present").length, [students]);
   const aCount = useMemo(() => students.filter(s => s.status === "absent").length, [students]);
@@ -406,260 +413,234 @@ export default function TeacherAttendanceView() {
   const pct = students.length ? Math.round((pCount / students.length) * 100) : 0;
   const changed = useMemo(() => dirty ? students.reduce((a, s, i) => s.status !== original[i]?.status ? a + 1 : a, 0) : 0, [students, original, dirty]);
 
-  /* ═══ CSS (injected once) ═══ */
-  const css = `
-    @keyframes popIn{from{opacity:0;transform:scale(.96) translateY(6px)}to{opacity:1;transform:none}}
-    @keyframes slideUp{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:none}}
-    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    @media(prefers-reduced-motion:reduce){.att-root *{animation:none!important;transition:none!important}}
-    .glass{background:rgba(255,255,255,.95);border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-    .dark .glass{background:rgba(15,23,42,.95);border-color:rgba(255,255,255,.06)}
-    .pill{background:rgba(0,0,0,.04)}.dark .pill{background:rgba(255,255,255,.06)}
-  `;
+  const confirmDialog = (
+    <AlertDialog open={!!confirm} onOpenChange={o => { if (!o) setConfirm(null); }}>
+      <AlertDialogContent className="max-w-[calc(100vw-32px)] rounded-2xl sm:max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
+          <AlertDialogDescription>{confirm?.msg}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="gap-2">
+          <AlertDialogCancel className="min-h-[44px] rounded-xl">Cancel</AlertDialogCancel>
+          <AlertDialogAction className="min-h-[44px] rounded-xl bg-[#111111] text-white hover:bg-[#222222]"
+            onClick={() => { const fn = confirm?.fn; setConfirm(null); fn?.(); }}>
+            {confirm?.ok}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 
-  /* ═══ LANDING ═══ */
+  /* ═══ CLASS LIST ═══ */
   if (!selected) {
+    const dateLabel = date.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
     return (
-      <>
-        <style>{css}</style>
-        <Toasts items={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
-        <div className="att-root space-y-4 sm:space-y-6 animate-[popIn_.3s_ease-out]">
-
-          {/* Teacher info (compact on mobile) */}
-          <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex items-center gap-4">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-white font-black text-xl sm:text-2xl shrink-0"
-              style={{ background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }}>
-              {name.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white truncate">{name}</h3>
-              <p className="text-xs text-slate-500 font-medium">{loading ? "Loading…" : `${myCount} assigned class${myCount !== 1 ? "es" : ""} · ${sessions.length} on this day`}</p>
-            </div>
-          </div>
-
-          {/* Calendar */}
-          <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <span className="text-slate-400"><Icon.Calendar /></span> {MONTHS[calM]} {calY}
-              </span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => { if (calM === 0) { setCalM(11); setCalY(calY - 1); } else { setCalM(calM - 1); } }}
-                  className="p-2 rounded-xl pill active:scale-90 touch-manipulation"><Icon.ChevL /></button>
-                <button onClick={() => { if (calM === 11) { setCalM(0); setCalY(calY + 1); } else { setCalM(calM + 1); } }}
-                  className="p-2 rounded-xl pill active:scale-90 touch-manipulation"><Icon.ChevR /></button>
-                <button onClick={() => { setCalM(new Date().getMonth()); setCalY(new Date().getFullYear()); setDate(new Date()); }}
-                  className="ml-1 px-2.5 py-1.5 rounded-lg pill text-[11px] font-bold text-slate-500 active:scale-95 touch-manipulation">Today</button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 gap-0.5 text-center">
-              {DAYS.map((d, i) => <div key={i} className="text-[10px] font-bold text-slate-400 py-1">{d}</div>)}
-              {calDays.map((d, i) => {
-                if (d === null) return <div key={i} className="h-9" />;
-                const sel = isSel(d); const tdy = isToday(d);
-                return (
-                  <button key={i} onClick={() => setDate(new Date(calY, calM, d))}
-                    className={`h-9 rounded-lg text-[13px] font-bold transition-all active:scale-90 touch-manipulation ${
-                      sel ? "text-white shadow-md" : tdy ? "pill ring-1 ring-blue-400 text-blue-600 dark:text-blue-400"
-                      : "text-slate-600 dark:text-slate-300 active:bg-slate-100 dark:active:bg-slate-800"
-                    }`}
-                    style={sel ? { background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" } : undefined}>
-                    {d}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-3 pill rounded-xl px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-              {DAYS_FULL[date.getDay()]}, {date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-            </div>
-          </div>
-
-          {/* Today's scheduled classes */}
-          <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">{toDateStr(date) === toDateStr(new Date()) ? "Today's classes" : "Classes on this day"}</h3>
-              <span className="text-[11px] font-bold text-slate-400 pill px-3 py-1.5 rounded-full">{sessions.length} scheduled</span>
-            </div>
-            {loading ? <p className="py-6 text-center text-slate-400 text-sm font-medium">Loading…</p>
-            : sessions.length === 0 ? <p className="py-4 text-center text-slate-400 text-sm">No timetable classes{assigns.length ? ". Use manual pick below." : "."}</p>
-            : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {sessions.map((s, i) => (
-                  <button key={s.sessionId || i} onClick={() => open(s)}
-                    className="glass rounded-2xl p-4 text-left active:scale-[0.98] touch-manipulation transition-transform">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-[11px] shrink-0"
-                        style={{ background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }}>
-                        {s.subjectCode?.slice(0, 3) || s.subjectName.slice(0, 2).toUpperCase()}
-                      </div>
-                      {s.isMarked
-                        ? <span className="text-[10px] font-bold text-emerald-600 pill px-2 py-1 rounded-full flex items-center gap-1"><Icon.Check /> Done</span>
-                        : <span className="text-[10px] font-bold text-amber-600 pill px-2 py-1 rounded-full">Pending</span>}
-                    </div>
-                    <h4 className="font-bold text-sm text-slate-800 dark:text-white truncate">{s.subjectName}</h4>
-                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{classLabel(s)}{s.room ? ` · ${s.room}` : ""}</p>
-                    {classTeachers[s.batchId] && (
-                      <p className="text-[10px] text-slate-400 truncate mt-0.5">Class teacher: <b className="text-slate-500">{classTeachers[s.batchId]}</b></p>
-                    )}
-                    <div className="flex gap-3 mt-2 text-[11px] text-slate-400 font-medium">
-                      {s.timeSlot && <span className="flex items-center gap-1"><Icon.Clock />{s.timeSlot}</span>}
-                      <span className="flex items-center gap-1"><Icon.Users />{s.studentCount}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Manual pick */}
-          <div className="glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
-            <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mb-1">Mark a class</h3>
-            <p className="text-xs text-slate-500 mb-3">
-              {isFuture ? "Future date — you can view, but not mark." : "Only classes assigned to you are listed."}
-            </p>
-            {!loading && assigns.length === 0 ? (
-              <div className="pill rounded-xl px-4 py-4 text-center">
-                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">No classes assigned to you yet</p>
-                <p className="text-xs text-slate-400 mt-1">Ask your HOD to assign you a subject in a section.</p>
-              </div>
-            ) : (
-            <div className="flex flex-col sm:flex-row gap-2.5">
-              <select value={pickBatch} onChange={e => { setPickBatch(e.target.value); setPickSubj(""); }}
-                className="pill rounded-xl px-3 py-3 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none flex-1 min-w-0">
-                <option value="">Section / batch…</option>
-                {otherBatches.length === 0
-                  ? myBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)
-                  : <>
-                      {myBatches.length > 0 && <optgroup label="My classes">{myBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>}
-                      <optgroup label="Other classes (HOD / admin access)">{otherBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>
-                    </>}
-              </select>
-              <select value={pickSubj} onChange={e => setPickSubj(e.target.value)} disabled={!pickBatch}
-                className="pill rounded-xl px-3 py-3 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none flex-1 min-w-0 disabled:opacity-40">
-                <option value="">Subject…</option>
-                {subjects.map(s => <option key={s.subjectId} value={s.subjectId}>{s.subjectName}{s.subjectCode ? ` (${s.subjectCode})` : ""}</option>)}
-              </select>
-              <button onClick={openManual} disabled={!pickBatch || !pickSubj}
-                className="rounded-xl px-5 py-3 text-sm font-bold text-white active:scale-95 disabled:opacity-40 touch-manipulation shrink-0"
-                style={{ background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }}>
-                Open →
-              </button>
-            </div>
-            )}
-          </div>
+      <div className="att-root space-y-4 text-[#1B1B1B] dark:text-white">
+        {/* Date */}
+        <div className={`${CARD} flex items-center gap-2 p-2 sm:p-3`}>
+          <button type="button" onClick={() => setDate(d => addDays(d, -1))} aria-label="Previous day" className={`${BTN_SECONDARY} w-11 shrink-0 px-0 ${FOCUS}`}><Icon.ChevL /></button>
+          <label className="min-w-0 flex-1 text-center">
+            <span className="block truncate text-sm font-semibold">{isToday ? `Today · ${dateLabel}` : dateLabel}</span>
+            <input type="date" value={toDateStr(date)} onChange={e => { if (e.target.value) setDate(fromDateStr(e.target.value)); }}
+              aria-label="Attendance date"
+              className={`mt-0.5 rounded-md bg-transparent text-center text-xs text-gray-500 dark:text-slate-400 ${FOCUS}`} />
+          </label>
+          <button type="button" onClick={() => setDate(d => addDays(d, 1))} aria-label="Next day" className={`${BTN_SECONDARY} w-11 shrink-0 px-0 ${FOCUS}`}><Icon.ChevR /></button>
+          {!isToday && <button type="button" onClick={() => setDate(new Date())} className={`${BTN_SECONDARY} shrink-0 ${FOCUS}`}>Today</button>}
         </div>
-      </>
+
+        {loadError ? (
+          <div role="alert" className={`${CARD} p-4`}>
+            <p className="text-sm font-semibold">{loadError}</p>
+            <button type="button" onClick={load} className={`${BTN_PRIMARY} mt-3 ${FOCUS}`}>Try again</button>
+          </div>
+        ) : noInstitute && !loading ? (
+          <div className={`${CARD} p-4`}>
+            <p className="text-sm font-semibold">You're not part of an institute yet</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Attendance works for classes in an institute. Join yours with the code from your admin or HOD.</p>
+            <Link to="/join-institute" className={`${BTN_PRIMARY} mt-3 ${FOCUS}`}>Join an institute</Link>
+          </div>
+        ) : (
+          <>
+            {/* The day's classes */}
+            <section className={`${CARD} p-3 sm:p-4`} aria-labelledby="att-day-title">
+              <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
+                <h3 id="att-day-title" className="text-base font-bold">{isToday ? "Today's classes" : "Classes on this day"}</h3>
+                {!loading && <span className="text-xs text-gray-500 dark:text-slate-400">{sessions.length} scheduled · {myCount} assigned</span>}
+              </div>
+              {loading ? <p className="px-1 py-4 text-sm text-gray-500" aria-busy="true">Loading classes…</p>
+              : sessions.length === 0 ? (
+                <p className="px-1 py-3 text-sm text-gray-500 dark:text-slate-400">
+                  No timetable classes on this day.{assigns.length ? " Pick a class below to mark it." : ""}
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100 dark:divide-white/5">
+                  {sessions.map((s, i) => (
+                    <li key={s.sessionId || `${s.batchId}-${s.subjectId}-${i}`}>
+                      <button type="button" onClick={() => open(s)}
+                        className={`flex w-full items-center gap-3 rounded-xl px-1 py-3 text-left hover:bg-gray-50 dark:hover:bg-slate-800 ${FOCUS}`}>
+                        <span className="w-12 shrink-0 text-sm font-semibold tabular-nums text-gray-500 dark:text-slate-400">{s.timeSlot || "—"}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">{s.subjectName}</span>
+                          <span className="block truncate text-xs text-gray-500 dark:text-slate-400">
+                            {classLabel(s)}{s.room ? ` · Room ${s.room}` : ""} · {s.studentCount} students
+                            {classTeachers[s.batchId] ? ` · Class teacher: ${classTeachers[s.batchId]}` : ""}
+                          </span>
+                        </span>
+                        {s.isMarked
+                          ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"><Icon.Check />Marked</span>
+                          : <span className="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">Not marked</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {/* Manual pick */}
+            <section className={`${CARD} p-3 sm:p-4`} aria-labelledby="att-pick-title">
+              <h3 id="att-pick-title" className="px-1 text-base font-bold">Mark another class</h3>
+              <p className="mb-3 mt-0.5 px-1 text-sm text-gray-500 dark:text-slate-400">
+                {isFuture ? "Future date: you can open a class, but not mark it." : "Only classes you are allowed to mark are listed."}
+              </p>
+              {!loading && assigns.length === 0 ? (
+                <div className="rounded-xl bg-gray-50 px-4 py-4 dark:bg-slate-800">
+                  <p className="text-sm font-semibold">No classes assigned to you yet</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Ask your HOD to assign you a subject in a section.</p>
+                </div>
+              ) : (
+              <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end">
+                <label className="min-w-0 flex-1">
+                  <span className="mb-1 block px-1 text-xs font-semibold text-gray-500 dark:text-slate-400">Class</span>
+                  <select value={pickBatch} onChange={e => { setPickBatch(e.target.value); setPickSubj(""); }}
+                    className={`min-h-[44px] w-full rounded-xl border border-gray-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-900 ${FOCUS}`}>
+                    <option value="">Choose a class…</option>
+                    {otherBatches.length === 0
+                      ? myBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)
+                      : <>
+                          {myBatches.length > 0 && <optgroup label="My classes">{myBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>}
+                          <optgroup label="Other classes (HOD / admin access)">{otherBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>
+                        </>}
+                  </select>
+                </label>
+                <label className="min-w-0 flex-1">
+                  <span className="mb-1 block px-1 text-xs font-semibold text-gray-500 dark:text-slate-400">Subject</span>
+                  <select value={pickSubj} onChange={e => setPickSubj(e.target.value)} disabled={!pickBatch}
+                    className={`min-h-[44px] w-full rounded-xl border border-gray-200 bg-white px-3 text-sm disabled:opacity-50 dark:border-white/10 dark:bg-slate-900 ${FOCUS}`}>
+                    <option value="">Choose a subject…</option>
+                    {subjects.map(s => <option key={s.subjectId} value={s.subjectId}>{s.subjectName}{s.subjectCode ? ` (${s.subjectCode})` : ""}</option>)}
+                  </select>
+                </label>
+                <button type="button" onClick={openManual} disabled={!pickBatch || !pickSubj} className={`${BTN_PRIMARY} shrink-0 ${FOCUS}`}>
+                  Open class
+                </button>
+              </div>
+              )}
+            </section>
+          </>
+        )}
+      </div>
     );
   }
 
   /* ═══ ATTENDANCE SHEET ═══ */
+  const statusLine = saving ? { text: "Saving…", tone: "text-amber-700 dark:text-amber-300" }
+    : saveError ? { text: `Not saved: ${saveError.replace(/\.+$/, "")}. Try Save again.`, tone: "text-red-700 dark:text-red-300" }
+    : isFuture ? { text: "Future date: view only.", tone: "text-gray-500" }
+    : dirty ? { text: `${changed} change${changed === 1 ? "" : "s"} not saved yet`, tone: "text-amber-700 dark:text-amber-300" }
+    : !hasSaved ? { text: "Not saved yet. Everyone starts as Present: mark who is absent or on leave, then Save.", tone: "text-amber-700 dark:text-amber-300" }
+    : lastSaved ? { text: `Saved at ${lastSaved}`, tone: "text-emerald-700 dark:text-emerald-300" }
+    : { text: "Saved earlier. Change marks and save to update.", tone: "text-emerald-700 dark:text-emerald-300" };
+
   return (
     <>
-      <style>{css}</style>
-      <Toasts items={toasts} onDismiss={id => setToasts(p => p.filter(t => t.id !== id))} />
-      <Confirm open={!!confirm} onClose={() => setConfirm(null)} onOk={() => confirm?.fn()} title={confirm?.title || ""} msg={confirm?.msg || ""} ok={confirm?.ok} warn={confirm?.warn} />
-
-      <div className="att-root space-y-4 sm:space-y-6 animate-[popIn_.25s_ease-out]">
-        {/* Header — sticky on mobile */}
-        <div className="sticky top-0 z-20 -mx-2 px-2 py-2 backdrop-blur-xl bg-white/95 dark:bg-slate-950/95 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:backdrop-blur-none sm:bg-transparent rounded-b-2xl sm:rounded-none">
+      {confirmDialog}
+      {/* att-sheet: index.css hides the help bubble while this is open (it sat on the P/A/L buttons) */}
+      <div ref={sheetRef} className="att-root att-sheet space-y-3 text-[#1B1B1B] dark:text-white">
+        {/* Header — sticky at every width so Save stays in reach after scrolling a long class */}
+        <div style={{ top: stickyTop }} className="sticky z-20 -mx-2 border-b border-gray-200 bg-white px-2 py-2 dark:border-white/10 dark:bg-slate-950 sm:mx-0 sm:rounded-2xl sm:border sm:p-4 dark:sm:bg-slate-900">
           <div className="flex items-start gap-2">
-            <button onClick={back} className="p-2 rounded-xl pill text-slate-600 dark:text-slate-300 active:scale-90 touch-manipulation shrink-0 mt-0.5"><Icon.Back /></button>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base sm:text-xl font-black text-slate-900 dark:text-white truncate">
-                {selected.subjectName} <span className="text-slate-400 font-bold text-sm">· {classLabel(selected)}</span>
+            <button type="button" onClick={back} aria-label="Back to classes" className={`${BTN_SECONDARY} w-11 shrink-0 px-0 ${FOCUS}`}><Icon.Back /></button>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-base font-bold sm:text-lg">
+                {selected.subjectName} <span className="font-semibold text-gray-500 dark:text-slate-400">· {classLabel(selected)}</span>
               </h2>
-              <p className="text-[11px] sm:text-xs text-slate-500 truncate">
-                {DAYS_FULL[date.getDay()]}, {date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} · {students.length} students
+              <p className="truncate text-xs text-gray-500 dark:text-slate-400">
+                {date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} · {students.length} students
                 {selected.timeSlot && ` · ${selected.timeSlot}`}
                 {classTeachers[selected.batchId] && ` · Class teacher: ${classTeachers[selected.batchId]}`}
               </p>
             </div>
           </div>
-          {/* Action buttons — horizontal scroll on mobile */}
-          <div className="flex items-center justify-between sm:justify-start gap-1.5 mt-3 sm:mt-2 overflow-x-auto scrollbar-none -mx-1 px-1 pb-1">
-            <button onClick={undo} disabled={!dirty} className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:py-2 rounded-xl pill font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 disabled:opacity-30 active:scale-95 touch-manipulation"><Icon.Undo /><span>Undo</span></button>
-            <button onClick={markAll} className="flex-1 sm:flex-none flex items-center justify-center gap-1 px-3 py-2 sm:py-2 rounded-xl pill font-bold text-xs sm:text-sm text-slate-600 dark:text-slate-300 active:scale-95 touch-manipulation"><Icon.Check /><span>All P</span></button>
-            <button onClick={save} disabled={!dirty || saving || isFuture}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 sm:py-2 rounded-xl font-bold text-xs sm:text-sm text-white disabled:opacity-30 active:scale-95 touch-manipulation sm:ml-auto"
-              style={{ background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" }}>
-              {saving ? <Icon.Spin /> : <Icon.Save />}{saving ? "Saving…" : "Save"}
-            </button>
-          </div>
-          <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-bold">
-            <span className={`w-1.5 h-1.5 rounded-full ${saving ? "bg-amber-500" : lastSaved ? "bg-emerald-500" : dirty ? "bg-amber-500" : "bg-slate-300"}`} />
-            <span className={saving ? "text-amber-600" : lastSaved ? "text-emerald-600" : dirty ? "text-amber-600" : "text-slate-400"}>
-              {saving ? "Saving…" : lastSaved ? `Saved ${lastSaved}` : dirty ? `${changed} changed` : "Saved"}
-            </span>
-          </div>
+          {students.length > 0 && (
+            <>
+              <div className="mt-2 sm:flex sm:items-center sm:gap-2">
+                <p className="text-sm tabular-nums sm:mr-auto" aria-label={`${pCount} present, ${aCount} absent, ${lCount} on leave, ${pct} percent present`}>
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-300">{pCount} P</span>
+                  <span className="text-gray-300"> · </span>
+                  <span className="font-semibold text-red-700 dark:text-red-300">{aCount} A</span>
+                  <span className="text-gray-300"> · </span>
+                  <span className="font-semibold text-blue-700 dark:text-blue-300">{lCount} L</span>
+                  <span className="text-gray-500 dark:text-slate-400"> · {pct}% present</span>
+                </p>
+                <div className="mt-2 grid grid-cols-3 gap-2 sm:mt-0 sm:flex">
+                  <button type="button" onClick={undo} disabled={!dirty} className={`${BTN_SECONDARY} ${FOCUS}`}>Undo</button>
+                  <button type="button" onClick={markAll} disabled={isFuture} className={`${BTN_SECONDARY} ${FOCUS}`}>All present</button>
+                  <button type="button" onClick={save} disabled={!canSave} className={`${BTN_PRIMARY} ${FOCUS}`}>
+                    {saving && <Icon.Spin />}{saving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
+              <p role="status" aria-live="polite" className={`mt-1.5 text-xs font-medium ${statusLine.tone}`}>{statusLine.text}</p>
+            </>
+          )}
         </div>
 
-        {/* Quick stats */}
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: "P", val: pCount, color: "text-emerald-600" },
-            { label: "A", val: aCount, color: "text-red-600" },
-            { label: "L", val: lCount, color: "text-blue-600" },
-            { label: "%", val: `${pct}`, color: "text-slate-800 dark:text-white" },
-          ].map((s, i) => (
-            <div key={i} className="glass rounded-2xl p-3 text-center">
-              <span className={`text-xl sm:text-2xl font-black tabular-nums ${s.color}`}>{s.val}</span>
-              <span className="block text-[9px] font-bold text-slate-400 uppercase mt-0.5">{s.label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Search + filter */}
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="flex items-center gap-2 pill rounded-xl px-3 py-2.5 flex-1 min-w-0">
-            <Icon.Search />
-            <input ref={searchRef} type="search" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
-              className="bg-transparent outline-none text-sm font-medium text-slate-700 dark:text-white placeholder-slate-400 w-full min-w-0" />
-            {search && <button onClick={() => setSearch("")} className="text-slate-400 active:text-slate-600 touch-manipulation p-0.5"><Icon.X /></button>}
-          </div>
-          <div className="flex gap-1 overflow-x-auto scrollbar-none pb-0.5">
-            {(["all", "present", "absent", "leave"] as const).map(f => (
-              <button key={f} onClick={() => setFilter(f)}
-                className={`px-3 py-2 rounded-lg text-[12px] font-bold whitespace-nowrap shrink-0 active:scale-95 touch-manipulation ${
-                  filter === f ? "text-white shadow-sm" : "pill text-slate-500"
-                }`}
-                style={filter === f ? { background: "linear-gradient(135deg, var(--theme-start, #3b82f6), var(--theme-end, #8b5cf6))" } : undefined}>
-                {f === "all" ? "All" : STATUS_CFG[f].full}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Student list */}
-        <div className="space-y-2">
-          {loadingSheet ? <p className="py-8 text-center text-slate-400 text-sm font-medium">Loading students…</p>
-          : filtered.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-slate-400 font-bold text-sm">No students found</p>
-              <p className="text-slate-400 text-xs mt-1">Adjust search or filter</p>
-            </div>
-          ) : filtered.map(s => (
-            <StudentCard key={s.id} s={s} idx={students.indexOf(s)} onMark={mark} />
-          ))}
-        </div>
-
-        {/* Attendance bar */}
-        {students.length > 0 && (
-          <div className="glass rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-slate-500">Present rate</span>
-              <span className="text-xs font-black text-slate-800 dark:text-white tabular-nums">{pct}%</span>
-            </div>
-            <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
-              <div className="h-full bg-emerald-500 transition-[width] duration-300" style={{ width: `${(pCount / students.length) * 100}%` }} />
-              <div className="h-full bg-blue-500 transition-[width] duration-300" style={{ width: `${(lCount / students.length) * 100}%` }} />
-              <div className="h-full bg-red-500 transition-[width] duration-300" style={{ width: `${(aCount / students.length) * 100}%` }} />
-            </div>
-            <div className="flex gap-4 mt-2.5 text-[11px] font-bold text-slate-500">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" />Present: {pCount}</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500" />Leave: {lCount}</span>
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" />Absent: {aCount}</span>
+        {loadingSheet ? <p className="py-8 text-center text-sm text-gray-500" aria-busy="true">Loading students…</p>
+        : sheetError ? (
+          <div role="alert" className={`${CARD} p-4`}>
+            <p className="text-sm font-semibold">{sheetError}</p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={() => open(selected)} className={`${BTN_PRIMARY} ${FOCUS}`}>Try again</button>
+              <button type="button" onClick={() => { setSelected(null); load(); }} className={`${BTN_SECONDARY} ${FOCUS}`}>Back to classes</button>
             </div>
           </div>
+        ) : students.length === 0 ? (
+          <div className={`${CARD} p-4`}>
+            <p className="text-sm font-semibold">This class has no active students</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Students are added by your HOD or admin.</p>
+          </div>
+        ) : (
+          <>
+            {/* Search + filter */}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <label className={`flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 dark:border-white/10 dark:bg-slate-900`}>
+                <span className="text-gray-400"><Icon.Search /></span>
+                <input ref={searchRef} type="search" placeholder="Search by name or roll no." aria-label="Search students" value={search} onChange={e => setSearch(e.target.value)}
+                  className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-gray-400" />
+                {search && <button type="button" onClick={() => setSearch("")} aria-label="Clear search" className={`rounded p-1 text-gray-400 ${FOCUS}`}><Icon.X /></button>}
+              </label>
+              <div role="group" aria-label="Show" className="flex gap-1 overflow-x-auto">
+                {(["all", "present", "absent", "leave"] as const).map(f => (
+                  <button key={f} type="button" onClick={() => setFilter(f)} aria-pressed={filter === f}
+                    className={`min-h-[44px] shrink-0 whitespace-nowrap rounded-xl border px-3 text-sm font-semibold ${FOCUS} ${
+                      filter === f ? "border-[#111111] bg-[#111111] text-white dark:border-white dark:bg-white dark:text-[#111111]" : "border-gray-200 bg-white text-gray-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"
+                    }`}>
+                    {f === "all" ? `All ${students.length}` : `${STATUS_CFG[f].full} ${f === "present" ? pCount : f === "absent" ? aCount : lCount}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Student list */}
+            {filtered.length === 0 ? (
+              <p className="py-6 text-center text-sm text-gray-500">No students match. Clear the search or filter.</p>
+            ) : (
+              <ul className={`${CARD} divide-y divide-gray-100 overflow-hidden dark:divide-white/5`} aria-label="Students">
+                {filtered.map(s => <StudentRow key={s.id} s={s} n={position.get(s.id) || 0} onMark={mark} />)}
+              </ul>
+            )}
+          </>
         )}
       </div>
     </>
