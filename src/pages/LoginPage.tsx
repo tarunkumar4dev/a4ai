@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
-import { authRedirectUrl, PHONE_OTP_ENABLED, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, takeRedirectAfterLogin, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
+import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, takeRedirectAfterLogin, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
 import OtpHelp from "@/components/auth/OtpHelp";
 import { useAuth } from "@/providers/AuthProvider";
 import { Eye, EyeOff, ArrowLeft, Lock } from "lucide-react";
@@ -23,6 +23,13 @@ import { REGEXP_ONLY_DIGITS } from "input-otp";
 // Format 10-digit Indian number to +91XXXXXXXXXX (shared normaliser; sendOtp validates first)
 const formatPhoneForIndia = (phone: string): string => normalizeIndianPhone(phone) || phone.trim();
 
+/** WhatsApp brand icon (official simple-icons path, brand colour #25D366). */
+const WhatsAppIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+  </svg>
+);
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -38,6 +45,7 @@ export default function LoginPage() {
   const [otpSent, setOtpSent] = useState(false);
   const [timer, setTimer] = useState(0);
   const [otpSentAt, setOtpSentAt] = useState(0); // restarts the "Didn't get the OTP?" help on every (re)send
+  const autoSubmittedFor = useRef(""); // the code we already auto-verified (no double submit)
   // The page is always light (white background); kept as a constant for the shared auth widgets' props.
   const isDarkMode = false;
   const [formError, setFormError] = useState("");
@@ -58,7 +66,7 @@ export default function LoginPage() {
       const mobile = mobileUA || isSmallScreen;
       
       setIsMobileDevice(mobile);
-      if (mobile && PHONE_OTP_ENABLED) {
+      if (mobile) {
         setLoginMethod("phone");
       }
     };
@@ -187,12 +195,16 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         phone: formatPhoneForIndia(phoneRaw),
+        // Login only — an unknown number must not silently become a new (role-less) account.
+        // Supabase answers "Signups not allowed for otp" → friendlyOtpError says "Sign up first".
+        options: { shouldCreateUser: false },
       });
       if (error) throw error;
 
       // Record successful OTP dispatch in rate limiter
       RateLimiter.recordOtpSent(phoneRaw);
       setOtp(""); // a resend invalidates the previous code
+      autoSubmittedFor.current = "";
       setOtpSent(true);
       setOtpSentAt(Date.now());
       setTimer(60);
@@ -248,6 +260,16 @@ export default function LoginPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    await submitLogin();
+  };
+
+  /** `codeOverride` is used by the auto-submit on the 6th OTP digit (setOtp hasn't applied yet). */
+  const submitLogin = async (codeOverride?: string) => {
+    // Phone mode, no OTP yet: Enter / main button sends the code instead of failing the verify.
+    if (loginMethod === "phone" && !otpSent) {
+      await sendOtp();
+      return;
+    }
 
     const identifier = loginMethod === "email" ? formValues.email.trim() : formValues.phone.trim();
     if (!identifier) {
@@ -345,7 +367,7 @@ export default function LoginPage() {
         await rememberPassword(formValues.email.trim(), formValues.password); // browser "save password" prompt
         await redirectAfterLogin();
       } else {
-        const otpToken = otp.trim();
+        const otpToken = (codeOverride ?? otp).trim();
         if (otpToken.length !== 6) {
           toast({ title: "Incomplete Code", description: "Please enter the 6-digit OTP", variant: "destructive" });
           setIsLoading(false);
@@ -421,12 +443,13 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-5">
-            {/* Google Login — primary option, all devices (in-app browsers get a hint instead) */}
-            <Button
+            {/* ── Social login buttons ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <Button
                 variant="outline"
                 onClick={handleGoogleLogin}
                 disabled={isLoading}
-                className="w-full h-12 rounded-xl font-bold gap-3 text-sm bg-white border-[#E5E7EB] text-[#1B1B1B] hover:bg-[#F7F8FA]"
+                className="h-12 rounded-xl font-bold gap-2.5 text-sm bg-white border-[#E5E7EB] text-[#1B1B1B] hover:bg-[#F7F8FA]"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -434,14 +457,39 @@ export default function LoginPage() {
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                 </svg>
-                Continue with Google
+                Google
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => { setLoginMethod("phone"); setOtp(""); setFormError(""); }}
+                disabled={isLoading}
+                className="h-12 rounded-xl font-bold gap-2.5 text-sm bg-white border-[#E5E7EB] text-[#1B1B1B] hover:bg-[#F0FFF4] hover:border-[#25D366]/40"
+              >
+                <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
+                WhatsApp
+              </Button>
+            </div>
 
+            {/* ── Method tabs (email ↔ WhatsApp) ── */}
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-slate-400/30" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                {loginMethod === "email" ? "or sign in with email" : "or use your mobile number"}
-              </span>
+              <div className="flex gap-1 bg-[#F3F4F6] rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => { setLoginMethod("email"); setOtp(""); setOtpSent(false); setOtpSentAt(0); autoSubmittedFor.current = ""; setFormError(""); }}
+                  className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${loginMethod === "email" ? "bg-white text-[#1B1B1B] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLoginMethod("phone"); setOtp(""); setFormError(""); }}
+                  className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${loginMethod === "phone" ? "bg-white text-[#1B1B1B] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
+                  WhatsApp
+                </button>
+              </div>
               <div className="flex-1 h-px bg-slate-400/30" />
             </div>
 
@@ -493,26 +541,40 @@ export default function LoginPage() {
                 /* ── Phone OTP Form ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
-                    <Label className="text-[10px] font-bold text-slate-500 uppercase ml-2">Phone Number</Label>
+                    <Label htmlFor="login-phone" className="text-[12px] font-semibold text-[#374151] ml-1">WhatsApp Number</Label>
                     <div className="flex gap-2">
-                      <Input 
-                        type="tel" 
-                        name="phone" 
-                        value={formValues.phone} 
-                        onChange={onChange} 
-                        className={`h-12 rounded-2xl flex-1 text-base transition-all ${isDarkMode ? "bg-white/5 border-white/10 text-white focus:bg-white/10" : "bg-white/60 border-white/60 focus:bg-white"}`} 
-                        placeholder="9593457XXX" 
-                      />
-                      <Button 
-                        type="button" 
-                        onClick={sendOtp} 
-                        disabled={timer > 0 || isLoading || lockoutSec > 0} 
-                        className={`h-12 rounded-2xl px-5 text-xs font-bold transition-all shadow-md ${isDarkMode ? "bg-white text-black hover:bg-slate-200" : "bg-black text-white hover:bg-slate-900"}`}
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500 select-none pointer-events-none">+91</span>
+                        <Input
+                          id="login-phone"
+                          type="tel"
+                          name="phone"
+                          inputMode="numeric"
+                          autoComplete="tel"
+                          maxLength={10}
+                          value={formValues.phone}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+                            setFormValues((s) => ({ ...s, phone: digits }));
+                            if (formError) setFormError("");
+                          }}
+                          className="h-12 rounded-xl pl-11 bg-white border-[#E5E7EB] text-[#1B1B1B] focus-visible:ring-[#25D366] text-base"
+                          placeholder="98765 43210"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={sendOtp}
+                        disabled={timer > 0 || isLoading || lockoutSec > 0 || formValues.phone.replace(/\D/g, "").length !== 10}
+                        className="h-12 rounded-xl px-5 text-xs font-bold bg-[#25D366] text-white hover:bg-[#1DA851] disabled:opacity-50"
                       >
-                        {timer > 0 ? `Resend (${timer}s)` : "Send OTP"}
+                        {timer > 0 ? `${timer}s` : otpSent ? "Resend" : "Send OTP"}
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1 ml-1">Your 10-digit WhatsApp number — the OTP comes on WhatsApp</p>
+                    <p className="text-[11px] text-slate-500 mt-1 ml-1 flex items-center gap-1">
+                      <WhatsAppIcon className="w-3 h-3 text-[#25D366]" />
+                      OTP will be sent on WhatsApp
+                    </p>
                   </div>
 
                   {otpSent && (
@@ -522,8 +584,8 @@ export default function LoginPage() {
                         {otp.length > 0 && (
                           <button
                             type="button"
-                            onClick={() => setOtp("")}
-                            className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-semibold transition-colors"
+                            onClick={() => { setOtp(""); autoSubmittedFor.current = ""; }}
+                            className="text-[11px] text-slate-400 hover:text-slate-600 font-semibold transition-colors"
                           >
                             Clear
                           </button>
@@ -534,7 +596,13 @@ export default function LoginPage() {
                           maxLength={6}
                           pattern={REGEXP_ONLY_DIGITS}
                           value={otp}
-                          onChange={(val) => setOtp(val)}
+                          onChange={(val) => {
+                            setOtp(val);
+                            if (val.length === 6 && autoSubmittedFor.current !== val) {
+                              autoSubmittedFor.current = val;
+                              submitLogin(val);
+                            }
+                          }}
                           containerClassName="w-full justify-between"
                         >
                           <InputOTPGroup className="flex justify-between w-full gap-2">
@@ -591,15 +659,23 @@ export default function LoginPage() {
 
               <Button
                 type="submit"
-                disabled={isLoading || lockoutSec > 0 || (requiresCaptcha && !captchaToken)} 
-                className={`w-full h-12 rounded-xl font-bold text-base bg-[#111111] text-white hover:bg-[#222222] ${lockoutSec > 0 || (requiresCaptcha && !captchaToken) ? "opacity-60 cursor-not-allowed" : ""}`}
+                disabled={isLoading || lockoutSec > 0 || (requiresCaptcha && !captchaToken)}
+                className={`w-full h-12 rounded-xl font-bold text-base ${
+                  loginMethod === "phone" && !otpSent
+                    ? "bg-[#25D366] text-white hover:bg-[#1DA851]"
+                    : "bg-[#111111] text-white hover:bg-[#222222]"
+                } ${lockoutSec > 0 || (requiresCaptcha && !captchaToken) ? "opacity-60 cursor-not-allowed" : ""}`}
               >
-                {isLoading 
-                  ? "Verifying..." 
-                  : lockoutSec > 0 
-                  ? `Locked (${RiskEngine.formatTime(lockoutSec)})` 
-                  : requiresCaptcha && !captchaToken 
+                {isLoading
+                  ? "Verifying..."
+                  : lockoutSec > 0
+                  ? `Locked (${RiskEngine.formatTime(lockoutSec)})`
+                  : requiresCaptcha && !captchaToken
                   ? "Complete the check to sign in"
+                  : loginMethod === "phone" && !otpSent
+                  ? "Send OTP on WhatsApp"
+                  : loginMethod === "phone" && otpSent
+                  ? "Verify OTP"
                   : "Sign In"}
               </Button>
 
@@ -611,23 +687,6 @@ export default function LoginPage() {
               </p>
             </form>
 
-            {/* Mobile OTP for accounts created with a phone number (paused: PHONE_OTP_ENABLED) */}
-            {PHONE_OTP_ENABLED && (
-            <p className="text-center text-xs text-slate-500">
-              {loginMethod === "email" ? (
-                <>
-                  Signed up with a mobile number?{" "}
-                  <button type="button" onClick={() => { setLoginMethod("phone"); setOtp(""); }} className="font-bold underline">
-                    Sign in with OTP
-                  </button>
-                </>
-              ) : (
-                <button type="button" onClick={() => { setLoginMethod("email"); setOtp(""); setOtpSent(false); }} className="font-bold underline">
-                  Use email instead
-                </button>
-              )}
-            </p>
-            )}
           </div>
         </div>
 
