@@ -745,7 +745,7 @@ export default function InstituteDashboardPage() {
     if (file.size > 2 * 1024 * 1024) return toast.error("Logo must be under 2MB");
     setUploadingLogo(true);
     try {
-      const { error } = await supabase.storage.from("institute-assets").upload(`${institute.id}/logo`, file, { upsert: true, contentType: file.type });
+      const { error } = await supabase.storage.from("institute-assets").upload(`${institute.id}/logo`, file, { upsert: true, contentType: file.type, cacheControl: "86400" }); // 1 day: same URL is reused, so a longer cache would show an old logo after a change
       if (error) throw error;
       const { data } = supabase.storage.from("institute-assets").getPublicUrl(`${institute.id}/logo`);
       setLogoUrl(data.publicUrl + `?t=${Date.now()}`);
@@ -762,7 +762,7 @@ export default function InstituteDashboardPage() {
     if (file.size > 5 * 1024 * 1024) return toast.error("Banner must be under 5MB");
     setUploadingBanner(true);
     try {
-      const { error } = await supabase.storage.from("institute-assets").upload(`${institute.id}/banner`, file, { upsert: true, contentType: file.type });
+      const { error } = await supabase.storage.from("institute-assets").upload(`${institute.id}/banner`, file, { upsert: true, contentType: file.type, cacheControl: "86400" });
       if (error) throw error;
       const { data } = supabase.storage.from("institute-assets").getPublicUrl(`${institute.id}/banner`);
       setBannerUrl(data.publicUrl + `?t=${Date.now()}`);

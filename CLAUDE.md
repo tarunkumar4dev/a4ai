@@ -326,6 +326,15 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   (main chunk 345 KB → 92 KB; JS on first load 1405 KB → ~520 KB), no framer-motion / Google Fonts / scroll-reveal
   observer / animate-* classes, What's New buttons no longer truncate. Student dashboard rebuilt: only real student
   routes, no sample stats, bottom nav on phones (old sidebar links /dashboard/messages|leaderboard|subscription were 404).
+- [x] Teacher dashboard production audit (27 Oct, branch perf/teacher-dashboard): `docs/TEACHER_DASHBOARD_PRODUCTION_AUDIT.md`.
+  Coins loaded once (were 3×), institute card queries parallel + no logo HEAD, idle prefetch only on `/`, logo uploads
+  cacheControl 1 day. Measured: data requests 19 → 13–15, JS files 68 → 21, JS 267 → 210 KB gzip.
+  Live read-only audit found public writes: anon INSERT on ncert_questions, any signed-in user INSERT/UPDATE/DELETE on
+  ncert_chunks → `27_public_write_lockdown.sql` (+ rollback, local test 44/44 PASS).
+- [ ] Run `27_public_write_lockdown.sql` on live + VERIFY, then build a test paper (questions must load).
+- Known after the teacher dashboard audit: users can UPDATE own profiles.coins and INSERT own coin_transactions; coins
+  redeem (client-side) for ₹100–250 vouchers → needs a server-side coin ledger before any voucher is fulfilled.
+  a4ai.in → www is a 307 (make it 308 in Vercel). Storage logo was served `private, no-cache`.
 - Known after the landing redesign: landing LCP ≈ 5 s on throttled mobile (1.6 Mbps/150 ms/4× CPU) — SPA renders nothing
   until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
   `Magical_FREE_AI_Tools.jpeg` are not used.

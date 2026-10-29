@@ -281,13 +281,16 @@ function IdleLogoutEnabled() {
 
 const App = () => {
   useEffect(() => {
-    // Warm up critical routes in background during idle time
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      window.requestIdleCallback(() => {
-        import("./pages/LandingPage");
-        import("./pages/LoginPage");
-      });
-    }
+    // Warm up the login page during idle time, but only for visitors on the landing page
+    // (the next page they're likely to open). Dashboards used to download Landing + Login
+    // (~26 KB gzip) for nothing; skipped entirely on Data Saver / 2G.
+    if (typeof window === "undefined" || !("requestIdleCallback" in window)) return;
+    if (window.location.pathname !== "/") return;
+    const conn = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (conn?.saveData || /(^|-)2g$/.test(conn?.effectiveType || "")) return;
+    window.requestIdleCallback(() => {
+      import("./pages/LoginPage");
+    });
   }, []);
 
   return (
