@@ -1034,17 +1034,6 @@ export default function TeacherAnalyticsTab({
             </div>
           </div>
 
-          {/* Actionable Correlation Banner */}
-          <div className="rounded-2xl p-4 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-500/20 text-slate-800 dark:text-slate-200 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-blue-500 text-white shrink-0 shadow-sm">
-              <Icons.Sparkles />
-            </div>
-            <div className="text-xs sm:text-sm font-medium">
-              <strong className="font-bold text-blue-700 dark:text-blue-300">Classroom Correlation Insight:</strong>{" "}
-              Students with attendance above 85% achieve an average test score <strong>19.2% higher</strong> than peers with frequent absences. Regular attendance directly correlates with higher distinction rates!
-            </div>
-          </div>
-
           {/* Visual Charts: Score Trend & Grade Distribution */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Score Trend AreaChart */}

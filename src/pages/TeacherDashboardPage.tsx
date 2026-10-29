@@ -36,10 +36,12 @@ const customStyles = `
   .dashboard-root {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
-    background-color: #F8F9FA;
+    background-color: #F7F8FA;
+    color: #1B1B1B;
   }
   .dark .dashboard-root {
     background-color: #0A0A0A;
+    color: #F5F5F5;
   }
 
   @keyframes fadeInUp {
@@ -128,31 +130,26 @@ const customStyles = `
   ::-webkit-scrollbar-thumb  { background: rgba(0, 0, 0, 0.2); border-radius: 10px; }
   .dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
 
+  /* Cards: solid surface, hairline border, soft shadow (same family as the landing cards). */
   .glass-panel {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(40px);
-    -webkit-backdrop-filter: blur(40px);
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05),
-                inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04), 0 8px 24px -12px rgba(17, 17, 17, 0.08);
   }
   .dark .glass-panel {
-    background: rgba(18, 18, 18, 0.95);
+    background: #121212;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.8),
-                inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+    box-shadow: none;
   }
   .glass-overlay {
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(48px);
-    border: 1px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.1),
-                inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 24px 48px -16px rgba(17, 17, 17, 0.18);
   }
   .dark .glass-overlay {
-    background: rgba(12, 12, 12, 0.98);
+    background: #0C0C0C;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 30px 60px -10px rgba(0, 0, 0, 0.9);
+    box-shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.8);
   }
   .inset-pill {
     background: rgba(255, 255, 255, 0.9);
@@ -167,51 +164,23 @@ const customStyles = `
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
-  .btn-glossy-theme {
-    background: linear-gradient(135deg, var(--theme-start) 0%, var(--theme-end) 100%);
-    box-shadow: inset 0px 2px 4px rgba(255, 255, 255, 0.25),
-                inset 0px -2px 4px rgba(0, 0, 0, 0.4),
-                0px 8px 20px var(--theme-shadow);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    position: relative;
-    overflow: hidden;
-    font-weight: 700;
-  }
-  .btn-glossy-theme::before {
-    content: '';
-    position: absolute;
-    top: 0; left: -100%;
-    width: 100%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left 0.5s ease;
-  }
-  .btn-glossy-theme:hover::before  { left: 100%; }
-  .btn-glossy-theme:hover  { filter: brightness(1.15); transform: translateY(-2px); }
-  .btn-glossy-theme:active { transform: translateY(0); filter: brightness(0.9); }
-
+  /* Action tiles: white surface, hairline border, dark text; hover changes colour only. */
+  .btn-glossy-theme,
   .btn-startups {
-    background: linear-gradient(135deg, var(--theme-start) 0%, var(--theme-end) 100%);
-    box-shadow: inset 0px 2px 4px rgba(255, 255, 255, 0.25),
-                inset 0px -2px 4px rgba(0, 0, 0, 0.4),
-                0px 8px 20px var(--theme-shadow);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    position: relative;
-    overflow: hidden;
+    background: #FFFFFF;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04);
+    color: #1B1B1B;
     font-weight: 700;
   }
-  .btn-startups::before {
-    content: '';
-    position: absolute;
-    top: 0; left: -100%;
-    width: 100%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
-    transition: left 0.5s ease;
-  }
-  .btn-startups:hover::before  { left: 100%; }
-  .btn-startups:hover  { filter: brightness(1.15); transform: translateY(-2px); }
-  .btn-startups:active { transform: translateY(0); filter: brightness(0.9); }
+  .btn-glossy-theme:hover,
+  .btn-startups:hover { background: #F7F8FA; border-color: #D1D5DB; }
+  .btn-glossy-theme:focus-visible,
+  .btn-startups:focus-visible { outline: 2px solid #111111; outline-offset: 2px; }
+  .dark .btn-glossy-theme,
+  .dark .btn-startups { background: #171717; border-color: rgba(255, 255, 255, 0.08); color: #FFFFFF; }
+  .dark .btn-glossy-theme:hover,
+  .dark .btn-startups:hover { background: #1F1F1F; }
 
   .folder-paper { fill: #F1F5F9; stroke: #CBD5E1; stroke-width: 2; }
   .dark .folder-paper { fill: #222222; stroke: #444444; }
@@ -287,21 +256,22 @@ const COLOR_SCHEMES = {
 };
 
 /* ------------------- REUSABLE COMPONENTS ------------------- */
-const SidebarButton = ({ active, Icon, label, colorClass, badge, onClick }: any) => (
+const SidebarButton = ({ active, Icon, label, badge, onClick }: any) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center justify-start px-4 sm:px-5 py-3 sm:py-3.5 rounded-[12px] font-bold text-sm transition-all duration-300 ${active
-      ? "bg-slate-200/50 dark:bg-slate-800 shadow-sm text-slate-800 dark:text-white"
-      : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+    aria-current={active ? "page" : undefined}
+    className={`w-full flex items-center justify-start px-4 sm:px-5 py-3 sm:py-3.5 min-h-[44px] rounded-[12px] font-semibold text-[15px] transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] ${active
+      ? "bg-[#FFF1EC] text-[#D93F4D] dark:bg-slate-800 dark:text-white"
+      : "text-[#374151] hover:bg-[#F7F8FA] dark:text-slate-400 dark:hover:bg-slate-800/60"
       }`}
   >
     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-      <div className={`${active ? "scale-110" : ""} transition-transform shrink-0 ${colorClass || "text-slate-500"}`}>
+      <div className="shrink-0 text-current">
         {Icon ? <Icon /> : null}
       </div>
       <span className="truncate tracking-wide">{label}</span>
       {badge && (
-        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs shrink-0">
+        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#F95D6A] text-white shadow-xs shrink-0">
           {badge}
         </span>
       )}
@@ -318,6 +288,7 @@ const GlossyButton = ({
   small = false,
   showNewBadge = false,
   isStartupsStyle = false,
+  primary = false,
   disabled = false,
 }: any) => (
   <button
@@ -325,8 +296,8 @@ const GlossyButton = ({
     disabled={disabled}
     className={`relative flex items-center justify-start gap-3 rounded-[22px] ${disabled
       ? "opacity-60 cursor-not-allowed filter grayscale"
-      : "hover:-translate-y-1"
-      } ${isStartupsStyle ? "btn-startups" : "btn-glossy-theme"
+      : ""
+      } ${primary ? `!bg-[#111111] !border-[#111111] !text-white hover:!bg-[#222222] shadow-sm !rounded-xl${small ? "" : " !h-[50px] !min-h-[50px] !py-0"}` : isStartupsStyle ? "btn-startups" : "btn-glossy-theme"
       } ${fullWidth ? "w-full" : "w-auto"
       } ${small
         ? "px-4 sm:px-5 py-2.5 sm:py-3 min-h-[44px] sm:min-h-[48px]"
@@ -335,26 +306,26 @@ const GlossyButton = ({
   >
     {Icon && (
       <div
-        className={`flex items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md ${small ? "h-7 w-7 sm:h-8 sm:w-8" : "h-8 w-8 sm:h-10 sm:w-10"} border border-white/40 shadow-inner  transition-transform shrink-0`}
+        className={`flex items-center justify-center rounded-xl ${primary ? "bg-white/15 text-white" : "bg-[#FFF1EC] text-[#D93F4D] dark:bg-white/10 dark:text-white"} ${small ? "h-7 w-7 sm:h-8 sm:w-8" : "h-9 w-9 sm:h-10 sm:w-10"} shrink-0`}
       >
         <Icon size={small ? 14 : 18} />
       </div>
     )}
     <div className="flex flex-1 flex-col text-left min-w-0">
-      <span className="font-bold leading-tight tracking-tight flex flex-wrap items-center gap-x-2 gap-y-1 text-white">
+      <span className={`font-bold leading-tight tracking-tight flex flex-wrap items-center gap-x-2 gap-y-1 ${primary ? "text-white" : "text-[#1B1B1B] dark:text-white"}`}>
         {label}
         {showNewBadge && (
-          <span className="new-badge bg-white/30 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider text-white">
+          <span className="new-badge bg-[#FFF1EC] text-[#D93F4D] border border-[#FECDD3] text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
             NEW
           </span>
         )}
       </span>
       {subLabel && !small && (
-        <span className="mt-1 text-xs font-medium leading-snug text-white/85">{subLabel}</span>
+        <span className={`mt-1 text-xs font-medium leading-snug ${primary ? "text-white/75" : "text-[#5D6570] dark:text-slate-400"}`}>{subLabel}</span>
       )}
     </div>
     {!small && (
-      <div className={`ml-auto pl-2 sm:pl-4 text-white/50  transition-transform shrink-0`}>
+      <div className="ml-auto pl-2 sm:pl-4 text-[#9CA3AF] shrink-0">
         <Icons.ChevronRight />
       </div>
     )}
@@ -761,7 +732,7 @@ function TestHistory({
               Access, preview, and download your generated question papers and answer keys anytime.
             </p>
           </div>
-          <GlossyButton label="Create Test" icon={Icons.Zap} small onClick={onCreateNew} isStartupsStyle />
+          <GlossyButton label="Create Test" icon={Icons.Zap} small onClick={onCreateNew} primary />
         </div>
 
         {/* Search & Filter Bar */}
@@ -859,7 +830,7 @@ function TestHistory({
             {filteredTests.map((t) => (
               <div
                 key={t.id}
-                className="flex flex-col xl:flex-row xl:items-center justify-between p-4 sm:p-6 rounded-[24px] sm:rounded-[32px] bg-white/50 dark:bg-slate-800/40 border border-black/5 dark:border-white/10 hover:bg-white/90 dark:hover:bg-slate-800/70 transition-all group gap-4 shadow-sm hover:shadow-md"
+                className="flex flex-col gap-4 p-4 sm:p-6 rounded-[24px] sm:rounded-[32px] bg-white/50 dark:bg-slate-800/40 border border-black/5 dark:border-white/10 hover:bg-white/90 dark:hover:bg-slate-800/70 transition-all group gap-4 shadow-sm hover:shadow-md"
               >
                 {/* Left: Test Info */}
                 <div className="flex items-start sm:items-center gap-3 sm:gap-5 min-w-0">
@@ -871,7 +842,7 @@ function TestHistory({
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h4 className="font-extrabold text-slate-900 dark:text-white text-base sm:text-lg transition-colors truncate">
+                      <h4 title={t.exam_title || "Untitled Test Paper"} className="font-extrabold text-slate-900 dark:text-white text-base sm:text-lg transition-colors break-words min-w-0">
                         {t.exam_title || "Untitled Test Paper"}
                       </h4>
                       {t.status === "saved" ? (
@@ -892,7 +863,7 @@ function TestHistory({
                 </div>
 
                 {/* Right: Badges & Action Buttons */}
-                <div className="flex items-center gap-2 sm:gap-3 flex-wrap xl:flex-nowrap shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100 dark:border-slate-700/50 justify-between sm:justify-start">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap pt-3 border-t border-slate-100 dark:border-slate-700/50">
                   {t.total_questions > 0 && (
                     <span className="text-xs font-bold text-slate-700 dark:text-slate-300 inset-pill border-none px-3 py-1.5 rounded-[16px]">
                       {t.total_questions}Q · {t.total_marks}M
@@ -1406,31 +1377,16 @@ export default function TeacherDashboardPage() {
       <div className="flex h-[100dvh] w-full text-slate-800 dark:text-slate-100 overflow-hidden relative bg-[#F8F9FA] dark:bg-[#0A0A0A] transition-colors duration-500">
         <style dangerouslySetInnerHTML={{ __html: customStyles }} />
 
-        <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-          <div
-            className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05]"
-            style={{ background: 'var(--theme-start)' }}
-          />
-          <div
-            className="absolute top-[20%] right-[-10%] w-[40vw] h-[40vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animation-delay-2000"
-            style={{ background: 'var(--theme-end)' }}
-          />
-          <div
-            className="absolute bottom-[-20%] left-[20%] w-[60vw] h-[60vw] rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-[100px] opacity-[0.03] dark:opacity-[0.05] animation-delay-4000"
-            style={{ background: 'var(--theme-start)' }}
-          />
-        </div>
-
         {mobileMenuOpen && (
           <div
-            className="fixed inset-0 bg-white/20 dark:bg-black/60 backdrop-blur-md z-[190] lg:hidden"
+            className="fixed inset-0 bg-black/30 dark:bg-black/60 z-[190] lg:hidden"
             onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
         {/* ===== SIDEBAR ===== */}
         <aside
-          className={`fixed lg:relative top-0 left-0 w-[288px] h-full flex flex-col bg-white/95 dark:bg-black/95 backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5 z-[200] lg:z-50 shrink-0 transform transition-transform duration-300 overflow-y-auto ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          className={`fixed lg:relative top-0 left-0 w-[288px] h-full flex flex-col bg-white dark:bg-[#0A0A0A] border-r border-[#E5E7EB] dark:border-white/5 z-[200] lg:z-50 shrink-0 transform transition-transform duration-300 overflow-y-auto ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
             }`}
         >
           <div className="p-5 pb-2">
@@ -1535,7 +1491,7 @@ export default function TeacherDashboardPage() {
               </div>
 
               <div className="hidden lg:flex flex-col min-w-0 w-full lg:w-auto">
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white tracking-tight truncate">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#1B1B1B] dark:text-white tracking-[-0.02em] truncate">
                   Welcome, {getFirstName()}
                 </h1>
                 <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-1 sm:mt-2 font-medium truncate">
@@ -1564,7 +1520,7 @@ export default function TeacherDashboardPage() {
                           <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">
                             Notifications
                           </h3>
-                          <span className="text-[10px] font-bold btn-glossy-theme px-2.5 py-1 rounded-full">
+                          <span className="text-[10px] font-bold bg-[#FFF1EC] text-[#D93F4D] border border-[#FECDD3] px-2.5 py-1 rounded-full">
                             New
                           </span>
                         </div>
@@ -1725,7 +1681,7 @@ export default function TeacherDashboardPage() {
 
             {/* MOBILE GREETING */}
             <div className="lg:hidden mb-6 sm:mb-8 px-1" style={{ animationDelay: "150ms" }}>
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">
+              <h1 className="text-2xl sm:text-3xl font-bold text-[#1B1B1B] dark:text-white tracking-[-0.02em] truncate">
                 Welcome, {getFirstName()}
               </h1>
               <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base font-medium mt-1 truncate">
@@ -1761,7 +1717,7 @@ export default function TeacherDashboardPage() {
                         label="Create Test"
                         icon={Icons.Zap}
                         onClick={() => navigate("/dashboard/test-generator")}
-                        isStartupsStyle={true}
+                        primary
                       />
                     </div>
                   </div>
@@ -1865,7 +1821,7 @@ export default function TeacherDashboardPage() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
                     <div>
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs">
+                        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-[#F95D6A] text-white shadow-xs">
                           ✨ AI SUPERPOWERS
                         </span>
                       </div>
@@ -1892,7 +1848,7 @@ export default function TeacherDashboardPage() {
                         desc: "Magically check & auto-grade handwritten answer sheets, test papers & assignments with instant scoring and line-by-line feedback.",
                         action: () => navigate("/dashboard/test-generator?tab=check"),
                         badge: "MAGICAL AI",
-                        badgeClass: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
+                        badgeClass: "bg-[#F95D6A] text-white",
                         btnLabel: "Check Papers",
                         highlight: true,
                       },
@@ -2161,7 +2117,7 @@ export default function TeacherDashboardPage() {
                 <div className="glass-panel rounded-[28px] sm:rounded-[40px] p-6 sm:p-10 relative overflow-hidden">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
                     <div>
-                      <div className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs mb-3">
+                      <div className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-black bg-[#F95D6A] text-white shadow-xs mb-3">
                         <Icons.Sparkles className="w-3.5 h-3.5" />
                         AI TEACHING SUPERPOWERS
                       </div>
@@ -2184,7 +2140,7 @@ export default function TeacherDashboardPage() {
                       desc: "Magically scan and auto-grade handwritten student answer sheets & test papers with question-by-question scoring and rubric feedback.",
                       action: () => navigate("/dashboard/test-generator?tab=check"),
                       badge: "MAGICAL AI",
-                      badgeClass: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
+                      badgeClass: "bg-[#F95D6A] text-white",
                       btnLabel: "Check Papers",
                       highlights: ["Handwritten copies supported", "Rubric & step-wise scoring", "Instant student analysis"],
                       highlight: true,
@@ -2307,7 +2263,7 @@ export default function TeacherDashboardPage() {
                             }}
                             className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded-[20px] text-xs sm:text-sm font-bold transition-all shadow-sm group-hover:shadow-md cursor-pointer ${
                               tool.highlight
-                                ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:brightness-110"
+                                ? "bg-[#F95D6A] text-white hover:brightness-110"
                                 : "bg-slate-900 dark:bg-white dark:text-slate-900 text-white hover:bg-blue-600 dark:hover:bg-blue-500 dark:hover:text-white"
                             }`}
                           >

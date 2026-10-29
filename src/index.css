@@ -194,3 +194,7 @@
     animation: a4-no 160ms ease-in-out 2 !important;
   }
 }
+
+/* Teacher attendance sheet: the fixed help bubble covered the rightmost P/A/L button while scrolling.
+   Hidden only while the sheet is open (TeacherAttendanceView .att-sheet; StaticSarthi .a4-help). */
+body:has(.att-sheet) .a4-help { display: none; }

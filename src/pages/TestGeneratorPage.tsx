@@ -57,13 +57,7 @@ export default function TestGeneratorPage() {
     .toUpperCase();
 
   return (
-    <div className="fixed inset-0 w-full h-full bg-[#F9FAFB] overflow-y-auto font-sans text-[#111827] selection:bg-gray-300">
-
-      {/* BACKGROUND */}
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-20%] left-[-15%] w-[55vw] h-[55vw] bg-gray-200/50 rounded-full blur-[60px] sm:blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-15%] w-[55vw] h-[55vw] bg-gray-200/50 rounded-full blur-[60px] sm:blur-[120px]" />
-      </div>
+    <div className="fixed inset-0 w-full h-full bg-[#F7F8FA] overflow-y-auto font-halenoir text-[#1B1B1B] selection:bg-gray-300">
 
       {/* TOP HEADER */}
       {/* Solid background: lite mode (src/styles/lite.css) turns backdrop blur off, and a see-through header let the
@@ -98,9 +92,9 @@ export default function TestGeneratorPage() {
                 />
               </div>
               <div className="min-w-0">
-                <h1 className="text-[13px] sm:text-base md:text-xl font-bold tracking-tight text-[#111827] truncate leading-tight">
+                <h1 className="text-[13px] sm:text-base md:text-xl font-bold tracking-tight text-[#1B1B1B] truncate leading-tight">
                   a4ai
-                  <span className="text-transparent bg-clip-text bg-gradient-to-br from-[#111827] to-[#374151]">
+                  <span className="text-[#1B1B1B]">
                     Engine V1
                   </span>
                 </h1>
@@ -115,11 +109,8 @@ export default function TestGeneratorPage() {
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4 flex-shrink-0">
             <div className="text-right hidden md:block">
               <p className="text-sm font-bold text-[#111827]">{displayName}</p>
-              <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wide bg-gray-100 px-2 py-0.5 rounded-full inline-block">
-                Pro Plan
-              </p>
             </div>
-            <div className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 rounded-full bg-gradient-to-br from-[#111827] to-[#374151] flex items-center justify-center text-white text-[11px] sm:text-xs md:text-sm font-bold shadow-md ring-2 ring-white">
+            <div className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 rounded-full bg-[#111111] flex items-center justify-center text-white text-[11px] sm:text-xs md:text-sm font-bold shadow-md ring-2 ring-white">
               {initials}
             </div>
           </div>
@@ -142,9 +133,9 @@ export default function TestGeneratorPage() {
               key={k}
               data-tab={k}
               onClick={() => setActiveTab(k)}
-              className={`shrink-0 px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              className={`shrink-0 min-h-[44px] px-4 sm:px-5 py-2.5 rounded-xl text-sm font-bold transition-colors ${
                 activeTab === k
-                  ? "bg-[#111827] text-white shadow"
+                  ? "bg-[#111111] text-white shadow"
                   : "bg-white border border-gray-200 text-gray-500 hover:border-gray-400"
               }`}
             >
@@ -159,7 +150,7 @@ export default function TestGeneratorPage() {
             {isGuest && (
               <div className="mb-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-between">
                 <div>
-                  <p className="font-bold text-indigo-900 text-sm">🎯 Demo Mode</p>
+                  <p className="font-bold text-indigo-900 text-sm">Demo mode</p>
                   <p className="text-xs text-indigo-600 mt-0.5">
                     {remainingTests > 0
                       ? `${remainingTests} free test${remainingTests > 1 ? "s" : ""} remaining — no login needed!`

@@ -8,6 +8,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { useMyScope } from "@/hooks/useMyScope";
+import { Building2 } from "lucide-react";
 
 type InstituteInfo = {
   id: string;
@@ -138,7 +139,7 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
         flexWrap: "wrap",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FFF5F2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🏛️</div>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FFF1EC", color: "#D93F4D", display: "flex", alignItems: "center", justifyContent: "center" }}><Building2 size={22} aria-hidden="true" /></div>
           <div>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#1E293B" }}>Not part of any institute</p>
             <p style={{ margin: "2px 0 0", fontSize: 13, color: "#94A3B8" }}>Join an institute to manage classes and students</p>
@@ -146,7 +147,7 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
         </div>
         <button
           onClick={() => navigate("/join-institute")}
-          style={{ background: "#FF7043", color: "#fff", border: "none", borderRadius: 12, padding: "10px 22px", fontWeight: 700, fontSize: 14, cursor: "pointer", whiteSpace: "nowrap" }}
+          style={{ background: "#111111", color: "#fff", border: "none", borderRadius: 12, padding: "10px 22px", minHeight: 44, fontWeight: 700, fontSize: 14, cursor: "pointer", whiteSpace: "nowrap" }}
         >
           Join Institute →
         </button>

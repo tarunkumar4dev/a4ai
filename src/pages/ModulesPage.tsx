@@ -325,7 +325,7 @@ export const ModulesPage: React.FC = () => {
       {/* Top Header Bar */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-md shadow-orange-500/20 shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-[#F95D6A] flex items-center justify-center text-white shadow-md shadow-orange-500/20 shrink-0">
             <BookOpen className="w-6 h-6" />
           </div>
           <div>
@@ -490,7 +490,7 @@ export const ModulesPage: React.FC = () => {
                         ) : moduleSummary[mod.id] ? (
                           <>
                             {/* Overview Box */}
-                            <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-4 sm:p-5 text-white shadow-sm space-y-2">
+                            <div className="bg-[#F95D6A] rounded-2xl p-4 sm:p-5 text-white shadow-sm space-y-2">
                               <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider opacity-90">
                                 <BookOpen className="w-4 h-4" />
                                 <span>Module Overview</span>

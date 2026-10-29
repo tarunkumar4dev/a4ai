@@ -11,6 +11,7 @@ import {
 } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import { clearAllDrafts } from "@/lib/testGenDraft";
 
 interface AuthContextType {
   session: Session | null;
@@ -80,6 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === "SIGNED_IN" && currentSession?.user) {
         ensureProfileExists(currentSession.user);
       }
+      // every sign-out path ends here (most pages call supabase.auth.signOut directly), so a shared device
+      // doesn't keep the Test Generator drafts
+      if (event === "SIGNED_OUT") clearAllDrafts();
     });
 
     return () => subscription.unsubscribe();

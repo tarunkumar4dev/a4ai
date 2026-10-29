@@ -940,7 +940,7 @@ export default function TeacherStudentsTab({
                 >
                   {/* Column 1: Student Avatar + Name + Email */}
                   <div className="md:col-span-4 flex items-center gap-3 w-full">
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 dark:from-orange-500/20 dark:to-amber-500/20 text-[#FF7043] flex items-center justify-center font-black text-sm shrink-0 shadow-xs border border-orange-200/50 dark:border-orange-500/20">
+                    <div className="w-10 h-10 rounded-2xl bg-[#FFF1EC] dark:bg-orange-500/20 text-[#FF7043] flex items-center justify-center font-black text-sm shrink-0 shadow-xs border border-orange-200/50 dark:border-orange-500/20">
                       {getInitials(s.name)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -1105,7 +1105,7 @@ export default function TeacherStudentsTab({
                   {/* Top card bar: Avatar + Name + Roll */}
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 dark:from-orange-500/20 dark:to-amber-500/20 text-[#FF7043] flex items-center justify-center font-black text-base shrink-0 shadow-xs border border-orange-200/50 dark:border-orange-500/20">
+                      <div className="w-12 h-12 rounded-2xl bg-[#FFF1EC] dark:bg-orange-500/20 text-[#FF7043] flex items-center justify-center font-black text-base shrink-0 shadow-xs border border-orange-200/50 dark:border-orange-500/20">
                         {getInitials(s.name)}
                       </div>
                       <div>

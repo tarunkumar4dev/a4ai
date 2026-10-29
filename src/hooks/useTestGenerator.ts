@@ -165,7 +165,7 @@ export function useTestGenerator(): UseTestGeneratorReturn {
           );
         } else if (err.status === 500) {
           setError(
-            "Server error — our AI is temporarily overloaded. Try again in 30 seconds."
+            "The generator hit a server error. Your settings are still filled in; try again."
           );
         } else {
           setError(typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail));
