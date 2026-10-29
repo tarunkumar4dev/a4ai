@@ -639,7 +639,8 @@ function SortableTestQuestion({
           : "border-gray-200/80 hover:border-gray-300 shadow-sm"
       }`}
     >
-      <div className="flex items-start gap-2.5 justify-between">
+      {/* Phone: tools go under the question so the question (and its tables) gets the full card width. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-2.5 sm:justify-between">
         <div className="flex items-start gap-2 flex-1 min-w-0">
           {/* Touch/Mouse Drag handle */}
           <div
@@ -671,7 +672,7 @@ function SortableTestQuestion({
         </div>
 
         {/* Right Action Tools */}
-        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+        <div className="flex items-center justify-end gap-1.5 flex-shrink-0 border-t border-gray-100 pt-2 sm:ml-2 sm:border-0 sm:pt-0">
           {/* Quick Nudge Buttons */}
           <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg p-0.5">
             <button
