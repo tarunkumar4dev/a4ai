@@ -1,0 +1,23 @@
+{
+  "_about": "A 2-page checked copy like the real one the red-pen bugs were seen on: page 2 has Q8, Q9, Q10 close together with long comments; Q11 is graded in sub-parts. Page height 1754 px (A4, 150 dpi).",
+  "page_height": 1754,
+  "graded_questions": [
+    { "q_no": "1", "max_marks": 2, "marks_awarded": 2, "page_index": 0, "y_start": 80, "has_subparts": false, "subpart_grades": [], "not_attempted": false, "feedback": "Correct", "legibility_issue": false, "confidence": "high" },
+    { "q_no": "2", "max_marks": 3, "marks_awarded": 1, "page_index": 0, "y_start": 300, "has_subparts": false, "subpart_grades": [], "not_attempted": false, "legibility_issue": false, "confidence": "high", "feedback": "",
+      "points": [ { "id": "p1", "text": "", "expected": "", "max_marks": 2, "marks_awarded": 0, "verdict": "none", "evidence": "", "reason": "Wrote the formula for kinetic energy instead of potential energy." } ] },
+    { "q_no": "8", "max_marks": 4, "marks_awarded": 2, "page_index": 1, "y_start": 120, "has_subparts": false, "subpart_grades": [], "not_attempted": false, "legibility_issue": false, "confidence": "high",
+      "feedback": "The definition of electric potential is correct, but the unit is written as N/C instead of V and the derivation skips the step where the work done is divided by the test charge, so only half marks." },
+    { "q_no": "9", "max_marks": 5, "marks_awarded": 3, "page_index": 1, "y_start": 160, "has_subparts": false, "subpart_grades": [], "not_attempted": false, "legibility_issue": true, "confidence": "low", "needs_review": true, "review_reasons": ["illegible", "low_confidence"],
+      "feedback": "Circuit diagram is drawn correctly. The equivalent resistance is calculated as 6 ohm but the parallel combination of 3 ohm and 6 ohm should give 2 ohm; the current that follows is therefore wrong as well." },
+    { "q_no": "10", "max_marks": 3, "marks_awarded": 0, "page_index": 1, "y_start": 200, "has_subparts": false, "subpart_grades": [], "not_attempted": false, "legibility_issue": false, "confidence": "medium",
+      "teacher_marks": 1, "teacher_note": "Given 1 mark for the correct diagram. Lens formula sign convention is reversed: u must be negative for a real object." },
+    { "q_no": "11", "max_marks": 6, "marks_awarded": 3.5, "page_index": 1, "y_start": 700, "has_subparts": true, "not_attempted": false, "legibility_issue": false, "confidence": "high", "feedback": "See sub-part feedback",
+      "subpart_grades": [
+        { "sub_id": "i", "max_marks": 1, "marks_awarded": 1, "feedback": "ok", "student_answer_summary": "", "key_concepts_found": [], "key_concepts_missed": [] },
+        { "sub_id": "11(ii)", "max_marks": 3, "marks_awarded": 1.5, "feedback": "half", "student_answer_summary": "", "key_concepts_found": [], "key_concepts_missed": [],
+          "points": [ { "id": "q11ii", "text": "", "expected": "", "max_marks": 1.5, "marks_awarded": 0, "verdict": "none", "evidence": "", "reason": "Missing the final numerical answer with units." } ] },
+        { "sub_id": "(iii)", "max_marks": 2, "marks_awarded": 1, "feedback": "partly", "student_answer_summary": "", "key_concepts_found": [], "key_concepts_missed": [], "review_reasons": ["low_confidence"] }
+      ] },
+    { "q_no": "12", "max_marks": 2, "marks_awarded": 0, "page_index": 1, "y_start": 930, "has_subparts": false, "subpart_grades": [], "not_attempted": true, "legibility_issue": false, "confidence": "high", "feedback": "" }
+  ]
+}

@@ -41,6 +41,7 @@ import { CSS } from "@dnd-kit/utilities";
 import "katex/dist/katex.min.css";
 import { InlineMath, BlockMath } from "react-katex";
 import { supabase } from "@/lib/supabaseClient";
+import { isoDate } from "@/lib/localDate";
 import { generateTestPaperPdf, generateAnswerKeyPdf } from "@/utils/testPdfExporter";
 import { getQuestionSegments, hasTable, type AccSegment } from "@/utils/accountancyTables";
 import { AccountancySegments } from "@/components/AccountancyTableView";
@@ -72,6 +73,7 @@ import {
 import { getBackendApiBase } from "@/lib/apiBase";
 import { contentHash } from "@/lib/ncert/contentHash";
 import { parseOptions } from "@/lib/ncert/optionLabel";
+import { CheckingLinkButton } from "@/components/teacher/copySubmissions/CheckingLink";
 
 // ── Config ──────────────────────────────────────────────────────
 const API_BASE = `${getBackendApiBase()}/v1`;
@@ -951,6 +953,7 @@ export default function TestBuilderPage() {
     loadSavedSelection().length ? "loading" : "done"
   );
   const [examTitle, setExamTitle] = useState("");
+  const [savedPaper, setSavedPaper] = useState<{ id: string; sig: string } | null>(null);
   const [templateTier, setTemplateTier] = useState<"standard" | "premium">("standard");
   const [colorTheme, setColorTheme] = useState<"teal" | "navy" | "dark_green" | "orange">("teal");
   const [instituteName, setInstituteName] = useState("");
@@ -1309,10 +1312,14 @@ export default function TestBuilderPage() {
   };
 
   // ── Export Flow & Auto-save ───────────────────────────────────
-  const autoSaveTestToHistory = async () => {
+  // One Test History row per paper: exporting the same paper again (or opening its Checking Link) reuses it.
+  const paperSignature = () => `${examTitle}|${testQuestions.map((q) => q.paperId ?? q.id).join(",")}`;
+  const autoSaveTestToHistory = async (): Promise<string | null> => {
     try {
+      const sig = paperSignature();
+      if (savedPaper && savedPaper.sig === sig) return savedPaper.id;
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.id) return;
+      if (!user?.id) return null;
 
       const testId = crypto.randomUUID();
       const { error: testErr } = await supabase.from("tests").insert({
@@ -1326,7 +1333,7 @@ export default function TestBuilderPage() {
         total_questions: testQuestions.length,
         total_marks: totalMarks,
         created_at: new Date().toISOString(),
-        paper_date: new Date().toLocaleDateString("en-GB"),
+        paper_date: isoDate(),   // `date` column, DateStyle MDY: "25/10/2026" was rejected
         cbse_pattern: false,
       });
 
@@ -1345,12 +1352,30 @@ export default function TestBuilderPage() {
           position: idx + 1,
           image_url: q.image_url || undefined,
         }));
-        await supabase.from("questions").insert(qRows);
+        const { error: qErr } = await supabase.from("questions").insert(qRows);
+        if (!qErr) {
+          setSavedPaper({ id: testId, sig });
+          return testId;
+        }
       }
+      return null;
     } catch {
       // silently proceed
+      return null;
     }
   };
+
+  const linkTestRef = (id: string) => ({
+    id, title: examTitle || `${subject} Class ${classGrade} Test`, subject, class_grade: `Class ${classGrade}`,
+    board: "CBSE", total_marks: totalMarks,
+  });
+  const ensureSavedForLink = async () => {
+    if (testQuestions.length === 0) { toast.error("Please add at least 1 question to the test paper!"); return null; }
+    const id = await autoSaveTestToHistory();
+    if (!id) { toast.error("Couldn't save the test. Check that you're logged in and try again."); return null; }
+    return linkTestRef(id);
+  };
+  const linkTest = savedPaper && savedPaper.sig === paperSignature() ? linkTestRef(savedPaper.id) : null;
 
   const buildQuestionsPayload = (includeAnswers: boolean) =>
     testQuestions.map((q) => ({
@@ -2121,6 +2146,9 @@ export default function TestBuilderPage() {
                         </button>
                       </div>
                     </div>
+
+                    <CheckingLinkButton test={linkTest} ensureSaved={ensureSavedForLink}
+                      className="w-full bg-gray-900 hover:bg-gray-800 active:scale-95 border border-gray-900 text-white font-semibold py-2.5 px-3 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all disabled:opacity-50" />
                   </div>
                 )}
               </div>
@@ -2260,6 +2288,8 @@ export default function TestBuilderPage() {
                           <FileKey className="w-3.5 h-3.5" /> Answer Key
                         </button>
                       </div>
+                      <CheckingLinkButton test={linkTest} ensureSaved={ensureSavedForLink}
+                        className="w-full bg-gray-900 active:scale-95 border border-gray-900 text-white font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50" />
                     </div>
                   )}
                 </div>

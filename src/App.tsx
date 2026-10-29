@@ -8,6 +8,8 @@ import {
   Route,
   Navigate,
   useLocation,
+  useParams,
+  useSearchParams,
 } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -38,6 +40,12 @@ const TestBuilderPage = lazy(() => import("./pages/TestBuilderPage"));
 const LandingDemo = lazy(() => import("@/components/LandingDemo"));
 const FAQ = lazy(() => import("@/components/FAQ"));
 const StudentPortalPage = lazy(() => import("./pages/StudentPortalPage"));
+const AssignmentLinkPage = lazy(() => import("./pages/AssignmentLinkPage"));
+// /s/:token is normally served by s.html (its own light entry); this route is the fallback inside the app
+function AssignmentLinkRoute() {
+  const { token = "" } = useParams();
+  return <AssignmentLinkPage token={token} />;
+}
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
 const MyCommunityQuizzesPage = lazy(() => import("./pages/teacher/MyCommunityQuizzesPage"));
@@ -65,8 +73,6 @@ const InstituteDashboardPage = lazy(() => import("./pages/institute/InstituteDas
 const TestGeneratorPage = lazy(() => import("./pages/TestGeneratorPage"));
 const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
-/* ---------- NEW MODULE PAGE ---------- */
-const ModulesPage = lazy(() => import("./pages/ModulesPage"));
 /* ---------- TEST CHECKER ---------- */
 
 
@@ -94,9 +100,17 @@ const CreateContestPage = lazy(() => import("./pages/CreateContestPage"));
 const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
 const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
+const ContestLeaderboardPage = lazy(() => import("./pages/ContestLeaderboardPage"));
+
+/** ?c=<short_code> / ?id=<contest_id> → a contest's leaderboard; plain /contests/leaderboard stays the old page */
+function LeaderboardRoute() {
+  const [params] = useSearchParams();
+  return params.get("c") || params.get("id") ? <ContestLeaderboardPage /> : <LeaderboardPage />;
+}
 const ContestPreviewPage = lazy(() => import("./pages/ContestPreview"));
 
 const ContestPage = lazy(() => import("./pages/ContestPage"));
+const MyContestsPage = lazy(() => import("./pages/teacher/MyContestsPage"));
 
 /* ---------- Mega Contest Pages ---------- */
 const MegaContestLivePage = lazy(() =>
@@ -344,6 +358,7 @@ const App = () => {
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />
                       <Route path="/features" element={<FeaturesPage />} />
                       <Route path="/student" element={<StudentPortalPage />} />
+                      <Route path="/s/:token" element={<AssignmentLinkRoute />} />
                       <Route path="/pricing" element={<PricingPage />} />
                       <Route path="/api" element={<ApiPage />} />
                       <Route path="/about" element={<AboutPage />} />
@@ -455,9 +470,10 @@ const App = () => {
                       {/* Contests */}
                       <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
                       <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
+                      <Route path="/contests/mine" element={<PrivateRoute><MyContestsPage /></PrivateRoute>} />
                       <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
                       <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
-                      <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardPage /></PrivateRoute>} />
+                      <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardRoute /></PrivateRoute>} />
                       <Route path="/contests/preview/:contestId" element={<PrivateRoute><ContestPreviewPage /></PrivateRoute>} />
                       <Route path="/contest/:shortCode" element={<PrivateRoute><ContestPage /></PrivateRoute>} />
                       <Route path="/mega-contest/:contestId" element={<PrivateRoute><MegaContestLivePage /></PrivateRoute>} />
@@ -467,14 +483,8 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  MODULES ROUTE - NAYA ADD KIYA HAI           */}
                       {/* ============================================ */}
-                      <Route
-                        path="/dashboard/modules"
-                        element={
-                          <PrivateRoute>
-                            <ModulesPage />
-                          </PrivateRoute>
-                        }
-                      />
+                      {/* Modules lives inside the teacher dashboard (sidebar + layout); the bare page had neither */}
+                      <Route path="/dashboard/modules" element={<Navigate to="/dashboard?tab=modules" replace />} />
 
                       {/* ============================================ */}
                       {/*  REDIRECTS (old paths → new paths)           */}

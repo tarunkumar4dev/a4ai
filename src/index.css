@@ -1,3 +1,23 @@
+/* Plus Jakarta Sans, self-hosted (variable 400-800, Google Fonts latin + latin-ext
+   subsets; latin-ext carries ₹). Used by the dashboards, pricing and features
+   pages by name, and by the landing headlines via Tailwind's font-halenoir. */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-latin.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/PlusJakartaSans-latin-ext.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -133,4 +153,44 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+/* Landing hero showcase (src/components/landing/FeatureShowcase.tsx).
+   The coded Test Generator preview is sized in em; its font-size follows the
+   frame width so it fills the 4:3 (mobile) / 16:10 frame at any size. */
+.a4-showcase-media {
+  container-type: inline-size;
+}
+.a4-tg-preview {
+  font-size: 11px;
+  font-size: 3.125cqw;
+}
+@media (min-width: 640px) {
+  .a4-tg-preview {
+    font-size: 15px;
+    font-size: 2.5cqw;
+  }
+}
+.a4-no-scrollbar {
+  scrollbar-width: none;
+}
+.a4-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Login characters shake "no" on a wrong password (LoginPage.tsx). The only
+   keyframe animation on the marketing/auth pages: 2 × 160 ms, transform only.
+   !important beats src/styles/lite.css, which zeroes every other animation. */
+@keyframes a4-no {
+  0%, 100% { transform: none; }
+  33% { transform: translateX(-4px) rotate(-7deg); }
+  66% { transform: translateX(4px) rotate(7deg); }
+}
+.a4-face {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .a4-no .a4-face {
+    animation: a4-no 160ms ease-in-out 2 !important;
+  }
 }

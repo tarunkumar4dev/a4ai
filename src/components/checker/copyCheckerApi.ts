@@ -38,8 +38,8 @@ export const STRICTNESS_LABEL: Record<Strictness, string> = {
   easy: "Lenient", medium: "Standard", hard: "Strict", extreme: "Very strict",
 };
 
-export const MAX_PAGES = 16;
-const BUCKET = "answer-sheets";
+export const MAX_PAGES = 30;   // backend hard cap; very large photos may still be refused by size (it says how many fit)
+export const BUCKET = "answer-sheets";
 const API = backendUrl("/v1/copy-checker");
 
 const request = (method: "POST" | "PATCH", path: string, body?: unknown) => checkerFetch(`${API}${path}`, method, body);

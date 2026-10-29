@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
 import { motion, AnimatePresence } from "framer-motion";
 import StudentCalendar, { type CalEvent } from "@/components/student/StudentCalendar";
+import UploadAttempts from "@/components/student/UploadAttempts";
 
 /* ─── Types ────────────────────────────────────────────────────── */
 type StudentData = {
@@ -38,6 +39,8 @@ type Assignment = {
   created_at: string;
   batch_id?: string;
   batch_name?: string | null;
+  /** set when the teacher switched the copy-upload link on (19) → upload through create_submission */
+  upload_link_token?: string | null;
   submission?: Submission | null;
 };
 
@@ -493,7 +496,9 @@ export default function StudentPortalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student?.id, student?.access_code]);
 
-  /* ── Submit (storage upload + submit_assignment RPC) ── */
+  /* ── Submit. Upload-link assignments (upload_link_token, 19): components/student/UploadAttempts
+     (create_submission / my_submissions, docs/upload-flow-api.md). Every other assignment keeps the old single-PDF
+     flow (storage upload + submit_assignment), which the teacher's AI check reads through file_url. ── */
   async function handleSubmitFile(assignment: Assignment, file: File) {
     if (!student) return;
     setUploading(true);
@@ -537,8 +542,10 @@ export default function StudentPortalPage() {
   }
 
   const pending = assignments.filter(a => !a.submission);
-  const submitted = assignments.filter(a => a.submission && a.submission.status === "submitted");
-  const graded = assignments.filter(a => a.submission && a.submission.status === "graded");
+  // upload-link attempts have their own statuses (docs/upload-flow-api.md §1): everything not yet published counts as submitted
+  const isDone = (s: string) => s === "graded" || s === "published";
+  const submitted = assignments.filter(a => a.submission && !isDone(a.submission.status) && a.submission.status !== "rejected");
+  const graded = assignments.filter(a => a.submission && isDone(a.submission.status));
 
   /* Aggregated files for the Files View */
   const allFiles = useMemo(() => {
@@ -816,29 +823,41 @@ export default function StudentPortalPage() {
                   </div>
                 )}
 
-                {submitSuccess && (
-                  <div className="rounded-lg px-4 py-3 text-sm font-medium mb-4 border" style={{ background: t.tealBg, color: t.teal, borderColor: `${t.teal}30` }}>
-                    ✅ Submitted successfully!
-                  </div>
+                {activeAssignment.upload_link_token ? (
+                  <UploadAttempts
+                    code={student.access_code}
+                    assignmentRef={activeAssignment.upload_link_token}
+                    student={{ id: student.id, institute_id: student.institute_id }}
+                    t={t}
+                    onChange={() => loadDashboard(student)}
+                  />
+                ) : (
+                  <>
+                    {submitSuccess && (
+                      <div className="rounded-lg px-4 py-3 text-sm font-medium mb-4 border" style={{ background: t.tealBg, color: t.teal, borderColor: `${t.teal}30` }}>
+                        ✅ Submitted successfully!
+                      </div>
+                    )}
+
+                    <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                      onChange={async e => {
+                        const file = e.target.files?.[0];
+                        if (file) await handleSubmitFile(activeAssignment, file);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                    />
+
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="w-full py-3 rounded-lg text-white font-medium text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
+                      style={{ background: uploading ? "#94A3B8" : `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}
+                    >
+                      {uploading ? <><Icons.Loader /> Uploading...</> : sub ? <><Icons.Upload /> Resubmit (PDF only)</> : <><Icons.Upload /> Upload Answer (PDF)</>}
+                    </button>
+                    <p className="text-center text-xs mt-2" style={{ color: t.textMuted }}>PDF files only · Max 10MB</p>
+                  </>
                 )}
-
-                <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
-                  onChange={async e => {
-                    const file = e.target.files?.[0];
-                    if (file) await handleSubmitFile(activeAssignment, file);
-                    if (fileInputRef.current) fileInputRef.current.value = "";
-                  }}
-                />
-
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="w-full py-3 rounded-lg text-white font-medium text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
-                  style={{ background: uploading ? "#94A3B8" : `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}
-                >
-                  {uploading ? <><Icons.Loader /> Uploading...</> : sub ? <><Icons.Upload /> Resubmit (PDF only)</> : <><Icons.Upload /> Upload Answer (PDF)</>}
-                </button>
-                <p className="text-center text-xs mt-2" style={{ color: t.textMuted }}>PDF files only · Max 10MB</p>
               </div>
             </div>
           </div>

@@ -35,7 +35,8 @@ import {
   TrendingUp,
   BarChart3,
   Target,
-  Loader2
+  Loader2,
+  FileUp
 } from "lucide-react";
 
 // contexts
@@ -192,7 +193,7 @@ function PremiumFlashCard({
 const ContestLandingPage: React.FC = () => {
   const navigate = useNavigate();
   const { coins } = useCoins();
-  const { userProfile } = useAuth();
+  const { userProfile, role } = useAuth() as ReturnType<typeof useAuth> & { userProfile?: { full_name?: string } };
   const [activeTopic, setActiveTopic] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
@@ -558,6 +559,29 @@ const ContestLandingPage: React.FC = () => {
             </div>
           </motion.div>
         </section>
+
+        {/* Teachers: question paper PDF → contest (same flow as the Test Generator tab) */}
+        {role !== "student" && (
+          <button
+            onClick={() => navigate("/dashboard/test-generator?tab=contest-pdf")}
+            className="w-full text-left flex items-center gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900 text-white shadow-md active:scale-[0.99]"
+          >
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-orange-500 flex items-center justify-center shrink-0">
+              <FileUp size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm sm:text-base font-extrabold font-jakarta">Create contest from PDF</p>
+              <p className="text-xs text-slate-300 font-jakarta">Upload a question paper with its answer key — check the answers, share a contest link.</p>
+            </div>
+            <ChevronRight size={20} className="shrink-0 text-slate-400" />
+          </button>
+        )}
+        {role !== "student" && (
+          <button onClick={() => navigate("/contests/mine")}
+            className="w-full text-left flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-white border border-slate-200 text-sm font-bold text-slate-800">
+            My contests — results &amp; publish <ChevronRight size={18} className="text-slate-400" />
+          </button>
+        )}
 
         {/* 2. Hero FlashCards - Mega Contests */}
         <section>

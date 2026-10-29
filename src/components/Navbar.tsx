@@ -1,9 +1,9 @@
-// Navbar.tsx — Static full-width top bar, Black and Peach buttons
+// Navbar.tsx — Redesigned static top bar, clean premium feel
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
-import { Search, Menu, X, ArrowRight, User, Settings, LayoutDashboard, LogOut, ChevronRight } from "lucide-react";
+import { Search, Menu, X, ArrowRight, User, Settings, LogOut, ChevronRight } from "lucide-react";
 
 const navItems = [
   { name: "Home", path: "/" },
@@ -32,8 +32,11 @@ export default function Navbar() {
   const searchRef = useRef<HTMLDivElement>(null);
 
   const { pathname } = useLocation();
-  const activeName =
-    navItems.find((n) => (n.path === "/" ? pathname === "/" : pathname.startsWith(n.path)))?.name ?? "Home";
+  // Pages outside the nav (login, signup…) highlight nothing; the Resources sub-pages highlight Resources.
+  const RESOURCE_PAGES = ["/docs", "/help", "/faq", "/blog", "/case-studies"];
+  const activeName = RESOURCE_PAGES.some((p) => pathname.startsWith(p))
+    ? "Resources"
+    : navItems.find((n) => (n.path === "/" ? pathname === "/" : pathname.startsWith(n.path)))?.name ?? null;
 
   const searchSuggestions: SuggestionItem[] = useMemo(() => [
     { name: "Dashboard", path: "/dashboard" },
@@ -42,7 +45,6 @@ export default function Navbar() {
       path: "/profile",
       subOptions: [
         { name: "Settings", path: "/dashboard/settings", icon: Settings },
-        { name: "My Dashboard", path: "/dashboard", icon: LayoutDashboard },
         { name: "Sign out", path: "/logout", icon: LogOut }
       ]
     },
@@ -62,6 +64,17 @@ export default function Navbar() {
     );
   }, [searchQuery, searchSuggestions]);
 
+  const handleSignOut = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setProfileOpen(false);
+      setMobileMenuOpen(false);
+      if (pathname.startsWith("/dashboard") || pathname.startsWith("/contests"))
+        navigate("/", { replace: true });
+    }
+  }, [navigate, pathname]);
+
   const handleSearchSelect = useCallback(
     (path: string) => {
       setSearchOpen(false);
@@ -73,7 +86,7 @@ export default function Navbar() {
         navigate(path);
       }
     },
-    [navigate]
+    [handleSignOut, navigate]
   );
 
   useEffect(() => {
@@ -92,41 +105,38 @@ export default function Navbar() {
   const gotoSignUp = () => navigate("/signup");
   const gotoDashboard = () => navigate("/dashboard");
 
-  async function handleSignOut() {
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      setProfileOpen(false);
-      setMobileMenuOpen(false);
-      if (pathname.startsWith("/dashboard") || pathname.startsWith("/contests"))
-        navigate("/", { replace: true });
-    }
-  }
-
   return (
     <>
+      {/* Accessibility Skip Link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[#111111] focus:text-white focus:rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F95D6A] text-sm font-semibold"
+      >
+        Skip to main content
+      </a>
+
       <nav className="fixed top-0 left-0 right-0 w-full z-50 bg-white border-b border-gray-200">
-        <div className="w-full h-20 flex items-center px-4 sm:px-6 lg:px-8">
-          {/* Logo — 2x icon size (64px) and 1.5x text size (30px) */}
+        <div className="w-full h-16 flex items-center px-4 sm:px-6 lg:px-8">
+          {/* Logo — 40px icon, "a4ai" wordmark at 20px */}
           <div className="flex-1 flex items-center justify-start">
-            <Link to="/" className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2.5">
               <img
                 src="/ICON.ico"
                 alt="a4ai"
-                className="h-16 w-16 object-contain flex-shrink-0"
-                style={{ width: "64px", height: "64px" }}
+                className="object-contain flex-shrink-0"
+                style={{ width: "40px", height: "40px" }}
               />
               <span
-                className="font-semibold tracking-tight text-gray-900"
-                style={{ fontSize: "30px", lineHeight: "1.1" }}
+                className="font-bold tracking-tight text-[#1B1B1B]"
+                style={{ fontSize: "20px", lineHeight: "1.2" }}
               >
-                AI for All India
+                a4ai
               </span>
             </Link>
           </div>
 
-          {/* Center Navigation toolbar buttons with Peach active background */}
-          <div className="hidden md:flex items-center justify-center gap-2 flex-none">
+          {/* Center Navigation — coral active with bottom border */}
+          <div className="hidden lg:flex items-center justify-center gap-0.5 xl:gap-1 flex-none">
             {navItems.map((item) => {
               const active = activeName === item.name;
               return (
@@ -139,44 +149,41 @@ export default function Navbar() {
                       document.getElementById("ai-tools")?.scrollIntoView({ behavior: "smooth" });
                     }
                   }}
-                  className={`px-4 py-2 rounded-[10px] text-[15px] font-bold border transition-colors ${
+                  className={`relative px-3 xl:px-3.5 py-2 text-[15px] font-medium whitespace-nowrap ${
                     active
-                      ? "border-[#fecdd3]"
-                      : "text-gray-900 border-transparent hover:text-black hover:bg-gray-100"
+                      ? "text-[#F95D6A]"
+                      : "text-[#1B1B1B] hover:text-[#F95D6A]"
                   }`}
-                  style={
-                    active
-                      ? {
-                          color: "#f75961",
-                          backgroundColor: "#fff0f1",
-                          borderColor: "#fecdd3",
-                        }
-                      : undefined
-                  }
                 >
                   {item.name}
+                  {active && (
+                    <span
+                      className="absolute left-3 right-3 xl:left-3.5 xl:right-3.5 bottom-0 h-[2px] rounded-full"
+                      style={{ backgroundColor: "#F95D6A" }}
+                    />
+                  )}
                 </Link>
               );
             })}
           </div>
 
-          {/* Actions — Peach (Sign in) & Black (Get Started) Buttons */}
+          {/* Actions */}
           <div className="flex-1 flex items-center justify-end gap-2.5 sm:gap-3">
             {/* Search */}
             <div className="relative flex items-center" ref={searchRef}>
               {searchOpen ? (
                 <div
-                  className="flex items-center rounded-[12px] h-10 bg-white border border-gray-300 shadow-sm"
+                  className="flex items-center rounded-xl h-10 bg-white border border-gray-200 shadow-sm"
                   style={{ width: typeof window !== "undefined" && window.innerWidth < 640 ? 160 : 220 }}
                 >
-                  <Search className="h-4 w-4 ml-3 flex-shrink-0" style={{ color: "#f75961" }} />
+                  <Search className="h-4 w-4 ml-3 flex-shrink-0 text-[#F95D6A]" />
                   <input
                     autoFocus
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search..."
-                    className="flex-1 h-full bg-transparent px-2 text-sm font-semibold outline-none min-w-0 text-gray-900"
+                    className="flex-1 h-full bg-transparent px-2 text-sm font-medium outline-none min-w-0 text-[#1B1B1B]"
                   />
                   <button
                     onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
@@ -188,8 +195,9 @@ export default function Navbar() {
               ) : (
                 <button
                   onClick={() => setSearchOpen(true)}
-                  className="h-10 w-10 flex items-center justify-center rounded-[12px] border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 cursor-pointer"
+                  className="h-9 w-9 flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-[#1B1B1B] hover:border-gray-300 cursor-pointer"
                   title="Search"
+                  aria-label="Search"
                 >
                   <Search className="h-4 w-4" />
                 </button>
@@ -197,8 +205,8 @@ export default function Navbar() {
 
               {/* Suggestions dropdown */}
               {searchOpen && (
-                <div className="absolute right-0 top-full mt-2 w-64 rounded-[14px] border border-gray-200 bg-white p-2 shadow-xl z-[9999]">
-                  <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">
+                <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-gray-200 bg-white p-2 shadow-lg z-[9999]">
+                  <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-[#5D6570]">
                     Suggestions
                   </div>
                   <div className="mt-1 space-y-0.5 max-h-[280px] overflow-y-auto">
@@ -206,7 +214,7 @@ export default function Navbar() {
                       <div key={item.name} className="block">
                         <button
                           onClick={() => handleSearchSelect(item.path)}
-                          className="flex w-full items-center justify-between rounded-[10px] px-3 py-2 text-left text-sm font-bold text-gray-800 hover:bg-[#fff0f1] hover:text-[#f75961] cursor-pointer"
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-[#1B1B1B] hover:bg-[#F7F8FA] hover:text-[#F95D6A] cursor-pointer"
                         >
                           <span>{item.name}</span>
                           {!item.subOptions && <ChevronRight className="h-3.5 w-3.5 opacity-40" />}
@@ -220,7 +228,7 @@ export default function Navbar() {
                                 <button
                                   key={sub.name}
                                   onClick={() => handleSearchSelect(sub.path)}
-                                  className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-xs font-bold text-gray-600 hover:bg-[#fff0f1] hover:text-[#f75961] cursor-pointer"
+                                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-[#5D6570] hover:bg-[#F7F8FA] hover:text-[#F95D6A] cursor-pointer"
                                 >
                                   <SubIcon className="h-3.5 w-3.5 opacity-60" />
                                   <span>{sub.name}</span>
@@ -236,21 +244,21 @@ export default function Navbar() {
               )}
             </div>
 
-            <div className="hidden items-center gap-2.5 md:flex">
+            <div className="hidden items-center gap-2.5 lg:flex whitespace-nowrap">
               {!loggedIn ? (
                 <>
-                  {/* Solid Peach Filled Button */}
+                  {/* Sign in — text link style */}
                   <button
                     onClick={gotoSignIn}
-                    className="h-10 px-5 text-sm font-bold rounded-[14px] bg-[#f75961] hover:bg-[#e8454d] text-white border border-[#f75961] transition-colors cursor-pointer"
+                    className="h-9 px-4 text-sm font-medium text-[#1B1B1B] hover:text-[#F95D6A] cursor-pointer"
                   >
                     Sign in
                   </button>
 
-                  {/* Black Button */}
+                  {/* Get Started — black CTA */}
                   <button
                     onClick={gotoSignUp}
-                    className="h-10 px-5 rounded-[14px] text-sm font-bold flex items-center gap-1.5 bg-black text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                    className="h-9 px-5 rounded-lg text-sm font-semibold flex items-center gap-1.5 bg-[#111111] text-white hover:bg-[#222222] cursor-pointer"
                   >
                     <span>Get Started</span>
                     <ArrowRight className="h-4 w-4" />
@@ -258,32 +266,34 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
+                  {/* Dashboard — black CTA */}
                   <button
                     onClick={gotoDashboard}
-                    className="h-10 px-5 rounded-[14px] text-sm font-bold bg-black text-white hover:bg-neutral-800 cursor-pointer"
+                    className="h-9 px-5 rounded-lg text-sm font-semibold bg-[#111111] text-white hover:bg-[#222222] cursor-pointer"
                   >
                     Dashboard
                   </button>
 
+                  {/* Profile icon button */}
                   <div className="relative">
                     <button
                       onClick={() => setProfileOpen((v) => !v)}
-                      className="h-10 inline-flex items-center gap-2 rounded-[14px] px-4 text-sm font-bold bg-black text-white hover:bg-neutral-800 cursor-pointer"
+                      className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-[#1B1B1B] hover:border-gray-300 cursor-pointer"
+                      aria-label="Profile menu"
                     >
-                      <User className="h-4 w-4 text-white" />
-                      <span className="hidden lg:inline">Profile</span>
+                      <User className="h-4 w-4" />
                     </button>
 
                     {profileOpen && (
                       <div
-                        className="absolute right-0 mt-2 w-48 rounded-[14px] p-1.5 bg-white border border-gray-200 shadow-xl"
+                        className="absolute right-0 mt-2 w-48 rounded-xl p-1.5 bg-white border border-gray-200 shadow-lg"
                         onMouseLeave={() => setProfileOpen(false)}
                       >
                         <DropItem to="/dashboard/settings" onClick={() => setProfileOpen(false)}>Settings</DropItem>
                         <DropItem to="/dashboard" onClick={() => setProfileOpen(false)}>My Dashboard</DropItem>
                         <button
                           onClick={handleSignOut}
-                          className="w-full text-left rounded-[10px] px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-100 cursor-pointer"
+                          className="w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-[#1B1B1B] hover:bg-[#F7F8FA] cursor-pointer"
                         >
                           Sign out
                         </button>
@@ -296,13 +306,14 @@ export default function Navbar() {
 
             {/* Mobile toggle */}
             <button
-              className="ml-1 md:hidden h-10 w-10 flex items-center justify-center rounded-[12px] border border-gray-200 text-gray-800 bg-white"
+              className="ml-1 lg:hidden h-10 w-10 flex items-center justify-center rounded-lg border border-gray-200 text-[#1B1B1B] bg-white"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 setMobileMenuOpen((m) => !m);
               }}
               aria-label="Toggle Navigation Menu"
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -312,8 +323,8 @@ export default function Navbar() {
 
       {/* ── Mobile menu drawer ── */}
       {mobileMenuOpen && (
-        <div className="fixed left-0 right-0 top-20 z-40 bg-white border-b border-gray-200 p-4 shadow-lg md:hidden">
-          <div className="space-y-1.5 py-1">
+        <div className="fixed left-0 right-0 top-16 z-40 bg-white border-b border-gray-200 p-4 shadow-lg lg:hidden">
+          <div className="space-y-1 py-1">
             {navItems.map((item) => {
               const active = activeName === item.name;
               return (
@@ -327,20 +338,11 @@ export default function Navbar() {
                       document.getElementById("ai-tools")?.scrollIntoView({ behavior: "smooth" });
                     }
                   }}
-                  className={`block rounded-[10px] px-4 py-3 text-base font-bold ${
+                  className={`block rounded-lg px-4 py-3 text-base font-medium ${
                     active
-                      ? "border border-[#fecdd3]"
-                      : "text-gray-900 hover:bg-gray-100"
+                      ? "text-[#F95D6A] bg-[#FFF1EC]"
+                      : "text-[#1B1B1B] hover:bg-[#F7F8FA]"
                   }`}
-                  style={
-                    active
-                      ? {
-                          color: "#f75961",
-                          backgroundColor: "#fff0f1",
-                          borderColor: "#fecdd3",
-                        }
-                      : undefined
-                  }
                 >
                   {item.name}
                 </Link>
@@ -350,7 +352,7 @@ export default function Navbar() {
               {!loggedIn ? (
                 <>
                   <button
-                    className="w-full h-11 rounded-[14px] text-sm font-bold bg-[#f75961] hover:bg-[#e8454d] text-white border border-[#f75961] cursor-pointer"
+                    className="w-full h-11 rounded-lg text-sm font-medium text-[#1B1B1B] border border-gray-200 hover:bg-[#F7F8FA] cursor-pointer"
                     onClick={() => {
                       setMobileMenuOpen(false);
                       gotoSignIn();
@@ -359,7 +361,7 @@ export default function Navbar() {
                     Sign in
                   </button>
                   <button
-                    className="w-full h-11 rounded-[14px] text-sm font-bold bg-black text-white hover:bg-neutral-800 cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full h-11 rounded-lg text-sm font-semibold bg-[#111111] text-white hover:bg-[#222222] cursor-pointer flex items-center justify-center gap-2"
                     onClick={() => {
                       setMobileMenuOpen(false);
                       gotoSignUp();
@@ -372,7 +374,7 @@ export default function Navbar() {
               ) : (
                 <>
                   <button
-                    className="w-full h-11 rounded-[14px] text-sm font-bold bg-black text-white hover:bg-neutral-800 cursor-pointer"
+                    className="w-full h-11 rounded-lg text-sm font-semibold bg-[#111111] text-white hover:bg-[#222222] cursor-pointer"
                     onClick={() => {
                       setMobileMenuOpen(false);
                       gotoDashboard();
@@ -381,7 +383,7 @@ export default function Navbar() {
                     Dashboard
                   </button>
                   <button
-                    className="w-full h-11 rounded-[14px] text-sm font-bold text-gray-700 border border-gray-200 hover:bg-gray-100 cursor-pointer"
+                    className="w-full h-11 rounded-lg text-sm font-medium text-[#1B1B1B] border border-gray-200 hover:bg-[#F7F8FA] cursor-pointer"
                     onClick={handleSignOut}
                   >
                     Sign out
@@ -401,7 +403,7 @@ function DropItem({ to, children, onClick }: { to: string; children: React.React
     <Link
       to={to}
       onClick={onClick}
-      className="block rounded-[10px] px-3 py-2 text-sm font-bold text-gray-800 hover:bg-gray-100"
+      className="block rounded-lg px-3 py-2 text-sm font-medium text-[#1B1B1B] hover:bg-[#F7F8FA]"
     >
       {children}
     </Link>

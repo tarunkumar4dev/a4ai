@@ -1,108 +1,77 @@
-// LandingHero.tsx — Static layout, Black and Peach buttons
+// LandingHero.tsx — two-column hero: message + CTAs on the left, the switchable
+// product showcase on the right. On phones the order is text → CTAs → showcase
+// → capability chips, so the main CTA stays near the top.
 import { Link } from "react-router-dom";
-import { ArrowRight, Crown, Sparkles } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
+import FeatureShowcase from "@/components/landing/FeatureShowcase";
 
-const features = [
-  { text: "1 Lakh+ NCERT Bank" },
-  { text: "CBSE Pattern Ready" },
-  { text: "PDF & DOCX Export" },
-  { text: "Answer Key Included" },
-  { text: "Section-wise Papers" },
-  { text: "Bloom's Taxonomy" },
+const CAPABILITY_CHIPS = [
+  "NCERT Question Bank",
+  "CBSE-Pattern Assessments",
+  "PDF & DOCX Export",
+  "Answer Keys Included",
+  "Section-Wise Layout",
 ];
 
 export default function LandingHero() {
   return (
-    <section
-      className="relative isolate overflow-hidden flex items-center justify-center bg-white w-full"
-      style={{ minHeight: "min(90vh, 860px)" }}
-    >
-      {/* ── Background: COMPLETELY WHITE ── */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-white z-0" />
-
-      {/* ── Content Layout ── */}
-      <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8 pt-28 sm:pt-32 md:pt-36 pb-12 sm:pb-16 md:pb-24 bg-transparent relative z-10 flex flex-col items-center">
-
-        {/* Badge — Peach */}
-        <div className="flex justify-center w-full">
-          <div
-            className="mb-5 sm:mb-7 inline-flex items-center gap-2 rounded-[12px] px-4 py-2 border shadow-xs"
-            style={{ backgroundColor: "#fff0f1", borderColor: "#fecdd3", color: "#f75961" }}
-          >
-            <Sparkles className="h-4 w-4" style={{ color: "#f75961" }} />
-            <span className="text-xs sm:text-sm font-bold">1 Lakh+ NCERT Questions Ready</span>
-          </div>
-        </div>
-
-        {/* ── Headline Block ── */}
-        <div className="text-center relative z-10 w-full">
-          <h1 className="font-halenoir font-bold tracking-[-0.02em]" style={{ lineHeight: 1 }}>
-            <span className="block lg:whitespace-nowrap text-neutral-900" style={{ fontSize: "clamp(2.4rem, 8vw, 7.2rem)" }}>
-              You Teach.{" "}
-              <span className="text-[#f75961]" style={{ color: "#f75961" }}>
-                a4ai Handles
-              </span>
+    <section className="relative bg-white w-full pt-[88px] sm:pt-24 lg:pt-[104px] pb-12 sm:pb-16 lg:pb-20">
+      <div className="mx-auto w-full max-w-[1360px] px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-y-8 lg:grid-cols-[minmax(0,44fr)_minmax(0,56fr)] lg:grid-rows-[auto_1fr] lg:gap-x-12 xl:gap-x-16 lg:gap-y-8 items-start">
+          {/* Message */}
+          <div className="min-w-0 lg:pt-6 xl:pt-10">
+            <span className="inline-flex items-center rounded-full px-3.5 py-1 mb-5 text-xs sm:text-[13px] font-semibold bg-[#FFF1EC] text-[#D93F4D]">
+              Practical tools for modern teachers
             </span>
 
-            <span
-              className="mt-3 sm:mt-5 md:mt-6 block font-bold tracking-[-0.01em] text-neutral-700"
-              style={{ fontSize: "clamp(0.95rem, 2.5vw, 2.2rem)", lineHeight: 1.2 }}
+            <h1
+              className="font-halenoir font-bold tracking-[-0.02em] text-[#1B1B1B] mb-5"
+              style={{ fontSize: "clamp(2.25rem, 1.4rem + 3.2vw, 3.75rem)", lineHeight: 1.08 }}
             >
-              the Test Papers, Attendance &amp; Report Cards.
-            </span>
-          </h1>
+              <span className="block">You teach.</span>
+              <span className="block text-[#F95D6A]">a4ai handles</span>
+              <span className="block">the rest.</span>
+            </h1>
 
-          <p
-            className="mx-auto mt-4 sm:mt-5 md:mt-7 max-w-[90%] sm:max-w-lg md:max-w-2xl leading-relaxed text-neutral-600 font-medium"
-            style={{ fontSize: "clamp(0.85rem, 1.3vw, 1.1rem)" }}
-          >
-            Drag &amp; drop from 1 Lakh+ NCERT questions — paper ready in 10 seconds.
-            Or let AI build it — done in under 2 minutes. Section-wise, with answer keys, ready to print.
-          </p>
+            <p className="text-[16px] sm:text-[18px] text-[#5D6570] leading-relaxed max-w-[34rem] mb-7 sm:mb-8">
+              Create test papers, evaluate student answers, manage attendance, and prepare reports from one
+              connected workspace.
+            </p>
 
-          {/* ── Action Buttons: Black & Peach ── */}
-          <div className="relative mt-8 sm:mt-10 md:mt-12 flex flex-col items-center justify-center gap-3 sm:gap-4 sm:flex-row">
-            {/* Try for FREE — Black Button */}
-            <div className="w-full sm:w-auto">
-              <Link to="/dashboard/test-generator" className="w-full block">
-                <button
-                  className="w-full sm:w-auto bg-black text-white rounded-[14px] px-8 py-3.5 font-bold flex items-center justify-center gap-2.5 hover:bg-neutral-800 transition-colors cursor-pointer"
-                  style={{ minHeight: 48, fontSize: "0.95rem" }}
-                >
-                  <span>Try for FREE</span>
-                  <ArrowRight className="h-4 w-4 flex-shrink-0" />
-                </button>
-              </Link>
-            </div>
-
-            {/* View Pricing — Peach Button */}
-            <div className="w-full sm:w-auto">
-              <Link to="/pricing" className="w-full block">
-                <button
-                  className="w-full sm:w-auto bg-[#f75961] hover:bg-[#e8454d] text-white rounded-[14px] px-8 py-3.5 font-bold flex items-center justify-center gap-2.5 transition-colors cursor-pointer border border-[#f75961]"
-                  style={{
-                    minHeight: 48,
-                    fontSize: "0.95rem",
-                  }}
-                >
-                  <Crown className="h-4 w-4 flex-shrink-0 text-white" />
-                  <span>View Pricing</span>
-                </button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Feature Pills — static flex wrap */}
-          <div className="mt-10 sm:mt-12 md:mt-16 w-full max-w-4xl mx-auto flex flex-wrap justify-center gap-3">
-            {features.map((f, i) => (
-              <div
-                key={i}
-                className="inline-flex items-center gap-2 border border-gray-200 rounded-[10px] px-4 py-2 text-xs font-bold text-gray-700 bg-white shadow-xs"
+            <div className="flex flex-col min-[420px]:flex-row items-stretch min-[420px]:items-center gap-3 sm:gap-4">
+              <Link
+                to="/dashboard/test-generator"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#111111] px-7 min-h-[50px] text-[15px] font-bold text-white hover:bg-[#222222] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F95D6A] focus-visible:ring-offset-2"
               >
-                {f.text}
-              </div>
-            ))}
+                Try for FREE
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
+              <Link
+                to="/pricing"
+                className="inline-flex items-center justify-center rounded-xl bg-white px-7 min-h-[50px] text-[15px] font-bold text-[#D93F4D] border-2 border-[#F95D6A] hover:bg-[#FFF1EC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#111111] focus-visible:ring-offset-2"
+              >
+                View Pricing
+              </Link>
+            </div>
           </div>
+
+          {/* Product showcase */}
+          <div className="min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-2">
+            <FeatureShowcase />
+          </div>
+
+          {/* Capability chips */}
+          <ul className="min-w-0 lg:col-start-1 lg:row-start-2 flex flex-wrap gap-2" aria-label="Test Generator capabilities">
+            {CAPABILITY_CHIPS.map((chip) => (
+              <li
+                key={chip}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#E5E7EB] bg-white px-3 py-1.5 text-[13px] font-medium text-[#5D6570]"
+              >
+                <Check className="h-3.5 w-3.5 text-[#047857]" aria-hidden="true" />
+                {chip}
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>

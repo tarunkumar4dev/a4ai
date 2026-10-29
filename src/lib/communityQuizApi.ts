@@ -285,7 +285,8 @@ export async function submitAttempt(
 ): Promise<SubmitResponse> {
   const res = await fetch(`${API_PREFIX}/q/${slug}/submit`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // X-Attempt-Id: the backend rate-limits per student attempt, not per (school) IP
+    headers: { "Content-Type": "application/json", "X-Attempt-Id": data.attempt_id },
     body: JSON.stringify(data),
   });
   return handleResponse<SubmitResponse>(res);

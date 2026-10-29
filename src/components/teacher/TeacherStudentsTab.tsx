@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useMyScope } from "@/hooks/useMyScope";
+import { openWhatsApp as openWa } from "@/lib/whatsapp";
 import {
   Users,
   Search,
@@ -445,17 +446,7 @@ export default function TeacherStudentsTab({
       toast.error("No phone number recorded for this student");
       return;
     }
-    const cleanNumber = rawNumber.replace(/\D/g, "");
-    const formatted = cleanNumber.startsWith("91")
-      ? cleanNumber
-      : cleanNumber.length === 10
-      ? `91${cleanNumber}`
-      : cleanNumber;
-
-    const message = encodeURIComponent(
-      `Hello, this is regarding ${student.name} (${student.batch_name || "Class"}) from ${instituteName}.`
-    );
-    window.open(`https://wa.me/${formatted}?text=${message}`, "_blank");
+    openWa(`Hello, this is regarding ${student.name} (${student.batch_name || "Class"}) from ${instituteName}.`, rawNumber);
   }
 
   /* ─── Filtered and Sorted Students ──────────────────────────────────────── */

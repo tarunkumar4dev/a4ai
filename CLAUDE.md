@@ -232,6 +232,125 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   schema. The Supabase Management API (`db query --linked -f`) rejects bodies > ~4 MB (413): split SQL per statement.
   `ncert_questions_insert_service` lets anon INSERT into ncert_questions — lockdown is a separate commit.
   Drop `a4_backup_20261022` (copy tables + full backup) after G5.
+- [x] Upload flow DB (22 Oct, branch feat/student-upload): `18_upload_flow.sql` — assignment = upload link (link_token,
+  window, attempts, mimes/size/pages, late/count policy, auto_publish); submissions = one row per attempt (attempt_no,
+  idempotency_key, files jsonb, status enum incl. waiting_key/waiting_quota); attempt → check_sheets (source_bucket
+  'submissions') + check_jobs (queue, claim/finish/sweep); results on check_sheets (per_question, needs_review_reasons,
+  published); audit = smart_assignment_checks (publish/unpublish/override). Student RPCs (access code, never student_id):
+  get_assignment_link, verify_access_code, create_submission, my_submissions; teacher: publish_results,
+  unpublish_results, override_marks. Access-code limit in Postgres (access_code_attempts, WRONG codes only:
+  20/10 min/IP or 10/10 min/code → 15 min lock; correct codes never limited). Bucket submissions: 10 MB,
+  jpeg/png/webp/heic/pdf (link max_mb ≤ 10); unattached uploads > 24 h → hourly pg_cron → 'retention' job,
+  worker deletes via Storage API (backend can't read HEIC yet — keep it off links). Storage path
+  `<inst>/<asg>/<student>/<uuid>.<ext>`. Contract: `docs/upload-flow-api.md`. Local tests (pgserver, no Docker):
+  `supabase/tests/upload_flow/run_local.py` → 102 SQL checks + 3 parallel, all pass. NOT run on staging/live.
+- [ ] Upload flow run: owner enables pg_net + pg_cron, vault secrets checker_job_run_url / checker_job_secret →
+  18 on staging → VERIFY → IP header check (§5 of the API doc) → live. Backend G2/G3 worker per API doc §4.
+- Known after 18:
+  - Backend `_checks_today` must also exclude publish/auto_publish/unpublish audit rows.
+  - Old `submit_assignment` refuses assignments that already have upload-link attempts; portal UI must switch.
+
+- [x] Upload flow UI (23 Oct, branch feat/student-upload; built ON TOP of de1668a — another session's portal commit):
+  F1 student: /s/:token = src/pages/AssignmentLinkPage.tsx + src/components/student/UploadAttempts.tsx (also used in the
+  /student portal) + src/lib/uploadFlow.ts (RPCs, preparePage) + src/lib/uploadLink/* (files: HEIC fallback / pdf.js page
+  count / quality hint / rotate; session: per-link code + resume draft; blobStore: IndexedDB; storageUpload: XHR progress;
+  status: badges). Portal: only `upload_link_enabled` assignments use the new flow, the rest keep submit_assignment.
+  F2 teacher: assignment detail → tab "📸 Copy Submissions" (src/components/teacher/copySubmissions/*): link settings + WhatsApp
+  share, per-student table, review drawer (pages, override_marks, history, red-pen), publish/unpublish, retry_checks,
+  regrade banner → POST /internal/regrade. src/lib/whatsapp.ts shared (TeacherStudentsTab uses it).
+  F3: `npm test` (vitest, 40 unit) + `npm run e2e` (Playwright, 7 tests, Supabase mocked in tests/e2e/mockSupabase.ts, runs
+  against a production build in dist-e2e; build alone ~3 min on OneDrive). Lint 0 errors (62 warnings = baseline).
+- [ ] Run `19_upload_link_portal.sql` on production (after 18) + its VERIFY block. Without 19: the teacher's "Submit link
+  banao" save fails (no upload_link_enabled column), Retry + history fail, portal never shows the new flow.
+- Known after the upload-flow UI:
+  - Students can't see a red-pen copy: anon can't sign Storage URLs (answer-sheets is teacher-owned). Needs a backend
+    endpoint or a signed-URL RPC via the worker — not built. Students see marks + per-question comments only.
+  - Per-student result share = the link page (code needed) on WhatsApp; an expiring no-code result link (share_links) is not built.
+  - Red-pen preview in the review drawer works only for the assignment's creator (answer-sheets RLS = owner folder).
+  - Teacher UI is not covered by e2e (needs a mocked staff session); its RPCs are covered by the DB harness.
+
+- [x] Checking Link from a test (23 Oct): "📸 Checking Link" next to "Share as Contest" (GeneratedTestView), in the NCERT
+  Test Builder export deck (desktop + mobile; one Test History row per paper now — re-exports reuse it), and in Test
+  History ⋯. Modal: class (useMyScope batches), deadline IST (default today + 2 days 11:59 PM), attempts 2, late accept+flag,
+  auto publish off, Advanced (MB / pages / formats) → src/lib/uploadLink/testLink.ts reuses the test + class assignment
+  (assignments.test_id, migration 20) or creates it; paper + key PDFs via testPdfExporter.exportTestPdfBlob; key upload +
+  question-paper upload shared with the Assignments form (src/lib/assignments.ts). "✓" when the test already has a link.
+  "Submissions dekho" → /dashboard?tab=assignments&assignment=<id>&view=copies. 53 unit tests, DB harness 113 checks.
+- [ ] Run `20_assignment_test_link.sql` on production (after 19) + VERIFY. Without it the Checking Link can't save
+  (no assignments.test_id column) and the ✓ state never shows.
+- Known after the Checking Link:
+  - The worker builds the rubric from the uploaded paper + key PDFs (AI), not from the saved questions; a key with only
+    MCQ letters relies on the paper PDF for the questions.
+  - Not covered by e2e (teacher session). Logic is unit-tested (testLink.test.ts).
+
+- [x] Upload-link polish (23 Oct): A English copy everywhere (server texts shown from codes, src/lib/uploadLink/messages.ts);
+  B black primary buttons (BLACK_BTN, styles.ts — app --primary is purple); C access-code fix (migration 21: O→0,
+  I/L→1, spaces/dashes dropped; live codes are 6 chars, the RPC makes 8); D /s/:token = own entry s.html (56 KB gz JS),
+  fetch-based RPCs, worker compression, 3 parallel uploads, windowed teacher table > 50 rows, progressive review drawer.
+  Lighthouse mobile median 93 (LCP 2.3 s, TBT 220 ms). docs/upload-flow-api.md §7.
+- [ ] Run `21_access_code_normalize.sql` on production, then `notify pgrst, 'reload schema';` + its VERIFY block.
+- [ ] Deploy: vercel.json now rewrites /s/:token → /s.html (must ship with the build that contains s.html).
+- [x] Fix (23 Oct): production still had the pre-18 `submissions_status_check` (old values only) → every
+  create_submission ('uploaded') failed with 23514. Dropped by hand on prod; `22_drop_legacy_submission_status_check.sql`
+  records it. Harness baseline now carries it + live's `assignments_status_check` (active/archived/draft), so a missing 22
+  fails the tests. Live audit (read-only) of submissions / check_sheets / check_jobs / check_sessions / assignments /
+  smart_assignment_checks: no other legacy check blocks 18-21 values. Found with it: the teacher "Link active" switch
+  wrote status 'closed' (rejected by assignments_status_check) → now 'archived'. Student link: HTTP 4xx/5xx from an RPC
+  → "Something went wrong. Try again or contact your teacher." + console `HTTP <status> code <pg code>`; "No reply"
+  only when nothing came back.
+- [ ] Run `22_drop_legacy_submission_status_check.sql` on staging (prod already done by hand), + its VERIFY.
+- [x] Open link (23 Oct): `23_open_link.sql` — assignments.link_identity_mode access_code | open; guest rows
+  (submissions.student_id null + guest_name/roll/class + submitter_key → private open_submitters); RPCs open_start
+  (server-made key + upload folder, needed before the first upload), open_create_submission, open_my_submissions,
+  delete_guest_submissions (teacher); IP limit 60 submits / link / hour (+ 100 starts); guest Storage folder
+  `<inst>/<asg>/guest/<key>/`. Student page: name form, "write your name + roll on every page" line (both modes),
+  receipt XXXX-XXXX, key in localStorage `a4ai_open_<token>`. Teacher: "Who can submit", Guest tag + ID, Delete.
+  API doc §8. DB harness 173 PASS.
+- [ ] Run `23_open_link.sql` on production (after 19-22) + VERIFY + `notify pgrst, 'reload schema';`.
+  Backend worker must ship first/with it: job_worker._validate builds the folder from student_id (guest copies would
+  all be rejected as missing files) and other_students_with compares student_id (no duplicate flags for guests).
+- Known after the open link:
+  - 60 submits / IP / link / hour: a class on one school Wi-Fi IP shares the 60 (raised from 10 for the 23 Oct launch).
+  - A guest who clears the browser loses access to their uploads / result (no code to get back in).
+  - Deleting a guest row doesn't block that device; it can submit again.
+- Known after the polish:
+  - index.html (main app) still loads Razorpay checkout.js synchronously (render-blocking on every page) though
+    PaymentPage loads it on demand; Google Fonts CSS is render-blocking. Not changed (outside the upload link).
+
+- [x] Landing redesign (26 Oct, uncommitted, on top of an earlier uncommitted redesign of Navbar/Hero/LandingPage/Footer):
+  hero right side = `src/components/landing/FeatureShowcase.tsx` (tabs + prev/next, wraps, no autoplay/animation, only the
+  current slide's image in the DOM). Slides in `featureSlides.ts`; screenshots auto-detected from `src/assets/features/<id>-<w>.webp`,
+  built by `python scripts/build-feature-images.py` from `design/source-images/*` (crop, blur PII, WebP). Guide:
+  `docs/landing-screenshots.md`. Contests/leaderboard slides hidden until screenshots exist. Slide 1 = coded Test Generator
+  preview (em-sized, `.a4-tg-preview` in index.css). Fonts: Plus Jakarta Sans self-hosted (`public/fonts`, the earlier
+  redesign had dropped the Google Fonts link that dashboards/pricing rely on; Halenoir woff2 is 0 bytes → font-halenoir
+  maps to Jakarta). index.html: Razorpay checkout.js removed (PaymentPage loads it on demand), gtag.js injected after `load`.
+  vercel.json: `/assets/*` immutable, `/fonts/*` 7 days. Navbar desktop links from `lg` (was overlapping at 768).
+  Fixes: `/select-role` crashed (missing useEffect import); Modules: AI values rendered via `asText` (objects crashed the
+  dashboard), tab wrapped in an error boundary, `/dashboard/modules` → `/dashboard?tab=modules`.
+- [x] Landing round 2 (26 Oct): showcase autoplay 2 s (+ swipe, pause button; stops on hover/keyboard focus/off screen/
+  hidden tab; starts paused for reduced-motion / Save-Data), Toddle-style gradient panels (themes in featureSlides.ts,
+  incl. lime green + light orange). Landing pricing preview removed → "Our partners" logo wall
+  (`src/components/landing/Partners.tsx`, logos via `scripts/build-partner-logos.py`).
+- [x] Marketing pages (26 Oct, branch feat/landing-showcase, uncommitted): About / Features / Resources / Login on the
+  shared shell `src/components/site/PageShell.tsx` (landing Navbar + Footer). Fabricated stats/testimonials/case studies
+  removed; Features lists only capabilities found in code. "a4ai Hub" → "Resources" (display only). Team = Tarun Kumar
+  Pathak / Yash Dubey / Aakash Singh / Nitin Kumar / Durgesh / Aman Singh (mentor); portraits via `scripts/build-team-photos.py`, initials when
+  missing (Nitin, Durgesh, Aman have no photo). Login + Signup: white, labelled inputs, shared `src/components/auth/AuthCharacters.tsx`, aria-live error (login), eye tracking without
+  React re-renders, "no" shake only on Supabase `invalid_credentials`. Audit `NOTES.md`, results `REDESIGN_REPORT.md`.
+- [x] Polish (27 Oct, branch feat/site-polish): /pricing on PageShell (landing Navbar + Footer, no Google Fonts import,
+  content and payment flow unchanged); About team = small circular avatars (Tarun, Yash, Aakash, Nitin, Durgesh + mentor
+  pill); navbar search lists Dashboard once. Note: PR #10 merged only 5717c61 — d7a2898 (About/Features/Resources/
+  Login/Signup) was cherry-picked onto this branch.
+- [x] Round 3 (26 Oct, feat/site-polish): team photos for Nitin/Durgesh/Aman; login/signup characters on solid sky
+  blue, plain-language CAPTCHA/security toasts; hero swipe on the whole panel; Contact compact (no free-domain offer);
+  Terms + Cookie Policy rewritten (`src/pages/legal/LegalLayout.tsx`). Teacher dashboard: tabs lazy-loaded
+  (main chunk 345 KB → 92 KB; JS on first load 1405 KB → ~520 KB), no framer-motion / Google Fonts / scroll-reveal
+  observer / animate-* classes, What's New buttons no longer truncate. Student dashboard rebuilt: only real student
+  routes, no sample stats, bottom nav on phones (old sidebar links /dashboard/messages|leaderboard|subscription were 404).
+- Known after the landing redesign: landing LCP ≈ 5 s on throttled mobile (1.6 Mbps/150 ms/4× CPU) — SPA renders nothing
+  until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
+  `Magical_FREE_AI_Tools.jpeg` are not used.
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.

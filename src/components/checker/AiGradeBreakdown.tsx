@@ -73,7 +73,17 @@ export type AiResult = {
   overall_remarks: string; needs_review_count?: number;
   /** Sheet total after the teacher's per-question changes (absent = no changes). */
   teacher_total?: number; overridden_questions?: number;
+  /** Upright, student-ordered page images the grader's page_index / y_start refer to (absent on older results:
+   * then page_index refers to the uploaded photos). */
+  norm_pages?: NormPage[];
+  sheet_flags?: SheetFlag[];
 };
+
+export type NormPage = {
+  index: number; source_index: number; student_page_no: string | null; rotation: number; blank: boolean;
+  path: string; w: number; h: number;
+};
+export type SheetFlag = { code: string; message: string; page: number | null };
 
 /** The marks that count for a question: the teacher's if changed, else the AI's. */
 export const effectiveMarks = (q: GradedQuestion) => q.teacher_marks ?? q.marks_awarded;

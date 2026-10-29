@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Student upload link (/s/:token). Light on purpose: no analytics, payment script or web fonts. -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload your answer copy · a4ai</title>
+    <meta name="description" content="Upload your answer copy for your teacher to check." />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#fafafa" />
+    <link rel="icon" href="/ICON.ico" />
+    <style>
+      /* first paint before the CSS file arrives: page background + a neutral box where the card will be */
+      /* same box, padding and height as the page's card + skeleton, so nothing moves when the app takes over */
+      html, body { margin: 0; background: #fafafa; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+      #root:empty { display: block; box-sizing: border-box; max-width: 36rem; margin: 0 auto; padding: 24px 16px; }
+      #root:empty::before { content: ""; display: block; box-sizing: border-box; height: 282px;
+        border-radius: 12px; background: #fff; border: 1px solid #e4e4e7; }
+      @media (min-width: 640px) { #root:empty { padding: 40px 16px; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/linkMain.tsx"></script>
+  </body>
+</html>

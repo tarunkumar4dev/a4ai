@@ -39,6 +39,23 @@ const API_URL = (
   'http://localhost:8000'
 ).replace(/\/+$/, '');
 
+// AI output is not always the shape we ask for (an answer can come back as
+// {format, text}, options as an object). Rendering an object crashes React and
+// blanks the whole page, so every AI value goes through this.
+const asText = (v: unknown): string => {
+  if (v == null) return '';
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) return v.map(asText).filter(Boolean).join(', ');
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    for (const k of ['text', 'value', 'answer', 'content', 'label']) if (o[k] != null) return asText(o[k]);
+    return Object.values(o).map(asText).filter(Boolean).join(' · ');
+  }
+  return '';
+};
+const asList = (v: unknown): unknown[] =>
+  Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v as Record<string, unknown>) : [];
+
 // ─── Topic visual theme sets ───
 const TOPIC_COLORS = [
   {
@@ -427,11 +444,11 @@ export const ModulesPage: React.FC = () => {
                                 ? `Class ${mod.class}`
                                 : mod.class || 'General'}
                             </span>
-                            {mod.page_count && (
+                            {mod.page_count ? (
                               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200">
                                 {mod.page_count} pages
                               </span>
-                            )}
+                            ) : null}
                           </div>
 
                           <div className="flex items-center gap-1.5 mt-2 text-slate-400 text-xs font-medium">
@@ -479,32 +496,32 @@ export const ModulesPage: React.FC = () => {
                                 <span>Module Overview</span>
                               </div>
                               <p className="text-xs sm:text-sm leading-relaxed font-medium opacity-95">
-                                {moduleSummary[mod.id].overview}
+                                {asText(moduleSummary[mod.id].overview)}
                               </p>
                               <div className="flex flex-wrap gap-2 pt-2 border-t border-white/20 text-xs font-black">
                                 {moduleSummary[mod.id].difficulty_level && (
                                   <span className="bg-white/20 px-2.5 py-0.5 rounded-lg">
-                                    Difficulty: {moduleSummary[mod.id].difficulty_level}
+                                    Difficulty: {asText(moduleSummary[mod.id].difficulty_level)}
                                   </span>
                                 )}
                                 {moduleSummary[mod.id].estimated_study_time && (
                                   <span className="bg-white/20 px-2.5 py-0.5 rounded-lg">
-                                    ⏱ {moduleSummary[mod.id].estimated_study_time}
+                                    ⏱ {asText(moduleSummary[mod.id].estimated_study_time)}
                                   </span>
                                 )}
                               </div>
                             </div>
 
                             {/* Topics Accordion */}
-                            {moduleSummary[mod.id].topics?.length > 0 && (
+                            {asList(moduleSummary[mod.id].topics).length > 0 && (
                               <div className="space-y-3">
                                 <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                                   <BookOpen className="w-4 h-4 text-orange-500" />
-                                  <span>Topics ({moduleSummary[mod.id].topics.length})</span>
+                                  <span>Topics ({asList(moduleSummary[mod.id].topics).length})</span>
                                 </h4>
 
                                 <div className="space-y-2.5">
-                                  {moduleSummary[mod.id].topics.map((topic, i) => {
+                                  {(asList(moduleSummary[mod.id].topics) as TopicItem[]).map((topic, i) => {
                                     const color = TOPIC_COLORS[i % TOPIC_COLORS.length];
                                     const isExpanded = expandedTopics[mod.id]?.has(i);
 
@@ -522,13 +539,13 @@ export const ModulesPage: React.FC = () => {
                                               {i + 1}
                                             </span>
                                             <p className="font-extrabold text-xs sm:text-sm truncate">
-                                              {topic.name}
+                                              {asText(topic.name)}
                                             </p>
                                           </div>
                                           <div className="flex items-center gap-2 shrink-0">
-                                            {topic.formulas?.length ? (
+                                            {asList(topic.formulas).length ? (
                                               <span className="bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-black">
-                                                {topic.formulas.length} formulas
+                                                {asList(topic.formulas).length} formulas
                                               </span>
                                             ) : null}
                                             {isExpanded ? (
@@ -542,23 +559,23 @@ export const ModulesPage: React.FC = () => {
                                         <div className={`${color.light} p-4 border-t ${color.border} space-y-3`}>
                                           {topic.explanation && (
                                             <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-                                              {topic.explanation}
+                                              {asText(topic.explanation)}
                                             </p>
                                           )}
 
-                                          {topic.key_points?.length ? (
+                                          {asList(topic.key_points).length ? (
                                             <div>
                                               <p className="text-[11px] font-extrabold uppercase text-slate-500 tracking-wider mb-1.5">
                                                 Key Points
                                               </p>
                                               <ul className="space-y-1">
-                                                {topic.key_points.map((pt, j) => (
+                                                {asList(topic.key_points).map((pt, j) => (
                                                   <li
                                                     key={j}
                                                     className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300 font-medium"
                                                   >
                                                     <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-1.5 shrink-0" />
-                                                    <span>{pt}</span>
+                                                    <span>{asText(pt)}</span>
                                                   </li>
                                                 ))}
                                               </ul>
@@ -566,22 +583,22 @@ export const ModulesPage: React.FC = () => {
                                           ) : null}
 
                                           {/* Formulas */}
-                                          {topic.formulas && topic.formulas.length > 0 && (
+                                          {asList(topic.formulas).length > 0 && (
                                             <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 space-y-2">
                                               <p className="text-[11px] font-black uppercase text-purple-700 dark:text-purple-400 flex items-center gap-1">
                                                 <FlaskConical className="w-3.5 h-3.5" />
                                                 <span>Formulas & Equations</span>
                                               </p>
-                                              {topic.formulas.map((f, fi) => (
+                                              {asList(topic.formulas).map((f: any, fi) => (
                                                 <div
                                                   key={fi}
                                                   className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-purple-200/70 dark:border-purple-900/40"
                                                 >
                                                   <p className="font-mono text-xs font-bold text-purple-800 dark:text-purple-300">
-                                                    {f.formula}
+                                                    {typeof f === 'object' && f ? asText(f.formula) : asText(f)}
                                                   </p>
                                                   <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
-                                                    {f.meaning}
+                                                    {typeof f === 'object' && f ? asText(f.meaning) : ''}
                                                   </p>
                                                 </div>
                                               ))}
@@ -596,20 +613,20 @@ export const ModulesPage: React.FC = () => {
                             )}
 
                             {/* Important Terms */}
-                            {moduleSummary[mod.id].important_terms?.length > 0 && (
+                            {asList(moduleSummary[mod.id].important_terms).length > 0 && (
                               <div className="space-y-2">
                                 <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                                   <BookMarked className="w-4 h-4 text-blue-500" />
                                   <span>Important Terms</span>
                                 </h4>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {moduleSummary[mod.id].important_terms.slice(0, 6).map((t, ti) => (
+                                  {(asList(moduleSummary[mod.id].important_terms) as TermItem[]).slice(0, 6).map((t, ti) => (
                                     <div
                                       key={ti}
                                       className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
                                     >
-                                      <p className="font-bold text-xs text-blue-700 dark:text-blue-400">{t.term}</p>
-                                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">{t.definition}</p>
+                                      <p className="font-bold text-xs text-blue-700 dark:text-blue-400">{asText(t?.term ?? t)}</p>
+                                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">{asText(t?.definition)}</p>
                                     </div>
                                   ))}
                                 </div>
@@ -677,13 +694,13 @@ export const ModulesPage: React.FC = () => {
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-white/20">
                     Generated Test Paper
                   </span>
-                  <span className="text-xs opacity-90">{testResult.questions?.length || 0} Questions</span>
+                  <span className="text-xs opacity-90">{asList(testResult.questions).length} Questions</span>
                 </div>
-                <h3 className="text-lg font-black mt-1">{testResult.title || 'Module Assessment Test'}</h3>
+                <h3 className="text-lg font-black mt-1">{asText(testResult.title) || 'Module Assessment Test'}</h3>
                 <div className="flex items-center gap-3 text-xs font-bold opacity-90 mt-1">
-                  <span>Marks: {testResult.total_marks || 25}</span>
+                  <span>Marks: {asText(testResult.total_marks) || 25}</span>
                   <span>•</span>
-                  <span>Duration: {testResult.duration_minutes || 30} mins</span>
+                  <span>Duration: {asText(testResult.duration_minutes) || 30} mins</span>
                 </div>
               </div>
 
@@ -697,27 +714,27 @@ export const ModulesPage: React.FC = () => {
 
             {/* Modal Questions Body */}
             <div className="overflow-y-auto p-5 sm:p-6 space-y-4 flex-1">
-              {testResult.questions?.map((q: any, i: number) => (
+              {asList(testResult.questions).map((q: any, i: number) => (
                 <div
                   key={i}
                   className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-50/50 dark:bg-slate-800/40"
                 >
                   <div className="bg-slate-100/80 dark:bg-slate-800 p-3.5 flex items-start justify-between gap-3 border-b border-slate-200/80 dark:border-slate-700">
                     <p className="font-extrabold text-xs sm:text-sm text-slate-800 dark:text-slate-100">
-                      <span className="text-orange-600 font-black mr-1">Q{q.q_no || i + 1}.</span>
-                      {q.question}
+                      <span className="text-orange-600 font-black mr-1">Q{asText(q.q_no) || i + 1}.</span>
+                      {asText(q.question)}
                     </p>
                     <span className="px-2.5 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-black shrink-0">
-                      {q.marks || 1}M
+                      {asText(q.marks) || 1}M
                     </span>
                   </div>
 
-                  {q.options && (
+                  {asList(q.options).length > 0 && (
                     <div className="p-3.5 space-y-1.5 bg-white dark:bg-slate-900">
-                      {q.options.map((opt: string, j: number) => (
+                      {asList(q.options).map((opt: unknown, j: number) => (
                         <p key={j} className="text-xs text-slate-700 dark:text-slate-300 flex items-start gap-2">
                           <span className="font-bold text-orange-600">{String.fromCharCode(65 + j)}.</span>
-                          <span>{opt.replace(/^[a-d]\)/i, '').trim()}</span>
+                          <span>{asText(opt).replace(/^[a-d]\)/i, '').trim()}</span>
                         </p>
                       ))}
                     </div>
@@ -726,11 +743,11 @@ export const ModulesPage: React.FC = () => {
                   {q.answer && (
                     <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border-t border-emerald-100 dark:border-emerald-900/30">
                       <p className="text-xs font-black text-emerald-800 dark:text-emerald-300">
-                        ✓ Answer: {q.answer}
+                        ✓ Answer: {asText(q.answer)}
                       </p>
                       {q.solution && (
                         <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-medium">
-                          {q.solution}
+                          {asText(q.solution)}
                         </p>
                       )}
                     </div>

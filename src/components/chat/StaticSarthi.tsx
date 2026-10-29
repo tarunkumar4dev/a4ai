@@ -129,8 +129,11 @@ export default function StaticSarthi({
   variant,
   onTab,
   accent = "#E8643A",
+  aboveBottomNav = false,
 }: {
   variant: "teacher" | "student";
+  /** page has a fixed bottom nav on phones: sit above it */
+  aboveBottomNav?: boolean;
   /** teacher dashboard: switch to an in-page tab */
   onTab?: (tab: string) => void;
   accent?: string;
@@ -240,7 +243,7 @@ export default function StaticSarthi({
   };
 
   return (
-    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[110] flex flex-col items-end gap-3">
+    <div className={`fixed right-4 sm:right-6 z-[110] flex flex-col items-end gap-3 ${aboveBottomNav ? "bottom-[76px] lg:bottom-6" : "bottom-4 sm:bottom-6"}`}>
       {open && (
         <div className="w-[calc(100vw-2rem)] sm:w-96 h-[70vh] max-h-[520px] rounded-2xl shadow-xl overflow-hidden flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
           <div className="px-4 py-3 flex items-center justify-between text-white shrink-0" style={{ background: accent }}>

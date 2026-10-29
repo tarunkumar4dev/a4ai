@@ -28,3 +28,9 @@ export function backendUrl(path: string): string {
   if (p === "/api" || p.startsWith("/api/")) p = p.slice("/api".length);
   return `${getBackendApiBase()}${p}`;
 }
+
+/** Backend routes outside "/api" (the checker worker's /internal/*): https://host + path. */
+export function backendRootUrl(path: string): string {
+  const root = getBackendApiBase().replace(/\/api$/, "");
+  return `${root}${path.startsWith("/") ? path : `/${path}`}`;
+}

@@ -1,44 +1,95 @@
-import React from "react";
-import { motion } from "framer-motion";
-import LegalLayout, { head, accent } from "./LegalLayout";
+// CookiePolicyPage.tsx — what a4ai stores in the browser and why.
+import { Link } from "react-router-dom";
+import LegalLayout, { LegalSection } from "./LegalLayout";
+
+const ROWS = [
+  {
+    what: "Sign-in session",
+    where: "Browser storage (a4ai.auth.token)",
+    why: "Keeps you signed in. Without it you can't use your dashboard.",
+    kind: "Essential",
+  },
+  {
+    what: "Your settings",
+    where: "Browser storage",
+    why: "Remembers small choices — for example where to send you after signing in, or an unsent upload on a student link.",
+    kind: "Essential",
+  },
+  {
+    what: "Google Analytics",
+    where: "Cookies (_ga, _ga_*)",
+    why: "Counts visits and pages viewed so we know what to improve. Not used for ads.",
+    kind: "Analytics",
+  },
+  {
+    what: "Vercel Analytics",
+    where: "No cookies",
+    why: "Page-load speed and visit counts, without identifying you.",
+    kind: "Analytics",
+  },
+  {
+    what: "Razorpay",
+    where: "Cookies set by Razorpay",
+    why: "Only on the payment page, to process your payment securely.",
+    kind: "Essential (payments)",
+  },
+];
 
 export default function CookiePolicyPage() {
   return (
-    <LegalLayout title="Cookie Policy" subtitle="Updated: Aug 2025">
-      <div 
-        className="legal-doc" 
-        style={{ color: "#334155" }}
-      >
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
-          We use cookies to ensure the site works correctly, remember your
-          preferences, and help us improve the experience.
-        </motion.p>
+    <LegalLayout
+      title="Cookie Policy"
+      updated="Updated: 26 October 2026"
+      description="What a4ai stores in your browser — sign-in, settings and analytics — and how to control it."
+      path="/cookies"
+    >
+      <LegalSection title="In short">
+        <p>
+          a4ai stores a small amount of information in your browser to keep you signed in and remember your settings,
+          and uses analytics to understand how the site is used. We don't use advertising cookies and we don't sell
+          your data.
+        </p>
+      </LegalSection>
 
-        <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.35, duration: 0.4 }}>
-          <h2 style={{ color: head() }}>Types of Cookies</h2>
-          <ul>
-            <li><strong style={{ color: head() }}>Essential:</strong> Required for login, navigation, and security.</li>
-            <li><strong style={{ color: head() }}>Preferences:</strong> Save your theme/language settings.</li>
-            <li><strong style={{ color: head() }}>Analytics:</strong> Anonymous usage insights (e.g., page views, clicks).</li>
-          </ul>
-        </motion.div>
+      <LegalSection title="What we store">
+        <div className="-mx-1 overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-left text-[14px]">
+            <thead>
+              <tr className="border-b border-[#E5E7EB] text-[#1B1B1B]">
+                <th className="px-1 py-2 font-semibold">What</th>
+                <th className="px-1 py-2 font-semibold">Where</th>
+                <th className="px-1 py-2 font-semibold">Why</th>
+                <th className="px-1 py-2 font-semibold">Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ROWS.map((r) => (
+                <tr key={r.what} className="border-b border-[#F0F1F3] align-top">
+                  <td className="px-1 py-2.5 font-semibold text-[#1B1B1B]">{r.what}</td>
+                  <td className="px-1 py-2.5">{r.where}</td>
+                  <td className="px-1 py-2.5">{r.why}</td>
+                  <td className="px-1 py-2.5 whitespace-nowrap">{r.kind}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </LegalSection>
 
-        <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.4, duration: 0.4 }}>
-          <h2 style={{ color: head() }}>Managing Cookies</h2>
-          <p>
-            You can disable cookies in your browser settings. Some features may
-            stop working without essential cookies.
-          </p>
-        </motion.div>
+      <LegalSection title="Controlling cookies">
+        <p>
+          You can block or delete cookies and site data in your browser settings. If you block essential storage you
+          will be signed out and some features will stop working. Blocking analytics cookies doesn't affect how a4ai
+          works.
+        </p>
+      </LegalSection>
 
-        <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.45, duration: 0.4 }}>
-          <h2 style={{ color: head() }}>Contact</h2>
-          <p>
-            For any cookie-related queries, email{" "}
-            <a href="mailto:a4ai.team@gmail.com" className="font-medium hover:underline" style={{ color: accent() }}>a4ai.team@gmail.com</a>
-          </p>
-        </motion.div>
-      </div>
+      <LegalSection title="More">
+        <p>
+          How we handle personal data is explained in our <Link to="/privacy">Privacy Policy</Link>. Questions? Email{" "}
+          <a href="mailto:a4ai.team@gmail.com">a4ai.team@gmail.com</a>.
+        </p>
+      </LegalSection>
     </LegalLayout>
   );
 }
