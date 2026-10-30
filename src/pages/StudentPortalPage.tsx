@@ -1,15 +1,39 @@
 // src/pages/StudentPortalPage.tsx
 // Route: /student
-// No login needed — student enters 6-char access code
-// MS Teams-inspired classroom view — Dark/Light Mode · Fully Responsive
+// No login needed — student enters the access code from their school.
+// Same look as the student dashboard (/student/dashboard): white sidebar, black active item, colourful cards,
+// bottom nav on phones. No animation (lite mode), no web fonts.
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import {
+  Activity,
+  ArrowLeft,
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Download,
+  FolderOpen,
+  GraduationCap,
+  LayoutGrid,
+  Loader2,
+  LogOut,
+  Megaphone,
+  Paperclip,
+  Pin,
+  Search,
+  Sparkles,
+  Star,
+  Upload,
+  type LucideIcon,
+} from "lucide-react";
 // Portal-only client: never carries a staff session (B2). DB access only via the access-code RPCs
 // in supabase/migrations/05_student_portal.sql — no direct table reads.
 import { portalSupabase as supabase } from "@/lib/supabasePortalClient";
-import { motion, AnimatePresence } from "framer-motion";
 import StudentCalendar, { type CalEvent } from "@/components/student/StudentCalendar";
-import UploadAttempts from "@/components/student/UploadAttempts";
+import UploadAttempts, { type UploadTokens } from "@/components/student/UploadAttempts";
 
 /* ─── Types ────────────────────────────────────────────────────── */
 type StudentData = {
@@ -62,18 +86,8 @@ type Announcement = {
   created_at: string;
 };
 
-type ChatMessage = {
-  id: string;
-  sender: string;
-  sender_id?: string;
-  sender_role?: "student" | "teacher" | "system";
-  text: string;
-  time: string;
-  created_at?: string;
-  isStudent: boolean;
-};
-
-type Theme = "dark" | "light";
+type View = "dashboard" | "tasks" | "calendar" | "files" | "activity";
+type TaskFilter = "all" | "pending" | "submitted" | "graded";
 
 /* ─── Helpers ───────────────────────────────────────────────────── */
 const fmtDate = (d: string) =>
@@ -85,10 +99,10 @@ const fmtDeadline = (d: string | null) => {
   const now = new Date();
   const diff = dt.getTime() - now.getTime();
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-  if (days < 0) return { text: "Overdue", color: "#EF4444" };
-  if (days === 0) return { text: "Due today", color: "#F59E0B" };
-  if (days === 1) return { text: "Due tomorrow", color: "#F59E0B" };
-  return { text: `Due ${fmtDate(d)}`, color: "#94A3B8" };
+  if (days < 0) return { text: "Overdue", color: "#B42318" };
+  if (days === 0) return { text: "Due today", color: "#C2410C" };
+  if (days === 1) return { text: "Due tomorrow", color: "#C2410C" };
+  return { text: `Due ${fmtDate(d)}`, color: "#5D6570" };
 };
 
 const getInitials = (name: string) => {
@@ -96,231 +110,76 @@ const getInitials = (name: string) => {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 };
 
-const getAvatarColor = (name: string) => {
-  const colors = [
-    "#4F46E5", "#0D9488", "#F59E0B", "#EF4444", "#8B5CF6",
-    "#EC4899", "#10B981", "#3B82F6", "#F97316", "#14B8A6"
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+// upload-link attempts have their own statuses (docs/upload-flow-api.md §1): everything not yet published counts as submitted
+const isDone = (s: string) => s === "graded" || s === "published";
+
+/** Status pill for an assignment — same colours as the dashboard tiles. */
+function statusOf(a: Assignment): { label: string; fg: string; bg: string } {
+  const sub = a.submission;
+  if (!sub) return { label: "Pending", fg: "#C2410C", bg: "#FFF1E3" };
+  if (isDone(sub.status)) {
+    return { label: sub.grade != null ? `Graded · ${sub.grade}/${a.max_marks ?? "?"}` : "Graded", fg: "#047857", bg: "#E4F8F3" };
   }
-  return colors[Math.abs(hash) % colors.length];
+  if (sub.status === "rejected") return { label: "Not accepted", fg: "#B42318", bg: "#FFF1F0" };
+  return { label: "Submitted", fg: "#5B4BC4", bg: "#EFEDFF" };
+}
+
+/* Colours from the student dashboard (StudentDashboardPage TOOLS) */
+const TILE = {
+  pink: { bg: "linear-gradient(135deg,#FFEDEF,#FFD9DE)", accent: "#D93F4D" },
+  orange: { bg: "linear-gradient(135deg,#FFF1E3,#FFDDBE)", accent: "#C2410C" },
+  lime: { bg: "linear-gradient(135deg,#EEF7D6,#DCEDB5)", accent: "#4D7C0F" },
+  lilac: { bg: "linear-gradient(135deg,#EFEDFF,#DCD7FF)", accent: "#5B4BC4" },
+  yellow: { bg: "linear-gradient(135deg,#FFF7D9,#FFE9AD)", accent: "#9A6B00" },
+  mint: { bg: "linear-gradient(135deg,#E4F8F3,#C9EFE4)", accent: "#047857" },
 };
 
-/* ─── Theme Tokens ─────────────────────────────────────────────── */
-const themeTokens = {
-  dark: {
-    bg: "#09090b",
-    surface: "#18181b",
-    border: "#27272a",
-    borderHover: "#3f3f46",
-    textPrimary: "#f4f4f5",
-    textSecondary: "#a1a1aa",
-    textMuted: "#71717a",
-    accent: "#4F46E5",
-    accentHover: "#4338ca",
-    accentBg: "rgba(79, 70, 229, 0.1)",
-    teal: "#0D9488",
-    tealBg: "rgba(13, 148, 136, 0.1)",
-    hover: "rgba(39, 39, 42, 0.5)",
-    scrollTrack: "#09090b",
-    scrollThumb: "#27272a",
-    scrollThumbHover: "#3f3f46",
-  },
-  light: {
-    bg: "#fafafa",
-    surface: "#ffffff",
-    border: "#e4e4e7",
-    borderHover: "#d4d4d8",
-    textPrimary: "#18181b",
-    textSecondary: "#52525b",
-    textMuted: "#a1a1aa",
-    accent: "#4F46E5",
-    accentHover: "#4338ca",
-    accentBg: "rgba(79, 70, 229, 0.08)",
-    teal: "#0D9488",
-    tealBg: "rgba(13, 148, 136, 0.08)",
-    hover: "rgba(244, 244, 245, 0.8)",
-    scrollTrack: "#fafafa",
-    scrollThumb: "#d4d4d8",
-    scrollThumbHover: "#a1a1aa",
-  },
+/** Tokens for UploadAttempts (it styles itself from these). */
+const UPLOAD_TOKENS: UploadTokens = {
+  bg: "#F7F8FA", surface: "#FFFFFF", border: "#E5E7EB", textPrimary: "#1B1B1B", textSecondary: "#374151",
+  textMuted: "#5D6570", accent: "#5B4BC4", accentHover: "#4C3DB0", accentBg: "#EFEDFF", teal: "#047857", tealBg: "#E4F8F3",
 };
 
-/* ─── Icons ─────────────────────────────────────────────────────── */
-const Icons = {
-  Teams: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-      <circle cx="9" cy="7" r="4"></circle>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-    </svg>
-  ),
-  Home: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1" />
-    </svg>
-  ),
-  Activity: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-    </svg>
-  ),
-  Chat: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-    </svg>
-  ),
-  Calendar: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  ),
-  Files: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-    </svg>
-  ),
-  Tasks: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 11 12 14 22 4"></polyline>
-      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-    </svg>
-  ),
-  Search: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  ),
-  Bell: () => (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 01-3.46 0" />
-    </svg>
-  ),
-  Upload: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  ),
-  Download: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  ),
-  Check: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  ),
-  Clock: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  ),
-  Star: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  ),
-  LogOut: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  ),
-  Pin: () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="17" x2="12" y2="22"></line>
-      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.68V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.68a2 2 0 0 1-1.11 1.8l-1.78.89A2 2 0 0 0 5 15.24Z"></path>
-    </svg>
-  ),
-  Loader: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="animate-spin">
-      <path d="M21 12a9 9 0 11-6.219-8.56" />
-    </svg>
-  ),
-  ChevronRight: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  ),
-  ChevronDown: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="6 9 12 15 18 9"></polyline>
-    </svg>
-  ),
-  Menu: () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  ),
-  Hash: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="4" y1="9" x2="20" y2="9"></line>
-      <line x1="4" y1="15" x2="20" y2="15"></line>
-      <line x1="10" y1="3" x2="8" y2="21"></line>
-      <line x1="16" y1="3" x2="14" y2="21"></line>
-    </svg>
-  ),
-  MonitorPlay: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-      <line x1="8" y1="21" x2="16" y2="21"></line>
-      <line x1="12" y1="17" x2="12" y2="21"></line>
-      <polygon points="10 7 15 10 10 13 10 7"></polygon>
-    </svg>
-  ),
-  Paper: () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  ),
-  Sun: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="5"></circle>
-      <line x1="12" y1="1" x2="12" y2="3"></line>
-      <line x1="12" y1="21" x2="12" y2="23"></line>
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-      <line x1="1" y1="12" x2="3" y2="12"></line>
-      <line x1="21" y1="12" x2="23" y2="12"></line>
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-    </svg>
-  ),
-  Moon: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-    </svg>
-  ),
-  Send: () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="22" y1="2" x2="11" y2="13"></line>
-      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-    </svg>
-  ),
-};
+const NAV: { id: View; label: string; Icon: LucideIcon }[] = [
+  { id: "dashboard", label: "Home", Icon: LayoutGrid },
+  { id: "tasks", label: "Assignments", Icon: ClipboardList },
+  { id: "calendar", label: "Calendar", Icon: CalendarDays },
+  { id: "files", label: "Files", Icon: FolderOpen },
+  { id: "activity", label: "Activity", Icon: Activity },
+];
 
-/* ─── Main Page ──────────────────────────────────────────────────── */
+const BTN_BLACK = "inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl bg-[#111111] px-5 text-[15px] font-bold text-white hover:bg-[#222222] disabled:cursor-not-allowed disabled:opacity-50";
+const BTN_GHOST = "inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 text-[14px] font-semibold text-[#374151] hover:bg-[#F7F8FA]";
+
+/* Hero surface: the soft pink card from the student dashboard, shared by the login, home and assignment screens. Dark text, black button. */
+const HERO_BG = "linear-gradient(135deg,#FFEDF0 0%,#FFD9E2 100%)";
+const BTN_ON_HERO = "inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl bg-[#111111] px-5 text-[15px] font-bold text-white hover:bg-[#222222]";
+const BTN_ON_HERO_GHOST = "inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-black/15 px-4 text-[15px] font-semibold text-[#1B1B1B] hover:border-black/40";
+
+function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <div className={`rounded-[24px] border border-[#E5E7EB] bg-white p-5 sm:p-6 ${className}`}>{children}</div>;
+}
+
+function Empty({ Icon, title, body }: { Icon: LucideIcon; title: string; body?: string }) {
+  return (
+    <div className="rounded-[20px] border border-dashed border-[#E5E7EB] bg-white px-6 py-10 text-center">
+      <Icon className="mx-auto h-7 w-7 text-[#9CA3AF]" aria-hidden="true" />
+      <p className="mt-3 text-[15px] font-semibold text-[#1B1B1B]">{title}</p>
+      {body && <p className="mt-1 text-[14px] text-[#5D6570]">{body}</p>}
+    </div>
+  );
+}
+
+function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <h2 className="text-lg font-bold">{children}</h2>
+      {action}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════ */
 export default function StudentPortalPage() {
   const [view, setView] = useState<"login" | "dashboard" | "assignment">("login");
   const [code, setCode] = useState("");
@@ -329,95 +188,23 @@ export default function StudentPortalPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [calEvents, setCalEvents] = useState<CalEvent[]>([]);
   const [activeAssignment, setActiveAssignment] = useState<Assignment | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "assignments" | "announcements">("overview");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sideView, setSideView] = useState<"dashboard" | "calendar" | "activity" | "chat" | "files" | "tasks">("dashboard");
-  const [expandedCourse, setExpandedCourse] = useState(true);
-  const [theme, setTheme] = useState<Theme>("light");
+  const [sideView, setSideView] = useState<View>("dashboard");
+  const [showAllAnnouncements, setShowAllAnnouncements] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const chatScrollRef = useRef<HTMLDivElement>(null);
 
-  /* New Interactive State for Files, Tasks, & Chat */
   const [fileSearchQuery, setFileSearchQuery] = useState("");
   const [fileCategoryFilter, setFileCategoryFilter] = useState<"all" | "assignments" | "submissions">("all");
-  const [taskStatusFilter, setTaskStatusFilter] = useState<"all" | "pending" | "submitted" | "graded">("all");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [newChatMessage, setNewChatMessage] = useState("");
-
-  const t = themeTokens[theme];
-
-  // Load chat messages. There is no batch_messages table in the DB (audit 29 Sep) → chat is local to this
-  // device (localStorage), which is what it effectively was before. No direct table reads from the portal.
-  useEffect(() => {
-    if (!student?.batch_id) return;
-    const batchId = student.batch_id;
-
-    function loadChat() {
-      // 1. localStorage
-      const local = localStorage.getItem(`a4ai_chat_${batchId}`);
-      if (local) {
-        try {
-          const parsed = JSON.parse(local);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setChatMessages(parsed);
-            return;
-          }
-        } catch {}
-      }
-
-      // 2. Default welcome message
-      const defaultMsg: ChatMessage[] = [
-        {
-          id: "welcome-1",
-          sender: "Teacher / Class Notice",
-          sender_role: "system",
-          text: `Welcome to ${student?.batch_name || "your batch"}! Use this General Chat space to discuss class topics, ask questions, and share study notes.`,
-          time: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
-          isStudent: false,
-        }
-      ];
-      setChatMessages(defaultMsg);
-      localStorage.setItem(`a4ai_chat_${batchId}`, JSON.stringify(defaultMsg));
-    }
-
-    loadChat();
-  }, [student?.batch_id, student?.id, student?.batch_name]);
-
-  // Auto-scroll to bottom of chat
-  useEffect(() => {
-    if (sideView === "chat" && chatScrollRef.current) {
-      setTimeout(() => {
-        if (chatScrollRef.current) {
-          chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-        }
-      }, 50);
-    }
-  }, [chatMessages, sideView]);
+  const [taskStatusFilter, setTaskStatusFilter] = useState<TaskFilter>("all");
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("a4ai_theme") as Theme | null;
-    if (savedTheme) setTheme(savedTheme);
     const saved = localStorage.getItem("a4ai_student_code");
     if (saved) loginWithCode(saved);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem("a4ai_theme", theme);
-  }, [theme]);
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSidebarOpen(false);
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, []);
-
-  const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
 
   /* ── Login (get_student_by_code RPC) ── */
   async function loginWithCode(inputCode: string) {
@@ -542,10 +329,12 @@ export default function StudentPortalPage() {
   }
 
   const pending = assignments.filter(a => !a.submission);
-  // upload-link attempts have their own statuses (docs/upload-flow-api.md §1): everything not yet published counts as submitted
-  const isDone = (s: string) => s === "graded" || s === "published";
   const submitted = assignments.filter(a => a.submission && !isDone(a.submission.status) && a.submission.status !== "rejected");
   const graded = assignments.filter(a => a.submission && isDone(a.submission.status));
+
+  /** Pending work, soonest deadline first (no deadline last). */
+  const upcoming = [...pending].sort((a, b) =>
+    (a.deadline ? new Date(a.deadline).getTime() : Infinity) - (b.deadline ? new Date(b.deadline).getTime() : Infinity));
 
   /* Aggregated files for the Files View */
   const allFiles = useMemo(() => {
@@ -603,1022 +392,671 @@ export default function StudentPortalPage() {
     return assignments;
   }, [assignments, pending, submitted, graded, taskStatusFilter]);
 
-  const appNav = [
-    { id: 'dashboard', icon: <Icons.Home />, label: 'Dashboard', badge: pending.length > 0 },
-    { id: 'tasks', icon: <Icons.Tasks />, label: 'Tasks' },
-    { id: 'files', icon: <Icons.Files />, label: 'Files' },
-    { id: 'calendar', icon: <Icons.Calendar />, label: 'Calendar' },
-    { id: 'activity', icon: <Icons.Activity />, label: 'Activity' },
-  ];
+  const openAssignment = (a: Assignment) => { setActiveAssignment(a); setView("assignment"); window.scrollTo(0, 0); };
+  const go = (v: View) => { setSideView(v); setView("dashboard"); setActiveAssignment(null); };
+  const openTasks = (f: TaskFilter) => { setTaskStatusFilter(f); go("tasks"); };
 
   /* ══════════════════════════════════════════
      LOGIN SCREEN
   ══════════════════════════════════════════ */
   if (view === "login") return (
-    <div className="min-h-screen flex items-center justify-center p-4 transition-colors duration-300" style={{ background: t.bg, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .animate-spin { animation: spin 1s linear infinite; }
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-      `}</style>
+    <div className="flex min-h-screen flex-col bg-[#F7F8FA] text-[#1B1B1B]">
+      <header className="flex h-16 items-center border-b border-[#E5E7EB] bg-white px-4 sm:px-6">
+        <Link to="/" className="flex items-center gap-2.5">
+          <img src="/ICON.ico" alt="" width={32} height={32} className="h-8 w-8" />
+          <span className="text-lg font-bold">a4ai</span>
+        </Link>
+      </header>
 
-      {/* Theme toggle top-right */}
-      <button
-        onClick={toggleTheme}
-        className="fixed top-4 right-4 p-2.5 rounded-xl border transition-all hover:scale-105 z-50"
-        style={{ background: t.surface, borderColor: t.border, color: t.textSecondary }}
-        title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-      >
-        {theme === "dark" ? <Icons.Sun /> : <Icons.Moon />}
-      </button>
-
-      <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 border transition-colors duration-300"
-        style={{ background: t.surface, borderColor: t.border }}
-      >
-        <div className="text-center mb-6 sm:mb-8">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg" style={{ background: `linear-gradient(135deg, ${t.accent}, ${t.teal})`, boxShadow: `0 8px 24px ${t.accent}40` }}>
-            <span className="text-white font-black text-xl sm:text-2xl tracking-tight">a4</span>
+      <main className="flex flex-1 items-center justify-center px-4 py-10">
+        <div className="w-full max-w-[440px]">
+          <div className="rounded-[24px] p-6 text-[#1B1B1B] sm:p-8" style={{ backgroundImage: HERO_BG }}>
+            <GraduationCap className="h-8 w-8" aria-hidden="true" />
+            <h1 className="mt-3 font-halenoir text-2xl font-bold sm:text-[1.9rem]">Student portal</h1>
+            <p className="mt-1.5 text-[15px] text-[#5D6570]">Enter the access code from your school to see your assignments, deadlines and marks.</p>
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold" style={{ color: t.textPrimary }}>Student Portal</h1>
-          <p className="text-xs sm:text-sm mt-1" style={{ color: t.textSecondary }}>Enter your access code to view your classroom</p>
+
+          <Card className="mt-4">
+            <form onSubmit={e => { e.preventDefault(); if (code.length >= 4) loginWithCode(code); }}>
+              <label htmlFor="access-code" className="block text-[14px] font-semibold text-[#374151]">Access code</label>
+              <input
+                id="access-code"
+                type="text"
+                maxLength={8}
+                value={code}
+                onChange={e => setCode(e.target.value.toUpperCase())}
+                placeholder="AB12CD"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                aria-invalid={!!error}
+                aria-describedby={error ? "code-error" : undefined}
+                className="mt-2 w-full rounded-xl border border-[#E5E7EB] bg-[#F7F8FA] px-4 py-3 text-center font-mono text-2xl font-bold tracking-[0.3em] outline-none placeholder:text-[#9CA3AF] focus:border-[#111111] focus:bg-white"
+                autoFocus
+              />
+
+              {error && (
+                <p id="code-error" role="alert" className="mt-3 rounded-xl border border-[#FECDCA] bg-[#FFF1F0] px-4 py-3 text-[14px] font-semibold text-[#B42318]">
+                  {error}
+                </p>
+              )}
+
+              <button type="submit" disabled={loading || code.length < 4} className={`${BTN_BLACK} mt-4 w-full`}>
+                {loading ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Checking…</> : "Enter classroom"}
+              </button>
+            </form>
+          </Card>
+
+          <p className="mt-5 text-center text-[14px] text-[#5D6570]">
+            Have an a4ai account?{" "}
+            <Link to="/student/dashboard" className="font-bold text-[#1B1B1B] underline underline-offset-4">Go to your dashboard</Link>
+          </p>
         </div>
+      </main>
+    </div>
+  );
 
-        <div className="mb-4">
-          <label className="text-xs font-bold uppercase tracking-wider block mb-2" style={{ color: t.textSecondary }}>Access Code</label>
-          <input
-            type="text"
-            maxLength={8}
-            value={code}
-            onChange={e => setCode(e.target.value.toUpperCase())}
-            onKeyDown={e => e.key === "Enter" && code.length >= 4 && loginWithCode(code)}
-            placeholder="e.g. AB12CD"
-            className="w-full px-4 py-3 sm:py-3.5 rounded-xl text-xl sm:text-2xl font-bold text-center tracking-[0.3em] outline-none font-mono transition-all placeholder:opacity-50"
-            style={{
-              background: t.bg,
-              border: `1px solid ${t.border}`,
-              color: t.textPrimary,
-            }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.boxShadow = `0 0 0 1px ${t.accent}`; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = t.border; e.currentTarget.style.boxShadow = "none"; }}
-            autoFocus
-          />
-        </div>
+  if (!student) return null;
 
-        {error && (
-          <div className="rounded-xl px-4 py-3 text-sm font-semibold mb-4" style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444", border: "1px solid rgba(239,68,68,0.2)" }}>
-            ⚠️ {error}
-          </div>
-        )}
+  const firstName = student.name.split(" ")[0];
+  const classLine = [student.batch_name, student.lab_batch_name ? `Lab ${student.lab_batch_name}` : null, student.institute_name]
+    .filter(Boolean).join(" · ");
+  const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
+  const current: View | null = view === "assignment" ? null : sideView;
+  const pageLabel = view === "assignment" ? "Assignment" : NAV.find(n => n.id === sideView)?.label;
 
+  /* ── One assignment row (Home + Assignments) ── */
+  const assignmentRow = (a: Assignment) => {
+    const st = statusOf(a);
+    const dl = fmtDeadline(a.deadline);
+    return (
+      <li key={a.id}>
         <button
-          onClick={() => loginWithCode(code)}
-          disabled={loading || code.length < 4}
-          className="w-full py-3 sm:py-3.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-          style={{ background: loading || code.length < 4 ? "#94A3B8" : `linear-gradient(135deg, ${t.accent}, ${t.accentHover})`, boxShadow: loading || code.length < 4 ? "none" : `0 8px 20px ${t.accent}30` }}
+          type="button"
+          onClick={() => openAssignment(a)}
+          className="flex w-full items-start justify-between gap-3 rounded-[20px] border border-[#E5E7EB] bg-white p-4 text-left hover:border-[#C9C4F5] sm:p-5"
         >
-          {loading ? <><Icons.Loader /> Verifying...</> : "Enter Classroom →"}
+          <span className="min-w-0">
+            <span className="block truncate text-[16px] font-bold">{a.title}</span>
+            <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[13px] font-medium text-[#5D6570]">
+              {dl && <span className="inline-flex items-center gap-1" style={{ color: dl.color }}><Clock className="h-3.5 w-3.5" aria-hidden="true" />{dl.text}</span>}
+              {a.max_marks != null && <span className="inline-flex items-center gap-1"><Star className="h-3.5 w-3.5" aria-hidden="true" />{a.max_marks} marks</span>}
+              {a.batch_name && a.batch_name !== student.batch_name && <span>{a.batch_name}</span>}
+            </span>
+          </span>
+          <span className="shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold" style={{ color: st.fg, background: st.bg }}>{st.label}</span>
         </button>
+      </li>
+    );
+  };
 
-        <p className="text-center text-xs mt-6" style={{ color: t.textMuted }}>
-          Enter the access code provided by your institution
-        </p>
-      </motion.div>
+  /* ══════════════════════════════════════════
+     SHELL (sidebar · top bar · bottom nav)
+  ══════════════════════════════════════════ */
+  const shell = (content: ReactNode) => (
+    <div className="min-h-screen bg-[#F7F8FA] text-[#1B1B1B]">
+      {/* Sidebar (desktop) */}
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[240px] flex-col border-r border-[#E5E7EB] bg-white p-5 lg:flex">
+        <Link to="/" className="mb-8 flex items-center gap-2.5 px-2">
+          <img src="/ICON.ico" alt="" width={36} height={36} className="h-9 w-9" />
+          <span className="text-xl font-bold">a4ai</span>
+        </Link>
+        <nav aria-label="Student portal" className="flex-1 space-y-1">
+          {NAV.map(({ id, label, Icon }) => {
+            const active = current === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => go(id)}
+                aria-current={active ? "page" : undefined}
+                className={`flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold ${
+                  active ? "bg-[#111111] text-white" : "text-[#374151] hover:bg-[#F7F8FA]"
+                }`}
+              >
+                <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                {label}
+                {id === "tasks" && pending.length > 0 && (
+                  <span className={`ml-auto rounded-full px-2 py-0.5 text-[12px] font-bold ${active ? "bg-white text-[#111111]" : "bg-[#FFF1E3] text-[#C2410C]"}`}>
+                    {pending.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="space-y-2 border-t border-[#E5E7EB] pt-3">
+          <div className="flex items-center gap-3 px-2 py-1">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[14px] font-bold text-[#5B4BC4]" style={{ backgroundImage: TILE.lilac.bg }}>
+              {getInitials(student.name)}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[14px] font-bold">{student.name}</span>
+              <span className="block truncate text-[12px] text-[#5D6570]">{student.roll_no ? `Roll ${student.roll_no}` : student.batch_name}</span>
+            </span>
+          </div>
+          <button type="button" onClick={logout} className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold text-[#B42318] hover:bg-[#FFF1F0]">
+            <LogOut className="h-[18px] w-[18px]" aria-hidden="true" /> Log out
+          </button>
+        </div>
+      </aside>
+
+      <div className="lg:pl-[240px]">
+        {/* Top bar */}
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b border-[#E5E7EB] bg-white px-4 sm:px-6">
+          <Link to="/" className="flex items-center gap-2 lg:hidden">
+            <img src="/ICON.ico" alt="" width={32} height={32} className="h-8 w-8" />
+            <span className="text-lg font-bold">a4ai</span>
+          </Link>
+          <p className="hidden truncate text-[14px] text-[#5D6570] lg:block">
+            {student.batch_name} <span aria-hidden="true">/</span> <span className="font-semibold text-[#1B1B1B]">{pageLabel}</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="relative hidden w-[260px] sm:block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" aria-hidden="true" />
+              <input
+                type="search"
+                aria-label="Search files and assignments"
+                value={fileSearchQuery}
+                onChange={e => {
+                  setFileSearchQuery(e.target.value);
+                  if (e.target.value.trim() && (sideView !== "files" || view !== "dashboard")) go("files");
+                }}
+                placeholder="Search files"
+                className="min-h-[40px] w-full rounded-xl border border-[#E5E7EB] bg-[#F7F8FA] pl-9 pr-3 text-[14px] outline-none focus:border-[#111111] focus:bg-white"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => openTasks("pending")}
+              aria-label={pending.length ? `${pending.length} pending assignments` : "Assignments"}
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[#E5E7EB] hover:bg-[#F7F8FA]"
+            >
+              <Bell className="h-4 w-4" aria-hidden="true" />
+              {pending.length > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#D93F4D]" aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              onClick={logout}
+              className="flex h-10 items-center gap-2 rounded-xl border border-[#E5E7EB] px-3 text-[14px] font-semibold text-[#B42318] hover:bg-[#FFF1F0] lg:hidden"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" /> <span className="sr-only sm:not-sr-only">Log out</span>
+            </button>
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-[1100px] px-4 pb-28 pt-6 sm:px-6 lg:pb-10 lg:pt-8">{content}</main>
+      </div>
+
+      {/* Bottom nav (phones) */}
+      <nav aria-label="Student portal" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-[#E5E7EB] bg-white lg:hidden">
+        {NAV.map(({ id, label, Icon }) => {
+          const active = current === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => go(id)}
+              aria-current={active ? "page" : undefined}
+              className={`relative flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-semibold ${active ? "text-[#D93F4D]" : "text-[#5D6570]"}`}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+              {label}
+              {id === "tasks" && pending.length > 0 && (
+                <span className="absolute right-[calc(50%-20px)] top-2 rounded-full bg-[#D93F4D] px-1.5 text-[10px] font-bold leading-4 text-white">{pending.length}</span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 
   /* ══════════════════════════════════════════
      ASSIGNMENT DETAIL VIEW
   ══════════════════════════════════════════ */
-  if (view === "assignment" && activeAssignment && student) {
+  if (view === "assignment" && activeAssignment) {
     const sub = activeAssignment.submission;
     const dl = fmtDeadline(activeAssignment.deadline);
+    const st = statusOf(activeAssignment);
 
-    return (
-      <div className="min-h-screen transition-colors duration-300" style={{ background: t.bg, color: t.textPrimary, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
-        <style>{`
-          @keyframes spin { to { transform: rotate(360deg); } }
-          .animate-spin { animation: spin 1s linear infinite; }
-        `}</style>
+    return shell(
+      <div className="mx-auto max-w-[820px]">
+        <button type="button" onClick={() => { setView("dashboard"); setActiveAssignment(null); }} className={BTN_GHOST}>
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
+        </button>
 
-        {/* Header */}
-        <div className="sticky top-0 z-50 border-b transition-colors duration-300" style={{ background: t.surface, borderColor: t.border }}>
-          <div className="flex items-center h-14 px-3 sm:px-4 max-w-7xl mx-auto">
-            <button
-              onClick={() => { setView("dashboard"); setActiveAssignment(null); }}
-              className="flex items-center gap-1.5 text-sm font-medium transition-colors"
-              style={{ color: t.textSecondary }}
-              onMouseEnter={e => e.currentTarget.style.color = t.textPrimary}
-              onMouseLeave={e => e.currentTarget.style.color = t.textSecondary}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-              Back
-            </button>
-            <div className="flex-1 text-center px-2 min-w-0">
-              <span className="text-sm font-semibold truncate block" style={{ color: t.textPrimary }}>{activeAssignment.title}</span>
-            </div>
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg transition-colors"
-              style={{ color: t.textSecondary }}
-              onMouseEnter={e => e.currentTarget.style.background = t.hover}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-              title="Toggle theme"
-            >
-              {theme === "dark" ? <Icons.Sun /> : <Icons.Moon />}
-            </button>
+        <div className="mt-4 rounded-[24px] p-6 text-[#1B1B1B] sm:p-8" style={{ backgroundImage: HERO_BG }}>
+          <span className="inline-block rounded-full bg-white px-2.5 py-1 text-[12px] font-bold" style={{ color: st.fg }}>{st.label}</span>
+          <h1 className="mt-3 break-words font-halenoir text-2xl font-bold sm:text-[1.9rem]">{activeAssignment.title}</h1>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[14px] font-semibold text-[#5D6570]">
+            {dl && <span className="inline-flex items-center gap-1.5 text-[#1B1B1B]"><Clock className="h-4 w-4" aria-hidden="true" />{dl.text}</span>}
+            {activeAssignment.max_marks != null && <span className="inline-flex items-center gap-1.5"><Star className="h-4 w-4" aria-hidden="true" />{activeAssignment.max_marks} marks</span>}
+            {activeAssignment.file_url && <span className="inline-flex items-center gap-1.5"><Paperclip className="h-4 w-4" aria-hidden="true" />PDF attached</span>}
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-          <div className="rounded-xl border overflow-hidden transition-colors duration-300" style={{ background: t.surface, borderColor: t.border }}>
-            {/* Header */}
-            <div className="p-4 sm:p-6 border-b" style={{ borderColor: t.border }}>
-              <h1 className="text-lg sm:text-xl font-bold break-words" style={{ color: t.textPrimary }}>{activeAssignment.title}</h1>
-              <div className="flex flex-wrap gap-2 sm:gap-3 mt-2">
-                {dl && (
-                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium" style={{ color: dl.color }}>
-                    <Icons.Clock /> {dl.text}
-                  </span>
-                )}
-                {activeAssignment.max_marks && (
-                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-amber-500">
-                    <Icons.Star /> {activeAssignment.max_marks} marks
-                  </span>
-                )}
-                {activeAssignment.file_url && (
-                  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium" style={{ color: t.teal }}>
-                    📎 PDF attached
-                  </span>
-                )}
+        <Card className="mt-4 space-y-6">
+          {activeAssignment.description && (
+            <section>
+              <h2 className="text-[14px] font-bold text-[#5D6570]">Description</h2>
+              <p className="mt-2 whitespace-pre-wrap text-[15px] leading-relaxed">{activeAssignment.description}</p>
+            </section>
+          )}
+
+          {activeAssignment.file_url && (
+            <section>
+              <h2 className="text-[14px] font-bold text-[#5D6570]">Attachments</h2>
+              <a href={activeAssignment.file_url} target="_blank" rel="noreferrer" className={`${BTN_GHOST} mt-2`}>
+                <Download className="h-4 w-4" aria-hidden="true" /> {activeAssignment.file_name || "Download assignment"}
+              </a>
+            </section>
+          )}
+
+          <section className="border-t border-[#E5E7EB] pt-6">
+            <h2 className="text-[14px] font-bold text-[#5D6570]">Your submission</h2>
+
+            {sub && sub.status === "graded" && (
+              <div className="mt-3 rounded-[20px] p-5" style={{ backgroundImage: TILE.mint.bg }}>
+                <p className="flex items-center gap-2 text-[14px] font-bold text-[#047857]"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /> Graded</p>
+                <p className="mt-1 text-3xl font-bold text-[#047857]">
+                  {sub.grade ?? "—"} <span className="text-[15px] font-semibold text-[#374151]">/ {activeAssignment.max_marks || "?"}</span>
+                </p>
+                {sub.feedback && <p className="mt-3 rounded-xl bg-white/80 p-3 text-[14px]">{sub.feedback}</p>}
               </div>
-            </div>
+            )}
 
-            {/* Content */}
-            <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
-              {activeAssignment.description && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2" style={{ color: t.textSecondary }}>Description</h3>
-                  <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap" style={{ color: t.textPrimary }}>{activeAssignment.description}</p>
+            {sub && sub.status === "submitted" && (
+              <div className="mt-3 flex items-center gap-3 rounded-[20px] p-4" style={{ backgroundImage: TILE.lilac.bg }}>
+                <CheckCircle2 className="h-6 w-6 shrink-0 text-[#5B4BC4]" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="truncate text-[15px] font-bold">{sub.file_name || "Submitted"}</p>
+                  {/* The submissions bucket is private and the portal has no session to sign a URL — no View link. */}
+                  <p className="text-[13px] text-[#374151]">Submitted {fmtDate(sub.submitted_at)}</p>
                 </div>
-              )}
+              </div>
+            )}
 
-              {activeAssignment.file_url && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2" style={{ color: t.textSecondary }}>Attachments</h3>
-                  <a
-                    href={activeAssignment.file_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border"
-                    style={{ background: t.bg, color: t.teal, borderColor: t.border }}
-                  >
-                    <Icons.Download /> {activeAssignment.file_name || "Download Assignment"}
-                  </a>
-                </div>
-              )}
+            <div className="mt-4">
+              {activeAssignment.upload_link_token ? (
+                <UploadAttempts
+                  code={student.access_code}
+                  assignmentRef={activeAssignment.upload_link_token}
+                  student={{ id: student.id, institute_id: student.institute_id }}
+                  t={UPLOAD_TOKENS}
+                  onChange={() => loadDashboard(student)}
+                />
+              ) : (
+                <>
+                  {submitSuccess && (
+                    <p role="status" className="mb-4 rounded-xl px-4 py-3 text-[14px] font-semibold text-[#047857]" style={{ background: "#E4F8F3" }}>
+                      Submitted successfully!
+                    </p>
+                  )}
 
-              {/* Submission */}
-              <div className="border-t pt-5 sm:pt-6" style={{ borderColor: t.border }}>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: t.textSecondary }}>Your Submission</h3>
-
-                {sub && sub.status === "graded" && (
-                  <div className="rounded-lg p-4 mb-4 border" style={{ background: t.tealBg, borderColor: `${t.teal}30` }}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `${t.teal}20`, color: t.teal }}>
-                        <Icons.Check />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold" style={{ color: t.teal }}>Graded ✓</p>
-                        <p className="text-xl sm:text-2xl font-bold" style={{ color: t.teal }}>
-                          {sub.grade ?? "—"} <span className="text-sm font-medium" style={{ color: t.textMuted }}>/ {activeAssignment.max_marks || "?"}</span>
-                        </p>
-                      </div>
-                    </div>
-                    {sub.feedback && (
-                      <div className="mt-3 rounded-lg p-3 text-sm border" style={{ background: t.bg, color: t.textPrimary, borderColor: `${t.teal}20` }}>
-                        💬 {sub.feedback}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {sub && sub.status === "submitted" && (
-                  <div className="rounded-lg p-4 mb-4 flex items-center justify-between gap-3 border" style={{ background: t.accentBg, borderColor: `${t.accent}30` }}>
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `${t.accent}20`, color: t.accent }}>
-                        <Icons.Check />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate" style={{ color: t.textPrimary }}>{sub.file_name || "Submitted"}</p>
-                        <p className="text-xs" style={{ color: t.textMuted }}>Submitted {fmtDate(sub.submitted_at)}</p>
-                      </div>
-                    </div>
-                    {/* The submissions bucket is private and the portal has no session to sign a URL — no View link. */}
-                    {sub.file_url && (
-                      <span className="text-sm font-medium shrink-0" style={{ color: t.accent }}>Submitted ✓</span>
-                    )}
-                  </div>
-                )}
-
-                {activeAssignment.upload_link_token ? (
-                  <UploadAttempts
-                    code={student.access_code}
-                    assignmentRef={activeAssignment.upload_link_token}
-                    student={{ id: student.id, institute_id: student.institute_id }}
-                    t={t}
-                    onChange={() => loadDashboard(student)}
+                  <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                    onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (file) await handleSubmitFile(activeAssignment, file);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
                   />
-                ) : (
-                  <>
-                    {submitSuccess && (
-                      <div className="rounded-lg px-4 py-3 text-sm font-medium mb-4 border" style={{ background: t.tealBg, color: t.teal, borderColor: `${t.teal}30` }}>
-                        ✅ Submitted successfully!
-                      </div>
-                    )}
 
-                    <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
-                      onChange={async e => {
-                        const file = e.target.files?.[0];
-                        if (file) await handleSubmitFile(activeAssignment, file);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                    />
-
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                      className="w-full py-3 rounded-lg text-white font-medium text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed shadow-md"
-                      style={{ background: uploading ? "#94A3B8" : `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}
-                    >
-                      {uploading ? <><Icons.Loader /> Uploading...</> : sub ? <><Icons.Upload /> Resubmit (PDF only)</> : <><Icons.Upload /> Upload Answer (PDF)</>}
-                    </button>
-                    <p className="text-center text-xs mt-2" style={{ color: t.textMuted }}>PDF files only · Max 10MB</p>
-                  </>
-                )}
-              </div>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className={`${BTN_BLACK} w-full`}>
+                    {uploading
+                      ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Uploading…</>
+                      : <><Upload className="h-4 w-4" aria-hidden="true" /> {sub ? "Resubmit (PDF only)" : "Upload answer (PDF)"}</>}
+                  </button>
+                  <p className="mt-2 text-center text-[13px] text-[#5D6570]">PDF files only · Max 10 MB</p>
+                </>
+              )}
             </div>
-          </div>
-        </div>
-      </div>
+          </section>
+        </Card>
+      </div>,
     );
   }
 
   /* ══════════════════════════════════════════
-     DASHBOARD
+     DASHBOARD VIEWS
   ══════════════════════════════════════════ */
-  if (!student) return null;
+  const next = upcoming[0];
+  const nextDl = next ? fmtDeadline(next.deadline) : null;
+  const visibleAnnouncements = showAllAnnouncements ? announcements : announcements.slice(0, 3);
 
-  const courses = [
-    { id: student.batch_id, name: student.batch_name || "Class", code: student.class_level || "" },
-  ];
+  const activityItems = [
+    ...graded.map(a => ({
+      Icon: CheckCircle2, color: "#047857", text: `Graded: ${a.title} — ${a.submission?.grade ?? "—"}/${a.max_marks || "?"}`,
+      time: a.submission?.submitted_at || a.created_at,
+    })),
+    ...assignments.map(a => ({ Icon: ClipboardList, color: "#5B4BC4", text: `New assignment: ${a.title}`, time: a.created_at })),
+    ...announcements.map(a => ({ Icon: Megaphone, color: "#D93F4D", text: a.title, time: a.created_at })),
+  ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 10);
 
-  const channels = [
-    { id: 'announcements', name: 'Announcements', icon: <Icons.Bell /> },
-    { id: 'assignments', name: 'Assignments & Tasks', icon: <Icons.Tasks /> },
-    { id: 'live', name: 'Live Lectures', icon: <Icons.MonitorPlay /> },
-  ];
+  return shell(
+    <>
+      {/* ── Home ── */}
+      {sideView === "dashboard" && (
+        <>
+          <h1 className="font-halenoir text-2xl font-bold tracking-[-0.01em] sm:text-[1.9rem]">Welcome back, {firstName}</h1>
+          <p className="mt-1 text-[14px] text-[#5D6570]">{classLine} · {today}</p>
 
-  const breadcrumb = courses[0]?.name || "Class";
-
-  return (
-    <div className="flex h-screen overflow-hidden transition-colors duration-300" style={{ background: t.bg, color: t.textPrimary, fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .animate-spin { animation: spin 1s linear infinite; }
-        .sidebar-transition { transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: ${t.scrollTrack}; }
-        ::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: ${t.scrollThumbHover}; }
-      `}</style>
-
-      {/* 1. Leftmost App Bar */}
-      <nav className="w-16 border-r flex flex-col items-center py-4 z-30 shrink-0 justify-between transition-colors duration-300" style={{ background: t.bg, borderColor: t.border }}>
-        <div className="flex flex-col items-center space-y-4 w-full">
-          {appNav.map((app) => (
-            <button
-              key={app.id}
-              onClick={() => { setSideView(app.id as any); setSidebarOpen(false); }}
-              className="relative flex flex-col items-center justify-center w-full group focus:outline-none"
-              title={app.label}
-            >
-              <div
-                className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-150 ease-in-out"
-                style={{
-                  color: sideView === app.id ? t.accent : t.textMuted,
-                  background: sideView === app.id ? t.accentBg : "transparent",
-                }}
-                onMouseEnter={e => { if (sideView !== app.id) { e.currentTarget.style.color = t.textPrimary; e.currentTarget.style.background = t.border; } }}
-                onMouseLeave={e => { if (sideView !== app.id) { e.currentTarget.style.color = t.textMuted; e.currentTarget.style.background = "transparent"; } }}
-              >
-                {app.icon}
-                {app.badge && (
-                  <span className="absolute top-0 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2" style={{ borderColor: t.bg }}></span>
-                )}
+          <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+            <div className="rounded-[24px] p-6 text-[#1B1B1B] sm:p-8" style={{ backgroundImage: HERO_BG }}>
+              <ClipboardList className="h-7 w-7" aria-hidden="true" />
+              <h2 className="mt-3 font-halenoir text-xl font-bold sm:text-2xl">
+                {pending.length > 0 ? `${pending.length} assignment${pending.length !== 1 ? "s" : ""} to submit` : "You're all caught up"}
+              </h2>
+              <p className="mt-1.5 max-w-md text-[15px] text-[#5D6570]">
+                {next
+                  ? <>Next: <span className="font-semibold text-[#1B1B1B]">{next.title}</span>{nextDl && <> · <span className="font-semibold text-[#1B1B1B]">{nextDl.text}</span></>}</>
+                  : "New work from your teachers will show up here."}
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {next
+                  ? <button type="button" onClick={() => openAssignment(next)} className={BTN_ON_HERO}>Open next assignment</button>
+                  : <button type="button" onClick={() => openTasks("all")} className={BTN_ON_HERO}>View assignments</button>}
+                <button type="button" onClick={() => go("calendar")} className={BTN_ON_HERO_GHOST}>
+                  <CalendarDays className="h-4 w-4" aria-hidden="true" /> Calendar
+                </button>
               </div>
-              {sideView === app.id && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-md" style={{ background: t.accent }}></div>
-              )}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-col items-center w-full pb-2 gap-3">
-          {/* Theme toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg transition-colors"
-            style={{ color: t.textMuted }}
-            onMouseEnter={e => { e.currentTarget.style.color = t.textPrimary; e.currentTarget.style.background = t.border; }}
-            onMouseLeave={e => { e.currentTarget.style.color = t.textMuted; e.currentTarget.style.background = "transparent"; }}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? <Icons.Sun /> : <Icons.Moon />}
-          </button>
-
-          {/* Logout avatar */}
-          <button
-            onClick={logout}
-            className="relative w-9 h-9 rounded-full p-[2px] transition-transform hover:scale-105"
-            style={{ background: `linear-gradient(135deg, ${getAvatarColor(student.name)}, ${t.accent})` }}
-            title="Logout"
-          >
-            <div className="w-full h-full rounded-full border-2 overflow-hidden flex items-center justify-center" style={{ background: t.surface, borderColor: t.surface }}>
-              <span className="text-xs font-bold" style={{ color: t.textPrimary }}>{getInitials(student.name)}</span>
             </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 rounded-full" style={{ borderColor: t.bg }}></div>
-          </button>
-        </div>
-      </nav>
 
-      {/* 2. Contextual Sidebar */}
-      <aside
-        className={`fixed md:relative inset-y-0 left-16 md:left-0 z-20 w-64 border-r flex-col shrink-0 sidebar-transition ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} flex overflow-y-auto transition-colors duration-300`}
-        style={{ background: t.surface, borderColor: t.border }}
-      >
-        <div className="p-4 border-b w-full" style={{ borderColor: t.border }}>
-          <h2 className="text-xs font-bold uppercase tracking-wider" style={{ color: t.textSecondary }}>Enrolled Courses</h2>
-        </div>
-        <div className="flex-1 py-2 overflow-y-auto w-full">
-          {courses.map((course) => (
-            <div key={course.id} className="mb-1">
-              <button
-                onClick={() => setExpandedCourse(!expandedCourse)}
-                className="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors"
-                style={{ color: t.textPrimary }}
-                onMouseEnter={e => e.currentTarget.style.background = t.hover}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-              >
-                <span className="font-medium truncate pr-2 text-left">{course.name}</span>
-                <span className={`transition-transform duration-200 ${expandedCourse ? 'rotate-180' : ''}`}>
-                  <Icons.ChevronDown />
-                </span>
-              </button>
-
-              {expandedCourse && (
-                <div className="px-3 pb-2 pt-1 space-y-1">
-                  {channels.map((channel) => {
-                    const isChannelActive =
-                      (channel.id === 'assignments' && (sideView === 'tasks' || (sideView === 'dashboard' && activeTab === 'assignments'))) ||
-                      (channel.id === 'announcements' && sideView === 'dashboard' && activeTab === 'announcements') ||
-                      (channel.id === 'live' && sideView === 'calendar') ||
-                      (channel.id === 'general' && sideView === 'chat');
-                    return (
-                      <button
-                        key={channel.id}
-                        onClick={() => {
-                          if (channel.id === 'assignments') { setSideView('tasks'); }
-                          else if (channel.id === 'announcements') { setSideView('dashboard'); setActiveTab('announcements'); }
-                          else if (channel.id === 'live') { setSideView('calendar'); }
-                          else { setSideView('chat'); }
-                          setSidebarOpen(false);
-                        }}
-                        className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-150"
-                        style={{
-                          background: isChannelActive ? t.accentBg : "transparent",
-                          color: isChannelActive ? t.accent : t.textSecondary,
-                          fontWeight: isChannelActive ? 500 : 400,
-                        }}
-                        onMouseEnter={e => { if (!isChannelActive) { e.currentTarget.style.background = t.border; e.currentTarget.style.color = t.textPrimary; } }}
-                        onMouseLeave={e => { if (!isChannelActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = t.textSecondary; } }}
-                      >
-                        <span className="opacity-70">{channel.icon}</span>
-                        <span>{channel.name}</span>
-                        {channel.id === 'assignments' && pending.length > 0 && (
-                          <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ color: t.accent, background: t.accentBg }}>
-                            {pending.length}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Quick Stats */}
-        <div className="p-4 border-t w-full" style={{ borderColor: t.border }}>
-          <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: t.textMuted }}>Your Progress</p>
-          <div className="space-y-2">
-            {[
-              { label: "Pending", value: pending.length, color: "#F59E0B" },
-              { label: "Submitted", value: submitted.length, color: t.accent },
-              { label: "Graded", value: graded.length, color: t.teal },
-            ].map((stat) => (
-              <div key={stat.label} className="flex items-center justify-between rounded-lg px-3 py-2 border" style={{ background: t.bg, borderColor: t.border }}>
-                <span className="text-xs font-medium" style={{ color: t.textSecondary }}>{stat.label}</span>
-                <span className="text-sm font-bold" style={{ color: stat.color }}>{stat.value}</span>
-              </div>
-            ))}
+            <Card>
+              <GraduationCap className="h-6 w-6 text-[#5B4BC4]" aria-hidden="true" />
+              <h2 className="mt-3 text-lg font-bold">Your class</h2>
+              <dl className="mt-2 space-y-1.5 text-[14px]">
+                {[
+                  ["Class", student.batch_name],
+                  ["Lab", student.lab_batch_name],
+                  ["Department", student.department_name],
+                  ["Roll no.", student.roll_no],
+                  ["School", student.institute_name],
+                ].filter(([, v]) => v).map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-3">
+                    <dt className="text-[#5D6570]">{k}</dt>
+                    <dd className="truncate text-right font-semibold">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
           </div>
-        </div>
-      </aside>
 
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-10 md:hidden" onClick={() => setSidebarOpen(false)} />
+          {/* Progress tiles */}
+          <ul className="mt-5 grid grid-cols-3 gap-3 sm:gap-4">
+            {([
+              { f: "pending", label: "Pending", n: pending.length, tile: TILE.orange },
+              { f: "submitted", label: "Submitted", n: submitted.length, tile: TILE.lilac },
+              { f: "graded", label: "Graded", n: graded.length, tile: TILE.mint },
+            ] as const).map(({ f, label, n, tile }) => (
+              <li key={f}>
+                <button
+                  type="button"
+                  onClick={() => openTasks(f)}
+                  className="w-full rounded-[20px] border border-black/[0.04] p-4 text-left sm:p-5"
+                  style={{ backgroundImage: tile.bg }}
+                >
+                  <span className="block text-3xl font-bold" style={{ color: tile.accent }}>{n}</span>
+                  <span className="mt-0.5 block text-[14px] font-semibold text-[#374151]">{label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-9 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+            <div className="space-y-9">
+              <section>
+                <SectionTitle action={assignments.length > 0 && (
+                  <button type="button" onClick={() => openTasks("all")} className="min-h-[44px] text-[14px] font-bold underline underline-offset-4">See all ({assignments.length})</button>
+                )}>
+                  Assignments
+                </SectionTitle>
+                {assignments.length === 0
+                  ? <Empty Icon={ClipboardList} title="No assignments yet" body="Your teachers will post work here." />
+                  : <ul className="space-y-3">{assignments.slice(0, 4).map(assignmentRow)}</ul>}
+              </section>
+
+              <section>
+                <SectionTitle action={announcements.length > 3 && (
+                  <button type="button" onClick={() => setShowAllAnnouncements(s => !s)} className="min-h-[44px] text-[14px] font-bold underline underline-offset-4">
+                    {showAllAnnouncements ? "Show less" : `See all (${announcements.length})`}
+                  </button>
+                )}>
+                  Announcements
+                </SectionTitle>
+                {announcements.length === 0
+                  ? <Empty Icon={Megaphone} title="No announcements yet" body="Your teacher will post updates here." />
+                  : (
+                    <ul className="space-y-3">
+                      {visibleAnnouncements.map(ann => (
+                        <li key={ann.id} className="flex gap-4 rounded-[20px] border border-[#E5E7EB] bg-white p-4 sm:p-5" style={ann.is_pinned ? { borderColor: "#FFE9AD" } : undefined}>
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ backgroundImage: ann.is_pinned ? TILE.yellow.bg : TILE.pink.bg, color: ann.is_pinned ? TILE.yellow.accent : TILE.pink.accent }}>
+                            {ann.is_pinned ? <Pin className="h-5 w-5" aria-hidden="true" /> : <Megaphone className="h-5 w-5" aria-hidden="true" />}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <h3 className="truncate text-[16px] font-bold">{ann.title}</h3>
+                              <span className="shrink-0 text-[12px] text-[#5D6570]">{fmtDate(ann.created_at)}</span>
+                            </div>
+                            {ann.is_pinned && <p className="text-[12px] font-bold text-[#9A6B00]">Pinned</p>}
+                            {ann.content && <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-[#374151]">{ann.content}</p>}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+              </section>
+            </div>
+
+            <div className="space-y-5">
+              <Card>
+                <h2 className="text-lg font-bold">Upcoming deadlines</h2>
+                {upcoming.length === 0
+                  ? <p className="mt-3 text-[14px] text-[#5D6570]">Nothing due. Nice work!</p>
+                  : (
+                    <ul className="mt-3 space-y-2">
+                      {upcoming.slice(0, 4).map(a => {
+                        const dl = fmtDeadline(a.deadline);
+                        return (
+                          <li key={a.id}>
+                            <button type="button" onClick={() => openAssignment(a)} className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-[#F7F8FA]">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dl?.color || "#9CA3AF" }} aria-hidden="true" />
+                              <span className="min-w-0">
+                                <span className="block truncate text-[14px] font-semibold">{a.title}</span>
+                                <span className="block text-[12px] font-medium" style={{ color: dl?.color || "#5D6570" }}>{dl?.text || "No deadline"}</span>
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+              </Card>
+
+              <Card>
+                <h2 className="text-lg font-bold">Recent marks</h2>
+                {graded.length === 0
+                  ? <p className="mt-3 text-[14px] text-[#5D6570]">Marks show up here after your teacher checks your work.</p>
+                  : (
+                    <ul className="mt-3 space-y-2">
+                      {graded.slice(0, 4).map(a => (
+                        <li key={a.id}>
+                          <button type="button" onClick={() => openAssignment(a)} className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left hover:bg-[#F7F8FA]">
+                            <span className="truncate text-[14px] font-semibold">{a.title}</span>
+                            <span className="shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold text-[#047857]" style={{ background: "#E4F8F3" }}>
+                              {a.submission?.grade ?? "—"}/{a.max_marks || "?"}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+              </Card>
+            </div>
+          </div>
+
+          <h2 className="mt-9 text-lg font-bold">Keep going</h2>
+          <ul className="mt-4 grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-4">
+            {([
+              { v: "calendar", title: "Calendar", body: "Classes and deadlines by date", Icon: CalendarDays, tile: TILE.yellow },
+              { v: "files", title: "Files", body: "Question papers from your teachers", Icon: FolderOpen, tile: TILE.lime },
+              { v: "activity", title: "Activity", body: "Everything new, latest first", Icon: Activity, tile: TILE.pink },
+            ] as const).map(({ v, title, body, Icon, tile }) => (
+              <li key={v}>
+                <button type="button" onClick={() => go(v)} className="flex h-full w-full items-start gap-4 rounded-[20px] border border-black/[0.04] p-5 text-left" style={{ backgroundImage: tile.bg }}>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/80" style={{ color: tile.accent }}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+                  <span>
+                    <span className="block text-[16px] font-bold">{title}</span>
+                    <span className="mt-0.5 block text-[14px] text-[#374151]">{body}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+            <li>
+              <Link to="/student/dashboard" className="flex h-full items-start gap-4 rounded-[20px] border border-black/[0.04] p-5" style={{ backgroundImage: TILE.lilac.bg }}>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/80" style={{ color: TILE.lilac.accent }}><Sparkles className="h-5 w-5" aria-hidden="true" /></span>
+                <span>
+                  <span className="block text-[16px] font-bold">Practise on a4ai</span>
+                  <span className="mt-0.5 block text-[14px] text-[#374151]">Contests, practice and flashcards</span>
+                </span>
+              </Link>
+            </li>
+          </ul>
+        </>
       )}
 
-      {/* 3. Main Content Stage */}
-      <main className="flex-1 flex flex-col min-w-0 relative transition-colors duration-300" style={{ background: t.bg }}>
-
-        {/* Top Header Bar */}
-        <header className="h-14 border-b flex items-center justify-between px-3 md:px-6 shrink-0 backdrop-blur z-10 transition-colors duration-300" style={{ background: `${t.bg}ee`, borderColor: t.border }}>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="md:hidden p-1.5 rounded transition-colors"
-              style={{ color: t.textSecondary }}
-            >
-              <Icons.Menu />
-            </button>
-            <div className="flex items-center space-x-2 text-sm" style={{ color: t.textSecondary }}>
-              <span className="hidden sm:inline">{breadcrumb}</span>
-              <span className="hidden sm:inline">/</span>
-              <span className="font-medium capitalize" style={{ color: t.textPrimary }}>{sideView === 'chat' ? 'Batch Discussion' : sideView}</span>
-            </div>
+      {/* ── Assignments ── */}
+      {sideView === "tasks" && (
+        <>
+          <h1 className="font-halenoir text-2xl font-bold sm:text-[1.9rem]">Assignments</h1>
+          <p className="mt-1 text-[14px] text-[#5D6570]">Homework, deadlines and marks from your teachers</p>
+          <div role="group" aria-label="Filter assignments" className="mt-5 flex flex-wrap gap-2">
+            {([
+              { id: "all", label: "All", count: assignments.length },
+              { id: "pending", label: "Pending", count: pending.length },
+              { id: "submitted", label: "Submitted", count: submitted.length },
+              { id: "graded", label: "Graded", count: graded.length },
+            ] as const).map(f => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setTaskStatusFilter(f.id)}
+                aria-pressed={taskStatusFilter === f.id}
+                className={`min-h-[40px] rounded-xl px-4 text-[14px] font-semibold ${taskStatusFilter === f.id ? "bg-[#111111] text-white" : "border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F7F8FA]"}`}
+              >
+                {f.label} ({f.count})
+              </button>
+            ))}
           </div>
+          <div className="mt-5">
+            {filteredTasks.length === 0
+              ? <Empty Icon={CheckCircle2} title="Nothing here" body="You are all caught up." />
+              : <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">{filteredTasks.map(assignmentRow)}</ul>}
+          </div>
+        </>
+      )}
 
-          <div className="flex items-center space-x-3 flex-1 justify-end max-w-md ml-4">
-            <div className="relative w-full max-w-sm hidden sm:block">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: t.textMuted }}>
-                <Icons.Search />
-              </div>
+      {/* ── Calendar ── */}
+      {sideView === "calendar" && (
+        <>
+          <h1 className="mb-5 font-halenoir text-2xl font-bold sm:text-[1.9rem]">Calendar</h1>
+          <StudentCalendar events={calEvents} />
+        </>
+      )}
+
+      {/* ── Files ── */}
+      {sideView === "files" && (
+        <>
+          <h1 className="font-halenoir text-2xl font-bold sm:text-[1.9rem]">Files</h1>
+          <p className="mt-1 text-[14px] text-[#5D6570]">Assignment papers and the files you submitted</p>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:hidden">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" aria-hidden="true" />
               <input
-                type="text"
+                type="search"
+                aria-label="Search files"
                 value={fileSearchQuery}
-                onChange={e => {
-                  setFileSearchQuery(e.target.value);
-                  if (sideView !== "files" && e.target.value.trim()) setSideView("files");
-                }}
-                placeholder="Search files or assignments..."
-                className="w-full rounded-lg py-1.5 pl-9 pr-4 text-sm outline-none transition-all"
-                style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.textPrimary }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.boxShadow = `0 0 0 1px ${t.accent}`; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = t.border; e.currentTarget.style.boxShadow = "none"; }}
+                onChange={e => setFileSearchQuery(e.target.value)}
+                placeholder="Search files"
+                className="min-h-[44px] w-full rounded-xl border border-[#E5E7EB] bg-white pl-9 pr-3 text-[14px] outline-none focus:border-[#111111]"
               />
             </div>
-            <button
-              onClick={() => setSideView("tasks")}
-              className="relative p-1.5 rounded-lg transition-colors"
-              style={{ color: t.textSecondary }}
-              onMouseEnter={e => e.currentTarget.style.background = t.border}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-              title="Pending Tasks"
-            >
-              <Icons.Bell />
-              {pending.length > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2" style={{ borderColor: t.bg }} />
-              )}
-            </button>
+            {([
+              { id: "all", label: "All files" },
+              { id: "assignments", label: "From teachers" },
+              { id: "submissions", label: "My submissions" },
+            ] as const).map(cat => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setFileCategoryFilter(cat.id)}
+                aria-pressed={fileCategoryFilter === cat.id}
+                className={`min-h-[40px] rounded-xl px-4 text-[14px] font-semibold ${fileCategoryFilter === cat.id ? "bg-[#111111] text-white" : "border border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F7F8FA]"}`}
+              >
+                {cat.label}
+              </button>
+            ))}
           </div>
-        </header>
-
-        {/* Scrollable Workspace */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          <div className="max-w-6xl mx-auto space-y-6">
-
-            {/* Calendar View */}
-            {sideView === "calendar" && (
-              <StudentCalendar events={calEvents} />
-            )}
-
-            {/* Activity View */}
-            {sideView === "activity" && (
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold mb-4" style={{ color: t.textPrimary }}>Recent Activity</h1>
-                <div className="rounded-xl p-4 border" style={{ background: t.surface, borderColor: t.border }}>
-                  <div className="space-y-3">
-                    {[
-                      ...assignments.filter(a => a.submission?.status === "graded").map(a => ({
-                        icon: "✅", text: `Graded: ${a.title} — ${a.submission?.grade}/${a.max_marks || "?"}`,
-                        time: a.submission?.submitted_at || a.created_at
-                      })),
-                      ...assignments.map(a => ({
-                        icon: "📋", text: `New assignment: ${a.title}`,
-                        time: a.created_at
-                      })),
-                      ...announcements.map(a => ({
-                        icon: "📢", text: a.title,
-                        time: a.created_at
-                      }))
-                    ].sort((a,b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-                     .slice(0, 10)
-                     .map((item, i) => (
-                      <div key={i} className="flex items-center gap-3 p-3 rounded-lg border transition-colors" style={{ borderColor: t.border }}>
-                        <span className="text-xl">{item.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate" style={{ color: t.textPrimary }}>{item.text}</p>
-                          <p className="text-xs" style={{ color: t.textMuted }}>{fmtDate(item.time)}</p>
+          <div className="mt-5">
+            {allFiles.length === 0
+              ? <Empty Icon={FolderOpen} title="No files found" body="Nothing matches this filter or search." />
+              : (
+                <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {allFiles.map(file => {
+                    const tile = file.type === "assignment" ? TILE.lime : TILE.lilac;
+                    return (
+                      <li key={file.id} className="flex flex-col justify-between rounded-[20px] border border-[#E5E7EB] bg-white p-4">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[12px] font-bold" style={{ backgroundImage: tile.bg, color: tile.accent }}>PDF</span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-[14px] font-bold">{file.fileName}</span>
+                            <span className="block truncate text-[12px] text-[#5D6570]">{file.title}</span>
+                          </span>
                         </div>
-                      </div>
-                    ))}
-                    {assignments.length === 0 && announcements.length === 0 && (
-                      <p className="text-center py-8" style={{ color: t.textMuted }}>No activity yet</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tasks & Homework View */}
-            {sideView === "tasks" && (
-              <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h1 className="text-xl sm:text-2xl font-bold" style={{ color: t.textPrimary }}>Assignments & Tasks</h1>
-                    <p className="text-sm mt-1" style={{ color: t.textSecondary }}>Manage your homework, view deadlines, and check grades</p>
-                  </div>
-                  {/* Status Filters */}
-                  <div className="flex items-center gap-1.5 p-1 rounded-xl border self-start sm:self-auto" style={{ background: t.surface, borderColor: t.border }}>
-                    {[
-                      { id: "all", label: "All Tasks", count: assignments.length },
-                      { id: "pending", label: "Pending", count: pending.length },
-                      { id: "submitted", label: "Submitted", count: submitted.length },
-                      { id: "graded", label: "Graded", count: graded.length },
-                    ].map(f => (
-                      <button
-                        key={f.id}
-                        onClick={() => setTaskStatusFilter(f.id as any)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                        style={{
-                          background: taskStatusFilter === f.id ? t.accentBg : "transparent",
-                          color: taskStatusFilter === f.id ? t.accent : t.textSecondary,
-                        }}
-                      >
-                        {f.label} ({f.count})
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {filteredTasks.length === 0 ? (
-                  <div className="rounded-xl p-12 text-center border" style={{ background: t.surface, borderColor: t.border }}>
-                    <div className="text-5xl mb-3">🎉</div>
-                    <p className="text-base font-semibold" style={{ color: t.textPrimary }}>No tasks found in this section</p>
-                    <p className="text-xs mt-1" style={{ color: t.textMuted }}>You are all caught up!</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredTasks.map(a => {
-                      const sub = a.submission;
-                      const dl = fmtDeadline(a.deadline);
-                      const statusColor = !sub ? "#F59E0B" : sub.status === "graded" ? t.teal : t.accent;
-                      const statusLabel = !sub ? "Pending" : sub.status === "graded" ? `Graded (${sub.grade}/${a.max_marks || "?"})` : "Submitted";
-
-                      return (
-                        <div
-                          key={a.id}
-                          className="rounded-xl p-5 border flex flex-col justify-between transition-all hover:border-indigo-500/40"
-                          style={{ background: t.surface, borderColor: t.border }}
-                        >
-                          <div>
-                            <div className="flex items-start justify-between gap-3 mb-2">
-                              <h3 className="font-semibold text-base break-words" style={{ color: t.textPrimary }}>{a.title}</h3>
-                              <span className="text-xs font-bold px-2.5 py-1 rounded-full shrink-0" style={{ background: `${statusColor}15`, color: statusColor }}>
-                                {statusLabel}
-                              </span>
-                            </div>
-                            {a.description && (
-                              <p className="text-xs leading-relaxed line-clamp-3 mb-4" style={{ color: t.textSecondary }}>{a.description}</p>
-                            )}
-                          </div>
-
-                          <div className="border-t pt-4 mt-2 flex items-center justify-between flex-wrap gap-2" style={{ borderColor: t.border }}>
-                            <div className="flex items-center gap-3 text-xs">
-                              {dl && <span className="font-medium" style={{ color: dl.color }}>⏰ {dl.text}</span>}
-                              {a.max_marks && <span className="font-medium text-amber-500">⭐ {a.max_marks} marks</span>}
-                            </div>
-                            <button
-                              onClick={() => { setActiveAssignment(a); setView("assignment"); }}
-                              className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-white transition-transform active:scale-95"
-                              style={{ background: `linear-gradient(135deg, ${t.accent}, ${t.accentHover})` }}
-                            >
-                              {!sub ? "Submit PDF →" : sub.status === "graded" ? "View Grade →" : "View Submission"}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Files & Document Library View */}
-            {sideView === "files" && (
-              <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h1 className="text-xl sm:text-2xl font-bold" style={{ color: t.textPrimary }}>Files & Documents</h1>
-                    <p className="text-sm mt-1" style={{ color: t.textSecondary }}>Access course PDFs, assignment attachments, and submitted files</p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Category Filter */}
-                    <div className="flex items-center gap-1 p-1 rounded-xl border" style={{ background: t.surface, borderColor: t.border }}>
-                      {[
-                        { id: "all", label: "All Files" },
-                        { id: "assignments", label: "Assignments" },
-                        { id: "submissions", label: "Submissions" },
-                      ].map(cat => (
-                        <button
-                          key={cat.id}
-                          onClick={() => setFileCategoryFilter(cat.id as any)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                          style={{
-                            background: fileCategoryFilter === cat.id ? t.accentBg : "transparent",
-                            color: fileCategoryFilter === cat.id ? t.accent : t.textSecondary,
-                          }}
-                        >
-                          {cat.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {allFiles.length === 0 ? (
-                  <div className="rounded-xl p-12 text-center border" style={{ background: t.surface, borderColor: t.border }}>
-                    <div className="text-5xl mb-3">📁</div>
-                    <p className="text-base font-semibold" style={{ color: t.textPrimary }}>No files found</p>
-                    <p className="text-xs mt-1" style={{ color: t.textMuted }}>No documents match your current filter or search query.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {allFiles.map(file => (
-                      <div
-                        key={file.id}
-                        className="rounded-xl p-4 border flex flex-col justify-between transition-all hover:border-teal-500/40"
-                        style={{ background: t.surface, borderColor: t.border }}
-                      >
-                        <div>
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm shrink-0" style={{ background: file.type === "assignment" ? t.tealBg : t.accentBg, color: file.type === "assignment" ? t.teal : t.accent }}>
-                              PDF
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="font-semibold text-sm truncate" style={{ color: t.textPrimary }}>{file.fileName}</h4>
-                              <p className="text-xs truncate" style={{ color: t.textMuted }}>{file.title}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="border-t pt-3 mt-2 flex items-center justify-between text-xs" style={{ borderColor: t.border }}>
-                          <span style={{ color: t.textMuted }}>{fmtDate(file.date)}</span>
+                        <div className="mt-4 flex items-center justify-between border-t border-[#E5E7EB] pt-3 text-[13px]">
+                          <span className="text-[#5D6570]">{fmtDate(file.date)}</span>
                           {file.type === "submission" ? (
                             // private bucket, no portal session to sign a URL
-                            <span className="px-3 py-1.5 font-semibold" style={{ color: t.accent }}>Submitted ✓</span>
+                            <span className="font-semibold text-[#5B4BC4]">Submitted</span>
                           ) : (
-                            <a
-                              href={file.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold border transition-colors"
-                              style={{ background: t.bg, color: t.teal, borderColor: t.border }}
-                            >
-                              <Icons.Download /> Open / Download
+                            <a href={file.url} target="_blank" rel="noreferrer" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-[#E5E7EB] px-3 font-semibold hover:bg-[#F7F8FA]">
+                              <Download className="h-4 w-4" aria-hidden="true" /> Open
                             </a>
                           )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-
-
-            {/* Dashboard View */}
-            {sideView === "dashboard" && (
-            <div className="space-y-6">
-
-              {/* Top Banner Widget */}
-              <div
-                className="relative overflow-hidden rounded-xl border shadow-sm flex flex-col sm:flex-row justify-between items-center group transition-colors duration-300"
-                style={{ background: t.surface, borderColor: t.border }}
-              >
-                <div className="p-6 md:p-8 flex-1 z-10">
-                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" style={{ color: t.textPrimary }}>
-                    Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {student.name.split(" ")[0]}.
-                  </h1>
-                  <p className="mt-2 text-sm md:text-base" style={{ color: t.textSecondary }}>
-                    You have <span className="font-medium" style={{ color: t.teal }}>{pending.length} pending</span> assignment{pending.length !== 1 ? "s" : ""} and <strong style={{ color: t.textPrimary }}>{assignments.length} total</strong>.
-                  </p>
-                  <div className="flex flex-wrap gap-3 mt-5">
-                    <button
-                      onClick={() => setSideView('calendar')}
-                      className="px-5 py-2.5 text-white text-sm font-medium rounded-lg transition-all shadow-md flex items-center space-x-2"
-                      style={{ background: t.accent, boxShadow: `0 8px 20px ${t.accent}30` }}
-                      onMouseEnter={e => e.currentTarget.style.background = t.accentHover}
-                      onMouseLeave={e => e.currentTarget.style.background = t.accent}
-                    >
-                      <Icons.MonitorPlay />
-                      <span>View Schedule</span>
-                    </button>
-                    <button
-                      onClick={() => setSideView('tasks')}
-                      className="px-5 py-2.5 text-sm font-medium rounded-lg transition-all border"
-                      style={{ background: t.bg, color: t.textPrimary, borderColor: t.border }}
-                    >
-                      View Assignments
-                    </button>
-                  </div>
-                </div>
-
-                <div
-                  className="relative w-full sm:w-64 h-40 sm:h-full shrink-0 border-l"
-                  style={{ borderColor: t.border, background: `linear-gradient(135deg, ${t.accent}20, ${t.teal}10, ${t.surface})` }}
-                >
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-5xl mb-2">🎓</div>
-                      <p className="text-xs font-medium" style={{ color: t.textSecondary }}>
-                        {student.batch_name}{student.lab_batch_name ? ` · Lab ${student.lab_batch_name}` : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="absolute top-4 right-4 flex items-center space-x-1.5 px-2.5 py-1 rounded-md backdrop-blur-md" style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }}>
-                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
-                    <span className="text-[10px] font-bold tracking-wider uppercase">Live</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Dashboard View Tabs */}
-              <div className="flex items-center gap-2 border-b pb-1" style={{ borderColor: t.border }}>
-                {[
-                  { id: "overview", label: "Overview" },
-                  { id: "announcements", label: `Announcements (${announcements.length})` },
-                  { id: "assignments", label: `Assignments (${assignments.length})` },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className="px-4 py-2 text-xs font-bold rounded-lg transition-all"
-                    style={{
-                      background: activeTab === tab.id ? t.accentBg : "transparent",
-                      color: activeTab === tab.id ? t.accent : t.textSecondary,
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* 2-Column Bento Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-                {/* Left Column */}
-                <div className="col-span-1 lg:col-span-2 space-y-4">
-                  {(activeTab === "overview" || activeTab === "announcements") && (
-                    <>
-                      <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: t.border }}>
-                        <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center" style={{ color: t.textPrimary }}>
-                          <Icons.Pin /> <span className="ml-2">Announcements</span>
-                        </h3>
-                        <span className="text-xs" style={{ color: t.textMuted }}>{announcements.length} total</span>
-                      </div>
-
-                      {announcements.length === 0 && (
-                        <div className="rounded-xl p-8 text-center border" style={{ background: t.surface, borderColor: t.border }}>
-                          <div className="text-4xl mb-3">📢</div>
-                          <p className="text-sm" style={{ color: t.textSecondary }}>No announcements yet</p>
-                          <p className="text-xs mt-1" style={{ color: t.textMuted }}>Your teacher will post updates here</p>
-                        </div>
-                      )}
-
-                      {(activeTab === "overview" ? announcements.slice(0, 3) : announcements).map(ann => (
-                        <div
-                          key={ann.id}
-                          className="rounded-xl p-5 border transition-colors duration-150"
-                          style={{
-                            background: t.surface,
-                            borderColor: ann.is_pinned ? "rgba(245,158,11,0.3)" : t.border,
-                          }}
-                        >
-                          <div className="flex items-start space-x-3">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: `linear-gradient(135deg, ${getAvatarColor(ann.title)}, ${t.accent})` }}>
-                              <span className="text-sm font-bold text-white">{ann.is_pinned ? "📌" : "📢"}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex justify-between items-baseline gap-2">
-                                <h4 className="font-semibold text-sm truncate" style={{ color: t.textPrimary }}>{ann.title}</h4>
-                                <span className="text-xs shrink-0" style={{ color: t.textMuted }}>{fmtDate(ann.created_at)}</span>
-                              </div>
-                              {ann.is_pinned && (
-                                <p className="text-xs text-amber-500 font-medium mt-0.5">📌 Pinned</p>
-                              )}
-                              {ann.content && (
-                                <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap" style={{ color: t.textSecondary }}>{ann.content}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  {(activeTab === "overview" || activeTab === "assignments") && (
-                    <>
-                      {/* Assignments Quick View */}
-                      <div className="flex items-center justify-between pb-2 border-b mt-6" style={{ borderColor: t.border }}>
-                        <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center" style={{ color: t.textPrimary }}>
-                          <Icons.Tasks /> <span className="ml-2">Recent Assignments</span>
-                        </h3>
-                        <span className="text-xs" style={{ color: t.textMuted }}>{assignments.length} total</span>
-                      </div>
-
-                      {assignments.length === 0 && (
-                        <div className="rounded-xl p-8 text-center border" style={{ background: t.surface, borderColor: t.border }}>
-                          <div className="text-4xl mb-3">📭</div>
-                          <p className="text-sm" style={{ color: t.textSecondary }}>No assignments yet</p>
-                        </div>
-                      )}
-
-                      {(activeTab === "overview" ? assignments.slice(0, 3) : assignments).map(a => {
-                        const sub = a.submission;
-                        const dl = fmtDeadline(a.deadline);
-                        const statusColor = !sub ? "#F59E0B" : sub.status === "graded" ? t.teal : t.accent;
-                        const statusLabel = !sub ? "Pending" : sub.status === "graded" ? `Graded · ${sub.grade}/${a.max_marks || "?"}` : "Submitted";
-
-                        return (
-                          <motion.div
-                            key={a.id}
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            whileHover={{ y: -1 }}
-                            onClick={() => { setActiveAssignment(a); setView("assignment"); }}
-                            className="rounded-xl p-4 cursor-pointer transition-all border"
-                            style={{ background: t.surface, borderColor: t.border }}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2 h-2 rounded-full shrink-0" style={{ background: statusColor }} />
-                                  <h3 className="font-semibold text-sm truncate" style={{ color: t.textPrimary }}>{a.title}</h3>
-                                </div>
-                                {a.description && (
-                                  <p className="text-xs truncate mt-1 pl-4" style={{ color: t.textSecondary }}>{a.description}</p>
-                                )}
-                                <div className="flex flex-wrap gap-3 mt-2 pl-4">
-                                  {dl && (
-                                    <span className="text-xs font-medium flex items-center gap-1" style={{ color: dl.color }}>
-                                      <Icons.Clock /> {dl.text}
-                                    </span>
-                                  )}
-                                  {a.max_marks && (
-                                    <span className="text-xs font-medium text-amber-500 flex items-center gap-1">
-                                      <Icons.Star /> {a.max_marks} marks
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <span className="text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap shrink-0" style={{ background: statusColor + '15', color: statusColor }}>
-                                {statusLabel}
-                              </span>
-                            </div>
-                          </motion.div>
-                        );
-                      })}
-                    </>
-                  )}
-                </div>
-
-                {/* Right Column */}
-                <div className="col-span-1 space-y-6">
-
-                  {/* Deadlines Widget */}
-                  <div className="rounded-xl p-5 shadow-sm border" style={{ background: t.surface, borderColor: t.border }}>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: t.textPrimary }}>Deadlines Approaching</h3>
-                    <div className="space-y-4">
-                      {pending.length === 0 && (
-                        <div className="text-center py-4">
-                          <div className="text-3xl mb-2">🎉</div>
-                          <p className="text-xs" style={{ color: t.textSecondary }}>All caught up!</p>
-                        </div>
-                      )}
-                      {pending.slice(0, 3).map(a => {
-                        const dl = fmtDeadline(a.deadline);
-                        const progress = a.deadline ? Math.max(0, Math.min(100, 100 - (new Date(a.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 7) * 100)) : 0;
-                        const circumference = 2 * Math.PI * 16;
-                        const offset = circumference - (progress / 100) * circumference;
-                        const color = dl?.color === "#EF4444" ? "#EF4444" : dl?.color === "#F59E0B" ? "#F59E0B" : t.teal;
-
-                        return (
-                          <div
-                            key={a.id}
-                            onClick={() => { setActiveAssignment(a); setView("assignment"); }}
-                            className="flex items-center justify-between p-3 rounded-lg border transition-colors group cursor-pointer"
-                            style={{ background: t.bg, borderColor: t.border }}
-                          >
-                            <div className="flex items-center space-x-3 min-w-0">
-                              <div className="relative w-10 h-10 shrink-0">
-                                <svg className="w-10 h-10 transform -rotate-90">
-                                  <circle cx="20" cy="20" r="16" fill="transparent" stroke={t.border} strokeWidth="3" />
-                                  <circle cx="20" cy="20" r="16" fill="transparent" stroke={color} strokeWidth="3" strokeDasharray={circumference} strokeDashoffset={offset} className="transition-all duration-1000 ease-out" strokeLinecap="round" />
-                                </svg>
-                                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold" style={{ color: t.textPrimary }}>{Math.round(progress)}%</span>
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium transition-colors truncate" style={{ color: t.textPrimary }}>{a.title}</p>
-                                {dl && <p className="text-xs mt-0.5 truncate" style={{ color: dl.color }}>{dl.text}</p>}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Grade Activity Widget */}
-                  <div className="rounded-xl p-5 shadow-sm border" style={{ background: t.surface, borderColor: t.border }}>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: t.textPrimary }}>Recent Grades</h3>
-                    <div className="space-y-3">
-                      {graded.length === 0 && (
-                        <div className="text-center py-4">
-                          <div className="text-3xl mb-2">📊</div>
-                          <p className="text-xs" style={{ color: t.textSecondary }}>No grades yet</p>
-                        </div>
-                      )}
-                      {graded.slice(0, 3).map(a => {
-                        const pct = a.max_marks ? Math.round((a.submission!.grade || 0) / a.max_marks * 100) : 0;
-                        const gradeColor = pct >= 80 ? t.teal : pct >= 60 ? t.accent : "#F59E0B";
-                        return (
-                          <div
-                            key={a.id}
-                            onClick={() => { setActiveAssignment(a); setView("assignment"); }}
-                            className="flex items-center justify-between group cursor-pointer"
-                          >
-                            <div className="flex items-center space-x-3 min-w-0">
-                              <div className="w-8 h-8 rounded flex items-center justify-center shrink-0 transition-colors" style={{ background: t.border, color: t.textSecondary }}>
-                                <Icons.Tasks />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium truncate" style={{ color: t.textPrimary }}>{a.title}</p>
-                                <p className="text-[11px]" style={{ color: t.textMuted }}>Graded {a.submission?.submitted_at ? fmtDate(a.submission.submitted_at) : ""}</p>
-                              </div>
-                            </div>
-                            <div className="px-2 py-1 rounded text-xs font-bold border shrink-0" style={{ background: gradeColor + '15', color: gradeColor, borderColor: gradeColor + '30' }}>
-                              {a.submission?.grade ?? "—"}/{a.max_marks || "?"}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {graded.length > 0 && (
-                      <button
-                        onClick={() => setSideView('tasks')}
-                        className="w-full mt-5 py-2 text-xs font-medium rounded-lg border transition-colors"
-                        style={{ background: t.bg, color: t.textSecondary, borderColor: t.border }}
-                      >
-                        View All Tasks & Grades
-                      </button>
-                    )}
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Status bar */}
-              <div className="flex items-center justify-between text-xs border-t pt-3 flex-wrap gap-2" style={{ color: t.textMuted, borderColor: t.border }}>
-                <span>a4ai Classroom · v2.0</span>
-                <span>
-                  {assignments.length} assignment{assignments.length !== 1 ? "s" : ""} ·{" "}
-                  {announcements.length} announcement{announcements.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-            </div>
-            )}
-
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
           </div>
-        </div>
-      </main>
-    </div>
+        </>
+      )}
+
+      {/* ── Activity ── */}
+      {sideView === "activity" && (
+        <>
+          <h1 className="font-halenoir text-2xl font-bold sm:text-[1.9rem]">Activity</h1>
+          <p className="mt-1 text-[14px] text-[#5D6570]">Latest first</p>
+          <div className="mt-5">
+            {activityItems.length === 0
+              ? <Empty Icon={Activity} title="No activity yet" />
+              : (
+                <ul className="divide-y divide-[#E5E7EB] rounded-[24px] border border-[#E5E7EB] bg-white">
+                  {activityItems.map((item, i) => (
+                    <li key={i} className="flex items-center gap-3 p-4">
+                      <item.Icon className="h-5 w-5 shrink-0" style={{ color: item.color }} aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14px] font-semibold">{item.text}</span>
+                        <span className="block text-[12px] text-[#5D6570]">{fmtDate(item.time)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </div>
+        </>
+      )}
+    </>,
   );
 }
