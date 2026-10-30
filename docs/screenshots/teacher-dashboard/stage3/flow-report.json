@@ -1,0 +1,31 @@
+{
+  "validation": {
+    "summaryShown": true,
+    "summaryText": "Fill in these fields to generate the paper:\n\nExam title is required\nTopic is required",
+    "callsSoFar": 0
+  },
+  "failure": {
+    "errorTitle": true,
+    "errorText": "Generation Failed\n\nThe generator hit a server error. Your settings are still filled in; try again.\n\nTry again with the same settings",
+    "retryButton": 1,
+    "titlePreserved": true,
+    "callsAfterFailure": 1
+  },
+  "loading": {
+    "statusShown": true,
+    "statusText": "Generating your paper…\n\nElapsed 0s. The paper is sent only when it is finished, so there is no partial progress to show. You can leave this page open; your settings stay filled in.",
+    "percentShown": false
+  },
+  "success": {
+    "callsTotal": 2,
+    "payloadExamTitle": "Unit Test: Polynomials",
+    "resultRendered": true,
+    "errorGone": true
+  },
+  "draftRestore": {
+    "restoredTitle": "Draft check title",
+    "expected": "Draft check title",
+    "status": "PASS"
+  },
+  "pageErrors": []
+}

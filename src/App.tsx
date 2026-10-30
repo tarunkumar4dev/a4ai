@@ -15,6 +15,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabaseClient";
 import PrivateRoute from "@/components/PrivateRoute";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { CoinProvider } from "@/context/CoinContext";
@@ -193,6 +194,10 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
     },
   },
+});
+// Shared device: the next person to sign in must never see the previous user's cached rows
+supabase.auth.onAuthStateChange(event => {
+  if (event === "SIGNED_OUT") queryClient.clear();
 });
 
 /* ---------- Loaders ---------- */

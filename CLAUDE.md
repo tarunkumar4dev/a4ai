@@ -352,6 +352,28 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   (mock browser + read-only live function defs; no test account). Live `get_monthly_attendance` returns 0.00 when
   total_held = 0 → show % only when total_held > 0. Dashboard `<header>` is sticky below 1024 px; the sheet header
   sticks under it (`useStickyOffset`). Server: teacher edit window 2 days, proctor 7, HOD/admin none, IST.
+- [x] Institute dashboard P1 (30 Oct, branch perf/institute-dashboard off perf/teacher-dashboard, uncommitted; the
+  Test Generator auth-header hotfix is in `git stash` "hotfix: test-generator auth headers …" — not in this branch).
+  /institute: BulkStudentUpload / BatchManagementPanel / HODAttendanceDashboard lazy (`src/components/LazySection.tsx`
+  = Suspense + error boundary + skeleton; preload on nav hover/focus) → first visit JS 337.9 → 181.6 KB gz, xlsx only
+  on bulk upload / attendance tab. Data = TanStack Query per resource (`src/pages/institute/instituteQueries.ts`, keys
+  `["institute", instId, resource]`); a mutation invalidates only `INVALIDATES[mutation]` — add new mutations there.
+  No full-page spinner after mutations; queries keyed by user.id (auth-js fires SIGNED_IN on every tab focus → the old
+  `useEffect([user])` reloaded everything). Student total/unassigned = server head counts; list read in 1000-row pages.
+  Legacy `fetchAttendance` (old `attendance` table, never rendered) removed. AccessProvider: 3 tries (1 s / 3 s), re-check
+  on focus (≤ 1 per 30 s) / online / TOKEN_REFRESHED, same data → same object; RoleRoute shows Retry on error (was /login).
+  App.tsx clears the query cache on SIGNED_OUT. Tests: AccessProvider.test.ts + instituteQueries.test.ts (157 unit) +
+  tests/e2e/institute-dashboard.spec.ts (mocked admin session; 14 e2e total).
+- [x] Student portal redesign (30 Oct, same branch, uncommitted, separate files from P1): /student now uses the
+  /student/dashboard look (white 240px sidebar, black active item, TOOLS gradient tiles, bottom nav on phones, no
+  animation, no framer-motion / Google Fonts). Logic unchanged (get_student_by_code, get_student_feed, 60 s poll,
+  submit_assignment, UploadAttempts with light UPLOAD_TOKENS). Removed: dark mode, the unreachable localStorage chat,
+  the fake "LIVE" badge and the deadline % rings. Login links to /student/dashboard; Home links back. Route JS 65.9 →
+  31.5 KB gz. Not translated (dashboard has a हिंदी toggle, portal doesn't yet). Not covered by e2e.
+- Known after institute P1: /hod still loads xlsx up front (HODAttendanceDashboard + HODDashboardPage import it
+  statically) — dynamic `import("xlsx")` in the export handlers would fix both. Students list still loads every row
+  (P2: server pagination + KPI RPC). AuthProvider runs `ensureProfileExists` (teacher_profiles query) on every SIGNED_IN,
+  i.e. every tab focus.
 - Known after the landing redesign: landing LCP ≈ 5 s on throttled mobile (1.6 Mbps/150 ms/4× CPU) — SPA renders nothing
   until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
   `Magical_FREE_AI_Tools.jpeg` are not used.
