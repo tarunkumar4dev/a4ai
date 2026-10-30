@@ -378,6 +378,28 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
   `Magical_FREE_AI_Tools.jpeg` are not used.
 
+- [x] Login WhatsApp OTP UI (30 Oct, branch WA_integration, uncommitted): LoginPage = 3 equal method buttons
+  (Google / WhatsApp / Email, no tab strip), one send button (the big one), OTP = `src/components/auth/OtpBoxes.tsx`
+  (6 real inputs: tap-to-edit, paste/autofill, Backspace/arrows), "Resend OTP in 0:10" → "Didn't receive the OTP?
+  Resend · N left today". Limit 5 OTPs / number / rolling 24 h, 20 s gap (`OTP_MAX_PER_DAY` / `OTP_RESEND_AFTER_SEC`
+  in rateLimiter.ts; browser only — the real limit is `27_otp_limit_5_per_day.sql`). Mobile no longer flips Email back
+  to WhatsApp when the keyboard opens (resize listener removed).
+  SignupPage: the duplicate "Already have an account? Sign in" under the heading removed (the one under the
+  Sign Up button stays, same as the login page).
+  "N of 5 left today" is read from the DB, not the browser: 27 also adds `a4_otp_phone_hash` (private; the SAME
+  hash as the Edge Function — sha256(`<OTP_HASH_PEPPER>:91XXXXXXXXXX`), pepper from Vault secret `otp_hash_pepper`,
+  built-in sha256() so no pgcrypto) + anon-callable `a4_otp_quota(phone)` → {used,left,max,next_in_sec,reset_in_sec}.
+  Frontend `src/lib/otpQuota.ts` (never throws; falls back to the browser count when the RPC is missing).
+  Local SQL test of 08+27 on pgserver: hash == the Edge Function's, normalisation, 24 h window, grants — all pass.
+- [ ] Run `27_otp_limit_5_per_day.sql` + both VERIFY blocks. Set Supabase Auth `sms_max_frequency` to 20s (if longer,
+  an early Resend shows its countdown instead). If the Edge Function has OTP_HASH_PEPPER set, add the same value as
+  Vault secret `otp_hash_pepper` — otherwise the page shows "5 left" while the server (correctly) still blocks.
+- Known after the login OTP fix:
+  - SignupPage + LoginModal still use the old OtpHelp box and their own 60 s timers, and don't show "N left today"
+    (their sends still count against the same 5 — the server enforces it).
+  - `a4_otp_quota` is anon-callable (no session exists at login): anyone can ask how many OTPs a given number has
+    requested in 24 h. It returns counts only — no name, no "account exists". Accepted; revisit if abused.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

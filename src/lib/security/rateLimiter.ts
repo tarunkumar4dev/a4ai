@@ -12,6 +12,11 @@ interface RateLimitRecord {
 }
 
 const STORAGE_PREFIX = "a4ai_rl_";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/** WhatsApp OTP: max sends per number in a rolling 24 h, and the wait before "Resend" (keep in sync with 27_otp_limit_5_per_day.sql). */
+export const OTP_MAX_PER_DAY = 5;
+export const OTP_RESEND_AFTER_SEC = 20;
 
 /** Simple string hash to avoid storing plain phone/email keys in localStorage */
 function hashKey(key: string): string {
@@ -122,12 +127,19 @@ export class RateLimiter {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // OTP COST CONTROL & THROTTLING (SMS API Abuse Prevention)
-  // Rules:
-  // 1. Min 60s cooldown between consecutive OTP requests for the same number
-  // 2. Max 3 OTP requests per hour per number
-  // 3. Max 5 OTP requests per 24 hours per number (prevents bill blowout)
+  // OTP COST CONTROL & THROTTLING (WhatsApp OTP abuse prevention)
+  // Rules (mirror of a4_otp_rate_check in the DB — the server is the real limit):
+  // 1. Min OTP_RESEND_AFTER_SEC between consecutive OTP requests for the same number
+  // 2. Max OTP_MAX_PER_DAY requests per rolling 24 hours per number
   // ───────────────────────────────────────────────────────────────────────────
+
+  /** Sends for this number in the last 24 h (oldest first). */
+  private static otpSendsToday(phone: string): number[] {
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (!cleanPhone) return [];
+    const now = Date.now();
+    return getStoredRecord(`otp_${cleanPhone}`).timestamps.filter((t) => now - t < ONE_DAY_MS);
+  }
 
   static checkOtpLimit(phone: string): {
     allowed: boolean;
@@ -135,60 +147,41 @@ export class RateLimiter {
     retryAfterSec: number;
     remainingToday: number;
   } {
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (!cleanPhone) {
+    if (!phone.replace(/\D/g, "")) {
       return { allowed: false, reason: "Invalid phone number", retryAfterSec: 0, remainingToday: 0 };
     }
 
-    const key = `otp_${cleanPhone}`;
-    const record = getStoredRecord(key);
+    const sends = RateLimiter.otpSendsToday(phone);
     const now = Date.now();
+    const remainingToday = Math.max(0, OTP_MAX_PER_DAY - sends.length);
 
-    // 1. Daily Quota Check (Max 5 / day)
-    const MAX_DAILY_OTP = 5;
-    const remainingToday = Math.max(0, MAX_DAILY_OTP - record.dayCount);
-    if (record.dayCount >= MAX_DAILY_OTP) {
-      const retryAfterSec = Math.ceil((record.dayResetTime - now) / 1000);
+    // 1. Rolling 24 h quota
+    if (sends.length >= OTP_MAX_PER_DAY) {
       return {
         allowed: false,
-        reason: "Daily OTP limit reached (5/day). Please try again tomorrow or contact support.",
-        retryAfterSec,
+        reason: `You can get at most ${OTP_MAX_PER_DAY} OTPs in 24 hours on this number. Try again later or sign in with Google or Email.`,
+        retryAfterSec: Math.ceil((sends[0] + ONE_DAY_MS - now) / 1000),
         remainingToday: 0,
       };
     }
 
-    // 2. Hourly Burst Check (Max 3 / hr)
-    const ONE_HOUR_MS = 60 * 60 * 1000;
-    const pastHourTimestamps = record.timestamps.filter((t) => now - t < ONE_HOUR_MS);
-    if (pastHourTimestamps.length >= 3) {
-      const oldestInHour = pastHourTimestamps[0];
-      const retryAfterSec = Math.ceil((oldestInHour + ONE_HOUR_MS - now) / 1000);
+    // 2. Cooldown between sends
+    const cooldown = RateLimiter.getOtpCooldownSeconds(phone);
+    if (cooldown > 0) {
       return {
         allowed: false,
-        reason: `Too many OTP requests. Please wait ${Math.ceil(retryAfterSec / 60)} minute(s) before requesting another OTP.`,
-        retryAfterSec,
+        reason: `Please wait ${cooldown} second(s) before requesting a new code.`,
+        retryAfterSec: cooldown,
         remainingToday,
       };
     }
 
-    // 3. 60-Second Cooldown Check
-    const COOLDOWN_MS = 60 * 1000;
-    const lastSent = record.timestamps[record.timestamps.length - 1];
-    if (lastSent && now - lastSent < COOLDOWN_MS) {
-      const retryAfterSec = Math.ceil((lastSent + COOLDOWN_MS - now) / 1000);
-      return {
-        allowed: false,
-        reason: `Please wait ${retryAfterSec} second(s) before requesting a new code.`,
-        retryAfterSec,
-        remainingToday,
-      };
-    }
+    return { allowed: true, retryAfterSec: 0, remainingToday };
+  }
 
-    return {
-      allowed: true,
-      retryAfterSec: 0,
-      remainingToday,
-    };
+  /** OTPs this number can still get in the current 24 h window. */
+  static getOtpRemainingToday(phone: string): number {
+    return Math.max(0, OTP_MAX_PER_DAY - RateLimiter.otpSendsToday(phone).length);
   }
 
   /**
@@ -200,8 +193,8 @@ export class RateLimiter {
     const key = `otp_${cleanPhone}`;
     const record = getStoredRecord(key);
     const now = Date.now();
-    record.timestamps.push(now);
-    record.dayCount = (record.dayCount || 0) + 1;
+    record.timestamps = [...record.timestamps.filter((t) => now - t < ONE_DAY_MS), now];
+    record.dayCount = record.timestamps.length;
     saveStoredRecord(key, record);
   }
 
@@ -209,14 +202,10 @@ export class RateLimiter {
    * Returns remaining cooldown in seconds (or 0 if ready)
    */
   static getOtpCooldownSeconds(phone: string): number {
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (!cleanPhone) return 0;
-    const key = `otp_${cleanPhone}`;
-    const record = getStoredRecord(key);
-    const lastSent = record.timestamps[record.timestamps.length - 1];
+    const lastSent = RateLimiter.otpSendsToday(phone).pop();
     if (!lastSent) return 0;
     const diff = Date.now() - lastSent;
-    return diff < 60000 ? Math.ceil((60000 - diff) / 1000) : 0;
+    return diff < OTP_RESEND_AFTER_SEC * 1000 ? Math.ceil((OTP_RESEND_AFTER_SEC * 1000 - diff) / 1000) : 0;
   }
 }
 

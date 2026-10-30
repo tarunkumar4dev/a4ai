@@ -61,7 +61,7 @@ export function friendlyOtpError(message: string | undefined): string {
   if (/expired|invalid.*(otp|token)|token.*invalid/i.test(m)) return "The OTP is wrong or has expired. Tap Resend and enter the new OTP.";
   if (/not on WhatsApp|WhatsApp nahi mila/i.test(m)) return "This number is not on WhatsApp. Use your WhatsApp number or sign in with Google or Email.";
   if (/hour|ghante/i.test(m)) return "Too many OTPs were sent to this number. Try again in an hour or sign in with Google or Email.";
-  if (/today|tomorrow|aaj ki/i.test(m)) return "This number has reached today's OTP limit. Try again tomorrow or sign in with Google or Email.";
+  if (/today|tomorrow|aaj ki|24 hours/i.test(m)) return "This number has used all 5 OTPs for 24 hours. Try again later or sign in with Google or Email.";
   if (/slow/i.test(m)) return "WhatsApp is responding slowly. Please try again.";
   if (/rate limit|too many|Bahut/i.test(m)) return "Too many attempts. Please try again in a minute.";
   if (/valid 10-digit|Sahi 10-digit/i.test(m)) return INVALID_PHONE_MESSAGE;
