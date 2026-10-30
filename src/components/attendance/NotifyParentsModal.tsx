@@ -7,6 +7,7 @@
 // "Missing Numbers" so the teacher knows who was skipped rather than silently losing them.
 
 import React, { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   buildAttendanceMessage, indianMobile10, maskParentPhone, waLink, WA_WINDOW, type NotifyStatus,
 } from "@/lib/parentNotify";
@@ -97,7 +98,8 @@ export default function NotifyParentsModal({ attendanceRecords, sessionInfo, onC
     );
   };
 
-  return (
+  // Portal to <body>: the dashboard wraps pages in animated/transformed containers, which would trap a position:fixed overlay inside the content column.
+  return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Notify Parents via WhatsApp"
       className="fixed inset-0 z-[300] flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
       onClick={onClose}>
@@ -218,6 +220,7 @@ export default function NotifyParentsModal({ attendanceRecords, sessionInfo, onC
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
