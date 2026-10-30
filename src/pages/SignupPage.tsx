@@ -426,10 +426,6 @@ export default function SignupPage() {
 
           <div className="mb-6">
             <h1 className="font-halenoir text-3xl sm:text-4xl font-bold tracking-[-0.02em] text-[#1B1B1B]">Create Account</h1>
-            <p className={`text-sm font-semibold mt-2 ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
-              Already have an account?{" "}
-              <Link to="/login" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>Sign in</Link>
-            </p>
           </div>
 
           <div className="space-y-4">

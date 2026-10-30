@@ -7,18 +7,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
 import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, takeRedirectAfterLogin, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
-import OtpHelp from "@/components/auth/OtpHelp";
+import OtpBoxes, { emptyOtp } from "@/components/auth/OtpBoxes";
 import { useAuth } from "@/providers/AuthProvider";
-import { Eye, EyeOff, ArrowLeft, Lock } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Lock, Mail } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import AuthCharacters from "@/components/auth/AuthCharacters";
 import { Helmet } from "react-helmet";
-import { RateLimiter } from "@/lib/security/rateLimiter";
+import { RateLimiter, OTP_MAX_PER_DAY, OTP_RESEND_AFTER_SEC } from "@/lib/security/rateLimiter";
+import { fetchOtpQuota, formatResetIn, type OtpQuota } from "@/lib/otpQuota";
 import { RiskEngine } from "@/lib/security/riskEngine";
 import { WAF } from "@/lib/security/waf";
 import { SmartCaptcha } from "@/components/security/SmartCaptcha";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { REGEXP_ONLY_DIGITS } from "input-otp";
 
 // Format 10-digit Indian number to +91XXXXXXXXXX (shared normaliser; sendOtp validates first)
 const formatPhoneForIndia = (phone: string): string => normalizeIndianPhone(phone) || phone.trim();
@@ -30,6 +29,9 @@ const WhatsAppIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
   </svg>
 );
 
+const METHOD_BTN =
+  "h-16 sm:h-12 flex-col sm:flex-row rounded-xl font-bold gap-1 sm:gap-2 px-2 text-[13px] bg-white text-[#1B1B1B] min-w-0";
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -38,13 +40,12 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [remember, setRemember] = useState(true);
-  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email"); // Google + email first; mobile OTP only for older phone accounts
   const [formValues, setFormValues] = useState({ email: "", password: "", phone: "" });
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState<string[]>(emptyOtp);
   const [otpSent, setOtpSent] = useState(false);
-  const [timer, setTimer] = useState(0);
-  const [otpSentAt, setOtpSentAt] = useState(0); // restarts the "Didn't get the OTP?" help on every (re)send
+  const [timer, setTimer] = useState(0); // seconds until "Resend" is allowed
+  const [quota, setQuota] = useState<OtpQuota | null>(null); // OTPs left for this number (from the DB)
   const autoSubmittedFor = useRef(""); // the code we already auto-verified (no double submit)
   // The page is always light (white background); kept as a constant for the shared auth widgets' props.
   const isDarkMode = false;
@@ -58,22 +59,11 @@ export default function LoginPage() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [lockoutSec, setLockoutSec] = useState(0);
 
-  // Detect Mobile Device / Screen width on mount
+  // Phones start on WhatsApp. Once only — a resize listener flipped Email back to WhatsApp
+  // whenever the Android keyboard opened (that's a resize).
   useEffect(() => {
-    const checkMobile = () => {
-      const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      const isSmallScreen = window.innerWidth < 768;
-      const mobile = mobileUA || isSmallScreen;
-      
-      setIsMobileDevice(mobile);
-      if (mobile) {
-        setLoginMethod("phone");
-      }
-    };
-
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (mobileUA || window.innerWidth < 768) setLoginMethod("phone");
   }, []);
 
   // Redirect if already logged in
@@ -130,6 +120,41 @@ export default function LoginPage() {
     }
   }, [loginMethod, formValues.email, formValues.phone]);
 
+  const phoneDigits = formValues.phone.replace(/\D/g, "");
+
+  /** Re-read "N left today" from the DB (otp_send_log). Stale answers are dropped. */
+  const quotaFor = useRef("");
+  const refreshQuota = React.useCallback(async (phone: string) => {
+    const digits = phone.replace(/\D/g, "");
+    quotaFor.current = digits;
+    const q = await fetchOtpQuota(digits);
+    if (quotaFor.current === digits) setQuota(q);
+  }, []);
+
+  useEffect(() => {
+    if (loginMethod !== "phone" || phoneDigits.length !== 10) {
+      setQuota(null);
+      quotaFor.current = "";
+      return;
+    }
+    const t = setTimeout(() => { void refreshQuota(phoneDigits); }, 350); // not on every keystroke
+    return () => clearTimeout(t);
+  }, [loginMethod, phoneDigits, refreshQuota]);
+
+  const resetOtp = () => {
+    setOtp(emptyOtp());
+    setOtpSent(false);
+    setTimer(0);
+    autoSubmittedFor.current = "";
+  };
+
+  const switchMethod = (method: "email" | "phone") => {
+    if (method === loginMethod) return;
+    setLoginMethod(method);
+    resetOtp();
+    setFormError("");
+  };
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormValues((s) => ({ ...s, [e.target.name]: e.target.value }));
     if (formError) setFormError("");
@@ -171,13 +196,11 @@ export default function LoginPage() {
     const otpCheck = RateLimiter.checkOtpLimit(phoneRaw);
     if (!otpCheck.allowed) {
       toast({
-        title: "Please wait before asking for another OTP",
+        title: otpCheck.remainingToday === 0 ? "OTP limit reached" : "Please wait before asking for another OTP",
         description: otpCheck.reason || "Please wait before requesting another OTP.",
         variant: "destructive",
       });
-      if (otpCheck.retryAfterSec > 0 && otpCheck.retryAfterSec <= 60) {
-        setTimer(otpCheck.retryAfterSec);
-      }
+      if (otpCheck.retryAfterSec > 0 && otpCheck.retryAfterSec <= 60) setTimer(otpCheck.retryAfterSec);
       return;
     }
 
@@ -203,15 +226,20 @@ export default function LoginPage() {
 
       // Record successful OTP dispatch in rate limiter
       RateLimiter.recordOtpSent(phoneRaw);
-      setOtp(""); // a resend invalidates the previous code
+      void refreshQuota(phoneRaw); // the DB now has one more row for this number
+      setOtp(emptyOtp()); // a resend invalidates the previous code
       autoSubmittedFor.current = "";
       setOtpSent(true);
-      setOtpSentAt(Date.now());
-      setTimer(60);
+      setTimer(OTP_RESEND_AFTER_SEC);
+      setFormError("");
       toast({ title: "OTP sent", description: OTP_SENT_MESSAGE });
     } catch (error: unknown) {
       const err = error as Error;
       RiskEngine.recordFailure(phoneRaw);
+      void refreshQuota(phoneRaw);
+      // Server cooldown ("…after 45 seconds") → show it on the Resend countdown.
+      const wait = Number(err.message?.match(/(\d+) seconds?\b/i)?.[1]);
+      if (wait > 0 && wait <= 600) setTimer(wait);
       toast({ title: "Could not send OTP", description: friendlyOtpError(err.message), variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -257,6 +285,10 @@ export default function LoginPage() {
       navigate('/dashboard', { replace: true });
     }
   };
+
+  // The DB is the truth (survives a cleared browser / another device); the local count is the fallback.
+  const otpLeft = quota ? quota.left : RateLimiter.getOtpRemainingToday(formValues.phone);
+  const otpLeftLabel = `${otpLeft} of ${quota?.max ?? OTP_MAX_PER_DAY} left today`;
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -367,7 +399,7 @@ export default function LoginPage() {
         await rememberPassword(formValues.email.trim(), formValues.password); // browser "save password" prompt
         await redirectAfterLogin();
       } else {
-        const otpToken = (codeOverride ?? otp).trim();
+        const otpToken = codeOverride ?? otp.join("");
         if (otpToken.length !== 6) {
           toast({ title: "Incomplete Code", description: "Please enter the 6-digit OTP", variant: "destructive" });
           setIsLoading(false);
@@ -443,15 +475,15 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-5">
-            {/* ── Social login buttons ── */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* ── Sign-in methods: Google / WhatsApp / Email, same size ── */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <Button
                 variant="outline"
                 onClick={handleGoogleLogin}
                 disabled={isLoading}
-                className="h-12 rounded-xl font-bold gap-2.5 text-sm bg-white border-[#E5E7EB] text-[#1B1B1B] hover:bg-[#F7F8FA]"
+                className={`${METHOD_BTN} border-[#E5E7EB] hover:bg-[#F7F8FA]`}
               >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
@@ -461,36 +493,24 @@ export default function LoginPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => { setLoginMethod("phone"); setOtp(""); setFormError(""); }}
+                onClick={() => switchMethod("phone")}
                 disabled={isLoading}
-                className="h-12 rounded-xl font-bold gap-2.5 text-sm bg-white border-[#E5E7EB] text-[#1B1B1B] hover:bg-[#F0FFF4] hover:border-[#25D366]/40"
+                aria-pressed={loginMethod === "phone"}
+                className={`${METHOD_BTN} ${loginMethod === "phone" ? "border-[#25D366] bg-[#F0FFF4] ring-1 ring-[#25D366]" : "border-[#E5E7EB] hover:bg-[#F0FFF4]"}`}
               >
-                <WhatsAppIcon className="w-5 h-5 text-[#25D366]" />
+                <WhatsAppIcon className="w-5 h-5 shrink-0 text-[#25D366]" />
                 WhatsApp
               </Button>
-            </div>
-
-            {/* ── Method tabs (email ↔ WhatsApp) ── */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-slate-400/30" />
-              <div className="flex gap-1 bg-[#F3F4F6] rounded-lg p-0.5">
-                <button
-                  type="button"
-                  onClick={() => { setLoginMethod("email"); setOtp(""); setOtpSent(false); setOtpSentAt(0); autoSubmittedFor.current = ""; setFormError(""); }}
-                  className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${loginMethod === "email" ? "bg-white text-[#1B1B1B] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  Email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setLoginMethod("phone"); setOtp(""); setFormError(""); }}
-                  className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all flex items-center gap-1.5 ${loginMethod === "phone" ? "bg-white text-[#1B1B1B] shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
-                  WhatsApp
-                </button>
-              </div>
-              <div className="flex-1 h-px bg-slate-400/30" />
+              <Button
+                variant="outline"
+                onClick={() => switchMethod("email")}
+                disabled={isLoading}
+                aria-pressed={loginMethod === "email"}
+                className={`${METHOD_BTN} ${loginMethod === "email" ? "border-[#111111] bg-[#F7F8FA] ring-1 ring-[#111111]" : "border-[#E5E7EB] hover:bg-[#F7F8FA]"}`}
+              >
+                <Mail className="w-5 h-5 shrink-0 text-[#374151]" />
+                Email
+              </Button>
             </div>
 
             {/* FORM AREA */}
@@ -538,94 +558,102 @@ export default function LoginPage() {
                   </div>
                 </div>
               ) : (
-                /* ── Phone OTP Form ── */
+                /* ── WhatsApp OTP Form (one send button: the big one below) ── */
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="space-y-1">
                     <Label htmlFor="login-phone" className="text-[12px] font-semibold text-[#374151] ml-1">WhatsApp Number</Label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500 select-none pointer-events-none">+91</span>
-                        <Input
-                          id="login-phone"
-                          type="tel"
-                          name="phone"
-                          inputMode="numeric"
-                          autoComplete="tel"
-                          maxLength={10}
-                          value={formValues.phone}
-                          onChange={(e) => {
-                            const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
-                            setFormValues((s) => ({ ...s, phone: digits }));
-                            if (formError) setFormError("");
-                          }}
-                          className="h-12 rounded-xl pl-11 bg-white border-[#E5E7EB] text-[#1B1B1B] focus-visible:ring-[#25D366] text-base"
-                          placeholder="98765 43210"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={sendOtp}
-                        disabled={timer > 0 || isLoading || lockoutSec > 0 || formValues.phone.replace(/\D/g, "").length !== 10}
-                        className="h-12 rounded-xl px-5 text-xs font-bold bg-[#25D366] text-white hover:bg-[#1DA851] disabled:opacity-50"
-                      >
-                        {timer > 0 ? `${timer}s` : otpSent ? "Resend" : "Send OTP"}
-                      </Button>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500 select-none pointer-events-none">+91</span>
+                      <Input
+                        id="login-phone"
+                        type="tel"
+                        name="phone"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        maxLength={10}
+                        value={formValues.phone}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+                          if (otpSent && digits !== formValues.phone) resetOtp(); // new number → the old code is useless
+                          setFormValues((s) => ({ ...s, phone: digits }));
+                          if (formError) setFormError("");
+                        }}
+                        className="h-12 rounded-xl pl-11 bg-white border-[#E5E7EB] text-[#1B1B1B] focus-visible:ring-[#25D366] text-base"
+                        placeholder="98765 43210"
+                      />
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1 ml-1 flex items-center gap-1">
                       <WhatsAppIcon className="w-3 h-3 text-[#25D366]" />
-                      OTP will be sent on WhatsApp
+                      {otpSent
+                        ? "OTP sent on WhatsApp. Edit the number to send to another one."
+                        : quota && quota.used > 0
+                        ? `OTP will be sent on WhatsApp · ${otpLeftLabel}`
+                        : "OTP will be sent on WhatsApp"}
                     </p>
                   </div>
 
                   {otpSent && (
-                    <div className="space-y-2 animate-in zoom-in-95 duration-200 pt-2">
-                      <div className="flex items-center justify-between ml-2 mr-1">
-                        <Label className="text-[10px] font-bold text-slate-500 uppercase">Verification Code</Label>
-                        {otp.length > 0 && (
+                    <div className="space-y-3 pt-1">
+                      <div className="flex items-center justify-between ml-1 mr-1">
+                        <Label className="text-[12px] font-semibold text-[#374151]">Enter the 6-digit OTP</Label>
+                        {otp.some(Boolean) && (
                           <button
                             type="button"
-                            onClick={() => { setOtp(""); autoSubmittedFor.current = ""; }}
-                            className="text-[11px] text-slate-400 hover:text-slate-600 font-semibold transition-colors"
+                            onClick={() => { setOtp(emptyOtp()); autoSubmittedFor.current = ""; }}
+                            className="text-[11px] text-slate-500 hover:text-slate-800 font-semibold"
                           >
                             Clear
                           </button>
                         )}
                       </div>
-                      <div className="flex justify-center w-full">
-                        <InputOTP
-                          maxLength={6}
-                          pattern={REGEXP_ONLY_DIGITS}
-                          value={otp}
-                          onChange={(val) => {
-                            setOtp(val);
-                            if (val.length === 6 && autoSubmittedFor.current !== val) {
-                              autoSubmittedFor.current = val;
-                              submitLogin(val);
-                            }
-                          }}
-                          containerClassName="w-full justify-between"
-                        >
-                          <InputOTPGroup className="flex justify-between w-full gap-2">
-                            {[0, 1, 2, 3, 4, 5].map((idx) => (
-                              <InputOTPSlot
-                                key={idx}
-                                index={idx}
-                                className={`w-11 sm:w-12 h-14 text-center text-xl font-black rounded-2xl border transition-all ${
-                                  isDarkMode
-                                    ? "bg-white/5 border-white/10 text-white focus:border-white/30 focus:bg-white/10"
-                                    : "bg-white/60 border-white/60 text-slate-900 focus:border-black/30 focus:bg-white shadow-sm"
-                                }`}
-                              />
-                            ))}
-                          </InputOTPGroup>
-                        </InputOTP>
-                      </div>
-                      <OtpHelp
-                        sentAt={otpSentAt}
-                        isDarkMode={isDarkMode}
-                        onGoogle={handleGoogleLogin}
-                        onEmail={() => { setLoginMethod("email"); setOtp(""); setOtpSent(false); setOtpSentAt(0); }}
+                      <OtpBoxes
+                        value={otp}
+                        autoFocus
+                        invalid={Boolean(formError)}
+                        disabled={isLoading}
+                        onChange={(next) => {
+                          setOtp(next);
+                          if (formError) setFormError("");
+                          const code = next.join("");
+                          if (code.length === 6 && autoSubmittedFor.current !== code) {
+                            autoSubmittedFor.current = code;
+                            submitLogin(code);
+                          }
+                        }}
                       />
+                      <div className="text-center text-[13px] text-slate-600 min-h-[1.5rem]" aria-live="polite">
+                        {otpLeft === 0 ? (
+                          <span>
+                            All {quota?.max ?? OTP_MAX_PER_DAY} OTPs for this number are used.{" "}
+                            {quota?.resetInSec ? `Try again in ${formatResetIn(quota.resetInSec)}, ` : "Try again later, "}
+                            or sign in with Google or Email.
+                          </span>
+                        ) : (
+                          <>
+                            {timer > 0 ? (
+                              <span>
+                                Resend OTP in{" "}
+                                <span className="font-bold tabular-nums text-[#111111]">
+                                  {Math.floor(timer / 60)}:{String(timer % 60).padStart(2, "0")}
+                                </span>
+                              </span>
+                            ) : (
+                              <span>
+                                Didn&apos;t receive the OTP?{" "}
+                                <button
+                                  type="button"
+                                  onClick={sendOtp}
+                                  disabled={isLoading || lockoutSec > 0}
+                                  className="font-bold text-[#128C4A] underline underline-offset-2 hover:text-[#0B6B37] disabled:opacity-50"
+                                >
+                                  Resend OTP
+                                </button>
+                              </span>
+                            )}
+                            <span className="block text-[12px] text-slate-400 mt-0.5">{otpLeftLabel}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -667,7 +695,7 @@ export default function LoginPage() {
                 } ${lockoutSec > 0 || (requiresCaptcha && !captchaToken) ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 {isLoading
-                  ? "Verifying..."
+                  ? loginMethod === "phone" && !otpSent ? "Sending..." : "Verifying..."
                   : lockoutSec > 0
                   ? `Locked (${RiskEngine.formatTime(lockoutSec)})`
                   : requiresCaptcha && !captchaToken
