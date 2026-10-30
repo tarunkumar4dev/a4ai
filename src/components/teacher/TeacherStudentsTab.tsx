@@ -54,6 +54,7 @@ export interface StudentRecord {
   class_level?: string | null;
   batch_id?: string | null;
   batch_name?: string;
+  section_id?: string | null;
   parent_name?: string | null;
   parent_phone?: string | null;
   phone?: string | null;
@@ -127,6 +128,10 @@ export default function TeacherStudentsTab({
   const scope = useMyScope();
   /** Not assigned anywhere yet (no teaching batch, not a proctor) → dedicated empty state. */
   const noScope = !scope.loading && !scope.isAdmin && batches.length === 0 && scope.proctorSectionIds.length === 0;
+
+  /** Mirrors RLS stu_update: admin, the department's HOD, or this student's class teacher. */
+  const canEditGuardian = (s: StudentRecord) =>
+    scope.canManageStudents || !!(s.section_id && scope.proctorSectionIds.includes(s.section_id));
 
   /* ─── Data Fetching ────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -1335,7 +1340,7 @@ export default function TeacherStudentsTab({
               <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-[10px] font-bold text-slate-400 uppercase">Parent Contact</span>
-                  {scope.canManageStudents && !editGuardian && (
+                  {canEditGuardian(selectedStudent) && !editGuardian && (
                     <button
                       onClick={() => startEditGuardian(selectedStudent)}
                       className="text-[10px] font-bold text-blue-600 hover:underline dark:text-blue-400"
