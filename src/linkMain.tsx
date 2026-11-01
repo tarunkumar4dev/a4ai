@@ -4,6 +4,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import AssignmentLinkPage from "./pages/AssignmentLinkPage";
+import NetworkBanner from "./components/NetworkBanner";
 import { installChunkReload } from "./lib/chunkReload";
 import "./index.css";
 import "./styles/lite.css";
@@ -15,5 +16,6 @@ const token = decodeURIComponent(window.location.pathname.replace(/^\/s\//, "").
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <AssignmentLinkPage token={token} />
+    <NetworkBanner />
   </React.StrictMode>,
 );

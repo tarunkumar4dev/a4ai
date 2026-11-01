@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { MotionConfig } from "framer-motion";
 const HODDashboardPage = lazy(() => import("@/pages/hod/HODDashboardPage")); // pulls xlsx; keep it out of the main bundle
 import ProtectedRoute from "@/components/ProtectedRoute";
+import NetworkBanner from "@/components/NetworkBanner";
 
 /* ---------- Vercel Analytics ---------- */
 import { Analytics } from "@vercel/analytics/react";
@@ -305,6 +306,7 @@ const App = () => {
             <TooltipProvider>
               <Toaster />
               <Sonner position="top-right" expand={false} richColors closeButton />
+              <NetworkBanner />
 
               <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors">
                 <BrowserRouter>

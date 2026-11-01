@@ -400,6 +400,13 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - `a4_otp_quota` is anon-callable (no session exists at login): anyone can ask how many OTPs a given number has
     requested in 24 h. It returns counts only — no name, no "account exists". Accepted; revisit if abused.
 
+- [x] Connection banner (1 Nov, uncommitted): `src/components/NetworkBanner.tsx` (App.tsx + linkMain.tsx) — top pill,
+  red offline / yellow slow / green for 2.5 s on recovery; slow can be dismissed. Detection `src/lib/networkStatus.ts` +
+  `src/hooks/useNetworkStatus.ts`: online/offline events + Network Information API (Chromium/WebView; 2g or rtt ≥ 1200 ms);
+  HEAD `/ICON.ico` probe only on a change and while offline (5 s) / slow (20 s), never in a hidden tab. Its slide is the
+  one transition allowed past lite.css (`.a4-net-banner` in index.css). Safari/Firefox: slow only shows via the probe
+  after a change event, and "Wi-Fi without internet" isn't detected (no polling while healthy).
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
