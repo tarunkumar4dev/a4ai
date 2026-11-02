@@ -210,6 +210,28 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Works whether VITE_BACKEND_URL / VITE_API_URL end in nothing, /api or /api/v1. Live VITE_BACKEND_URL had no /api → checker
   calls were 404. Don't build backend URLs from env vars directly. (Modules/worksheet still use VITE_API_URL root + /modules.)
 
+- [x] NCERT builder quality — G0–G4.4 (22 Oct, branch `fix/ncert-builder-quality` in both repos; the old
+  `feat/ncert-quality` + migration 18 are superseded, leave 18 unapplied). Audit report + baselines:
+  RAG-BACKEND `test-generator-backend/docs/ncert-audit-class10-maths.md` (Class 10 Maths 10,793 rows → ~2.6k distinct;
+  Symbol-font glyphs, flattened math, figure_ref cut to one digit, chapter ILIKE bug). One normalize()/content_hash
+  (v2) per repo, shared fixtures `src/lib/ncert/ncert_normalize_fixtures.json` = backend `scripts/fixtures/…`.
+  G4.1 backend: exact chapter match, ORDER BY …, id, stats fallback pages through all rows. G4.2: backup
+  `a4_backup_20261022.ncert_questions_backup_20261022` APPLIED on live (91,906 rows, md5 equal; RESTORE line in
+  `19_ncert_backup_20261022.sql`). G4.3: `19_ncert_quality_status.sql` (+ rollback) tested on a copy, NOT applied.
+  G4.4: `scripts/ncert_quality_pass.py` dry run on copy `a4_backup_20261022.ncert_q_c10m_copy`: 1,657 visible.
+- [x] G4.5 (22 Oct): migration 19 (+ generated `quality_rank`) APPLIED on live; quality pass APPLIED to Class 10 Maths
+  only — counts = dry run (clean 470, fixed 93, needs_review 1,094, duplicate 9,136; 1,657 visible). Every other class:
+  quality_status NULL = visible, unchanged. Log: RAG-BACKEND `docs/audit/g45-apply-class10-maths.md`.
+- [x] G4.6 backend + G4.7 frontend committed on `fix/ncert-builder-quality` (both repos, pushed; NOT merged/deployed —
+  prod deploys from `main` via the Vercel GitHub integration). Verified with the new backend run locally on prod data:
+  3 NULL-class combos identical (rows, ids, stats); Class 10 Maths Circles 93 = stats, "Example 1" 62 → 2.
+- [ ] Deploy: merge RAG-BACKEND PR first, then a4ai PR. Browser max-age=300 → ≤ 5 min stale; open builder tabs keep
+  their in-memory lists until reload. CDN cache is per deployment (new deployment = cold cache).
+- [ ] After deploy: anon INSERT policy lockdown on ncert_questions (separate branch). Rule 6 (granularity) undecided.
+- Known: never write a new table into `public` for backups/copies (anon gets REST grants) — use an `a4_backup_*`
+  schema. The Supabase Management API (`db query --linked -f`) rejects bodies > ~4 MB (413): split SQL per statement.
+  `ncert_questions_insert_service` lets anon INSERT into ncert_questions — lockdown is a separate commit.
+  Drop `a4_backup_20261022` (copy tables + full backup) after G5.
 - [x] Upload flow DB (22 Oct, branch feat/student-upload): `18_upload_flow.sql` — assignment = upload link (link_token,
   window, attempts, mimes/size/pages, late/count policy, auto_publish); submissions = one row per attempt (attempt_no,
   idempotency_key, files jsonb, status enum incl. waiting_key/waiting_quota); attempt → check_sheets (source_bucket
@@ -469,6 +491,34 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   used by login, AuthCallback, reset password, RoleRoute, Navbar); typing /dashboard bounces back. /student = portal for
   students of a school / college / institute (access code); no code → sign in or create a student account. Login links
   to the portal. Migrations 28, 29, 30, 31 written, NOT applied. Nothing deployed.
+- [x] Login WhatsApp OTP UI (30 Oct, branch WA_integration, uncommitted): LoginPage = 3 equal method buttons
+  (Google / WhatsApp / Email, no tab strip), one send button (the big one), OTP = `src/components/auth/OtpBoxes.tsx`
+  (6 real inputs: tap-to-edit, paste/autofill, Backspace/arrows), "Resend OTP in 0:10" → "Didn't receive the OTP?
+  Resend · N left today". Limit 5 OTPs / number / rolling 24 h, 20 s gap (`OTP_MAX_PER_DAY` / `OTP_RESEND_AFTER_SEC`
+  in rateLimiter.ts; browser only — the real limit is `27_otp_limit_5_per_day.sql`). Mobile no longer flips Email back
+  to WhatsApp when the keyboard opens (resize listener removed).
+  SignupPage: the duplicate "Already have an account? Sign in" under the heading removed (the one under the
+  Sign Up button stays, same as the login page).
+  "N of 5 left today" is read from the DB, not the browser: 27 also adds `a4_otp_phone_hash` (private; the SAME
+  hash as the Edge Function — sha256(`<OTP_HASH_PEPPER>:91XXXXXXXXXX`), pepper from Vault secret `otp_hash_pepper`,
+  built-in sha256() so no pgcrypto) + anon-callable `a4_otp_quota(phone)` → {used,left,max,next_in_sec,reset_in_sec}.
+  Frontend `src/lib/otpQuota.ts` (never throws; falls back to the browser count when the RPC is missing).
+  Local SQL test of 08+27 on pgserver: hash == the Edge Function's, normalisation, 24 h window, grants — all pass.
+- [ ] Run `27_otp_limit_5_per_day.sql` + both VERIFY blocks. Set Supabase Auth `sms_max_frequency` to 20s (if longer,
+  an early Resend shows its countdown instead). If the Edge Function has OTP_HASH_PEPPER set, add the same value as
+  Vault secret `otp_hash_pepper` — otherwise the page shows "5 left" while the server (correctly) still blocks.
+- Known after the login OTP fix:
+  - SignupPage + LoginModal still use the old OtpHelp box and their own 60 s timers, and don't show "N left today"
+    (their sends still count against the same 5 — the server enforces it).
+  - `a4_otp_quota` is anon-callable (no session exists at login): anyone can ask how many OTPs a given number has
+    requested in 24 h. It returns counts only — no name, no "account exists". Accepted; revisit if abused.
+
+- [x] Connection banner (1 Nov, uncommitted): `src/components/NetworkBanner.tsx` (App.tsx + linkMain.tsx) — top pill,
+  red offline / yellow slow / green for 2.5 s on recovery; slow can be dismissed. Detection `src/lib/networkStatus.ts` +
+  `src/hooks/useNetworkStatus.ts`: online/offline events + Network Information API (Chromium/WebView; 2g or rtt ≥ 1200 ms);
+  HEAD `/ICON.ico` probe only on a change and while offline (5 s) / slow (20 s), never in a hidden tab. Its slide is the
+  one transition allowed past lite.css (`.a4-net-banner` in index.css). Safari/Firefox: slow only shows via the probe
+  after a change event, and "Wi-Fi without internet" isn't detected (no polling while healthy).
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
