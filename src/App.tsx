@@ -58,7 +58,6 @@ const ApiPage = lazy(() => import("./pages/product/ApiPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 
-const SubjectHubPage = lazy(() => import("@/practice/SubjectHub"));
 
 /* ---------- Lazy Auth & App Pages ---------- */
 const RoleSelectionPage = lazy(() => import("./pages/RoleSelectionPage"));
@@ -81,8 +80,9 @@ const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 const QuizPage = lazy(() => import("./pages/Quiz"));
 
 /* ---------- Lazy PYQ Practice Pages ---------- */
-const PracticeZonePage = lazy(() => import("./pages/PracticeZonePage"));
-const PYQPracticeSessionPage = lazy(() => import("./pages/PYQPracticeSessionPage"));
+/* Practice = NCERT question bank (the old PYQ / daily-practice pages ran on mock data or 32 questions) */
+const PracticeHome = lazy(() => import("./pages/practice/PracticeHome"));
+const PracticeSession = lazy(() => import("./pages/practice/PracticeSession"));
 const PYQAdminPage = lazy(() => import("./pages/admin/PYQAdminPage"));
 
 /* ---------- Students / Notes / Settings ---------- */
@@ -91,14 +91,14 @@ const NotesPage = lazy(() => import("./pages/Notes"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 /* ---------- FLASHCARDS ---------- */
-const FlashcardDashboard = lazy(() => import("./pages/flashcards/FlashcardDashboard"));
-const FlashcardChapter = lazy(() => import("./pages/flashcards/FlashcardChapter"));
-const FlashcardSubject = lazy(() => import("./pages/flashcards/FlashcardSubject"));
+const FlashcardsHome = lazy(() => import("./pages/flashcards/FlashcardsHome"));
+const FlashcardDeckPage = lazy(() => import("./pages/flashcards/FlashcardDeckPage"));
+const LegacySubjectRedirect = lazy(() => import("./pages/flashcards/FlashcardRedirects").then((m) => ({ default: m.LegacySubjectRedirect })));
+const LegacyDeckRedirect = lazy(() => import("./pages/flashcards/FlashcardRedirects").then((m) => ({ default: m.LegacyDeckRedirect })));
 
 /* ---------- Contests ---------- */
 const ContestLandingPage = lazy(() => import("./pages/ContestLandingPage"));
 const CreateContestPage = lazy(() => import("./pages/CreateContestPage"));
-const JoinContestPage = lazy(() => import("./pages/JoinContestPage"));
 const ContestLivePage = lazy(() => import("./pages/ContestLivePage"));
 const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 const ContestLeaderboardPage = lazy(() => import("./pages/ContestLeaderboardPage"));
@@ -136,7 +136,7 @@ const MegaContestLivePage = lazy(() =>
 const AdminAddQuestions = lazy(() => import("./pages/AdminAddQuestions"));
 
 /* ---------- Coins ---------- */
-const CoinShop = lazy(() => import("./pages/CoinShop"));
+const RewardsPage = lazy(() => import("./pages/RewardsPage"));
 
 /* ---------- Resources ---------- */
 const ResourcesHome = lazy(() => import("./pages/Resources/ResourcesHome"));
@@ -157,11 +157,8 @@ const CookiePolicyPage = lazy(() => import("./pages/legal/CookiePolicyPage"));
 const PaymentPage = lazy(() => import("./pages/payment/PaymentPage"));
 
 /* ---------- Daily Practice Module ---------- */
-const PracticeSelectionPage = lazy(() => import("@/practice/index"));
-const PracticeSessionPage = lazy(() => import("@/practice/session/index"));
 
 /* ---------- Practice page alias ---------- */
-const PracticePage = lazy(() => import("@/practice/index"));
 
 /* ---------- Auth Callback (SINGLE file — replaces old pages/auth/callback.tsx) ---------- */
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
@@ -454,21 +451,24 @@ const App = () => {
                       <Route path="/quiz" element={<PrivateRoute><QuizPage /></PrivateRoute>} />
 
                       {/* Practice & PYQ Routes */}
-                      <Route path="/practice/zone" element={<PrivateRoute><PracticeZonePage /></PrivateRoute>} />
-                      <Route path="/practice/pyq-session" element={<PrivateRoute><PYQPracticeSessionPage /></PrivateRoute>} />
+                      <Route path="/practice" element={<PrivateRoute><PracticeHome /></PrivateRoute>} />
+                      <Route path="/practice/session" element={<PrivateRoute><PracticeSession /></PrivateRoute>} />
+                      {/* old practice pages (mock data / 32 questions) → the NCERT practice */}
+                      <Route path="/practice/zone" element={<Navigate to="/practice" replace />} />
+                      <Route path="/practice/pyq-session" element={<Navigate to="/practice" replace />} />
                       <Route path="/admin/pyq" element={<RoleRoute allow={['admin']}><PYQAdminPage /></RoleRoute>} />
 
-                      <Route path="/dashboard/practice" element={<PrivateRoute><PracticePage /></PrivateRoute>} />
-                      <Route path="/practice" element={<PracticePage />} />
-                      <Route path="/practice/chemistry" element={<PrivateRoute><SubjectHubPage /></PrivateRoute>} />
-                      <Route path="/practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} />
-                      <Route path="/daily-practice" element={<PrivateRoute><PracticeSelectionPage /></PrivateRoute>} />
-                      <Route path="/daily-practice/session" element={<PrivateRoute><PracticeSessionPage /></PrivateRoute>} />
+                      <Route path="/dashboard/practice" element={<Navigate to="/practice" replace />} />
+                      <Route path="/practice/chemistry" element={<Navigate to="/practice?class=10&subject=Science" replace />} />
+                      <Route path="/daily-practice" element={<Navigate to="/practice" replace />} />
+                      <Route path="/daily-practice/session" element={<Navigate to="/practice" replace />} />
 
                       {/* Flashcards */}
-                      <Route path="/dashboard/flashcards" element={<PrivateRoute><FlashcardDashboard /></PrivateRoute>} />
-                      <Route path="/dashboard/flashcards/:subject/:chapter" element={<PrivateRoute><FlashcardChapter /></PrivateRoute>} />
-                      <Route path="/dashboard/flashcards/class/:class/subject/:subject" element={<PrivateRoute><FlashcardSubject /></PrivateRoute>} />
+                      <Route path="/dashboard/flashcards" element={<PrivateRoute><FlashcardsHome /></PrivateRoute>} />
+                      <Route path="/dashboard/flashcards/deck" element={<PrivateRoute><FlashcardDeckPage /></PrivateRoute>} />
+                      {/* old flashcard URLs */}
+                      <Route path="/dashboard/flashcards/:subject/:chapter" element={<LegacyDeckRedirect />} />
+                      <Route path="/dashboard/flashcards/class/:class/subject/:subject" element={<LegacySubjectRedirect />} />
 
                       {/* Others */}
                       <Route path="/students" element={<PrivateRoute><StudentsPage /></PrivateRoute>} />
@@ -479,14 +479,17 @@ const App = () => {
                       <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
                       <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
                       <Route path="/contests/mine" element={<PrivateRoute><MyContestsPage /></PrivateRoute>} />
-                      <Route path="/contests/join" element={<PrivateRoute><JoinContestPage /></PrivateRoute>} />
+                      {/* the old join page listed hard-coded sample contests; joining by code lives on /contests now */}
+                      <Route path="/contests/join" element={<Navigate to="/contests?join=1" replace />} />
                       <Route path="/contests/live/:contestId" element={<PrivateRoute><ContestLivePage /></PrivateRoute>} />
                       <Route path="/contests/leaderboard" element={<PrivateRoute><LeaderboardRoute /></PrivateRoute>} />
                       <Route path="/contests/preview/:contestId" element={<PrivateRoute><ContestPreviewPage /></PrivateRoute>} />
                       <Route path="/contest/:shortCode" element={<PrivateRoute><ContestPage /></PrivateRoute>} />
                       <Route path="/mega-contest/:contestId" element={<PrivateRoute><MegaContestLivePage /></PrivateRoute>} />
                       <Route path="/admin/contest/:contestId/questions" element={<PrivateRoute><AdminAddQuestions /></PrivateRoute>} />
-                      <Route path="/coinshop" element={<PrivateRoute><CoinShop /></PrivateRoute>} />
+                      <Route path="/rewards" element={<PrivateRoute><RewardsPage /></PrivateRoute>} />
+                      {/* the old coin shop listed hard-coded vouchers and minted coins in the browser */}
+                      <Route path="/coinshop" element={<Navigate to="/rewards" replace />} />
 
                       {/* ============================================ */}
                       {/*  MODULES ROUTE - NAYA ADD KIYA HAI           */}
@@ -505,7 +508,7 @@ const App = () => {
                       <Route path="/dashboard/notes" element={<Navigate to="/notes" replace />} />
                       <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
                       <Route path="/dashboard/contests" element={<Navigate to="/contests" replace />} />
-                      <Route path="/dashboard/coinshop" element={<Navigate to="/coinshop" replace />} />
+                      <Route path="/dashboard/coinshop" element={<Navigate to="/rewards" replace />} />
                       <Route path="/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
                       <Route path="/study/flashcards" element={<Navigate to="/dashboard/flashcards" replace />} />
                       <Route path="/home" element={<Navigate to="/" replace />} />

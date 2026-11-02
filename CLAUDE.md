@@ -374,9 +374,101 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   statically) — dynamic `import("xlsx")` in the export handlers would fix both. Students list still loads every row
   (P2: server pagination + KPI RPC). AuthProvider runs `ensureProfileExists` (teacher_profiles query) on every SIGNED_IN,
   i.e. every tab focus.
+- [x] Login role fix (1 Nov, perf/institute-dashboard, uncommitted): a self-signed-up student landed on the teacher
+  dashboard at the next login — get_my_access returns home_route '/dashboard' for everyone without an institute and
+  RoleRoute treated primary_role 'none' as teacher. `src/lib/homeRoute.ts` resolveHomeRoute(access, signupRole) is
+  now the ONLY landing rule (LoginPage ×2, AuthCallback, ResetPasswordPage, RoleRoute; contests avatar link):
+  staff → home_route; none + student → /student/dashboard; none + institute → /institute; else /dashboard.
+  Tests `src/lib/homeRoute.test.ts`.
+- [x] Contest tables lockdown code (1 Nov): read-only live check found RLS DISABLED on contests / contest_questions /
+  contest_attempts with full anon + authenticated grants (anyone could read every correct_answer and rewrite scores).
+  `28_contest_tables_lockdown.sql` (+ rollback): RLS on, writes revoked (backend = service role, unaffected), dropped
+  "Read questions of active contests", "Students manage own attempts" (ALL) → contest_attempts_own_select.
+  Kept "Anyone can read active contests" for ContestLivePage's gate. `supabase/tests/28_29_contests_test.py`.
+- [ ] Run 28 on live + VERIFY, then one contest end to end as a student (start → submit → leaderboard).
+- [x] Contests page (1 Nov, uncommitted): /contests rebuilt LeetCode-style on real data (old page = hard-coded sample
+  contests/stats + the non-existent mega_contests table). `29_contest_feed.sql`: contest_registrations (PK contest+
+  student), get_my_contests (owned + registered + attempted; keyset ≤ 50, counts, subject facets, banner contest,
+  schedule dates, server_now), get_contest_card(code|link), register_for_contest (idempotent). Internal
+  a4_contest_rows / a4_contest_items / a4_contest_code are revoked from clients (a4_contest_rows takes a user id).
+  Frontend: `src/lib/contestLifecycle.ts` = the only MyState × Phase → action rules; `src/lib/serverClock.ts` = one
+  shared, server-corrected countdown clock; `src/lib/contestFeed.ts` = RPCs, 12 s timeout, error kinds, TanStack
+  keys ["contests", uid, …], BroadcastChannel for other tabs; components in `src/components/contests/`.
+  Tests: 99 SQL checks (28 + 29, incl. two-connection register), 50 unit, 9 e2e (`tests/e2e/contests.spec.ts`).
+  Report + 10k analysis + measured bench: `docs/CONTESTS_PAGE_ARCHITECTURE.md`, `supabase/tests/29_contest_feed_bench.py`.
+- [ ] Run 29 on live (after 28) + VERIFY. Before that the page says "Your contest list is almost ready" and a code
+  opens /contest/:code directly.
+- [x] Contests visual redesign (1 Nov, uncommitted): LeetCode layout — `src/components/contests/`: ContestNav (top bar,
+  account dropdown), ContestBanners (crimson featured / gold practice-create; JoinCodeCard = blue), ContestCard (cards
+  in Live now / Starting soon / Completed sections; ContestRow removed), ContestCalendar (clickable contest days, next
+  scheduled), ContestSidebar (LatestResults = real FastAPI leaderboard, lazy on screen; coins; fair play),
+  subjectStyle (subject tile colours/icons). CoinContext got `balance` (real profiles.coins or null) — `coins` still
+  falls back to 100, never show that as a balance. `/contests/join` (old hard-coded page) → `/contests?join=1`.
+  Why phase 1 looked unchanged + screenshots list: `docs/CONTESTS_PAGE_ARCHITECTURE.md` §6b.
+- [x] Student experience redesign (1 Nov, uncommitted; same look as /contests): shared layer `src/components/student/`
+  (ui.ts tokens/buttons, StudentNav = Dashboard · Contests · Practice · Rewards (teachers: My contests), Parts.tsx =
+  StudentLayout / useStudentShell / PageHeader / SectionHeader / StatTile / EmptyState / ErrorState / DifficultyBadge /
+  SideCard, Banner.tsx = HeroBanner + corner geometry, subjectStyle.tsx). ContestNav removed (contests uses StudentNav).
+  - /student/dashboard rewritten: greeting + school (profiles), stats only from real data ("—" when unknown), continue
+    (in-progress contest / last practice set), deterministic daily plan, upcoming contests (same feed cache + ContestCard),
+    subject performance (contest % and practice marks kept apart), recent activity, sidebar. EN/हिंदी headings kept.
+    ScratchCard "100 FREE coins" removed (it credited nothing). Data: `src/lib/studentData.ts`.
+  - /practice + /practice/session = NCERT bank via the existing public cached backend endpoints
+    (/test-generator/ncert-question-stats, /ncert-questions) — `src/lib/practiceApi.ts`. Only ~18 % of rows have an
+    answer key: answers shown only where present, otherwise "check with your book"; MCQ check only when the key maps
+    to an option. Marks ("I got it" / "Review later") are device-local per user (`src/lib/practiceProgress.ts`,
+    always labelled "on this device"). No coins for practice. Old routes (/practice/zone, /practice/pyq-session,
+    /daily-practice[/session], /dashboard/practice, /practice/chemistry) redirect to /practice; old files kept, unrouted.
+  - /rewards (/coinshop, /dashboard/coinshop redirect): real balance (CoinContext `balance` / `earned`, null-aware),
+    paged coin history, milestones from contest results (display-only), honest "no rewards to redeem yet". The old
+    CoinShop (hard-coded brand vouchers, browser-side redeem, "+25 / +100 bonus" buttons) is unrouted.
+  - MathText escapes the source when KaTeX fails. Help bot practice answer corrected.
+  - Tests: 23 new unit (practiceApi / practiceProgress / studentData), `tests/e2e/student.spec.ts` (17, incl. 10 widths).
+- [x] Flashcards + Notes redesign (2 Nov, uncommitted; same student UI, nav now Dashboard · Contests · Practice ·
+  Flashcards · Notes · Rewards, full nav from lg):
+  - /dashboard/flashcards (FlashcardsHome) + /dashboard/flashcards/deck?class&subject&chapter&card[&only=learning]
+    (FlashcardDeckPage); old /:subject/:chapter and /class/:c/subject/:s URLs redirect (FlashcardRedirects).
+    Data `src/lib/flashcardData.ts` (1,107 usable cards; 11 Class 11 Physics cards have no answer). Raw card ids
+    repeat across classes (604 unique of 1,118) — keys are now class|subject|chapter|id. Progress (known /
+    learning) per user on this device `src/lib/flashcardProgress.ts`; the old global "flashcardMastered" is imported
+    once. Fake "4.9★ / 10k+ learners / community notes" removed. Old FlashcardDashboard/Chapter/Subject unrouted.
+  - /notes rewritten: written notes per user on this device (`src/lib/studentNotes.ts`, card notes from flashcards
+    included, old "flashcardNotes" imported once), search / pin / tags / subject / confirm-before-delete, read-only
+    "Class library" of the files already in the public notes bucket. The old shared upload is gone (it wrote into
+    one PUBLIC folder per class + subject, and live has no storage insert policy, so it failed anyway).
+  - Rewards store: voucher catalogue from CoinContext as glossy brand cards (`src/components/student/RewardStore.tsx`)
+    with real progress; REDEEM_OPEN = false until a server issues codes; PUBG / Free Fire not shown (banned in India).
+  - Practice falls back to reading ncert_questions directly when the backend fails (local dev's VITE_BACKEND_URL is
+    127.0.0.1:8000 and usually not running → "Count unavailable"). Same visibility filter + subject spellings.
+  - Shared: `src/lib/deviceStore.ts`, `src/components/student/ClassPicker.tsx`. Tests: 250 unit, 39 e2e (student + contests).
+- [x] `30_practice_coins_lockdown.sql` (+ rollback) written, NOT applied: a4_guard_profile_coins trigger (app JWT can't
+  change profiles.coins / total_coins_earned; self-inserted profiles start at 0), coin_transactions insert closed,
+  practice_* tables RLS on + writes revoked. `31_practice_progress.sql` written, NOT applied: ncert_practice_marks +
+  record_practice_mark / clear_practice_mark / get_my_practice_summary (not used by the app yet).
+  Local test `supabase/tests/30_31_student_test.py` 56/56.
+- [ ] Deploy the frontend FIRST (production still serves the old practice pages that write practice_*), then run 30 +
+  VERIFY. 31 only when the app is switched to server-side progress.
+- Known after the student redesign:
+  - Plain /contests/leaderboard (bina ?c) is still the old hard-coded LeaderboardPage. Teacher dashboard still links
+    /practice/zone (redirects). Hindi toggle covers dashboard headings only.
+  - Practice difficulty filter needs a backend `difficulty` param (not built; badges only). Subject list per class is a
+    static catalogue from the 1 Nov audit (counts are live); Class 8 has no questions.
+  - Local dev: another worktree (`Downloads/worktrees/fe-parent-notify-perf`) was serving :8080 — check which folder a
+    dev server runs from before judging the UI.
+- Known after the contests page:
+  - Backend leaderboard (`_board`) reads every attempt + answers with no range → PostgREST's row limit (default 1,000)
+    silently truncates big contests; 10k attempts = 2.2 s / 27 MB read locally. Proposal in the doc §4 (backend repo).
+  - "Anyone can read active contests" lets anyone list active contests + short codes; switch ContestLivePage's gate
+    to get_contest_card, then drop it. MegaContestLivePage / AdminAddQuestions still use the missing mega_contests.
+  - e2e build on OneDrive can exceed playwright's 10 min webServer timeout: build dist-e2e first, then serve it.
 - Known after the landing redesign: landing LCP ≈ 5 s on throttled mobile (1.6 Mbps/150 ms/4× CPU) — SPA renders nothing
   until main JS runs; prerendering `/` is the next big win. `Attendance2.jpeg` (real names + enrolment nos.) and
   `Magical_FREE_AI_Tools.jpeg` are not used.
+
+- [x] Student routing + portal (2 Nov): a student account always lands on /student/dashboard (`src/lib/homeRoute.ts`,
+  used by login, AuthCallback, reset password, RoleRoute, Navbar); typing /dashboard bounces back. /student = portal for
+  students of a school / college / institute (access code); no code → sign in or create a student account. Login links
+  to the portal. Migrations 28, 29, 30, 31 written, NOT applied. Nothing deployed.
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
