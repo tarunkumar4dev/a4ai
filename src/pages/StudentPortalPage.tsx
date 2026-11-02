@@ -413,7 +413,7 @@ export default function StudentPortalPage() {
           <div className="rounded-[24px] p-6 text-[#1B1B1B] sm:p-8" style={{ backgroundImage: HERO_BG }}>
             <GraduationCap className="h-8 w-8" aria-hidden="true" />
             <h1 className="mt-3 font-halenoir text-2xl font-bold sm:text-[1.9rem]">Student portal</h1>
-            <p className="mt-1.5 text-[15px] text-[#5D6570]">Enter the access code from your school to see your assignments, deadlines and marks.</p>
+            <p className="mt-1.5 text-[15px] text-[#5D6570]">For students of a school, college or institute on a4ai. Enter the access code your teacher gave you to see your assignments, deadlines and marks.</p>
           </div>
 
           <Card className="mt-4">
@@ -447,10 +447,14 @@ export default function StudentPortalPage() {
             </form>
           </Card>
 
-          <p className="mt-5 text-center text-[14px] text-[#5D6570]">
-            Have an a4ai account?{" "}
-            <Link to="/student/dashboard" className="font-bold text-[#1B1B1B] underline underline-offset-4">Go to your dashboard</Link>
-          </p>
+          <div className="mt-5 rounded-[20px] border border-[#E5E7EB] bg-white p-5 text-center">
+            <p className="text-[14px] font-semibold text-[#1B1B1B]">No code from your school?</p>
+            <p className="mt-1 text-[13.5px] text-[#5D6570]">Use your own a4ai student account for contests, practice, flashcards and notes.</p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Link to="/login" className="inline-flex min-h-[44px] items-center rounded-xl border border-[#E5E7EB] px-4 text-[14px] font-bold text-[#1B1B1B] hover:bg-[#F7F8FA]">Sign in</Link>
+              <Link to="/signup" state={{ role: "student" }} className="inline-flex min-h-[44px] items-center rounded-xl bg-[#111111] px-4 text-[14px] font-bold text-white hover:bg-[#222222]">Create a student account</Link>
+            </div>
+          </div>
         </div>
       </main>
     </div>

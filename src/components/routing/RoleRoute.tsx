@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAccess } from '../../context/AccessProvider';
 import { useAuth } from '@/providers/AuthProvider';
+import { isStudentOnly, resolveHomeRoute } from '@/lib/homeRoute';
 
 type Role = 'admin' | 'hod' | 'proctor' | 'teacher';
 
@@ -36,10 +37,11 @@ export const RoleRoute: React.FC<{
   if (allowNewInstituteOwner && access.primary_role === 'none' && signupRole === 'institute') {
     return <>{children}</>;
   }
-  // No institute membership = independent teacher: they get the personal teacher dashboard.
+  // No institute membership = independent teacher: they get the personal teacher dashboard —
+  // unless they signed up as a student (they go to the student dashboard instead).
   const role: Role = access.primary_role === 'none' ? 'teacher' : (access.primary_role as Role);
-  if (!allow.includes(role)) {
-    const target = access.home_route || '/dashboard';
+  if (isStudentOnly(access, signupRole) || !allow.includes(role)) {
+    const target = resolveHomeRoute(access, signupRole);
     // Never redirect to the page we are already on (that renders a blank screen).
     if (target === location.pathname) {
       return <div style={{ padding: 40, textAlign: 'center' }}>You don't have access to this page.</div>;

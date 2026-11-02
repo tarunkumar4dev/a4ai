@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
 import { takeRedirectAfterLogin } from "@/lib/authHelpers";
+import { resolveHomeRoute } from "@/lib/homeRoute";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -93,21 +94,17 @@ export default function AuthCallback() {
         // 7. Check for redirect URL after successful auth
         const redirectUrl = takeRedirectAfterLogin(); // same-site app paths only
 
-        const targetRole = (finalRole || "teacher").toLowerCase().trim();
-        const fallbackDashboard = `/${targetRole}/dashboard`;
-
         if (redirectUrl) {
           navigate(redirectUrl, { replace: true });
           return;
         }
 
-        // 8. Redirect using get_my_access home_route
+        // 8. Redirect: institute staff → get_my_access home_route; everyone else → their signup role's dashboard
         try {
           const { data: accessData } = await supabase.rpc('get_my_access');
-          const access = accessData?.[0];
-          navigate(access?.home_route || fallbackDashboard, { replace: true });
+          navigate(resolveHomeRoute(accessData?.[0], finalRole), { replace: true });
         } catch {
-          navigate(fallbackDashboard, { replace: true });
+          navigate(resolveHomeRoute(null, finalRole), { replace: true });
         }
       } catch (error: any) {
         console.error("OAuth callback error:", error);
