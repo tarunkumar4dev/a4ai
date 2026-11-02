@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1060" viewBox="0 0 1700 1060" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <marker id="aG" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+    <marker id="aR" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/></marker>
+    <marker id="aS" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker>
+    <marker id="aD" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+  </defs>
+
+  <rect width="1700" height="1060" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="60" y="62" font-size="34" font-weight="800" fill="#0f172a">Offline mode: how a4ai keeps your work safe</text>
+  <text x="60" y="96" font-size="18" fill="#475569">When the internet drops, nothing is lost. Work is saved in the browser and sent to the server once the connection is back.</text>
+
+  <!-- ============ CARD 1: online ============ -->
+  <rect x="60" y="140" width="460" height="500" rx="16" fill="#fff" stroke="#e2e8f0" stroke-width="2"/>
+  <rect x="60" y="140" width="460" height="56" rx="16" fill="#16a34a"/>
+  <rect x="60" y="170" width="460" height="26" fill="#16a34a"/>
+  <text x="84" y="177" font-size="22" font-weight="800" fill="#fff">1 · Internet is working</text>
+
+  <rect x="100" y="226" width="380" height="64" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="290" y="266" font-size="20" font-weight="700" fill="#0f172a" text-anchor="middle">Student types an answer</text>
+
+  <path d="M180 290 L180 348" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#aG)"/>
+  <path d="M400 290 L400 348" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#aG)"/>
+
+  <rect x="90" y="352" width="180" height="112" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="180" y="388" font-size="19" font-weight="800" fill="#14532d" text-anchor="middle">Browser</text>
+  <text x="180" y="414" font-size="16" fill="#166534" text-anchor="middle">IndexedDB</text>
+  <text x="180" y="440" font-size="15" fill="#166534" text-anchor="middle">safety copy</text>
+
+  <rect x="310" y="352" width="180" height="112" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="400" y="388" font-size="19" font-weight="800" fill="#14532d" text-anchor="middle">Supabase</text>
+  <text x="400" y="414" font-size="16" fill="#166534" text-anchor="middle">server</text>
+  <text x="400" y="440" font-size="15" fill="#166534" text-anchor="middle">main copy</text>
+
+  <text x="290" y="520" font-size="17" fill="#334155" text-anchor="middle">Draft is saved every few seconds.</text>
+  <text x="290" y="546" font-size="17" fill="#334155" text-anchor="middle">Submit goes straight to the server.</text>
+  <text x="290" y="590" font-size="17" font-weight="700" fill="#16a34a" text-anchor="middle">No banner shown</text>
+
+  <!-- arrow card1 → card2 -->
+  <text x="570" y="338" font-size="15" font-weight="700" fill="#dc2626" text-anchor="middle">connection</text>
+  <text x="570" y="357" font-size="15" font-weight="700" fill="#dc2626" text-anchor="middle">drops</text>
+  <path d="M526 385 L614 385" stroke="#dc2626" stroke-width="4" fill="none" marker-end="url(#aR)"/>
+
+  <!-- ============ CARD 2: offline ============ -->
+  <rect x="620" y="140" width="460" height="500" rx="16" fill="#fff" stroke="#e2e8f0" stroke-width="2"/>
+  <rect x="620" y="140" width="460" height="56" rx="16" fill="#dc2626"/>
+  <rect x="620" y="170" width="460" height="26" fill="#dc2626"/>
+  <text x="644" y="177" font-size="22" font-weight="800" fill="#fff">2 · Internet is gone</text>
+
+  <rect x="660" y="226" width="380" height="64" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="850" y="266" font-size="20" font-weight="700" fill="#0f172a" text-anchor="middle">Student keeps working</text>
+
+  <path d="M740 290 L740 348" stroke="#dc2626" stroke-width="3" fill="none" marker-end="url(#aR)"/>
+  <path d="M960 290 L960 348" stroke="#94a3b8" stroke-width="3" stroke-dasharray="8 7" fill="none" marker-end="url(#aS)"/>
+  <text x="960" y="320" font-size="24" font-weight="800" fill="#dc2626" text-anchor="middle">×</text>
+
+  <rect x="650" y="352" width="180" height="112" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+  <text x="740" y="384" font-size="19" font-weight="800" fill="#7f1d1d" text-anchor="middle">IndexedDB</text>
+  <text x="740" y="410" font-size="15" fill="#991b1b" text-anchor="middle">draft + sync queue</text>
+  <text x="740" y="434" font-size="14" fill="#991b1b" text-anchor="middle">Submit #1 · Edit #2</text>
+  <text x="740" y="453" font-size="14" fill="#991b1b" text-anchor="middle">Mark #3 …</text>
+
+  <rect x="870" y="352" width="180" height="112" rx="12" fill="#f1f5f9" stroke="#94a3b8" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="960" y="388" font-size="19" font-weight="800" fill="#64748b" text-anchor="middle">Supabase</text>
+  <text x="960" y="414" font-size="16" fill="#64748b" text-anchor="middle">can't be reached</text>
+  <text x="960" y="440" font-size="15" fill="#64748b" text-anchor="middle">waiting…</text>
+
+  <rect x="700" y="490" width="300" height="40" rx="20" fill="#dc2626"/>
+  <circle cx="724" cy="510" r="4" fill="#fff"/>
+  <text x="850" y="516" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">No internet connection</text>
+
+  <text x="850" y="566" font-size="17" fill="#334155" text-anchor="middle">Each action is added to the queue.</text>
+  <text x="850" y="592" font-size="17" fill="#334155" text-anchor="middle">Refresh or close the tab? Still safe.</text>
+  <text x="850" y="618" font-size="15" fill="#64748b" text-anchor="middle">Slow net? Same thing, banner is yellow.</text>
+
+  <!-- arrow card2 → card3 -->
+  <text x="1130" y="338" font-size="15" font-weight="700" fill="#16a34a" text-anchor="middle">connection</text>
+  <text x="1130" y="357" font-size="15" font-weight="700" fill="#16a34a" text-anchor="middle">returns</text>
+  <path d="M1086 385 L1174 385" stroke="#16a34a" stroke-width="4" fill="none" marker-end="url(#aG)"/>
+
+  <!-- ============ CARD 3: back online ============ -->
+  <rect x="1180" y="140" width="460" height="500" rx="16" fill="#fff" stroke="#e2e8f0" stroke-width="2"/>
+  <rect x="1180" y="140" width="460" height="56" rx="16" fill="#16a34a"/>
+  <rect x="1180" y="170" width="460" height="26" fill="#16a34a"/>
+  <text x="1204" y="177" font-size="22" font-weight="800" fill="#fff">3 · Back online, auto sync</text>
+
+  <rect x="1220" y="226" width="380" height="64" rx="12" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="1410" y="266" font-size="20" font-weight="700" fill="#0f172a" text-anchor="middle">"online" event fires</text>
+
+  <path d="M1300 290 L1300 348" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#aG)"/>
+
+  <rect x="1210" y="352" width="180" height="112" rx="12" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+  <text x="1300" y="384" font-size="19" font-weight="800" fill="#713f12" text-anchor="middle">Queue</text>
+  <text x="1300" y="410" font-size="15" fill="#854d0e" text-anchor="middle">oldest first</text>
+  <text x="1300" y="434" font-size="14" fill="#854d0e" text-anchor="middle">retry if it fails</text>
+
+  <path d="M1394 408 L1426 408" stroke="#16a34a" stroke-width="3" fill="none" marker-end="url(#aG)"/>
+  <text x="1410" y="382" font-size="13" font-weight="700" fill="#16a34a" text-anchor="middle">sync</text>
+
+  <rect x="1430" y="352" width="180" height="112" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="1520" y="388" font-size="19" font-weight="800" fill="#14532d" text-anchor="middle">Supabase</text>
+  <text x="1520" y="414" font-size="16" fill="#166534" text-anchor="middle">gets everything</text>
+  <text x="1520" y="440" font-size="15" fill="#166534" text-anchor="middle">once only</text>
+
+  <rect x="1260" y="490" width="300" height="40" rx="20" fill="#16a34a"/>
+  <circle cx="1284" cy="510" r="4" fill="#fff"/>
+  <text x="1410" y="516" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">Back online</text>
+
+  <text x="1410" y="566" font-size="17" fill="#334155" text-anchor="middle">Teacher changed it meanwhile? Ask the user.</text>
+  <text x="1410" y="592" font-size="17" fill="#334155" text-anchor="middle">Then delete the local copy.</text>
+  <text x="1410" y="618" font-size="15" fill="#64748b" text-anchor="middle">Toast "Synced" · green banner for 2.5 s</text>
+
+  <!-- ============ TIMELINE ============ -->
+  <text x="60" y="690" font-size="20" font-weight="800" fill="#0f172a">What the user sees over time</text>
+  <rect x="60" y="710" width="400" height="30" fill="#16a34a" rx="6"/>
+  <rect x="460" y="710" width="300" height="30" fill="#facc15"/>
+  <rect x="760" y="710" width="400" height="30" fill="#dc2626"/>
+  <rect x="1160" y="710" width="480" height="30" fill="#16a34a" rx="6"/>
+  <rect x="440" y="710" width="30" height="30" fill="#facc15"/>
+  <rect x="1140" y="710" width="30" height="30" fill="#dc2626"/>
+  <rect x="740" y="710" width="30" height="30" fill="#facc15"/>
+  <rect x="1140" y="710" width="30" height="30" fill="#dc2626"/>
+
+  <text x="260" y="772" font-size="16" font-weight="700" fill="#14532d" text-anchor="middle">Normal</text>
+  <text x="260" y="793" font-size="14" fill="#475569" text-anchor="middle">no banner</text>
+  <text x="610" y="772" font-size="16" font-weight="700" fill="#713f12" text-anchor="middle">Slow · yellow banner</text>
+  <text x="610" y="793" font-size="14" fill="#475569" text-anchor="middle">keep saving locally, retry later</text>
+  <text x="960" y="772" font-size="16" font-weight="700" fill="#7f1d1d" text-anchor="middle">Offline · red banner</text>
+  <text x="960" y="793" font-size="14" fill="#475569" text-anchor="middle">queue grows, nothing lost</text>
+  <text x="1400" y="772" font-size="16" font-weight="700" fill="#14532d" text-anchor="middle">Back · green banner</text>
+  <text x="1400" y="793" font-size="14" fill="#475569" text-anchor="middle">queue syncs, then normal</text>
+
+  <!-- ============ BOTTOM ROW ============ -->
+  <rect x="60" y="830" width="500" height="200" rx="16" fill="#fff" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="84" y="868" font-size="20" font-weight="800" fill="#0f172a">What to save offline</text>
+  <text x="84" y="904" font-size="17" fill="#334155">•  Test answers (auto-submit later)</text>
+  <text x="84" y="934" font-size="17" fill="#334155">•  Assignment drafts + photos</text>
+  <text x="84" y="964" font-size="17" fill="#334155">•  Attendance marks</text>
+  <text x="84" y="994" font-size="17" fill="#334155">•  Notes and long forms</text>
+
+  <rect x="600" y="830" width="500" height="200" rx="16" fill="#fff" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="624" y="868" font-size="20" font-weight="800" fill="#0f172a">Where it is stored</text>
+  <text x="624" y="904" font-size="17" font-weight="700" fill="#334155">IndexedDB</text>
+  <text x="624" y="926" font-size="15" fill="#475569">drafts, queue, photos (100+ MB)</text>
+  <text x="624" y="956" font-size="17" font-weight="700" fill="#334155">LocalStorage</text>
+  <text x="624" y="978" font-size="15" fill="#475569">small settings only (~5 MB)</text>
+  <text x="624" y="1008" font-size="17" font-weight="700" fill="#334155">Service worker cache</text>
+  <text x="900" y="1008" font-size="15" fill="#475569">pages open with no net</text>
+
+  <rect x="1140" y="830" width="500" height="200" rx="16" fill="#fff" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="1164" y="868" font-size="20" font-weight="800" fill="#0f172a">Safety rules</text>
+  <text x="1164" y="904" font-size="17" fill="#334155">•  Server stays the source of truth</text>
+  <text x="1164" y="934" font-size="17" fill="#334155">•  Every queued action has an id,</text>
+  <text x="1164" y="956" font-size="17" fill="#334155">   so a retry never submits twice</text>
+  <text x="1164" y="986" font-size="17" fill="#334155">•  Ask the user on conflicts</text>
+  <text x="1164" y="1016" font-size="17" fill="#334155">•  Wipe local data on logout</text>
+</svg>

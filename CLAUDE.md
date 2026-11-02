@@ -407,6 +407,24 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   one transition allowed past lite.css (`.a4-net-banner` in index.css). Safari/Firefox: slow only shows via the probe
   after a change event, and "Wi-Fi without internet" isn't detected (no polling while healthy).
 
+- [x] Offline attendance (2 Nov, uncommitted): teacher sheet keeps a save on the device when it can't reach the server and
+  syncs on its own. `src/lib/offline/secureQueue.ts` (IndexedDB `a4ai-offline`; AES-GCM, non-extractable key per user, id +
+  user authenticated, no plain-text fallback, 7-day expiry, 100 per user, wiped on SIGNED_OUT) + `attendanceQueue.ts`
+  (`decideSync`: server == mine → nothing to send; server == base → send; else conflict, teacher chooses; network / 5xx / 401
+  retry, other errors = rejected with the server's reason; sent only by the user who queued it) + `OfflineSyncManager`
+  (App.tsx) + panel in TeacherAttendanceView. Replay = same RPC + current JWT, so scope and edit window are re-checked.
+  `chunkReload` now reloads only if the site answers (offline it sent the app to the browser's error page);
+  `RouteErrorBoundary` shows the offline message and reloads on reconnect. Check: `node scripts/offline-attendance-check.mjs`
+  (real browser, Supabase stubbed, 54 checks). Live `save_class_attendance` is last-write-wins with no version check.
+- Known after offline attendance:
+  - Not run against a real account yet: try it on a test class with dummy students (airplane mode mid-class, then a proctor edit).
+  - No service worker and no stored roster: the sheet must already be open before the net drops; the app can't start offline.
+  - Conflict check is in the browser, so a change between its read and the send isn't caught (attendance_edit_log has it).
+    A strict fix = `p_expected` compare inside save_class_attendance (migration).
+  - marked_at = sync time, not when the teacher marked. A teacher's save older than 2 days at sync time is refused.
+  - ProctorSectionView saves (reason required) are online-only. Sign-out deletes unsynced saves, with a warning.
+  - `docs/offline-mode-idea.png` is the wider idea (drafts, notes, service worker); only attendance is built.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

@@ -13,12 +13,20 @@
 //   • If saved marks can't be loaded, the sheet does not open (it would show everyone Present and a save
 //     would overwrite the real marks).
 //   • A failed save stays on screen until the next save works.
+//   • No connection: the marks stay on this device (encrypted) and sync on their own. "Saved on this device" is
+//     never shown as saved. If someone else changed the class meanwhile, the teacher chooses (lib/offline/attendanceQueue.ts).
 
 import React, { useState, useMemo, useCallback, useEffect, memo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+import { useAttendanceQueue } from "@/hooks/useAttendanceQueue";
+import {
+  attendanceKey, countDifferences, discardQueuedSave, flushAttendanceQueue, getQueuedSave, keepMyMarks,
+  queueAttendanceSave, sendAttendance, waitForFlush, type AttendanceSave, type Marks,
+} from "@/lib/offline/attendanceQueue";
+import type { QueueItem } from "@/lib/offline/secureQueue";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -137,6 +145,56 @@ const StudentRow = memo(({ s, n, onMark }: { s: Student; n: number; onMark: (id:
 ));
 StudentRow.displayName = "StudentRow";
 
+/* ───── SAVES STILL ON THIS DEVICE ───── */
+function PendingSaves({ items, onSync, onKeepMine, onDiscard }: {
+  items: QueueItem<AttendanceSave>[];
+  onSync: () => void;
+  onKeepMine: (item: QueueItem<AttendanceSave>) => void;
+  onDiscard: (item: QueueItem<AttendanceSave>) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <section className={`${CARD} p-3 sm:p-4`} aria-labelledby="att-pending-title" data-testid="pending-saves">
+      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+        <h3 id="att-pending-title" className="text-base font-bold">Saved on this device</h3>
+        {items.some(i => i.body.state === "pending") && (
+          <button type="button" onClick={onSync} className={`${BTN_SECONDARY} shrink-0 ${FOCUS}`}>Sync now</button>
+        )}
+      </div>
+      <ul className="divide-y divide-gray-100 dark:divide-white/5">
+        {items.map(item => {
+          const s = item.body;
+          const when = fromDateStr(s.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+          const diff = s.serverMarks ? countDifferences(s.serverMarks, s.marks) : 0;
+          return (
+            <li key={item.id} className="px-1 py-3">
+              <p className="truncate text-sm font-semibold">{s.subjectName} · {s.classLabel} · {when}</p>
+              {s.state === "pending" && <p className="mt-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">Not on the server yet. It will sync when the connection is back.</p>}
+              {s.state === "conflict" && (
+                <>
+                  <p className="mt-0.5 text-xs font-medium text-red-700 dark:text-red-300">
+                    Someone else changed this class after you marked it. {diff} mark{diff === 1 ? "" : "s"} differ from yours. Nothing was overwritten.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => onDiscard(item)} className={`${BTN_SECONDARY} ${FOCUS}`}>Use their marks</button>
+                    <button type="button" onClick={() => onKeepMine(item)} className={`${BTN_PRIMARY} ${FOCUS}`}>Keep my marks</button>
+                  </div>
+                </>
+              )}
+              {s.state === "rejected" && (
+                <>
+                  <p className="mt-0.5 text-xs font-medium text-red-700 dark:text-red-300">Not saved: {s.note || "The server refused this save."}</p>
+                  <button type="button" onClick={() => onDiscard(item)} className={`${BTN_SECONDARY} mt-2 ${FOCUS}`}>Remove from this device</button>
+                </>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════
    MAIN
 ═══════════════════════════════════════════════════════════ */
@@ -159,6 +217,13 @@ export default function TeacherAttendanceView() {
   const [hasSaved, setHasSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  /** the current marks are on this device, not on the server yet */
+  const [queuedLocal, setQueuedLocal] = useState(false);
+  const queued = useAttendanceQueue(user?.id);
+  /** the server's marks when this class was opened: what a later sync compares against */
+  const baseMarks = useRef<Marks>({});
+  const queuedMarks = useRef<Marks>({});
+  const seenQueued = useRef(false);
 
   const [instId, setInstId] = useState<string | null>(null);
   const [noInstitute, setNoInstitute] = useState(false);
@@ -274,6 +339,7 @@ export default function TeacherAttendanceView() {
   const open = useCallback(async (t: SessionTarget) => {
     setSelected(t); setStudents([]); setOriginal([]); setDirty(false); setSearch(""); setFilter("all");
     setLastSaved(null); setSaveError(null); setSheetError(null); setHasSaved(false); setLoadingSheet(true);
+    setQueuedLocal(false); seenQueued.current = false; baseMarks.current = {};
     try {
       const ds = toDateStr(date);
       const { data: stu, error: stuErr } = await supabase.from("students").select("id, name, roll_no")
@@ -310,12 +376,18 @@ export default function TeacherAttendanceView() {
         });
       } catch { /* the sheet works without it */ }
 
+      // marks still waiting on this device win over the server's, and keep the starting point they were made from
+      const local = user?.id ? await getQueuedSave(user.id, attendanceKey(t.batchId, t.subjectId, ds, t.timetableSlotId)) : null;
+      const waiting = local?.body.state === "pending" ? local.body : null;
+
       const loaded: Student[] = stu.map((s: any) => ({
         id: s.id, name: s.name, rollNo: s.roll_no || undefined,
-        status: saved[s.id] || "present", pct: pctMap[s.id],
+        status: waiting?.marks[s.id] || saved[s.id] || "present", pct: pctMap[s.id],
       }));
       setStudents(loaded); setOriginal(loaded.map(s => ({ ...s })));
       setHasSaved(Object.keys(saved).length > 0);
+      baseMarks.current = waiting ? waiting.base : saved;
+      if (waiting) { queuedMarks.current = waiting.marks; setQueuedLocal(true); }
       if (sid) setSelected(prev => (prev ? { ...prev, sessionId: sid } : prev));
     } catch (e) {
       console.error("attendance sheet:", e);
@@ -323,7 +395,7 @@ export default function TeacherAttendanceView() {
       setSheetError(SHEET_ERROR);
     }
     setLoadingSheet(false);
-  }, [date]);
+  }, [date, user?.id]);
 
   const openManual = useCallback(() => {
     const t = assigns.find(a => a.batchId === pickBatch && a.subjectId === pickSubj);
@@ -331,7 +403,7 @@ export default function TeacherAttendanceView() {
     open(t);
   }, [assigns, pickBatch, pickSubj, open]);
 
-  const unsaved = dirty || (!hasSaved && students.length > 0 && !sheetError);
+  const unsaved = dirty || (!hasSaved && !queuedLocal && students.length > 0 && !sheetError);
   const back = useCallback(() => {
     if (unsaved && !isFuture) {
       setConfirm({
@@ -353,37 +425,101 @@ export default function TeacherAttendanceView() {
 
   const undo = useCallback(() => { if (original.length) { setStudents(original.map(s => ({ ...s }))); setDirty(false); } }, [original]);
 
-  const canSave = !!selected && students.length > 0 && !saving && !isFuture && !sheetError && (dirty || !hasSaved);
+  const canSave = !!selected && students.length > 0 && !saving && !isFuture && !sheetError && (dirty || (!hasSaved && !queuedLocal));
 
   const save = useCallback(async () => {
-    if (!selected || !instId) return;
+    if (!selected || !instId || !user?.id) return;
     if (isFuture) { setSaveError("You can't mark attendance for a future date."); return; }
     setSaving(true);
     setSaveError(null);
-    try {
-      const { data: sid, error } = await supabase.rpc("save_class_attendance", {
-        p_institute_id: instId,
-        p_batch_id: selected.batchId,
-        p_subject_id: selected.subjectId,
-        p_date: toDateStr(date),
-        p_timetable_slot_id: selected.timetableSlotId ?? null,
-        p_session_id: selected.sessionId ?? null,
-        p_records: students.map(s => ({ student_id: s.id, status: s.status })),
-      });
-      if (error) throw new Error(error.message);
+    const ds = toDateStr(date);
+    const marks: Marks = {};
+    students.forEach(s => { marks[s.id] = s.status; });
+    const draft: AttendanceSave = {
+      key: attendanceKey(selected.batchId, selected.subjectId, ds, selected.timetableSlotId),
+      instituteId: instId, batchId: selected.batchId, subjectId: selected.subjectId, date: ds,
+      slotId: selected.timetableSlotId ?? null, sessionId: selected.sessionId ?? null,
+      marks, base: baseMarks.current,
+      subjectName: selected.subjectName, classLabel: classLabel(selected), state: "pending",
+    };
 
-      setSelected(prev => (prev ? { ...prev, sessionId: sid as string, isMarked: true } : prev));
+    await waitForFlush();
+    const res = navigator.onLine ? await sendAttendance(draft) : { kind: "retry" as const, message: "No internet connection" };
+
+    if (res.kind === "ok") {
+      // this save was made on top of what the server has now, so it replaces anything waiting for this class
+      const old = await getQueuedSave(user.id, draft.key);
+      if (old) await discardQueuedSave(old.id);
+      baseMarks.current = marks; seenQueued.current = false; setQueuedLocal(false);
+      setSelected(prev => (prev ? { ...prev, sessionId: res.sessionId, isMarked: true } : prev));
       setOriginal(students.map(s => ({ ...s }))); setDirty(false); setHasSaved(true);
       setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
       const ctName = classTeachers[selected.batchId];
       toast.success(`Saved: ${selected.subjectName} · ${classLabel(selected)}${ctName && ctName !== "you" ? ` · sent to ${ctName}` : ""}`);
-    } catch (e: any) {
-      const msg = e?.message || "Save failed";
-      setSaveError(msg);
+    } else if (res.kind === "retry") {
+      try {
+        await queueAttendanceSave(user.id, draft);
+        queuedMarks.current = marks; seenQueued.current = false; setQueuedLocal(true);
+        setOriginal(students.map(s => ({ ...s }))); setDirty(false);
+        toast.info("No connection. Saved on this device, it will sync on its own.");
+      } catch {
+        // no IndexedDB / WebCrypto / space: say it plainly rather than keep the marks unencrypted
+        setSaveError(`${res.message}. This browser can't keep it offline, keep this page open`);
+        toast.error("Attendance not saved");
+      }
+    } else {
+      setSaveError(res.message || "Save failed");
       toast.error("Attendance not saved");
     }
     setSaving(false);
-  }, [students, selected, instId, date, isFuture, classTeachers]);
+  }, [students, selected, instId, date, isFuture, classTeachers, user?.id]);
+
+  // The save waiting for the open class has reached the server.
+  useEffect(() => {
+    if (!queuedLocal || !selected) return;
+    const key = attendanceKey(selected.batchId, selected.subjectId, toDateStr(date), selected.timetableSlotId);
+    if (queued.some(i => i.body.key === key)) { seenQueued.current = true; return; }
+    if (!seenQueued.current) return; // the list hasn't caught up with the new save yet
+    baseMarks.current = queuedMarks.current;
+    seenQueued.current = false;
+    setQueuedLocal(false); setHasSaved(true);
+    setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
+  }, [queued, queuedLocal, selected, date]);
+
+  // The class list's "Marked" badges are stale after a sync.
+  const queuedCount = queued.length;
+  const prevQueuedCount = useRef(queuedCount);
+  useEffect(() => {
+    if (queuedCount < prevQueuedCount.current && !selected) load();
+    prevQueuedCount.current = queuedCount;
+  }, [queuedCount, selected, load]);
+
+  const syncNow = useCallback(() => {
+    if (!user?.id) return;
+    if (!navigator.onLine) { toast.info("Still no connection. It will sync on its own."); return; }
+    flushAttendanceQueue(user.id).then(r => {
+      if (r.waiting) toast.info("Couldn't reach the server yet. It will keep trying.");
+    });
+  }, [user?.id]);
+
+  const keepMine = useCallback((item: QueueItem<AttendanceSave>) => {
+    if (!user?.id) return;
+    setConfirm({
+      title: "Keep your marks?",
+      msg: `Your marks will replace what is saved for ${item.body.subjectName} · ${item.body.classLabel}, including the other person's changes. The change is logged.`,
+      ok: "Keep my marks",
+      fn: () => { keepMyMarks(user.id, item).then(syncNow).catch(() => toast.error("Couldn't update this save. Try again.")); },
+    });
+  }, [user?.id, syncNow]);
+
+  const discard = useCallback((item: QueueItem<AttendanceSave>) => {
+    setConfirm({
+      title: "Remove your marks from this device?",
+      msg: `Your marks for ${item.body.subjectName} · ${item.body.classLabel} will be deleted. What is on the server stays as it is.`,
+      ok: "Remove my marks",
+      fn: () => { discardQueuedSave(item.id); },
+    });
+  }, []);
 
   // Keyboard shortcuts (not while the confirm dialog is open; it handles its own keys)
   useEffect(() => {
@@ -436,6 +572,9 @@ export default function TeacherAttendanceView() {
     const dateLabel = date.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short", year: "numeric" });
     return (
       <div className="att-root space-y-4 text-[#1B1B1B] dark:text-white">
+        {confirmDialog}
+        <PendingSaves items={queued} onSync={syncNow} onKeepMine={keepMine} onDiscard={discard} />
+
         {/* Date */}
         <div className={`${CARD} flex items-center gap-2 p-2 sm:p-3`}>
           <button type="button" onClick={() => setDate(d => addDays(d, -1))} aria-label="Previous day" className={`${BTN_SECONDARY} w-11 shrink-0 px-0 ${FOCUS}`}><Icon.ChevL /></button>
@@ -487,7 +626,9 @@ export default function TeacherAttendanceView() {
                             {classTeachers[s.batchId] ? ` · Class teacher: ${classTeachers[s.batchId]}` : ""}
                           </span>
                         </span>
-                        {s.isMarked
+                        {queued.some(q => q.body.key === attendanceKey(s.batchId, s.subjectId, toDateStr(date), s.timetableSlotId))
+                          ? <span className="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">On this device</span>
+                          : s.isMarked
                           ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"><Icon.Check />Marked</span>
                           : <span className="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">Not marked</span>}
                       </button>
@@ -548,6 +689,9 @@ export default function TeacherAttendanceView() {
     : saveError ? { text: `Not saved: ${saveError.replace(/\.+$/, "")}. Try Save again.`, tone: "text-red-700 dark:text-red-300" }
     : isFuture ? { text: "Future date: view only.", tone: "text-gray-500" }
     : dirty ? { text: `${changed} change${changed === 1 ? "" : "s"} not saved yet`, tone: "text-amber-700 dark:text-amber-300" }
+    : queuedLocal ? (queued.some(q => q.body.key === attendanceKey(selected.batchId, selected.subjectId, toDateStr(date), selected.timetableSlotId) && q.body.state !== "pending")
+        ? { text: "This save couldn't sync. Go back to your classes to sort it out.", tone: "text-red-700 dark:text-red-300" }
+        : { text: "Saved on this device, not on the server yet. It will sync when the connection is back.", tone: "text-amber-700 dark:text-amber-300" })
     : !hasSaved ? { text: "Not saved yet. Everyone starts as Present: mark who is absent or on leave, then Save.", tone: "text-amber-700 dark:text-amber-300" }
     : lastSaved ? { text: `Saved at ${lastSaved}`, tone: "text-emerald-700 dark:text-emerald-300" }
     : { text: "Saved earlier. Change marks and save to update.", tone: "text-emerald-700 dark:text-emerald-300" };

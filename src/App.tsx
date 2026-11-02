@@ -27,6 +27,9 @@ import { MotionConfig } from "framer-motion";
 const HODDashboardPage = lazy(() => import("@/pages/hod/HODDashboardPage")); // pulls xlsx; keep it out of the main bundle
 import ProtectedRoute from "@/components/ProtectedRoute";
 import NetworkBanner from "@/components/NetworkBanner";
+import OfflineSyncManager from "@/components/OfflineSyncManager";
+import RouteErrorBoundary from "@/components/routing/RouteErrorBoundary";
+import { countItems } from "@/lib/offline/secureQueue";
 
 /* ---------- Vercel Analytics ---------- */
 import { Analytics } from "@vercel/analytics/react";
@@ -272,7 +275,13 @@ function IdleLogoutEnabled() {
   useIdleLogout({
     timeoutMs: 2 * 60 * 60 * 1000,
     warnBeforeMs: 60 * 1000,
-    onWarn: () => toast.warning("You've been inactive. Auto sign-out in 1 minute."),
+    onWarn: () => {
+      countItems().then((n) => {
+        toast.warning(n
+          ? `You've been inactive. Auto sign-out in 1 minute, and ${n} attendance save${n === 1 ? "" : "s"} waiting for the internet will be removed.`
+          : "You've been inactive. Auto sign-out in 1 minute.");
+      });
+    },
     onLogout: () => toast.info("Signed out due to inactivity."),
   });
   return null;
@@ -307,10 +316,12 @@ const App = () => {
               <Toaster />
               <Sonner position="top-right" expand={false} richColors closeButton />
               <NetworkBanner />
+              <OfflineSyncManager />
 
               <div className="min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors">
                 <BrowserRouter>
                   <ScrollToTop />
+                  <RouteErrorBoundary>
                   <Suspense fallback={<LoadingScreen />}>
                     <Routes>
 
@@ -515,6 +526,7 @@ const App = () => {
                     <Analytics />
                     <SpeedInsights />
                   </Suspense>
+                  </RouteErrorBoundary>
                 </BrowserRouter>
               </div>
             </TooltipProvider>
