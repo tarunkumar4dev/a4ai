@@ -7,16 +7,30 @@
 // Backward compatible: dept/section nullable, works without them
 // ──────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, lazy } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { teacherDisplayName } from "@/lib/teacherName";
 import { toast } from "sonner";
-import BulkStudentUpload from "@/components/institute/BulkStudentUpload";
-import BatchManagementPanel from "@/components/admin/BatchManagementPanel";
-import HODAttendanceDashboard from "@/components/attendance/HODAttendanceDashboard";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customStyles, Icons } from "@/pages/institute/dashboardTheme";
+import { LazySection, SectionSkeleton } from "@/components/LazySection";
+import {
+  instKey, resolveKey, invalidateInstitute, type InstituteMutation, resolveInstitute, fetchMeta, fetchTeachers,
+  fetchBatches, fetchStudents, fetchStudentCounts, fetchDepartments, fetchSections, fetchSubjects, fetchTeaching,
+  fetchProctors, fetchBranding,
+} from "@/pages/institute/instituteQueries";
+
+// Not needed for the first screen: loaded when their tab / modal opens (xlsx only comes with these)
+const loadAttendance = () => import("@/components/attendance/HODAttendanceDashboard");
+const loadBatchSettings = () => import("@/components/admin/BatchManagementPanel");
+const loadBulkUpload = () => import("@/components/institute/BulkStudentUpload");
+const HODAttendanceDashboard = lazy(loadAttendance);
+const BatchManagementPanel = lazy(loadBatchSettings);
+const BulkStudentUpload = lazy(loadBulkUpload);
+// keyed by nav tab id; Batch settings sits in the Analytics tab
+const PRELOAD: Record<string, () => Promise<unknown>> = { attendance: loadAttendance, analytics: loadBatchSettings };
 
 
 
@@ -50,6 +64,13 @@ interface Section { id: string; department_id: string; name: string; year: numbe
 interface Teacher { id: string; user_id: string; role: string; status: string; joined_at: string; user_email?: string; user_name?: string; department_id?: string | null; }
 interface Batch { id: string; name: string; class_level: string; subject: string; description: string; is_active: boolean; department_id?: string | null; section_id?: string | null; }
 interface Student { id: string; name: string; roll_no: string; class_level: string; parent_name: string; parent_phone: string; batch_id: string; batch_name?: string; is_active: boolean; department_id?: string | null; section_id?: string | null; }
+
+const NO_TEACHERS: Teacher[] = [];
+const NO_BATCHES: Batch[] = [];
+const NO_STUDENTS: Student[] = [];
+const NO_DEPTS: Department[] = [];
+const NO_SECTIONS: Section[] = [];
+const NO_SUBJECTS: { id: string; name: string; code: string; department_id?: string | null }[] = [];
 
 /* ═══════════════════════════════════════════════════════════════════
    CHARTS
@@ -125,13 +146,67 @@ export default function InstituteDashboardPage() {
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const [institute, setInstitute] = useState<Institute | null>(null);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  // Keyed by the user id, not the user object: that changes on every token refresh / tab focus
+  const userId = user?.id ?? null;
+  const resolveQ = useQuery({ queryKey: resolveKey(userId ?? ""), queryFn: () => resolveInstitute(userId!), enabled: !!userId });
+  const instId = resolveQ.data?.id ?? null;
+  const isHod = resolveQ.data?.isHod ?? false;
+  const hodDeptId = resolveQ.data?.hodDeptId ?? null;
+  // refetchOnWindowFocus refetches only data older than staleTime (5 min, App.tsx) — no request storm
+  const live = { enabled: !!instId, refetchOnWindowFocus: true } as const;
+  const k = (r: Parameters<typeof instKey>[1]) => instKey(instId ?? "", r);
+  const metaQ = useQuery({ queryKey: k("meta"), queryFn: () => fetchMeta(instId!), ...live });
+  const teachersQ = useQuery({ queryKey: k("teachers"), queryFn: () => fetchTeachers(instId!), ...live });
+  const batchesQ = useQuery({ queryKey: k("batches"), queryFn: () => fetchBatches(instId!), ...live });
+  const studentsQ = useQuery({ queryKey: k("students"), queryFn: () => fetchStudents(instId!), ...live });
+  const countsQ = useQuery({ queryKey: k("studentCounts"), queryFn: () => fetchStudentCounts(instId!), ...live });
+  const deptsQ = useQuery({ queryKey: k("departments"), queryFn: () => fetchDepartments(instId!), ...live });
+  const sectionsQ = useQuery({ queryKey: k("sections"), queryFn: () => fetchSections(instId!), ...live });
+  const subjectsQ = useQuery({ queryKey: k("subjects"), queryFn: () => fetchSubjects(instId!), ...live });
+  const teachingQ = useQuery({ queryKey: k("teaching"), queryFn: () => fetchTeaching(instId!), ...live });
+  const proctorsQ = useQuery({ queryKey: k("proctors"), queryFn: () => fetchProctors(instId!), ...live });
+  const brandingQ = useQuery({ queryKey: k("branding"), queryFn: () => fetchBranding(instId!), enabled: !!instId, staleTime: Infinity });
+
+  const institute = (metaQ.data as Institute | undefined) ?? null;
+  const teachers = (teachersQ.data as Teacher[] | undefined) ?? NO_TEACHERS;
+  const batches = (batchesQ.data as Batch[] | undefined) ?? NO_BATCHES;
+  const students = (studentsQ.data as Student[] | undefined) ?? NO_STUDENTS;
+  const departments = (deptsQ.data as Department[] | undefined) ?? NO_DEPTS;
+  const sections = (sectionsQ.data as Section[] | undefined) ?? NO_SECTIONS;
+  const subjects = subjectsQ.data ?? NO_SUBJECTS;
+  const logoUrl = brandingQ.data?.logoUrl ?? null;
+  const bannerUrl = brandingQ.data?.bannerUrl ?? null;
+
+  // Teacher → batches is derived from teaching_assignments (legacy teacher_batches is no longer read or written)
+  const { teacherSubjectMap, teacherBatchMap } = useMemo(() => {
+    const taMap: Record<string, { batch_id: string; subject_id: string }[]> = {};
+    const tbMap: Record<string, string[]> = {};
+    teachingQ.data?.forEach((ta: any) => {
+      if (!taMap[ta.teacher_id]) taMap[ta.teacher_id] = [];
+      taMap[ta.teacher_id].push({ batch_id: ta.batch_id, subject_id: ta.subject_id });
+      if (!tbMap[ta.teacher_id]) tbMap[ta.teacher_id] = [];
+      if (!tbMap[ta.teacher_id].includes(ta.batch_id)) tbMap[ta.teacher_id].push(ta.batch_id);
+    });
+    return { teacherSubjectMap: taMap, teacherBatchMap: tbMap };
+  }, [teachingQ.data]);
+
+  // Class teachers. proctor_assignments.teacher_id is an institute_members.id (NOT a user_id),
+  // so both maps are keyed/valued by member id — same as `teacher.id` in this page.
+  const { proctorOfSection, sectionsOfProctor } = useMemo(() => {
+    const bySection: Record<string, string> = {};
+    const byMember: Record<string, string[]> = {};
+    (proctorsQ.data ?? []).forEach((p: any) => {
+      bySection[p.section_id] = p.teacher_id;
+      (byMember[p.teacher_id] ||= []).push(p.section_id);
+    });
+    return { proctorOfSection: bySection, sectionsOfProctor: byMember };
+  }, [proctorsQ.data]);
+
+  const coreQs = [metaQ, teachersQ, batchesQ, studentsQ, deptsQ, sectionsQ, subjectsQ, teachingQ, proctorsQ];
+  // Full-page spinner only for the first load; a refetch after a mutation keeps the current data on screen
+  const loading = !!userId && (resolveQ.isPending || (!!instId && coreQs.some(q => q.isPending)));
+  const instLoadError = resolveQ.error || metaQ.error;
   const [creatingInstitute, setCreatingInstitute] = useState(false);
   const [newInstituteName, setNewInstituteName] = useState("");
 
@@ -140,15 +215,10 @@ export default function InstituteDashboardPage() {
   const [showAddDept, setShowAddDept] = useState(false);
   const [showAddSection, setShowAddSection] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [isHod, setIsHod] = useState(false);
-  const [hodDeptId, setHodDeptId] = useState<string | null>(null);
   const [assignTeacherBatches, setAssignTeacherBatches] = useState<{ teacherId: string; teacherName: string } | null>(null);
-  const [teacherBatchMap, setTeacherBatchMap] = useState<Record<string, string[]>>({});
-  const [subjects, setSubjects] = useState<{ id: string; name: string; code: string; department_id?: string | null }[]>([]);
-  const [teacherSubjectMap, setTeacherSubjectMap] = useState<Record<string, { batch_id: string; subject_id: string }[]>>({});
-  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [attendanceDateFilter, setAttendanceDateFilter] = useState(new Date().toISOString().slice(0, 10));
+  // Class-teacher (proctor) modal: memberId = institute_members.id, which is what assign_proctor wants.
+  const [assignProctorFor, setAssignProctorFor] = useState<{ memberId: string; userId: string; teacherName: string; deptId: string | null } | null>(null);
+  const [proctorBusy, setProctorBusy] = useState(false);
   const [assignHodDept, setAssignHodDept] = useState<Department | null>(null);
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
 
@@ -165,8 +235,6 @@ export default function InstituteDashboardPage() {
   const [deptFilter, setDeptFilter] = useState<string>("");
   const [sectionFilter, setSectionFilter] = useState<string>("");
 
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -187,9 +255,11 @@ export default function InstituteDashboardPage() {
   }, [search]);
 
   useEffect(() => {
-    if (user) fetchData();
-    else setLoading(false);
-  }, [user]);
+    if (studentsQ.error) {
+      console.error("students fetch:", studentsQ.error);
+      toast.error(`Couldn't load students: ${studentsQ.error.message}`);
+    }
+  }, [studentsQ.error]);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -200,148 +270,14 @@ export default function InstituteDashboardPage() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  useEffect(() => {
-    if (activeTab === "attendance" && institute) {
-      fetchAttendance(attendanceDateFilter);
-    }
-  }, [activeTab, institute]);
 
-  /* ─────────────────────────────────────────────────────────────
-     FIXED: fetchData
-     - Optional `id` param: if given, load that institute directly
-     - Otherwise: check institutes (owner) first, then institute_members
-     ───────────────────────────────────────────────────────────── */
-  const fetchData = async (explicitId?: string) => {
-    setLoading(true);
-    try {
-      let id: string | null = explicitId || null;
-
-      if (!id) {
-        // 1. Owner check (institutes table)
-        const { data: ownerData, error: ownerErr } = await supabase
-          .from("institutes")
-          .select("id")
-          .eq("owner_id", user?.id)
-          .order("created_at", { ascending: false })
-          .limit(1);
-
-        if (!ownerErr && ownerData && ownerData.length > 0) {
-          id = ownerData[0].id;
-        } else {
-          // 2. Member check (institute_members table)
-          const { data: mData, error: memberError } = await supabase
-            .from("institute_members")
-            .select("institute_id, role, department_id")
-            .eq("user_id", user?.id)
-            .limit(1);
-
-          if (memberError) console.error("Member lookup error:", memberError);
-
-          if (mData && mData.length > 0) {
-            id = mData[0].institute_id;
-            if (mData[0].role === "hod" && mData[0].department_id) {
-              setIsHod(true);
-              setHodDeptId(mData[0].department_id);
-            }
-          }
-        }
-      }
-
-      if (!id) {
-        setInstitute(null);
-        setLoading(false);
-        return;
-      }
-
-      const [a, b, c, d, e, f] = await Promise.all([
-        supabase.from("institutes").select("*").eq("id", id).single(),
-        supabase.from("institute_members").select("*").eq("institute_id", id).eq("status", "active").in("role", ["teacher", "hod"]).order("joined_at", { ascending: false }),
-        supabase.from("batches").select("*").eq("institute_id", id).eq("is_active", true).order("created_at", { ascending: false }),
-        // students has TWO FKs to batches since 05 (batch_id, lab_batch_id) → the embed must name the FK column,
-        // else PostgREST rejects it as ambiguous (PGRST201) and no students load.
-        supabase.from("students").select("*, batches!batch_id(name), student_access_codes(access_code)").eq("institute_id", id).eq("is_active", true).order("name", { ascending: true }),
-        supabase.from("departments").select("*").eq("institute_id", id).order("name", { ascending: true }),
-        supabase.from("sections").select("*, departments!inner(institute_id)").eq("departments.institute_id", id).order("name", { ascending: true }),
-      ]);
-
-      if (a.data) {
-        setInstitute(a.data as Institute);
-        const instId = a.data.id;
-        try {
-          const { data: logoData } = supabase.storage.from("institute-assets").getPublicUrl(`${instId}/logo`);
-          const { data: bannerData } = supabase.storage.from("institute-assets").getPublicUrl(`${instId}/banner`);
-          try {
-            const logoRes = await fetch(logoData.publicUrl, { method: "HEAD" });
-            if (logoRes.ok && logoRes.headers.get("content-type")?.startsWith("image")) {
-              setLogoUrl(logoData.publicUrl + `?t=${Date.now()}`);
-            }
-          } catch { setLogoUrl(null); }
-          try {
-            const bannerRes = await fetch(bannerData.publicUrl, { method: "HEAD" });
-            if (bannerRes.ok && bannerRes.headers.get("content-type")?.startsWith("image")) {
-              setBannerUrl(bannerData.publicUrl + `?t=${Date.now()}`);
-            }
-          } catch { setBannerUrl(null); }
-        } catch { /* ignore */ }
-      }
-      if (b.data) {
-        let list = b.data as Teacher[];
-        if (list.some(t => !t.user_name || !t.user_email)) {
-          // Fill missing names/emails from auth.users (same RPC the HOD page uses)
-          const { data: dir, error: dirErr } = await supabase.rpc("get_member_directory", { p_institute_id: id });
-          if (dirErr) console.warn("get_member_directory:", dirErr.message);
-          const byId = Object.fromEntries((dir || []).map((r: any) => [r.user_id, r]));
-          list = list.map(t => byId[t.user_id]
-            ? { ...t, user_name: t.user_name || byId[t.user_id].full_name, user_email: t.user_email || byId[t.user_id].email }
-            : t);
-        }
-        setTeachers(list);
-      }
-      if (c.data) setBatches(c.data as Batch[]);
-      if (d.error) {
-        console.error("students fetch:", d.error);
-        toast.error(`Couldn't load students: ${d.error.message}`);
-      }
-      if (d.data) setStudents(d.data.map((s: any) => ({ ...s, batch_name: s.batches?.name || "Unassigned" })));
-      if (e.data) setDepartments(e.data as Department[]);
-      if (f.data) setSections(f.data as Section[]);
-
-      // Subjects list
-      const { data: subjData } = await supabase
-        .from("subjects")
-        .select("id, name, code, department_id")
-        .eq("institute_id", id)
-        .order("code");
-      setSubjects(subjData || []);
-
-      // Teaching assignments (subject-level)
-      const { data: taData } = await supabase
-        .from("teaching_assignments")
-        .select("teacher_id, batch_id, subject_id")
-        .eq("institute_id", id)
-        .eq("is_active", true);
-      const taMap: Record<string, { batch_id: string; subject_id: string }[]> = {};
-      // Teacher → batches is derived from teaching_assignments (legacy teacher_batches is no longer read or written)
-      const tbMap: Record<string, string[]> = {};
-      taData?.forEach((ta: any) => {
-        if (!taMap[ta.teacher_id]) taMap[ta.teacher_id] = [];
-        taMap[ta.teacher_id].push({ batch_id: ta.batch_id, subject_id: ta.subject_id });
-        if (!tbMap[ta.teacher_id]) tbMap[ta.teacher_id] = [];
-        if (!tbMap[ta.teacher_id].includes(ta.batch_id)) tbMap[ta.teacher_id].push(ta.batch_id);
-      });
-      setTeacherSubjectMap(taMap);
-      setTeacherBatchMap(tbMap);
-    } catch (err) {
-      console.error("Data load error:", err);
-      toast.error("Couldn't load your institute data");
-    }
-    setLoading(false);
-  };
+  /** After a mutation: fetch again only what it changed (instituteQueries.INVALIDATES). */
+  const invalidate = (m: InstituteMutation) => (instId ? invalidateInstitute(qc, instId, m) : Promise.resolve([]));
 
   /* ─────────────────────────────────────────────────────────────
      FIXED: handleCreateInstitute
      - Uses the RPC's return value (UUID) directly
-     - Calls fetchData(newId) on success — no page reload needed
+     - Full page reload on success (access is loaded once per login)
      - Turns a duplicate-slug error into a friendly message
      ───────────────────────────────────────────────────────────── */
   const handleCreateInstitute = async () => {
@@ -409,7 +345,7 @@ export default function InstituteDashboardPage() {
       toast.success("Batch created!");
       setShowAddBatch(false);
       setNewBatch({ name: "", class_level: "", subject: "", description: "", department_id: "", section_id: "" });
-      fetchData();
+      invalidate("addBatch");
     } catch (e: any) { toast.error(e.message); }
   };
 
@@ -418,7 +354,7 @@ export default function InstituteDashboardPage() {
     const { error } = await supabase.from("batches").update({ is_active: false }).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Batch deleted");
-    fetchData();
+    invalidate("deleteBatch");
   };
 
   const handleAddStudent = async () => {
@@ -439,7 +375,7 @@ export default function InstituteDashboardPage() {
       toast.success("Student added!");
       setShowAddStudent(false);
       setNewStudent({ name: "", roll_no: "", class_level: "", parent_name: "", parent_phone: "", batch_id: "", department_id: "", section_id: "" });
-      fetchData();
+      invalidate("addStudent");
     } catch (e: any) { toast.error(e.message); }
   };
 
@@ -449,7 +385,7 @@ export default function InstituteDashboardPage() {
     const { error } = await supabase.from("students").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Student removed");
-    fetchData();
+    invalidate("removeStudent");
   };
 
   const removeTeacher = async (id: string, userId?: string) => {
@@ -459,7 +395,7 @@ export default function InstituteDashboardPage() {
     const { error } = await supabase.from("institute_members").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Teacher removed");
-    fetchData();
+    invalidate("removeTeacher");
   };
 
   const promoteToHod = async (teacherId: string, departmentId: string) => {
@@ -476,7 +412,7 @@ export default function InstituteDashboardPage() {
       if (error) throw error;
       toast.success("HOD assigned");
       setAssignHodDept(null);
-      fetchData();
+      invalidate("teacherRole");
     } catch (e: any) {
       toast.error(e.message || "Failed to assign HOD");
     }
@@ -488,7 +424,7 @@ export default function InstituteDashboardPage() {
       .update({ role: "teacher" }).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("HOD demoted to teacher");
-    fetchData();
+    invalidate("teacherRole");
   };
 
   const setTeacherDept = async (teacherId: string, deptId: string | null) => {
@@ -496,7 +432,7 @@ export default function InstituteDashboardPage() {
       .update({ department_id: deptId }).eq("id", teacherId);
     if (error) return toast.error(error.message);
     toast.success("Department updated");
-    fetchData();
+    invalidate("teacherRole");
   };
 
   const assignSubjectToTeacher = async (teacherUserId: string, batchId: string, subjectId: string) => {
@@ -509,7 +445,7 @@ export default function InstituteDashboardPage() {
     });
     if (error && error.code !== "23505") return toast.error(error.message);
     toast.success("Subject assigned!");
-    fetchData();
+    invalidate("teaching");
   };
 
   const removeSubjectFromTeacher = async (teacherUserId: string, batchId: string, subjectId: string) => {
@@ -522,7 +458,7 @@ export default function InstituteDashboardPage() {
       .eq("institute_id", institute.id);
     if (error) return toast.error(error.message);
     toast.success("Subject removed");
-    fetchData();
+    invalidate("teaching");
   };
 
   /** Removes every subject this teacher teaches in this batch (teaching_assignments). */
@@ -535,40 +471,44 @@ export default function InstituteDashboardPage() {
       .eq("institute_id", institute.id);
     if (error) return toast.error(error.message);
     toast.success("Batch removed");
-    fetchData();
+    invalidate("teaching");
   };
 
-  const fetchAttendance = async (dateStr: string) => {
-    if (!institute) return;
-    setAttendanceLoading(true);
-    try {
-      const { data } = await supabase
-        .from("attendance")
-        .select("*")
-        .eq("institute_id", institute.id)
-        .eq("date", dateStr);
+  /**
+   * Make this member the class teacher (proctor) of a section.
+   * assign_proctor takes institute_members.id and replaces whoever held the section (UNIQUE(section_id)).
+   * batches.proctor_id is mirrored with the auth user_id — attendance_records RLS reads it so the
+   * proctor can correct marks for the whole section (main batch + labs).
+   */
+  const assignProctor = async (memberId: string, userId: string, section: Section) => {
+    if (!institute || !section.department_id) return toast.error("This section has no department.");
+    setProctorBusy(true);
+    const { error } = await supabase.rpc("assign_proctor", {
+      p_institute_id: institute.id,
+      p_department_id: section.department_id,
+      p_section_id: section.id,
+      p_teacher_id: memberId,
+    });
+    if (error) { setProctorBusy(false); return toast.error(error.message); }
+    const { error: mirrorErr } = await supabase.from("batches").update({ proctor_id: userId }).eq("section_id", section.id);
+    setProctorBusy(false);
+    if (mirrorErr) toast.warning(`Class teacher set, but attendance rights may be limited: ${mirrorErr.message}`);
+    else toast.success(`Class teacher of ${section.name}`);
+    invalidate("proctor");
+  };
 
-      if (data) {
-        const enriched = data.map((a: any) => {
-          const batch = batches.find(b => b.id === a.batch_id);
-          const teacher = teachers.find(t => t.user_id === a.marked_by);
-          const records: Record<string, string> = a.records || {};
-          const total = Object.keys(records).length;
-          const present = Object.values(records).filter(v => v === "present").length;
-          return {
-            ...a,
-            batch_name: batch?.name || "Unknown",
-            teacher_name: teacher?.user_name || teacher?.user_email || "—",
-            total,
-            present,
-            absent: total - present,
-            pct: total > 0 ? Math.round((present / total) * 100) : 0,
-          };
-        });
-        setAttendanceRecords(enriched);
-      }
-    } catch (e) { console.error(e); }
-    setAttendanceLoading(false);
+  const removeProctor = async (section: Section) => {
+    if (!institute) return;
+    if (!confirm(`Remove the class teacher of ${section.name}?`)) return;
+    setProctorBusy(true);
+    const { error, count } = await supabase.from("proctor_assignments")
+      .delete({ count: "exact" }).eq("section_id", section.id).eq("institute_id", institute.id);
+    if (error) { setProctorBusy(false); return toast.error(error.message); }
+    if (!count) { setProctorBusy(false); return toast.error("Not removed — you may not have permission for this section."); }
+    await supabase.from("batches").update({ proctor_id: null }).eq("section_id", section.id);
+    setProctorBusy(false);
+    toast.success("Class teacher removed");
+    invalidate("proctor");
   };
 
   const downloadAccessCodesCSV = async () => {
@@ -629,7 +569,7 @@ export default function InstituteDashboardPage() {
       toast.success(`${newDept.name} created`);
       setShowAddDept(false);
       setNewDept({ name: "" });
-      fetchData();
+      invalidate("addDept");
     } catch (e: any) { toast.error(e.message || "Failed — check RLS policy"); }
   };
 
@@ -639,7 +579,7 @@ export default function InstituteDashboardPage() {
     if (error) return toast.error(error.message);
     toast.success(`${name} deleted`);
     if (expandedDept === id) setExpandedDept(null);
-    fetchData();
+    invalidate("deleteDept");
   };
 
   const regenDeptCode = async (deptId: string, deptName: string, kind: "student_code" | "teacher_code") => {
@@ -649,7 +589,7 @@ export default function InstituteDashboardPage() {
       const { error } = await supabase.from("departments").update({ [kind]: code }).eq("id", deptId);
       if (error) throw error;
       toast.success("New code generated");
-      fetchData();
+      invalidate("regenDeptCode");
     } catch (e: any) { toast.error(e.message || "Failed to regenerate"); }
   };
 
@@ -672,7 +612,7 @@ export default function InstituteDashboardPage() {
       toast.success("Section created");
       setShowAddSection(false);
       setNewSection({ department_id: "", name: "", year: "" });
-      fetchData();
+      invalidate("addSection");
     } catch (e: any) { toast.error(e.message || "Failed to create section"); }
   };
 
@@ -681,7 +621,7 @@ export default function InstituteDashboardPage() {
     const { error } = await supabase.from("sections").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success(`${name} deleted`);
-    fetchData();
+    invalidate("deleteSection");
   };
 
   const copyCode = useCallback(async () => {
@@ -708,7 +648,7 @@ export default function InstituteDashboardPage() {
       const { error } = await supabase.from("institutes").update({ join_code: newCode }).eq("id", institute.id);
       if (error) throw error;
       toast.success("New join code generated");
-      await fetchData();
+      await invalidate("joinCode");
     } catch (e: any) {
       toast.error(e.message || "Failed to regenerate — check RLS policy");
     }
@@ -732,7 +672,7 @@ export default function InstituteDashboardPage() {
     try {
       const { error } = await supabase.from("institutes").update({ name: editNameValue.trim() }).eq("id", institute.id);
       if (error) throw error;
-      setInstitute({ ...institute, name: editNameValue.trim() });
+      qc.setQueryData(instKey(institute.id, "meta"), { ...institute, name: editNameValue.trim() });
       toast.success("Institute name updated!");
       setEditingName(false);
     } catch (e: any) { toast.error(e.message || "Failed to update name"); }
@@ -748,7 +688,7 @@ export default function InstituteDashboardPage() {
       const { error } = await supabase.storage.from("institute-assets").upload(`${institute.id}/logo`, file, { upsert: true, contentType: file.type, cacheControl: "86400" }); // 1 day: same URL is reused, so a longer cache would show an old logo after a change
       if (error) throw error;
       const { data } = supabase.storage.from("institute-assets").getPublicUrl(`${institute.id}/logo`);
-      setLogoUrl(data.publicUrl + `?t=${Date.now()}`);
+      qc.setQueryData(instKey(institute.id, "branding"), (b: any) => ({ ...b, logoUrl: data.publicUrl + `?t=${Date.now()}` }));
       toast.success("Logo updated!");
     } catch (err: any) { toast.error(err.message || "Upload failed"); }
     setUploadingLogo(false);
@@ -765,7 +705,7 @@ export default function InstituteDashboardPage() {
       const { error } = await supabase.storage.from("institute-assets").upload(`${institute.id}/banner`, file, { upsert: true, contentType: file.type, cacheControl: "86400" });
       if (error) throw error;
       const { data } = supabase.storage.from("institute-assets").getPublicUrl(`${institute.id}/banner`);
-      setBannerUrl(data.publicUrl + `?t=${Date.now()}`);
+      qc.setQueryData(instKey(institute.id, "branding"), (b: any) => ({ ...b, bannerUrl: data.publicUrl + `?t=${Date.now()}` }));
       toast.success("Banner updated!");
     } catch (err: any) { toast.error(err.message || "Upload failed"); }
     setUploadingBanner(false);
@@ -780,7 +720,8 @@ export default function InstituteDashboardPage() {
 
   const totalTeachersAll = teachers.length;
   const hods = useMemo(() => teachers.filter(t => t.role === "hod"), [teachers]);
-  const totalStudents = students.length;
+  // Server counts: correct even when the list is still loading or larger than one request
+  const totalStudents = countsQ.data?.total ?? students.length;
   const totalBatches = batches.length;
   const totalDepartments = departments.length;
   const totalSections = sections.length;
@@ -790,7 +731,7 @@ export default function InstituteDashboardPage() {
   const studentPct = maxStudents ? Math.min(totalStudents / maxStudents, 1) : 0;
   const teacherPct = maxTeachers ? Math.min(totalTeachersAll / maxTeachers, 1) : 0;
   const batchPct = totalBatches ? Math.min(totalBatches / 10, 1) : 0;
-  const unassigned = students.filter(s => !s.batch_id).length;
+  const unassigned = countsQ.data?.unassigned ?? students.filter(s => !s.batch_id).length;
   const avgPerBatch = totalBatches ? Math.round(totalStudents / totalBatches) : 0;
 
   const matchesDept = (deptId?: string | null) => {
@@ -867,6 +808,19 @@ export default function InstituteDashboardPage() {
         <div className="text-center anim-in">
           <div className="w-10 h-10 rounded-full anim-spin mx-auto mb-4" style={{ border: "3px solid #F0F2F5", borderTopColor: "#FF7043" }} />
           <p className="text-slate-500 font-bold text-sm">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!institute && instLoadError) {
+    return (
+      <div className={`${rootClass} min-h-screen flex items-center justify-center px-4`}>
+        <style dangerouslySetInnerHTML={{ __html: customStyles }} />
+        <div role="alert" className="glass-overlay rounded-3xl p-10 max-w-md w-full text-center">
+          <h2 className="text-xl font-black text-slate-900 mb-2">Couldn't load your institute</h2>
+          <p className="text-sm text-slate-500 mb-6 font-medium">Check your internet connection and try again.</p>
+          <button className="btn-orange w-full py-3.5 rounded-xl" onClick={() => { resolveQ.refetch(); metaQ.refetch(); }}>Retry</button>
         </div>
       </div>
     );
@@ -983,6 +937,8 @@ export default function InstituteDashboardPage() {
               <button
                 key={item.id}
                 onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }}
+                onPointerEnter={PRELOAD[item.id]}
+                onFocus={PRELOAD[item.id]}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-[14px] transition-colors ${activeTab === item.id ? "active-nav-item" : "text-slate-500 hover:bg-slate-50 font-medium"}`}
               >
                 <item.icon />
@@ -1409,6 +1365,13 @@ export default function InstituteDashboardPage() {
                         >
                           📚 Batches ({(teacherBatchMap[t.user_id] || []).length})
                         </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); setAssignProctorFor({ memberId: t.id, userId: t.user_id, teacherName: teacherDisplayName(t), deptId: t.department_id || null }); }}
+                          className="text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors"
+                          title="Make this teacher the class teacher (proctor) of a section"
+                        >
+                          👤 Class teacher ({(sectionsOfProctor[t.id] || []).length})
+                        </button>
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${t.status === "active" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>{t.status}</span>
                         <button onClick={e => { e.stopPropagation(); removeTeacher(t.id, t.user_id); }} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                       </div>
@@ -1471,7 +1434,7 @@ export default function InstituteDashboardPage() {
                 <p className="text-[13px] text-slate-500 font-bold">{search || deptFilter || sectionFilter ? `${filteredStudents.length} match${filteredStudents.length !== 1 ? "es" : ""}` : `${totalStudents} total`}</p>
                 <div className="flex gap-2">
                   <button onClick={downloadAccessCodesCSV} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]" title="Download access codes CSV for parents">📥 Access Codes CSV</button>
-                  <button onClick={() => setShowBulkUpload(true)} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]"><Icons.Upload /> Bulk Upload</button>
+                  <button onClick={() => setShowBulkUpload(true)} onPointerEnter={loadBulkUpload} onFocus={loadBulkUpload} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]"><Icons.Upload /> Bulk Upload</button>
                   <button onClick={() => setShowAddStudent(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px]"><Icons.Plus /> Add Student</button>
                 </div>
               </div>
@@ -1583,15 +1546,17 @@ export default function InstituteDashboardPage() {
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-800">Attendance</h2>
                 <p className="text-sm text-slate-400 mt-1">Monitor teacher marking status and export monthly reports</p>
               </div>
-              <HODAttendanceDashboard
-                instituteId={institute.id}
-                isHod={isHod}
-                hodDeptId={hodDeptId}
-                teachers={teachers}
-                batches={batches}
-                departments={departments}
-                subjects={subjects}
-              />
+              <LazySection label="Attendance">
+                <HODAttendanceDashboard
+                  instituteId={institute.id}
+                  isHod={isHod}
+                  hodDeptId={hodDeptId}
+                  teachers={teachers}
+                  batches={batches}
+                  departments={departments}
+                  subjects={subjects}
+                />
+              </LazySection>
             </div>
           )}
 
@@ -1620,7 +1585,7 @@ export default function InstituteDashboardPage() {
 
               <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
                 <h3 className="text-[16px] font-bold text-slate-800 mb-4">Batch Settings</h3>
-                <BatchManagementPanel instituteId={institute.id} />
+                <LazySection label="Batch settings"><BatchManagementPanel instituteId={institute.id} /></LazySection>
               </div>
 
               <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
@@ -1888,15 +1853,87 @@ export default function InstituteDashboardPage() {
         </div>
       )}
 
+      {assignProctorFor && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAssignProctorFor(null)}>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Class teacher (proctor)</h3>
+              <button onClick={() => setAssignProctorFor(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
+            </div>
+            <p className="text-sm text-slate-500 mb-1">Teacher: <strong>{assignProctorFor.teacherName}</strong></p>
+            <p className="text-xs text-slate-400 mb-4">
+              The class teacher of a section sees every subject teacher of that class, their daily attendance and the
+              monthly record — and may correct marks up to 7 days back. One class teacher per section.
+            </p>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {[...sections]
+                .sort((a, b) => {
+                  // The teacher's own department first — that's almost always the one being assigned.
+                  const d = assignProctorFor.deptId;
+                  const rank = (s: Section) => (d && s.department_id === d ? 0 : 1);
+                  return rank(a) - rank(b) || a.name.localeCompare(b.name);
+                })
+                .map(s => {
+                  const holder = proctorOfSection[s.id];
+                  const isMine = holder === assignProctorFor.memberId;
+                  const holderMember = holder ? teachers.find(x => x.id === holder) : null;
+                  // A proctor owns a section, so the section is what identifies the class — show the
+                  // batches inside it, otherwise "ECE-2" vs "ECE 1" is guesswork.
+                  const secBatches = batches.filter(b => b.section_id === s.id);
+                  return (
+                    <div key={s.id}
+                      className={"flex items-center justify-between gap-2 p-3 rounded-xl border transition-colors " + (isMine ? "bg-teal-50 border-teal-200" : "bg-white border-slate-100 hover:border-slate-200")}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-800 truncate">{s.name}</p>
+                        <p className="text-xs text-slate-400 truncate">
+                          {s.department_id ? deptName(s.department_id) : "No department"}
+                          {secBatches.length > 0 ? ` · ${secBatches.map(b => b.name).join(", ")}` : " · no batches linked"}
+                          {holder && !isMine && ` · now: ${holderMember ? teacherDisplayName(holderMember) : "another teacher"}`}
+                        </p>
+                      </div>
+                      {isMine ? (
+                        <button
+                          disabled={proctorBusy}
+                          onClick={() => removeProctor(s)}
+                          className="px-4 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-50 shrink-0"
+                        >
+                          Remove
+                        </button>
+                      ) : (
+                        <button
+                          disabled={proctorBusy || !s.department_id}
+                          onClick={() => assignProctor(assignProctorFor.memberId, assignProctorFor.userId, s)}
+                          className="px-4 py-1.5 rounded-lg text-xs font-bold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 shrink-0"
+                          title={!s.department_id ? "This section has no department" : undefined}
+                        >
+                          {holder ? "Replace" : "Make class teacher"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              {sections.length === 0 && <p className="text-center text-slate-400 py-4">No sections yet — create one in the Departments tab.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showBulkUpload && (
+        <LazySection label="Bulk upload" fallback={
+          <div className="fixed inset-0 z-[200] bg-slate-900/40 flex items-center justify-center p-4">
+            <div className="w-full max-w-lg"><SectionSkeleton label="bulk upload" rows={5} /></div>
+          </div>
+        }>
         <BulkStudentUpload
           instituteId={institute.id}
           batches={batches}
           departments={departments}
           sections={sections}
-          onUploadComplete={fetchData}
+          onUploadComplete={() => invalidate("bulkUpload")}
           onClose={() => setShowBulkUpload(false)}
         />
+        </LazySection>
       )}
     </div>
   );

@@ -1,486 +1,343 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
-import {
-  Moon, Sun, Search, Upload, Eye, Download, X, FileText, Image as ImageIcon, FileType, Trash2,
-  ChevronDown, Grid as GridIcon, Rows, Star, StarOff, Tag, SlidersHorizontal, Keyboard,
-  Pencil, Link as LinkIcon, Plus, Palette,
-} from "lucide-react";
+// /notes — the student's written notes (this device, per user) + the shared class library (read-only).
+// Notes from flashcard cards live here too (lib/studentNotes). The old page uploaded files into ONE PUBLIC folder
+// per class + subject (everyone's files visible to everyone) and the live bucket has no upload policy, so uploads
+// failed; it also flipped the whole app into dark mode. Replaced. The 11 files already in the shared folders stay
+// visible below as "Class library".
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { ExternalLink, FileText, Library, NotebookPen, Pencil, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  LIMITS, createNote, deleteNote, filterNotes, migrateLegacyFlashcardNotes, updateNote, useNotesStore,
+  type Note, type NotesFilter, type NotesSort,
+} from "@/lib/studentNotes";
+import { decksFor, deckHref } from "@/lib/flashcardData";
+import { SUBJECTS_BY_CLASS } from "@/lib/practiceApi";
+import { HeroBanner, EYEBROW, ON_DARK_BTN } from "@/components/student/Banner";
+import { EmptyState, ErrorState, SectionHeader, SideCard, StudentLayout, useStudentShell } from "@/components/student/Parts";
+import { SubjectTile } from "@/components/student/subjectStyle";
+import { BTN_PRIMARY_MD, BTN_SECONDARY_MD, FOCUS_RING } from "@/components/student/ui";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
-/* -------------------------------------------------------------------------- */
-/*                               Notes (polished)                             */
-/* -------------------------------------------------------------------------- */
+const CLASSES = ["6", "7", "8", "9", "10", "11", "12"];
+const ALL_SUBJECTS = Array.from(new Set(Object.values(SUBJECTS_BY_CLASS).flat().concat(["Physics", "Chemistry", "Biology"]))).sort();
+const INPUT = "w-full rounded-lg border border-[#E5E7EB] bg-white px-3 text-[14px] text-[#1B1B1B] placeholder:text-[#6B7280] outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20";
+const when = (t: number) => new Date(t).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
-type Note = {
-  id: number;
-  name: string;
-  size: string; // human readable
-  date: string; // ISO
-  type: string; // mime
-  content: string; // public URL
-  subjectKey: string; // e.g. "11-Physics"
-  pinned?: boolean;
-  tags?: string[];
-  _path?: string; // storage object path (for delete/rename later)
-};
+/** cardKey "cls|subject|index|rawId" → link to that card in its deck */
+function cardLink(key: string): string | null {
+  const [cls, subject, idx, ...rest] = key.split("|");
+  const index = Number(idx);
+  const deck = decksFor(cls, subject).find((d) => d.index === index);
+  if (!deck) return null;
+  const pos = deck.cards.findIndex((c) => c.rawId === rest.join("|"));
+  return deckHref({ cls, subject, index, card: Math.max(0, pos) });
+}
 
-type ViewMode = "grid" | "list";
-type SortKey = "date" | "name" | "size";
+type Draft = { title: string; body: string; cls: string; subject: string; chapter: string; tags: string; pinned: boolean };
+const emptyDraft = (n?: Note | null): Draft => ({
+  title: n?.title ?? "", body: n?.body ?? "", cls: n?.cls ?? "", subject: n?.subject ?? "", chapter: n?.chapter ?? "",
+  tags: (n?.tags ?? []).join(", "), pinned: n?.pinned ?? false,
+});
 
-const SUBJECTS: Record<string, string[]> = {
+function Editor({ initial, onSave, onCancel }: { initial: Note | null; onSave: (d: Draft) => void; onCancel: () => void }) {
+  const [d, setD] = useState<Draft>(() => emptyDraft(initial));
+  const set = (k: keyof Draft, v: string | boolean) => setD((x) => ({ ...x, [k]: v }));
+  const empty = !d.title.trim() && !d.body.trim();
+  const submit = (e: FormEvent) => { e.preventDefault(); if (!empty) onSave(d); };
+  return (
+    <form onSubmit={submit} aria-label={initial ? "Edit note" : "New note"} className="rounded-xl border border-[#14243A] bg-white p-4 shadow-[0_0_0_1px_#14243A] sm:p-5">
+      <div className="grid gap-3">
+        <div>
+          <label htmlFor="note-title" className="text-[12.5px] font-semibold text-[#1B1B1B]">Title</label>
+          <input id="note-title" value={d.title} onChange={(e) => set("title", e.target.value)} maxLength={LIMITS.title} placeholder="e.g. Ohm's law in one line" className={cn(INPUT, "mt-1 h-10")} autoFocus />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label htmlFor="note-class" className="text-[12.5px] font-semibold text-[#1B1B1B]">Class</label>
+            <select id="note-class" value={d.cls} onChange={(e) => set("cls", e.target.value)} className={cn(INPUT, "mt-1 h-10")}>
+              <option value="">Any</option>
+              {CLASSES.map((c) => <option key={c} value={c}>Class {c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="note-subject" className="text-[12.5px] font-semibold text-[#1B1B1B]">Subject</label>
+            <input id="note-subject" list="note-subjects" value={d.subject} onChange={(e) => set("subject", e.target.value.slice(0, 60))} placeholder="e.g. Science" className={cn(INPUT, "mt-1 h-10")} />
+            <datalist id="note-subjects">{(d.cls ? SUBJECTS_BY_CLASS[d.cls] ?? [] : ALL_SUBJECTS).map((s) => <option key={s} value={s} />)}</datalist>
+          </div>
+          <div>
+            <label htmlFor="note-chapter" className="text-[12.5px] font-semibold text-[#1B1B1B]">Chapter <span className="font-normal text-[#5D6570]">(optional)</span></label>
+            <input id="note-chapter" value={d.chapter} onChange={(e) => set("chapter", e.target.value.slice(0, 120))} placeholder="e.g. Electricity" className={cn(INPUT, "mt-1 h-10")} />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-baseline justify-between">
+            <label htmlFor="note-body" className="text-[12.5px] font-semibold text-[#1B1B1B]">Note</label>
+            <span className="text-[11.5px] tabular-nums text-[#5D6570]">{d.body.length.toLocaleString("en-IN")} / {LIMITS.body.toLocaleString("en-IN")}</span>
+          </div>
+          <textarea id="note-body" value={d.body} onChange={(e) => set("body", e.target.value)} maxLength={LIMITS.body} rows={8}
+            placeholder="Write in your own words. Formulas, steps, doubts to ask — anything that helps you revise."
+            className={cn(INPUT, "mt-1 resize-y py-2 leading-relaxed")} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <label htmlFor="note-tags" className="text-[12.5px] font-semibold text-[#1B1B1B]">Tags <span className="font-normal text-[#5D6570]">(comma separated, up to {LIMITS.tags})</span></label>
+            <input id="note-tags" value={d.tags} onChange={(e) => set("tags", e.target.value)} placeholder="formula, revise, doubt" className={cn(INPUT, "mt-1 h-10")} />
+          </div>
+          <label className="inline-flex h-10 items-center gap-2 text-[13.5px] font-medium text-[#1B1B1B]">
+            <input type="checkbox" checked={d.pinned} onChange={(e) => set("pinned", e.target.checked)} className="h-4 w-4 accent-[#14243A]" /> Pin to top
+          </label>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <button type="button" onClick={onCancel} className={BTN_SECONDARY_MD}>Cancel</button>
+        <button type="submit" disabled={empty} className={cn(BTN_PRIMARY_MD, "disabled:opacity-50")}>{initial ? "Save changes" : "Save note"}</button>
+      </div>
+    </form>
+  );
+}
+
+function NoteCard({ n, onEdit, onDelete, onPin }: { n: Note; onEdit: () => void; onDelete: () => void; onPin: () => void }) {
+  const meta = [n.cls ? `Class ${n.cls}` : null, n.subject, n.chapter].filter(Boolean).join(" · ");
+  const link = n.cardKey ? cardLink(n.cardKey) : null;
+  return (
+    <article aria-labelledby={`note-${n.id}`} className={cn("flex h-full flex-col rounded-xl border bg-white p-4", n.pinned ? "border-[#F2D9A2]" : "border-[#E5E7EB]")}>
+      <div className="flex items-start gap-3">
+        {n.subject ? <SubjectTile subject={n.subject} size={36} /> : <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#F1F2F4] text-[#14243A]"><NotebookPen size={16} /></span>}
+        <div className="min-w-0 flex-1">
+          <h3 id={`note-${n.id}`} className="line-clamp-2 font-halenoir text-[15px] font-bold leading-snug text-[#1B1B1B]">{n.title}</h3>
+          <p className="mt-0.5 truncate text-[12px] text-[#5D6570]">{meta || "General"}</p>
+        </div>
+        <button type="button" onClick={onPin} aria-pressed={n.pinned} aria-label={n.pinned ? `Unpin ${n.title}` : `Pin ${n.title}`}
+          className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", n.pinned ? "bg-[#FFF8E8] text-[#7A5200]" : "text-[#5D6570] hover:bg-[#F5F6F8]", FOCUS_RING)}>
+          {n.pinned ? <Pin size={16} aria-hidden /> : <PinOff size={16} aria-hidden />}
+        </button>
+      </div>
+      {n.body && <p className="mt-3 line-clamp-5 whitespace-pre-line break-words text-[13.5px] leading-relaxed text-[#1B1B1B] [overflow-wrap:anywhere]">{n.body}</p>}
+      {n.tags.length > 0 && (
+        <ul className="mt-3 flex flex-wrap gap-1.5">
+          {n.tags.map((t) => <li key={t} className="rounded-md bg-[#F1F2F4] px-2 py-0.5 text-[11.5px] font-medium text-[#14243A]">#{t}</li>)}
+        </ul>
+      )}
+      <div className="mt-auto flex flex-wrap items-center gap-1 pt-3">
+        <span className="mr-auto text-[11.5px] text-[#5D6570]">Updated {when(n.updatedAt)}</span>
+        {link && <Link to={link} className={cn("inline-flex h-9 items-center gap-1 rounded-lg px-2 text-[12.5px] font-semibold text-[#1D4F99] hover:bg-[#EAF1FB]", FOCUS_RING)}>Open card</Link>}
+        <button type="button" onClick={onEdit} aria-label={`Edit ${n.title}`} className={cn("grid h-9 w-9 place-items-center rounded-lg text-[#1B1B1B] hover:bg-[#F5F6F8]", FOCUS_RING)}><Pencil size={15} aria-hidden /></button>
+        <button type="button" onClick={onDelete} aria-label={`Delete ${n.title}`} className={cn("grid h-9 w-9 place-items-center rounded-lg text-[#A92532] hover:bg-[#FBEBED]", FOCUS_RING)}><Trash2 size={15} aria-hidden /></button>
+      </div>
+    </article>
+  );
+}
+
+/* ─────────── shared class library (read-only; files already in the public bucket) ─────────── */
+const LIB_SUBJECTS: Record<string, string[]> = {
   "9": ["Maths", "Science", "English", "Social Science"],
   "10": ["Maths", "Science", "English", "Social Science"],
   "11": ["Physics", "Chemistry", "Maths", "Biology", "Computer Science", "English"],
   "12": ["Physics", "Chemistry", "Maths", "Biology", "Computer Science", "English"],
 };
 
-/* --------------------------------- Helpers -------------------------------- */
-const prettyType = (mime: string) => {
-  if (!mime) return "FILE";
-  if (mime.includes("pdf")) return "PDF";
-  if (mime.startsWith("image/")) return mime.split("/")[1]?.toUpperCase();
-  if (mime.includes("msword") || mime.includes("word")) return "DOC";
-  if (mime.includes("excel") || mime.includes("spreadsheet")) return "XLS";
-  if (mime.includes("text/markdown") || mime.endsWith("markdown")) return "MD";
-  if (mime.includes("text")) return "TXT";
-  return mime.split("/")[1]?.toUpperCase() || "FILE";
-};
-const iconFor = (mime: string) => {
-  if (mime.startsWith("image/")) return <ImageIcon className="h-5 w-5" />;
-  if (mime.includes("pdf")) return <FileText className="h-5 w-5" />;
-  return <FileType className="h-5 w-5" />;
-};
-const bytesToSize = (bytes?: number) => {
-  if (!bytes && bytes !== 0) return "—";
-  const k = 1024, dm = 1, sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-};
-const useLocalStorage = <T,>(key: string, initial: T) => {
-  const [state, setState] = useState<T>(() => {
-    try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as T) : initial; } catch { return initial; }
+function ClassLibrary() {
+  const [cls, setCls] = useState("10");
+  const [subject, setSubject] = useState("Science");
+  const prefix = `user-notes/${cls}-${subject}`;
+  const files = useQuery({
+    queryKey: ["notes-library", prefix],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.storage.from("notes").list(prefix, { limit: 100, sortBy: { column: "created_at", order: "desc" } });
+      if (error) throw error;
+      return (data ?? []).filter((f) => f.name && !f.name.startsWith(".")).map((f) => ({
+        name: f.name.replace(/^\d{10,}-/, ""),
+        url: supabase.storage.from("notes").getPublicUrl(`${prefix}/${f.name}`).data.publicUrl,
+        size: (f.metadata as { size?: number } | null)?.size ?? null,
+        at: f.created_at ? Date.parse(f.created_at) : null,
+      }));
+    },
   });
-  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)); } catch {} }, [key, state]);
-  return [state, setState] as const;
-};
-
-/* ---------------------------- Accent / Theme map --------------------------- */
-const ACCENTS = {
-  indigo: { grad: "from-indigo-600 via-fuchsia-600 to-sky-500", solid: "bg-indigo-600", soft: "from-indigo-500 to-fuchsia-500" },
-  emerald:{ grad: "from-emerald-600 via-teal-500 to-cyan-500", solid: "bg-emerald-600", soft: "from-emerald-500 to-teal-500" },
-  amber:  { grad: "from-amber-600 via-orange-500 to-rose-500",  solid: "bg-amber-600",  soft: "from-amber-500 to-orange-500" },
-  rose:   { grad: "from-rose-600 via-pink-500 to-violet-500",   solid: "bg-rose-600",   soft: "from-rose-500 to-pink-500" },
-} as const;
-type AccentKey = keyof typeof ACCENTS;
-
-/* ------------------------------- Tiny Components --------------------------- */
-function Kbd({ children }: { children: string }) {
   return (
-    <span className="inline-flex items-center rounded-md border border-neutral-300 dark:border-neutral-700 bg-white/70 dark:bg-neutral-900/60 px-1.5 py-0.5 text-[10px] font-medium text-neutral-600 dark:text-neutral-300">
-      {children}
-    </span>
-  );
-}
-function TagChip({ label, onRemove }: { label: string; onRemove?: () => void }) {
-  return (
-    <motion.span layout className="inline-flex items-center gap-1 rounded-full bg-neutral-200/70 dark:bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-700 dark:text-neutral-200">
-      #{label}
-      {onRemove && (<button onClick={onRemove} className="ml-0.5 rounded hover:bg-neutral-300/60 dark:hover:bg-neutral-700/60 px-1">×</button>)}
-    </motion.span>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*                                Main Component                              */
-/* -------------------------------------------------------------------------- */
-
-export default function NotesSection() {
-  const [darkMode, setDarkMode] = useLocalStorage<boolean>("notes:dark", false);
-  const [accent, setAccent] = useLocalStorage<AccentKey>("notes:accent", "indigo");
-  const [selectedClass, setSelectedClass] = useLocalStorage<string>("notes:class", "");
-  const [selectedSubject, setSelectedSubject] = useLocalStorage<string>("notes:subject", "");
-  const [searchQuery, setSearchQuery] = useLocalStorage<string>("notes:q", "");
-  const [layout, setLayout] = useLocalStorage<ViewMode>("notes:layout", "grid");
-  const [notes, setNotes] = useLocalStorage<Note[]>("notes:data", []);
-  const [file, setFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [preview, setPreview] = useState<Note | null>(null);
-  const [showPreview, setShowPreview] = useState<boolean>(false);
-  const [sortKey, setSortKey] = useLocalStorage<SortKey>("notes:sort", "date");
-  const [activeTags, setActiveTags] = useLocalStorage<string[]>("notes:activeTags", []);
-  const [renameId, setRenameId] = useState<number | null>(null);
-  const [clipboardInfo, setClipboardInfo] = useState<string | null>(null);
-  const [tagInput, setTagInput] = useState("");
-
-  const dropRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { document.documentElement.classList.toggle("dark", darkMode); }, [darkMode]);
-
-  /* -------------------------------- Drag&Drop -------------------------------- */
-  useEffect(() => {
-    const el = dropRef.current; if (!el) return;
-    const onOver = (e: DragEvent) => { e.preventDefault(); el.classList.add("ring-2", "ring-purple-500"); };
-    const onLeave = () => el.classList.remove("ring-2", "ring-purple-500");
-    const onDrop = (e: DragEvent) => { e.preventDefault(); onLeave(); if (e.dataTransfer?.files?.[0]) setFile(e.dataTransfer.files[0]); };
-    el.addEventListener("dragover", onOver); el.addEventListener("dragleave", onLeave); el.addEventListener("drop", onDrop);
-    return () => { el.removeEventListener("dragover", onOver); el.removeEventListener("dragleave", onLeave); el.removeEventListener("drop", onDrop); };
-  }, []);
-
-  /* ------------------------------- Keyboard UX ------------------------------ */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); }
-      if (e.key === "Escape") { setShowPreview(false); setRenameId(null); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  /* --------------------------- Supabase: helpers ---------------------------- */
-  const bucket = "notes";
-  const currentPrefix = selectedClass && selectedSubject ? `user-notes/${selectedClass}-${selectedSubject}` : "";
-
-  const getPublicUrl = (path: string) => {
-    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-    return data.publicUrl;
-  };
-
-  const fetchNotes = async () => {
-    if (!currentPrefix) { setNotes([]); return; }
-    const { data, error } = await supabase.storage.from(bucket).list(currentPrefix, {
-      limit: 200,
-      sortBy: { column: "name", order: "asc" },
-    });
-    if (error) { console.error("Fetch error:", error.message); setNotes([]); return; }
-    const mapped: Note[] = (data || []).map((obj) => {
-      const path = `${currentPrefix}/${obj.name}`;
-      const url = getPublicUrl(path);
-      const updated = (obj.updated_at ?? new Date().toISOString());
-      const size = bytesToSize(obj.metadata?.size as number | undefined);
-      const mimeGuess = obj.metadata?.mimetype || (obj.name.toLowerCase().endsWith(".pdf") ? "application/pdf" :
-                       obj.name.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? `image/${obj.name.split(".").pop()}` : "application/octet-stream");
-      return {
-        id: (updated ? new Date(updated).getTime() : Date.now()) + Math.floor(Math.random() * 1000),
-        name: obj.name,
-        size,
-        date: updated,
-        type: String(mimeGuess),
-        content: url,
-        subjectKey: `${selectedClass}-${selectedSubject}`,
-        tags: [],
-        _path: path,
-      };
-    });
-    // keep pinned tags etc. if same name exists
-    setNotes((prev) => {
-      const byName = new Map(prev.map((n) => [n.name, n]));
-      return mapped.map((m) => (byName.has(m.name) ? { ...m, pinned: byName.get(m.name)?.pinned, tags: byName.get(m.name)?.tags || [] } : m));
-    });
-  };
-
-  useEffect(() => { fetchNotes(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [selectedClass, selectedSubject]);
-
-  /* -------------------------------- Uploading -------------------------------- */
-  const handleUpload = async () => {
-    if (!selectedClass || !selectedSubject || !file) return alert("⚠️ Select class, subject and a file.");
-    setUploadProgress(5);
-    const safeName = file.name.replace(/\s+/g, "_");
-    const path = `${currentPrefix}/${Date.now()}-${safeName}`;
-    const { data, error } = await supabase.storage.from(bucket).upload(path, file, { cacheControl: "3600", upsert: false });
-    if (error) { console.error("Upload error:", error.message); setUploadProgress(0); return; }
-    setUploadProgress(90);
-    const publicUrl = getPublicUrl(data.path);
-    const newNote: Note = {
-      id: Date.now(),
-      name: safeName,
-      size: bytesToSize(file.size),
-      date: new Date().toISOString(),
-      type: file.type || "application/octet-stream",
-      content: publicUrl,
-      subjectKey: `${selectedClass}-${selectedSubject}`,
-      tags: [],
-      _path: data.path,
-    };
-    setNotes((prev) => [newNote, ...prev]);
-    setUploadProgress(100);
-    setTimeout(() => setUploadProgress(0), 600);
-    setFile(null);
-  };
-
-  const handleView = (note: Note) => { setPreview(note); setShowPreview(true); };
-
-  const handleDownload = (note: Note) => {
-    const a = document.createElement("a");
-    a.href = note.content;
-    a.download = note.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handleDelete = async (note: Note) => {
-    if (!note._path) { setNotes((prev) => prev.filter((n) => n.id !== note.id)); return; }
-    const { error } = await supabase.storage.from(bucket).remove([note._path]);
-    if (error) { console.error("Delete error:", error.message); return; }
-    setNotes((prev) => prev.filter((n) => n.id !== note.id));
-    if (preview?.id === note.id) setShowPreview(false);
-  };
-
-  const togglePin = (note: Note) => setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, pinned: !n.pinned } : n)));
-  const addTagToNote = (note: Note, tag: string) =>
-    setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, tags: Array.from(new Set([...(n.tags || []), tag])) } : n)));
-  const removeTagFromNote = (note: Note, tag: string) =>
-    setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, tags: (n.tags || []).filter((t) => t !== tag) } : n)));
-  const clearFilters = () => { setSelectedClass(""); setSelectedSubject(""); setSearchQuery(""); setActiveTags([]); };
-
-  /* --------------------------------- Derived -------------------------------- */
-  const filtered = useMemo(() => {
-    const key = selectedClass && selectedSubject ? `${selectedClass}-${selectedSubject}` : null;
-    const list = key ? notes.filter((n) => n.subjectKey === key) : [];
-    const q = searchQuery.trim().toLowerCase();
-    const byQuery = q ? list.filter((n) => n.name.toLowerCase().includes(q) || (n.tags || []).some((t) => t.toLowerCase().includes(q))) : list;
-    const byTags = activeTags.length ? byQuery.filter((n) => activeTags.every((t) => (n.tags || []).includes(t))) : byQuery;
-    const sorted = [...byTags].sort((a, b) => {
-      if (sortKey === "name") return a.name.localeCompare(b.name);
-      if (sortKey === "size") return parseFloat(b.size) - parseFloat(a.size);
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-    sorted.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-    return sorted;
-  }, [notes, selectedClass, selectedSubject, searchQuery, sortKey, activeTags]);
-
-  const allTags = useMemo(() => Array.from(new Set(notes.flatMap((n) => n.tags || []))).sort(), [notes]);
-
-  /* ---------------------------------- JSX ----------------------------------- */
-  return (
-    <div className={`relative min-h-screen p-6 transition-colors duration-300 ${darkMode ? "dark bg-neutral-950" : "bg-gradient-to-br from-slate-50 to-indigo-50"}`}>
-      <motion.div className={`pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br ${ACCENTS[accent].solid}`} animate={{ y: [0, 15, 0], opacity: [0.25, 0.35, 0.25] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }} />
-      <motion.div className={`pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full blur-3xl opacity-30 bg-gradient-to-br ${ACCENTS[accent].solid}`} animate={{ y: [0, -12, 0], opacity: [0.25, 0.35, 0.25] }} transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }} />
-
-      <AnimatePresence>
-        {showPreview && preview && (
-          <motion.div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl bg-white dark:bg-neutral-900" initial={{ y: 20, scale: 0.98, opacity: 0 }} animate={{ y: 0, scale: 1, opacity: 1 }} exit={{ y: 20, scale: 0.98, opacity: 0 }}>
-              <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-200 dark:border-neutral-800">
-                <div className="flex items-center gap-2 font-medium text-neutral-800 dark:text-neutral-100 truncate">
-                  {iconFor(preview.type)} <span className="truncate">{preview.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => handleDownload(preview)} className="px-3 py-1.5 text-sm rounded-lg bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 hover:opacity-90">Download</button>
-                  <button onClick={() => setShowPreview(false)} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"><X className="h-5 w-5" /></button>
-                </div>
-              </div>
-              <div className="p-4 overflow-auto max-h-[78vh]">
-                {preview.type.startsWith("image/") ? (
-                  <img src={preview.content} alt={preview.name} className="max-w-full h-auto mx-auto rounded-lg" />
-                ) : preview.type.includes("pdf") ? (
-                  <iframe title="preview" src={preview.content} className="w-full h-[72vh] rounded-lg" />
-                ) : (
-                  <div className="p-6 rounded-xl bg-neutral-50 dark:bg-neutral-800 text-center text-neutral-500 dark:text-neutral-400">Preview not available for this file type. Download to view.</div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="max-w-7xl mx-auto relative">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
-          <div>
-            <h1 className={`text-5xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r ${ACCENTS[accent].grad}`}>Notes</h1>
-            <div className="mt-2 text-sm text-neutral-600 dark:text-neutral-300 flex items-center gap-2">
-              <span>Classes</span><span>›</span><span>{selectedClass || "—"}</span><span>›</span><span>{selectedSubject || "—"}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-neutral-800 p-1">
-              {(Object.keys(ACCENTS) as AccentKey[]).map((k) => (
-                <button key={k} onClick={() => setAccent(k)} className={`h-7 w-7 rounded-lg ${ACCENTS[k].solid} ${accent === k ? "ring-2 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 ring-white/80" : "opacity-80"}`} title={`Accent: ${k}`} />
-              ))}
-            </div>
-            <button onClick={() => setLayout((l) => (l === "grid" ? "list" : "grid"))} className="rounded-xl border border-neutral-200 dark:border-neutral-800 px-3 py-2 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Toggle layout">
-              {layout === "grid" ? <Rows className="h-5 w-5" /> : <GridIcon className="h-5 w-5" />}
-            </button>
-            <button onClick={() => setDarkMode(!darkMode)} className="rounded-xl border border-neutral-200 dark:border-neutral-800 px-3 py-2 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Toggle theme">
-              {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border-0 shadow-lg bg-white dark:bg-neutral-900">
-          <div className="p-6 space-y-5">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Upload New Notes</h2>
-              {(selectedClass || selectedSubject || searchQuery || activeTags.length) && (
-                <button onClick={clearFilters} className="text-sm text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200">Clear filters</button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Class</label>
-                <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="mt-1 w-full py-2 px-3 rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100">
-                  <option value="">Select Class</option>
-                  {[9, 10, 11, 12].map((c) => (<option key={c} value={String(c)}>Class {c}</option>))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Subject</label>
-                <select value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)} disabled={!selectedClass} className="mt-1 w-full py-2 px-3 rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-100 disabled:opacity-60">
-                  <option value="">Select Subject</option>
-                  {selectedClass && SUBJECTS[selectedClass]?.map((s) => (<option key={s} value={s}>{s}</option>))}
-                </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">File</label>
-                <div ref={dropRef} className="mt-1 flex items-center gap-3 rounded-2xl border-2 border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-4 py-3">
-                  <input id="notes-file-input" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="block w-full text-sm text-neutral-600 dark:text-neutral-300 file:mr-4 file:rounded-lg file:border-0 file:bg-neutral-900 file:text-white dark:file:bg-white dark:file:text-neutral-900 file:px-3 file:py-2" />
-                  <button onClick={handleUpload} disabled={!selectedClass || !selectedSubject || !file} className={`inline-flex items-center gap-2 rounded-xl bg-gradient-to-r ${ACCENTS[accent].soft} px-4 py-2 text-white disabled:opacity-60`}>
-                    <Upload className="h-4 w-4" /> Upload
-                  </button>
-                </div>
-                {uploadProgress > 0 && uploadProgress < 100 && (
-                  <div className="mt-2">
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
-                      <div className={`h-full bg-gradient-to-r ${ACCENTS[accent].soft} transition-all`} style={{ width: `${uploadProgress}%` }} />
-                    </div>
-                    <p className="mt-1 text-xs text-neutral-500">Uploading… {Math.round(uploadProgress)}%</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-              <div className="relative md:col-span-5">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-                <input ref={searchRef} placeholder="Search notes… (press /)" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 pl-9 pr-3 py-2 text-neutral-800 dark:text-neutral-100" />
-              </div>
-              <div className="md:col-span-3 flex items-center gap-2">
-                <SlidersHorizontal className="h-4 w-4 text-neutral-400" />
-                <span className="text-xs text-neutral-500">Sort</span>
-                <div className="relative">
-                  <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} className="appearance-none rounded-xl border bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 px-3 py-2 pr-8 text-sm">
-                    <option value="date">Newest</option>
-                    <option value="name">Name</option>
-                    <option value="size">Size</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-                </div>
-              </div>
-
-              <div className="md:col-span-4">
-                <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 px-3 py-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-neutral-500"><Tag className="h-4 w-4" /> Tags</div>
-                    <div className="flex items-center gap-2">
-                      <input value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => {
-                        if (e.key === "Enter" && tagInput.trim()) { const v = tagInput.trim(); setActiveTags((prev) => Array.from(new Set([...prev, v]))); setTagInput(""); }
-                      }} placeholder="Add filter tag" className="w-32 rounded-md bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-xs" />
-                      <button onClick={() => tagInput.trim() && (setActiveTags((p) => Array.from(new Set([...p, tagInput.trim()]))), setTagInput(""))} className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-white bg-gradient-to-r ${ACCENTS[accent].soft}`}>
-                        <Plus className="h-3.5 w-3.5" /> Add
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <AnimatePresence>
-                      {activeTags.map((t) => (
-                        <motion.div key={t} initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}>
-                          <TagChip label={t} onRemove={() => setActiveTags((arr) => arr.filter((x) => x !== t))} />
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                    {!activeTags.length && allTags.length > 0 && (<div className="text-xs text-neutral-500">Quick picks:</div>)}
-                    {activeTags.length === 0 && allTags.slice(0, 6).map((t) => (
-                      <button key={t} onClick={() => setActiveTags((arr) => Array.from(new Set([...arr, t])))} className="rounded-full bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-700">#{t}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {selectedClass && selectedSubject ? (
-          <div className="mt-8">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-neutral-800 dark:text-neutral-100">
-                Notes for Class {selectedClass} – {selectedSubject}
-                <span className="ml-2 align-middle text-sm text-neutral-500">({filtered.length} files)</span>
-              </h2>
-              {clipboardInfo && <span className="text-xs text-emerald-600 dark:text-emerald-400">{clipboardInfo}</span>}
-            </div>
-
-            {filtered.length ? (
-              <LayoutGroup>
-                <div className={layout === "grid" ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
-                  {filtered.map((note) => (
-                    <motion.div key={note.id} layout whileHover={{ y: -2 }} className={`group rounded-2xl border ${layout === "grid" ? "p-4" : "p-3"} bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800`}>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-200/60 dark:bg-neutral-700/60">
-                            {iconFor(note.type)}
-                          </div>
-                          <div className="min-w-0">
-                            {renameId === note.id ? (
-                              <input autoFocus defaultValue={note.name} onBlur={(e) => { setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, name: e.target.value } : n))); setRenameId(null); }} className="w-full rounded-md bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-sm" />
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <p className="truncate font-medium text-neutral-800 dark:text-neutral-100 max-w-[16rem]">{note.name}</p>
-                                {note.pinned && <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px]">PINNED</span>}
-                              </div>
-                            )}
-                            <p className="text-xs text-neutral-500">{prettyType(note.type)} · {note.size} · {new Date(note.date).toLocaleDateString()}</p>
-                            {note.tags && note.tags.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {note.tags.map((t) => (<TagChip key={t} label={t} onRemove={() => removeTagFromNote(note, t)} />))}
-                              </div>
-                            )}
-                            <div className="mt-2 flex items-center gap-2">
-                              <input
-                                placeholder="Add tag"
-                                className="w-28 rounded-md bg-neutral-100 dark:bg-neutral-800 px-2 py-1 text-xs"
-                                onKeyDown={(e) => {
-                                  const v = (e.target as HTMLInputElement).value.trim();
-                                  if (e.key === "Enter" && v) { addTagToNote(note, v); (e.target as HTMLInputElement).value = ""; }
-                                }}
-                              />
-                              <button onClick={() => setRenameId(note.id)} className="text-xs rounded-md px-2 py-1 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700"><Pencil className="h-3.5 w-3.5 inline" /> Rename</button>
-                              <button onClick={() => navigator.clipboard.writeText(note.content).then(() => { setClipboardInfo("Copied note link"); setTimeout(() => setClipboardInfo(null), 1200); })} className="text-xs rounded-md px-2 py-1 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700"><LinkIcon className="h-3.5 w-3.5 inline" /> Copy link</button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          <button title="Pin" onClick={() => togglePin(note)} className="rounded-lg p-2 hover:bg-neutral-200/60 dark:hover:bg-neutral-800">{note.pinned ? <Star className="h-4 w-4" /> : <StarOff className="h-4 w-4" />}</button>
-                          <button title="Preview" onClick={() => handleView(note)} className="rounded-lg p-2 hover:bg-neutral-200/60 dark:hover:bg-neutral-800"><Eye className="h-4 w-4" /></button>
-                          <button title="Download" onClick={() => handleDownload(note)} className="rounded-lg p-2 hover:bg-neutral-200/60 dark:hover:bg-neutral-800"><Download className="h-4 w-4" /></button>
-                          <button title="Delete" onClick={() => handleDelete(note)} className="rounded-lg p-2 hover:bg-red-100/70 dark:hover:bg-red-900/30"><Trash2 className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </LayoutGroup>
-            ) : (
-              <div className="rounded-2xl border-0 shadow-md bg-white dark:bg-neutral-900 p-10 text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800"><FileText className="h-8 w-8 text-neutral-400" /></div>
-                <h3 className="text-lg font-medium text-neutral-800 dark:text-neutral-100">No notes found</h3>
-                <p className="mt-1 text-neutral-500 dark:text-neutral-400">{searchQuery ? "Try a different search term" : "Upload the first note for this subject!"}</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="mt-10 grid place-items-center">
-            <div className="text-center">
-              <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br ${ACCENTS[accent].soft} text-white`}><Upload className="h-8 w-8" /></div>
-              <p className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">Choose a class & subject to begin</p>
-              <p className="text-neutral-500 dark:text-neutral-400">Then drag and drop a file or click Upload.</p>
-            </div>
-          </div>
-        )}
+    <section aria-labelledby="library-title" className="mt-10">
+      <SectionHeader id="library-title" title="Class library" dot="#087E8B" />
+      <p className="-mt-1 mb-3 text-[12.5px] text-[#5D6570]">Files shared for everyone in a class. Read-only.</p>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <label className="sr-only" htmlFor="lib-class">Library class</label>
+        <select id="lib-class" value={cls} onChange={(e) => { setCls(e.target.value); setSubject(LIB_SUBJECTS[e.target.value][0]); }} className={cn(INPUT, "h-10 w-auto")}>
+          {Object.keys(LIB_SUBJECTS).map((c) => <option key={c} value={c}>Class {c}</option>)}
+        </select>
+        <label className="sr-only" htmlFor="lib-subject">Library subject</label>
+        <select id="lib-subject" value={subject} onChange={(e) => setSubject(e.target.value)} className={cn(INPUT, "h-10 w-auto")}>
+          {LIB_SUBJECTS[cls].map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
-    </div>
+      {files.isPending ? (
+        <ul aria-hidden className="grid gap-2">{[0, 1].map((i) => <li key={i} className="h-14 list-none rounded-xl border border-[#E5E7EB] bg-white" />)}</ul>
+      ) : files.isError ? (
+        <ErrorState message="The class library couldn't load." onRetry={() => files.refetch()} />
+      ) : files.data.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-[#D5D9DF] bg-[#FAFBFC] px-4 py-5 text-center text-[13px] text-[#5D6570]">No shared files for Class {cls} {subject} yet.</p>
+      ) : (
+        <ul className="divide-y divide-[#E5E7EB] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+          {files.data.map((f) => (
+            <li key={f.url} className="flex items-center gap-3 px-4 py-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#E6F4F5] text-[#087E8B]"><FileText size={16} aria-hidden /></span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13.5px] font-semibold text-[#1B1B1B]" title={f.name}>{f.name}</p>
+                <p className="text-[12px] text-[#5D6570]">{[f.size != null ? `${Math.max(1, Math.round(f.size / 1024))} KB` : null, f.at ? when(f.at) : null].filter(Boolean).join(" · ")}</p>
+              </div>
+              <a href={f.url} target="_blank" rel="noopener noreferrer" className={cn(BTN_SECONDARY_MD, "h-9")}>Open <ExternalLink size={14} aria-hidden /></a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+export default function NotesPage() {
+  const { uid } = useStudentShell();
+  const store = useNotesStore(uid);
+  const [params, setParams] = useSearchParams();
+  useEffect(() => { migrateLegacyFlashcardNotes(uid); }, [uid]);
+  const filter = (["all", "pinned", "flashcards"].includes(params.get("filter") ?? "") ? params.get("filter") : "all") as NotesFilter;
+  const [q, setQ] = useState("");
+  const [subject, setSubject] = useState("");
+  const [sort, setSort] = useState<NotesSort>("updated");
+  const [editing, setEditing] = useState<Note | "new" | null>(null);
+  const [confirm, setConfirm] = useState<Note | null>(null);
+  const [limitHit, setLimitHit] = useState(false);
+
+  const all = useMemo(() => Object.values(store.notes), [store]);
+  const list = useMemo(() => filterNotes(all, { q, filter, subject: subject || null, sort }), [all, q, filter, subject, sort]);
+  const subjects = useMemo(() => Array.from(new Set(all.map((n) => n.subject).filter((s): s is string => !!s))).sort(), [all]);
+  const counts = { all: all.length, pinned: all.filter((n) => n.pinned).length, flashcards: all.filter((n) => n.cardKey || n.tags.includes("flashcards")).length };
+  const setFilter = (f: NotesFilter) => { const p = new URLSearchParams(params); if (f === "all") p.delete("filter"); else p.set("filter", f); setParams(p, { replace: true }); };
+
+  const save = (d: Draft) => {
+    const payload = { title: d.title, body: d.body, cls: d.cls || null, subject: d.subject.trim() || null, chapter: d.chapter.trim() || null,
+      tags: d.tags.split(","), pinned: d.pinned };
+    if (editing === "new") {
+      if (!createNote(uid, payload)) { setLimitHit(true); return; }
+    } else if (editing) updateNote(uid, editing.id, payload);
+    setEditing(null);
+  };
+
+  const sidebar = (
+    <>
+      <SideCard title="Your notes" icon={<NotebookPen size={16} aria-hidden />} labelledBy="notes-count">
+        <dl className="grid grid-cols-3 gap-2 text-center">
+          {[["All", counts.all], ["Pinned", counts.pinned], ["Cards", counts.flashcards]].map(([l, v]) => (
+            <div key={l as string} className="rounded-lg bg-[#F5F6F8] px-2 py-2">
+              <dt className="text-[11px] font-medium text-[#5D6570]">{l}</dt>
+              <dd className="font-halenoir text-[18px] font-extrabold tabular-nums text-[#1B1B1B]">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-2 text-[11.5px] text-[#5D6570]">Saved on this device, for your account only.</p>
+      </SideCard>
+      <SideCard title="Good notes" icon={<Library size={16} aria-hidden />} labelledBy="notes-tips">
+        <ul className="space-y-2 text-[12.5px] leading-relaxed text-[#5D6570]">
+          <li>Write it <b className="text-[#1B1B1B]">in your own words</b> — that's what makes it stick.</li>
+          <li>Add the <b className="text-[#1B1B1B]">subject and chapter</b> so you can find it before the test.</li>
+          <li>Notes you write on a flashcard show up here with a link back to the card.</li>
+        </ul>
+        <Link to="/dashboard/flashcards" className={cn("mt-2 inline-flex h-9 items-center text-[13px] font-semibold text-[#A92532] hover:underline", FOCUS_RING)}>Open flashcards</Link>
+      </SideCard>
+    </>
+  );
+
+  return (
+    <StudentLayout title="My notes" sidebar={sidebar}>
+      <HeroBanner tone="navy" labelledBy="notes-hero"
+        aside={<button type="button" onClick={() => { setLimitHit(false); setEditing("new"); }} className={ON_DARK_BTN}><Plus size={15} aria-hidden /> New note</button>}>
+        <span className={cn(EYEBROW, "bg-white/15 text-white")}><NotebookPen size={12} aria-hidden /> My notes</span>
+        <h1 id="notes-hero" className="mt-2.5 font-halenoir text-[26px] font-extrabold leading-tight md:text-[32px]">Your notes, in one place</h1>
+        <p className="mt-1.5 max-w-[52ch] text-[14px] text-white">Write notes by subject and chapter — the notes you keep on flashcards are here too.</p>
+      </HeroBanner>
+
+      {editing && (
+        <div className="mt-6">
+          {limitHit && <p role="alert" className="mb-2 rounded-lg bg-[#FBEBED] px-3 py-2 text-[13px] font-semibold text-[#A92532]">You've reached {LIMITS.notes} notes on this device. Delete a few to add more.</p>}
+          <Editor key={editing === "new" ? "new" : editing.id} initial={editing === "new" ? null : editing} onSave={save} onCancel={() => setEditing(null)} />
+        </div>
+      )}
+
+      <section aria-labelledby="notes-list-title" className="mt-7">
+        <SectionHeader id="notes-list-title" title="Notes" count={list.length} dot="#14243A" />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div role="tablist" aria-label="Show" className="flex gap-5 border-b border-[#E5E7EB]">
+            {([["all", "All"], ["pinned", "Pinned"], ["flashcards", "From flashcards"]] as const).map(([f, label]) => (
+              <button key={f} role="tab" type="button" aria-selected={filter === f} onClick={() => setFilter(f)}
+                className={cn("relative -mb-px inline-flex h-11 items-center gap-1.5 whitespace-nowrap border-b-2 text-[14px] font-semibold",
+                  filter === f ? "border-[#A92532] text-[#1B1B1B]" : "border-transparent text-[#5D6570] hover:text-[#1B1B1B]", FOCUS_RING)}>
+                {label}<span className="rounded-full bg-[#F1F2F4] px-1.5 text-[11.5px] tabular-nums text-[#5D6570]">{counts[f]}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-none">
+              <label htmlFor="notes-search" className="sr-only">Search notes</label>
+              <Search size={15} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5D6570]" />
+              <input id="notes-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search notes" maxLength={80}
+                className="h-10 w-full rounded-lg border border-[#E5E7EB] bg-[#F5F6F8] pl-9 pr-3 text-[14px] text-[#1B1B1B] placeholder:text-[#6B7280] outline-none focus:border-[#246BCE] focus:bg-white focus:ring-2 focus:ring-[#246BCE]/20" />
+            </div>
+            {subjects.length > 0 && (
+              <>
+                <label htmlFor="notes-subject" className="sr-only">Subject</label>
+                <select id="notes-subject" value={subject} onChange={(e) => setSubject(e.target.value)} className={cn(INPUT, "h-10 w-auto")}>
+                  <option value="">All subjects</option>
+                  {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </>
+            )}
+            <label htmlFor="notes-sort" className="sr-only">Sort</label>
+            <select id="notes-sort" value={sort} onChange={(e) => setSort(e.target.value as NotesSort)} className={cn(INPUT, "h-10 w-auto")}>
+              <option value="updated">Recently updated</option>
+              <option value="title">Title A–Z</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          {all.length === 0 ? (
+            <EmptyState icon={<NotebookPen size={24} aria-hidden />} title="No notes yet"
+              body="Write your first note, or add one to any flashcard — it will show up here."
+              action={<button type="button" onClick={() => setEditing("new")} className={BTN_PRIMARY_MD}><Plus size={14} aria-hidden /> Write a note</button>} />
+          ) : list.length === 0 ? (
+            <EmptyState icon={<Search size={24} aria-hidden />} title="No notes match"
+              action={<button type="button" onClick={() => { setQ(""); setSubject(""); setFilter("all"); }} className={BTN_PRIMARY_MD}>Clear filters</button>} />
+          ) : (
+            <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {list.map((n) => (
+                <li key={n.id} className="list-none">
+                  <NoteCard n={n} onEdit={() => { setLimitHit(false); setEditing(n); window.scrollTo({ top: 0 }); }}
+                    onDelete={() => setConfirm(n)} onPin={() => updateNote(uid, n.id, { pinned: !n.pinned }, n.updatedAt)} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <ClassLibrary />
+
+      <AlertDialog open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+            <AlertDialogDescription>"{confirm?.title}" will be removed from this device. This can't be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (confirm) { deleteNote(uid, confirm.id); if (editing !== "new" && editing?.id === confirm.id) setEditing(null); } setConfirm(null); }}
+              className="bg-[#A92532] hover:bg-[#8F1F2A]">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </StudentLayout>
   );
 }

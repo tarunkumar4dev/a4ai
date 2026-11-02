@@ -2,6 +2,8 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
+import { useAccess } from "@/context/AccessProvider";
+import { resolveHomeRoute } from "@/lib/homeRoute";
 import { supabase } from "@/lib/supabaseClient";
 import { Search, Menu, X, ArrowRight, User, Settings, LogOut, ChevronRight } from "lucide-react";
 
@@ -22,7 +24,9 @@ interface SuggestionItem {
 
 export default function Navbar() {
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, role } = useAuth();
+  const { access } = useAccess();
+  const home = resolveHomeRoute(access, role); // students → /student/dashboard, staff → their dashboard
   const loggedIn = !!session;
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -103,7 +107,7 @@ export default function Navbar() {
 
   const gotoSignIn = () => navigate("/login");
   const gotoSignUp = () => navigate("/signup");
-  const gotoDashboard = () => navigate("/dashboard");
+  const gotoDashboard = () => navigate(home);
 
   return (
     <>
@@ -290,7 +294,7 @@ export default function Navbar() {
                         onMouseLeave={() => setProfileOpen(false)}
                       >
                         <DropItem to="/dashboard/settings" onClick={() => setProfileOpen(false)}>Settings</DropItem>
-                        <DropItem to="/dashboard" onClick={() => setProfileOpen(false)}>My Dashboard</DropItem>
+                        <DropItem to={home} onClick={() => setProfileOpen(false)}>My Dashboard</DropItem>
                         <button
                           onClick={handleSignOut}
                           className="w-full text-left rounded-lg px-3 py-2 text-sm font-medium text-[#1B1B1B] hover:bg-[#F7F8FA] cursor-pointer"

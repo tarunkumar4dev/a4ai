@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { useMyScope } from "@/hooks/useMyScope";
 import { openWhatsApp as openWa } from "@/lib/whatsapp";
+import { indianMobile10, maskParentPhone, toStoredParentPhone } from "@/lib/parentNotify";
 import {
   Users,
   Search,
@@ -53,6 +54,7 @@ export interface StudentRecord {
   class_level?: string | null;
   batch_id?: string | null;
   batch_name?: string;
+  section_id?: string | null;
   parent_name?: string | null;
   parent_phone?: string | null;
   phone?: string | null;
@@ -100,6 +102,14 @@ export default function TeacherStudentsTab({
   // Quick Detail Modal State
   const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
 
+  // Guardian contact edit, inside the detail modal. Only offered to those RLS (stu_update) lets
+  // through — institute admin, the department's HOD, or the section's class teacher.
+  const [editGuardian, setEditGuardian] = useState(false);
+  const [guardianForm, setGuardianForm] = useState({ parent_name: "", parent_phone: "" });
+  const [savingGuardian, setSavingGuardian] = useState(false);
+  // A different student — or a closed modal — must not inherit the last row's open edit form.
+  useEffect(() => { setEditGuardian(false); }, [selectedStudent?.id]);
+
   // Add Student Modal State
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -118,6 +128,10 @@ export default function TeacherStudentsTab({
   const scope = useMyScope();
   /** Not assigned anywhere yet (no teaching batch, not a proctor) → dedicated empty state. */
   const noScope = !scope.loading && !scope.isAdmin && batches.length === 0 && scope.proctorSectionIds.length === 0;
+
+  /** Mirrors RLS stu_update: admin, the department's HOD, or this student's class teacher. */
+  const canEditGuardian = (s: StudentRecord) =>
+    scope.canManageStudents || !!(s.section_id && scope.proctorSectionIds.includes(s.section_id));
 
   /* ─── Data Fetching ────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -437,6 +451,45 @@ export default function TeacherStudentsTab({
     setCopiedId(id);
     toast.success(`Copied ${label} to clipboard`);
     setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  /* ─── Guardian Contact Edit ─────────────────────────────────────────────── */
+  function startEditGuardian(s: StudentRecord) {
+    setGuardianForm({
+      parent_name: s.parent_name || "",
+      // stored as "+91XXXXXXXXXX"; the field edits the 10 digits
+      parent_phone: indianMobile10(s.parent_phone) || "",
+    });
+    setEditGuardian(true);
+  }
+
+  async function saveGuardian() {
+    if (!selectedStudent) return;
+    const typed = guardianForm.parent_phone.trim();
+    // An empty field clears the number; anything else must be a real 10-digit Indian mobile,
+    // or the wa.me link it produces would be dead.
+    let stored: string | null = null;
+    if (typed) {
+      stored = toStoredParentPhone(typed);
+      if (!stored) {
+        toast.error("Enter a valid 10-digit mobile number (starting 6-9)");
+        return;
+      }
+    }
+    setSavingGuardian(true);
+    const patch = { parent_name: guardianForm.parent_name.trim() || null, parent_phone: stored };
+    const { error } = await supabase.from("students").update(patch).eq("id", selectedStudent.id);
+    setSavingGuardian(false);
+    if (error) {
+      // stu_update lets through admin / the department's HOD / the section's class teacher only
+      console.error("guardian update:", error);
+      toast.error(error.message || "Could not save the parent contact");
+      return;
+    }
+    setStudents((prev) => prev.map((s) => (s.id === selectedStudent.id ? { ...s, ...patch } : s)));
+    setSelectedStudent((prev) => (prev ? { ...prev, ...patch } : prev));
+    setEditGuardian(false);
+    toast.success("Parent contact saved");
   }
 
   /* ─── WhatsApp Parent ───────────────────────────────────────────────────── */
@@ -1285,9 +1338,19 @@ export default function TeacherStudentsTab({
               </div>
 
               <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Parent Contact</span>
-                <p className="font-bold text-slate-800 dark:text-white text-sm mt-0.5">
-                  {selectedStudent.parent_phone || "Not recorded"}
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Parent Contact</span>
+                  {canEditGuardian(selectedStudent) && !editGuardian && (
+                    <button
+                      onClick={() => startEditGuardian(selectedStudent)}
+                      className="text-[10px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+                <p className="font-bold text-slate-800 dark:text-white text-sm mt-0.5 tabular-nums">
+                  {maskParentPhone(selectedStudent.parent_phone) || "Not recorded"}
                 </p>
                 {selectedStudent.parent_name && (
                   <p className="text-[10px] text-slate-400 mt-0.5">
@@ -1311,6 +1374,66 @@ export default function TeacherStudentsTab({
                   Phone: {selectedStudent.phone || "—"} · Email: {selectedStudent.email || "—"}
                 </p>
               </div>
+
+              {editGuardian && (
+                <div className="col-span-2 p-3 rounded-xl border border-blue-200 bg-blue-50/60 dark:border-blue-500/20 dark:bg-blue-950/20">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Edit Parent Contact</span>
+                  <div className="mt-2 space-y-2">
+                    <div>
+                      <label htmlFor="g-name" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                        Guardian Name
+                      </label>
+                      <input
+                        id="g-name"
+                        type="text"
+                        value={guardianForm.parent_name}
+                        onChange={(e) => setGuardianForm((f) => ({ ...f, parent_name: e.target.value }))}
+                        placeholder="Parent / Guardian ka naam"
+                        className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="g-phone" className="block text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                        Parent WhatsApp Number
+                      </label>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-400">+91</span>
+                        <input
+                          id="g-phone"
+                          type="tel"
+                          inputMode="numeric"
+                          maxLength={10}
+                          value={guardianForm.parent_phone}
+                          // digits only, so the 10-digit rule is what the teacher sees while typing
+                          onChange={(e) =>
+                            setGuardianForm((f) => ({ ...f, parent_phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))
+                          }
+                          placeholder="10-digit mobile number"
+                          className="w-full min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 text-xs tabular-nums text-slate-800 dark:border-white/10 dark:bg-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        Saved as +91XXXXXXXXXX. Leave empty to remove the number.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={saveGuardian}
+                        disabled={savingGuardian}
+                        className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-40"
+                      >
+                        {savingGuardian ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        onClick={() => setEditGuardian(false)}
+                        className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Actions */}

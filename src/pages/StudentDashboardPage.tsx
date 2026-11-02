@@ -1,287 +1,310 @@
-// src/pages/StudentDashboardPage.tsx — home for students with an a4ai account.
-// Every card opens a feature that exists for students (contests, practice,
-// notes, flashcards, leaderboard, coin shop, the school portal). No sample data,
-// no animation: plain links and one small profile menu.
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+// /student/dashboard — the student's home. Real data only:
+//   contests → get_my_contests (same cache as /contests), coins → CoinContext (real balance or "—"),
+//   practice → this device's marks (always labelled), profile → profiles.full_name / school_name.
+// No streak or study time (no data for them), no sample numbers, no "free coins" popup (it credited nothing).
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
-  BookOpen,
-  Coins,
-  Flame,
-  KeyRound,
-  Layers,
-  LayoutGrid,
-  LogOut,
-  Settings,
-  Target,
-  Trophy,
-  User,
-  type LucideIcon,
+  ArrowRight, Award, BookOpen, CalendarClock, CheckCircle2, Circle, History, KeyRound, Languages, Layers, ListChecks,
+  RotateCcw, Settings, Target, Trophy, UserRound,
 } from "lucide-react";
+import { useCoins } from "@/context/CoinContext";
+import { contestKeys, useContestFeed, useContestsChangedListener, FeedError } from "@/lib/contestFeed";
+import { contestPath, phaseAt, startsAt, type FeedContest } from "@/lib/contestLifecycle";
+import { leaderboardHref } from "@/lib/leaderboard";
+import { serverNow } from "@/lib/serverClock";
+import { practiceSessionHref } from "@/lib/practiceApi";
+import { localDay, summarize, usePracticeProgress } from "@/lib/practiceProgress";
+import { buildActivity, contestStats, subjectPerformance, useStudentProfile, type CoinTx } from "@/lib/studentData";
+import { HeroBanner, EYEBROW, ON_DARK_BTN } from "@/components/student/Banner";
+import { EmptyState, SectionHeader, SideCard, StatTile, StudentLayout, useStudentShell } from "@/components/student/Parts";
+import { SubjectTile } from "@/components/student/subjectStyle";
+import { BTN_PRIMARY_MD, BTN_SECONDARY_MD, FOCUS_RING } from "@/components/student/ui";
+import { ContestCard } from "@/components/contests/ContestCard";
+import { ContestCalendar } from "@/components/contests/ContestCalendar";
 import StaticSarthi from "@/components/chat/StaticSarthi";
-import { supabase } from "@/lib/supabaseClient";
-import { useUserProfile } from "@/hooks/useUserProfile";
-
-const ScratchCard = lazy(() => import("@/components/ScratchCard"));
+import { cn } from "@/lib/utils";
 
 const T = {
   en: {
-    home: "Home",
-    contests: "Contests",
-    practice: "Practice",
-    notes: "Notes",
-    flashcards: "Flashcards",
-    leaderboard: "Leaderboard",
-    settings: "Settings",
-    logOut: "Log out",
-    welcome: "Welcome back",
-    joinTitle: "Join a live contest",
-    joinBody: "Got a contest code from your teacher? Enter it and start.",
-    joinCta: "Enter contest code",
-    toolsTitle: "Keep practising",
-    schoolTitle: "Code from your school?",
-    schoolBody: "Open the student portal to see your assignments and results.",
-    schoolCta: "Open student portal",
-    language: "हिंदी",
-    tools: {
-      practice: ["Practice zone", "Previous-year questions, chapter by chapter"],
-      daily: ["Daily practice", "A short set of questions every day"],
-      notes: ["My notes", "Your study notes in one place"],
-      flashcards: ["Flashcards", "Quick revision cards"],
-      leaderboard: ["Leaderboard", "See where you stand in contests"],
-      coins: ["Coin shop", "Spend the coins you earn"],
-    },
+    morning: "Good morning", afternoon: "Good afternoon", evening: "Good evening", ready: "Ready to make today's progress?",
+    cont: "Continue learning", join: "Join a contest", overview: "Your progress", upcoming: "Upcoming contests", finished: "Contests finished",
+    avg: "Average score", today: "Practised today", coins: "Coins", continueTitle: "Pick up where you left off", plan: "Today's plan",
+    subjects: "Subject performance", activity: "Recent activity", allContests: "All contests", lang: "हिंदी",
+    noActivity: "Nothing yet — your contest results, practice and coin changes will show up here.",
   },
   hi: {
-    home: "होम",
-    contests: "प्रतियोगिताएं",
-    practice: "अभ्यास",
-    notes: "नोट्स",
-    flashcards: "फ़्लैशकार्ड",
-    leaderboard: "लीडरबोर्ड",
-    settings: "सेटिंग्स",
-    logOut: "लॉग आउट",
-    welcome: "वापसी पर स्वागत है",
-    joinTitle: "लाइव प्रतियोगिता में शामिल हों",
-    joinBody: "टीचर से प्रतियोगिता कोड मिला है? कोड डालें और शुरू करें।",
-    joinCta: "प्रतियोगिता कोड डालें",
-    toolsTitle: "अभ्यास जारी रखें",
-    schoolTitle: "स्कूल से कोड मिला है?",
-    schoolBody: "अपने असाइनमेंट और रिज़ल्ट देखने के लिए स्टूडेंट पोर्टल खोलें।",
-    schoolCta: "स्टूडेंट पोर्टल खोलें",
-    language: "English",
-    tools: {
-      practice: ["प्रैक्टिस ज़ोन", "पिछले वर्षों के प्रश्न, अध्याय अनुसार"],
-      daily: ["रोज़ का अभ्यास", "हर दिन कुछ प्रश्न"],
-      notes: ["मेरे नोट्स", "आपके नोट्स एक जगह"],
-      flashcards: ["फ़्लैशकार्ड", "जल्दी दोहराने के कार्ड"],
-      leaderboard: ["लीडरबोर्ड", "प्रतियोगिताओं में आपकी रैंक"],
-      coins: ["कॉइन शॉप", "कमाए हुए कॉइन इस्तेमाल करें"],
-    },
+    morning: "सुप्रभात", afternoon: "नमस्ते", evening: "शुभ संध्या", ready: "आज थोड़ा आगे बढ़ें?",
+    cont: "पढ़ाई जारी रखें", join: "प्रतियोगिता में शामिल हों", overview: "आपकी प्रगति", upcoming: "आने वाली प्रतियोगिताएं", finished: "पूरी की गई प्रतियोगिताएं",
+    avg: "औसत स्कोर", today: "आज का अभ्यास", coins: "कॉइन", continueTitle: "जहाँ छोड़ा था वहीं से", plan: "आज की योजना",
+    subjects: "विषय अनुसार प्रदर्शन", activity: "हाल की गतिविधि", allContests: "सभी प्रतियोगिताएं", lang: "English",
+    noActivity: "अभी कुछ नहीं — आपके परिणाम, अभ्यास और कॉइन यहाँ दिखेंगे।",
   },
 };
 type Lang = keyof typeof T;
+const DAILY_GOAL = 10;
 
-const NAV: { to: string; key: "home" | "contests" | "practice" | "notes" | "flashcards" | "leaderboard"; Icon: LucideIcon }[] = [
-  { to: "/student/dashboard", key: "home", Icon: LayoutGrid },
-  { to: "/contests", key: "contests", Icon: Trophy },
-  { to: "/practice/zone", key: "practice", Icon: Target },
-  { to: "/notes", key: "notes", Icon: BookOpen },
-  { to: "/dashboard/flashcards", key: "flashcards", Icon: Layers },
-  { to: "/contests/leaderboard", key: "leaderboard", Icon: Flame },
-];
+function greeting(t: (typeof T)["en"], h = new Date().getHours()) {
+  return h < 12 ? t.morning : h < 17 ? t.afternoon : t.evening;
+}
 
-const TOOLS: { to: string; key: keyof (typeof T)["en"]["tools"]; Icon: LucideIcon; bg: string; accent: string }[] = [
-  { to: "/practice/zone", key: "practice", Icon: Target, bg: "linear-gradient(135deg,#FFEDEF,#FFD9DE)", accent: "#D93F4D" },
-  { to: "/daily-practice", key: "daily", Icon: Flame, bg: "linear-gradient(135deg,#FFF1E3,#FFDDBE)", accent: "#C2410C" },
-  { to: "/notes", key: "notes", Icon: BookOpen, bg: "linear-gradient(135deg,#EEF7D6,#DCEDB5)", accent: "#4D7C0F" },
-  { to: "/dashboard/flashcards", key: "flashcards", Icon: Layers, bg: "linear-gradient(135deg,#EFEDFF,#DCD7FF)", accent: "#5B4BC4" },
-  { to: "/contests/leaderboard", key: "leaderboard", Icon: Trophy, bg: "linear-gradient(135deg,#FFF7D9,#FFE9AD)", accent: "#9A6B00" },
-  { to: "/coinshop", key: "coins", Icon: Coins, bg: "linear-gradient(135deg,#E4F8F3,#C9EFE4)", accent: "#047857" },
-];
-
-function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-[24px] border border-[#E5E7EB] bg-white p-5 sm:p-6 ${className}`}>{children}</div>;
+function PlanItem({ done, title, detail, action }: { done: boolean; title: string; detail: string; action?: ReactNode }) {
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      {done ? <CheckCircle2 size={20} aria-hidden className="shrink-0 text-[#168B59]" /> : <Circle size={20} aria-hidden className="shrink-0 text-[#9CA3AF]" />}
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-[14px] font-semibold", done ? "text-[#5D6570] line-through decoration-[#9CA3AF]" : "text-[#1B1B1B]")}>{title}</p>
+        <p className="text-[12.5px] text-[#5D6570]">{detail}</p>
+      </div>
+      {action}
+      <span className="sr-only">{done ? "Done" : "Not done yet"}</span>
+    </li>
+  );
 }
 
 export default function StudentDashboardPage() {
-  const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const [searchParams] = useSearchParams();
-  const { profile, loading } = useUserProfile();
+  const qc = useQueryClient();
+  const { uid, firstName, name, email } = useStudentShell();
   const [lang, setLang] = useState<Lang>("en");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showScratchCard, setShowScratchCard] = useState(false);
   const t = T[lang];
+  const { balance, transactions } = useCoins();
+  const profile = useStudentProfile(uid);
+  const store = usePracticeProgress(uid);
+  const practice = useMemo(() => summarize(store), [store]);
+  useContestsChangedListener(uid);
+  const upcoming = useContestFeed(uid, "upcoming", "", "");
+  const past = useContestFeed(uid, "past", "", "");
+  const contestsMissing = [upcoming.error, past.error].some((e) => e instanceof FeedError && e.kind === "missing");
 
-  // Welcome coins for a brand-new account (same rule as before).
-  useEffect(() => {
-    if (loading || !profile) return;
-    let seen = false;
-    try {
-      seen = Boolean(localStorage.getItem("hasSeenCoinPopup"));
-    } catch {
-      /* storage unavailable */
-    }
-    if (searchParams.get("newUser") === "true" && !seen) setShowScratchCard(true);
-  }, [loading, profile, searchParams]);
+  const up = upcoming.data?.pages[0];
+  const upItems = up?.items ?? [];
+  const pastItems = past.data?.pages[0]?.items ?? [];
+  const stats = contestStats(pastItems);
+  const inProgress = upItems.find((c) => c.my_state === "in_progress") ?? null;
+  const last = store.last;
+  const now = serverNow();
+  const todayKey = localDay(now);
+  const todayContest = upItems.find((c) => c.my_state !== "owner" && (phaseAt(c, now) === "live" ||
+    (startsAt(c) != null && localDay(startsAt(c)!) === todayKey))) ?? null;
+  const nextUp = upItems.filter((c) => c.id !== inProgress?.id).slice(0, 2);
+  const subjects = subjectPerformance(pastItems, practice).slice(0, 6);
+  const txs: CoinTx[] = transactions.map((x) => ({ id: x.id, type: x.type, amount: x.amount, description: x.description, createdAt: x.createdAt }));
+  const activity = buildActivity(pastItems, txs, practice, (c: FeedContest) => leaderboardHref(c.short_code, c.id));
+  const displayName = (profile.data?.full_name || "").split(/\s+/)[0] || firstName;
 
-  const firstName = (profile?.full_name || "").split(" ")[0];
-  const today = new Date().toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN", { weekday: "long", day: "numeric", month: "long" });
-  const signOut = () => supabase.auth.signOut().then(() => navigate("/login"));
+  const onZero = useCallback(() => {
+    if (uid) setTimeout(() => qc.invalidateQueries({ queryKey: contestKeys.all(uid) }), Math.random() * 3000);
+  }, [qc, uid]);
 
-  if (loading) {
-    return <div className="flex min-h-screen items-center justify-center bg-[#F7F8FA] text-[#5D6570]">Loading…</div>;
-  }
+  const primary = inProgress
+    ? { href: contestPath(inProgress), label: `${t.cont}: ${inProgress.title}` }
+    : last
+      ? { href: practiceSessionHref({ c: last.c, s: last.s, ch: last.ch, type: last.type, page: last.page, q: last.q }), label: `${t.cont}: ${last.ch}` }
+      : { href: "/practice", label: t.cont };
+
+  const sidebar = (
+    <>
+      <SideCard title="Your profile" icon={<UserRound size={16} aria-hidden />} labelledBy="profile-title">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#14243A] font-halenoir text-[16px] font-extrabold text-white">
+            {(name[0] || email?.[0] || "?").toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[14px] font-semibold text-[#1B1B1B]">{profile.data?.full_name || name || "Student"}</p>
+            {email && <p className="truncate text-[12px] text-[#5D6570]">{email}</p>}
+          </div>
+        </div>
+        <dl className="mt-3 space-y-1.5 text-[12.5px]">
+          <div className="flex justify-between gap-2"><dt className="text-[#5D6570]">School</dt><dd className="truncate text-right font-medium text-[#1B1B1B]">{profile.data?.school_name || "Not added"}</dd></div>
+          <div className="flex justify-between gap-2"><dt className="text-[#5D6570]">Practice class</dt><dd className="font-medium text-[#1B1B1B]">{store.cls ? `Class ${store.cls}` : "Not chosen"}</dd></div>
+        </dl>
+        <Link to="/settings" className={cn("mt-3 inline-flex h-9 items-center text-[13px] font-semibold text-[#A92532] hover:underline", FOCUS_RING)}>Edit in settings</Link>
+      </SideCard>
+      <ContestCalendar scheduled={up?.scheduled ?? []} contests={upItems} upNext={upItems.find((c) => phaseAt(c, now) === "scheduled") ?? null} />
+      <SideCard title="Rewards" icon={<Award size={16} aria-hidden />} labelledBy="rewards-side">
+        <p className="font-halenoir text-[22px] font-extrabold tabular-nums text-[#1B1B1B]">{balance != null ? balance.toLocaleString("en-IN") : "—"}<span className="ml-1.5 text-[13px] font-semibold text-[#5D6570]">coins</span></p>
+        <Link to="/rewards" className={cn("mt-1 inline-flex h-9 items-center gap-1 text-[13px] font-semibold text-[#A92532] hover:underline", FOCUS_RING)}>History & milestones <ArrowRight size={14} aria-hidden /></Link>
+      </SideCard>
+      <SideCard title="More tools" labelledBy="tools-title">
+        <ul className="grid gap-1">
+          {[
+            { to: "/notes", label: "My notes", Icon: BookOpen },
+            { to: "/dashboard/flashcards", label: "Flashcards", Icon: Layers },
+            { to: "/student", label: "School portal (code from school)", Icon: KeyRound },
+            { to: "/settings", label: "Settings", Icon: Settings },
+          ].map(({ to, label, Icon }) => (
+            <li key={to}>
+              <Link to={to} className={cn("flex h-11 items-center gap-3 rounded-lg px-2 text-[13.5px] font-medium text-[#1B1B1B] hover:bg-[#F5F6F8]", FOCUS_RING)}>
+                <Icon size={16} aria-hidden className="text-[#5D6570]" /> {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </SideCard>
+    </>
+  );
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] text-[#1B1B1B]">
-      <Suspense fallback={null}>
-        {showScratchCard && <ScratchCard isOpen={showScratchCard} onClose={() => setShowScratchCard(false)} coins={100} />}
-      </Suspense>
-
-      {/* Sidebar (desktop) */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-[240px] flex-col border-r border-[#E5E7EB] bg-white p-5 lg:flex">
-        <Link to="/" className="mb-8 flex items-center gap-2.5 px-2">
-          <img src="/ICON.ico" alt="" width={36} height={36} className="h-9 w-9" />
-          <span className="text-xl font-bold">a4ai</span>
-        </Link>
-        <nav aria-label="Student" className="flex-1 space-y-1">
-          {NAV.map(({ to, key, Icon }) => {
-            const active = pathname === to;
-            return (
-              <Link
-                key={to}
-                to={to}
-                aria-current={active ? "page" : undefined}
-                className={`flex min-h-[44px] items-center gap-3 rounded-xl px-3 text-[15px] font-semibold ${
-                  active ? "bg-[#111111] text-white" : "text-[#374151] hover:bg-[#F7F8FA]"
-                }`}
-              >
-                <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
-                {t[key]}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="space-y-1 border-t border-[#E5E7EB] pt-3">
-          <Link to="/settings" className="flex min-h-[44px] items-center gap-3 rounded-xl px-3 text-[15px] font-semibold text-[#374151] hover:bg-[#F7F8FA]">
-            <Settings className="h-[18px] w-[18px]" aria-hidden="true" /> {t.settings}
-          </Link>
-          <button type="button" onClick={signOut} className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold text-[#B42318] hover:bg-[#FFF1F0]">
-            <LogOut className="h-[18px] w-[18px]" aria-hidden="true" /> {t.logOut}
+    <StudentLayout title="Dashboard" sidebar={sidebar}>
+      <HeroBanner tone="crimson" labelledBy="hello-title"
+        aside={(
+          <div className="flex flex-wrap gap-2">
+            <Link to={primary.href} className={cn(ON_DARK_BTN, "max-w-full sm:max-w-[300px]")}><span className="truncate">{primary.label}</span> <ArrowRight size={14} aria-hidden /></Link>
+            <Link to="/contests?join=1" className="inline-flex h-10 items-center rounded-lg border border-white/60 px-4 text-[13px] font-semibold text-white hover:bg-white/10 outline-none focus-visible:ring-2 focus-visible:ring-white">{t.join}</Link>
+          </div>
+        )}>
+        <div className="flex items-center gap-2">
+          <span className={cn(EYEBROW, "bg-white/15 text-white")}>{new Date().toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN", { weekday: "long", day: "numeric", month: "long" })}</span>
+          <button type="button" onClick={() => setLang((l) => (l === "en" ? "hi" : "en"))} aria-label={lang === "en" ? "हिंदी में देखें" : "Show in English"}
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-white/40 px-2 text-[12px] font-semibold text-white hover:bg-white/10 outline-none focus-visible:ring-2 focus-visible:ring-white">
+            <Languages size={13} aria-hidden /> {t.lang}
           </button>
         </div>
-      </aside>
+        <h1 id="hello-title" className="mt-2.5 font-halenoir text-[26px] font-extrabold leading-tight md:text-[32px]">
+          {greeting(t)}{displayName ? `, ${displayName}` : ""}!
+        </h1>
+        <p className="mt-1 text-[14px] text-[#FBE3E5]">{t.ready}{profile.data?.school_name ? ` · ${profile.data.school_name}` : ""}</p>
+      </HeroBanner>
 
-      <div className="lg:pl-[240px]">
-        {/* Top bar */}
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-3 border-b border-[#E5E7EB] bg-white px-4 sm:px-6">
-          <Link to="/" className="flex items-center gap-2 lg:hidden">
-            <img src="/ICON.ico" alt="" width={32} height={32} className="h-8 w-8" />
-            <span className="text-lg font-bold">a4ai</span>
-          </Link>
-          <span className="hidden lg:block" />
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLang((l) => (l === "en" ? "hi" : "en"))}
-              className="min-h-[40px] rounded-xl border border-[#E5E7EB] px-3 text-[14px] font-semibold text-[#374151] hover:bg-[#F7F8FA]"
-            >
-              {t.language}
-            </button>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((o) => !o)}
-                aria-expanded={menuOpen}
-                aria-label="Account menu"
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E5E7EB] hover:bg-[#F7F8FA]"
-              >
-                <User className="h-4 w-4" aria-hidden="true" />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-xl border border-[#E5E7EB] bg-white p-1.5 shadow-lg">
-                  <Link to="/settings" className="block rounded-lg px-3 py-2 text-[14px] font-medium hover:bg-[#F7F8FA]">
-                    {t.settings}
-                  </Link>
-                  <button type="button" onClick={signOut} className="block w-full rounded-lg px-3 py-2 text-left text-[14px] font-medium text-[#B42318] hover:bg-[#FFF1F0]">
-                    {t.logOut}
-                  </button>
-                </div>
+      <section aria-labelledby="overview-title" className="mt-7">
+        <SectionHeader id="overview-title" title={t.overview} dot="#14243A" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <StatTile label={t.upcoming} value={contestsMissing ? null : up ? up.counts.upcoming : null} accent="#246BCE" />
+          <StatTile label={t.finished} value={contestsMissing ? null : past.data ? stats.finished : null} accent="#14243A"
+            hint={past.data?.pages[0]?.nextCursor ? "in your last 20 results" : undefined} />
+          <StatTile label={t.avg} value={stats.average != null ? `${stats.average}%` : null} accent="#168B59"
+            hint={stats.scored ? `over ${stats.scored} scored contest${stats.scored === 1 ? "" : "s"}` : "no scored contests yet"} />
+          <StatTile label={t.today} value={practice.today} accent="#E5A526" hint={`questions · this device`} />
+          <StatTile label={t.coins} value={balance != null ? balance.toLocaleString("en-IN") : null} accent="#A92532" />
+        </div>
+      </section>
+
+      <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <section aria-labelledby="continue-title">
+          <SectionHeader id="continue-title" title={t.continueTitle} dot="#A92532" />
+          {inProgress || last ? (
+            <ul className="grid grid-cols-1 gap-3">
+              {inProgress && <li className="list-none"><ContestCard c={inProgress} onZero={onZero} /></li>}
+              {last && (
+                <li className="list-none">
+                  <article className="flex items-center gap-3 rounded-xl border border-[#E5E7EB] bg-white p-4">
+                    <SubjectTile subject={last.s} />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-halenoir text-[15px] font-bold text-[#1B1B1B]">{last.ch}</h3>
+                      <p className="text-[12.5px] text-[#5D6570]">Practice · Class {last.c} · {last.s} · set {last.page + 1}</p>
+                    </div>
+                    <Link to={practiceSessionHref({ c: last.c, s: last.s, ch: last.ch, type: last.type, page: last.page, q: last.q })} className={BTN_PRIMARY_MD}>
+                      <RotateCcw size={14} aria-hidden /> Resume
+                    </Link>
+                  </article>
+                </li>
               )}
-            </div>
-          </div>
-        </header>
+            </ul>
+          ) : (
+            <EmptyState icon={<Target size={24} aria-hidden />} title="Nothing in progress" body="Start a chapter in Practice or join a contest with your teacher's code."
+              action={<div className="flex flex-wrap justify-center gap-2"><Link to="/practice" className={BTN_PRIMARY_MD}>Open practice</Link><Link to="/contests?join=1" className={BTN_SECONDARY_MD}>Enter a code</Link></div>} />
+          )}
+        </section>
 
-        <main className="mx-auto max-w-[1100px] px-4 pb-28 pt-6 sm:px-6 lg:pb-10 lg:pt-8">
-          <h1 className="font-halenoir text-2xl font-bold tracking-[-0.01em] sm:text-[1.9rem]">
-            {t.welcome}
-            {firstName ? `, ${firstName}` : ""}
-          </h1>
-          <p className="mt-1 text-[14px] text-[#5D6570]">{today}</p>
-
-          <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_320px]">
-            <div className="rounded-[24px] p-6 sm:p-8" style={{ backgroundImage: "linear-gradient(135deg,#FFE3EC,#FFC9DB)" }}>
-              <Trophy className="h-7 w-7 text-[#BE185D]" aria-hidden="true" />
-              <h2 className="mt-3 font-halenoir text-xl font-bold sm:text-2xl">{t.joinTitle}</h2>
-              <p className="mt-1.5 max-w-md text-[15px] text-[#374151]">{t.joinBody}</p>
-              <Link
-                to="/contests/join"
-                className="mt-5 inline-flex min-h-[46px] items-center rounded-xl bg-[#111111] px-5 text-[15px] font-bold text-white hover:bg-[#222222]"
-              >
-                {t.joinCta}
-              </Link>
-            </div>
-
-            <Card>
-              <KeyRound className="h-6 w-6 text-[#5B4BC4]" aria-hidden="true" />
-              <h2 className="mt-3 text-lg font-bold">{t.schoolTitle}</h2>
-              <p className="mt-1 text-[14px] text-[#5D6570]">{t.schoolBody}</p>
-              <Link to="/student" className="mt-4 inline-flex min-h-[44px] items-center text-[15px] font-bold underline underline-offset-4">
-                {t.schoolCta}
-              </Link>
-            </Card>
-          </div>
-
-          <h2 className="mt-9 text-lg font-bold">{t.toolsTitle}</h2>
-          <ul className="mt-4 grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
-            {TOOLS.map(({ to, key, Icon, bg, accent }) => (
-              <li key={key}>
-                <Link to={to} className="flex h-full items-start gap-4 rounded-[20px] border border-black/[0.04] p-5" style={{ backgroundImage: bg }}>
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/80" style={{ color: accent }}>
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <span>
-                    <span className="block text-[16px] font-bold">{t.tools[key][0]}</span>
-                    <span className="mt-0.5 block text-[14px] text-[#374151]">{t.tools[key][1]}</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
+        <section aria-labelledby="plan-title">
+          <SectionHeader id="plan-title" title={t.plan} dot="#168B59" />
+          <ul className="divide-y divide-[#E5E7EB] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+            <PlanItem done={practice.today >= DAILY_GOAL} title={`Practise ${DAILY_GOAL} questions`}
+              detail={`${Math.min(practice.today, DAILY_GOAL)} of ${DAILY_GOAL} marked today on this device`}
+              action={practice.today < DAILY_GOAL ? <Link to={last ? practiceSessionHref({ c: last.c, s: last.s, ch: last.ch, type: last.type, page: last.page, q: last.q }) : "/practice"} className={BTN_SECONDARY_MD}>Practise</Link> : undefined} />
+            {todayContest ? (
+              <PlanItem done={false} title={phaseAt(todayContest, now) === "live" ? `Contest live: ${todayContest.title}` : `Contest today: ${todayContest.title}`}
+                detail={todayContest.scheduled_at ? new Date(Date.parse(todayContest.scheduled_at)).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }) : "Open now"}
+                action={<Link to="/contests" className={BTN_SECONDARY_MD}>Open</Link>} />
+            ) : (
+              <PlanItem done={false} title="No contest today" detail="Registered contests show up here on the day they run." />
+            )}
+            {practice.review > 0 && (
+              <PlanItem done={false} title={`${practice.review} question${practice.review === 1 ? "" : "s"} marked to review`} detail="Go back to them in Practice"
+                action={<Link to="/practice" className={BTN_SECONDARY_MD}>Review</Link>} />
+            )}
           </ul>
-        </main>
+        </section>
       </div>
 
-      {/* Bottom nav (phones) */}
-      <nav aria-label="Student" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-[#E5E7EB] bg-white lg:hidden">
-        {NAV.filter((n) => n.key !== "flashcards").map(({ to, key, Icon }) => {
-          const active = pathname === to;
-          return (
-            <Link
-              key={to}
-              to={to}
-              aria-current={active ? "page" : undefined}
-              className={`flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-semibold ${active ? "text-[#D93F4D]" : "text-[#5D6570]"}`}
-            >
-              <Icon className="h-5 w-5" aria-hidden="true" />
-              {t[key]}
-            </Link>
-          );
-        })}
-      </nav>
+      <section aria-labelledby="upcoming-title" className="mt-8">
+        <SectionHeader id="upcoming-title" title={t.upcoming} dot="#246BCE"
+          action={<Link to="/contests" className={cn("inline-flex h-9 items-center gap-1 text-[13px] font-semibold text-[#A92532] hover:underline", FOCUS_RING)}>{t.allContests} <ArrowRight size={14} aria-hidden /></Link>} />
+        {contestsMissing ? (
+          <EmptyState icon={<CalendarClock size={24} aria-hidden />} title="Your contests will show up here soon" body="The contest list switches on with the next server update. You can already join with a code." action={<Link to="/contests?join=1" className={BTN_PRIMARY_MD}>Enter a code</Link>} />
+        ) : upcoming.isPending ? (
+          <ul aria-hidden className="grid gap-3 md:grid-cols-2">{[0, 1].map((i) => <li key={i} className="h-[196px] list-none rounded-xl border border-[#E5E7EB] bg-white" />)}</ul>
+        ) : nextUp.length ? (
+          <ul className="grid gap-3 md:grid-cols-2">{nextUp.map((c) => <li key={c.id} className="list-none"><ContestCard c={c} onZero={onZero} /></li>)}</ul>
+        ) : (
+          <EmptyState icon={<Trophy size={24} aria-hidden />} title="No upcoming contests" body="Got a code from your teacher? Register and you'll see a countdown here." action={<Link to="/contests?join=1" className={BTN_PRIMARY_MD}>Enter a code</Link>} />
+        )}
+      </section>
 
-      <StaticSarthi variant="student" aboveBottomNav />
-    </div>
+      <div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <section aria-labelledby="subjects-title">
+          <SectionHeader id="subjects-title" title={t.subjects} dot="#E5A526" />
+          {subjects.length ? (
+            <ul className="grid grid-cols-1 gap-2">
+              {subjects.map((s) => (
+                <li key={s.subject} className="flex items-center gap-3 rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5">
+                  <SubjectTile subject={s.subject} size={36} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-semibold text-[#1B1B1B]">{s.subject}</p>
+                    {s.contestAvg != null && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#EEF0F3]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={s.contestAvg} aria-label={`${s.subject} contest average`}>
+                          <div className="h-full rounded-full bg-[#246BCE]" style={{ width: `${Math.min(100, s.contestAvg)}%` }} />
+                        </div>
+                        <span className="text-[12px] font-semibold tabular-nums text-[#1B1B1B]">{s.contestAvg}%</span>
+                      </div>
+                    )}
+                    <p className="mt-0.5 text-[11.5px] text-[#5D6570]">
+                      {[s.contests ? `${s.contests} contest${s.contests === 1 ? "" : "s"}` : null, s.got + s.review ? `practice: ${s.got} got it · ${s.review} review (this device)` : null].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState icon={<ListChecks size={24} aria-hidden />} title="No subject data yet" body="Finish a contest or mark practice questions and each subject shows up here." />
+          )}
+        </section>
+
+        <section aria-labelledby="activity-title">
+          <SectionHeader id="activity-title" title={t.activity} dot="#14243A" />
+          {activity.length ? (
+            <ol className="divide-y divide-[#E5E7EB] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+              {activity.map((a) => (
+                <li key={a.id} className="flex items-center gap-3 px-4 py-3">
+                  <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg",
+                    a.kind === "contest" ? "bg-[#EAF1FB] text-[#1D4F99]" : a.kind === "coins" ? "bg-[#FFF8E8] text-[#7A5200]" : "bg-[#E7F6EE] text-[#0E6B43]")}>
+                    {a.kind === "contest" ? <Trophy size={16} aria-hidden /> : a.kind === "coins" ? <Award size={16} aria-hidden /> : <Target size={16} aria-hidden />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-semibold text-[#1B1B1B]">
+                      {a.kind === "contest" ? `Submitted ${a.title}` : a.kind === "coins" ? a.description : `Practised ${a.count} question${a.count === 1 ? "" : "s"}`}
+                    </p>
+                    <p className="text-[12px] text-[#5D6570]">
+                      {a.kind === "practice" ? `${new Date(a.at).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} · this device`
+                        : new Date(a.at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+                    </p>
+                  </div>
+                  {a.kind === "contest" && (
+                    a.pending ? <span className="text-[12px] font-semibold text-[#7A5200]">Results soon</span>
+                      : <Link to={a.href} className={cn("text-[12.5px] font-semibold tabular-nums text-[#1B1B1B] hover:underline", FOCUS_RING)}>{a.score != null ? `${a.score}${a.total ? `/${a.total}` : ""}` : "View"}</Link>
+                  )}
+                  {a.kind === "coins" && <span className={cn("font-halenoir text-[14px] font-extrabold tabular-nums", a.spent ? "text-[#A92532]" : "text-[#0E6B43]")}>{a.spent ? "−" : "+"}{a.amount}</span>}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <EmptyState icon={<History size={24} aria-hidden />} title={t.activity} body={t.noActivity} />
+          )}
+        </section>
+      </div>
+      <StaticSarthi variant="student" />
+    </StudentLayout>
   );
 }

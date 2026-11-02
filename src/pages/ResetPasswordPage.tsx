@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { rememberPassword } from "@/lib/authHelpers";
+import { resolveHomeRoute } from "@/lib/homeRoute";
 
 type Phase = "checking" | "ready" | "invalid" | "done";
 
@@ -70,11 +71,13 @@ export default function ResetPasswordPage() {
   };
 
   const goHome = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const signupRole = session?.user?.user_metadata?.role ?? session?.user?.app_metadata?.role;
     try {
       const { data } = await supabase.rpc("get_my_access");
-      window.location.assign(data?.[0]?.home_route || "/dashboard");
+      window.location.assign(resolveHomeRoute(data?.[0], signupRole));
     } catch {
-      window.location.assign("/dashboard");
+      window.location.assign(resolveHomeRoute(null, signupRole));
     }
   };
 

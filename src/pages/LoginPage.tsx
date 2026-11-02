@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { authRedirectUrl, isInAppBrowser, IN_APP_BROWSER_MESSAGE, GOOGLE_ACCOUNT_HINT, rememberPassword, takeRedirectAfterLogin, normalizeIndianPhone, INVALID_PHONE_MESSAGE, OTP_SENT_MESSAGE, friendlyOtpError } from "@/lib/authHelpers";
 import OtpBoxes, { emptyOtp } from "@/components/auth/OtpBoxes";
 import { useAuth } from "@/providers/AuthProvider";
+import { resolveHomeRoute } from "@/lib/homeRoute";
 import { Eye, EyeOff, ArrowLeft, Lock, Mail } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import AuthCharacters from "@/components/auth/AuthCharacters";
@@ -72,11 +73,9 @@ export default function LoginPage() {
       const checkAccess = async () => {
         try {
           const { data } = await supabase.rpc('get_my_access');
-          const access = data?.[0];
-          navigate(access?.home_route || '/dashboard', { replace: true });
+          navigate(resolveHomeRoute(data?.[0], role), { replace: true });
         } catch {
-          const targetRole = (role || "teacher").toLowerCase().trim();
-          navigate(`/${targetRole}/dashboard`, { replace: true });
+          navigate(resolveHomeRoute(null, role), { replace: true });
         }
       };
       checkAccess();
@@ -270,7 +269,8 @@ export default function LoginPage() {
     }
   };
 
-  const redirectAfterLogin = async () => {
+  /** signupRole: the signed-in user's user_metadata.role (useAuth's `role` is still the previous render's here) */
+  const redirectAfterLogin = async (signupRole: string | null | undefined) => {
     const back = takeRedirectAfterLogin(); // e.g. the test paper page that opened the login modal
     if (back) {
       navigate(back, { replace: true });
@@ -278,11 +278,10 @@ export default function LoginPage() {
     }
     try {
       const { data } = await supabase.rpc('get_my_access');
-      const access = data?.[0];
-      navigate(access?.home_route || '/dashboard', { replace: true });
+      navigate(resolveHomeRoute(data?.[0], signupRole), { replace: true });
     } catch (err) {
       console.error("Failed to get_my_access:", err);
-      navigate('/dashboard', { replace: true });
+      navigate(resolveHomeRoute(null, signupRole), { replace: true });
     }
   };
 
@@ -397,7 +396,7 @@ export default function LoginPage() {
         RiskEngine.recordSuccess(identifier);
         RateLimiter.resetAttempts(`login_${identifier}`);
         await rememberPassword(formValues.email.trim(), formValues.password); // browser "save password" prompt
-        await redirectAfterLogin();
+        await redirectAfterLogin(data.user?.user_metadata?.role ?? data.user?.app_metadata?.role);
       } else {
         const otpToken = codeOverride ?? otp.join("");
         if (otpToken.length !== 6) {
@@ -415,7 +414,7 @@ export default function LoginPage() {
         // Reset risk and rate limits on success
         RiskEngine.recordSuccess(identifier);
         RateLimiter.resetAttempts(`login_${identifier}`);
-        await redirectAfterLogin();
+        await redirectAfterLogin(data.user?.user_metadata?.role ?? data.user?.app_metadata?.role);
       }
     } catch (error: unknown) {
       const err = error as Error;
@@ -712,6 +711,10 @@ export default function LoginPage() {
                 <Link to="/signup" className={`font-bold hover:underline ${isDarkMode ? "text-white" : "text-black"}`}>
                   Sign up
                 </Link>
+              </p>
+              <p className="text-center text-sm font-medium text-slate-600">
+                Got an access code from your school?{" "}
+                <Link to="/student" className="font-bold text-black hover:underline">Open the student portal</Link>
               </p>
             </form>
 

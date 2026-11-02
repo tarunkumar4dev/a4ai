@@ -1,1073 +1,360 @@
-import React, { useMemo, useState, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import clsx from "clsx";
-
-// shadcn/ui components
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
-
-// icons
-import {
-  Search,
-  Filter,
-  Calendar,
-  Trophy,
-  Users,
-  Clock,
-  Star,
-  Award,
-  BookOpen,
-  Zap,
-  Flame,
-  Sparkles,
-  ShieldCheck,
-  ArrowLeft,
-  ChevronRight,
-  Crown,
-  LayoutGrid,
-  X,
-  Menu,
-  TrendingUp,
-  BarChart3,
-  Target,
-  Loader2,
-  FileUp
-} from "lucide-react";
-
-// contexts
+// /contests — contest home in the LeetCode layout: top nav, featured banner row, Live / Starting soon / Completed
+// sections of contest cards, right sidebar (calendar, latest results, coins). Real data only (get_my_contests,
+// 29_contest_feed.sql: contests you own, registered for or attempted). No animations (lite mode); one sticky
+// element (the nav). Data / timing logic lives in lib/contestFeed, lib/contestLifecycle and lib/serverClock.
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Helmet } from "react-helmet";
+import { useQueryClient } from "@tanstack/react-query";
+import { CalendarClock, KeyRound, RefreshCw, Search, SlidersHorizontal, Trophy, X } from "lucide-react";
+import { useAuth } from "@/providers/AuthProvider";
+import { useAccess } from "@/context/AccessProvider";
 import { useCoins } from "@/context/CoinContext";
 import { supabase } from "@/lib/supabaseClient";
-import { useAuth } from "@/providers/AuthProvider";
-import { toast } from "sonner";
+import { resolveHomeRoute } from "@/lib/homeRoute";
+import { serverNow } from "@/lib/serverClock";
+import { phaseAt, startsAt, type FeedContest } from "@/lib/contestLifecycle";
+import {
+  FeedError, FEED_ERROR_TEXT, contestKeys, reportContestError, useContestFeed, useContestsChangedListener, type FeedView,
+} from "@/lib/contestFeed";
+import { FOCUS_RING } from "@/components/contests/ContestBits";
+import { ContestCard, ContestCardSkeleton } from "@/components/contests/ContestCard";
+import { FeaturedBanner, PracticeCreateBanner } from "@/components/contests/ContestBanners";
+import { JOIN_INPUT_ID, JoinCodeCard } from "@/components/contests/JoinCodeCard";
+import { StudentNav } from "@/components/student/StudentNav";
+import { EmptyState as Notice } from "@/components/student/Parts";
+import { ContestCalendar } from "@/components/contests/ContestCalendar";
+import { CoinsCard, FairPlay, LatestResults } from "@/components/contests/ContestSidebar";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
-/* ---------------------------
-   Types
----------------------------- */
-interface Contest {
-  id: string;
-  title: string;
-  participants: number;
-  duration: string;
-  difficulty: "Easy" | "Medium" | "Hard";
-  status: "upcoming" | "ongoing" | "completed";
-  acceptance: string;
-  startTime: string;
-}
-
-interface Problem {
-  id: number;
-  title: string;
-  difficulty: "Easy" | "Medium" | "Hard";
-  acceptance: string;
-}
-
-interface MegaContest {
-  id: string;
-  contest_code: string;
-  title: string;
-  class: string;
-  description: string;
-  subjects: string[];
-  start_time: string;
-  end_time: string;
-  created_at: string;
-  total_questions?: number;
-  total_marks?: number;
-}
-
-/* -------------------------------------------
-   Premium Bento FlashCard (Orange Theme)
--------------------------------------------- */
-function PremiumFlashCard({
-   onClick,
-   title,
-   subtitle,
-   badge,
-   cta,
-   gradient,
-   icon,
-   isTrending = false,
-   isPopular = false,
-   isLoading = false,
- }: {
-   onClick: () => void;
-   title: string;
-   subtitle: string;
-   badge: string;
-   cta: string;
-   gradient: string;
-   icon: React.ReactNode;
-   isTrending?: boolean;
-   isPopular?: boolean;
-   isLoading?: boolean;
- }) {
-   return (
-     <motion.div
-       whileHover={{ y: -4, scale: 1.02 }}
-       whileTap={{ scale: 0.98 }}
-       initial={{ opacity: 0, y: 20 }}
-       animate={{ opacity: 1, y: 0 }}
-       className="relative h-full w-full"
-     >
-       <div
-         onClick={isLoading ? undefined : onClick}
-         className={clsx(
-           "group relative overflow-hidden rounded-[16px] sm:rounded-[20px] md:rounded-[24px] h-[160px] sm:h-[180px] md:h-[200px] transition-all duration-300",
-           isLoading 
-             ? "bg-gradient-to-br from-gray-200 to-gray-300 cursor-not-allowed"
-             : "cursor-pointer",
-           !isLoading && "shadow-[0_4px_12px_-8px_rgba(0,0,0,0.15)] hover:shadow-[0_16px_40px_-12px_rgba(0,0,0,0.3)]",
-           !isLoading && gradient
-         )}
-       >
-         {isLoading ? (
-           <div className="h-full flex items-center justify-center">
-             <Loader2 className="h-8 w-8 text-gray-400 animate-spin" />
-           </div>
-         ) : (
-           <>
-             {/* Gradient Overlay */}
-             <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300">
-               <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent" />
-             </div>
-             
-             {/* Noise Texture */}
-             <div className="absolute inset-0 opacity-[0.02] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] mix-blend-overlay" />
-             
-             {/* Top Right Live Badge */}
-             <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20">
-               <Badge className="bg-red-500 hover:bg-red-600 text-white px-2 py-0.5 text-xs font-extrabold animate-pulse shadow-lg">
-                 LIVE
-               </Badge>
-             </div>
-     
-             {/* Top Left Icon */}
-             <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20">
-               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
-                 {icon}
-               </div>
-             </div>
-     
-             {/* Content */}
-             <div className="relative z-10 h-full flex flex-col justify-between p-4 sm:p-5 md:p-6">
-               <div className="space-y-2 sm:space-y-3">
-                 {/* Title - Top Aligned */}
-                 <div className="pr-10 sm:pr-12 mt-8"> 
-                   <h3 className="text-base sm:text-lg md:text-xl font-extrabold text-white leading-tight tracking-tight drop-shadow-lg line-clamp-2 font-jakarta">
-                     {title}
-                   </h3>
-                 </div>
-               </div>
-     
-               {/* Join Now Button - Centered */}
-               <div className="flex justify-center">
-                 <motion.div 
-                   className="w-full max-w-[180px]"
-                   whileHover={{ scale: 1.02 }}
-                   whileTap={{ scale: 0.98 }}
-                 >
-                   <button className="w-full flex items-center justify-center px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-white/95 hover:bg-white text-slate-900 text-xs sm:text-sm font-bold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-[0.98] group/btn font-jakarta">
-                     <span>{cta}</span>
-                     <div className="w-5 h-5 rounded-full bg-slate-100 group-hover/btn:bg-slate-200 transition-colors flex items-center justify-center ml-2">
-                       <ChevronRight size={12} className="text-slate-600" />
-                     </div>
-                   </button>
-                 </motion.div>
-               </div>
-             </div>
-           </>
-         )}
-       </div>
-     </motion.div>
-   );
- }
-
-/* ---------------------------
-   Main Page - Orange Theme
----------------------------- */
-const ContestLandingPage: React.FC = () => {
-  const navigate = useNavigate();
-  const { coins } = useCoins();
-  const { userProfile, role } = useAuth() as ReturnType<typeof useAuth> & { userProfile?: { full_name?: string } };
-  const [activeTopic, setActiveTopic] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-  const [difficultyFilter, setDifficultyFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
-  const [megaContests, setMegaContests] = useState<MegaContest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userStats, setUserStats] = useState({
-    streak: 7,
-    rating: 1420,
-    rank: "Top 20%",
-    solved: 162
-  });
-
-  // Fetch mega contests from database
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value);
   useEffect(() => {
-    const fetchMegaContests = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('mega_contests')
-          .select('*')
-          .order('start_time', { ascending: true })
-          .limit(8);
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
 
-        if (error) throw error;
-        setMegaContests(data || []);
-      } catch (error) {
-        console.error('Error fetching mega contests:', error);
-        toast.error('Failed to load contests');
-      } finally {
-        setLoading(false);
-      }
-    };
+/** Scroll the code box into view (it may be off screen in the phone banner row) and focus it. */
+function focusJoin() {
+  const el = document.getElementById(JOIN_INPUT_ID) as HTMLInputElement | null;
+  el?.scrollIntoView({ block: "nearest", inline: "center" });
+  el?.focus({ preventScroll: true });
+}
 
-    fetchMegaContests();
-  }, []);
+/* ─────────────── list pieces ─────────────── */
 
-  const handleBack = () => navigate(-1);
-  const handleDashboardClick = () => navigate("/dashboard");
-
-  // Mega Contest hero cards - Dynamic from database
-  const heroCards = useMemo(() => {
-    const gradients = [
-      "bg-gradient-to-br from-orange-500 to-amber-600",
-      "bg-gradient-to-br from-amber-500 to-yellow-500",
-      "bg-gradient-to-br from-orange-600 to-red-500",
-      "bg-gradient-to-br from-amber-600 to-orange-500",
-      "bg-gradient-to-br from-yellow-500 to-orange-500",
-      "bg-gradient-to-br from-orange-400 to-amber-500",
-      "bg-gradient-to-br from-red-500 to-orange-500",
-      "bg-gradient-to-br from-amber-500 to-orange-600"
-    ];
-    
-    if (loading) {
-      return Array(4).fill(0).map((_, index) => ({
-        id: `loading-${index}`,
-        key: `loading-${index}`,
-        title: "Loading...",
-        subtitle: "",
-        cta: "Loading...",
-        gradient: gradients[index % gradients.length],
-        badge: "Mega",
-        icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" />,
-        isLoading: true
-      }));
-    }
-    
-    if (megaContests.length > 0) {
-      return megaContests.slice(0, 4).map((contest, index) => {
-        const now = new Date();
-        const startTime = new Date(contest.start_time);
-        const endTime = new Date(contest.end_time);
-        const isLive = now >= startTime && now <= endTime;
-        
-        return {
-          id: contest.id,
-          key: `contest-${contest.id}-${index}`,
-          title: contest.title,
-          subtitle: "",
-          cta: isLive ? "Join Now" : "View Details",
-          gradient: gradients[index % gradients.length],
-          badge: contest.class === '11' || contest.class === '12' ? 'PCMB' : 'Mega',
-          icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" />,
-          isTrending: index === 0,
-          isPopular: index === 1,
-          contestData: contest
-        };
-      });
-    }
-    
-    // Fallback if no contests in DB
-    return [
-      { 
-        id: 1, 
-        key: "class9-1", 
-        title: "Class 9 Mega Test", 
-        subtitle: "",
-        cta: "Coming Soon", 
-        gradient: gradients[0],
-        badge: "Mega", 
-        icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" />, 
-        isTrending: true 
-      },
-      { 
-        id: 2, 
-        key: "class10-2", 
-        title: "Class 10 Mega Test", 
-        subtitle: "",
-        cta: "Coming Soon", 
-        gradient: gradients[1], 
-        badge: "Mega", 
-        icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" />, 
-        isPopular: true 
-      },
-      { 
-        id: 3, 
-        key: "class11-3", 
-        title: "Class 11 Mega Test", 
-        subtitle: "",
-        cta: "Coming Soon", 
-        gradient: gradients[2], 
-        badge: "PCMB", 
-        icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" /> 
-      },
-      { 
-        id: 4, 
-        key: "class12-4", 
-        title: "Class 12 Mega Test", 
-        subtitle: "",
-        cta: "Coming Soon", 
-        gradient: gradients[3], 
-        badge: "PCMB", 
-        icon: <Crown className="h-4 w-4 sm:h-5 sm:w-5" /> 
-      },
-    ];
-  }, [megaContests, loading]);
-
-  const topics = useMemo(() => [
-    { name: "All", count: 42, icon: <LayoutGrid size={12} className="sm:size-[14px]" />, color: "bg-slate-200" },
-    { name: "Class 10", count: 8, icon: "🔟", color: "bg-amber-100" },
-    { name: "Class 11", count: 12, icon: "1️⃣1️⃣", color: "bg-orange-100" },
-    { name: "Class 12", count: 15, icon: "1️⃣2️⃣", color: "bg-amber-100" },
-    { name: "JEE", count: 14, icon: "⚛️", color: "bg-orange-100" },
-    { name: "NEET", count: 10, icon: "🧬", color: "bg-amber-100" },
-    { name: "Physics", count: 11, icon: "⚡", color: "bg-orange-100" },
-    { name: "Chemistry", count: 9, icon: "🧪", color: "bg-amber-100" },
-    { name: "Maths", count: 13, icon: "📐", color: "bg-orange-100" },
-  ], []);
-
-  const contests: Contest[] = useMemo(() => [
-    { id: "jee-sprint-5", title: "JEE Sprint #5 — Mechanics", participants: 980, duration: "60m", difficulty: "Medium", status: "upcoming", acceptance: "—", startTime: "Starts in 2d" },
-    { id: "cbse-x-physics", title: "Class 10 — Light & Electricity", participants: 310, duration: "40m", difficulty: "Easy", status: "ongoing", acceptance: "—", startTime: "Ends in 32m" },
-    { id: "neet-bio", title: "NEET Biology — Genetics", participants: 540, duration: "45m", difficulty: "Medium", status: "upcoming", acceptance: "—", startTime: "Starts in 4d" },
-    { id: "cbse-chem", title: "Class 12 — Organic Chem", participants: 120, duration: "90m", difficulty: "Hard", status: "completed", acceptance: "42%", startTime: "Ended yesterday" },
-  ], []);
-
-  const problems: Problem[] = useMemo(() => [
-    { id: 1, title: "Gravitation — g at height h", difficulty: "Easy", acceptance: "78%" },
-    { id: 2, title: "Chemical Kinetics — rate law", difficulty: "Medium", acceptance: "63%" },
-    { id: 3, title: "Vectors — resultant magnitude", difficulty: "Medium", acceptance: "55%" },
-    { id: 4, title: "Human Physiology — blood groups", difficulty: "Hard", acceptance: "49%" },
-  ], []);
-
-  const filteredContests = contests.filter((c) => {
-    const s = searchQuery.toLowerCase();
-    const matchesSearch = c.title.toLowerCase().includes(s);
-    const matchesDiff = difficultyFilter === "all" || c.difficulty.toLowerCase() === difficultyFilter;
-    return matchesSearch && matchesDiff;
-  });
-
-  const handleContestAction = useCallback((contest: Contest) => {
-    if (contest.status === "upcoming") navigate(`/contests/preview/${contest.id}`);
-    else if (contest.status === "ongoing") navigate(`/contests/live/${contest.id}`);
-    else navigate(`/contests/${contest.id}`);
-  }, [navigate]);
-
-  // Handle Mega Contest card clicks
-  const handleCardClick = useCallback((cardKey: string, contestData?: MegaContest) => {
-    if (contestData?.contest_code) {
-      navigate(`/mega-contest/${contestData.contest_code}`);
-    } else {
-      toast.info('Contest details loading...');
-    }
-  }, [navigate]);
-
-  // Get user initials for avatar
-  const getUserInitials = () => {
-    if (userProfile?.full_name) {
-      return userProfile.full_name.charAt(0).toUpperCase();
-    }
-    return "T";
+function Tabs({ view, setView, counts }: { view: FeedView; setView: (v: FeedView) => void; counts?: { upcoming: number; past: number } }) {
+  const tabs: { id: FeedView; label: string; n?: number }[] = [
+    { id: "upcoming", label: "Live & upcoming", n: counts?.upcoming },
+    { id: "past", label: "Past", n: counts?.past },
+  ];
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const next = view === "upcoming" ? "past" : "upcoming";
+    setView(next);
+    document.getElementById(`tab-${next}`)?.focus();
   };
-
-  if (loading && megaContests.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] font-jakarta">
-        <div className="text-center">
-          <div className="w-12 h-12 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600 font-medium">Loading contests...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-jakarta text-slate-900 selection:bg-orange-500/20 selection:text-orange-800 pb-20">
-      
-      {/* Header - Orange Theme */}
-      <div className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur-xl shadow-sm transition-all">
-        <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8">
-          <div className="h-[64px] sm:h-[72px] flex items-center justify-between gap-3">
-            
-            {/* Left: Branding & Back */}
-            <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleBack}
-                className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 transition-all shadow-sm"
-              >
-                <ArrowLeft size={20} strokeWidth={2.5} />
-              </motion.button>
-
-              <motion.div 
-                className="flex items-center gap-2.5 cursor-pointer" 
-                onClick={() => navigate("/")}
-                whileHover={{ scale: 1.02 }}
-              >
-                <img 
-                  src="/images/LOGO.png" 
-                  alt="a4ai Logo" 
-                  className="h-7 sm:h-9 w-auto object-contain" 
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                  }}
-                />
-                <div className="hidden sm:block">
-                  <h1 className="text-lg font-extrabold tracking-tight text-slate-900 font-jakarta">a4ai <span className="text-orange-500">Contest Zone</span></h1>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Center: Search (Desktop) */}
-            <div className="hidden md:flex flex-1 max-w-xl px-4">
-              <motion.div 
-                className="relative w-full group"
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search contests, topics..."
-                  className="pl-10 h-10 rounded-xl bg-slate-100/80 border-transparent focus:bg-white focus:border-orange-200 focus:ring-3 focus:ring-orange-500/20 transition-all font-jakarta"
-                />
-              </motion.div>
-            </div>
-
-            {/* Right: Coins & Profile */}
-            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-              
-              {/* Mobile Search Toggle */}
-              <motion.button 
-                className="md:hidden w-9 h-9 flex items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 active:bg-slate-200"
-                onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
-                whileTap={{ scale: 0.9 }}
-              >
-                {isMobileSearchOpen ? <X size={20} /> : <Search size={20} />}
-              </motion.button>
-
-              {/* Coin Balance */}
-              <motion.div 
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-xl border border-amber-200/50 cursor-pointer hover:shadow-md transition-all"
-                onClick={() => navigate('/coinshop')}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-white font-extrabold text-xs shadow-sm">
-                  <Award size={12} />
-                </div>
-                <span className="font-extrabold text-amber-800 text-sm font-jakarta">{coins.toLocaleString()}</span>
-              </motion.div>
-
-              {/* User Profile */}
-              <motion.div 
-                onClick={handleDashboardClick}
-                className="flex items-center gap-2.5 pl-1.5 pr-3 sm:pr-4 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 hover:border-slate-300 cursor-pointer transition-all shadow-sm"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-sm font-jakarta">
-                  {getUserInitials()}
-                </div>
-                <span className="text-sm font-bold text-slate-700 hidden sm:block font-jakarta">{userProfile?.full_name || "Tarun"}</span>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Mobile Search Bar (Dropdown) */}
-          <AnimatePresence>
-            {isMobileSearchOpen && (
-              <motion.div 
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="md:hidden overflow-hidden"
-              >
-                <div className="pb-3 pt-2">
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search contests..."
-                    autoFocus
-                    className="w-full h-11 rounded-xl bg-slate-100/80 border-slate-200 focus:bg-white focus:ring-2 focus:ring-orange-500/20 font-jakarta"
-                  />
-                </div>
-              </motion.div>
+    <div role="tablist" aria-label="Contests" className="flex gap-4 min-[380px]:gap-6" onKeyDown={onKey}>
+      {tabs.map((t) => {
+        const on = t.id === view;
+        return (
+          <button key={t.id} id={`tab-${t.id}`} role="tab" type="button" aria-selected={on} aria-controls="contest-list"
+            tabIndex={on ? 0 : -1} onClick={() => setView(t.id)}
+            className={cn("relative -mb-px inline-flex h-12 items-center gap-2 whitespace-nowrap border-b-2 text-[15px] font-semibold",
+              on ? "border-[#A92532] text-[#1B1B1B]" : "border-transparent text-[#5D6570] hover:text-[#1B1B1B]", FOCUS_RING)}>
+            {t.label}
+            {t.n != null && (
+              <span className={cn("rounded-full px-2 py-0.5 text-[11.5px] font-semibold tabular-nums", on ? "bg-[#FBF4F5] text-[#A92532]" : "bg-[#F1F2F4] text-[#5D6570]")}>{t.n}</span>
             )}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8 py-5 sm:py-8 space-y-6 sm:space-y-10">
-        
-        {/* 1. Welcome Section */}
-        <section className="flex flex-col md:flex-row md:items-end justify-between gap-4 sm:gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight font-jakarta">
-              Ready to Compete, <br className="sm:hidden" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500 font-jakarta">
-                {userProfile?.full_name?.split(' ')[0] || "Tarun"}?
-              </span>
-            </h1>
-            <p className="text-slate-500 mt-2 font-medium text-sm sm:text-base font-jakarta">
-              Your <span className="text-amber-500 font-bold">{userStats.streak} day streak</span> is active. Keep it up!
-            </p>
-          </motion.div>
-          
-          {/* Quick Stats Grid */}
-          <motion.div 
-            className="flex flex-wrap items-center gap-2 sm:gap-3"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <div className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
-              <Trophy size={16} className="text-amber-500" />
-              <span className="text-xs sm:text-sm font-bold text-slate-700 font-jakarta">{userStats.rank}</span>
-            </div>
-            <div className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
-              <BarChart3 size={16} className="text-orange-500" />
-              <span className="text-xs sm:text-sm font-bold text-slate-700 font-jakarta">{userStats.rating}</span>
-            </div>
-            <div className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
-              <Target size={16} className="text-amber-600" />
-              <span className="text-xs sm:text-sm font-bold text-slate-700 font-jakarta">{userStats.solved} solved</span>
-            </div>
-          </motion.div>
-        </section>
-
-        {/* Teachers: question paper PDF → contest (same flow as the Test Generator tab) */}
-        {role !== "student" && (
-          <button
-            onClick={() => navigate("/dashboard/test-generator?tab=contest-pdf")}
-            className="w-full text-left flex items-center gap-4 p-4 sm:p-5 rounded-2xl bg-slate-900 text-white shadow-md active:scale-[0.99]"
-          >
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-orange-500 flex items-center justify-center shrink-0">
-              <FileUp size={22} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm sm:text-base font-extrabold font-jakarta">Create contest from PDF</p>
-              <p className="text-xs text-slate-300 font-jakarta">Upload a question paper with its answer key — check the answers, share a contest link.</p>
-            </div>
-            <ChevronRight size={20} className="shrink-0 text-slate-400" />
           </button>
-        )}
-        {role !== "student" && (
-          <button onClick={() => navigate("/contests/mine")}
-            className="w-full text-left flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-white border border-slate-200 text-sm font-bold text-slate-800">
-            My contests — results &amp; publish <ChevronRight size={18} className="text-slate-400" />
-          </button>
-        )}
-
-        {/* 2. Hero FlashCards - Mega Contests */}
-        <section>
-          <div className="flex items-center justify-between mb-4 sm:mb-5">
-            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 flex items-center gap-2 font-jakarta">
-              <Sparkles size={18} className="text-orange-500" /> Mega Contests
-            </h2>
-            <Badge variant="outline" className="text-xs font-bold bg-orange-50 text-orange-700 border-orange-200 font-jakarta">
-              Live Today
-            </Badge>
-          </div>
-          
-          {/* Responsive Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-            {heroCards.map((card) => (
-              <PremiumFlashCard 
-                key={card.key} 
-                {...card} 
-                onClick={() => handleCardClick(card.key, card.contestData)} 
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* 3. Main Split Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8">
-          
-          {/* Left Column (Content) */}
-          <div className="lg:col-span-8 space-y-6 sm:space-y-8">
-            
-            {/* Topic Pills */}
-            <div>
-              <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider ml-1 font-jakarta">Browse Topics</h3>
-                <span className="text-xs text-slate-400 font-medium font-jakarta">{topics.reduce((sum, t) => sum + t.count, 0)} topics</span>
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
-                {topics.map((topic, index) => {
-                  const key = topic.name.toLowerCase();
-                  const active = activeTopic === key;
-                  return (
-                    <motion.button
-                      key={`${topic.name}-${index}`}
-                      onClick={() => setActiveTopic(key)}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={clsx(
-                        "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 border shrink-0 font-jakarta",
-                        active 
-                          ? "bg-gradient-to-r from-orange-500 to-amber-500 border-orange-500 text-white shadow-lg" 
-                          : "bg-white border-slate-200 text-slate-600 hover:border-orange-300 hover:bg-orange-50"
-                      )}
-                    >
-                      <span className="text-base">{topic.icon}</span>
-                      {topic.name}
-                      {active && (
-                        <span className="bg-white/20 px-2 py-0.5 rounded-lg text-xs font-bold ml-1.5">
-                          {topic.count}
-                        </span>
-                      )}
-                    </motion.button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Modern Tabbed Content */}
-            <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-              <Tabs defaultValue="contests" className="w-full">
-                <div className="border-b border-slate-100 bg-slate-50/50 px-5 sm:px-6 pt-5 sm:pt-6 pb-0">
-                  <TabsList className="bg-slate-200/50 p-1 rounded-xl w-full sm:w-auto flex h-11 sm:h-12">
-                    <TabsTrigger value="contests" className="flex-1 sm:flex-none rounded-lg px-5 sm:px-6 h-9 text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-orange-600 font-jakarta">
-                      <Calendar size={16} className="mr-2 hidden sm:inline" />
-                      Live Contests
-                    </TabsTrigger>
-                    <TabsTrigger value="problems" className="flex-1 sm:flex-none rounded-lg px-5 sm:px-6 h-9 text-sm font-bold data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-orange-600 font-jakarta">
-                      <BookOpen size={16} className="mr-2 hidden sm:inline" />
-                      Practice Bank
-                    </TabsTrigger>
-                  </TabsList>
-                </div>
-
-                <TabsContent value="contests" className="p-0 m-0">
-                  <div className="divide-y divide-slate-100">
-                    {filteredContests.length > 0 ? (
-                      filteredContests.map((c, i) => (
-                        <ContestRow key={c.id} data={c} onAction={handleContestAction} index={i} />
-                      ))
-                    ) : (
-                      <div className="p-10 text-center">
-                        <Search size={48} className="text-slate-300 mx-auto mb-4" />
-                        <p className="text-slate-400 font-bold font-jakarta">No contests found.</p>
-                        <p className="text-slate-400 text-sm font-medium mt-1 font-jakarta">Try a different search term</p>
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="problems" className="p-0 m-0">
-                  <div className="divide-y divide-slate-100">
-                    {problems.map((p, i) => (
-                      <ProblemRow key={`problem-${p.id}-${i}`} data={p} onClick={() => {}} index={i} />
-                    ))}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-            
-            <SafetyNote />
-          </div>
-
-          {/* Right Column (Widgets) - Orange Theme, No Purple */}
-          <div className="lg:col-span-4 space-y-5 sm:space-y-6">
-            <CoinsCard coins={coins} />
-            <ScheduleWidget />
-            <div className="hidden lg:block"><ProfileWidget userStats={userStats} /></div>
-            {/* Removed WeeklyChallenge - replaced with something else */}
-            <DailyChallenge />
-          </div>
-        </div>
-      </div>
+        );
+      })}
     </div>
   );
-};
+}
 
-/* ---------------------------
-   Refined Sub-Components - Orange Theme
----------------------------- */
-
-function ContestRow({ data, onAction, index }: { data: Contest, onAction: any, index: number }) {
-  const isOngoing = data.status === "ongoing";
-  const isUpcoming = data.status === "upcoming";
-  
+function SubjectChips({ subjects, subject, setSubject, className, wrap }: {
+  subjects: { name: string; count: number }[]; subject: string; setSubject: (s: string) => void; className?: string; wrap?: boolean;
+}) {
+  if (!subjects.length) return null;
+  const chip = (on: boolean) => cn("inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-medium",
+    on ? "border-[#14243A] bg-[#14243A] text-white" : "border-[#E5E7EB] bg-white text-[#1B1B1B] hover:border-[#9CA3AF]", FOCUS_RING);
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      onClick={() => onAction(data)}
-      className={clsx(
-        "p-4 sm:p-5 md:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 hover:bg-slate-50/80 transition-colors cursor-pointer group relative",
-        isOngoing && "bg-gradient-to-r from-orange-50/50 to-amber-50/50"
-      )}
-    >
-      {/* Status Indicator */}
-      <div className={clsx(
-        "absolute top-4 right-4 w-2 h-2 rounded-full",
-        isOngoing ? "bg-green-500 animate-pulse" : 
-        isUpcoming ? "bg-amber-500" : "bg-slate-400"
-      )} />
-      
-      <div className="flex w-full sm:w-auto items-start gap-4">
-        {/* Icon */}
-        <div className={clsx(
-          "w-12 h-12 rounded-2xl flex shrink-0 items-center justify-center shadow-lg",
-          isOngoing ? "bg-gradient-to-br from-green-100 to-emerald-100 text-green-600" : 
-          isUpcoming ? "bg-gradient-to-br from-amber-100 to-orange-100 text-amber-600" :
-          "bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500"
-        )}>
-          {isOngoing ? <Zap size={22} className="fill-green-500/30" /> : 
-           isUpcoming ? <Clock size={22} /> : <Calendar size={22} />}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            {isOngoing && (
-              <Badge className="bg-green-500 hover:bg-green-600 text-white px-2 py-0.5 text-xs font-extrabold font-jakarta">
-                LIVE
-              </Badge>
-            )}
-            <Badge variant="outline" className={clsx(
-              "text-xs font-bold font-jakarta",
-              data.difficulty === "Easy" ? "border-green-200 text-green-700 bg-green-50" :
-              data.difficulty === "Medium" ? "border-amber-200 text-amber-700 bg-amber-50" :
-              "border-red-200 text-red-700 bg-red-50"
-            )}>
-              {data.difficulty}
-            </Badge>
-          </div>
-          
-          <h4 className="text-base font-bold text-slate-900 group-hover:text-orange-600 transition-colors line-clamp-2 font-jakarta">
-            {data.title}
-          </h4>
-          
-          <div className="flex flex-wrap items-center gap-3 mt-2.5 text-sm font-medium text-slate-500 font-jakarta">
-            <span className="flex items-center gap-1.5">
-              <Users size={14} />
-              {data.participants.toLocaleString()} participants
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Clock size={14} />
-              {data.startTime}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Button */}
-      <div className="w-full sm:w-auto mt-3 sm:mt-0">
-        <Button 
-          size="sm"
-          className={clsx(
-            "rounded-xl font-extrabold px-6 h-10 w-full sm:w-auto shadow-md transition-all font-jakarta",
-            isOngoing 
-              ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white" 
-              : "bg-white border border-slate-200 text-slate-700 hover:border-orange-300 hover:text-orange-600 hover:shadow-lg"
-          )}
-        >
-          {isOngoing ? "Join Now" : 
-           isUpcoming ? "Preview" : "View Results"}
-          <ChevronRight size={16} className="ml-2" />
-        </Button>
-      </div>
-    </motion.div>
+    <div role="group" aria-label="Filter by subject" className={cn("flex gap-2", wrap ? "flex-wrap" : "overflow-x-auto [scrollbar-width:none]", className)}>
+      <button type="button" aria-pressed={!subject} className={chip(!subject)} onClick={() => setSubject("")}>All subjects</button>
+      {subjects.map((s) => {
+        const on = subject.toLowerCase() === s.name.toLowerCase();
+        return (
+          <button key={s.name} type="button" aria-pressed={on} className={chip(on)} onClick={() => setSubject(on ? "" : s.name)}>
+            {s.name}
+            <span className={cn("text-[12px] tabular-nums", on ? "text-white/80" : "text-[#5D6570]")}>{s.count}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-function ProblemRow({ data, onClick, index }: { data: Problem, onClick: any, index: number }) {
+function Section({ title, count, tone, children }: { title: string; count?: number; tone: "live" | "soon" | "done"; children: ReactNode }) {
+  const dot = tone === "live" ? "bg-[#168B59]" : tone === "soon" ? "bg-[#246BCE]" : "bg-[#14243A]";
   return (
-    <motion.div 
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05 }}
-      onClick={onClick}
-      className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50/80 cursor-pointer group"
-    >
-      <div className="flex items-center gap-3 sm:gap-4">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex shrink-0 items-center justify-center text-slate-600 font-extrabold text-sm group-hover:from-orange-100 group-hover:to-amber-100 group-hover:text-orange-600 transition-all shadow-sm font-jakarta">
-          #{data.id}
-        </div>
-        <div>
-          <h4 className="font-bold text-slate-900 text-sm group-hover:text-orange-700 line-clamp-2 font-jakarta">
-            {data.title}
-          </h4>
-          <div className="flex items-center gap-3 mt-1.5">
-            <Badge variant="outline" className={clsx(
-              "text-xs font-bold px-2 font-jakarta",
-              data.difficulty === "Easy" ? "border-green-200 text-green-700 bg-green-50" :
-              data.difficulty === "Medium" ? "border-amber-200 text-amber-700 bg-amber-50" :
-              "border-red-200 text-red-700 bg-red-50"
-            )}>
-              {data.difficulty}
-            </Badge>
-            <span className="text-xs font-medium text-slate-500 font-jakarta">Acc: {data.acceptance}</span>
-          </div>
-        </div>
+    <section aria-label={title} className="mt-5 first:mt-4">
+      <div className="mb-3 flex items-center gap-3">
+        <span className={cn("h-2 w-2 rounded-full", dot)} aria-hidden />
+        <h2 className="font-halenoir text-[17px] font-bold text-[#1B1B1B]">{title}</h2>
+        {count != null && <span className="text-[13px] font-medium tabular-nums text-[#5D6570]">{count}</span>}
+        <span className="h-px flex-1 bg-[#E5E7EB]" aria-hidden />
       </div>
-      <ChevronRight size={18} className="text-slate-300 group-hover:text-orange-500 transition-colors" />
-    </motion.div>
+      <ul className="grid gap-3 md:grid-cols-2">{children}</ul>
+    </section>
   );
 }
 
-function CoinsCard({ coins }: { coins: number }) {
+const DARK_BTN = cn("inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#14243A] px-4 text-[13px] font-semibold text-white hover:bg-[#0B1626]", FOCUS_RING);
+
+/* ─────────────── page ─────────────── */
+
+export default function ContestLandingPage() {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const { user, role } = useAuth();
+  const { access } = useAccess();
+  const { balance } = useCoins();
+  const uid = user?.id ?? null;
+  const isStudent = (role || "").toLowerCase().trim() === "student";
+  const home = resolveHomeRoute(access, role);
+  const name = (user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "").trim();
+
+  const [view, setView] = useState<FeedView>("upcoming");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput.trim().slice(0, 80), 300);
+  const [subject, setSubject] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  useContestsChangedListener(uid);
+  const feed = useContestFeed(uid, view, search, subject);
+  const first = feed.data?.pages[0];
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    return (feed.data?.pages ?? []).flatMap((p) => p.items).filter((c) => !seen.has(c.id) && !!seen.add(c.id));
+  }, [feed.data]);
+
+  useEffect(() => {
+    if (feed.error) reportContestError("feed", feed.error);
+  }, [feed.error]);
+
+  // "Enter contest code" from the student dashboard / old /contests/join links → focus the code box once
+  useEffect(() => {
+    if (params.get("join") !== "1") return;
+    focusJoin();
+    params.delete("join");
+    setParams(params, { replace: true });
+  }, [params, setParams]);
+
+  // A countdown reached 0: ask the server again (≤ once per 5 s, however many cards flip at once). The button
+  // already flipped on the shared clock; the refetch only re-syncs, so it waits 0–3 s at random — everyone
+  // waiting for the same contest hits 0 in the same server second, and must not refetch in that second.
+  const lastZero = useRef(0);
+  const onZero = useCallback(() => {
+    if (!uid || Date.now() - lastZero.current < 5000) return;
+    lastZero.current = Date.now();
+    setTimeout(() => qc.invalidateQueries({ queryKey: contestKeys.all(uid) }), Math.random() * 3000);
+  }, [qc, uid]);
+
+  const clearFilters = () => { setSearchInput(""); setSubject(""); };
+  const switchView = (v: FeedView) => { setView(v); setSubject(""); };
+  const errorKind = feed.error instanceof FeedError ? feed.error.kind : feed.error ? "server" : null;
+  const firstLoad = feed.isPending && !!uid;
+  const total = subject ? first?.subjects.find((s) => s.name.toLowerCase() === subject.toLowerCase())?.count : first?.counts[view];
+  const activeFilters = (search ? 1 : 0) + (subject ? 1 : 0);
+
+  // Upcoming view is sorted by start time, so every live contest comes before every scheduled one — the two
+  // sections follow the server's page order exactly.
+  const now = serverNow();
+  const live = view === "upcoming" ? items.filter((c) => phaseAt(c, now) !== "scheduled") : [];
+  const soon = view === "upcoming" ? items.filter((c) => phaseAt(c, now) === "scheduled") : [];
+  const next = first?.next ?? null;
+  const upNext = soon.find((c) => c.id !== next?.id && startsAt(c) != null) ?? null;
+
+  const signInAgain = async () => {
+    await supabase.auth.signOut().catch(() => undefined);
+    navigate("/login", { replace: true });
+  };
+
+  const joinCta = isStudent
+    ? <button type="button" onClick={focusJoin} className={DARK_BTN}><KeyRound size={14} aria-hidden /> Enter a code</button>
+    : <Link to="/dashboard/test-generator?tab=contest-pdf" className={DARK_BTN}>Create from PDF</Link>;
+  const card = (c: FeedContest) => <li key={c.id} className="list-none"><ContestCard c={c} onZero={onZero} /></li>;
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500 p-5 sm:p-6 text-white shadow-xl"
-    >
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-white rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-300 rounded-full blur-3xl" />
-      </div>
-      
-      <div className="relative z-10">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <p className="text-amber-100 text-sm font-bold mb-1 font-jakarta">Your Balance</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight font-jakarta">{coins.toLocaleString()}</span>
-              <span className="text-xl opacity-80">©</span>
+    <div className="min-h-screen bg-white text-[#1B1B1B]">
+      <Helmet><title>Contests · a4ai</title></Helmet>
+      <StudentNav home={home} isStudent={isStudent} name={name} email={user?.email ?? null} balance={balance} />
+
+      <main className="mx-auto max-w-[1280px] px-4 pb-[calc(3rem+env(safe-area-inset-bottom))] pt-5 lg:px-6 lg:pt-7">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-8">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+              <div>
+                <h1 className="font-halenoir text-[26px] font-extrabold leading-tight tracking-tight md:text-[30px]">Contests</h1>
+                <p className="mt-0.5 text-[13.5px] text-[#5D6570]">
+                  {isStudent ? "Your teachers' contests, live countdowns and where you rank." : "Your contests, who's taking them and how they did."}
+                </p>
+              </div>
+              {first && !search && !subject && first.counts.upcoming + first.counts.past > 0 && (
+                <ul aria-label="Summary" className="flex gap-2 text-[12.5px] font-semibold">
+                  <li className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[#E5E7EB] px-3 text-[#0E6B43]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#168B59]" aria-hidden /><span className="tabular-nums">{first.counts.live}</span> live
+                  </li>
+                  <li className="inline-flex h-8 items-center gap-1 rounded-full border border-[#E5E7EB] px-3 text-[#1D4F99]">
+                    <span className="tabular-nums">{Math.max(0, first.counts.upcoming - first.counts.live)}</span> upcoming
+                  </li>
+                  <li className="inline-flex h-8 items-center gap-1 rounded-full border border-[#E5E7EB] px-3 text-[#5D6570]">
+                    <span className="tabular-nums">{first.counts.past}</span> past
+                  </li>
+                </ul>
+              )}
             </div>
-            <p className="text-amber-100/80 text-sm font-medium mt-2 font-jakarta">Earn more by solving problems</p>
-          </div>
-          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-lg">
-            <Award size={24} className="text-white" />
-          </div>
-        </div>
-        
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => window.location.href = '/coinshop'}
-          className="w-full bg-white text-amber-700 font-extrabold h-12 rounded-xl shadow-lg hover:shadow-xl hover:bg-amber-50 transition-all flex items-center justify-center gap-2 font-jakarta"
-        >
-          <Sparkles size={16} />
-          Redeem Rewards
-        </motion.button>
-      </div>
-    </motion.div>
-  );
-}
 
-function ScheduleWidget() {
-  const [currentDate] = useState(new Date());
-  
-  const days = [
-    { id: 0, label: 'S', full: 'Sunday' },
-    { id: 1, label: 'M', full: 'Monday' },
-    { id: 2, label: 'T', full: 'Tuesday' },
-    { id: 3, label: 'W', full: 'Wednesday' },
-    { id: 4, label: 'T', full: 'Thursday' },
-    { id: 5, label: 'F', full: 'Friday' },
-    { id: 6, label: 'S', full: 'Saturday' }
-  ];
-  
-  const today = currentDate.getDate();
-  const currentDay = currentDate.getDay();
-  
-  return (
-    <Card className="rounded-2xl sm:rounded-3xl border-slate-200 shadow-sm overflow-hidden">
-      <CardContent className="p-5 sm:p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center">
-            <Calendar size={20} className="text-orange-600" />
-          </div>
-          <div>
-            <h3 className="font-extrabold text-slate-900 font-jakarta">Study Calendar</h3>
-            <p className="text-slate-500 text-sm font-medium font-jakarta">Upcoming tests & deadlines</p>
-          </div>
-        </div>
-        
-        {/* Date Strip */}
-        <div className="flex justify-between mb-6">
-          {days.map((day, index) => {
-            const date = today - currentDay + index;
-            const isToday = index === currentDay;
-            return (
-              <div key={`${day.full}-${day.id}`} className="flex flex-col items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 font-jakarta">{day.label}</span>
-                <div className={clsx(
-                  "w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all font-jakarta",
-                  isToday 
-                    ? "bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg scale-110" 
-                    : "text-slate-700 hover:bg-slate-100"
-                )}>
-                  {date}
+            {/* featured: swipe row (one at a time on phones, no autoplay) → three columns from xl */}
+            <div className="-mx-4 mt-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] lg:-mx-6 lg:scroll-px-6 lg:px-6 xl:mx-0 xl:grid xl:grid-cols-3 xl:gap-4 xl:overflow-visible xl:px-0 xl:pb-0">
+              <FeaturedBanner next={next} loading={firstLoad} isStudent={isStudent} onZero={onZero} onJoin={focusJoin} />
+              <JoinCodeCard uid={uid} onZero={onZero} />
+              <PracticeCreateBanner isStudent={isStudent} />
+            </div>
+
+            {/* category navigation */}
+            <div className="mt-8 flex items-end justify-between gap-3 border-b border-[#E5E7EB]">
+              <Tabs view={view} setView={switchView} counts={first?.counts} />
+              <div className="flex items-center gap-2 pb-2">
+                {feed.isFetching && !firstLoad && (
+                  <span className="hidden items-center gap-1 text-[12px] text-[#5D6570] lg:inline-flex" role="status">
+                    <RefreshCw size={12} aria-hidden /> Updating
+                  </span>
+                )}
+                <div className="relative hidden md:block">
+                  <label htmlFor="contest-search" className="sr-only">Search your contests</label>
+                  <Search size={15} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5D6570]" />
+                  <input id="contest-search" type="search" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+                    placeholder="Search title, subject or code" maxLength={80}
+                    className="h-9 w-60 rounded-lg border border-[#E5E7EB] bg-[#F5F6F8] pl-9 pr-3 text-[13.5px] text-[#1B1B1B] placeholder:text-[#6B7280] outline-none focus:border-[#246BCE] focus:bg-white focus:ring-2 focus:ring-[#246BCE]/20" />
                 </div>
+                <button type="button" onClick={() => setSheetOpen(true)}
+                  className={cn("inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D5D9DF] px-3 text-[13px] font-semibold text-[#1B1B1B] md:hidden", FOCUS_RING)}>
+                  <SlidersHorizontal size={15} aria-hidden /> <span className="sr-only min-[380px]:not-sr-only">Filters</span>
+                  {activeFilters > 0 && <span className="rounded-full bg-[#14243A] px-1.5 text-[11px] text-white">{activeFilters}</span>}
+                </button>
               </div>
-            );
-          })}
-        </div>
-        
-        {/* Upcoming Event */}
-        <div className="bg-gradient-to-r from-orange-50/80 to-amber-50/80 p-4 rounded-xl border border-orange-100">
-          <div className="flex gap-3">
-            <div className="w-1.5 bg-gradient-to-b from-orange-500 to-amber-500 rounded-full h-full min-h-[48px]" />
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-0.5 text-xs font-extrabold font-jakarta">
-                  Physics
-                </Badge>
-                <span className="text-xs text-orange-600 font-bold font-jakarta">Mock Test</span>
-              </div>
-              <h4 className="text-sm font-bold text-orange-900 font-jakarta">Weekly Assessment</h4>
-              <p className="text-xs text-orange-600 font-medium mt-0.5 font-jakarta">Today • 7:30 PM • 60 mins</p>
+            </div>
+            <SubjectChips subjects={first?.subjects ?? []} subject={subject} setSubject={setSubject} className="-mx-4 mt-3 px-4 md:mx-0 md:px-0" />
+
+            <div id="contest-list" role="tabpanel" aria-labelledby={`tab-${view}`} aria-busy={feed.isFetching}>
+              {errorKind && items.length === 0 ? (
+                errorKind === "missing" ? (
+                  <Notice className="mt-4" icon={<CalendarClock size={26} aria-hidden />} title="Your contest list is almost ready"
+                    body="The list switches on with the next server update. You can already join a contest with its code." action={joinCta} />
+                ) : (
+                  <div role="alert">
+                    <Notice className="mt-4" icon={<RefreshCw size={24} aria-hidden />} title={FEED_ERROR_TEXT[errorKind]}
+                      action={errorKind === "auth"
+                        ? <button type="button" onClick={signInAgain} className={DARK_BTN}>Sign in again</button>
+                        : <button type="button" onClick={() => feed.refetch()} className={DARK_BTN}><RefreshCw size={14} aria-hidden /> Try again</button>} />
+                  </div>
+                )
+              ) : firstLoad ? (
+                <ul aria-hidden className="mt-4 grid gap-3 md:grid-cols-2">
+                  {[0, 1, 2, 3].map((i) => <li key={i} className="list-none"><ContestCardSkeleton /></li>)}
+                </ul>
+              ) : items.length === 0 ? (
+                search || subject ? (
+                  <Notice className="mt-4" icon={<Search size={24} aria-hidden />} title={`No contests match${search ? ` "${search}"` : ""}${subject ? ` in ${subject}` : ""}`}
+                    action={<button type="button" onClick={clearFilters} className={DARK_BTN}>Clear filters</button>} />
+                ) : (
+                  <Notice className="mt-4" icon={<Trophy size={26} aria-hidden />}
+                    title={view === "upcoming" ? "No live or upcoming contests" : "No past contests yet"}
+                    body={isStudent
+                      ? view === "upcoming" ? "Got a code or link from your teacher? Enter it and the contest appears here with a countdown." : "Contests you finish show up here with your score."
+                      : view === "upcoming" ? "Create a contest from a question paper PDF and share its link with your class." : "Contests that have ended show up here."}
+                    action={view === "upcoming" ? joinCta : undefined} />
+                )
+              ) : (
+                <div className={cn(feed.isPlaceholderData && "opacity-60")}>
+                  {errorKind && (
+                    <p role="status" className="mt-4 rounded-lg border border-[#F2D9A2] bg-[#FFF8E8] px-4 py-2 text-[12.5px] text-[#7A5200]">
+                      Couldn't refresh — showing the last loaded list.{" "}
+                      <button type="button" onClick={() => feed.refetch()} className="font-semibold underline underline-offset-2">Try again</button>
+                    </p>
+                  )}
+                  {view === "upcoming" ? (
+                    <>
+                      {live.length > 0 && <Section title="Live now" count={subject || search ? undefined : first?.counts.live} tone="live">{live.map(card)}</Section>}
+                      {soon.length > 0 && <Section title="Starting soon" tone="soon">{soon.map(card)}</Section>}
+                    </>
+                  ) : (
+                    <Section title="Completed & closed" tone="done">{items.map(card)}</Section>
+                  )}
+                  <div className="mt-5 flex items-center justify-between gap-3 text-[12.5px] text-[#5D6570]">
+                    <span className="tabular-nums">Showing {items.length}{total != null && total >= items.length ? ` of ${total}` : ""}</span>
+                    {feed.hasNextPage && (
+                      <button type="button" onClick={() => feed.fetchNextPage()} disabled={feed.isFetchingNextPage}
+                        className={cn("inline-flex h-10 items-center rounded-lg border border-[#D5D9DF] px-5 text-[13px] font-semibold text-[#1B1B1B] hover:border-[#9CA3AF] disabled:opacity-60", FOCUS_RING)}>
+                        {feed.isFetchingNextPage ? "Loading…" : "Load more"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* sidebar on desktop; under the list on phones and tablets */}
+          <aside aria-label="Calendar and results" className="mt-10 space-y-4 lg:mt-0">
+            <ContestCalendar scheduled={first?.scheduled ?? []} contests={items} upNext={upNext} />
+            <LatestResults uid={uid} isStudent={isStudent} />
+            {balance != null && <CoinsCard balance={balance} />}
+            <FairPlay />
+          </aside>
         </div>
-      </CardContent>
-    </Card>
+      </main>
+
+      {/* phone filters: one bottom sheet instead of sticky filter bars */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5">
+          <SheetHeader className="text-left">
+            <SheetTitle>Filters</SheetTitle>
+            <SheetDescription>Search and narrow your contests.</SheetDescription>
+          </SheetHeader>
+          <label htmlFor="contest-search-m" className="mt-4 block text-[13px] font-semibold text-[#1B1B1B]">Search</label>
+          <div className="relative mt-1.5">
+            <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5D6570]" />
+            <input id="contest-search-m" type="search" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Title, subject or code" maxLength={80}
+              className="h-11 w-full rounded-lg border border-[#D5D9DF] bg-white pl-9 pr-10 text-[15px] text-[#1B1B1B] outline-none focus:border-[#246BCE] focus:ring-2 focus:ring-[#246BCE]/20" />
+            {searchInput && (
+              <button type="button" aria-label="Clear search" onClick={() => setSearchInput("")}
+                className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center text-[#5D6570]"><X size={16} aria-hidden /></button>
+            )}
+          </div>
+          {(first?.subjects.length ?? 0) > 0 && (
+            <>
+              <p className="mt-4 text-[13px] font-semibold text-[#1B1B1B]">Subject</p>
+              <SubjectChips subjects={first!.subjects} subject={subject} setSubject={setSubject} className="mt-2" wrap />
+            </>
+          )}
+          <div className="mt-6 flex gap-2">
+            <button type="button" onClick={clearFilters} className="h-11 flex-1 rounded-lg border border-[#D5D9DF] text-[14px] font-semibold text-[#1B1B1B]">Clear</button>
+            <button type="button" onClick={() => setSheetOpen(false)} className="h-11 flex-[2] rounded-lg bg-[#14243A] text-[14px] font-semibold text-white">
+              {total != null ? `Show ${total} contest${total === 1 ? "" : "s"}` : "Show contests"}
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }
-
-function ProfileWidget({ userStats }: { userStats: any }) {
-  return (
-    <Card className="rounded-2xl sm:rounded-3xl border-slate-200 shadow-sm overflow-hidden">
-      <CardContent className="p-5 sm:p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 border-4 border-white shadow-lg flex items-center justify-center text-white font-extrabold text-xl font-jakarta">
-            T
-          </div>
-          <div>
-            <h3 className="font-extrabold text-slate-900 text-lg font-jakarta">Tarun</h3>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold font-jakarta">
-                {userStats.rank}
-              </Badge>
-              <span className="text-xs font-medium text-slate-500 font-jakarta">Student</span>
-            </div>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100 text-center shadow-sm">
-            <div className="text-xs font-extrabold text-slate-500 uppercase mb-2 font-jakarta">Solved</div>
-            <div className="text-2xl font-black text-slate-900 font-jakarta">{userStats.solved}</div>
-            <Progress value={75} className="h-1.5 mt-2" />
-          </div>
-          <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100 text-center shadow-sm">
-            <div className="text-xs font-extrabold text-slate-500 uppercase mb-2 font-jakarta">Streak</div>
-            <div className="text-2xl font-black text-slate-900 flex items-center justify-center gap-1.5 font-jakarta">
-              {userStats.streak} 
-              <Flame size={16} className="text-orange-500 fill-orange-500" />
-            </div>
-            <p className="text-xs font-medium text-slate-500 mt-1 font-jakarta">7 days active</p>
-          </div>
-        </div>
-        
-        <div className="mt-4 pt-4 border-t border-slate-100">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-medium text-slate-600 font-jakarta">Weekly Progress</span>
-            <span className="text-sm font-extrabold text-amber-600 font-jakarta">+12%</span>
-          </div>
-          <Progress value={65} className="h-2 mt-2" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// Replaced WeeklyChallenge with DailyChallenge - Orange Theme
-function DailyChallenge() {
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.4 }}
-      className="rounded-2xl sm:rounded-3xl bg-gradient-to-br from-orange-500 via-amber-500 to-orange-600 p-5 sm:p-6 text-white text-center shadow-xl relative overflow-hidden"
-    >
-      {/* Background Elements */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16 blur-3xl" />
-      <div className="absolute bottom-0 left-0 w-40 h-40 bg-amber-500/10 rounded-full translate-y-16 -translate-x-16 blur-3xl" />
-      
-      <div className="relative z-10">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg">
-          <Zap size={28} className="text-white" />
-        </div>
-        
-        <h3 className="text-lg sm:text-xl font-extrabold mb-2 font-jakarta">Daily Challenge</h3>
-        <p className="text-orange-100 text-sm font-medium mb-6 max-w-xs mx-auto font-jakarta">
-          Solve today's challenge and earn 50 bonus coins!
-        </p>
-        
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
-            <div className="text-xl font-black font-jakarta">50</div>
-            <div className="text-xs text-orange-200 font-bold font-jakarta">Coins</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
-            <div className="text-xl font-black font-jakarta">Easy</div>
-            <div className="text-xs text-orange-200 font-bold font-jakarta">Difficulty</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm p-3 rounded-xl">
-            <div className="text-xl font-black font-jakarta">10</div>
-            <div className="text-xs text-orange-200 font-bold font-jakarta">Minutes</div>
-          </div>
-        </div>
-        
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="w-full py-3.5 bg-white text-orange-700 font-extrabold rounded-xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-2 font-jakarta"
-        >
-          <Target size={18} />
-          Start Challenge
-        </motion.button>
-      </div>
-    </motion.div>
-  );
-}
-
-function SafetyNote() {
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.5 }}
-      className="rounded-xl sm:rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/80 to-amber-50/80 p-4 flex items-start gap-3"
-    >
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center shadow-sm">
-        <ShieldCheck className="w-5 h-5 text-orange-600" />
-      </div>
-      <div>
-        <h4 className="text-sm font-bold text-orange-900 mb-1 font-jakarta">Fair Play & Security</h4>
-        <p className="text-xs text-orange-700/90 font-medium leading-relaxed font-jakarta">
-          Advanced proctoring monitors tab switching. All contests are timed and recorded to ensure a fair competitive environment.
-        </p>
-      </div>
-    </motion.div>
-  );
-}
-
-export default ContestLandingPage;

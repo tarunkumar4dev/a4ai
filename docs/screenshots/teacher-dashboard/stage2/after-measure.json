@@ -1,0 +1,150 @@
+{
+  "landing-1440": {
+    "h1": {
+      "weight": "700",
+      "color": "rgb(27, 27, 27)",
+      "size": "60px",
+      "font": "\"Plus Jakarta Sans\""
+    },
+    "primaryCta": {
+      "bg": "rgb(17, 17, 17)",
+      "color": "rgb(255, 255, 255)",
+      "radius": "12px",
+      "height": 50
+    },
+    "bodyColor": "rgb(27, 27, 27)",
+    "overflow": 0
+  },
+  "landing-390": {
+    "h1": {
+      "weight": "700",
+      "color": "rgb(27, 27, 27)",
+      "size": "36px",
+      "font": "\"Plus Jakarta Sans\""
+    },
+    "primaryCta": {
+      "bg": "rgb(17, 17, 17)",
+      "color": "rgb(255, 255, 255)",
+      "radius": "12px",
+      "height": 50
+    },
+    "bodyColor": "rgb(27, 27, 27)",
+    "overflow": 0
+  },
+  "dashboard-320": {
+    "h1s": [
+      {
+        "text": "Welcome, Test",
+        "weight": "700",
+        "color": "rgb(27, 27, 27)",
+        "size": "24px"
+      },
+      {
+        "text": "Welcome, Test",
+        "weight": "700",
+        "color": "rgb(27, 27, 27)",
+        "size": "24px"
+      }
+    ],
+    "heroCta": {
+      "bg": "rgb(17, 17, 17)",
+      "color": "rgb(255, 255, 255)",
+      "radius": "12px",
+      "height": 50,
+      "top": 674,
+      "bottom": 724,
+      "visibleInViewport": true
+    },
+    "rootColor": "rgb(27, 27, 27)",
+    "rootBg": "rgb(247, 248, 250)",
+    "overflow": 0,
+    "navButtons": 12
+  },
+  "dashboard-390": {
+    "h1s": [
+      {
+        "text": "Welcome, Test",
+        "weight": "700",
+        "color": "rgb(27, 27, 27)",
+        "size": "24px"
+      },
+      {
+        "text": "Welcome, Test",
+        "weight": "700",
+        "color": "rgb(27, 27, 27)",
+        "size": "24px"
+      }
+    ],
+    "heroCta": {
+      "bg": "rgb(17, 17, 17)",
+      "color": "rgb(255, 255, 255)",
+      "radius": "12px",
+      "height": 50,
+      "top": 654,
+      "bottom": 704,
+      "visibleInViewport": true
+    },
+    "rootColor": "rgb(27, 27, 27)",
+    "rootBg": "rgb(247, 248, 250)",
+    "overflow": 0,
+    "navButtons": 12
+  },
+  "dashboard-768": {
+    "h1s": [
+      {
+        "text": "Welcome, Test",
+        "weight": "700",
+        "color": "rgb(27, 27, 27)",
+        "size": "30px"
+      },
+      {
+        "text": "Welcome, Test",
+        "weight": "700",
+        "color": "rgb(27, 27, 27)",
+        "size": "30px"
+      }
+    ],
+    "heroCta": {
+      "bg": "rgb(17, 17, 17)",
+      "color": "rgb(255, 255, 255)",
+      "radius": "12px",
+      "height": 50,
+      "top": 674,
+      "bottom": 724,
+      "visibleInViewport": true
+    },
+    "rootColor": "rgb(27, 27, 27)",
+    "rootBg": "rgb(247, 248, 250)",
+    "overflow": 0,
+    "navButtons": 12
+  },
+  "dashboard-1440": {
+    "h1s": [
+      {
+        "text": "Welcome, Test",
+        "weight": "700",
+        "color": "rgb(27, 27, 27)",
+        "size": "36px"
+      },
+      {
+        "text": "Welcome, Test",
+        "weight": "700",
+        "color": "rgb(27, 27, 27)",
+        "size": "30px"
+      }
+    ],
+    "heroCta": {
+      "bg": "rgb(17, 17, 17)",
+      "color": "rgb(255, 255, 255)",
+      "radius": "12px",
+      "height": 50,
+      "top": 698,
+      "bottom": 748,
+      "visibleInViewport": true
+    },
+    "rootColor": "rgb(27, 27, 27)",
+    "rootBg": "rgb(247, 248, 250)",
+    "overflow": 0,
+    "navButtons": 12
+  }
+}
