@@ -1,5 +1,6 @@
-// Agent SSE client: POST /api/agent/chat (streams AgentEvent), POST /api/agent/approve.
-import { backendUrl } from "@/lib/apiBase";
+// Agent SSE client: POST /agent/chat (streams AgentEvent), POST /agent/approve, GET /agent/drafts/:id/pdf.
+// Base URL = VITE_AGENT_URL (see ./config).
+import { agentUrl } from "./config";
 import { createSseParser, decodeSseData, type AgentEvent } from "./events";
 
 export class AgentHttpError extends Error {
@@ -29,7 +30,7 @@ export async function streamChat(opts: {
   onEvent: (e: AgentEvent) => void;
   signal?: AbortSignal;
 }): Promise<void> {
-  const res = await fetch(backendUrl("/agent/chat"), {
+  const res = await fetch(agentUrl("/agent/chat"), {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream", Authorization: `Bearer ${opts.token}` },
     body: JSON.stringify({ session_id: opts.sessionId ?? null, message: opts.message }),
@@ -59,7 +60,7 @@ export async function streamChat(opts: {
 export interface ApproveResult { ok: boolean; [k: string]: unknown }
 
 export async function approve(opts: { sessionId: string; approvalId: string; token: string; signal?: AbortSignal }): Promise<ApproveResult> {
-  const res = await fetch(backendUrl("/agent/approve"), {
+  const res = await fetch(agentUrl("/agent/approve"), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${opts.token}` },
     body: JSON.stringify({ session_id: opts.sessionId, approval_id: opts.approvalId }),
@@ -68,4 +69,26 @@ export async function approve(opts: { sessionId: string; approvalId: string; tok
   if (!res.ok) throw new AgentHttpError(res.status, await errorText(res));
   const j = await res.json().catch(() => ({}));
   return { ok: true, ...(j && typeof j === "object" ? j : {}) };
+}
+
+/** Only the agent's own draft-PDF path is fetched with the user's token (never an arbitrary URL). */
+export function isAgentPdfPath(path: unknown): path is string {
+  return typeof path === "string" && /^\/agent\/drafts\/[0-9a-f-]{36}\/pdf$/i.test(path);
+}
+
+export async function downloadAgentPdf(opts: { path: string; token: string; filename?: string }): Promise<void> {
+  if (!isAgentPdfPath(opts.path)) throw new AgentHttpError(400, "Invalid download link");
+  const res = await fetch(agentUrl(opts.path), { headers: { Authorization: `Bearer ${opts.token}` } });
+  if (!res.ok) throw new AgentHttpError(res.status, await errorText(res));
+  const url = URL.createObjectURL(await res.blob());
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = opts.filename ?? "a4ai-test.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
 }
