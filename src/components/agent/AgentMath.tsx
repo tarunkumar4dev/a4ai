@@ -1,6 +1,7 @@
-// $...$ inline math via KaTeX (trust:false, throwOnError:false). Plain text is escaped,
-// never parsed as HTML (no DOMPurify in the repo, so only KaTeX's own output is injected).
+// $...$ inline math via KaTeX (trust:false, throwOnError:false). Plain text is escaped, and the
+// combined HTML is sanitized with DOMPurify before it is injected.
 import { useMemo } from "react";
+import DOMPurify from "dompurify";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 
@@ -25,6 +26,9 @@ export function renderMathHtml(text: string): string {
 }
 
 export function AgentMath({ text, className }: { text: string; className?: string }) {
-  const html = useMemo(() => renderMathHtml(text), [text]);
+  const html = useMemo(
+    () => DOMPurify.sanitize(renderMathHtml(text), { USE_PROFILES: { html: true, mathMl: true, svg: true } }),
+    [text],
+  );
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }

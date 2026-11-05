@@ -40,6 +40,7 @@ const Rules = lazy(() => import("@/pages/Rules"));
 const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage"));
 const TestBuilderPage = lazy(() => import("./pages/TestBuilderPage"));
 const LandingDemo = lazy(() => import("@/components/LandingDemo"));
+const AgentPage = lazy(() => import("@/pages/agent/AgentPage"));
 const FAQ = lazy(() => import("@/components/FAQ"));
 const StudentPortalPage = lazy(() => import("./pages/StudentPortalPage"));
 const AssignmentLinkPage = lazy(() => import("./pages/AssignmentLinkPage"));
@@ -477,6 +478,7 @@ const App = () => {
                       <Route path="/notes" element={<PrivateRoute><NotesPage /></PrivateRoute>} />
                       <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
 
+                      <Route path="/agent" element={<RoleRoute allow={['admin', 'hod', 'proctor', 'teacher']}><AgentPage /></RoleRoute>} />
                       {/* Contests */}
                       <Route path="/contests" element={<PrivateRoute><ContestLandingPage /></PrivateRoute>} />
                       <Route path="/contests/create" element={<PrivateRoute><CreateContestPage /></PrivateRoute>} />
