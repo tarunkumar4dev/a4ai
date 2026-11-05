@@ -110,3 +110,14 @@ describe("status labels, URLs", () => {
     expect(isAgentPdfPath(undefined)).toBe(false);
   });
 });
+
+describe("dev role header", () => {
+  it("adds X-Dev-Role only in dev with a valid role", async () => {
+    const { agentDevRole, agentHeaders } = await import("./client");
+    expect(agentDevRole({ DEV: true, VITE_AGENT_DEV_ROLE: "Admin" })).toBe("admin");
+    expect(agentDevRole({ DEV: false, VITE_AGENT_DEV_ROLE: "admin" })).toBeNull();
+    expect(agentDevRole({ DEV: true, VITE_AGENT_DEV_ROLE: "root" })).toBeNull();
+    expect(agentHeaders(null, {}, "teacher")).toEqual({ "X-Dev-Role": "teacher" });
+    expect(agentHeaders("t", { "Content-Type": "application/json" }, null)).toEqual({ "Content-Type": "application/json", Authorization: "Bearer t" });
+  });
+});

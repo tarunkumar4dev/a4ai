@@ -2,7 +2,7 @@
 // sheet or an error never clears the history. Cancel on an approval is LOCAL ONLY: /agent/approve executes the
 // action, so it is called solely by the Approve button; an unapproved request simply expires (15 min).
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import { AgentHttpError, approve as approveApi, downloadAgentPdf, getAgentToken, isAgentPdfPath, streamChat } from "@/lib/agent/client";
+import { AgentHttpError, agentDevRole, approve as approveApi, downloadAgentPdf, getAgentToken, isAgentPdfPath, streamChat } from "@/lib/agent/client";
 import { chatReducer, initialChatState, type Block, type ChatState } from "@/lib/agent/chatState";
 
 export interface AgentChat {
@@ -48,7 +48,7 @@ export function useAgentChat(): AgentChat {
     void (async () => {
       try {
         const token = await getAgentToken();
-        if (!token) {
+        if (!token && !agentDevRole()) {
           dispatch({ type: "fail", code: "unauthorized", message: "Please sign in to use a4ai Agent." });
           return;
         }
@@ -83,7 +83,7 @@ export function useAgentChat(): AgentChat {
     void (async () => {
       try {
         const token = await getAgentToken();
-        if (!token) throw new AgentHttpError(401, "no token");
+        if (!token && !agentDevRole()) throw new AgentHttpError(401, "no token");
         const r = await approveApi({ sessionId, approvalId: b.ev.approval_id, token });
         dispatch({ type: "approval", blockId, state: "approved", result: r });
       } catch (err) {
@@ -105,7 +105,7 @@ export function useAgentChat(): AgentChat {
     void (async () => {
       try {
         const token = await getAgentToken();
-        if (!token) throw new AgentHttpError(401, "no token");
+        if (!token && !agentDevRole()) throw new AgentHttpError(401, "no token");
         await downloadAgentPdf({ path, token, filename: "a4ai-test.pdf" });
       } catch (err) {
         dispatch({ type: "approval", blockId, state: "approved", error: friendlyError(err)?.message ?? "Download failed." });

@@ -3,6 +3,19 @@
 import { agentUrl } from "./config";
 import { createSseParser, decodeSseData, type AgentEvent } from "./events";
 
+/** Dev only: VITE_AGENT_DEV_ROLE=admin|teacher -> X-Dev-Role (backend honours it only with AGENT_DEV_MODE=1). */
+export function agentDevRole(env: { DEV?: boolean; VITE_AGENT_DEV_ROLE?: string } = import.meta.env): "admin" | "teacher" | null {
+  const r = (env.VITE_AGENT_DEV_ROLE ?? "").trim().toLowerCase();
+  return env.DEV && (r === "admin" || r === "teacher") ? r : null;
+}
+
+export function agentHeaders(token: string | null, extra: Record<string, string> = {}, devRole = agentDevRole()): Record<string, string> {
+  const h: Record<string, string> = { ...extra };
+  if (token) h.Authorization = `Bearer ${token}`;
+  if (devRole) h["X-Dev-Role"] = devRole;
+  return h;
+}
+
 export class AgentHttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
@@ -26,13 +39,13 @@ async function errorText(res: Response): Promise<string> {
 export async function streamChat(opts: {
   message: string;
   sessionId?: string | null;
-  token: string;
+  token: string | null;
   onEvent: (e: AgentEvent) => void;
   signal?: AbortSignal;
 }): Promise<void> {
   const res = await fetch(agentUrl("/agent/chat"), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream", Authorization: `Bearer ${opts.token}` },
+    headers: agentHeaders(opts.token, { "Content-Type": "application/json", Accept: "text/event-stream" }),
     body: JSON.stringify({ session_id: opts.sessionId ?? null, message: opts.message }),
     signal: opts.signal,
   });
@@ -59,10 +72,10 @@ export async function streamChat(opts: {
 
 export interface ApproveResult { ok: boolean; [k: string]: unknown }
 
-export async function approve(opts: { sessionId: string; approvalId: string; token: string; signal?: AbortSignal }): Promise<ApproveResult> {
+export async function approve(opts: { sessionId: string; approvalId: string; token: string | null; signal?: AbortSignal }): Promise<ApproveResult> {
   const res = await fetch(agentUrl("/agent/approve"), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${opts.token}` },
+    headers: agentHeaders(opts.token, { "Content-Type": "application/json" }),
     body: JSON.stringify({ session_id: opts.sessionId, approval_id: opts.approvalId }),
     signal: opts.signal,
   });
@@ -76,9 +89,9 @@ export function isAgentPdfPath(path: unknown): path is string {
   return typeof path === "string" && /^\/agent\/drafts\/[0-9a-f-]{36}\/pdf$/i.test(path);
 }
 
-export async function downloadAgentPdf(opts: { path: string; token: string; filename?: string }): Promise<void> {
+export async function downloadAgentPdf(opts: { path: string; token: string | null; filename?: string }): Promise<void> {
   if (!isAgentPdfPath(opts.path)) throw new AgentHttpError(400, "Invalid download link");
-  const res = await fetch(agentUrl(opts.path), { headers: { Authorization: `Bearer ${opts.token}` } });
+  const res = await fetch(agentUrl(opts.path), { headers: agentHeaders(opts.token) });
   if (!res.ok) throw new AgentHttpError(res.status, await errorText(res));
   const url = URL.createObjectURL(await res.blob());
   try {
