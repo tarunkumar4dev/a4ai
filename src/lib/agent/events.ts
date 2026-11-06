@@ -1,5 +1,7 @@
-// Mirror of RAG-BACKEND agent/schemas.py (FROZEN CONTRACT 1.0). Do not rename fields.
-export const AGENT_CONTRACT_VERSION = "1.0";
+// Mirror of RAG-BACKEND agent/schemas.py (FROZEN CONTRACT 1.1). Do not rename fields.
+// 1.1: stat_card.period / stat_card.delta (optional); thinking_status key "tool.<name>" with
+//      params {phase:"start"} then {phase:"done", ms, ok}.
+export const AGENT_CONTRACT_VERSION = "1.1";
 
 export type QuestionType =
   | "mcq" | "numeric" | "assertion_reason" | "short_answer" | "long_answer" | "case_study" | "very_short";
@@ -12,6 +14,8 @@ export interface TextDelta extends Base { type: "text_delta"; text: string }
 export interface ThinkingStatus extends Base { type: "thinking_status"; key: string; params: Record<string, unknown> }
 export interface StatCard extends Sourced {
   type: "stat_card"; title: string; value: string | null; unit?: string | null; subtitle?: string | null;
+  /** e.g. "1–5 Nov 2026" */ period?: string | null;
+  /** e.g. "+2.1 pts vs Oct" — only when the tool computed it */ delta?: string | null;
 }
 export interface ChartSeries { name: string; points: [string, number | null][] }
 export interface Chart extends Sourced {
@@ -52,6 +56,14 @@ export interface AgentError extends Base {
   message: string; partial?: Record<string, unknown>;
 }
 
+/** GET /agent/meta */
+export interface AgentMeta {
+  data_source: "live" | "demo"; read_only: boolean; role: "admin" | "hod" | "teacher";
+  first_name: string | null; institute_name: string | null;
+}
+/** GET /agent/sessions → sessions[] */
+export interface AgentSessionInfo { session_id: string; title: string; created_at: string; updated_at: string }
+
 export type AgentEvent =
   | TextDelta | ThinkingStatus | StatCard | Chart | Table | Clarify | Blueprint | PaperPreview
   | VerificationSummary | PendingApproval | Final | AgentError;
@@ -75,7 +87,12 @@ export function parseAgentEvent(raw: unknown): AgentEvent | null {
   switch (t) {
     case "text_delta": if (typeof e.text !== "string") return null; break;
     case "thinking_status": if (typeof e.key !== "string") return null; e.params = isObj(e.params) ? e.params : {}; break;
-    case "stat_card": if (typeof e.title !== "string") return null; if (e.value === undefined) e.value = null; break;
+    case "stat_card":
+      if (typeof e.title !== "string") return null;
+      if (e.value === undefined) e.value = null;
+      if (typeof e.period !== "string") e.period = null;
+      if (typeof e.delta !== "string") e.delta = null;
+      break;
     case "chart": e.series = arr(e.series); break;
     case "table": e.columns = arr(e.columns); e.rows = arr<unknown>(e.rows).filter(Array.isArray); break;
     case "clarify": e.chips = arr<unknown>(e.chips).filter((c) => isObj(c) && typeof c.label === "string" && typeof c.value === "string").slice(0, 5); break;
@@ -128,4 +145,26 @@ export function createSseParser() {
 /** JSON-decode one SSE data payload into an AgentEvent (null on bad JSON / unknown type). */
 export function decodeSseData(data: string): AgentEvent | null {
   try { return parseAgentEvent(JSON.parse(data)); } catch { return null; }
+}
+
+const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
+
+/** Tolerant decode of GET /agent/meta (null when the shape is unusable). */
+export function parseAgentMeta(raw: unknown): AgentMeta | null {
+  if (!isObj(raw)) return null;
+  const ds = raw.data_source;
+  if (ds !== "live" && ds !== "demo") return null;
+  const role = raw.role === "admin" || raw.role === "hod" ? raw.role : "teacher";
+  return { data_source: ds, read_only: raw.read_only !== false, role, first_name: str(raw.first_name), institute_name: str(raw.institute_name) };
+}
+
+/** Tolerant decode of GET /agent/sessions (bad rows are dropped). */
+export function parseAgentSessions(raw: unknown): AgentSessionInfo[] {
+  const list = isObj(raw) ? arr<unknown>(raw.sessions) : [];
+  return list.filter(isObj).filter((s) => typeof s.session_id === "string" && s.session_id).map((s) => ({
+    session_id: s.session_id as string,
+    title: str(s.title) ?? "Untitled chat",
+    created_at: typeof s.created_at === "string" ? s.created_at : "",
+    updated_at: typeof s.updated_at === "string" ? s.updated_at : (typeof s.created_at === "string" ? s.created_at : ""),
+  })).slice(0, 50);
 }

@@ -1,59 +1,80 @@
-import { useState } from "react";
+// pending_approval → what will happen, that it can't be undone, and three choices:
+// Approve (the ONLY caller of /agent/approve), Edit (puts a message in the composer), Cancel (local only — the
+// server request just expires). Download PDF appears only after a successful approve with the agent's own PDF path.
+import { CheckCircle2, Clock, Download, Loader2, Pencil, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { approve, getAgentToken, type ApproveResult } from "@/lib/agent/client";
-import type { PendingApproval } from "@/lib/agent/events";
+import type { Block } from "@/lib/agent/chatState";
+import { isAgentPdfPath } from "@/lib/agent/client";
+import { asOfLabel } from "./format";
 
-const fmtExpiry = (iso: string) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" });
+type ApprovalBlock = Extract<Block, { kind: "approval" }>;
+
+const ACTION_LABEL: Record<string, { title: string; effect: string }> = {
+  finalize_test: { title: "Test final karna hai", effect: "Paper lock ho jayega aur Test History me save hoga." },
+  assign_to_section: { title: "Section ko assign karna hai", effect: "Students ko ye test dikhne lagega." },
 };
 
-export function ApprovalCard({ ev, sessionId }: { ev: PendingApproval; sessionId: string | null }) {
-  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
-  const [result, setResult] = useState<ApproveResult | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const expired = new Date(ev.expires_at).getTime() < Date.now();
+export const EDIT_PREFILL = "Approve se pehle ye badlo: ";
 
-  const onApprove = async () => {
-    if (!sessionId) { setErr("Session not ready yet — wait for the reply to finish."); setState("error"); return; }
-    setState("busy"); setErr(null);
-    try {
-      const token = await getAgentToken();
-      if (!token) throw new Error("Please sign in again.");
-      const r = await approve({ sessionId, approvalId: ev.approval_id, token });
-      setResult(r); setState("done");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Approval failed."); setState("error");
-    }
-  };
-
-  const downloadUrl = typeof result?.download_url === "string" ? result.download_url
-    : typeof result?.url === "string" ? result.url : null;
-  const safeUrl = downloadUrl && /^https:\/\//i.test(downloadUrl) ? downloadUrl : null;
+export function ApprovalCard({ block, busy, onApprove, onCancel, onEdit, onDownload }: {
+  block: ApprovalBlock; busy?: boolean;
+  onApprove: () => void; onCancel: () => void; onEdit: () => void; onDownload: () => void;
+}) {
+  const { ev, state, result, error } = block;
+  const label = ACTION_LABEL[ev.action] ?? { title: "Approval chahiye", effect: "" };
+  const canDownload = state === "approved" && isAgentPdfPath(result?.download_path);
+  const open = state === "pending" || state === "failed" || state === "approving";
+  const expired = Number.isFinite(Date.parse(ev.expires_at)) && Date.parse(ev.expires_at) < Date.now();
 
   return (
-    <Card>
-      <CardContent className="space-y-2 p-4">
-        <p className="text-xs font-medium uppercase text-muted-foreground">
-          {ev.action === "finalize_test" ? "Finalize test" : "Assign to section"} · needs your approval
-        </p>
-        <p className="break-words text-sm">{ev.summary}</p>
-        <p className="text-xs text-muted-foreground">Expires {fmtExpiry(ev.expires_at)}</p>
-        {state === "done" ? (
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-green-700">Approved ✓</p>
-            {safeUrl ? (
-              <Button asChild size="sm"><a href={safeUrl} target="_blank" rel="noopener noreferrer">Download</a></Button>
-            ) : null}
-          </div>
-        ) : (
-          <Button type="button" size="sm" disabled={state === "busy" || expired} onClick={onApprove}>
-            {expired ? "Expired" : state === "busy" ? "Approving…" : "Approve"}
-          </Button>
-        )}
-        {err ? <p className="text-sm text-red-600" role="alert">{err}</p> : null}
-      </CardContent>
-    </Card>
+    <section className={`min-w-0 rounded-lg border bg-card p-4 text-card-foreground ${open ? "border-primary/50" : "border-border"}`} data-testid="approval">
+      <div className="flex items-start gap-3">
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${state === "approved" ? "bg-primary/10 text-primary" : "bg-muted text-foreground"}`}>
+          {state === "approved" ? <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> : <ShieldAlert aria-hidden="true" className="h-4 w-4" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Aapki approval chahiye</p>
+          <h4 className="mt-0.5 text-sm font-semibold">{label.title}</h4>
+          <p className="mt-1 break-words text-sm text-foreground">{ev.summary}</p>
+          {open ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {label.effect} <strong className="font-medium text-foreground">Approve ke baad wapas nahi hoga.</strong> Approve tak kuch nahi badlega.
+            </p>
+          ) : null}
+          {open ? (
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock aria-hidden="true" className="h-3.5 w-3.5" />{expired ? "Expire ho gaya" : `Expires ${asOfLabel(ev.expires_at)}`}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {error ? <p role="alert" className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive dark:text-red-300">{error}</p> : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {open ? (
+          <>
+            <Button type="button" className="h-11" disabled={state === "approving" || expired} onClick={onApprove}>
+              {state === "approving" ? <><Loader2 aria-hidden="true" className="animate-spin" />Approving…</> : state === "failed" ? "Approve again" : "Approve"}
+            </Button>
+            <Button type="button" variant="outline" className="h-11" disabled={state === "approving" || busy} onClick={onEdit}>
+              <Pencil aria-hidden="true" />Edit
+            </Button>
+            <Button type="button" variant="ghost" className="h-11" disabled={state === "approving"} onClick={onCancel}>
+              <X aria-hidden="true" />Cancel
+            </Button>
+          </>
+        ) : null}
+        {state === "approved" ? (
+          <p className="text-sm font-medium">Approved{result?.replayed ? " (pehle hi ho chuka tha)" : ""}</p>
+        ) : null}
+        {canDownload ? (
+          <Button type="button" variant="secondary" className="h-11" onClick={onDownload}><Download aria-hidden="true" />Download PDF</Button>
+        ) : null}
+        {state === "cancelled" ? (
+          <p className="text-sm text-muted-foreground">Cancel kiya — kuch nahi badla. Request apne aap expire ho jayegi.</p>
+        ) : null}
+      </div>
+    </section>
   );
 }

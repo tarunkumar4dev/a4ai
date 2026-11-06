@@ -1,7 +1,11 @@
-// Agent SSE client: POST /agent/chat (streams AgentEvent), POST /agent/approve, GET /agent/drafts/:id/pdf.
+// Agent SSE client: POST /agent/chat (streams AgentEvent), POST /agent/approve, GET /agent/drafts/:id/pdf,
+// GET /agent/meta, GET /agent/sessions (contract 1.1).
 // Base URL = VITE_AGENT_URL (see ./config).
 import { agentUrl } from "./config";
-import { createSseParser, decodeSseData, type AgentEvent } from "./events";
+import {
+  createSseParser, decodeSseData, parseAgentMeta, parseAgentSessions,
+  type AgentEvent, type AgentMeta, type AgentSessionInfo,
+} from "./events";
 
 /** Dev only: VITE_AGENT_DEV_ROLE=admin|teacher -> X-Dev-Role (backend honours it only with AGENT_DEV_MODE=1). */
 export function agentDevRole(env: { DEV?: boolean; VITE_AGENT_DEV_ROLE?: string } = import.meta.env): "admin" | "teacher" | null {
@@ -104,4 +108,22 @@ export async function downloadAgentPdf(opts: { path: string; token: string | nul
   } finally {
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
+}
+
+async function getJson(path: string, token: string | null, signal?: AbortSignal): Promise<unknown> {
+  const res = await fetch(agentUrl(path), { headers: agentHeaders(token, { Accept: "application/json" }), signal });
+  if (!res.ok) throw new AgentHttpError(res.status, await errorText(res));
+  return res.json();
+}
+
+/** GET /agent/meta → data source pill, role badge, greeting name. Throws on HTTP errors or a bad shape. */
+export async function fetchAgentMeta(token: string | null, signal?: AbortSignal): Promise<AgentMeta> {
+  const meta = parseAgentMeta(await getJson("/agent/meta", token, signal));
+  if (!meta) throw new AgentHttpError(502, "Bad /agent/meta response");
+  return meta;
+}
+
+/** GET /agent/sessions → own sessions, newest first (max 50). */
+export async function fetchAgentSessions(token: string | null, signal?: AbortSignal): Promise<AgentSessionInfo[]> {
+  return parseAgentSessions(await getJson("/agent/sessions", token, signal));
 }

@@ -21,6 +21,7 @@ const WorksheetGenerator = lazy(() => import("@/components/teacher/WorksheetGene
 const TeacherCalendarTab = lazy(() => import("@/components/teacher/TeacherCalendarTab"));
 const TeacherStudentsTab = lazy(() => import("@/components/teacher/TeacherStudentsTab"));
 const TeacherAnalyticsTab = lazy(() => import("@/components/teacher/TeacherAnalyticsTab"));
+const AgentWorkspace = lazy(() => import("@/components/agent/AgentWorkspace"));
 const CheckingLinkModal = lazy(() =>
   import("@/components/teacher/copySubmissions/CheckingLink").then((m) => ({ default: m.CheckingLinkModal })),
 );
@@ -1261,7 +1262,7 @@ export default function TeacherDashboardPage() {
   const location = useLocation();
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get("tab");
-    if (tab === "assignments" || tab === "modules") setActiveTab(tab);
+    if (tab === "assignments" || tab === "modules" || tab === "agent") setActiveTab(tab);
   }, [location.search]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1377,6 +1378,7 @@ export default function TeacherDashboardPage() {
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
     { id: "ai-tools", Icon: Icons.Sparkles, label: "AI Tools", color: "text-amber-500" },
+    ...(access && access.primary_role !== "none" ? [{ id: "agent", Icon: Icons.Sparkles, label: "a4ai Agent", color: "text-violet-500" }] : []),
   ];
 
   const finalNavItems = navItems;
@@ -2112,6 +2114,8 @@ export default function TeacherDashboardPage() {
                 user={user}
               />
             )}
+
+            {activeTab === "agent" && <AgentWorkspace />}
 
             {/* ===== ANALYTICS TAB ===== */}
             {activeTab === "analytics" && (

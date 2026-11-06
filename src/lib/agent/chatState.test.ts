@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatReducer, eventToBlock, initialChatState, statusLabel, type ChatState } from "./chatState";
+import { chatReducer, eventToBlock, initialChatState, statusLabel, stepLabel, stepsSummary, type ChatState } from "./chatState";
 import { agentBaseUrl, agentUrl } from "./config";
 import { isAgentPdfPath } from "./client";
 import type { AgentEvent } from "./events";
@@ -87,6 +87,60 @@ describe("chatReducer", () => {
     s = chatReducer(s, { type: "clarify_answered", blockId: clar.id, value: "A" });
     expect(lastBlocks(s)[0]).toMatchObject({ kind: "approval", state: "approved", result: { status: "finalized" } });
     expect(lastBlocks(s)[1]).toMatchObject({ kind: "clarify", answered: "A" });
+  });
+});
+
+describe("steps timeline (thinking_status tool.* / status.*)", () => {
+  const at = (s: ChatState, e: AgentEvent, t: number) => chatReducer(s, { type: "event", ev: e, at: t });
+  const steps = (s: ChatState) => s.turns[s.turns.length - 1].steps ?? [];
+
+  it("tool start → running, done → done with the server ms and ok flag", () => {
+    let s = chatReducer(initialChatState, { type: "send", text: "q", at: 1000 });
+    s = at(s, ev({ type: "thinking_status", key: "tool.resolve_entity", params: { phase: "start" } }), 1100);
+    expect(steps(s)).toMatchObject([{ key: "tool.resolve_entity", status: "running", ms: null }]);
+    s = at(s, ev({ type: "thinking_status", key: "tool.resolve_entity", params: { phase: "done", ms: 412, ok: true } }), 1600);
+    s = at(s, ev({ type: "thinking_status", key: "tool.attendance_stats", params: { phase: "start" } }), 1700);
+    s = at(s, ev({ type: "thinking_status", key: "tool.attendance_stats", params: { phase: "done", ms: 830, ok: false } }), 2600);
+    expect(steps(s).map((x) => [x.key, x.status, x.ms])).toEqual([["tool.resolve_entity", "done", 412], ["tool.attendance_stats", "failed", 830]]);
+    expect(s.status?.key).toBe("tool.attendance_stats");
+  });
+
+  it("paper phases become steps; a new phase closes the previous one; final closes everything", () => {
+    let s = chatReducer(initialChatState, { type: "send", text: "paper", at: 0 });
+    s = at(s, ev({ type: "thinking_status", key: "status.generating", params: { n: 19 } }), 100);
+    s = at(s, ev({ type: "thinking_status", key: "status.verifying", params: { round: 1 } }), 3100);
+    expect(steps(s).map((x) => [x.key, x.status, x.ms])).toEqual([["status.generating", "done", 3000], ["status.verifying", "running", null]]);
+    s = at(s, ev({ type: "thinking_status", key: "status.thinking", params: {} }), 3200); // status line only
+    expect(steps(s)).toHaveLength(2);
+    s = at(s, ev({ type: "final", session_id: "s1" }), 4200);
+    expect(steps(s).every((x) => x.status === "done")).toBe(true);
+    expect(stepsSummary(s.turns[1])).toBe("2 steps · 4.2s");
+  });
+
+  it("stop / error mark running steps stopped; history kept", () => {
+    let s = chatReducer(initialChatState, { type: "send", text: "q", at: 0 });
+    s = at(s, ev({ type: "thinking_status", key: "tool.marks_stats", params: { phase: "start" } }), 10);
+    s = chatReducer(s, { type: "stop", at: 500 });
+    expect(steps(s)[0]).toMatchObject({ status: "stopped", ms: 490 });
+    expect(s.busy).toBe(false);
+    expect(s.turns).toHaveLength(2);
+  });
+
+  it("feedback is stored on the assistant turn only", () => {
+    let s = apply(send(initialChatState, "q"), ev({ type: "text_delta", text: "a" }), ev({ type: "final", session_id: "x" }));
+    s = chatReducer(s, { type: "feedback", turnId: s.turns[1].id, value: "up" });
+    s = chatReducer(s, { type: "feedback", turnId: s.turns[0].id, value: "down" });
+    expect(s.turns[1].feedback).toBe("up");
+    expect(s.turns[0].feedback).toBeUndefined();
+  });
+
+  it("Hinglish step labels", () => {
+    expect(stepLabel("tool.resolve_entity")).toBe("Naam dhoondh raha hoon");
+    expect(stepLabel("tool.low_attendance_list")).toBe("Kam attendance wale students dekh raha hoon");
+    expect(stepLabel("tool.generate_questions")).toBe("Sawaal likh raha hoon");
+    expect(stepLabel("status.verifying", { round: 2 })).toBe("Verify kar raha hoon · round 2");
+    expect(stepLabel("tool.regenerate_failed")).toBe("Galat sawaal dobara likh raha hoon");
+    expect(stepLabel("tool.mystery")).toBe("Kaam chal raha hai");
   });
 });
 
