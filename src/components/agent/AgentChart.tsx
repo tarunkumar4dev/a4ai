@@ -28,6 +28,12 @@ export function AgentChart({ ev }: { ev: Chart }) {
   const hasData = rows.some((r) => ev.series.some((_, i) => r[`s${i}`] !== null));
   const config: ChartConfig = Object.fromEntries(ev.series.map((s, i) => [`s${i}`, { label: s.name, color: SERIES_COLORS[i % SERIES_COLORS.length] }]));
   const unit = ev.y_unit ?? "";
+  // percentages: zoom to the data (floor to 10s) but keep 100 on top, so an 80→84 trend is visible
+  const values = rows.flatMap((r) => ev.series.map((_, i) => r[`s${i}`])).filter((v): v is number => typeof v === "number");
+  const lo = values.length ? Math.max(0, Math.floor((Math.min(...values) - 5) / 10) * 10) : 0;
+  const step = 100 - lo > 40 ? 20 : 10;
+  const pctTicks = Array.from({ length: Math.floor((100 - lo) / step) + 1 }, (_, i) => lo + i * step);
+  const yDomain: [number, number | "auto"] = unit === "%" ? [lo, 100] : [0, "auto"];
   const axis = { stroke: "hsl(var(--muted-foreground))", fontSize: 11, tickLine: false, axisLine: false } as const;
 
   return (
@@ -45,10 +51,10 @@ export function AgentChart({ ev }: { ev: Chart }) {
         <>
           <ChartContainer config={config} className="mt-3 aspect-auto h-52 w-full" aria-hidden="true">
             {ev.kind === "line" ? (
-              <LineChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+              <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="x" {...axis} tickMargin={8} minTickGap={16} />
-                <YAxis {...axis} width={40} tickFormatter={(v) => `${v}${unit === "%" ? "%" : ""}`} />
+                <YAxis {...axis} width={44} domain={yDomain} ticks={unit === "%" ? pctTicks : undefined} allowDecimals={false} tickFormatter={(v) => `${v}${unit === "%" ? "%" : ""}`} />
                 <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
                 {ev.series.map((s, i) => (
                   <Line key={s.name} dataKey={`s${i}`} name={s.name} type="monotone" stroke={`var(--color-s${i})`} strokeWidth={2}
@@ -56,10 +62,10 @@ export function AgentChart({ ev }: { ev: Chart }) {
                 ))}
               </LineChart>
             ) : (
-              <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+              <BarChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="x" {...axis} tickMargin={8} minTickGap={8} />
-                <YAxis {...axis} width={40} />
+                <YAxis {...axis} width={44} allowDecimals={false} tickFormatter={(v) => `${v}${unit === "%" ? "%" : ""}`} />
                 <ChartTooltip cursor={{ fill: "hsl(var(--muted))" }} content={<ChartTooltipContent />} />
                 {ev.series.map((s, i) => (
                   <Bar key={s.name} dataKey={`s${i}`} name={s.name} fill={`var(--color-s${i})`} radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} />

@@ -72,7 +72,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background font-halenoir text-foreground" data-testid={`agent-chat-${variant}`}>
-      <AgentHeader meta={s.meta} metaStatus={s.metaStatus} role={role} compact={compact}
+      <AgentHeader meta={s.meta} metaStatus={s.metaStatus} role={role} compact={compact} newChatInSidebar={!compact}
         canNew={chat.turns.length > 0 || s.remoteOnly} onNewChat={() => agentStore.newChat()} leading={leading} trailing={trailing} />
 
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">

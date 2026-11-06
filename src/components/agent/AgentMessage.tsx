@@ -95,7 +95,7 @@ export const AgentMessage = memo(function AgentMessage({ turn, h, ctx, onFeedbac
   const groups = groupBlocks(turn.blocks);
   return (
     <div className="group flex gap-3" data-testid="msg-assistant">
-      <AgentMark className="mt-0.5" title={timeLabel(turn.at)} />
+      <AgentMark className="mt-0.5 hidden sm:grid" title={timeLabel(turn.at)} />
       <div className="min-w-0 flex-1 space-y-3">
         <StepTimeline turn={turn} />
         {groups.map((g) => (g.kind === "stats"

@@ -16,6 +16,12 @@ import { questionActionMessage } from "./PaperPreview";
 import { isStaffRole, roleLabel, suggestionsFor } from "./roles";
 import { dash } from "./format";
 
+// the chart / paper are lazy chunks in the app; render them directly here
+vi.mock("./lazyBlocks", async () => ({
+  LazyChart: (await import("./AgentChart")).AgentChart,
+  LazyPaper: (await import("./PaperPreview")).PaperPreview,
+}));
+
 const h: BlockHandlers = { busy: false, onAnswer: vi.fn(), onApprove: vi.fn(), onCancel: vi.fn(), onRetry: vi.fn(), onDownload: vi.fn(), onSend: vi.fn(), onPrefill: vi.fn() };
 const meta = { seq: 0, request_id: "r" };
 const src = { source: "tool:attendance_stats", as_of: "2026-11-05T13:13:43+05:30" };
@@ -82,11 +88,11 @@ describe("AgentEventBlock: event → component", () => {
 
   it("verification is split (objective · rubric · manual) — never a flat N/N verified", () => {
     const out = html({ kind: "verification", id: "1", ev: { ...meta, type: "verification_summary", objective_verified: 13, objective_total: 13, rubric_checked: 6, rubric_total: 6, manual_review: [], marks_sum_ok: true, duplicates: [], rounds: 2 } });
-    expect(out).toContain("Objective 13/13 · Rubric 6/6 · Manual review 0");
+    expect(out.replace(/<[^>]+>/g, "")).toContain("Objective 13/13 · Rubric 6/6 · Manual review 0");
     expect(out).not.toMatch(/19\/19/);
     expect(out).not.toContain("Details"); // nothing to list
     const withIds = html({ kind: "verification", id: "1", ev: { ...meta, type: "verification_summary", objective_verified: 12, objective_total: 13, rubric_checked: 5, rubric_total: 6, manual_review: ["q7"], marks_sum_ok: true, duplicates: [], rounds: 2 } });
-    expect(withIds).toContain("Manual review 1");
+    expect(withIds.replace(/<[^>]+>/g, "")).toContain("Objective 12/13 · Rubric 5/6 · Manual review 1");
     expect(withIds).toContain("Details");
   });
 

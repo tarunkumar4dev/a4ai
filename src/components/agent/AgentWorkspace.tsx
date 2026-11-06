@@ -1,5 +1,5 @@
 // /dashboard?tab=agent — past chats on the left (a sheet on phones), the chat in the middle. Staff only.
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { History, Lock, X } from "lucide-react";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAccess } from "@/context/AccessProvider";
@@ -16,7 +16,24 @@ export default function AgentWorkspace() {
   const s = useAgentStore(user?.id ?? "anon");
   const items = useMemo(() => mergeChatList(s.index, s.remote), [s.index, s.remote]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const historyBtn = useRef<HTMLButtonElement>(null);
   useMarkAgentWorkspace();
+  const box = useRef<HTMLDivElement>(null);
+
+  // fill the dashboard's scroll area below its header, so the composer is always on screen (phones included)
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const fit = () => {
+      const main = el.closest("main");
+      const area = main ?? document.documentElement;
+      const top = el.getBoundingClientRect().top - (main ? main.getBoundingClientRect().top - main.scrollTop : 0);
+      el.style.height = `${Math.max(420, area.clientHeight - top - 12)}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [loading]);
 
   if (!loading && !isStaffRole(access?.primary_role)) {
     return (
@@ -36,17 +53,19 @@ export default function AgentWorkspace() {
   );
 
   return (
-    <div data-testid="agent-workspace"
-      className="-mx-4 -mt-2 flex h-[calc(100dvh-11.5rem)] min-h-[460px] overflow-hidden border-y border-border bg-background font-halenoir text-foreground sm:mx-0 sm:mt-0 sm:rounded-lg sm:border lg:h-[calc(100dvh-14rem)]">
+    <div ref={box} data-testid="agent-workspace" data-agent-workspace=""
+      className="-mx-4 flex h-[calc(100dvh-15rem)] min-h-[420px] overflow-hidden border-y border-border bg-background font-halenoir text-foreground sm:mx-0 sm:rounded-lg sm:border">
+      {/* the help bubble would sit on the send button; the agent is the help here */}
+      <style>{"body:has([data-agent-workspace]) .a4-help{display:none!important}"}</style>
       <aside className="hidden w-64 shrink-0 border-r border-border bg-muted/30 lg:block">{list()}</aside>
       <AgentChatPanel variant="page"
         leading={(
-          <button type="button" onClick={() => setHistoryOpen(true)} aria-label="Pichhli chats"
+          <button ref={historyBtn} type="button" onClick={() => setHistoryOpen(true)} aria-label="Pichhli chats"
             className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden">
             <History aria-hidden="true" className="h-5 w-5" />
           </button>
         )} />
-      <AgentSheetFrame open={historyOpen} onOpenChange={setHistoryOpen} side="left" title="Pichhli chats" description="a4ai Agent ki pichhli chats"
+      <AgentSheetFrame open={historyOpen} onOpenChange={setHistoryOpen} side="left" title="Pichhli chats" description="a4ai Agent ki pichhli chats" returnFocus={historyBtn}
         className="w-[85vw] max-w-xs">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <p className="text-sm font-semibold">Pichhli chats</p>

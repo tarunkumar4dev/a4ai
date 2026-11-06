@@ -520,6 +520,11 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   one transition allowed past lite.css (`.a4-net-banner` in index.css). Safari/Firefox: slow only shows via the probe
   after a change event, and "Wi-Fi without internet" isn't detected (no polling while healthy).
 
+- [x] a4ai Agent UI (6 Nov, branch claude/youthful-archimedes-tw0p0s): `/dashboard?tab=agent` workspace + "Ask a4ai" sheet share
+  one store (`src/lib/agent/store.ts`), history per user in localStorage (cleared on sign-out). Notes, mount-point diffs,
+  colour exceptions, known gaps: `docs/AGENT_UI_NOTES.md`. e2e `tests/e2e/agent.spec.ts` (agent + Supabase mocked).
+  Known: admin/HOD get bounced from /dashboard by the dashboard's home_route rule → they use the sheet.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

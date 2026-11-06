@@ -8,7 +8,7 @@ import { durationLabel, num } from "./format";
 
 export const QTYPE_LABEL: Record<string, string> = {
   mcq: "MCQ", numeric: "Numerical", assertion_reason: "Assertion–Reason", short_answer: "Short answer",
-  long_answer: "Long answer", case_study: "Case study", very_short: "Very short answer",
+  long_answer: "Long answer", case_study: "Case study", very_short: "Very short",
 };
 export const qtypeLabel = (q: string) => QTYPE_LABEL[q] ?? q.replace(/_/g, " ");
 
@@ -51,11 +51,11 @@ export function BlueprintCard({ ev, disabled, onConfirm }: { ev: Blueprint; disa
       </header>
 
       <div className="border-t border-border">
-        <div className="grid grid-cols-[2.25rem_minmax(0,1fr)_3.75rem_3.75rem_2.75rem] items-center gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_3.25rem_3.25rem_2.5rem] items-center gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           <span>Sec</span><span>Type</span><span className="text-center">Qs</span><span className="text-center">Marks</span><span className="text-right">Total</span>
         </div>
         {rows.map((r, i) => (
-          <div key={`${r.section}-${i}`} className="grid grid-cols-[2.25rem_minmax(0,1fr)_3.75rem_3.75rem_2.75rem] items-center gap-2 border-t border-border/60 px-4 py-1.5 text-sm">
+          <div key={`${r.section}-${i}`} className="grid grid-cols-[1.75rem_minmax(0,1fr)_3.25rem_3.25rem_2.5rem] items-center gap-2 border-t border-border/60 px-4 py-1.5 text-sm">
             <span className="font-semibold">{r.section}</span>
             <span className="truncate text-muted-foreground" title={qtypeLabel(r.qtype)}>{qtypeLabel(r.qtype)}</span>
             <input aria-label={`Section ${r.section} questions`} type="number" inputMode="numeric" min={0} max={99} step={1}

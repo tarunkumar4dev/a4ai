@@ -38,8 +38,12 @@ export function VerificationBadge({ ev, failedIds = [] }: { ev: VerificationSumm
   return (
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-4 py-3 text-sm ${tone}`} data-testid="verification">
       <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
-      <p className="min-w-0 flex-1 font-medium tabular-nums">{verificationLine(ev)}</p>
-      {ev.rounds ? <span className="text-xs opacity-80">{ev.rounds} round{ev.rounds === 1 ? "" : "s"}</span> : null}
+      <p className="min-w-[12rem] flex-1 font-medium tabular-nums">
+        {verificationLine(ev).split(" · ").map((part, i) => (
+          <span key={part}>{i ? <span className="opacity-60"> · </span> : null}<span className="whitespace-nowrap">{part}</span></span>
+        ))}
+      </p>
+      {ev.rounds ? <span className="ml-auto text-xs opacity-80">{ev.rounds} round{ev.rounds === 1 ? "" : "s"}</span> : null}
       {hasDetails ? (
         <Popover>
           <PopoverTrigger className="inline-flex min-h-9 items-center gap-1 rounded-md border border-border bg-background/80 px-2.5 text-xs font-medium text-foreground hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

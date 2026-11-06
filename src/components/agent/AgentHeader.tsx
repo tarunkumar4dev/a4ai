@@ -32,9 +32,10 @@ export function DataSourcePill({ meta, status }: { meta: AgentMeta | null; statu
   );
 }
 
-export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading, trailing, compact }: {
+export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading, trailing, compact, newChatInSidebar }: {
   meta: AgentMeta | null; metaStatus: MetaStatus; role: string; onNewChat: () => void; canNew: boolean;
   leading?: ReactNode; trailing?: ReactNode; compact?: boolean;
+  /** the workspace sidebar (lg+) already has a New chat button */ newChatInSidebar?: boolean;
 }) {
   return (
     <header className={`flex items-center gap-2 border-b border-border bg-background/95 ${compact ? "px-3 py-2" : "px-3 py-2.5 sm:px-5"}`}>
@@ -51,7 +52,7 @@ export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading
         </div>
       </div>
       <button type="button" onClick={onNewChat} disabled={!canNew}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40">
+        className={`inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 ${newChatInSidebar ? "lg:hidden" : ""}`}>
         <SquarePen aria-hidden="true" className="h-4 w-4" /><span className={compact ? "sr-only" : "hidden sm:inline"}>New chat</span>
         {compact ? null : <span className="sr-only sm:hidden">New chat</span>}
       </button>

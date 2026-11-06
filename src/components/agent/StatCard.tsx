@@ -37,7 +37,11 @@ export function StatGrid({ cards }: { cards: StatCardEvent[] }) {
   return (
     <div className="space-y-2" data-testid="stat-grid">
       <div className="grid grid-cols-2 gap-2 sm:gap-3 [@container(min-width:40rem)]:grid-cols-3">
-        {cards.map((c, i) => <StatCard key={`${c.request_id}-${c.seq}-${i}`} ev={c} footer={!shared} />)}
+        {cards.map((c, i) => (
+          <div key={`${c.request_id}-${c.seq}-${i}`} className={`flex min-w-0 [&>*]:flex-1 ${i === 0 && cards.length % 2 === 1 ? "col-span-2 [@container(min-width:40rem)]:col-span-1" : ""}`}>
+            <StatCard ev={c} footer={!shared} />
+          </div>
+        ))}
       </div>
       {shared ? <SourceFooter source={cards[0].source} asOf={cards[0].as_of} className="px-1" /> : null}
     </div>

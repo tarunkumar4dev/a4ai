@@ -79,7 +79,7 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
         <label htmlFor={inputId} className="sr-only">Message a4ai Agent</label>
         <textarea id={inputId} ref={ref} rows={1} value={value} disabled={busy} maxLength={MAX_CHARS}
           onChange={(e) => setValue(e.target.value.slice(0, MAX_CHARS))} onKeyDown={onKeyDown} onPaste={onPaste}
-          placeholder={busy ? "Jawab aa raha hai…" : "Poochiye — attendance, marks, ya naya test…"}
+          placeholder={busy ? "Jawab aa raha hai…" : "Poochiye — attendance, marks, test…"}
           aria-describedby={near ? `${inputId}-count` : undefined}
           className="max-h-[168px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
         {busy ? (

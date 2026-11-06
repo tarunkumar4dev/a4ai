@@ -3,13 +3,13 @@
 import { AlertCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Block } from "@/lib/agent/chatState";
-import { AgentChart } from "./AgentChart";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { ApprovalCard, EDIT_PREFILL } from "./ApprovalCard";
 import { BlueprintCard } from "./BlueprintCard";
 import { ClarifyChips } from "./ClarifyChips";
 import { DataTable } from "./DataTable";
-import { PaperPreview, type PaperContext } from "./PaperPreview";
+import type { PaperContext } from "./PaperPreview";
+import { LazyChart, LazyPaper } from "./lazyBlocks";
 import { StatCard } from "./StatCard";
 import { VerificationBadge } from "./VerificationBadge";
 
@@ -71,13 +71,13 @@ export function AgentEventBlock({ block, h, ctx }: { block: Block; h: BlockHandl
     case "table":
       return <DataTable ev={block.ev} />;
     case "chart":
-      return <AgentChart ev={block.ev} />;
+      return <LazyChart ev={block.ev} />;
     case "clarify":
       return <ClarifyChips ev={block.ev} answered={block.answered} disabled={h.busy} onPick={(v) => h.onAnswer(block.id, v)} />;
     case "blueprint":
       return <BlueprintCard ev={block.ev} disabled={h.busy} onConfirm={send} />;
     case "paper_preview":
-      return <PaperPreview ev={block.ev} ctx={ctx?.paper} disabled={h.busy} onSend={send} onPrefill={prefill} />;
+      return <LazyPaper ev={block.ev} ctx={ctx?.paper} disabled={h.busy} onSend={send} onPrefill={prefill} />;
     case "verification":
       return <VerificationBadge ev={block.ev} failedIds={ctx?.failedIds} />;
     case "approval":
