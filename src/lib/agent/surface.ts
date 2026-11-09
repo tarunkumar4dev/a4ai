@@ -17,3 +17,8 @@ export function useMarkAgentWorkspace() {
     return () => { mounted--; emit(); };
   }, []);
 }
+
+// ---- "focus the message box" requests (Ctrl+K, "/", New chat) — the composer on screen listens ----------------
+const focusListeners = new Set<() => void>();
+export function onComposerFocusRequest(fn: () => void) { focusListeners.add(fn); return () => { focusListeners.delete(fn); }; }
+export function requestComposerFocus() { focusListeners.forEach((l) => l()); }

@@ -35,7 +35,7 @@ describe("parseAgentEvent", () => {
   });
   it("fills defaults and filters bad chips", () => {
     const c = parseAgentEvent({ ...base, type: "clarify", question: "Which?", chips: [{ label: "A", value: "a" }, { label: 1 }] });
-    expect(c?.type === "clarify" && c.chips).toEqual([{ label: "A", value: "a" }]);
+    expect(c?.type === "clarify" && c.chips).toEqual([{ label: "A", value: "a", hint: null }]);
     const v = parseAgentEvent({ ...base, type: "verification_summary", objective_verified: 1, objective_total: 2,
       rubric_checked: 0, rubric_total: 1, manual_review: ["q3"], marks_sum_ok: true });
     expect(v?.type === "verification_summary" && v.duplicates).toEqual([]);

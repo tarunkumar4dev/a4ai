@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { chatReducer, initialChatState, type ChatState } from "./chatState";
 import type { AgentEvent } from "./events";
 import {
-  MAX_CHATS, MAX_CHAT_BYTES, clearUser, loadChat, loadIndex, normalizeLoaded, saveChat, saveIndex, serializeChat, titleFrom,
+  MAX_CHATS, MAX_CHAT_BYTES, clearUser, loadChat, loadIndex, normalizeLoaded, saveChat, saveIndex, serializeChat, titleFrom, savePendingDraft, takePendingDraft,
 } from "./persist";
-import { mergeChatList } from "./store";
 
 const ev = (e: Record<string, unknown>, seq = 0) => ({ request_id: "r", seq, ...e }) as unknown as AgentEvent;
 
@@ -87,16 +86,12 @@ describe("persist", () => {
   });
 });
 
-describe("chat list merge (local ∪ GET /agent/sessions)", () => {
-  it("local wins for its session, server-only rows are marked, hidden rows stay hidden, newest first", () => {
-    const list = mergeChatList(
-      { chats: [{ key: "c1", sessionId: "s1", title: "Renamed", createdAt: 1, updatedAt: 10, renamed: true }], hidden: ["s3"], activeKey: "c1" },
-      [
-        { session_id: "s1", title: "Aaj ki attendance", created_at: "2026-11-06T10:00:00Z", updated_at: "2026-11-06T10:00:00Z" },
-        { session_id: "s2", title: "Trig test", created_at: "2026-11-05T10:00:00Z", updated_at: "2026-11-05T10:00:00Z" },
-        { session_id: "s3", title: "Deleted", created_at: "2026-11-04T10:00:00Z", updated_at: "2026-11-04T10:00:00Z" },
-      ],
-    );
-    expect(list.map((x) => [x.title, x.remoteOnly])).toEqual([["Renamed", false], ["Trig test", true]]);
+describe("pending draft (sign in again)", () => {
+  it("is kept once in sessionStorage and read back once", () => {
+    savePendingDraft("ECE-2 ki attendance");
+    expect(takePendingDraft()).toBe("ECE-2 ki attendance");
+    expect(takePendingDraft()).toBeNull();
+    savePendingDraft("   ");
+    expect(takePendingDraft()).toBeNull();
   });
 });

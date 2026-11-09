@@ -111,3 +111,26 @@ export function clearUser(uid: string) {
     keys.forEach(remove);
   } catch { /* ignore */ }
 }
+
+// ---- typed text that must survive a sign-in (session expired → sign in again → back here) ---------------
+// sessionStorage (this tab only, gone when the tab closes); written ONLY when the user presses "Sign in again".
+const PENDING_DRAFT = "a4ai.agent.pendingDraft";
+
+export function savePendingDraft(text: string) {
+  try { if (text.trim()) sessionStorage.setItem(PENDING_DRAFT, text.slice(0, 4000)); } catch { /* blocked */ }
+}
+
+/** Read + clear. */
+export function takePendingDraft(): string | null {
+  try {
+    const v = sessionStorage.getItem(PENDING_DRAFT);
+    sessionStorage.removeItem(PENDING_DRAFT);
+    return v && v.trim() ? v : null;
+  } catch { return null; }
+}
+
+// ---- small per-user UI prefs (history panel collapsed) ----------------------------------------------------
+export function loadPref(uid: string, name: string): string | null {
+  try { return ls()?.getItem(`${PREFIX}.${uid}.pref.${name}`) ?? null; } catch { return null; }
+}
+export function savePref(uid: string, name: string, value: string) { writeRaw(`${PREFIX}.${uid}.pref.${name}`, value); }

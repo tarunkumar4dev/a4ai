@@ -4,7 +4,7 @@
 import { agentUrl } from "./config";
 import {
   createSseParser, decodeSseData, parseAgentMeta, parseAgentSessions,
-  type AgentEvent, type AgentMeta, type AgentSessionInfo,
+  type AgentEvent, type AgentMeta, type SessionSummary,
 } from "./events";
 
 /** Dev only: VITE_AGENT_DEV_ROLE=admin|teacher -> X-Dev-Role (backend honours it only with AGENT_DEV_MODE=1). */
@@ -124,6 +124,6 @@ export async function fetchAgentMeta(token: string | null, signal?: AbortSignal)
 }
 
 /** GET /agent/sessions → own sessions, newest first (max 50). */
-export async function fetchAgentSessions(token: string | null, signal?: AbortSignal): Promise<AgentSessionInfo[]> {
+export async function fetchAgentSessions(token: string | null, signal?: AbortSignal): Promise<SessionSummary[]> {
   return parseAgentSessions(await getJson("/agent/sessions", token, signal));
 }

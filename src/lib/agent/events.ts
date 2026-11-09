@@ -1,81 +1,35 @@
-// Mirror of RAG-BACKEND agent/schemas.py (FROZEN CONTRACT 1.1). Do not rename fields.
-// 1.1: stat_card.period / stat_card.delta (optional); thinking_status key "tool.<name>" with
-//      params {phase:"start"} then {phase:"done", ms, ok}.
-export const AGENT_CONTRACT_VERSION = "1.1";
-
-export type QuestionType =
-  | "mcq" | "numeric" | "assertion_reason" | "short_answer" | "long_answer" | "case_study" | "very_short";
-export type VerifyStatus = "verified" | "failed" | "manual_review" | "rubric_ok";
-
-interface Base { seq: number; request_id: string }
-interface Sourced extends Base { source: string; as_of: string }
-
-export interface TextDelta extends Base { type: "text_delta"; text: string }
-export interface ThinkingStatus extends Base { type: "thinking_status"; key: string; params: Record<string, unknown> }
-export interface StatCard extends Sourced {
-  type: "stat_card"; title: string; value: string | null; unit?: string | null; subtitle?: string | null;
-  /** e.g. "1–5 Nov 2026" */ period?: string | null;
-  /** e.g. "+2.1 pts vs Oct" — only when the tool computed it */ delta?: string | null;
-}
-export interface ChartSeries { name: string; points: [string, number | null][] }
-export interface Chart extends Sourced {
-  type: "chart"; kind: "line" | "bar"; title: string; series: ChartSeries[]; y_unit?: string | null;
-}
-export interface Table extends Sourced {
-  type: "table"; title: string; columns: string[]; rows: (string | null)[][];
-}
-export interface ClarifyChip { label: string; value: string }
-export interface Clarify extends Base { type: "clarify"; question: string; chips: ClarifyChip[] }
-export interface BlueprintSection { section: string; qtype: QuestionType; count: number; marks_each: number }
-export interface Blueprint extends Base {
-  type: "blueprint"; class_grade: number; subject: string; chapters: string[];
-  total_marks: number; duration_min: number; sections: BlueprintSection[];
-}
-export interface PreviewQuestion {
-  id: string; section: string; qtype: QuestionType; marks: number; text: string;
-  options?: string[] | null; answer?: string | null; marking_scheme?: string[] | null;
-  sub_questions?: Record<string, unknown>[] | null; status: VerifyStatus;
-}
-export interface PaperPreview extends Base {
-  type: "paper_preview"; draft_id: string; title: string; total_marks: number;
-  duration_min: number; questions: PreviewQuestion[];
-}
-export interface VerificationSummary extends Base {
-  type: "verification_summary"; objective_verified: number; objective_total: number;
-  rubric_checked: number; rubric_total: number; manual_review: string[];
-  marks_sum_ok: boolean; duplicates: string[]; rounds: number;
-}
-export interface PendingApproval extends Base {
-  type: "pending_approval"; approval_id: string; action: "finalize_test" | "assign_to_section";
-  summary: string; args_sha256: string; expires_at: string;
-}
-export interface Final extends Base { type: "final"; session_id: string; usage?: Record<string, unknown> }
-export interface AgentError extends Base {
-  type: "error";
-  code: "budget_exceeded" | "forbidden" | "not_found" | "provider_error" | "invalid_input" | "internal";
-  message: string; partial?: Record<string, unknown>;
-}
-
-/** GET /agent/meta */
-export interface AgentMeta {
-  data_source: "live" | "demo"; read_only: boolean; role: "admin" | "hod" | "teacher";
-  first_name: string | null; institute_name: string | null;
-}
-/** GET /agent/sessions → sessions[] */
-export interface AgentSessionInfo { session_id: string; title: string; created_at: string; updated_at: string }
-
-export type AgentEvent =
-  | TextDelta | ThinkingStatus | StatCard | Chart | Table | Clarify | Blueprint | PaperPreview
-  | VerificationSummary | PendingApproval | Final | AgentError;
-export type AgentEventType = AgentEvent["type"];
+// Parsers for the a4ai Agent contract. The TYPES live in ./types.ts (one place) and are re-exported here so older
+// imports keep working. Every parser is tolerant: bad rows are dropped, unknown event types return null.
+import type {
+  AgentEvent, AgentEventType, AgentMeta, ComparisonRow, MessagesPage, QueryHistoryItem, ScopeBatch, ScopeSummary,
+  SessionSummary, SessionsPage, StoredFeedback, StoredMessage, Suggestion, SuggestionType,
+} from "./types";
+export * from "./types";
 
 const KNOWN: ReadonlySet<string> = new Set<AgentEventType>([
   "text_delta", "thinking_status", "stat_card", "chart", "table", "clarify", "blueprint",
   "paper_preview", "verification_summary", "pending_approval", "final", "error",
+  "session", "my_scope", "section_comparison",
 ]);
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
+const numOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const iso = (v: unknown): string => (typeof v === "string" ? v : "");
+
+function parseScopeBatches(v: unknown): ScopeBatch[] {
+  return arr<unknown>(v).filter(isObj).filter((b) => typeof b.name === "string" && b.name.trim()).slice(0, 200).map((b) => ({
+    batch_id: typeof b.batch_id === "string" ? b.batch_id : String(b.name),
+    name: String(b.name), students: numOrNull(b.students), kind: str(b.kind), department: str(b.department), via: str(b.via),
+  }));
+}
+
+function parseComparisonRows(v: unknown): ComparisonRow[] {
+  return arr<unknown>(v).filter(isObj).filter((r) => typeof r.name === "string").slice(0, 100).map((r) => ({
+    id: str(r.id), name: String(r.name), value: numOrNull(r.value), students: numOrNull(r.students), detail: str(r.detail),
+  }));
+}
 
 /** Tolerant: returns null for non-objects, unknown `type`s or missing seq/request_id. Fills safe defaults for lists. */
 export function parseAgentEvent(raw: unknown): AgentEvent | null {
@@ -95,13 +49,37 @@ export function parseAgentEvent(raw: unknown): AgentEvent | null {
       break;
     case "chart": e.series = arr(e.series); break;
     case "table": e.columns = arr(e.columns); e.rows = arr<unknown>(e.rows).filter(Array.isArray); break;
-    case "clarify": e.chips = arr<unknown>(e.chips).filter((c) => isObj(c) && typeof c.label === "string" && typeof c.value === "string").slice(0, 5); break;
+    case "clarify":
+      if (typeof e.question !== "string") e.question = "";
+      e.chips = arr<unknown>(e.chips).filter(isObj).filter((c) => typeof c.label === "string" && typeof c.value === "string")
+        .slice(0, 5).map((c) => ({ label: c.label, value: c.value, hint: str(c.hint) }));
+      break;
     case "blueprint": e.sections = arr(e.sections); e.chapters = arr(e.chapters); break;
     case "paper_preview": e.questions = arr(e.questions); break;
     case "verification_summary": e.manual_review = arr(e.manual_review); e.duplicates = arr(e.duplicates); if (typeof e.rounds !== "number") e.rounds = 0; break;
     case "pending_approval": if (typeof e.approval_id !== "string") return null; break;
     case "final": if (typeof e.session_id !== "string") return null; break;
     case "error": if (typeof e.message !== "string") e.message = "Something went wrong."; break;
+    case "session":
+      if (typeof e.session_id !== "string" || !e.session_id) return null;
+      e.title = str(e.title) ?? "New chat";
+      break;
+    case "my_scope":
+      e.batches = parseScopeBatches(e.batches);
+      e.total_students = numOrNull(e.total_students);
+      e.departments = arr<unknown>(e.departments).filter((d): d is string => typeof d === "string");
+      if (typeof e.role !== "string") e.role = "teacher";
+      if (typeof e.source !== "string") e.source = "tool:my_scope";
+      if (typeof e.as_of !== "string") e.as_of = "";
+      break;
+    case "section_comparison":
+      if (typeof e.title !== "string") e.title = "Section comparison";
+      if (typeof e.metric !== "string") e.metric = "Value";
+      e.rows = parseComparisonRows(e.rows);
+      e.higher_is_better = e.higher_is_better !== false;
+      if (typeof e.source !== "string") e.source = "tool:section_comparison";
+      if (typeof e.as_of !== "string") e.as_of = "";
+      break;
   }
   return e as unknown as AgentEvent;
 }
@@ -147,24 +125,74 @@ export function decodeSseData(data: string): AgentEvent | null {
   try { return parseAgentEvent(JSON.parse(data)); } catch { return null; }
 }
 
-const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
-/** Tolerant decode of GET /agent/meta (null when the shape is unusable). */
+/** Tolerant decode of GET /agent/meta (null when the shape is unusable). `scope` only when the backend sends it. */
 export function parseAgentMeta(raw: unknown): AgentMeta | null {
   if (!isObj(raw)) return null;
   const ds = raw.data_source;
   if (ds !== "live" && ds !== "demo") return null;
   const role = raw.role === "admin" || raw.role === "hod" ? raw.role : "teacher";
-  return { data_source: ds, read_only: raw.read_only !== false, role, first_name: str(raw.first_name), institute_name: str(raw.institute_name) };
+  const meta: AgentMeta = { data_source: ds, read_only: raw.read_only !== false, role, first_name: str(raw.first_name), institute_name: str(raw.institute_name) };
+  if (isObj(raw.scope)) {
+    const scope: ScopeSummary = { batches: parseScopeBatches(raw.scope.batches), total_students: numOrNull(raw.scope.total_students) };
+    meta.scope = scope;
+  }
+  return meta;
 }
 
-/** Tolerant decode of GET /agent/sessions (bad rows are dropped). */
-export function parseAgentSessions(raw: unknown): AgentSessionInfo[] {
-  const list = isObj(raw) ? arr<unknown>(raw.sessions) : [];
-  return list.filter(isObj).filter((s) => typeof s.session_id === "string" && s.session_id).map((s) => ({
+function parseSession(s: Record<string, unknown>): SessionSummary {
+  const created = iso(s.created_at);
+  return {
     session_id: s.session_id as string,
     title: str(s.title) ?? "Untitled chat",
-    created_at: typeof s.created_at === "string" ? s.created_at : "",
-    updated_at: typeof s.updated_at === "string" ? s.updated_at : (typeof s.created_at === "string" ? s.created_at : ""),
-  })).slice(0, 50);
+    created_at: created,
+    updated_at: iso(s.updated_at) || created,
+    pinned: s.pinned === true,
+  };
+}
+
+/** GET /agent/sessions → page. Also accepts the v1 shape ({ sessions } without cursor / pinned). */
+export function parseSessionsPage(raw: unknown): SessionsPage {
+  const list = isObj(raw) ? arr<unknown>(raw.sessions) : Array.isArray(raw) ? raw : [];
+  const sessions = list.filter(isObj).filter((s) => typeof s.session_id === "string" && s.session_id).map(parseSession).slice(0, 200);
+  return { sessions, next_cursor: isObj(raw) ? str(raw.next_cursor) : null };
+}
+
+/** v1 helper kept for callers that only want the list. */
+export const parseAgentSessions = (raw: unknown): SessionSummary[] => parseSessionsPage(raw).sessions.slice(0, 50);
+
+/** One stored message (bad events are dropped, unknown roles → null). */
+export function parseStoredMessage(raw: unknown): StoredMessage | null {
+  if (!isObj(raw) || typeof raw.seq !== "number" || (raw.role !== "user" && raw.role !== "assistant")) return null;
+  const r = isObj(raw.feedback) ? raw.feedback.rating : null;
+  const fb: StoredFeedback | null = r === "up" || r === "down" ? { rating: r, note: str((raw.feedback as Record<string, unknown>).note) } : null;
+  const m: StoredMessage = { seq: raw.seq, role: raw.role, created_at: iso(raw.created_at), feedback: fb, request_id: str(raw.request_id) };
+  if (raw.role === "user") m.text = typeof raw.text === "string" ? raw.text : "";
+  else {
+    m.events = arr<unknown>(raw.events).map(parseAgentEvent).filter((e): e is AgentEvent => e !== null);
+    m.stopped = raw.stopped === true;
+  }
+  return m;
+}
+
+/** GET /agent/sessions/{id}/messages → page, sorted oldest → newest by seq. */
+export function parseMessagesPage(raw: unknown): MessagesPage {
+  const list = isObj(raw) ? arr<unknown>(raw.messages) : [];
+  const messages = list.map(parseStoredMessage).filter((m): m is StoredMessage => m !== null).sort((a, b) => a.seq - b.seq);
+  return { messages, next_cursor: isObj(raw) ? str(raw.next_cursor) : null };
+}
+
+/** GET /agent/history/queries → items (newest first, blank texts dropped). */
+export function parseQueryHistory(raw: unknown): QueryHistoryItem[] {
+  const list = isObj(raw) ? arr<unknown>(raw.queries) : Array.isArray(raw) ? raw : [];
+  return list.filter(isObj).filter((q) => typeof q.id === "string" && typeof q.text === "string" && q.text.trim())
+    .map((q) => ({ id: q.id as string, text: (q.text as string).trim(), created_at: iso(q.created_at) })).slice(0, 100);
+}
+
+const SUGGESTION_TYPES: ReadonlySet<string> = new Set<SuggestionType>(["recent", "template", "entity"]);
+/** GET /agent/suggestions → [{type, text, hint}] (also accepts { suggestions: [...] }). */
+export function parseSuggestions(raw: unknown): Suggestion[] {
+  const list = Array.isArray(raw) ? raw : isObj(raw) ? arr<unknown>(raw.suggestions) : [];
+  return list.filter(isObj).filter((x) => typeof x.type === "string" && SUGGESTION_TYPES.has(x.type) && typeof x.text === "string" && x.text.trim())
+    .map((x) => ({ type: x.type as SuggestionType, text: (x.text as string).trim(), hint: str(x.hint), id: str(x.id) })).slice(0, 20);
 }
