@@ -50,7 +50,7 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
         className={`flex h-full min-w-0 flex-1 items-center gap-2 rounded-md pl-2.5 pr-10 text-left disabled:opacity-60 ${focusRing}`}>
         {s.pinned ? <Pin aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : null}
         <span className={`min-w-0 flex-1 truncate text-sm ${active ? "font-medium" : "text-foreground"}`}>{s.title}</span>
-        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground group-hover:invisible group-focus-within:invisible">{when}</span>
+        <span className={`shrink-0 text-[11px] tabular-nums group-hover:invisible group-focus-within:invisible ${active ? "text-accent-foreground/75" : "text-muted-foreground"}`}>{when}</span>
         <span className="sr-only">{s.pinned ? ", pinned" : ""}</span>
       </button>
       <DropdownMenu modal={false}>
@@ -163,7 +163,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
   };
 
   const renderRow = (r: HistoryRow) => (r.kind === "header"
-    ? <p className="flex h-full items-end px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground" role="presentation">{r.label}</p>
+    ? <p className="flex h-full items-end px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground" role="presentation" data-testid="history-group">{r.label}</p>
     : <Row s={r.session} active={r.session.session_id === activeKey} now={now} disabled={busy} editing={editing === r.session.session_id}
         onOpen={open} onStartRename={setEditing} onRename={rename} onCancelRename={() => setEditing(null)} onPin={pin} onDelete={setConfirm} />);
 
@@ -174,7 +174,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
     <nav aria-label="Chat history" className="flex h-full min-h-0 flex-col" data-testid="agent-history">
       <div className="flex items-center gap-1.5 p-3 pb-2">
         <button type="button" onClick={startNew} title={`New chat (${NEW_CHAT_SHORTCUT})`}
-          className={`flex h-11 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted ${focusRing}`}>
+          className={`flex h-11 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted ${focusRing}`}>
           <SquarePen aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="truncate">New chat</span>
           <kbd className="ml-auto hidden shrink-0 rounded border border-border px-1 font-sans text-[10px] text-muted-foreground xl:inline">{NEW_CHAT_SHORTCUT}</kbd>
         </button>
@@ -192,7 +192,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
           <input ref={searchRef} id="agent-history-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search chats"
             onKeyDown={(e) => { if (e.key === "Escape" && search) { e.preventDefault(); e.stopPropagation(); setSearch(""); } }}
             {...(search ? { [ESC_LAYER]: "" } : {})}
-            className={`h-10 w-full rounded-md border border-input bg-background pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${focusRing}`} />
+            className={`h-10 w-full rounded-md border border-input bg-card pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${focusRing}`} />
           {searching ? <Loader2 aria-hidden="true" className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             : search ? (
               <button type="button" onClick={() => { setSearch(""); searchRef.current?.focus(); }} aria-label="Clear search"

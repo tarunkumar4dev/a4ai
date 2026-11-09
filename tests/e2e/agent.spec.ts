@@ -206,7 +206,7 @@ test("attendance answer: stat cards + prose, steps summary, history survives a r
   await expect(page.getByTestId("agent-workspace")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("msg-user").first()).toHaveText("Meri class ki attendance");
   await expect(page.getByTestId("stat-grid")).toContainText("83.8");
-  await expect(page.getByTestId("agent-sessions").locator('[aria-current="true"]')).toContainText("Meri class ki attendance");
+  await expect(page.getByTestId("history-sidebar").locator('[aria-current="page"]')).toContainText("Meri class ki attendance");
 });
 
 test("clarify flow: tapping a chip sends a second stream in the same session", async ({ page }) => {
@@ -253,6 +253,7 @@ test("trigonometry paper: blueprint → paper + verification → approval → Ap
   await page.getByRole("menuitem", { name: "Change marks" }).click();
   await expect(input(page)).toHaveValue("Q5 (q5) ke marks change karo: ");
   await input(page).fill("");
+  await input(page).press("Escape"); // an empty, focused box shows Recent / Try (v2) — close it
 
   const appr = page.getByTestId("approval");
   await expect(appr).toContainText("wapas nahi hoga");

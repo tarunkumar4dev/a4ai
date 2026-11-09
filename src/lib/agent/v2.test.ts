@@ -422,3 +422,15 @@ describe("mock adapter", () => {
     expect(m.events?.some((e) => e.type === "final")).toBe(false);
   }, 20_000);
 });
+
+describe("ranking order inside one match bucket", () => {
+  it("your recent questions come before shorter entity/template rows with the same match quality", () => {
+    const out = rankSuggestions("ece", {
+      server: [{ type: "entity", text: "ECE1 ki attendance", hint: "Batch · 0 students" }],
+      recent: [{ id: "q1", text: "ECE-2 ki attendance", created_at: "" }, { id: "q2", text: "ECE 1 ki attendance ka trend", created_at: "" }],
+      templates: [],
+    });
+    expect(out.map((o) => o.type)).toEqual(["recent", "recent", "entity"]);
+    expect(out[0].text).toBe("ECE-2 ki attendance"); // shorter recent first
+  });
+});

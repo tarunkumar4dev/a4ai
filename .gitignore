@@ -69,6 +69,7 @@ coverage/
 test-results/
 playwright-report/
 dist-e2e/
+dist-e2e-agent/
 dist-perf/
 
 # Original screenshots / logos (unblurred PII) - only the processed WebPs in src/assets are committed

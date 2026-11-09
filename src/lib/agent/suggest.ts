@@ -12,16 +12,16 @@ export interface SuggestOption {
 export const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 const tokens = (q: string) => norm(q).split(" ").filter(Boolean);
 
-/** Higher = better; -1 = not a match. Exact > starts with > a word starts with > contains > every word contained. */
+/** Match quality bucket (higher = better; -1 = no match): exact > starts with > a word starts with > contains > every word contained. */
 export function matchScore(text: string, q: string): number {
   const t = norm(text), n = norm(q);
   if (!n) return 0;
   if (t === n) return 1000;
-  if (t.startsWith(n)) return 800 - Math.min(t.length, 200) / 10;
-  if (t.split(/[\s\-–·,()/]+/).some((w) => w.startsWith(n))) return 600 - Math.min(t.length, 200) / 10;
-  if (t.includes(n)) return 400 - Math.min(t.length, 200) / 10;
+  if (t.startsWith(n)) return 800;
+  if (t.split(/[\s\-–·,()/]+/).some((w) => w.startsWith(n))) return 600;
+  if (t.includes(n)) return 400;
   const ws = tokens(q);
-  if (ws.length > 1 && ws.every((w) => t.includes(w))) return 200 - Math.min(t.length, 200) / 10;
+  if (ws.length > 1 && ws.every((w) => t.includes(w))) return 200;
   return -1;
 }
 
@@ -30,8 +30,8 @@ const keyOf = (type: SuggestionType, text: string) => `${type}:${norm(text)}`;
 
 /**
  * Typed query → merged list: server suggestions + matching local recent + matching templates, one row per text
- * (recent wins, an entity's hint is kept), sorted by match score, then type (recent, entity, template), then the
- * order the server sent. Pure.
+ * (recent wins, an entity's hint is kept), sorted by match quality, then type (recent, entity, template), then
+ * length, then the order the server sent. Pure.
  */
 export function rankSuggestions(q: string, input: { server: Suggestion[]; recent: QueryHistoryItem[]; templates: string[] }, limit = 8): SuggestOption[] {
   const n = norm(q);
@@ -55,7 +55,8 @@ export function rankSuggestions(q: string, input: { server: Suggestion[]; recent
   for (const r of input.recent) offer("recent", r.text, null, r.id);
   for (const t of input.templates) offer("template", t, null, null);
   return [...byText.values()]
-    .sort((a, b) => b.score - a.score || TYPE_RANK[a.type] - TYPE_RANK[b.type] || a.order - b.order)
+    // same match quality → your own recent questions first (as Google does), then shorter, then server order
+    .sort((a, b) => b.score - a.score || TYPE_RANK[a.type] - TYPE_RANK[b.type] || a.text.length - b.text.length || a.order - b.order)
     .slice(0, limit)
     .map(({ score: _s, order: _o, ...o }) => o);
 }

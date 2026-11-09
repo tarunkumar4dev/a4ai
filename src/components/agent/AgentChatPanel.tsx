@@ -32,9 +32,23 @@ export function firstNameOf(full: unknown): string | null {
   return f ? f[0].toUpperCase() + f.slice(1) : null;
 }
 
-/** The live status text: the running step, else the latest status key. */
-function liveStatus(s: ReturnType<typeof useAgentStore>): string {
-  if (!s.chat.busy) return "";
+/**
+ * The ONE live region's text: while streaming the running step (else the latest status key); after it, a fresh
+ * error / stop / failed approval / expired session (so error cards don't need role="alert"). Pure.
+ */
+export function liveStatus(s: Pick<ReturnType<typeof useAgentStore>, "chat" | "authExpired">, now = Date.now()): string {
+  if (!s.chat.busy) {
+    if (s.authExpired) return "Session expire ho gaya. Dobara sign in karein.";
+    const approvals = s.chat.turns.flatMap((t) => t.blocks).filter((b) => b.kind === "approval");
+    const lastAppr = approvals[approvals.length - 1];
+    if (lastAppr?.kind === "approval" && lastAppr.state === "failed" && lastAppr.error) return lastAppr.error;
+    const last = s.chat.turns[s.chat.turns.length - 1];
+    if (!last || last.role !== "assistant" || !(typeof last.endedAt === "number" && now - last.endedAt < 10_000)) return "";
+    const err = last.blocks.find((b) => b.kind === "error");
+    if (err && err.kind === "error") return `Jawab nahi aa paya: ${err.message}`;
+    if (last.stopped) return "Jawab rok diya gaya.";
+    return "";
+  }
   const last = s.chat.turns[s.chat.turns.length - 1];
   const running = [...(last?.steps ?? [])].reverse().find((x) => x.status === "running");
   if (running) return `${stepLabel(running.key, running.params)}…`;
@@ -49,7 +63,7 @@ function SessionExpired() {
     navigate("/login");
   };
   return (
-    <div role="alert" className="mx-auto mb-2 flex max-w-3xl items-start gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-sm" data-testid="session-expired">
+    <div className="mx-auto mb-2 flex max-w-3xl items-start gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-sm" data-testid="session-expired">
       <LogIn aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
       <div className="min-w-0 flex-1">
         <p className="font-medium text-foreground">Session expire ho gaya</p>
@@ -87,8 +101,10 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   }, 0);
   useEffect(() => {
     const el = scroller.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [size, s.activeKey, s.load]);
+    if (!el) return;
+    if (!chat.turns.length) el.scrollTop = 0; // the empty state reads from the top (greeting first on phones)
+    else if (pinned.current) el.scrollTop = el.scrollHeight;
+  }, [size, s.activeKey, s.load, chat.turns.length]);
   useEffect(() => { pinned.current = true; }, [chat.turns.length, s.activeKey]);
   const onScroll = () => {
     const el = scroller.current;
@@ -110,7 +126,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const firstLive = Math.max(0, chat.turns.length - LIVE_TURNS);
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background font-halenoir text-foreground" data-testid={`agent-chat-${variant}`}>
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card font-halenoir text-card-foreground" data-testid={`agent-chat-${variant}`}>
       <AgentHeader meta={s.meta} metaStatus={s.metaStatus} role={role} compact={compact} newChatInSidebar={newChatInSidebar}
         title={chat.title ?? null}
         canNew={chat.turns.length > 0 || !!chat.sessionId} onNewChat={() => agentStore.newChat()} leading={leading} trailing={trailing} />
@@ -143,7 +159,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
 
       <p aria-live="polite" className="sr-only" data-testid="agent-status">{liveStatus(s)}</p>
 
-      <div className="border-t border-border bg-background">
+      <div className="border-t border-border bg-card">
         {offline ? (
           <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}>
             <p className="mx-auto flex max-w-3xl items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 py-2 text-xs text-foreground" data-testid="agent-offline">

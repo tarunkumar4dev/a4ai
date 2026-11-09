@@ -18,7 +18,7 @@ export function ClarifyChips({ ev, answered, disabled, onPick }: {
             <button key={c.value} type="button" aria-pressed={picked} disabled={answered !== null || disabled}
               onClick={() => onPick(c.value)}
               data-testid="clarify-chip"
-              className={`inline-flex min-h-11 items-center gap-1.5 border border-border bg-background text-sm text-foreground hover:border-primary/60 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60 aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary aria-pressed:opacity-100 ${c.hint ? "rounded-xl px-3.5 py-1.5 text-left" : "rounded-full px-4"}`}>
+              className={`inline-flex min-h-11 items-center gap-1.5 border border-border bg-card text-sm text-foreground hover:border-primary/60 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60 aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-primary aria-pressed:opacity-100 ${c.hint ? "rounded-xl px-3.5 py-1.5 text-left" : "rounded-full px-4"}`}>
               {picked ? <Check aria-hidden="true" className="h-4 w-4 shrink-0" /> : null}
               {c.hint ? (
                 <span className="flex flex-col leading-tight">

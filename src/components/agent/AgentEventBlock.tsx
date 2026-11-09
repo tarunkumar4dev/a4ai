@@ -49,7 +49,7 @@ export function ErrorCard({ code, message, retryText, busy, onRetry }: {
   code: string; message: string; retryText: string | null; busy?: boolean; onRetry: (text: string) => void;
 }) {
   return (
-    <div role="alert" className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm" data-testid="agent-error">
+    <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm" data-testid="agent-error">
       <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-destructive dark:text-red-400" />
       <div className="min-w-0 flex-1">
         <p className="font-medium text-foreground">{ERROR_TITLE[code] ?? "Jawab nahi aa paya"}</p>

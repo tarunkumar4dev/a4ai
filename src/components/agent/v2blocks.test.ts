@@ -161,3 +161,19 @@ describe("shortcuts + step icons", () => {
     expect(stepIcon("tool.something_new")).toBe(Wrench);
   });
 });
+
+describe("the one live region", () => {
+  it("streaming → running step; after → fresh error / stop / failed approval / expired session; old turns stay quiet", async () => {
+    const { liveStatus } = await import("./AgentChatPanel");
+    const now = 1_000_000;
+    const base = { turns: [] as ChatTurn[], status: null, sessionId: null, busy: false, lastUserText: null };
+    const asst = (o: Partial<ChatTurn>): ChatTurn => ({ id: "a", role: "assistant", text: "", blocks: [], done: true, at: now - 2000, endedAt: now - 1000, ...o });
+    expect(liveStatus({ authExpired: false, chat: { ...base, busy: true, turns: [asst({ done: false, steps: [{ id: "s", key: "tool.my_scope", params: {}, status: "running", startedAt: 0, ms: null }] })] } }, now))
+      .toBe("Aapke batches dekh raha hoon…");
+    expect(liveStatus({ authExpired: false, chat: { ...base, turns: [asst({ blocks: [{ kind: "error", id: "e", code: "network", message: "Connection nahi bana", retryText: "q" }] })] } }, now))
+      .toBe("Jawab nahi aa paya: Connection nahi bana");
+    expect(liveStatus({ authExpired: false, chat: { ...base, turns: [asst({ stopped: true })] } }, now)).toBe("Jawab rok diya gaya.");
+    expect(liveStatus({ authExpired: false, chat: { ...base, turns: [asst({ stopped: true, endedAt: now - 60_000 })] } }, now)).toBe("");
+    expect(liveStatus({ authExpired: true, chat: base }, now)).toMatch(/Session expire/);
+  });
+});

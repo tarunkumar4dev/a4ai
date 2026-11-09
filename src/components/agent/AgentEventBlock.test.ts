@@ -139,7 +139,8 @@ describe("AgentEventBlock: event → component", () => {
 
   it("error block is an inline retry card", () => {
     const out = html({ kind: "error", id: "1", code: "network", message: "a4ai Agent tak nahi pahunch paye.", retryText: "Aaj ki attendance" });
-    expect(out).toContain('role="alert"');
+    expect(out).toContain('data-testid="agent-error"');
+    expect(out).not.toContain('role="alert"'); // announced by the one status line instead
     expect(out).toMatch(/Retry</);
   });
 });

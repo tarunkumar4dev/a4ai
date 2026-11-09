@@ -59,7 +59,7 @@ export function AgentSuggestions({ listId, options, active, query, onRun, onFill
                       <Highlight text={o.text} q={query} />
                       <span className="sr-only">{`, ${TYPE_LABEL[o.type]}`}{o.hint ? `, ${o.hint}` : ""}</span>
                     </span>
-                    {o.hint ? <span aria-hidden="true" className="hidden max-w-[45%] shrink-0 truncate text-xs text-muted-foreground min-[400px]:inline">{o.hint}</span> : null}
+                    {o.hint ? <span aria-hidden="true" className={`hidden max-w-[45%] shrink-0 truncate text-xs min-[400px]:inline ${isActive ? "text-accent-foreground/75" : "text-muted-foreground"}`}>{o.hint}</span> : null}
                     <button type="button" tabIndex={-1} aria-label={`Fill “${o.text}” without sending`} title="Box me bharo"
                       onClick={(e) => { e.stopPropagation(); onFill(o); }}
                       className="grid h-11 w-9 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground">
@@ -81,7 +81,7 @@ export function AgentSuggestions({ listId, options, active, query, onRun, onFill
       </ul>
       {loading && !options.length ? <p className="px-3 pb-2 text-xs text-muted-foreground">Dhoondh raha hoon…</p> : null}
       {canClear ? (
-        <div className="border-t border-border px-1.5 py-1">
+        <div className="sticky bottom-0 border-t border-border bg-popover px-1.5 py-1">
           <button type="button" onClick={onClear} data-testid="clear-history"
             className="flex h-11 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />Clear history

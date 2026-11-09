@@ -112,7 +112,7 @@ export function DataTable({ ev }: { ev: Table }) {
           {/* phones: one card per row */}
           <ul className="space-y-2 border-t border-border p-3 sm:hidden">
             {shown.map((r, ri) => (
-              <li key={ri} className="rounded-md border border-border/80 bg-background px-3 py-2">
+              <li key={ri} className="rounded-md border border-border/80 bg-card px-3 py-2">
                 <p className="text-sm font-medium">{dash(r[0])}</p>
                 <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
                   {ev.columns.slice(1).map((c, ci) => (

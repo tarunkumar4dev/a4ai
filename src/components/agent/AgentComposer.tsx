@@ -44,7 +44,11 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   const qc = useAgentQueryClient();
 
   const [focused, setFocused] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  // closed until the user focuses the box themselves (click / Tab), types, or presses ↓ — focus moved by code
+  // (sheet opening, Ctrl+K, back after a reply) never pops the list over the answer
+  const [dismissed, setDismissed] = useState(true);
+  const codeFocus = useRef(false);
+  const focusByCode = (el: HTMLTextAreaElement | null) => { if (!el) return; codeFocus.current = true; el.focus(); codeFocus.current = false; };
   const [active, setActive] = useState(-1);
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -83,7 +87,7 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   const focusEnd = () => requestAnimationFrame(() => {
     const el = ref.current;
     if (!el) return;
-    el.focus();
+    focusByCode(el);
     el.setSelectionRange(el.value.length, el.value.length);
   });
 
@@ -102,10 +106,10 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   // give focus back after a reply if the user was typing here
   useEffect(() => {
     if (busy) { hadFocus.current = document.activeElement === ref.current || hadFocus.current; return; }
-    if (hadFocus.current) { hadFocus.current = false; ref.current?.focus(); }
+    if (hadFocus.current) { hadFocus.current = false; focusByCode(ref.current); }
   }, [busy]);
 
-  useEffect(() => { if (autoFocus) ref.current?.focus(); }, [autoFocus]);
+  useEffect(() => { if (autoFocus) focusByCode(ref.current); }, [autoFocus]);
 
   const send = (text: string) => {
     const t = text.trim();
@@ -117,13 +121,13 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   };
   const fill = (o: SuggestOption) => {
     setValue(o.text.slice(0, MAX_CHARS));
-    setDismissed(false);
     focusEnd();
+    setDismissed(false);
   };
   const remove = (o: SuggestOption) => {
     if (!uid || !o.historyId) return;
     void getAgentApi().then((api) => removeRecentQuery(qc, uid, api, o.historyId!)).catch((err: Error) => toast.error(err.message));
-    ref.current?.focus();
+    focusByCode(ref.current);
   };
   const clearAll = () => {
     setConfirmClear(false);
@@ -169,12 +173,13 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
     <form className={compact ? "px-3 pb-3 pt-2" : "px-3 pb-3 pt-2 sm:px-6 sm:pb-5"} onSubmit={(e) => { e.preventDefault(); send(value); }}>
       <div ref={wrap} className="relative mx-auto max-w-3xl" {...(open ? { [ESC_LAYER]: "" } : {})}
         onBlur={(e) => { if (!wrap.current?.contains(e.relatedTarget as Node | null)) { setFocused(false); setActive(-1); } }}>
-        <div className="flex items-end gap-2 rounded-2xl border border-input bg-background p-1.5 pl-3 shadow-sm focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/30">
+        <div className="flex items-end gap-2 rounded-2xl border border-input bg-card p-1.5 pl-3 shadow-sm focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/30">
           <label htmlFor={inputId} className="sr-only">Message a4ai Agent</label>
           <textarea id={inputId} ref={ref} rows={1} value={value} disabled={busy} maxLength={MAX_CHARS}
             role="combobox" aria-expanded={open} aria-controls={open ? listId : undefined} aria-autocomplete="list" aria-haspopup="listbox"
             aria-activedescendant={activeId}
-            onFocus={() => { setFocused(true); setDismissed(false); }}
+            onFocus={() => { setFocused(true); if (!codeFocus.current) setDismissed(false); }}
+            onPointerDown={() => setDismissed(false)}
             onChange={(e) => { setValue(e.target.value.slice(0, MAX_CHARS)); setDismissed(false); }}
             onKeyDown={onKeyDown} onPaste={onPaste}
             placeholder={busy ? "Jawab aa raha hai…" : offline ? "Offline — connection aate hi bhej paayenge" : "Poochiye — attendance, marks, test…"}
@@ -199,13 +204,15 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
         ) : null}
       </div>
       <div className="mx-auto mt-1.5 flex max-w-3xl items-center justify-between gap-2 px-1 text-[11px] text-muted-foreground">
-        <span className="hidden sm:inline">Enter = bhejo · Shift+Enter = nayi line · ↑↓ suggestions</span>
-        <span className="sm:hidden">Numbers sirf aapke institute ke data se</span>
+        {compact ? (
+          <span className="hidden truncate sm:inline">Enter = bhejo · Shift+Enter = nayi line</span>
+        ) : <span className="hidden sm:inline">Enter = bhejo · Shift+Enter = nayi line · ↑↓ suggestions</span>}
+        <span className="truncate sm:hidden">Numbers sirf aapke institute ke data se</span>
         {near ? (
-          <span id={`${inputId}-count`} className={`tabular-nums ${value.length >= MAX_CHARS ? "font-medium text-destructive dark:text-red-400" : ""}`}>
+          <span id={`${inputId}-count`} className={`shrink-0 tabular-nums ${value.length >= MAX_CHARS ? "font-medium text-destructive dark:text-red-400" : ""}`}>
             {value.length} / {MAX_CHARS}
           </span>
-        ) : <span className="hidden sm:inline">Numbers sirf aapke institute ke data se</span>}
+        ) : <span className={compact ? "hidden truncate sm:inline" : "hidden sm:inline"}>{compact ? "Sirf aapke institute ka data" : "Numbers sirf aapke institute ke data se"}</span>}
       </div>
       <AgentConfirm open={confirmClear} onOpenChange={setConfirmClear} title="Search history clear karein?"
         description="Aapke pichhle sawaal suggestions se hat jayenge. Chats delete nahi hongi." confirmLabel="Clear history" onConfirm={clearAll} />

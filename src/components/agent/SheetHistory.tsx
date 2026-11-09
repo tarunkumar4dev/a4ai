@@ -29,7 +29,7 @@ export default function SheetHistory({ onClose, onPicked }: { onClose: () => voi
 
   return (
     <div ref={box} {...{ [ESC_LAYER]: "" }} role="region" aria-label="Chat history"
-      className="absolute inset-0 z-10 flex flex-col bg-background" data-testid="sheet-history">
+      className="absolute inset-0 z-10 flex flex-col bg-card" data-testid="sheet-history">
       <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
         <button type="button" onClick={onClose} aria-label="Back to chat"
           className="grid h-11 w-11 place-items-center rounded-md text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

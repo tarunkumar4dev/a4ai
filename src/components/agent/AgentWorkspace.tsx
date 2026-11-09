@@ -60,7 +60,7 @@ export default function AgentWorkspace() {
 
   return (
     <div ref={box} data-testid="agent-workspace" data-agent-workspace=""
-      className="-mx-4 flex h-[calc(100dvh-15rem)] min-h-[420px] overflow-hidden border-y border-border bg-background font-halenoir text-foreground sm:mx-0 sm:rounded-lg sm:border">
+      className="-mx-4 flex h-[calc(100dvh-15rem)] min-h-[420px] overflow-hidden border-y border-border bg-card font-halenoir text-card-foreground sm:mx-0 sm:rounded-lg sm:border">
       {/* the help bubble would sit on the send button; the agent is the help here */}
       <style>{"body:has([data-agent-workspace]) .a4-help{display:none!important}"}</style>
       {!collapsed ? (
