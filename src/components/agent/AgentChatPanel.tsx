@@ -1,19 +1,30 @@
 // The a4ai Agent chat column, shared by the /dashboard?tab=agent workspace and the floating sheet. State lives in
 // the app-wide store (src/lib/agent/store.ts), so both show the same conversation. The ONLY aria-live region is the
 // (visually hidden) status line below the messages.
+// Long chats: turns above the last few use `content-visibility: auto` (the browser skips their layout/paint until
+// they scroll into view) with a remembered intrinsic size, so a 100-turn chat costs about as much as a short one and
+// nothing jumps; the streaming turn is never skipped.
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { History } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { History, LogIn, WifiOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAccess } from "@/context/AccessProvider";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { rememberRedirectAfterLogin } from "@/lib/authHelpers";
 import { stepLabel } from "@/lib/agent/chatState";
-import { agentStore, useAgentStore } from "@/lib/agent/store";
+import { savePendingDraft } from "@/lib/agent/persist";
 import { useAgentQueryClient } from "@/lib/agent/queries";
+import { agentStore, useAgentStore } from "@/lib/agent/store";
 import { ErrorCard, type BlockHandlers } from "./AgentEventBlock";
 import { AgentComposer } from "./AgentComposer";
 import { AgentEmptyState } from "./AgentEmptyState";
 import { AgentHeader } from "./AgentHeader";
 import { AgentMessage, buildContexts } from "./AgentMessage";
-import { roleLabel, suggestionsFor } from "./roles";
+import { emptyCards, roleLabel, scopeSummary, suggestionsFor } from "./roles";
+
+/** Turns kept fully rendered at the bottom (the rest use content-visibility). */
+export const LIVE_TURNS = 6;
 
 export function firstNameOf(full: unknown): string | null {
   if (typeof full !== "string") return null;
@@ -30,6 +41,25 @@ function liveStatus(s: ReturnType<typeof useAgentStore>): string {
   return s.chat.status ? `${stepLabel(s.chat.status.key, s.chat.status.params)}…` : "";
 }
 
+function SessionExpired() {
+  const navigate = useNavigate();
+  const signIn = () => {
+    savePendingDraft(agentStore.composerText || agentStore.getState().chat.lastUserText || "");
+    rememberRedirectAfterLogin();
+    navigate("/login");
+  };
+  return (
+    <div role="alert" className="mx-auto mb-2 flex max-w-3xl items-start gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-sm" data-testid="session-expired">
+      <LogIn aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-foreground">Session expire ho gaya</p>
+        <p className="text-xs text-muted-foreground">Dobara sign in karein — box me likha text yahin wapas milega.</p>
+      </div>
+      <Button type="button" size="sm" className="h-10 shrink-0" onClick={signIn}>Sign in again</Button>
+    </div>
+  );
+}
+
 export default function AgentChatPanel({ variant = "page", leading, trailing, autoFocus, newChatInSidebar }: {
   variant?: "page" | "sheet"; leading?: ReactNode; trailing?: ReactNode; autoFocus?: boolean;
   /** the workspace sidebar (lg+) has its own New chat button */ newChatInSidebar?: boolean;
@@ -37,6 +67,8 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const { user } = useAuth();
   const { access } = useAccess();
   const s = useAgentStore(user?.id ?? "anon", useAgentQueryClient());
+  const net = useNetworkStatus();
+  const offline = net === "offline";
   const { chat } = s;
   const compact = variant === "sheet";
   const scroller = useRef<HTMLDivElement>(null);
@@ -45,6 +77,8 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const firstName = s.meta?.first_name ?? firstNameOf(user?.user_metadata?.full_name ?? user?.user_metadata?.name);
   const role = roleLabel(s.meta?.role, access?.primary_role);
   const templates = useMemo(() => suggestionsFor(s.meta?.role, access?.primary_role).map((x) => x.prompt), [s.meta?.role, access?.primary_role]);
+  const cards = useMemo(() => emptyCards(s.meta?.scope, s.meta?.role, access?.primary_role), [s.meta?.scope, s.meta?.role, access?.primary_role]);
+  const scopeLine = scopeSummary(s.meta?.scope);
 
   // stick to the bottom while new content arrives, unless the user scrolled up to read
   const size = chat.turns.reduce((n, t) => {
@@ -54,7 +88,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   useEffect(() => {
     const el = scroller.current;
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [size, s.activeKey]);
+  }, [size, s.activeKey, s.load]);
   useEffect(() => { pinned.current = true; }, [chat.turns.length, s.activeKey]);
   const onScroll = () => {
     const el = scroller.current;
@@ -72,13 +106,16 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
     onPrefill: agentStore.prefill,
   };
   const inputId = compact ? "agent-input-sheet" : "agent-input-page";
+  const lastAssistant = [...chat.turns].reverse().find((t) => t.role === "assistant")?.id;
+  const firstLive = Math.max(0, chat.turns.length - LIVE_TURNS);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background font-halenoir text-foreground" data-testid={`agent-chat-${variant}`}>
       <AgentHeader meta={s.meta} metaStatus={s.metaStatus} role={role} compact={compact} newChatInSidebar={newChatInSidebar}
+        title={chat.title ?? null}
         canNew={chat.turns.length > 0 || !!chat.sessionId} onNewChat={() => agentStore.newChat()} leading={leading} trailing={trailing} />
 
-      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]" data-testid="agent-scroller">
         <div className={`mx-auto w-full max-w-3xl space-y-6 [container-type:inline-size] ${compact ? "px-3 py-4" : "px-3 py-5 sm:px-6"}`}>
           {s.loadNote ? (
             <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground" data-testid="load-note">
@@ -91,19 +128,33 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
               <div className="space-y-2"><div className="h-4 w-3/4 rounded bg-muted" /><div className="h-4 w-1/2 rounded bg-muted" /><div className="h-24 rounded-lg bg-muted/70" /></div>
             </div>
           ) : s.load === "error" && chat.turns.length === 0 ? (
-            <ErrorCard code="network" message="Ye chat load nahi ho payi." retryText="retry" busy={false} onRetry={() => agentStore.retryLoad()} />
+            <ErrorCard code={offline ? "offline" : "network"} message="Ye chat load nahi ho payi." retryText="retry" busy={false} onRetry={() => agentStore.retryLoad()} />
           ) : chat.turns.length === 0 ? (
-            <AgentEmptyState firstName={firstName} suggestions={suggestionsFor(s.meta?.role, access?.primary_role)} compact={compact}
-              disabled={chat.busy} onPick={agentStore.send} />
-          ) : chat.turns.map((t) => <AgentMessage key={t.id} turn={t} h={h} ctx={ctx} onFeedback={agentStore.feedback} />)}
+            <AgentEmptyState firstName={firstName} suggestions={cards} compact={compact} scopeLine={scopeLine}
+              disabled={chat.busy || offline} onPick={agentStore.send} />
+          ) : chat.turns.map((t, i) => (
+            <div key={t.id} className={i < firstLive ? "[content-visibility:auto] [contain-intrinsic-size:auto_320px]" : undefined}>
+              <AgentMessage turn={t} h={h} ctx={ctx} isLast={t.id === lastAssistant}
+                onFeedback={agentStore.feedback} onRegenerate={agentStore.regenerate} onEdit={agentStore.editAndResend} />
+            </div>
+          ))}
         </div>
       </div>
 
       <p aria-live="polite" className="sr-only" data-testid="agent-status">{liveStatus(s)}</p>
 
       <div className="border-t border-border bg-background">
+        {offline ? (
+          <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}>
+            <p className="mx-auto flex max-w-3xl items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 py-2 text-xs text-foreground" data-testid="agent-offline">
+              <WifiOff aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+              Aap offline hain. Likhte rahiye — connection aate hi bhej sakenge.
+            </p>
+          </div>
+        ) : null}
+        {s.authExpired ? <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}><SessionExpired /></div> : null}
         <AgentComposer inputId={inputId} busy={chat.busy} onSend={agentStore.send} onStop={agentStore.stop}
-          draftRequest={s.draft} autoFocus={autoFocus} compact={compact} uid={user?.id ?? null} templates={templates} />
+          draftRequest={s.draft} autoFocus={autoFocus} compact={compact} uid={user?.id ?? null} templates={templates} offline={offline} />
       </div>
     </div>
   );

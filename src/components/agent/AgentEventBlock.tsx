@@ -10,6 +10,8 @@ import { ClarifyChips } from "./ClarifyChips";
 import { DataTable } from "./DataTable";
 import type { PaperContext } from "./PaperPreview";
 import { LazyChart, LazyPaper } from "./lazyBlocks";
+import { ScopeCard } from "./ScopeCard";
+import { SectionComparison } from "./SectionComparison";
 import { StatCard } from "./StatCard";
 import { VerificationBadge } from "./VerificationBadge";
 
@@ -39,6 +41,8 @@ const ERROR_TITLE: Record<string, string> = {
   unauthorized: "Sign in chahiye",
   rate_limited: "Thoda rukiye",
   network: "Connection nahi bana",
+  offline: "Aap offline hain",
+  expired: "Approval expire ho gaya",
 };
 
 export function ErrorCard({ code, message, retryText, busy, onRetry }: {
@@ -85,6 +89,10 @@ export function AgentEventBlock({ block, h, ctx }: { block: Block; h: BlockHandl
         <ApprovalCard block={block} busy={h.busy} onApprove={() => h.onApprove(block.id)} onCancel={() => h.onCancel(block.id)}
           onEdit={() => prefill(EDIT_PREFILL)} onDownload={() => h.onDownload(block.id)} />
       );
+    case "my_scope":
+      return <ScopeCard ev={block.ev} disabled={h.busy} onSend={send} onPrefill={prefill} />;
+    case "section_comparison":
+      return <SectionComparison ev={block.ev} disabled={h.busy} onSend={send} />;
     case "error":
       return <ErrorCard code={block.code} message={block.message} retryText={block.retryText} busy={h.busy} onRetry={h.onRetry} />;
     default:

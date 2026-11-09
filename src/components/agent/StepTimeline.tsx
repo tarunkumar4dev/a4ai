@@ -1,23 +1,57 @@
 // Activity timeline of one assistant turn, built from thinking_status tool.* / status.* events (chatState.applyStep).
-// Running: open list, spinner → check + duration. Done: collapses to "3 steps · 4.2s" (click to expand).
-// Not a live region — the single aria-live status line lives in the chat panel.
+// Each step: the tool's own icon, label, then a spinner (running) / duration / failed / stopped on the right.
+// Running: open list. Done: collapses to "3 steps · 4.2s" (click to expand). Rows have a fixed height, so the
+// answer below never jumps while steps arrive. Not a live region — the single aria-live status line is in the panel.
 import { useState } from "react";
-import { Check, ChevronRight, Loader2, MinusCircle, XCircle } from "lucide-react";
+import {
+  AlertTriangle, BarChart3, BookOpen, CalendarCheck, ChevronRight, FileDown, FileText, GraduationCap, LayoutList, Loader2,
+  Lock, MinusCircle, PenLine, RefreshCw, Save, Search, Send, ShieldCheck, Sparkles, TrendingUp, Users, Wrench, XCircle,
+  type LucideIcon,
+} from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { fmtMs, stepLabel, stepsSummary, type ChatTurn, type Step } from "@/lib/agent/chatState";
 
+const STEP_ICON: Record<string, LucideIcon> = {
+  "tool.resolve_entity": Search,
+  "tool.attendance_stats": CalendarCheck,
+  "tool.low_attendance_list": AlertTriangle,
+  "tool.attendance_trend": TrendingUp,
+  "tool.marks_stats": GraduationCap,
+  "tool.tests_created_by_teacher": FileText,
+  "tool.blueprint_defaults": LayoutList,
+  "tool.generate_questions": PenLine,
+  "tool.verify_paper": ShieldCheck,
+  "tool.regenerate_failed": RefreshCw,
+  "tool.save_draft": Save,
+  "tool.finalize_test": Lock,
+  "tool.assign_to_section": Send,
+  "tool.export_pdf": FileDown,
+  "tool.my_scope": Users,
+  "tool.section_comparison": BarChart3,
+  "status.retrieving_ncert": BookOpen,
+  "status.generating": PenLine,
+  "status.verifying": ShieldCheck,
+  "status.regenerating": RefreshCw,
+  "status.thinking": Sparkles,
+};
+
+/** Icon for a step key (exported for tests). Unknown tools get a wrench. */
+export const stepIcon = (key: string): LucideIcon => STEP_ICON[key] ?? Wrench;
+
 function StepRow({ s }: { s: Step }) {
-  const icon = s.status === "running" ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin text-primary" />
-    : s.status === "failed" ? <XCircle aria-hidden="true" className="h-3.5 w-3.5 text-destructive dark:text-red-400" />
-    : s.status === "stopped" ? <MinusCircle aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />
-    : <Check aria-hidden="true" className="h-3.5 w-3.5 text-primary" />;
+  const Icon = stepIcon(s.key);
   const state = s.status === "running" ? "chal raha hai" : s.status === "failed" ? "fail hua" : s.status === "stopped" ? "ruk gaya" : "ho gaya";
   return (
-    <li className="flex items-center gap-2 py-0.5" data-status={s.status}>
-      <span className="grid h-4 w-4 place-items-center">{icon}</span>
-      <span className={s.status === "running" ? "text-foreground" : "text-muted-foreground"}>{stepLabel(s.key, s.params)}</span>
+    <li className="flex h-6 items-center gap-2" data-status={s.status} data-step={s.key}>
+      <Icon aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 ${s.status === "running" ? "text-primary" : s.status === "failed" ? "text-destructive dark:text-red-400" : "text-muted-foreground"}`} />
+      <span className={`min-w-0 truncate ${s.status === "running" ? "text-foreground" : "text-muted-foreground"}`}>{stepLabel(s.key, s.params)}</span>
       <span className="sr-only">({state})</span>
-      {s.ms !== null && s.status !== "running" ? <span className="ml-auto pl-2 tabular-nums text-muted-foreground/80">{fmtMs(s.ms)}</span> : null}
+      <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 tabular-nums text-muted-foreground/90">
+        {s.status === "running" ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin text-primary" />
+          : s.status === "failed" ? <><XCircle aria-hidden="true" className="h-3.5 w-3.5 text-destructive dark:text-red-400" />{fmtMs(s.ms)}</>
+          : s.status === "stopped" ? <><MinusCircle aria-hidden="true" className="h-3.5 w-3.5" />ruka</>
+          : fmtMs(s.ms)}
+      </span>
     </li>
   );
 }
@@ -26,7 +60,7 @@ export function StepTimeline({ turn }: { turn: ChatTurn }) {
   const steps = turn.steps ?? [];
   const [open, setOpen] = useState(false);
   if (!steps.length) return null;
-  const list = <ol className="space-y-0.5 border-l border-border pl-3 text-xs">{steps.map((s) => <StepRow key={s.id} s={s} />)}</ol>;
+  const list = <ol className="border-l border-border pl-3 text-xs">{steps.map((s) => <StepRow key={s.id} s={s} />)}</ol>;
 
   if (!turn.done) return <div className="max-w-md" data-testid="steps">{list}</div>;
   return (

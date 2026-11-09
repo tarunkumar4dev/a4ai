@@ -5,6 +5,8 @@ import { SquarePen } from "lucide-react";
 import type { AgentMeta } from "@/lib/agent/events";
 import type { MetaStatus } from "@/lib/agent/store";
 import { AgentMark } from "./AgentMessage";
+import { ShortcutsHelp } from "./ShortcutsHelp";
+import { NEW_CHAT_SHORTCUT } from "./shortcuts";
 
 /** Pill text + tone. emerald / amber are the documented exception to "tokens only" (no success/warning tokens). */
 export function dataSourcePill(meta: AgentMeta | null, status: MetaStatus): { label: string; tone: "live" | "demo" | "unknown"; title: string } {
@@ -32,8 +34,9 @@ export function DataSourcePill({ meta, status }: { meta: AgentMeta | null; statu
   );
 }
 
-export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading, trailing, compact, newChatInSidebar }: {
+export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading, trailing, compact, newChatInSidebar, title }: {
   meta: AgentMeta | null; metaStatus: MetaStatus; role: string; onNewChat: () => void; canNew: boolean;
+  /** the open chat's title */ title?: string | null;
   leading?: ReactNode; trailing?: ReactNode; compact?: boolean;
   /** the workspace sidebar (lg+) already has a New chat button */ newChatInSidebar?: boolean;
 }) {
@@ -48,10 +51,12 @@ export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading
         </div>
         <div className="mt-0.5 flex min-w-0 items-center gap-2">
           <DataSourcePill meta={meta} status={metaStatus} />
-          {meta?.institute_name ? <span className="hidden truncate text-xs text-muted-foreground sm:inline">{meta.institute_name}</span> : null}
+          {title ? <span className="min-w-0 truncate text-xs text-muted-foreground" data-testid="chat-title" title={title}>{title}</span>
+            : meta?.institute_name ? <span className="hidden truncate text-xs text-muted-foreground sm:inline">{meta.institute_name}</span> : null}
         </div>
       </div>
-      <button type="button" onClick={onNewChat} disabled={!canNew}
+      <ShortcutsHelp />
+      <button type="button" onClick={onNewChat} disabled={!canNew} title={`New chat (${NEW_CHAT_SHORTCUT})`}
         className={`inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 ${newChatInSidebar ? "lg:hidden" : ""}`}>
         <SquarePen aria-hidden="true" className="h-4 w-4" /><span className={compact ? "sr-only" : "hidden sm:inline"}>New chat</span>
         {compact ? null : <span className="sr-only sm:hidden">New chat</span>}

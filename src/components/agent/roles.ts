@@ -45,3 +45,45 @@ export function suggestionsFor(metaRole: string | null | undefined, primaryRole:
   if (r === "hod") return SUGGESTIONS.hod;
   return SUGGESTIONS.teacher;
 }
+
+// ---- empty state from the caller's scope (v2: GET /agent/meta → scope) ------------------------------------
+export interface ScopeLike { batches: { name: string; students: number | null; via?: string | null; kind?: string | null }[]; total_students: number | null }
+
+/** "2 batches · 44 students" (null when the scope isn't known). Pure. */
+export function scopeSummary(scope: ScopeLike | null | undefined): string | null {
+  if (!scope || !scope.batches.length) return null;
+  const n = scope.batches.length;
+  const total = scope.total_students ?? (scope.batches.every((b) => typeof b.students === "number") ? scope.batches.reduce((a, b) => a + (b.students ?? 0), 0) : null);
+  const parts = [`${n} batch${n === 1 ? "" : "es"}`];
+  if (total !== null) parts.push(`${total} student${total === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+
+const VIA: Record<string, string> = { teacher: "Aap padhate hain", proctor: "Aap proctor hain", hod: "Aapka department", admin: "Institute" };
+
+/**
+ * Four empty-state cards: up to two about the caller's own batches (largest first), then role templates.
+ * Never repeats a prompt. Pure.
+ */
+export function emptyCards(scope: ScopeLike | null | undefined, metaRole: string | null | undefined, primaryRole: string | null | undefined): Suggestion[] {
+  const out: Suggestion[] = [];
+  const batches = [...(scope?.batches ?? [])].filter((b) => b.kind !== "Lab").sort((a, b) => (b.students ?? -1) - (a.students ?? -1));
+  for (const b of batches.slice(0, 2)) {
+    const n = b.students;
+    out.push({
+      Icon: Users,
+      title: `${b.name} ki attendance`,
+      hint: [n === null ? null : `${n} students`, b.via ? VIA[b.via] ?? null : null].filter(Boolean).join(" · ") || "Is mahine ka haal",
+      prompt: `${b.name} ki attendance`,
+    });
+  }
+  if (batches.length > 1 && out.length < 4) {
+    out.push({ Icon: BarChart3, title: "Mere sections compare karo", hint: `${batches.length} sections ki ranking`, prompt: "Sections ki attendance compare karo" });
+  }
+  for (const s of suggestionsFor(metaRole, primaryRole)) {
+    if (out.length >= 4) break;
+    if (out.some((o) => o.prompt.toLowerCase() === s.prompt.toLowerCase() || o.title.toLowerCase() === s.title.toLowerCase())) continue;
+    out.push(s);
+  }
+  return out.slice(0, 4);
+}

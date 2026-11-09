@@ -257,13 +257,13 @@ export function useDebounced<T>(value: T, ms = SUGGEST_DEBOUNCE_MS): T {
  */
 export function useSuggestions(uid: string | null, text: string, enabled: boolean) {
   const q = useDebounced(text.trim());
-  const query = useQuery({
+  const query = useQuery<Suggestion[], Error, Suggestion[], ReturnType<typeof agentKeys.suggest>>({
     queryKey: agentKeys.suggest(uid ?? "-", q),
     enabled: !!uid && enabled && q.length > 0,
     staleTime: 60_000,
     gcTime: 5 * 60_000,
     retry: false,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev: Suggestion[] | undefined) => prev,
     queryFn: async ({ signal }) => {
       const api = await getAgentApi();
       try { return await api.suggestions({ q, limit: 8 }, signal); } catch (err) {
