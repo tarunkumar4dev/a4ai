@@ -7,7 +7,8 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useAccess } from "@/context/AccessProvider";
 import { stepLabel } from "@/lib/agent/chatState";
 import { agentStore, useAgentStore } from "@/lib/agent/store";
-import type { BlockHandlers } from "./AgentEventBlock";
+import { useAgentQueryClient } from "@/lib/agent/queries";
+import { ErrorCard, type BlockHandlers } from "./AgentEventBlock";
 import { AgentComposer } from "./AgentComposer";
 import { AgentEmptyState } from "./AgentEmptyState";
 import { AgentHeader } from "./AgentHeader";
@@ -29,12 +30,13 @@ function liveStatus(s: ReturnType<typeof useAgentStore>): string {
   return s.chat.status ? `${stepLabel(s.chat.status.key, s.chat.status.params)}…` : "";
 }
 
-export default function AgentChatPanel({ variant = "page", leading, trailing, autoFocus }: {
+export default function AgentChatPanel({ variant = "page", leading, trailing, autoFocus, newChatInSidebar }: {
   variant?: "page" | "sheet"; leading?: ReactNode; trailing?: ReactNode; autoFocus?: boolean;
+  /** the workspace sidebar (lg+) has its own New chat button */ newChatInSidebar?: boolean;
 }) {
   const { user } = useAuth();
   const { access } = useAccess();
-  const s = useAgentStore(user?.id ?? "anon");
+  const s = useAgentStore(user?.id ?? "anon", useAgentQueryClient());
   const { chat } = s;
   const compact = variant === "sheet";
   const scroller = useRef<HTMLDivElement>(null);
@@ -72,22 +74,26 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background font-halenoir text-foreground" data-testid={`agent-chat-${variant}`}>
-      <AgentHeader meta={s.meta} metaStatus={s.metaStatus} role={role} compact={compact} newChatInSidebar={!compact}
-        canNew={chat.turns.length > 0 || s.remoteOnly} onNewChat={() => agentStore.newChat()} leading={leading} trailing={trailing} />
+      <AgentHeader meta={s.meta} metaStatus={s.metaStatus} role={role} compact={compact} newChatInSidebar={newChatInSidebar}
+        canNew={chat.turns.length > 0 || !!chat.sessionId} onNewChat={() => agentStore.newChat()} leading={leading} trailing={trailing} />
 
       <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className={`mx-auto w-full max-w-3xl space-y-6 [container-type:inline-size] ${compact ? "px-3 py-4" : "px-3 py-5 sm:px-6"}`}>
-          {chat.turns.length === 0 ? (
-            <>
-              {s.remoteOnly ? (
-                <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                  <History aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                  Is chat ki purani baatein is device par saved nahi hain. Yahin se aage poochh sakte hain.
-                </p>
-              ) : null}
-              <AgentEmptyState firstName={firstName} suggestions={suggestionsFor(s.meta?.role, access?.primary_role)} compact={compact}
-                disabled={chat.busy} onPick={agentStore.send} />
-            </>
+          {s.loadNote ? (
+            <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground" data-testid="load-note">
+              <History aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{s.loadNote}
+            </p>
+          ) : null}
+          {s.load === "loading" && chat.turns.length === 0 ? (
+            <div className="space-y-6" aria-label="Chat load ho rahi hai" data-testid="chat-loading">
+              <div className="ml-auto h-10 w-1/2 rounded-2xl bg-muted" />
+              <div className="space-y-2"><div className="h-4 w-3/4 rounded bg-muted" /><div className="h-4 w-1/2 rounded bg-muted" /><div className="h-24 rounded-lg bg-muted/70" /></div>
+            </div>
+          ) : s.load === "error" && chat.turns.length === 0 ? (
+            <ErrorCard code="network" message="Ye chat load nahi ho payi." retryText="retry" busy={false} onRetry={() => agentStore.retryLoad()} />
+          ) : chat.turns.length === 0 ? (
+            <AgentEmptyState firstName={firstName} suggestions={suggestionsFor(s.meta?.role, access?.primary_role)} compact={compact}
+              disabled={chat.busy} onPick={agentStore.send} />
           ) : chat.turns.map((t) => <AgentMessage key={t.id} turn={t} h={h} ctx={ctx} onFeedback={agentStore.feedback} />)}
         </div>
       </div>
