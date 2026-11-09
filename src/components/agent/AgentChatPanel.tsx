@@ -44,6 +44,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const ctx = useMemo(() => buildContexts(chat.turns), [chat.turns]);
   const firstName = s.meta?.first_name ?? firstNameOf(user?.user_metadata?.full_name ?? user?.user_metadata?.name);
   const role = roleLabel(s.meta?.role, access?.primary_role);
+  const templates = useMemo(() => suggestionsFor(s.meta?.role, access?.primary_role).map((x) => x.prompt), [s.meta?.role, access?.primary_role]);
 
   // stick to the bottom while new content arrives, unless the user scrolled up to read
   const size = chat.turns.reduce((n, t) => {
@@ -102,7 +103,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
 
       <div className="border-t border-border bg-background">
         <AgentComposer inputId={inputId} busy={chat.busy} onSend={agentStore.send} onStop={agentStore.stop}
-          draftRequest={s.draft} autoFocus={autoFocus} compact={compact} />
+          draftRequest={s.draft} autoFocus={autoFocus} compact={compact} uid={user?.id ?? null} templates={templates} />
       </div>
     </div>
   );
