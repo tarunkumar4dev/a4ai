@@ -69,12 +69,14 @@ export function suggestionsFor(role: StaffRole): Suggestion[] {
   return SUGGESTIONS[role];
 }
 
-/** "3 batches" / "Poora institute" — what the empty state says the caller can see. Pure. */
-export function scopeLine(role: StaffRole, batchCount: number | null): string | null {
+/** "3 batches · 44 students" / "Poora institute" — what the empty state says the caller can see. Pure. */
+export function scopeLine(role: StaffRole, batchCount: number | null, studentCount?: number | null): string | null {
   if (role === "admin") return "Poora institute";
   if (batchCount === null) return null;
   if (batchCount === 0) return "Abhi koi batch assign nahi hai";
-  return `${batchCount} batch${batchCount === 1 ? "" : "es"}`;
+  const b = `${batchCount} batch${batchCount === 1 ? "" : "es"}`;
+  if (typeof studentCount === "number" && studentCount > 0) return `${b} · ${studentCount} student${studentCount === 1 ? "" : "s"}`;
+  return b;
 }
 
 /**

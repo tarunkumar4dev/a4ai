@@ -1,16 +1,16 @@
-// Runtime parsers for the a4ai Agent contract 1.2. TYPES come from ./types.ts (generated, ./api.gen.ts) and are
+// Runtime parsers for the a4ai Agent contract 1.3. TYPES come from ./types.ts (generated, ./api.gen.ts) and are
 // re-exported here so older imports keep working. Every parser is tolerant: bad rows are dropped, unknown event
 // types return null, missing optional lists become []. Outputs are the generated wire types themselves.
 import type {
-  AgentEvent, AgentEventType, AgentMeta, QueryItem, SessionItem, SessionList, StoredMessage, StoredMessagePage,
+  AgentEvent, AgentEventType, MetaResponse, QueryItem, SessionItem, SessionList, StoredMessage, StoredMessagePage,
   Suggestion, SuggestionType,
 } from "./types";
 export * from "./types";
 
-/** Every `type` the UI accepts: the contract's 13 (MessageItem.events) + the pending `file` event. */
+/** Every `type` the UI accepts: the contract's 14 event types (file is now in the contract). */
 export const EVENT_TYPES = [
   "session", "text_delta", "thinking_status", "stat_card", "chart", "table", "clarify", "blueprint",
-  "paper_preview", "verification_summary", "pending_approval", "final", "error", "file",
+  "paper_preview", "verification_summary", "pending_approval", "file", "final", "error",
 ] as const satisfies readonly AgentEventType[];
 // compile-time: EVENT_TYPES lists every AgentEventType (adding one to the contract breaks the build here)
 type Missing = Exclude<AgentEventType, (typeof EVENT_TYPES)[number]>;
@@ -55,17 +55,26 @@ export function parseAgentEvent(raw: unknown): AgentEvent | null {
     case "blueprint": e.sections = arr(e.sections); e.chapters = arr(e.chapters); break;
     case "paper_preview": e.questions = arr(e.questions); break;
     case "verification_summary": e.manual_review = arr(e.manual_review); e.duplicates = arr(e.duplicates); if (typeof e.rounds !== "number") e.rounds = 0; break;
-    case "pending_approval": if (typeof e.approval_id !== "string") return null; break;
+    case "pending_approval":
+      if (typeof e.approval_id !== "string") return null;
+      if (typeof e.status !== "string") e.status = "pending";
+      break;
     case "final":
       if (typeof e.session_id !== "string") return null;
       e.cancelled = e.cancelled === true;
       break;
-    case "error": if (typeof e.message !== "string") e.message = "Something went wrong."; if (typeof e.code !== "string") e.code = "internal"; break;
+    case "error":
+      if (typeof e.message !== "string") e.message = "Something went wrong.";
+      if (typeof e.code !== "string") e.code = "internal";
+      if (typeof e.retryable !== "boolean") e.retryable = false;
+      break;
     case "file":
       if (typeof e.file_id !== "string" || !e.file_id) return null;
       e.name = str(e.name) ?? "a4ai-export";
-      e.rows = numOrNull(e.rows);
-      e.expires_at = str(e.expires_at);
+      if (typeof e.rows !== "number") e.rows = 0;
+      e.expires_at = str(e.expires_at) ?? "";
+      if (typeof e.download_path !== "string") e.download_path = `/agent/files/${e.file_id}`;
+      if (typeof e.kind !== "string") e.kind = "defaulters_export";
       break;
   }
   return e as unknown as AgentEvent;
@@ -113,13 +122,50 @@ export function decodeSseData(data: string): AgentEvent | null {
 }
 
 // ---- REST -------------------------------------------------------------------------------------------
+
+const ROLES: ReadonlySet<string> = new Set(["admin", "hod", "teacher"]);
+const SCOPE_LEVELS: ReadonlySet<string> = new Set(["institute", "department", "section", "classes", "none"]);
+
+function parseMetaScope(raw: unknown) {
+  if (!isObj(raw)) return undefined;
+  const level = typeof raw.level === "string" && SCOPE_LEVELS.has(raw.level) ? raw.level as MetaResponse["scope"] extends infer S ? S extends { level: infer L } ? L : never : never : "none";
+  return {
+    level,
+    batch_count: typeof raw.batch_count === "number" ? raw.batch_count : 0,
+    student_count: typeof raw.student_count === "number" ? raw.student_count : 0,
+    batches: Array.isArray(raw.batches) ? (raw.batches as unknown[]).filter((b) => typeof b === "string") as string[] : undefined,
+  };
+}
+
 /** GET /agent/meta (null when the shape is unusable). */
-export function parseAgentMeta(raw: unknown): AgentMeta | null {
+export function parseAgentMeta(raw: unknown): MetaResponse | null {
   if (!isObj(raw)) return null;
   const ds = raw.data_source;
   if (ds !== "live" && ds !== "demo") return null;
-  const role = raw.role === "admin" || raw.role === "hod" ? raw.role : "teacher";
-  return { data_source: ds, read_only: raw.read_only !== false, role, first_name: str(raw.first_name), institute_name: str(raw.institute_name) };
+  const role = (typeof raw.role === "string" && ROLES.has(raw.role) ? raw.role : "teacher") as MetaResponse["role"];
+  const scope = isObj(raw.scope) ? parseMetaScope(raw.scope) : (raw.scope === null ? null : undefined);
+  const features = isObj(raw.features) ? {
+    paper_generation: raw.features.paper_generation === true,
+    defaulters_export: raw.features.defaulters_export === true,
+    proctor_month_report: raw.features.proctor_month_report === true,
+    cancel: raw.features.cancel !== false,
+  } : { paper_generation: false, defaulters_export: false, proctor_month_report: false, cancel: true };
+  const limits = isObj(raw.limits) ? {
+    chat_turns_per_10min: typeof raw.limits.chat_turns_per_10min === "number" ? raw.limits.chat_turns_per_10min : 20,
+    institute_daily_tokens: numOrNull(raw.limits.institute_daily_tokens),
+  } : { chat_turns_per_10min: 20, institute_daily_tokens: null };
+  return {
+    contract_version: typeof raw.contract_version === "string" ? raw.contract_version : "1.3",
+    enabled: raw.enabled !== false,
+    data_source: ds,
+    read_only: raw.read_only !== false,
+    role,
+    first_name: str(raw.first_name),
+    institute_name: str(raw.institute_name),
+    scope,
+    features,
+    limits,
+  };
 }
 
 function parseSessionItem(s: Record<string, unknown>): SessionItem | null {

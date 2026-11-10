@@ -1,4 +1,4 @@
-// Contract test: every event variant of contract 1.2 (RAG-BACKEND docs/agent_openapi_v2.json, snapshot in
+// Contract test: every event variant of contract 1.3 (RAG-BACKEND docs/agent_openapi_v2.json, snapshot in
 // src/lib/agent/contract/) has a typed fixture, survives the wire parser unchanged, goes through the reducer, and
 // renders. A new event type in the backend fails here (and at compile time in fixtures.ts / chatState.eventToBlock).
 import { createElement } from "react";
@@ -27,14 +27,13 @@ const eventRefs = ((spec as { components: { schemas: { MessageItem: { properties
   .components.schemas.MessageItem.properties.events.anyOf.find((x) => x.items)!.items!.oneOf).map((r) => r.$ref.split("/").pop()!);
 const typeOf = (name: string) => { const t = schemas[name].properties?.type; return t?.const ?? t?.default ?? null; };
 
-describe("contract 1.2 ↔ UI", () => {
-  it("the snapshot lists 13 event schemas and every one has a fixture (and only those)", () => {
+describe("contract 1.3 ↔ UI", () => {
+  it("the snapshot lists 14 event schemas (file is now in the contract) and every one has a fixture", () => {
     const types = eventRefs.map(typeOf);
     expect(types).not.toContain(null);
     expect([...types].sort()).toEqual(Object.keys(CONTRACT_FIXTURES).sort());
-    expect(types).toHaveLength(13);
-    // the UI accepts exactly the contract's types + the pending `file`
-    expect([...EVENT_TYPES].sort()).toEqual([...types, "file"].sort());
+    expect(types).toHaveLength(14);
+    expect([...EVENT_TYPES].sort()).toEqual([...types].sort());
   });
 
   it("every fixture survives SSE decoding unchanged (no field dropped or renamed)", () => {

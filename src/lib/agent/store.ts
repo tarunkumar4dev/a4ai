@@ -11,7 +11,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { AgentHttpError, isAgentPdfPath } from "./client";
 import { getAgentApi, isMissingEndpoint } from "./api";
 import { chatReducer, initialChatState, type Block, type ChatAction, type ChatState, type Feedback } from "./chatState";
-import type { AgentEvent, AgentMeta, ChatRequest, SessionItem, StoredMessage } from "./types";
+import type { AgentEvent, ChatRequest, MetaResponse, SessionItem, StoredMessage } from "./types";
 import { clearAgentStorage, isSafeId, loadPref, purgeLegacyAgentStorage, savePref, titleFrom } from "./persist";
 import { replayMessages } from "./replay";
 import { addRecentQuery, agentKeys, findSession, placeSession, removeSession } from "./queries";
@@ -25,7 +25,7 @@ export interface AgentStoreState {
   /** session id of the open chat, or a temporary "c-…" key until the server gives one */
   activeKey: string;
   chat: ChatState;
-  meta: AgentMeta | null;
+  meta: MetaResponse | null;
   metaStatus: MetaStatus;
   /** a request to put text into the composer (Edit on an approval, "Change marks", ScopeCard edit …) */
   draft: { text: string; nonce: number } | null;

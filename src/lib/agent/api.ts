@@ -1,4 +1,4 @@
-// Typed client for every a4ai Agent endpoint (contract 1.2: ./api.gen.ts via ./types.ts). One interface, two adapters:
+// Typed client for every a4ai Agent endpoint (contract 1.3: ./api.gen.ts via ./types.ts). One interface, two adapters:
 //   http — the real backend at VITE_AGENT_URL, with the signed-in user's Supabase token (refreshed once on a 401);
 //   mock — ./mock.ts, an in-memory fake typed with the SAME generated types (VITE_AGENT_MOCK=1 builds only; the mock
 //          chunk is not emitted otherwise).
@@ -13,7 +13,7 @@ import {
   parseSessionList, parseSuggestions,
 } from "./events";
 import type {
-  AgentEvent, AgentMeta, CancelResponse, ChatRequest, FeedbackRequest, MessagesQuery, QueryItem, SessionItem,
+  AgentEvent, CancelResponse, ChatRequest, FeedbackRequest, MessagesQuery, MetaResponse, QueryItem, SessionItem,
   SessionList, SessionPatch, SessionsQuery, StoredMessagePage, Suggestion,
 } from "./types";
 
@@ -27,7 +27,7 @@ export interface StreamOptions {
 
 export interface AgentApi {
   readonly kind: "http" | "mock";
-  meta(signal?: AbortSignal): Promise<AgentMeta>;
+  meta(signal?: AbortSignal): Promise<MetaResponse>;
   listSessions(q: SessionsQuery, signal?: AbortSignal): Promise<SessionList>;
   getMessages(sessionId: string, q: MessagesQuery, signal?: AbortSignal): Promise<StoredMessagePage>;
   patchSession(sessionId: string, patch: SessionPatch): Promise<SessionItem | null>;
@@ -41,7 +41,7 @@ export interface AgentApi {
   chat(opts: StreamOptions): Promise<void>;
   approve(opts: { sessionId: string; approvalId: string; signal?: AbortSignal }): Promise<ApproveResult>;
   downloadPdf(opts: { path: string; filename?: string }): Promise<void>;
-  /** NOT in contract 1.2: GET /agent/files/{file_id} (the `file` event's download). 404 / 410 = expired. */
+  /** GET /agent/files/{file_id} (the `file` event's download). 404 / 410 = expired. */
   downloadFile(opts: { fileId: string; filename: string }): Promise<void>;
 }
 

@@ -52,9 +52,12 @@ describe("contract 1.1 additions", () => {
     const b = parseAgentEvent({ ...base, type: "stat_card", title: "Att", value: "1", source: "tool:x", as_of: "t", delta: 3 });
     expect(b?.type === "stat_card" && [b.period, b.delta]).toEqual([null, null]);
   });
-  it("GET /agent/meta", () => {
-    expect(parseAgentMeta({ data_source: "live", read_only: true, role: "hod", first_name: "Priya", institute_name: "MSIT" }))
-      .toEqual({ data_source: "live", read_only: true, role: "hod", first_name: "Priya", institute_name: "MSIT" });
+  it("GET /agent/meta (contract 1.3: scope, features, limits)", () => {
+    const full = parseAgentMeta({ data_source: "live", read_only: true, role: "hod", first_name: "Priya", institute_name: "MSIT", scope: { level: "department", batch_count: 3, student_count: 45 } });
+    expect(full).toMatchObject({ contract_version: "1.3", enabled: true, data_source: "live", read_only: true, role: "hod", first_name: "Priya", institute_name: "MSIT" });
+    expect(full?.scope).toMatchObject({ level: "department", batch_count: 3, student_count: 45 });
+    expect(full?.features).toMatchObject({ paper_generation: false, cancel: true });
+    expect(full?.limits).toMatchObject({ chat_turns_per_10min: 20, institute_daily_tokens: null });
     expect(parseAgentMeta({ data_source: "prod" })).toBeNull();
     expect(parseAgentMeta({ data_source: "demo", role: "root" })?.role).toBe("teacher");
   });

@@ -2,14 +2,14 @@
 // the history button (phones) and the sheet's close button.
 import type { ReactNode } from "react";
 import { SquarePen } from "lucide-react";
-import type { AgentMeta } from "@/lib/agent/events";
+import type { MetaResponse } from "@/lib/agent/events";
 import type { MetaStatus } from "@/lib/agent/store";
 import { AgentMark } from "./AgentMessage";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { NEW_CHAT_SHORTCUT } from "./shortcuts";
 
 /** Pill text + tone. emerald / amber are the documented exception to "tokens only" (no success/warning tokens). */
-export function dataSourcePill(meta: AgentMeta | null, status: MetaStatus): { label: string; tone: "live" | "demo" | "unknown"; title: string } {
+export function dataSourcePill(meta: MetaResponse | null, status: MetaStatus): { label: string; tone: "live" | "demo" | "unknown"; title: string } {
   if (status === "ok" && meta?.data_source === "live") {
     return { label: meta.read_only ? "Live · read-only" : "Live", tone: "live", title: "Aapke institute ka asli data. Agent kuch bhi badal nahi sakta." };
   }
@@ -24,7 +24,7 @@ const TONE = {
 } as const;
 const DOT = { live: "bg-emerald-600 dark:bg-emerald-400", demo: "bg-amber-500 dark:bg-amber-400", unknown: "bg-muted-foreground/60" } as const;
 
-export function DataSourcePill({ meta, status }: { meta: AgentMeta | null; status: MetaStatus }) {
+export function DataSourcePill({ meta, status }: { meta: MetaResponse | null; status: MetaStatus }) {
   const p = dataSourcePill(meta, status);
   return (
     <span title={p.title} data-testid="data-source" data-tone={p.tone}
@@ -35,7 +35,7 @@ export function DataSourcePill({ meta, status }: { meta: AgentMeta | null; statu
 }
 
 export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading, trailing, compact, newChatInSidebar, title }: {
-  meta: AgentMeta | null; metaStatus: MetaStatus; role: string; onNewChat: () => void; canNew: boolean;
+  meta: MetaResponse | null; metaStatus: MetaStatus; role: string; onNewChat: () => void; canNew: boolean;
   /** the open chat's title */ title?: string | null;
   leading?: ReactNode; trailing?: ReactNode; compact?: boolean;
   /** the workspace sidebar (lg+) already has a New chat button */ newChatInSidebar?: boolean;

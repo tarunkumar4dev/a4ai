@@ -90,8 +90,14 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const who = agentRole(s.meta?.role, access);
   const role = roleLabel(s.meta?.role, access?.primary_role, access);
   const templates = useMemo(() => suggestionsFor(who).map((x) => x.prompt), [who]);
-  const cards = useMemo(() => emptyCards(who, myScope.batches), [who, myScope.batches]);
-  const scopeLine = scopeLineOf(who, myScope.loading ? null : myScope.batches.length);
+  const metaScope = s.meta?.scope;
+  const metaBatchNames = metaScope?.batches;
+  const cards = useMemo(() => {
+    const batches = metaBatchNames?.length ? metaBatchNames.map((name) => ({ name })) : myScope.batches;
+    return emptyCards(who, batches);
+  }, [who, metaBatchNames, myScope.batches]);
+  const batchCount = metaScope?.batch_count ?? (myScope.loading ? null : myScope.batches.length);
+  const scopeLine = scopeLineOf(who, batchCount, metaScope?.student_count);
 
   // stick to the bottom while new content arrives, unless the user scrolled up to read
   const size = chat.turns.reduce((n, t) => {

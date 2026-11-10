@@ -4,7 +4,7 @@
 // message and everything after it (the server does the same with regenerate_from_seq / edit_of_seq).
 // Timestamps are client clock (ms). `seq` = the server's per-session message number (1, 2, 3 …).
 import type {
-  AgentEvent, Blueprint, Chart, Clarify, FileEvent, PaperPreview, PendingApproval, StatCard, Table,
+  AgentEvent, Blueprint, Chart, Clarify, FileReady, PaperPreview, PendingApproval, StatCard, Table,
   VerificationSummary,
 } from "./types";
 
@@ -20,8 +20,7 @@ export type Block =
   | { kind: "paper_preview"; id: string; ev: PaperPreview }
   | { kind: "verification"; id: string; ev: VerificationSummary }
   | { kind: "approval"; id: string; ev: PendingApproval; state: ApprovalState; result: Record<string, unknown> | null; error: string | null }
-  /** `file` (download card) — not in contract 1.2 yet */
-  | { kind: "file"; id: string; ev: FileEvent; state: FileState; error: string | null }
+  | { kind: "file"; id: string; ev: FileReady; state: FileState; error: string | null }
   | { kind: "error"; id: string; code: string; message: string; retryText: string | null; /** 429: retry allowed from (ms) */ retryAt?: number | null };
 
 export type FileState = "ready" | "downloading" | "done" | "expired" | "failed";
@@ -101,7 +100,10 @@ export function eventToBlock(ev: AgentEvent, retryText: string | null = null): B
     case "blueprint": return { kind: "blueprint", id, ev };
     case "paper_preview": return { kind: "paper_preview", id, ev };
     case "verification_summary": return { kind: "verification", id, ev };
-    case "pending_approval": return { kind: "approval", id, ev, state: "pending", result: null, error: null };
+    case "pending_approval": {
+      const s = ev.status === "approved" ? "approved" : ev.status === "cancelled" ? "cancelled" : ev.status === "expired" ? "expired" : "pending";
+      return { kind: "approval", id, ev, state: s, result: ev.result_ref ? { download_path: ev.result_ref } : null, error: null };
+    }
     case "file": {
       const exp = ev.expires_at ? Date.parse(ev.expires_at) : NaN;
       return { kind: "file", id, ev, state: Number.isFinite(exp) && exp < Date.now() ? "expired" : "ready", error: null };

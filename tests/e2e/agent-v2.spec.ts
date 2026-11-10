@@ -76,21 +76,21 @@ test("history: groups, open + replay a chat, restore after reload, search, infin
   await expect(hist.getByTestId("history-group").first()).toHaveText("Pinned");
   for (const g of ["Pinned", "Today", "Yesterday", "Previous 7 days"]) await expect(hist.getByTestId("history-group").filter({ hasText: new RegExp(`^${g}$`) })).toBeVisible();
 
-  await item(hist, "Sections ki attendance compare karo").getByRole("button").first().click();
-  await expect(item(hist, "Sections ki attendance compare karo").getByRole("button").first()).toHaveAttribute("aria-current", "page");
-  await expect(chat(page).getByTestId("msg-user-text")).toHaveText("Sections ki attendance compare karo");
+  await item(hist, "Department ka section-wise comparison").getByRole("button").first().click();
+  await expect(item(hist, "Department ka section-wise comparison").getByRole("button").first()).toHaveAttribute("aria-current", "page");
+  await expect(chat(page).getByTestId("msg-user-text")).toHaveText("Department ka section-wise comparison");
   await expect(chat(page).getByTestId("ranking-table")).toBeVisible();
   await expect(chat(page).getByTestId("agent-chart")).toBeVisible();
   await expect(chat(page).getByTestId("steps")).toContainText(/1 step · /);
-  await expect(chat(page).getByTestId("chat-title")).toHaveText("Sections ki attendance compare karo");
+  await expect(chat(page).getByTestId("chat-title")).toHaveText("Department ka section-wise comparison");
 
   await item(hist, "Main kya kya dekh sakta hoon?").getByRole("button").first().click();
-  await expect(chat(page).getByTestId("scope-card")).toContainText("44 students");
+  await expect(chat(page).getByTestId("scope-card")).toContainText("59 students");
   await expect(chat(page).getByTestId("ranking-table")).toHaveCount(0);
 
   // v3: mock is in-memory, but lastSession pref is saved → reload reopens the same session from seed
   await page.reload();
-  await expect(chat(page).getByTestId("scope-card")).toContainText("44 students", { timeout: 30_000 });
+  await expect(chat(page).getByTestId("scope-card")).toContainText("59 students", { timeout: 30_000 });
   await expect(item(sidebar(page), "Main kya kya dekh sakta hoon?").getByRole("button").first()).toHaveAttribute("aria-current", "page");
 
   const search = sidebar(page).getByRole("searchbox", { name: "Search chats" });
@@ -154,7 +154,7 @@ test("suggestions: recent + try on focus, typed matches with hints, keyboard (�
   await expect(input(page)).toHaveAttribute("aria-expanded", "true");
 
   await input(page).pressSequentially("ece 1", { delay: 30 });
-  await expect(list.locator('[data-type="entity"]').filter({ hasText: "ECE-1 ki attendance" })).toContainText("Batch · 22 students");
+  await expect(list.locator('[data-type="entity"]').filter({ hasText: "ECE-1 ki is mahine ki attendance" })).toContainText("Batch · 22 students");
   await expect(list.locator("mark").first()).toHaveText(/ece/i);
   const first = list.getByRole("option").first();
   await expect(first).toContainText("ECE 1 ki attendance");
@@ -172,10 +172,10 @@ test("suggestions: recent + try on focus, typed matches with hints, keyboard (�
   await input(page).press("Enter");
   const clarify = chat(page).getByTestId("clarify");
   await expect(clarify).toContainText("Kaun sa?");
-  await expect(clarify).toContainText("Section · 22 students");
-  await expect(clarify).toContainText("Section · 0 students");
-  await clarify.getByTestId("clarify-chip").filter({ hasText: "ECE-1" }).first().click();
-  await expect(chat(page).getByTestId("stat-grid")).toContainText("83.8");
+  await expect(clarify).toContainText("Electronics · 22 students");
+  await expect(clarify).toContainText("Electronics · 0 students");
+  await clarify.getByTestId("clarify-chip").filter({ hasText: "ECE 1" }).first().click();
+  await expect(chat(page).getByTestId("stat-card")).toContainText("83.8");
 
   // a click on a suggestion runs it at once; the ↖ icon only fills
   await input(page).click();
@@ -249,17 +249,17 @@ test("stop keeps the partial answer, regenerate replaces it, 👎 with a note, e
 test("my_scope + section_comparison blocks, scope empty state", async ({ page }) => {
   await openWorkspace(page);
   await page.getByTestId("history-sidebar").getByRole("button", { name: /New chat/ }).click();
-  await expect(page.getByTestId("scope-summary")).toHaveText("Aapke paas: 2 batches · 44 students");
+  await expect(page.getByTestId("scope-summary")).toHaveText("Aapke paas: 3 batches · 59 students");
   await expect(chat(page).getByRole("button", { name: /ECE-1 ki attendance/ })).toBeVisible();
-  await expect(chat(page).getByRole("button", { name: /Mere sections compare karo/ })).toBeVisible();
+  await expect(chat(page).getByRole("button", { name: /ECE-2 ki attendance/ })).toBeVisible();
 
   await ask(page, "Main kya kya dekh sakta hoon?");
   const scope = chat(page).getByTestId("scope-card");
-  await expect(scope.getByTestId("scope-total")).toHaveText("3 batches · 44 students");
+  await expect(scope.getByTestId("scope-total")).toHaveText("3 batches · 59 students");
   await expect(scope.getByTestId("scope-batch")).toHaveCount(3);
   await scope.getByTestId("scope-batch").filter({ hasText: "ECE-2" }).first().click();
-  await expect(chat(page).getByTestId("msg-user-text").last()).toHaveText("ECE-2 ki attendance");
-  await expect(chat(page).getByTestId("stat-grid")).toContainText("83.8");
+  await expect(chat(page).getByTestId("msg-user-text").last()).toHaveText("ECE-2 ki is mahine ki attendance");
+  await expect(chat(page).getByTestId("stat-card")).toContainText("83.8");
 
   await ask(page, "Sections ki attendance compare karo");
   const table = chat(page).getByTestId("ranking-table");
@@ -269,7 +269,7 @@ test("my_scope + section_comparison blocks, scope empty state", async ({ page })
   await expect(table.locator("tbody tr").first()).toContainText("86.4%");
   await expect(table.locator("tbody tr").last()).toContainText("ECE-4");
   await expect(table.locator("tbody tr").last()).toContainText("—");
-  await expect(chat(page).getByTestId("section-comparison").getByTestId("agent-chart")).toBeVisible();
+  await expect(chat(page).getByTestId("agent-chart")).toBeVisible();
 });
 
 test("mobile sheet: Ask a4ai, history drawer inside the sheet, Esc closes the drawer first, Ctrl+K", async ({ page }) => {
@@ -294,7 +294,7 @@ test("mobile sheet: Ask a4ai, history drawer inside the sheet, Esc closes the dr
   await expect(sheet.getByRole("button", { name: "Chat history" })).toBeFocused();
 
   await sheet.getByRole("button", { name: "Chat history" }).click();
-  await drawer.getByTestId("history-item").filter({ hasText: "Sections ki attendance compare karo" }).getByRole("button").first().click();
+  await drawer.getByTestId("history-item").filter({ hasText: "Department ka section-wise comparison" }).getByRole("button").first().click();
   await expect(drawer).toHaveCount(0);
   await expect(sheet.getByTestId("ranking-table")).toBeVisible();
 
@@ -464,7 +464,7 @@ for (const width of [390, 1440]) {
       await shot("scope");
 
       await ask(page, "Sections ki attendance compare karo");
-      await expect(chat(page).getByTestId("section-comparison").getByTestId("agent-chart")).toBeVisible();
+      await expect(chat(page).getByTestId("agent-chart")).toBeVisible();
       await chat(page).getByTestId("ranking-table").scrollIntoViewIfNeeded();
       await shot("comparison");
 

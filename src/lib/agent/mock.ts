@@ -7,7 +7,7 @@
 // section_comparison as `table` (+ `chart`) events.
 //
 // Scenarios (by message text, case-insensitive):
-//   "excel" | "export"                      → table + `file` event (download card; NOT in contract 1.2 yet)
+//   "excel" | "export"                      → table + `file` event (download card)
 //   "scope" | "kya dekh" | "meri classes"   → my_scope table "Meri classes · N"
 //   "compare" | "comparison" | "section-wise" → section_comparison table + bar chart
 //   "ece 1" | "ece1"                        → clarify with hints
@@ -19,7 +19,7 @@
 import type { AgentApi, StreamOptions } from "./api";
 import { AgentHttpError, saveBlob } from "./client";
 import type {
-  AgentEvent, AgentMeta, CancelResponse, ContractEvent, FileEvent, QueryItem, SessionItem, SessionList, StoredMessage,
+  AgentEvent, CancelResponse, FileReady, MetaResponse, QueryItem, SessionItem, SessionList, StoredMessage,
   StoredMessagePage, Suggestion,
 } from "./types";
 
@@ -49,7 +49,7 @@ export const MOCK_BATCHES = [
   { name: "ECE-2", students: 22, role: "proctor", subjects: "Signals, Networks" },
   { name: "ECE-2 A", students: 15, role: "proctor", subjects: null },
 ] as const;
-const TEMPLATES: Record<AgentMeta["role"], string[]> = {
+const TEMPLATES: Record<MetaResponse["role"], string[]> = {
   teacher: ["Meri classes ki is mahine ki attendance", "75% se kam attendance wale students", "Class 10 trigonometry test banao, 40 marks", "Mere tests ke marks summary"],
   hod: ["Department ka section-wise comparison", "Is mahine department ki attendance", "75% se kam wale students, Excel mein", "Teachers ne kitne tests banaye"],
   admin: ["Aaj poore institute ki attendance", "Department-wise comparison is mahine", "75% se kam wale students, Excel mein", "Teachers ne kitne tests banaye"],
@@ -60,7 +60,7 @@ const load = (): MockDb => (db ??= seed());
 /** Tests / e2e: wipe and reseed (same ids every time). */
 export function resetMock() { db = null; }
 const nextId = (p: string) => { const d = load(); return `${p}-${(d.next++).toString(16).padStart(8, "0")}-0000-4000-8000-000000000000`; };
-const mockRole = (): AgentMeta["role"] => {
+const mockRole = (): MetaResponse["role"] => {
   const r = typeof window !== "undefined" ? (window as unknown as { __AGENT_MOCK_ROLE__?: string }).__AGENT_MOCK_ROLE__ : undefined;
   return r === "admin" || r === "hod" ? r : "teacher";
 };
@@ -79,7 +79,7 @@ function scenario(text: string): { events: Draft[]; delay: number } {
   if (/excel|export|xlsx/.test(t)) {
     const fileId = nextId("file").slice(0, 32).replace(/-/g, "");
     load().files.set(fileId, { name: "below-75-ece2.xlsx", csv: "Student,Section,%,Marked\nAarav Gupta,ECE-2,61.1,18\nDiya Verma,ECE-2,66.7,18\n", expires: Date.now() + 15 * 60_000 });
-    const file: Omit<FileEvent, "seq" | "request_id"> = { type: "file", file_id: fileId, name: "below-75-ece2.xlsx", rows: 6, expires_at: new Date(Date.now() + 15 * 60_000).toISOString(), mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", size_bytes: 8200, source: "tool:low_attendance_list" };
+    const file: Omit<FileReady, "seq" | "request_id"> = { type: "file", file_id: fileId, kind: "defaulters_export", name: "below-75-ece2.xlsx", rows: 6, expires_at: new Date(Date.now() + 15 * 60_000).toISOString(), download_path: `/agent/files/${fileId}` };
     return { delay: 70, events: [...tool("low_attendance_list", 640),
       { type: "table", ...src("low_attendance_list"), title: "Below 75%", columns: ["Student", "Section", "%", "Marked"],
         rows: [["Aarav Gupta", "ECE-2", "61.1", "18"], ["Diya Verma", "ECE-2", "66.7", "18"], ["Kabir Singh", "ECE-2", "72.2", "18"], ["Meera Nair", "ECE-2", null, "0"], ["Rohan Das", "ECE-2", "70.0", "18"], ["Sana Khan", "ECE-2", "74.4", "18"]] },
@@ -110,6 +110,11 @@ function scenario(text: string): { events: Draft[]; delay: number } {
       { type: "clarify", question: "Kaun sa? / Which one?", chips: [
         { label: "ECE 1", value: "ECE 1 (id 6b0e1c2d)", hint: "Electronics · 22 students" },
         { label: "ECE1", value: "ECE1 (id 77c1d2e3)", hint: "Electronics · 0 students" }] }] };
+  }
+  if (/ece ?1.*\(id /.test(t)) {
+    return { delay: 70, events: [...tool("attendance_stats", 1100),
+      { type: "stat_card", ...src("attendance_stats"), title: "Attendance · ECE-1", value: "83.8", unit: "%", period: "1–9 Nov 2026", delta: "+2.1 pts vs previous 9 days", subtitle: "396 marks · 18 classes" },
+      { type: "text_delta", text: "ECE-1 ki attendance is mahine **83.8%** hai." }] };
   }
   if (/trend/.test(t)) {
     return { delay: 70, events: [...tool("attendance_trend", 700),
@@ -198,7 +203,13 @@ function recordQuery(text: string) {
 // ---- the adapter ----------------------------------------------------------------------------------------
 export const mockApi: AgentApi = {
   kind: "mock",
-  meta: (signal) => rest((): AgentMeta => ({ data_source: "demo", read_only: false, role: mockRole(), first_name: "Priya", institute_name: "MSIT (mock)" }), signal),
+  meta: (signal) => rest((): MetaResponse => ({
+    contract_version: "1.3", enabled: true, data_source: "demo", read_only: false, role: mockRole(),
+    first_name: "Priya", institute_name: "MSIT (mock)",
+    scope: { level: mockRole() === "admin" ? "institute" : mockRole() === "hod" ? "department" : "classes", batch_count: MOCK_BATCHES.length, student_count: MOCK_BATCHES.reduce((s, b) => s + b.students, 0), batches: MOCK_BATCHES.map((b) => b.name) },
+    features: { paper_generation: true, defaulters_export: true, proctor_month_report: true, cancel: true },
+    limits: { chat_turns_per_10min: 20, institute_daily_tokens: null },
+  }), signal),
 
   listSessions: (q, signal) => rest((): SessionList => {
     const needle = norm(q.q ?? "");
@@ -348,5 +359,5 @@ export const mockApi: AgentApi = {
   },
 };
 
-/** The contract's own event union is what the mock streams (plus `file`, which is not in 1.2 yet). */
-export type MockEvent = ContractEvent | FileEvent;
+/** The contract's own event union (file is in the contract since 1.3). */
+export type MockEvent = AgentEvent;

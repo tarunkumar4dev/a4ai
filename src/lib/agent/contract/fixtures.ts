@@ -1,7 +1,7 @@
-// One realistic fixture per event the backend can send (contract 1.2), typed with the GENERATED types. The mapped
+// One realistic fixture per event the backend can send (contract 1.3), typed with the GENERATED types. The mapped
 // type makes the object incomplete — a compile error — as soon as `npm run agent:contract` brings a new event type.
 // contract.test.ts also checks this list against the OpenAPI JSON snapshot at runtime.
-import type { ContractEvent, FileEvent } from "../types";
+import type { ContractEvent, FileReady } from "../types";
 
 type Fixtures = { [K in ContractEvent["type"]]: Extract<ContractEvent, { type: K }> };
 const R = "9f2c1a7e5b3d4c21";
@@ -18,8 +18,9 @@ export const CONTRACT_FIXTURES: Fixtures = {
   blueprint: { type: "blueprint", seq: 7, request_id: R, class_grade: 10, subject: "Mathematics", chapters: ["Introduction to Trigonometry"], total_marks: 20, duration_min: 45, sections: [{ section: "A", qtype: "mcq", count: 4, marks_each: 1 }, { section: "B", qtype: "short_answer", count: 2, marks_each: 3 }, { section: "C", qtype: "long_answer", count: 2, marks_each: 5 }] },
   paper_preview: { type: "paper_preview", seq: 8, request_id: R, draft_id: "0f8fad5b-d9cb-469f-a165-70867728950e", title: "Trigonometry — Unit Test", total_marks: 20, duration_min: 45, questions: [{ id: "q1", section: "A", qtype: "mcq", marks: 1, text: "The value of $\\tan 45^\\circ$ is:", options: ["0", "1", "$\\sqrt{3}$", "$\\frac{1}{\\sqrt{3}}$"], answer: "(b) 1", marking_scheme: null, sub_questions: null, status: "verified" }] },
   verification_summary: { type: "verification_summary", seq: 9, request_id: R, objective_verified: 4, objective_total: 4, rubric_checked: 3, rubric_total: 4, manual_review: ["q6"], marks_sum_ok: true, duplicates: [], rounds: 2 },
-  pending_approval: { type: "pending_approval", seq: 10, request_id: R, approval_id: "appr-1", action: "finalize_test", summary: "Class 10 Mathematics — 8 sawaal, 20 marks. Test History me save hoga.", args_sha256: "a".repeat(64), expires_at: "2099-01-01T00:00:00+00:00" },
-  error: { type: "error", seq: 11, request_id: R, code: "provider_error", message: "AI service abhi busy hai.", partial: {} },
+  pending_approval: { type: "pending_approval", seq: 10, request_id: R, approval_id: "appr-1", action: "finalize_test", summary: "Class 10 Mathematics — 8 sawaal, 20 marks. Test History me save hoga.", args_sha256: "a".repeat(64), expires_at: "2099-01-01T00:00:00+00:00", status: "pending" },
+  file: { type: "file", seq: 15, request_id: R, file_id: "f7a1c0de0000400080000000000000ab", kind: "defaulters_export", name: "below-75-ece2.xlsx", rows: 6, expires_at: "2099-01-01T00:00:00+00:00", download_path: "/agent/files/f7a1c0de0000400080000000000000ab" },
+  error: { type: "error", seq: 11, request_id: R, code: "provider_error", message: "AI service abhi busy hai.", retryable: false, partial: {} },
   final: { type: "final", seq: 12, request_id: R, session_id: "6b0e1c2d-1111-4aaa-8bbb-000000000001", usage: {}, cancelled: false },
 };
 
@@ -33,8 +34,5 @@ export const RANKING_TABLE: Extract<ContractEvent, { type: "table" }> = {
   rows: [["1", "ECE 1", "86.4", "18", "396"], ["2", "ECE 2", "83.8", "18", "396"], [null, "ECE 4", null, "0", "0"]],
 };
 
-/** Not in contract 1.2 yet (the UI is ready for it). */
-export const FILE_FIXTURE: FileEvent = {
-  type: "file", seq: 15, request_id: R, file_id: "f7a1c0de0000400080000000000000ab", name: "below-75-ece2.xlsx", rows: 6,
-  expires_at: "2099-01-01T00:00:00+00:00", mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", size_bytes: 8200,
-};
+/** Convenience typed reference for tests that need the file fixture separately. */
+export const FILE_FIXTURE: FileReady = CONTRACT_FIXTURES.file;

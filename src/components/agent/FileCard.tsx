@@ -1,4 +1,4 @@
-// `file` event (NOT in contract 1.2 yet) → a download card: name, rows, size, expiry. Download = GET
+// `file` event (contract 1.3) → a download card: name, rows, expiry. Download = GET
 // /agent/files/{file_id} with the user's token (never a public URL). After expires_at, or on 404 / 410, it says
 // "expired" and offers to ask again.
 import { Download, FileSpreadsheet, Loader2, RotateCcw, TimerOff } from "lucide-react";
@@ -10,7 +10,7 @@ type FileBlock = Extract<Block, { kind: "file" }>;
 
 const size = (n: number | null | undefined) => (typeof n === "number" && n > 0 ? (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`) : null);
 
-/** "6 rows · 8 KB · expires 9 Nov, 10:12 pm IST". Pure. */
+/** "6 rows · expires 9 Nov, 10:12 pm IST". Pure. */
 export function fileMeta(ev: FileBlock["ev"]): string {
   return [
     typeof ev.rows === "number" ? `${ev.rows} row${ev.rows === 1 ? "" : "s"}` : null,

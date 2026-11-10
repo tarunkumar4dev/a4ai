@@ -54,10 +54,10 @@ describe("my_scope / section_comparison tables", () => {
   });
 });
 
-describe("file card (`file` event, not in contract 1.2 yet)", () => {
+describe("file card (`file` event, contract 1.3)", () => {
   const block = (o: Partial<Extract<Block, { kind: "file" }>> = {}): Extract<Block, { kind: "file" }> => ({ kind: "file", id: "f", ev: FILE_FIXTURE, state: "ready", error: null, ...o });
   it("name, rows, size, expiry; Download button", () => {
-    expect(fileMeta(FILE_FIXTURE)).toMatch(/^6 rows · 8 KB · expires /);
+    expect(fileMeta(FILE_FIXTURE)).toMatch(/^6 rows · expires /);
     const out = renderToStaticMarkup(createElement(FileCard, { block: block(), onDownload: vi.fn(), onAskAgain: vi.fn() }));
     expect(out).toContain("below-75-ece2.xlsx");
     expect(out).toContain('aria-label="Download below-75-ece2.xlsx"');

@@ -1,8 +1,8 @@
-// Stored messages (GET /agent/sessions/{id}/messages, contract 1.2) → the same ChatState the live stream built.
+// Stored messages (GET /agent/sessions/{id}/messages, contract 1.3) → the same ChatState the live stream built.
 // Each assistant message carries the exact events it streamed (session … final), and they go through the SAME
 // reducer, so a reopened chat renders exactly as it did live: blocks, steps + durations, clarify picks, and a
-// cancelled turn (final.cancelled) marked as stopped. Approvals: the contract stores no approval outcome, so a
-// past one is shown as expired once its expires_at has passed (never as approvable). Pure.
+// cancelled turn (final.cancelled) marked as stopped. Approvals: contract 1.3 stores the outcome (status field
+// on PendingApproval), so eventToBlock reads it; the expiry fallback below catches a 1.2 backend that omits it.
 import { chatReducer, initialChatState, type ChatState, type ChatTurn } from "./chatState";
 import type { StoredMessage } from "./types";
 
@@ -37,7 +37,11 @@ export function replayMessages(messages: StoredMessage[], sessionId: string | nu
       // a turn whose stream died without `final` (server restart) counts as stopped
       stopped: last.stopped || ended,
       steps: (last.steps ?? []).map((x) => (x.status === "running" ? { ...x, status: "stopped" as const, ms: x.ms ?? 0 } : x)),
-      blocks: last.blocks.map((b) => (b.kind === "approval" && b.state === "pending" && Date.parse(b.ev.expires_at) < now ? { ...b, state: "expired" as const } : b)),
+      blocks: last.blocks.map((b) => {
+        if (b.kind !== "approval" || b.state !== "pending") return b;
+        if (Date.parse(b.ev.expires_at) < now) return { ...b, state: "expired" as const };
+        return b;
+      }),
     };
     s = { ...s, turns, busy: false };
   }

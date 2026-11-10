@@ -20,7 +20,7 @@ const sess = (id: string, title: string, iso: string, pinned = false): SessionIt
 const q = (id: string, text: string): QueryItem => ({ id, text, last_used_at: "2026-11-09T10:00:00+00:00", use_count: 1 });
 
 // ---- parsers -------------------------------------------------------------------------------------------
-describe("contract 1.2 parsers", () => {
+describe("contract 1.3 parsers", () => {
   it("sessions: items + next_cursor; a 1.1 backend (only `sessions`) is mapped onto items", () => {
     const p = parseSessionList({ items: [{ id: "s1", title: "A", created_at: "2026-11-09T10:00:00+00:00", last_message_at: "2026-11-09T10:05:00+00:00", message_count: 4, pinned: true, preview: "ok" }, { title: "no id" }], next_cursor: "c2" });
     expect(p).toEqual({ items: [{ id: "s1", title: "A", created_at: "2026-11-09T10:00:00+00:00", last_message_at: "2026-11-09T10:05:00+00:00", message_count: 4, pinned: true, preview: "ok" }], next_cursor: "c2" });
@@ -54,10 +54,14 @@ describe("contract 1.2 parsers", () => {
     expect(parseAgentEvent({ seq: 9, request_id: "r", type: "final", session_id: "s1" })).toMatchObject({ cancelled: false });
     const cl = parseAgentEvent({ seq: 3, request_id: "r", type: "clarify", question: "Kaun sa?", chips: [{ label: "ECE 1", value: "ECE 1 (id 6b0e)", hint: "Electronics · 2 students" }, { label: "ECE1", value: "v2" }] });
     expect(cl?.type === "clarify" && cl.chips.map((c) => c.hint)).toEqual(["Electronics · 2 students", null]);
-    expect(parseAgentEvent({ seq: 4, request_id: "r", type: "file", file_id: "abc" })).toMatchObject({ type: "file", name: "a4ai-export", rows: null }); // the download checks the id
+    expect(parseAgentEvent({ seq: 4, request_id: "r", type: "file", file_id: "abc" })).toMatchObject({ type: "file", name: "a4ai-export", rows: 0 });
     expect(parseAgentEvent({ seq: 4, request_id: "r", type: "file", name: "x" })).toBeNull();
     expect(parseAgentEvent({ seq: 0, request_id: "r", type: "my_scope" })).toBeNull(); // not an event: my_scope is a table
-    expect(parseAgentMeta({ data_source: "demo", role: "teacher", scope: {} })).toEqual({ data_source: "demo", read_only: true, role: "teacher", first_name: null, institute_name: null });
+    const m = parseAgentMeta({ data_source: "demo", role: "teacher", scope: {} });
+    expect(m).toMatchObject({ contract_version: "1.3", enabled: true, data_source: "demo", read_only: true, role: "teacher", first_name: null, institute_name: null });
+    expect(m?.scope).toMatchObject({ level: "none", batch_count: 0, student_count: 0 });
+    expect(m?.features).toBeDefined();
+    expect(m?.limits).toBeDefined();
   });
 
   it("chat body: regenerate sends no message; v2 fields only when set", () => {
