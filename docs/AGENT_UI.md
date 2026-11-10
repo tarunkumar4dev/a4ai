@@ -235,3 +235,11 @@ All types generated from `RAG-BACKEND docs/agent_openapi_v2.json` (contract 1.2,
    `/agent/meta` would restore "2 batches · 44 students".
 6. **Real-backend e2e.** `A4AI_ANTHROPIC_API_KEY` not set → 503. Needs a scripted LLM provider (like
    `tests/agent/test_agent_v2.py:Scripted`) or a dev-mode endpoint that accepts a pre-written response.
+
+
+## Voice (contract 1.4)
+Code: `src/lib/voice/*` (pure logic + browser wiring), `src/components/voice/*` (lazy UI), mounted from
+`AgentChatPanel` (dock above the composer) and `AskA4aiLauncher` (floating mic, `ui_action` navigation). Backend
+spec: RAG-BACKEND `docs/VOICE_PLAN.md`. Voice prefs (speaker, speed, mute, consent timestamp + version) live in
+`a4ai.agent.v3.<uid>.pref.voice` and are cleared with the other agent prefs on sign-out. The route registry copy is
+refreshed with `npm run agent:routes` (set `AGENT_BACKEND_DIR` when the backend is not at `../RAG-BACKEND`).

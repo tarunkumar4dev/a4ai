@@ -71,3 +71,28 @@
 | `tests/e2e/agent-v2.spec.ts` | Updated for v3 mock + axe-core |
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+---
+
+## Voice (contract 1.4, commits 53fabf8 → 0ecef14)
+
+| phase | commit | what |
+|---|---|---|
+| 2 | 53fabf8 | push-to-talk core: pure state machine (idle → listening → transcribing → thinking → speaking), silence auto-stop, MIME pick (webm/opus Chrome, mp4 iOS), recorder with noiseSuppression / echoCancellation / autoGainControl |
+| 3 | 992a113 | route registry copy (`src/lib/agent/routeRegistry.json`, `npm run agent:routes`), `resolveRoute` (role-gated, typed params), test that every key exists in `App.tsx` |
+| 4 | 0ecef14 | mic in Ask a4ai + floating mic on mobile dashboards (56 px), transcript strip (auto-send pause + Edit, "Maine suna … Sahi hai?", chips, "Dobara boliye"), spoken replies with mute, voice + speed settings, first-use consent + 3 example chips, `ui_action` navigate / highlight Confirm, contract 1.4 regen |
+
+- Lazy: `VoiceDock` chunk **8.0 KB gzip**, `FloatingMic` **0.6 KB gzip**. No new dependencies. The registry JSON and
+  the tiny ui_action bus are in the main bundle (the launcher executes navigation).
+- Slow network (`navigator.connection` / the app's network check): no level meter, browser speechSynthesis.
+- Accessibility: aria-label on the mic (Hindi + English), one aria-live region for transcript + spoken caption,
+  hold Space to talk on desktop, design tokens only, meter is transform-only, `motion-safe` on the Confirm pulse.
+
+**Ran and passed:** `npx vitest run` 409/409 (38 files). `tsc` shows no new errors in agent/voice files; the 4
+remaining are pre-existing (`AgentEventBlock.test.ts` meta casts, `FileCard.size_bytes`, `queries.ts:295`).
+`vite build` succeeds.
+**Not verified:** nothing was run in a real browser or on a phone. MediaRecorder, mic permission, autoplay and TTS
+playback on Chrome Android / iOS Safari are untested. Playwright e2e was not run or extended for voice.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
