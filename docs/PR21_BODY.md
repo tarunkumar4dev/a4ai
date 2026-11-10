@@ -3,7 +3,7 @@
 ## Summary
 
 - **v2** (commits 0b2e62c–4b79916): ChatGPT-style server history, Google-style suggestions combobox, message actions (stop/regen/edit/feedback), ScopeCard + SectionComparison, a11y audit, shortcuts, e2e on mock adapter.
-- **v3** (commits 281b3d5–dcf1929): contract-first rewrite against RAG-BACKEND `agent_openapi_v2.json` (contract 1.2).
+- **v3** (commits 281b3d5–de042be): contract-first rewrite against RAG-BACKEND `agent_openapi_v2.json` (contract 1.2 → 1.3).
 
 ### v3 phases
 
@@ -15,6 +15,7 @@
 | 4 | 85adb27 | **Speed** — prefetch suggestions on focus; bundle sizes measured |
 | 5 | 872b747 | **Contrast** — `--muted-foreground` 46.9% → 46% = 4.65:1 (WCAG AA) |
 | 5+6 | dcf1929 | **Tests** — axe-core a11y, e2e updated for in-memory mock |
+| 7 | de042be | **Contract 1.3** — regen api.gen.ts, wire scope/approval/file, fix 3 pre-existing e2e |
 
 ### Key v2 → v3 changes
 
@@ -43,18 +44,20 @@
 
 ### Tests
 
-- **119 vitest** unit tests: contract (13), privacy (3), blocks/roles/events/store/mock
-- **12 Playwright e2e** (mock adapter): history, rename/pin/delete, suggestions, stop/regen/edit, scope/ranking, mobile sheet, contrast audit, axe-core a11y (both themes)
+- **374 vitest** unit tests: contract (14), privacy (3), blocks/roles/events/store/mock + all other project tests
+- **13 Playwright e2e** (mock adapter, 9 run + 4 screenshot-only): history, rename/pin/delete, suggestions, stop/regen/edit, scope/ranking, mobile sheet, contrast audit, axe-core a11y (both themes)
 - Contract test reads the OpenAPI JSON snapshot at runtime → a new backend event type fails at compile time (fixtures.ts) AND at runtime (contract.test.ts)
 
 ### Blocked on the backend
 
-1. **Feedback not replayed** — messages endpoint doesn't return feedback → 👍/👎 reset on reload
-2. **File event / download** — UI ready; needs backend `file` event + download endpoint
-3. **Approval persistence** — past approvals show as expired on replay
-4. **Excel export** — needs file event
-5. **Meta scope** — empty state uses batch names, not student counts
-6. **Real-backend e2e** — needs scripted LLM provider (no API keys set → 503)
+1. **Feedback not replayed** — `MessageItem` in contract 1.3 has no feedback field → 👍/👎 reset on reload
+2. **Real-backend e2e** — needs scripted LLM provider (no API keys set → 503)
+
+### Resolved in contract 1.3
+
+- **File event / download** — wired (FileReady with kind, download_path)
+- **Approval persistence** — eventToBlock reads status/result_ref/decided_at from stored events
+- **Meta scope** — empty state uses batch_count + student_count + batches from /agent/meta
 
 ### Files outside agent folders
 
