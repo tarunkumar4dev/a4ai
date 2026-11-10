@@ -74,3 +74,4 @@ dist-perf/
 
 # Original screenshots / logos (unblurred PII) - only the processed WebPs in src/assets are committed
 design/source-images/
+dist-e2e-audit/
