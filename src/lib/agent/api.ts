@@ -23,6 +23,8 @@ export interface StreamOptions {
   /** X-Agent-Request-Id from the response headers — known before the first event (cancel works at once) */
   onRequestId?: (id: string) => void;
   signal?: AbortSignal;
+  /** the message was spoken: POST /agent/voice/chat (same body / events, plus a `speech` event) */
+  voice?: boolean;
 }
 
 export interface AgentApi {
@@ -113,8 +115,8 @@ export const httpApi: AgentApi = {
     const j = await res.json().catch(() => null) as CancelResponse | null;
     return j && typeof j.request_id === "string" ? j : null;
   },
-  async chat({ body, onEvent, onRequestId, signal }) {
-    const res = await authedFetch("/agent/chat", { method: "POST", json: chatBody(body), accept: "text/event-stream", signal });
+  async chat({ body, onEvent, onRequestId, signal, voice }) {
+    const res = await authedFetch(voice ? "/agent/voice/chat" : "/agent/chat", { method: "POST", json: chatBody(body), accept: "text/event-stream", signal });
     if (!res.body) throw new AgentHttpError(res.status, "Empty response");
     const rid = res.headers.get("x-agent-request-id");
     if (rid) onRequestId?.(rid);

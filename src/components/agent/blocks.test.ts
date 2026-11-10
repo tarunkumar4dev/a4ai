@@ -91,7 +91,7 @@ describe("error states", () => {
   });
   it("an expired approval has no Approve button", () => {
     const out = html({ kind: "approval", id: "a", state: "expired", result: null, error: null,
-      ev: { type: "pending_approval", seq: 1, request_id: "r", approval_id: "a1", action: "finalize_test", summary: "s", args_sha256: "h", expires_at: "2020-01-01T00:00:00+00:00" } });
+      ev: { type: "pending_approval", seq: 1, request_id: "r", approval_id: "a1", action: "finalize_test", summary: "s", args_sha256: "h", expires_at: "2020-01-01T00:00:00+00:00", status: "pending" } });
     expect(out).toContain('data-testid="approval-expired"');
     expect(out).not.toMatch(/>Approve</);
   });

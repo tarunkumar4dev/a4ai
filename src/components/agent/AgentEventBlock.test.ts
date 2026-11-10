@@ -122,7 +122,7 @@ describe("AgentEventBlock: event → component", () => {
   });
 
   it("pending approval: Approve / Edit / Cancel, irreversible note, no Download", () => {
-    const out = html({ kind: "approval", id: "1", state: "pending", result: null, error: null, ev: { ...meta, type: "pending_approval", approval_id: "a", action: "finalize_test", summary: "Class 10 Trig test (40 marks) final karna", args_sha256: "h", expires_at: future } });
+    const out = html({ kind: "approval", id: "1", state: "pending", result: null, error: null, ev: { ...meta, type: "pending_approval", approval_id: "a", action: "finalize_test", summary: "Class 10 Trig test (40 marks) final karna", args_sha256: "h", expires_at: future, status: "pending" } });
     expect(out).toMatch(/>Approve</);
     expect(out).toMatch(/Edit</);
     expect(out).toMatch(/Cancel</);
@@ -131,7 +131,7 @@ describe("AgentEventBlock: event → component", () => {
   });
 
   it("Download PDF only after a successful approve with an agent PDF path", () => {
-    const ev = { ...meta, type: "pending_approval" as const, approval_id: "a", action: "finalize_test" as const, summary: "s", args_sha256: "h", expires_at: future };
+    const ev = { ...meta, type: "pending_approval" as const, approval_id: "a", action: "finalize_test" as const, summary: "s", args_sha256: "h", expires_at: future, status: "pending" as const };
     expect(html({ kind: "approval", id: "1", state: "approved", error: null, ev, result: { status: "finalized", download_path: "/agent/drafts/0f8fad5b-d9cb-469f-a165-70867728950e/pdf" } })).toContain("Download PDF");
     expect(html({ kind: "approval", id: "1", state: "failed", error: "Approval failed.", ev, result: null })).not.toContain("Download");
     expect(html({ kind: "approval", id: "1", state: "approved", error: null, ev, result: { download_path: "https://evil.example/x.pdf" } })).not.toContain("Download");

@@ -20,6 +20,8 @@ import { AgentEmptyState } from "./AgentEmptyState";
 import { AgentHeader } from "./AgentHeader";
 import { AgentMessage, buildContexts } from "./AgentMessage";
 import { agentRole, emptyCards, roleLabel, scopeLine as scopeLineOf, suggestionsFor } from "./roles";
+import { LazyVoiceDock } from "@/components/voice";
+import { emitUiAction } from "@/lib/voice/uiActions";
 
 /** Turns kept fully rendered at the bottom (the rest use content-visibility). */
 export const LIVE_TURNS = 6;
@@ -126,6 +128,8 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
     onSend: agentStore.send,
     onPrefill: agentStore.prefill,
     onDownloadFile: agentStore.downloadFile,
+    onNavigate: (routeKey, params) => emitUiAction({ routeKey, params, label: null }),
+    confirmHighlight: !!chat.confirmHighlightAt,
   };
   const inputId = compact ? "agent-input-sheet" : "agent-input-page";
   const lastAssistant = [...chat.turns].reverse().find((t) => t.role === "assistant")?.id;
@@ -175,6 +179,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
           </div>
         ) : null}
         {s.authExpired ? <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}><SessionExpired /></div> : null}
+        {user?.id ? <div className="pt-2"><LazyVoiceDock uid={user.id} compact={compact} offline={offline} /></div> : null}
         <AgentComposer inputId={inputId} busy={chat.busy} onSend={agentStore.send} onStop={agentStore.stop}
           draftRequest={s.draft} autoFocus={autoFocus} compact={compact} uid={user?.id ?? null} templates={templates} offline={offline} />
       </div>

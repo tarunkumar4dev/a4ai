@@ -16,9 +16,10 @@ const ACTION_LABEL: Record<string, { title: string; effect: string }> = {
 
 export const EDIT_PREFILL = "Approve se pehle ye badlo: ";
 
-export function ApprovalCard({ block, busy, onApprove, onCancel, onEdit, onDownload }: {
+export function ApprovalCard({ block, busy, onApprove, onCancel, onEdit, onDownload, highlight }: {
   block: ApprovalBlock; busy?: boolean;
   onApprove: () => void; onCancel: () => void; onEdit: () => void; onDownload: () => void;
+  /** voice: "Screen par Confirm dabaiye" — ring the Approve button (pulse only without prefers-reduced-motion) */ highlight?: boolean;
 }) {
   const { ev, state, result, error } = block;
   const label = ACTION_LABEL[ev.action] ?? { title: "Approval chahiye", effect: "" };
@@ -55,7 +56,8 @@ export function ApprovalCard({ block, busy, onApprove, onCancel, onEdit, onDownl
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {open ? (
           <>
-            <Button type="button" className="h-11" disabled={state === "approving" || expired} onClick={onApprove}>
+            <Button type="button" className={`h-11 ${highlight && open ? "ring-4 ring-primary/40 ring-offset-2 motion-safe:animate-pulse" : ""}`}
+              data-confirm-highlight={highlight && open ? "" : undefined} disabled={state === "approving" || expired} onClick={onApprove}>
               {state === "approving" ? <><Loader2 aria-hidden="true" className="animate-spin" />Approving…</> : state === "failed" ? "Approve again" : "Approve"}
             </Button>
             <Button type="button" variant="outline" className="h-11" disabled={state === "approving" || busy} onClick={onEdit}>

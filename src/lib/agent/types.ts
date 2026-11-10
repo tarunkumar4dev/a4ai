@@ -5,7 +5,7 @@
 import type { components, operations } from "./api.gen";
 
 export type Schemas = components["schemas"];
-export const AGENT_CONTRACT_VERSION = "1.3";
+export const AGENT_CONTRACT_VERSION = "1.4";
 
 // ---- SSE events (contract) --------------------------------------------------------------------------
 /** Every event the backend can stream / store (MessageItem.events — the contract's own union). */
@@ -32,6 +32,12 @@ export type QuestionType = PreviewQuestion["qtype"];
 export type VerifyStatus = PreviewQuestion["status"];
 export type FileReady = Schemas["FileReady"];
 export type ApprovalStatus = NonNullable<PendingApproval["status"]>;
+// 1.4 (voice): spoken headline of a voice turn; UI instruction (navigate to a registry key / highlight Confirm)
+export type Speech = Schemas["Speech"];
+export type UiAction = Schemas["UiAction"];
+export type VoiceConfig = Schemas["VoiceConfig"];
+export type TranscribeResponse = Schemas["TranscribeResponse"];
+export type SpeakRequest = Schemas["SpeakRequest"];
 
 /** @deprecated Use FileReady (contract 1.3 name). Alias kept for migration of existing code. */
 export type FileEvent = FileReady;

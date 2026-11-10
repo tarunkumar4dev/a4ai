@@ -1,4 +1,4 @@
-// Contract test: every event variant of contract 1.3 (RAG-BACKEND docs/agent_openapi_v2.json, snapshot in
+// Contract test: every event variant of contract 1.4 (RAG-BACKEND docs/agent_openapi_v2.json, snapshot in
 // src/lib/agent/contract/) has a typed fixture, survives the wire parser unchanged, goes through the reducer, and
 // renders. A new event type in the backend fails here (and at compile time in fixtures.ts / chatState.eventToBlock).
 import { createElement } from "react";
@@ -27,12 +27,12 @@ const eventRefs = ((spec as { components: { schemas: { MessageItem: { properties
   .components.schemas.MessageItem.properties.events.anyOf.find((x) => x.items)!.items!.oneOf).map((r) => r.$ref.split("/").pop()!);
 const typeOf = (name: string) => { const t = schemas[name].properties?.type; return t?.const ?? t?.default ?? null; };
 
-describe("contract 1.3 ↔ UI", () => {
-  it("the snapshot lists 14 event schemas (file is now in the contract) and every one has a fixture", () => {
+describe("contract 1.4 ↔ UI", () => {
+  it("the snapshot lists 16 event schemas (1.4 adds speech + ui_action) and every one has a fixture", () => {
     const types = eventRefs.map(typeOf);
     expect(types).not.toContain(null);
     expect([...types].sort()).toEqual(Object.keys(CONTRACT_FIXTURES).sort());
-    expect(types).toHaveLength(14);
+    expect(types).toHaveLength(16);
     expect([...EVENT_TYPES].sort()).toEqual([...types].sort());
   });
 
@@ -44,7 +44,7 @@ describe("contract 1.3 ↔ UI", () => {
   });
 
   it("every event maps to a block or to state, and every block renders", () => {
-    const blockless = new Set(["session", "thinking_status", "final"]);
+    const blockless = new Set(["session", "thinking_status", "final", "speech"]); // speech lives on the turn (turn.speech)
     for (const ev of [...Object.values(CONTRACT_FIXTURES), SCOPE_TABLE, RANKING_TABLE, FILE_FIXTURE] as AgentEvent[]) {
       const block = eventToBlock(ev, "retry me");
       if (blockless.has(ev.type)) { expect(block, ev.type).toBeNull(); continue; }
@@ -64,8 +64,9 @@ describe("contract 1.3 ↔ UI", () => {
     for (const ev of Object.values(CONTRACT_FIXTURES) as AgentEvent[]) s = chatReducer(s, { type: "event", ev });
     expect(s.sessionId).toBe(CONTRACT_FIXTURES.session.session_id);
     expect(s.busy).toBe(false);
+    expect(s.turns[1].speech).toEqual({ text: CONTRACT_FIXTURES.speech.text, language: "hi-en" });
     const html = renderToStaticMarkup(createElement(AgentMessage, { turn: s.turns[1], h, ctx: new Map(), onFeedback: vi.fn() }));
-    for (const id of ["stat-card", "agent-chart", "data-table", "clarify", "blueprint", "paper-preview", "verification", "approval", "agent-error"]) {
+    for (const id of ["stat-card", "agent-chart", "data-table", "clarify", "blueprint", "paper-preview", "verification", "approval", "agent-error", "ui-navigate"]) {
       expect(html, id).toContain(`data-testid="${id}"`);
     }
   });

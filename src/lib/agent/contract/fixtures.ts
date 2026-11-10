@@ -1,4 +1,4 @@
-// One realistic fixture per event the backend can send (contract 1.3), typed with the GENERATED types. The mapped
+// One realistic fixture per event the backend can send (contract 1.4), typed with the GENERATED types. The mapped
 // type makes the object incomplete — a compile error — as soon as `npm run agent:contract` brings a new event type.
 // contract.test.ts also checks this list against the OpenAPI JSON snapshot at runtime.
 import type { ContractEvent, FileReady } from "../types";
@@ -21,6 +21,8 @@ export const CONTRACT_FIXTURES: Fixtures = {
   pending_approval: { type: "pending_approval", seq: 10, request_id: R, approval_id: "appr-1", action: "finalize_test", summary: "Class 10 Mathematics — 8 sawaal, 20 marks. Test History me save hoga.", args_sha256: "a".repeat(64), expires_at: "2099-01-01T00:00:00+00:00", status: "pending" },
   file: { type: "file", seq: 15, request_id: R, file_id: "f7a1c0de0000400080000000000000ab", kind: "defaulters_export", name: "below-75-ece2.xlsx", rows: 6, expires_at: "2099-01-01T00:00:00+00:00", download_path: "/agent/files/f7a1c0de0000400080000000000000ab" },
   error: { type: "error", seq: 11, request_id: R, code: "provider_error", message: "AI service abhi busy hai.", retryable: false, partial: {} },
+  speech: { type: "speech", seq: 16, request_id: R, text: "ECE 1 की attendance इस महीने 83.8% रही।", language: "hi-en" },
+  ui_action: { type: "ui_action", seq: 17, request_id: R, action: "navigate", route_key: "dashboard.attendance", params: {}, label: "Attendance" },
   final: { type: "final", seq: 12, request_id: R, session_id: "6b0e1c2d-1111-4aaa-8bbb-000000000001", usage: {}, cancelled: false },
 };
 

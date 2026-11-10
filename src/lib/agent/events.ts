@@ -7,10 +7,10 @@ import type {
 } from "./types";
 export * from "./types";
 
-/** Every `type` the UI accepts: the contract's 14 event types (file is now in the contract). */
+/** Every `type` the UI accepts: the contract's 16 event types (1.4 adds speech + ui_action). */
 export const EVENT_TYPES = [
   "session", "text_delta", "thinking_status", "stat_card", "chart", "table", "clarify", "blueprint",
-  "paper_preview", "verification_summary", "pending_approval", "file", "final", "error",
+  "paper_preview", "verification_summary", "pending_approval", "file", "final", "error", "speech", "ui_action",
 ] as const satisfies readonly AgentEventType[];
 // compile-time: EVENT_TYPES lists every AgentEventType (adding one to the contract breaks the build here)
 type Missing = Exclude<AgentEventType, (typeof EVENT_TYPES)[number]>;
@@ -75,6 +75,18 @@ export function parseAgentEvent(raw: unknown): AgentEvent | null {
       e.expires_at = str(e.expires_at) ?? "";
       if (typeof e.download_path !== "string") e.download_path = `/agent/files/${e.file_id}`;
       if (typeof e.kind !== "string") e.kind = "defaulters_export";
+      break;
+    case "speech":
+      if (typeof e.text !== "string" || !e.text.trim()) return null;
+      if (e.language !== "hi" && e.language !== "en" && e.language !== "hi-en") e.language = "hi-en";
+      break;
+    case "ui_action":
+      if (e.action !== "navigate" && e.action !== "highlight_confirm") return null;
+      // the key is only ever looked up in the registry copy; anything else is dropped there
+      if (e.action === "navigate" && (typeof e.route_key !== "string" || !/^[a-z0-9_.]{1,64}$/.test(e.route_key))) return null;
+      e.route_key = typeof e.route_key === "string" ? e.route_key : null;
+      e.params = isObj(e.params) ? Object.fromEntries(Object.entries(e.params).filter(([, v]) => typeof v === "string")) : {};
+      e.label = str(e.label);
       break;
   }
   return e as unknown as AgentEvent;

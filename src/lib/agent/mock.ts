@@ -75,7 +75,7 @@ const src = (name: string) => ({ source: `tool:${name}`, as_of: new Date().toISO
 
 function scenario(text: string): { events: Draft[]; delay: number } {
   const t = text.toLowerCase();
-  if (/\bfail\b/.test(t)) return { delay: 60, events: [...tool("resolve_entity", 300), { type: "error", code: "provider_error", message: "AI service abhi busy hai. Thodi der me retry karein." }] };
+  if (/\bfail\b/.test(t)) return { delay: 60, events: [...tool("resolve_entity", 300), { type: "error", code: "provider_error", message: "AI service abhi busy hai. Thodi der me retry karein.", retryable: true, partial: {} }] };
   if (/excel|export|xlsx/.test(t)) {
     const fileId = nextId("file").slice(0, 32).replace(/-/g, "");
     load().files.set(fileId, { name: "below-75-ece2.xlsx", csv: "Student,Section,%,Marked\nAarav Gupta,ECE-2,61.1,18\nDiya Verma,ECE-2,66.7,18\n", expires: Date.now() + 15 * 60_000 });

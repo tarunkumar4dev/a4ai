@@ -4,7 +4,7 @@
 // message and everything after it (the server does the same with regenerate_from_seq / edit_of_seq).
 // Timestamps are client clock (ms). `seq` = the server's per-session message number (1, 2, 3 …).
 import type {
-  AgentEvent, Blueprint, Chart, Clarify, FileReady, PaperPreview, PendingApproval, StatCard, Table,
+  AgentEvent, Blueprint, Chart, Clarify, FileReady, PaperPreview, PendingApproval, StatCard, Table, UiAction,
   VerificationSummary,
 } from "./types";
 
@@ -21,6 +21,7 @@ export type Block =
   | { kind: "verification"; id: string; ev: VerificationSummary }
   | { kind: "approval"; id: string; ev: PendingApproval; state: ApprovalState; result: Record<string, unknown> | null; error: string | null }
   | { kind: "file"; id: string; ev: FileReady; state: FileState; error: string | null }
+  | { kind: "ui_action"; id: string; ev: UiAction }
   | { kind: "error"; id: string; code: string; message: string; retryText: string | null; /** 429: retry allowed from (ms) */ retryAt?: number | null };
 
 export type FileState = "ready" | "downloading" | "done" | "expired" | "failed";
@@ -43,6 +44,7 @@ export interface ChatTurn {
   /** server message number in the session (null/undefined = not known, e.g. a v1 chat) */ seq?: number | null;
   /** assistant: the user pressed Stop — the partial answer is kept and marked */ stopped?: boolean;
   /** assistant: request_id of the stream that produced it (for /agent/chat/{id}/cancel) */ requestId?: string | null;
+  /** assistant, voice turns: the spoken headline (`speech` event) — also the caption while it plays */ speech?: { text: string; language: string } | null;
 }
 
 export interface ChatState {
@@ -53,6 +55,7 @@ export interface ChatState {
   lastUserText: string | null;
   /** title from the `session` event (v2) */ title?: string | null;
   /** request_id of the stream in flight (null when idle) */ requestId?: string | null;
+  /** a live `ui_action highlight_confirm` arrived (approve-by-voice): point at the Confirm button until the next send */ confirmHighlightAt?: number | null;
 }
 
 export type ChatAction =
@@ -109,7 +112,8 @@ export function eventToBlock(ev: AgentEvent, retryText: string | null = null): B
       return { kind: "file", id, ev, state: Number.isFinite(exp) && exp < Date.now() ? "expired" : "ready", error: null };
     }
     case "error": return { kind: "error", id, code: ev.code, message: ev.message, retryText };
-    case "thinking_status": case "final": case "session": return null;
+    case "ui_action": return { kind: "ui_action", id, ev };
+    case "thinking_status": case "final": case "session": case "speech": return null;
     default: {
       const unhandled: never = ev;
       return unhandled;
@@ -174,7 +178,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       if (!text) return state;
       const seqs = nextSeqs(state.turns);
       return {
-        ...state, busy: true, lastUserText: text, status: { key: "status.thinking", params: {} }, requestId: null,
+        ...state, busy: true, lastUserText: text, status: { key: "status.thinking", params: {} }, requestId: null, confirmHighlightAt: null,
         turns: [...state.turns,
           { id: nid("u"), role: "user", text, blocks: [], done: true, at, seq: seqs.user },
           { id: nid("a"), role: "assistant", text: "", blocks: [], done: false, at, steps: [], endedAt: null, seq: seqs.assistant }],
@@ -238,6 +242,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           return { ...t, blocks: [...t.blocks, eventToBlock(ev)!] };
         });
       }
+      if (ev.type === "speech") {
+        return withLastAssistant(state, at, (t) => ({ ...t, speech: { text: ev.text, language: ev.language } }));
+      }
       const block = eventToBlock(ev, state.lastUserText);
       if (!block) return state;
       const s = withLastAssistant(state, at, (t) => {
@@ -245,6 +252,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         const next = { ...t, blocks: [...t.blocks, block] };
         return ev.type === "error" ? finish(next, at, "stopped") : next;
       });
+      if (ev.type === "ui_action" && ev.action === "highlight_confirm" && state.busy) return { ...s, confirmHighlightAt: at };
       return ev.type === "error" ? { ...s, busy: false, status: null, requestId: null } : s;
     }
     case "fail": {

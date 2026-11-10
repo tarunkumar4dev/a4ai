@@ -1,3039 +1,3666 @@
 {
- "openapi": "3.1.0",
- "info": {
-  "title": "a4ai Agent",
-  "description": "a4ai Agent API (contract 1.3). Human-readable spec: docs/AGENT_API_V2.md. Auth: Authorization: Bearer <Supabase access token>. Foreign ids return 404.",
-  "version": "1.3"
- },
- "paths": {
-  "/agent/meta": {
-   "get": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Meta",
-    "description": "Never 403 for a not-yet-enabled institute: answers enabled=false so the UI can hide the agent.",
-    "operationId": "meta_agent_meta_get",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/MetaResponse"
-        }
-       }
-      }
-     }
-    }
-   }
+  "openapi": "3.1.0",
+  "info": {
+    "title": "a4ai Agent",
+    "description": "a4ai Agent API (contract 1.4). Human-readable spec: docs/AGENT_API_V2.md. Auth: Authorization: Bearer <Supabase access token>. Foreign ids return 404.",
+    "version": "1.4"
   },
-  "/agent/chat": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Chat",
-    "operationId": "chat_agent_chat_post",
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/ChatRequest"
-       }
-      }
-     },
-     "required": true
-    },
-    "responses": {
-     "200": {
-      "description": "SSE stream: `data: <AgentEvent JSON>` frames; first `session`, last `final`.",
-      "headers": {
-       "X-Agent-Request-Id": {
-        "description": "request_id of every event; use it to cancel",
-        "schema": {
-         "type": "string"
-        }
-       }
-      },
-      "content": {
-       "text/event-stream": {
-        "schema": {
-         "$ref": "#/components/schemas/AgentEvent"
-        }
-       }
-      }
-     },
-     "404": {
-      "description": "unknown / foreign session_id or seq"
-     },
-     "429": {
-      "description": "rate limit or institute token budget hit; nothing stored",
-      "headers": {
-       "Retry-After": {
-        "schema": {
-         "type": "integer"
-        }
-       }
-      },
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/RateLimitResponse"
-        }
-       }
-      }
-     },
-     "503": {
-      "description": "LLM provider not configured (nothing stored)"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/approve": {
-   "post": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Approve",
-    "operationId": "approve_agent_approve_post",
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/ApproveRequest"
-       }
-      }
-     },
-     "required": true
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/sessions/{session_id}": {
-   "get": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Get Session View",
-    "description": "1.1 view (turns = event lists). Agent store sessions: owner only. Seed/dev fallback: the local demo\nPostgres row (owner or same-institute admin, as in 1.1).",
-    "operationId": "get_session_view_agent_sessions__session_id__get",
-    "parameters": [
-     {
-      "name": "session_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "Session Id"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   },
-   "patch": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "Patch Session",
-    "operationId": "patch_session_agent_sessions__session_id__patch",
-    "parameters": [
-     {
-      "name": "session_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "Session Id"
-      }
-     }
-    ],
-    "requestBody": {
-     "required": true,
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/SessionPatch"
-       }
-      }
-     }
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/SessionItem"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   },
-   "delete": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "Delete Session",
-    "operationId": "delete_session_agent_sessions__session_id__delete",
-    "parameters": [
-     {
-      "name": "session_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "Session Id"
-      }
-     }
-    ],
-    "responses": {
-     "204": {
-      "description": "Successful Response"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/drafts/{draft_id}/pdf": {
-   "get": {
-    "tags": [
-     "agent"
-    ],
-    "summary": "Draft Pdf",
-    "operationId": "draft_pdf_agent_drafts__draft_id__pdf_get",
-    "parameters": [
-     {
-      "name": "draft_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "Draft Id"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {}
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/files/{file_id}": {
-   "get": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "Get File",
-    "operationId": "get_file_agent_files__file_id__get",
-    "parameters": [
-     {
-      "name": "file_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "File Id"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "the generated file (Content-Disposition: attachment)",
-      "content": {
-       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
-        "schema": {
-         "type": "string",
-         "format": "binary"
-        }
-       }
-      }
-     },
-     "404": {
-      "description": "unknown / foreign file"
-     },
-     "410": {
-      "description": "your file, but expired (1 hour); ask the agent again"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/sessions": {
-   "get": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "List Sessions",
-    "operationId": "list_sessions_agent_sessions_get",
-    "parameters": [
-     {
-      "name": "cursor",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string",
-         "maxLength": 200
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Cursor"
-      }
-     },
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "integer",
-       "maximum": 50,
-       "minimum": 1,
-       "default": 20,
-       "title": "Limit"
-      }
-     },
-     {
-      "name": "q",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string",
-         "maxLength": 80
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Q"
-      }
-     },
-     {
-      "name": "pinned",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "boolean"
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Pinned"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/SessionList"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/sessions/{session_id}/messages": {
-   "get": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "List Messages",
-    "operationId": "list_messages_agent_sessions__session_id__messages_get",
-    "parameters": [
-     {
-      "name": "session_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "Session Id"
-      }
-     },
-     {
-      "name": "cursor",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string",
-         "maxLength": 200
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Cursor"
-      }
-     },
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "integer",
-       "maximum": 200,
-       "minimum": 1,
-       "default": 100,
-       "title": "Limit"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/MessageList"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/history/queries": {
-   "get": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "List Queries",
-    "operationId": "list_queries_agent_history_queries_get",
-    "parameters": [
-     {
-      "name": "q",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string",
-         "maxLength": 80
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Q"
-      }
-     },
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "integer",
-       "maximum": 50,
-       "minimum": 1,
-       "default": 10,
-       "title": "Limit"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "array",
-         "items": {
-          "$ref": "#/components/schemas/QueryItem"
-         },
-         "title": "Response List Queries Agent History Queries Get"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   },
-   "delete": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "Clear Queries",
-    "operationId": "clear_queries_agent_history_queries_delete",
-    "responses": {
-     "204": {
-      "description": "Successful Response"
-     }
-    }
-   }
-  },
-  "/agent/history/queries/{query_id}": {
-   "delete": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "Delete Query",
-    "operationId": "delete_query_agent_history_queries__query_id__delete",
-    "parameters": [
-     {
-      "name": "query_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "Query Id"
-      }
-     }
-    ],
-    "responses": {
-     "204": {
-      "description": "Successful Response"
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/suggestions": {
-   "get": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "Suggestions",
-    "operationId": "suggestions_agent_suggestions_get",
-    "parameters": [
-     {
-      "name": "q",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "anyOf": [
-        {
-         "type": "string",
-         "maxLength": 80
-        },
-        {
-         "type": "null"
-        }
-       ],
-       "title": "Q"
-      }
-     },
-     {
-      "name": "limit",
-      "in": "query",
-      "required": false,
-      "schema": {
-       "type": "integer",
-       "maximum": 20,
-       "minimum": 1,
-       "default": 8,
-       "title": "Limit"
-      }
-     }
-    ],
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "type": "array",
-         "items": {
-          "$ref": "#/components/schemas/Suggestion"
-         },
-         "title": "Response Suggestions Agent Suggestions Get"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/feedback": {
-   "post": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "Feedback",
-    "operationId": "feedback_agent_feedback_post",
-    "requestBody": {
-     "content": {
-      "application/json": {
-       "schema": {
-        "$ref": "#/components/schemas/FeedbackRequest"
-       }
-      }
-     },
-     "required": true
-    },
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/FeedbackResponse"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/chat/{request_id}/cancel": {
-   "post": {
-    "tags": [
-     "agent-v2"
-    ],
-    "summary": "Cancel",
-    "operationId": "cancel_agent_chat__request_id__cancel_post",
-    "parameters": [
-     {
-      "name": "request_id",
-      "in": "path",
-      "required": true,
-      "schema": {
-       "type": "string",
-       "title": "Request Id"
-      }
-     }
-    ],
-    "responses": {
-     "202": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/CancelResponse"
-        }
-       }
-      }
-     },
-     "422": {
-      "description": "Validation Error",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/healthz": {
-   "get": {
-    "tags": [
-     "ops"
-    ],
-    "summary": "Healthz",
-    "operationId": "healthz_healthz_get",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/HealthResponse"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/readyz": {
-   "get": {
-    "tags": [
-     "ops"
-    ],
-    "summary": "Readyz",
-    "operationId": "readyz_readyz_get",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/ReadyResponse"
-        }
-       }
-      }
-     },
-     "503": {
-      "description": "Service Unavailable",
-      "content": {
-       "application/json": {
-        "schema": {
-         "$ref": "#/components/schemas/ReadyResponse"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/agent/metrics": {
-   "get": {
-    "tags": [
-     "ops"
-    ],
-    "summary": "Metrics",
-    "operationId": "metrics_agent_metrics_get",
-    "responses": {
-     "200": {
-      "description": "Prometheus text exposition (version 0.0.4)",
-      "content": {
-       "text/plain": {
-        "schema": {
-         "type": "string"
-        }
-       }
-      }
-     }
-    }
-   }
-  }
- },
- "components": {
-  "schemas": {
-   "AgentEvent": {
-    "discriminator": {
-     "mapping": {
-      "blueprint": "#/components/schemas/Blueprint",
-      "chart": "#/components/schemas/Chart",
-      "clarify": "#/components/schemas/Clarify",
-      "error": "#/components/schemas/Error",
-      "file": "#/components/schemas/FileReady",
-      "final": "#/components/schemas/Final",
-      "paper_preview": "#/components/schemas/PaperPreview",
-      "pending_approval": "#/components/schemas/PendingApproval",
-      "session": "#/components/schemas/SessionStarted",
-      "stat_card": "#/components/schemas/StatCard",
-      "table": "#/components/schemas/Table",
-      "text_delta": "#/components/schemas/TextDelta",
-      "thinking_status": "#/components/schemas/ThinkingStatus",
-      "verification_summary": "#/components/schemas/VerificationSummary"
-     },
-     "propertyName": "type"
-    },
-    "oneOf": [
-     {
-      "$ref": "#/components/schemas/SessionStarted"
-     },
-     {
-      "$ref": "#/components/schemas/TextDelta"
-     },
-     {
-      "$ref": "#/components/schemas/ThinkingStatus"
-     },
-     {
-      "$ref": "#/components/schemas/StatCard"
-     },
-     {
-      "$ref": "#/components/schemas/Chart"
-     },
-     {
-      "$ref": "#/components/schemas/Table"
-     },
-     {
-      "$ref": "#/components/schemas/Clarify"
-     },
-     {
-      "$ref": "#/components/schemas/Blueprint"
-     },
-     {
-      "$ref": "#/components/schemas/PaperPreview"
-     },
-     {
-      "$ref": "#/components/schemas/VerificationSummary"
-     },
-     {
-      "$ref": "#/components/schemas/PendingApproval"
-     },
-     {
-      "$ref": "#/components/schemas/FileReady"
-     },
-     {
-      "$ref": "#/components/schemas/Final"
-     },
-     {
-      "$ref": "#/components/schemas/Error"
-     }
-    ],
-    "description": "One SSE frame of POST /agent/chat (`data: <json>`). Discriminated by `type`."
-   },
-   "ApproveRequest": {
-    "properties": {
-     "session_id": {
-      "type": "string",
-      "title": "Session Id"
-     },
-     "approval_id": {
-      "type": "string",
-      "title": "Approval Id"
-     },
-     "decision": {
-      "type": "string",
-      "enum": [
-       "approve",
-       "cancel"
-      ],
-      "title": "Decision",
-      "default": "approve"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "session_id",
-     "approval_id"
-    ],
-    "title": "ApproveRequest"
-   },
-   "Blueprint": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "blueprint",
-      "title": "Type",
-      "default": "blueprint"
-     },
-     "class_grade": {
-      "type": "integer",
-      "maximum": 12.0,
-      "minimum": 1.0,
-      "title": "Class Grade"
-     },
-     "subject": {
-      "type": "string",
-      "title": "Subject"
-     },
-     "chapters": {
-      "items": {
-       "type": "string"
-      },
-      "type": "array",
-      "title": "Chapters"
-     },
-     "total_marks": {
-      "type": "number",
-      "title": "Total Marks"
-     },
-     "duration_min": {
-      "type": "integer",
-      "title": "Duration Min"
-     },
-     "sections": {
-      "items": {
-       "$ref": "#/components/schemas/BlueprintSection"
-      },
-      "type": "array",
-      "title": "Sections"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "class_grade",
-     "subject",
-     "chapters",
-     "total_marks",
-     "duration_min",
-     "sections"
-    ],
-    "title": "Blueprint"
-   },
-   "BlueprintSection": {
-    "properties": {
-     "section": {
-      "type": "string",
-      "title": "Section"
-     },
-     "qtype": {
-      "type": "string",
-      "enum": [
-       "mcq",
-       "numeric",
-       "assertion_reason",
-       "short_answer",
-       "long_answer",
-       "case_study",
-       "very_short"
-      ],
-      "title": "Qtype"
-     },
-     "count": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Count"
-     },
-     "marks_each": {
-      "type": "number",
-      "exclusiveMinimum": 0.0,
-      "title": "Marks Each"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "section",
-     "qtype",
-     "count",
-     "marks_each"
-    ],
-    "title": "BlueprintSection"
-   },
-   "CancelResponse": {
-    "properties": {
-     "request_id": {
-      "type": "string",
-      "title": "Request Id"
-     },
-     "cancelled": {
-      "type": "boolean",
-      "title": "Cancelled",
-      "default": true
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "request_id"
-    ],
-    "title": "CancelResponse"
-   },
-   "Chart": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "source": {
-      "type": "string",
-      "pattern": "^tool:[a-z_]+$",
-      "title": "Source"
-     },
-     "as_of": {
-      "type": "string",
-      "title": "As Of"
-     },
-     "type": {
-      "type": "string",
-      "const": "chart",
-      "title": "Type",
-      "default": "chart"
-     },
-     "kind": {
-      "type": "string",
-      "enum": [
-       "line",
-       "bar"
-      ],
-      "title": "Kind"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     },
-     "series": {
-      "items": {
-       "$ref": "#/components/schemas/ChartSeries"
-      },
-      "type": "array",
-      "title": "Series"
-     },
-     "y_unit": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Y Unit"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "source",
-     "as_of",
-     "kind",
-     "title",
-     "series"
-    ],
-    "title": "Chart"
-   },
-   "ChartSeries": {
-    "properties": {
-     "name": {
-      "type": "string",
-      "title": "Name"
-     },
-     "points": {
-      "items": {
-       "prefixItems": [
-        {
-         "type": "string"
-        },
-        {
-         "anyOf": [
-          {
-           "type": "number"
-          },
-          {
-           "type": "null"
+  "paths": {
+    "/agent/meta": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Meta",
+        "description": "Never 403 for a not-yet-enabled institute: answers enabled=false so the UI can hide the agent.",
+        "operationId": "meta_agent_meta_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaResponse"
+                }
+              }
+            }
           }
-         ]
         }
-       ],
-       "type": "array",
-       "maxItems": 2,
-       "minItems": 2
-      },
-      "type": "array",
-      "title": "Points"
-     }
+      }
     },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "name",
-     "points"
-    ],
-    "title": "ChartSeries"
-   },
-   "ChatRequest": {
-    "properties": {
-     "session_id": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Session Id"
-     },
-     "message": {
-      "anyOf": [
-       {
-        "type": "string",
-        "maxLength": 4000,
-        "minLength": 1
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Message"
-     },
-     "regenerate_from_seq": {
-      "anyOf": [
-       {
-        "type": "integer",
-        "minimum": 1.0
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Regenerate From Seq"
-     },
-     "edit_of_seq": {
-      "anyOf": [
-       {
-        "type": "integer",
-        "minimum": 1.0
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Edit Of Seq"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "title": "ChatRequest",
-    "description": "message is required, except with regenerate_from_seq (the stored user message is re-run).\nregenerate_from_seq / edit_of_seq need session_id and are mutually exclusive (docs/AGENT_API_V2.md)."
-   },
-   "Clarify": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "clarify",
-      "title": "Type",
-      "default": "clarify"
-     },
-     "question": {
-      "type": "string",
-      "title": "Question"
-     },
-     "chips": {
-      "items": {
-       "$ref": "#/components/schemas/ClarifyChip"
-      },
-      "type": "array",
-      "maxItems": 5,
-      "title": "Chips"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "question",
-     "chips"
-    ],
-    "title": "Clarify"
-   },
-   "ClarifyChip": {
-    "properties": {
-     "label": {
-      "type": "string",
-      "title": "Label"
-     },
-     "value": {
-      "type": "string",
-      "title": "Value"
-     },
-     "hint": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Hint"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "label",
-     "value"
-    ],
-    "title": "ClarifyChip"
-   },
-   "Error": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "error",
-      "title": "Type",
-      "default": "error"
-     },
-     "code": {
-      "type": "string",
-      "enum": [
-       "budget_exceeded",
-       "forbidden",
-       "not_found",
-       "provider_error",
-       "invalid_input",
-       "internal",
-       "rate_limited",
-       "db_unavailable",
-       "tool_timeout"
-      ],
-      "title": "Code"
-     },
-     "message": {
-      "type": "string",
-      "title": "Message"
-     },
-     "partial": {
-      "additionalProperties": true,
-      "type": "object",
-      "title": "Partial"
-     },
-     "retryable": {
-      "type": "boolean",
-      "title": "Retryable",
-      "default": false
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "code",
-     "message"
-    ],
-    "title": "Error"
-   },
-   "FeedbackRequest": {
-    "properties": {
-     "session_id": {
-      "type": "string",
-      "maxLength": 64,
-      "title": "Session Id"
-     },
-     "message_seq": {
-      "type": "integer",
-      "minimum": 1.0,
-      "title": "Message Seq"
-     },
-     "rating": {
-      "type": "string",
-      "enum": [
-       "up",
-       "down"
-      ],
-      "title": "Rating"
-     },
-     "note": {
-      "anyOf": [
-       {
-        "type": "string",
-        "maxLength": 1000
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Note"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "session_id",
-     "message_seq",
-     "rating"
-    ],
-    "title": "FeedbackRequest"
-   },
-   "FeedbackResponse": {
-    "properties": {
-     "ok": {
-      "type": "boolean",
-      "title": "Ok",
-      "default": true
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "title": "FeedbackResponse"
-   },
-   "FileReady": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "file",
-      "title": "Type",
-      "default": "file"
-     },
-     "file_id": {
-      "type": "string",
-      "title": "File Id"
-     },
-     "kind": {
-      "type": "string",
-      "enum": [
-       "defaulters_export",
-       "proctor_month_report"
-      ],
-      "title": "Kind"
-     },
-     "name": {
-      "type": "string",
-      "title": "Name"
-     },
-     "rows": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Rows"
-     },
-     "expires_at": {
-      "type": "string",
-      "title": "Expires At"
-     },
-     "download_path": {
-      "type": "string",
-      "title": "Download Path"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "file_id",
-     "kind",
-     "name",
-     "rows",
-     "expires_at",
-     "download_path"
-    ],
-    "title": "FileReady",
-    "description": "A generated file (read-only export, e.g. defaulters .xlsx). Download with GET download_path and the same\nAuthorization header; owner only; gone after expires_at (1 hour)."
-   },
-   "Final": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "final",
-      "title": "Type",
-      "default": "final"
-     },
-     "session_id": {
-      "type": "string",
-      "title": "Session Id"
-     },
-     "usage": {
-      "additionalProperties": true,
-      "type": "object",
-      "title": "Usage"
-     },
-     "cancelled": {
-      "type": "boolean",
-      "title": "Cancelled",
-      "default": false
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "session_id"
-    ],
-    "title": "Final"
-   },
-   "HTTPValidationError": {
-    "properties": {
-     "detail": {
-      "items": {
-       "$ref": "#/components/schemas/ValidationError"
-      },
-      "type": "array",
-      "title": "Detail"
-     }
-    },
-    "type": "object",
-    "title": "HTTPValidationError"
-   },
-   "HealthResponse": {
-    "properties": {
-     "status": {
-      "type": "string",
-      "const": "ok",
-      "title": "Status",
-      "default": "ok"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "title": "HealthResponse"
-   },
-   "LegacySessionItem": {
-    "properties": {
-     "session_id": {
-      "type": "string",
-      "title": "Session Id"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     },
-     "created_at": {
-      "type": "string",
-      "title": "Created At"
-     },
-     "updated_at": {
-      "type": "string",
-      "title": "Updated At"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "session_id",
-     "title",
-     "created_at",
-     "updated_at"
-    ],
-    "title": "LegacySessionItem",
-    "description": "Contract 1.1 shape, kept so the current UI keeps working. Deprecated: use `items`."
-   },
-   "MessageItem": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "title": "Seq"
-     },
-     "role": {
-      "type": "string",
-      "enum": [
-       "user",
-       "assistant"
-      ],
-      "title": "Role"
-     },
-     "text": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Text"
-     },
-     "events": {
-      "anyOf": [
-       {
-        "items": {
-         "oneOf": [
-          {
-           "$ref": "#/components/schemas/SessionStarted"
+    "/agent/chat": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Chat",
+        "operationId": "chat_agent_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
           },
-          {
-           "$ref": "#/components/schemas/TextDelta"
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream: `data: <AgentEvent JSON>` frames; first `session`, last `final`.",
+            "headers": {
+              "X-Agent-Request-Id": {
+                "description": "request_id of every event; use it to cancel",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentEvent"
+                }
+              }
+            }
           },
-          {
-           "$ref": "#/components/schemas/ThinkingStatus"
+          "404": {
+            "description": "unknown / foreign session_id or seq"
           },
-          {
-           "$ref": "#/components/schemas/StatCard"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           },
-          {
-           "$ref": "#/components/schemas/Chart"
+          "429": {
+            "description": "rate limit or institute token budget hit; nothing stored",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitResponse"
+                }
+              }
+            }
           },
-          {
-           "$ref": "#/components/schemas/Table"
-          },
-          {
-           "$ref": "#/components/schemas/Clarify"
-          },
-          {
-           "$ref": "#/components/schemas/Blueprint"
-          },
-          {
-           "$ref": "#/components/schemas/PaperPreview"
-          },
-          {
-           "$ref": "#/components/schemas/VerificationSummary"
-          },
-          {
-           "$ref": "#/components/schemas/PendingApproval"
-          },
-          {
-           "$ref": "#/components/schemas/FileReady"
-          },
-          {
-           "$ref": "#/components/schemas/Final"
-          },
-          {
-           "$ref": "#/components/schemas/Error"
+          "503": {
+            "description": "LLM provider not configured (nothing stored)"
           }
-         ],
-         "discriminator": {
-          "propertyName": "type",
+        }
+      }
+    },
+    "/agent/approve": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Approve",
+        "operationId": "approve_agent_approve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Get Session View",
+        "description": "1.1 view (turns = event lists). Agent store sessions: owner only. Seed/dev fallback: the local demo\nPostgres row (owner or same-institute admin, as in 1.1).",
+        "operationId": "get_session_view_agent_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "Patch Session",
+        "operationId": "patch_session_agent_sessions__session_id__patch",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionItem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "Delete Session",
+        "operationId": "delete_session_agent_sessions__session_id__delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/drafts/{draft_id}/pdf": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Draft Pdf",
+        "operationId": "draft_pdf_agent_drafts__draft_id__pdf_get",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/files/{file_id}": {
+      "get": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "Get File",
+        "operationId": "get_file_agent_files__file_id__get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "the generated file (Content-Disposition: attachment)",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "unknown / foreign file"
+          },
+          "410": {
+            "description": "your file, but expired (1 hour); ask the agent again"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/sessions": {
+      "get": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "List Sessions",
+        "operationId": "list_sessions_agent_sessions_get",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "pinned",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pinned"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/sessions/{session_id}/messages": {
+      "get": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "List Messages",
+        "operationId": "list_messages_agent_sessions__session_id__messages_get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/history/queries": {
+      "get": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "List Queries",
+        "operationId": "list_queries_agent_history_queries_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/QueryItem"
+                  },
+                  "title": "Response List Queries Agent History Queries Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "Clear Queries",
+        "operationId": "clear_queries_agent_history_queries_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/agent/history/queries/{query_id}": {
+      "delete": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "Delete Query",
+        "operationId": "delete_query_agent_history_queries__query_id__delete",
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Query Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/suggestions": {
+      "get": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "Suggestions",
+        "operationId": "suggestions_agent_suggestions_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 8,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Suggestion"
+                  },
+                  "title": "Response Suggestions Agent Suggestions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/feedback": {
+      "post": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "Feedback",
+        "operationId": "feedback_agent_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/chat/{request_id}/cancel": {
+      "post": {
+        "tags": [
+          "agent-v2"
+        ],
+        "summary": "Cancel",
+        "operationId": "cancel_agent_chat__request_id__cancel_post",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Healthz",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Readyz",
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/metrics": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Metrics",
+        "operationId": "metrics_agent_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition (version 0.0.4)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/voice/config": {
+      "get": {
+        "tags": [
+          "agent-voice"
+        ],
+        "summary": "Voice Config",
+        "description": "Never 403: a disabled institute gets enabled=false so the mic button is hidden, not broken.",
+        "operationId": "voice_config_agent_voice_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent/voice/transcribe": {
+      "post": {
+        "tags": [
+          "agent-voice"
+        ],
+        "summary": "Transcribe",
+        "description": "Body = the recorded audio bytes (Content-Type audio/webm | audio/mp4 | audio/ogg | audio/wav). The container\nis decoded for its real duration; the client's own headers are not trusted.",
+        "operationId": "transcribe_agent_voice_transcribe_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "content-type",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content-Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscribeResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "audio over VOICE_MAX_BYTES"
+          },
+          "422": {
+            "description": "format / over 30 s"
+          },
+          "429": {
+            "description": "per-user voice limit"
+          },
+          "503": {
+            "description": "voice off or STT down -> type"
+          }
+        }
+      }
+    },
+    "/agent/voice/speak": {
+      "post": {
+        "tags": [
+          "agent-voice"
+        ],
+        "summary": "Speak",
+        "description": "Speaker and pace only from the allowlist (`GET /agent/voice/config`). Static phrases (`phrase`) come from an\nin-process cache; data answers are never cached (they carry names and numbers).",
+        "operationId": "speak_agent_voice_speak_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeakRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "audio stream",
+            "content": {
+              "audio/mpeg": {}
+            }
+          },
+          "204": {
+            "description": "TTS is off (VOICE_TTS=none): use browser speechSynthesis"
+          },
+          "422": {
+            "description": "speaker / pace not in the allowlist"
+          },
+          "503": {
+            "description": "TTS down"
+          }
+        }
+      }
+    },
+    "/agent/voice/chat": {
+      "post": {
+        "tags": [
+          "agent-voice"
+        ],
+        "summary": "Voice Chat",
+        "description": "The transcript becomes a normal chat message (same session, history, retention, clear-all). The only\ndifferences: the model is told the message was spoken (untrusted, keep it short, one-line refusals) and ends its\nanswer with a `speech` event. Writes stay behind the on-screen approval gate — this endpoint never approves.",
+        "operationId": "voice_chat_agent_voice_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE, as POST /agent/chat, plus a `speech` event",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AgentEvent": {
+        "discriminator": {
           "mapping": {
-           "blueprint": "#/components/schemas/Blueprint",
-           "chart": "#/components/schemas/Chart",
-           "clarify": "#/components/schemas/Clarify",
-           "error": "#/components/schemas/Error",
-           "file": "#/components/schemas/FileReady",
-           "final": "#/components/schemas/Final",
-           "paper_preview": "#/components/schemas/PaperPreview",
-           "pending_approval": "#/components/schemas/PendingApproval",
-           "session": "#/components/schemas/SessionStarted",
-           "stat_card": "#/components/schemas/StatCard",
-           "table": "#/components/schemas/Table",
-           "text_delta": "#/components/schemas/TextDelta",
-           "thinking_status": "#/components/schemas/ThinkingStatus",
-           "verification_summary": "#/components/schemas/VerificationSummary"
+            "blueprint": "#/components/schemas/Blueprint",
+            "chart": "#/components/schemas/Chart",
+            "clarify": "#/components/schemas/Clarify",
+            "error": "#/components/schemas/Error",
+            "file": "#/components/schemas/FileReady",
+            "final": "#/components/schemas/Final",
+            "paper_preview": "#/components/schemas/PaperPreview",
+            "pending_approval": "#/components/schemas/PendingApproval",
+            "session": "#/components/schemas/SessionStarted",
+            "speech": "#/components/schemas/Speech",
+            "stat_card": "#/components/schemas/StatCard",
+            "table": "#/components/schemas/Table",
+            "text_delta": "#/components/schemas/TextDelta",
+            "thinking_status": "#/components/schemas/ThinkingStatus",
+            "ui_action": "#/components/schemas/UiAction",
+            "verification_summary": "#/components/schemas/VerificationSummary"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SessionStarted"
+          },
+          {
+            "$ref": "#/components/schemas/TextDelta"
+          },
+          {
+            "$ref": "#/components/schemas/ThinkingStatus"
+          },
+          {
+            "$ref": "#/components/schemas/StatCard"
+          },
+          {
+            "$ref": "#/components/schemas/Chart"
+          },
+          {
+            "$ref": "#/components/schemas/Table"
+          },
+          {
+            "$ref": "#/components/schemas/Clarify"
+          },
+          {
+            "$ref": "#/components/schemas/Blueprint"
+          },
+          {
+            "$ref": "#/components/schemas/PaperPreview"
+          },
+          {
+            "$ref": "#/components/schemas/VerificationSummary"
+          },
+          {
+            "$ref": "#/components/schemas/PendingApproval"
+          },
+          {
+            "$ref": "#/components/schemas/FileReady"
+          },
+          {
+            "$ref": "#/components/schemas/Final"
+          },
+          {
+            "$ref": "#/components/schemas/Error"
+          },
+          {
+            "$ref": "#/components/schemas/Speech"
+          },
+          {
+            "$ref": "#/components/schemas/UiAction"
           }
-         }
+        ],
+        "description": "One SSE frame of POST /agent/chat (`data: <json>`). Discriminated by `type`."
+      },
+      "ApproveRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "approval_id": {
+            "type": "string",
+            "title": "Approval Id"
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "cancel"
+            ],
+            "title": "Decision",
+            "default": "approve"
+          }
         },
-        "type": "array"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Events"
-     },
-     "created_at": {
-      "type": "string",
-      "title": "Created At"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "role",
-     "created_at"
-    ],
-    "title": "MessageItem"
-   },
-   "MessageList": {
-    "properties": {
-     "items": {
-      "items": {
-       "$ref": "#/components/schemas/MessageItem"
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "approval_id"
+        ],
+        "title": "ApproveRequest"
       },
-      "type": "array",
-      "title": "Items"
-     },
-     "next_cursor": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Next Cursor"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "items"
-    ],
-    "title": "MessageList"
-   },
-   "MetaFeatures": {
-    "properties": {
-     "paper_generation": {
-      "type": "boolean",
-      "title": "Paper Generation"
-     },
-     "defaulters_export": {
-      "type": "boolean",
-      "title": "Defaulters Export"
-     },
-     "proctor_month_report": {
-      "type": "boolean",
-      "title": "Proctor Month Report"
-     },
-     "cancel": {
-      "type": "boolean",
-      "title": "Cancel",
-      "default": true
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "paper_generation",
-     "defaulters_export",
-     "proctor_month_report"
-    ],
-    "title": "MetaFeatures"
-   },
-   "MetaLimits": {
-    "properties": {
-     "chat_turns_per_10min": {
-      "type": "integer",
-      "title": "Chat Turns Per 10Min"
-     },
-     "institute_daily_tokens": {
-      "anyOf": [
-       {
-        "type": "integer"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Institute Daily Tokens"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "chat_turns_per_10min"
-    ],
-    "title": "MetaLimits"
-   },
-   "MetaResponse": {
-    "properties": {
-     "contract_version": {
-      "type": "string",
-      "title": "Contract Version"
-     },
-     "enabled": {
-      "type": "boolean",
-      "title": "Enabled"
-     },
-     "data_source": {
-      "type": "string",
-      "enum": [
-       "demo",
-       "live"
-      ],
-      "title": "Data Source"
-     },
-     "read_only": {
-      "type": "boolean",
-      "title": "Read Only"
-     },
-     "role": {
-      "type": "string",
-      "enum": [
-       "admin",
-       "hod",
-       "teacher"
-      ],
-      "title": "Role"
-     },
-     "first_name": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "First Name"
-     },
-     "institute_name": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Institute Name"
-     },
-     "scope": {
-      "anyOf": [
-       {
-        "$ref": "#/components/schemas/MetaScope"
-       },
-       {
-        "type": "null"
-       }
-      ]
-     },
-     "features": {
-      "$ref": "#/components/schemas/MetaFeatures"
-     },
-     "limits": {
-      "$ref": "#/components/schemas/MetaLimits"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "contract_version",
-     "enabled",
-     "data_source",
-     "read_only",
-     "role",
-     "features",
-     "limits"
-    ],
-    "title": "MetaResponse"
-   },
-   "MetaScope": {
-    "properties": {
-     "level": {
-      "type": "string",
-      "enum": [
-       "institute",
-       "department",
-       "section",
-       "classes",
-       "none"
-      ],
-      "title": "Level"
-     },
-     "batch_count": {
-      "type": "integer",
-      "title": "Batch Count"
-     },
-     "student_count": {
-      "type": "integer",
-      "title": "Student Count"
-     },
-     "batches": {
-      "items": {
-       "type": "string"
-      },
-      "type": "array",
-      "title": "Batches",
-      "description": "batch names, max 50, sorted"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "level",
-     "batch_count",
-     "student_count"
-    ],
-    "title": "MetaScope",
-    "description": "What the caller can see. level: institute (admin) > department (HOD) > section (proctor) > classes\n(teacher's own batch/subject pairs) > none (nothing assigned yet)."
-   },
-   "MyScopeTable": {
-    "additionalProperties": false,
-    "description": "`table` event from my_scope (\"meri classes\").",
-    "properties": {
-     "seq": {
-      "minimum": 0,
-      "title": "Seq",
-      "type": "integer"
-     },
-     "request_id": {
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id",
-      "type": "string"
-     },
-     "source": {
-      "const": "tool:my_scope",
-      "title": "Source",
-      "type": "string"
-     },
-     "as_of": {
-      "title": "As Of",
-      "type": "string"
-     },
-     "type": {
-      "const": "table",
-      "default": "table",
-      "title": "Type",
-      "type": "string"
-     },
-     "title": {
-      "title": "Title",
-      "type": "string"
-     },
-     "columns": {
-      "items": {
-       "enum": [
-        "Batch",
-        "Students",
-        "Role",
-        "Subjects"
-       ],
-       "type": "string"
-      },
-      "title": "Columns",
-      "type": "array"
-     },
-     "rows": {
-      "items": {
-       "items": {
-        "anyOf": [
-         {
-          "type": "string"
-         },
-         {
-          "type": "null"
-         }
-        ]
-       },
-       "type": "array"
-      },
-      "title": "Rows",
-      "type": "array"
-     }
-    },
-    "required": [
-     "seq",
-     "request_id",
-     "source",
-     "as_of",
-     "title",
-     "columns",
-     "rows"
-    ],
-    "title": "MyScopeTable",
-    "type": "object"
-   },
-   "PaperPreview": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "paper_preview",
-      "title": "Type",
-      "default": "paper_preview"
-     },
-     "draft_id": {
-      "type": "string",
-      "title": "Draft Id"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     },
-     "total_marks": {
-      "type": "number",
-      "title": "Total Marks"
-     },
-     "duration_min": {
-      "type": "integer",
-      "title": "Duration Min"
-     },
-     "questions": {
-      "items": {
-       "$ref": "#/components/schemas/PreviewQuestion"
-      },
-      "type": "array",
-      "title": "Questions"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "draft_id",
-     "title",
-     "total_marks",
-     "duration_min",
-     "questions"
-    ],
-    "title": "PaperPreview"
-   },
-   "PendingApproval": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "pending_approval",
-      "title": "Type",
-      "default": "pending_approval"
-     },
-     "approval_id": {
-      "type": "string",
-      "title": "Approval Id"
-     },
-     "action": {
-      "type": "string",
-      "enum": [
-       "finalize_test",
-       "assign_to_section"
-      ],
-      "title": "Action"
-     },
-     "summary": {
-      "type": "string",
-      "title": "Summary"
-     },
-     "args_sha256": {
-      "type": "string",
-      "title": "Args Sha256"
-     },
-     "expires_at": {
-      "type": "string",
-      "title": "Expires At"
-     },
-     "status": {
-      "type": "string",
-      "enum": [
-       "pending",
-       "approved",
-       "cancelled",
-       "expired"
-      ],
-      "title": "Status",
-      "default": "pending"
-     },
-     "result_ref": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Result Ref"
-     },
-     "decided_at": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Decided At"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "approval_id",
-     "action",
-     "summary",
-     "args_sha256",
-     "expires_at"
-    ],
-    "title": "PendingApproval",
-    "description": "Streamed with status \"pending\". Stored copies (GET /messages) carry the outcome once decided, and a pending\ncard past expires_at is returned as \"expired\", so a replay never shows a stale approve button."
-   },
-   "PreviewQuestion": {
-    "properties": {
-     "id": {
-      "type": "string",
-      "title": "Id"
-     },
-     "section": {
-      "type": "string",
-      "title": "Section"
-     },
-     "qtype": {
-      "type": "string",
-      "enum": [
-       "mcq",
-       "numeric",
-       "assertion_reason",
-       "short_answer",
-       "long_answer",
-       "case_study",
-       "very_short"
-      ],
-      "title": "Qtype"
-     },
-     "marks": {
-      "type": "number",
-      "title": "Marks"
-     },
-     "text": {
-      "type": "string",
-      "title": "Text"
-     },
-     "options": {
-      "anyOf": [
-       {
-        "items": {
-         "type": "string"
+      "Blueprint": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "blueprint",
+            "title": "Type",
+            "default": "blueprint"
+          },
+          "class_grade": {
+            "type": "integer",
+            "maximum": 12,
+            "minimum": 1,
+            "title": "Class Grade"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "chapters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Chapters"
+          },
+          "total_marks": {
+            "type": "number",
+            "title": "Total Marks"
+          },
+          "duration_min": {
+            "type": "integer",
+            "title": "Duration Min"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/BlueprintSection"
+            },
+            "type": "array",
+            "title": "Sections"
+          }
         },
-        "type": "array"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Options"
-     },
-     "answer": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Answer"
-     },
-     "marking_scheme": {
-      "anyOf": [
-       {
-        "items": {
-         "type": "string"
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "class_grade",
+          "subject",
+          "chapters",
+          "total_marks",
+          "duration_min",
+          "sections"
+        ],
+        "title": "Blueprint"
+      },
+      "BlueprintSection": {
+        "properties": {
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "qtype": {
+            "type": "string",
+            "enum": [
+              "mcq",
+              "numeric",
+              "assertion_reason",
+              "short_answer",
+              "long_answer",
+              "case_study",
+              "very_short"
+            ],
+            "title": "Qtype"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Count"
+          },
+          "marks_each": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "title": "Marks Each"
+          }
         },
-        "type": "array"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Marking Scheme"
-     },
-     "sub_questions": {
-      "anyOf": [
-       {
-        "items": {
-         "additionalProperties": true,
-         "type": "object"
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "section",
+          "qtype",
+          "count",
+          "marks_each"
+        ],
+        "title": "BlueprintSection"
+      },
+      "CancelResponse": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "title": "Cancelled",
+            "default": true
+          }
         },
-        "type": "array"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Sub Questions"
-     },
-     "status": {
-      "type": "string",
-      "enum": [
-       "verified",
-       "failed",
-       "manual_review",
-       "rubric_ok"
-      ],
-      "title": "Status"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "id",
-     "section",
-     "qtype",
-     "marks",
-     "text",
-     "status"
-    ],
-    "title": "PreviewQuestion"
-   },
-   "QueryItem": {
-    "properties": {
-     "id": {
-      "type": "string",
-      "title": "Id"
-     },
-     "text": {
-      "type": "string",
-      "title": "Text"
-     },
-     "last_used_at": {
-      "type": "string",
-      "title": "Last Used At"
-     },
-     "use_count": {
-      "type": "integer",
-      "title": "Use Count"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "id",
-     "text",
-     "last_used_at",
-     "use_count"
-    ],
-    "title": "QueryItem"
-   },
-   "RateLimitDetail": {
-    "properties": {
-     "code": {
-      "type": "string",
-      "const": "rate_limited",
-      "title": "Code",
-      "default": "rate_limited"
-     },
-     "scope": {
-      "type": "string",
-      "enum": [
-       "user",
-       "institute"
-      ],
-      "title": "Scope"
-     },
-     "message": {
-      "type": "string",
-      "title": "Message"
-     },
-     "retry_after_s": {
-      "type": "integer",
-      "title": "Retry After S"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "scope",
-     "message",
-     "retry_after_s"
-    ],
-    "title": "RateLimitDetail",
-    "description": "`detail` of a 429 from POST /agent/chat (also sent as the Retry-After header). Nothing was stored."
-   },
-   "RateLimitResponse": {
-    "properties": {
-     "detail": {
-      "$ref": "#/components/schemas/RateLimitDetail"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "detail"
-    ],
-    "title": "RateLimitResponse"
-   },
-   "ReadyResponse": {
-    "properties": {
-     "status": {
-      "type": "string",
-      "enum": [
-       "ready",
-       "not_ready"
-      ],
-      "title": "Status"
-     },
-     "checks": {
-      "additionalProperties": {
-       "type": "boolean"
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id"
+        ],
+        "title": "CancelResponse"
       },
-      "type": "object",
-      "title": "Checks"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "status",
-     "checks"
-    ],
-    "title": "ReadyResponse"
-   },
-   "SectionComparisonChart": {
-    "additionalProperties": false,
-    "description": "`chart` event (kind bar) from section_comparison; only classes with data.",
-    "properties": {
-     "seq": {
-      "minimum": 0,
-      "title": "Seq",
-      "type": "integer"
-     },
-     "request_id": {
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id",
-      "type": "string"
-     },
-     "source": {
-      "const": "tool:section_comparison",
-      "title": "Source",
-      "type": "string"
-     },
-     "as_of": {
-      "title": "As Of",
-      "type": "string"
-     },
-     "type": {
-      "const": "chart",
-      "default": "chart",
-      "title": "Type",
-      "type": "string"
-     },
-     "kind": {
-      "const": "bar",
-      "title": "Kind",
-      "type": "string"
-     },
-     "title": {
-      "title": "Title",
-      "type": "string"
-     },
-     "series": {
-      "items": {
-       "$ref": "#/components/schemas/ChartSeries"
-      },
-      "title": "Series",
-      "type": "array"
-     },
-     "y_unit": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "default": null,
-      "title": "Y Unit"
-     }
-    },
-    "required": [
-     "seq",
-     "request_id",
-     "source",
-     "as_of",
-     "kind",
-     "title",
-     "series"
-    ],
-    "title": "SectionComparisonChart",
-    "type": "object"
-   },
-   "SectionComparisonTable": {
-    "additionalProperties": false,
-    "description": "`table` event from section_comparison: rank (ties share a rank, null = no data), class, %, held/tests,\nmarked/graded.",
-    "properties": {
-     "seq": {
-      "minimum": 0,
-      "title": "Seq",
-      "type": "integer"
-     },
-     "request_id": {
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id",
-      "type": "string"
-     },
-     "source": {
-      "const": "tool:section_comparison",
-      "title": "Source",
-      "type": "string"
-     },
-     "as_of": {
-      "title": "As Of",
-      "type": "string"
-     },
-     "type": {
-      "const": "table",
-      "default": "table",
-      "title": "Type",
-      "type": "string"
-     },
-     "title": {
-      "title": "Title",
-      "type": "string"
-     },
-     "columns": {
-      "items": {
-       "enum": [
-        "#",
-        "Class",
-        "%",
-        "Classes held",
-        "Marked",
-        "Tests",
-        "Graded"
-       ],
-       "type": "string"
-      },
-      "title": "Columns",
-      "type": "array"
-     },
-     "rows": {
-      "items": {
-       "items": {
-        "anyOf": [
-         {
-          "type": "string"
-         },
-         {
-          "type": "null"
-         }
-        ]
-       },
-       "type": "array"
-      },
-      "title": "Rows",
-      "type": "array"
-     }
-    },
-    "required": [
-     "seq",
-     "request_id",
-     "source",
-     "as_of",
-     "title",
-     "columns",
-     "rows"
-    ],
-    "title": "SectionComparisonTable",
-    "type": "object"
-   },
-   "SessionItem": {
-    "properties": {
-     "id": {
-      "type": "string",
-      "title": "Id"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     },
-     "created_at": {
-      "type": "string",
-      "title": "Created At"
-     },
-     "last_message_at": {
-      "type": "string",
-      "title": "Last Message At"
-     },
-     "message_count": {
-      "type": "integer",
-      "title": "Message Count"
-     },
-     "pinned": {
-      "type": "boolean",
-      "title": "Pinned"
-     },
-     "preview": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Preview"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "id",
-     "title",
-     "created_at",
-     "last_message_at",
-     "message_count",
-     "pinned"
-    ],
-    "title": "SessionItem"
-   },
-   "SessionList": {
-    "properties": {
-     "items": {
-      "items": {
-       "$ref": "#/components/schemas/SessionItem"
-      },
-      "type": "array",
-      "title": "Items"
-     },
-     "next_cursor": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Next Cursor"
-     },
-     "sessions": {
-      "items": {
-       "$ref": "#/components/schemas/LegacySessionItem"
-      },
-      "type": "array",
-      "title": "Sessions",
-      "description": "deprecated alias of items (1.1)"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "items"
-    ],
-    "title": "SessionList"
-   },
-   "SessionPatch": {
-    "properties": {
-     "title": {
-      "anyOf": [
-       {
-        "type": "string",
-        "maxLength": 80,
-        "minLength": 1
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Title"
-     },
-     "pinned": {
-      "anyOf": [
-       {
-        "type": "boolean"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Pinned"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "title": "SessionPatch"
-   },
-   "SessionStarted": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "session",
-      "title": "Type",
-      "default": "session"
-     },
-     "session_id": {
-      "type": "string",
-      "title": "Session Id"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "session_id",
-     "title"
-    ],
-    "title": "SessionStarted",
-    "description": "First event of every /agent/chat stream (seq 0): which session this turn belongs to."
-   },
-   "StatCard": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "source": {
-      "type": "string",
-      "pattern": "^tool:[a-z_]+$",
-      "title": "Source"
-     },
-     "as_of": {
-      "type": "string",
-      "title": "As Of"
-     },
-     "type": {
-      "type": "string",
-      "const": "stat_card",
-      "title": "Type",
-      "default": "stat_card"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     },
-     "value": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Value"
-     },
-     "unit": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Unit"
-     },
-     "subtitle": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Subtitle"
-     },
-     "period": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Period"
-     },
-     "delta": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Delta"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "source",
-     "as_of",
-     "title",
-     "value"
-    ],
-    "title": "StatCard"
-   },
-   "Suggestion": {
-    "properties": {
-     "type": {
-      "type": "string",
-      "enum": [
-       "recent",
-       "template",
-       "entity"
-      ],
-      "title": "Type"
-     },
-     "text": {
-      "type": "string",
-      "title": "Text"
-     },
-     "hint": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Hint"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "type",
-     "text"
-    ],
-    "title": "Suggestion"
-   },
-   "Table": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "source": {
-      "type": "string",
-      "pattern": "^tool:[a-z_]+$",
-      "title": "Source"
-     },
-     "as_of": {
-      "type": "string",
-      "title": "As Of"
-     },
-     "type": {
-      "type": "string",
-      "const": "table",
-      "title": "Type",
-      "default": "table"
-     },
-     "title": {
-      "type": "string",
-      "title": "Title"
-     },
-     "columns": {
-      "items": {
-       "type": "string"
-      },
-      "type": "array",
-      "title": "Columns"
-     },
-     "rows": {
-      "items": {
-       "items": {
-        "anyOf": [
-         {
-          "type": "string"
-         },
-         {
-          "type": "null"
-         }
-        ]
-       },
-       "type": "array"
-      },
-      "type": "array",
-      "title": "Rows"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "source",
-     "as_of",
-     "title",
-     "columns",
-     "rows"
-    ],
-    "title": "Table"
-   },
-   "TextDelta": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "text_delta",
-      "title": "Type",
-      "default": "text_delta"
-     },
-     "text": {
-      "type": "string",
-      "title": "Text"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "text"
-    ],
-    "title": "TextDelta"
-   },
-   "ThinkingStatus": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "thinking_status",
-      "title": "Type",
-      "default": "thinking_status"
-     },
-     "key": {
-      "type": "string",
-      "title": "Key"
-     },
-     "params": {
-      "additionalProperties": true,
-      "type": "object",
-      "title": "Params"
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "key"
-    ],
-    "title": "ThinkingStatus"
-   },
-   "ValidationError": {
-    "properties": {
-     "loc": {
-      "items": {
-       "anyOf": [
-        {
-         "type": "string"
+      "Chart": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^tool:[a-z_]+$",
+            "title": "Source"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "type": {
+            "type": "string",
+            "const": "chart",
+            "title": "Type",
+            "default": "chart"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "line",
+              "bar"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/ChartSeries"
+            },
+            "type": "array",
+            "title": "Series"
+          },
+          "y_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Unit"
+          }
         },
-        {
-         "type": "integer"
-        }
-       ]
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "source",
+          "as_of",
+          "kind",
+          "title",
+          "series"
+        ],
+        "title": "Chart"
       },
-      "type": "array",
-      "title": "Location"
-     },
-     "msg": {
-      "type": "string",
-      "title": "Message"
-     },
-     "type": {
-      "type": "string",
-      "title": "Error Type"
-     }
-    },
-    "type": "object",
-    "required": [
-     "loc",
-     "msg",
-     "type"
-    ],
-    "title": "ValidationError"
-   },
-   "VerificationSummary": {
-    "properties": {
-     "seq": {
-      "type": "integer",
-      "minimum": 0.0,
-      "title": "Seq"
-     },
-     "request_id": {
-      "type": "string",
-      "maxLength": 64,
-      "minLength": 1,
-      "title": "Request Id"
-     },
-     "type": {
-      "type": "string",
-      "const": "verification_summary",
-      "title": "Type",
-      "default": "verification_summary"
-     },
-     "objective_verified": {
-      "type": "integer",
-      "title": "Objective Verified"
-     },
-     "objective_total": {
-      "type": "integer",
-      "title": "Objective Total"
-     },
-     "rubric_checked": {
-      "type": "integer",
-      "title": "Rubric Checked"
-     },
-     "rubric_total": {
-      "type": "integer",
-      "title": "Rubric Total"
-     },
-     "manual_review": {
-      "items": {
-       "type": "string"
+      "ChartSeries": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "points": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Points"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "points"
+        ],
+        "title": "ChartSeries"
       },
-      "type": "array",
-      "title": "Manual Review"
-     },
-     "marks_sum_ok": {
-      "type": "boolean",
-      "title": "Marks Sum Ok"
-     },
-     "duplicates": {
-      "items": {
-       "type": "string"
+      "ChatRequest": {
+        "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "regenerate_from_seq": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regenerate From Seq"
+          },
+          "edit_of_seq": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Of Seq"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ChatRequest",
+        "description": "message is required, except with regenerate_from_seq (the stored user message is re-run).\nregenerate_from_seq / edit_of_seq need session_id and are mutually exclusive (docs/AGENT_API_V2.md)."
       },
-      "type": "array",
-      "title": "Duplicates"
-     },
-     "rounds": {
-      "type": "integer",
-      "title": "Rounds",
-      "default": 0
-     }
-    },
-    "additionalProperties": false,
-    "type": "object",
-    "required": [
-     "seq",
-     "request_id",
-     "objective_verified",
-     "objective_total",
-     "rubric_checked",
-     "rubric_total",
-     "manual_review",
-     "marks_sum_ok"
-    ],
-    "title": "VerificationSummary"
-   }
+      "Clarify": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "clarify",
+            "title": "Type",
+            "default": "clarify"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "chips": {
+            "items": {
+              "$ref": "#/components/schemas/ClarifyChip"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Chips"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "question",
+          "chips"
+        ],
+        "title": "Clarify"
+      },
+      "ClarifyChip": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "ClarifyChip"
+      },
+      "ClarifyChipOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "ClarifyChipOut"
+      },
+      "ClarifyOut": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "chips": {
+            "items": {
+              "$ref": "#/components/schemas/ClarifyChipOut"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Chips"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "chips"
+        ],
+        "title": "ClarifyOut"
+      },
+      "Error": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "error",
+            "title": "Type",
+            "default": "error"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "budget_exceeded",
+              "forbidden",
+              "not_found",
+              "provider_error",
+              "invalid_input",
+              "internal",
+              "rate_limited",
+              "db_unavailable",
+              "tool_timeout"
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "partial": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Partial"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "code",
+          "message"
+        ],
+        "title": "Error"
+      },
+      "FeedbackRequest": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Session Id"
+          },
+          "message_seq": {
+            "type": "integer",
+            "minimum": 1,
+            "title": "Message Seq"
+          },
+          "rating": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Rating"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "message_seq",
+          "rating"
+        ],
+        "title": "FeedbackRequest"
+      },
+      "FeedbackResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FeedbackResponse"
+      },
+      "FileReady": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "file",
+            "title": "Type",
+            "default": "file"
+          },
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "defaulters_export",
+              "proctor_month_report"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "rows": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Rows"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At"
+          },
+          "download_path": {
+            "type": "string",
+            "title": "Download Path"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "file_id",
+          "kind",
+          "name",
+          "rows",
+          "expires_at",
+          "download_path"
+        ],
+        "title": "FileReady",
+        "description": "A generated file (read-only export, e.g. defaulters .xlsx). Download with GET download_path and the same\nAuthorization header; owner only; gone after expires_at (1 hour)."
+      },
+      "Final": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "final",
+            "title": "Type",
+            "default": "final"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "usage": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Usage"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "title": "Cancelled",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "session_id"
+        ],
+        "title": "Final"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status",
+            "default": "ok"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "HealthResponse"
+      },
+      "LegacySessionItem": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "session_id",
+          "title",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LegacySessionItem",
+        "description": "Contract 1.1 shape, kept so the current UI keeps working. Deprecated: use `items`."
+      },
+      "MessageItem": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SessionStarted"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TextDelta"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ThinkingStatus"
+                    },
+                    {
+                      "$ref": "#/components/schemas/StatCard"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Chart"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Table"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Clarify"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Blueprint"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PaperPreview"
+                    },
+                    {
+                      "$ref": "#/components/schemas/VerificationSummary"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PendingApproval"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FileReady"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Final"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Speech"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UiAction"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "type",
+                    "mapping": {
+                      "blueprint": "#/components/schemas/Blueprint",
+                      "chart": "#/components/schemas/Chart",
+                      "clarify": "#/components/schemas/Clarify",
+                      "error": "#/components/schemas/Error",
+                      "file": "#/components/schemas/FileReady",
+                      "final": "#/components/schemas/Final",
+                      "paper_preview": "#/components/schemas/PaperPreview",
+                      "pending_approval": "#/components/schemas/PendingApproval",
+                      "session": "#/components/schemas/SessionStarted",
+                      "speech": "#/components/schemas/Speech",
+                      "stat_card": "#/components/schemas/StatCard",
+                      "table": "#/components/schemas/Table",
+                      "text_delta": "#/components/schemas/TextDelta",
+                      "thinking_status": "#/components/schemas/ThinkingStatus",
+                      "ui_action": "#/components/schemas/UiAction",
+                      "verification_summary": "#/components/schemas/VerificationSummary"
+                    }
+                  }
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "role",
+          "created_at"
+        ],
+        "title": "MessageItem"
+      },
+      "MessageList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MessageItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "MessageList"
+      },
+      "MetaFeatures": {
+        "properties": {
+          "paper_generation": {
+            "type": "boolean",
+            "title": "Paper Generation"
+          },
+          "defaulters_export": {
+            "type": "boolean",
+            "title": "Defaulters Export"
+          },
+          "proctor_month_report": {
+            "type": "boolean",
+            "title": "Proctor Month Report"
+          },
+          "cancel": {
+            "type": "boolean",
+            "title": "Cancel",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "paper_generation",
+          "defaulters_export",
+          "proctor_month_report"
+        ],
+        "title": "MetaFeatures"
+      },
+      "MetaLimits": {
+        "properties": {
+          "chat_turns_per_10min": {
+            "type": "integer",
+            "title": "Chat Turns Per 10Min"
+          },
+          "institute_daily_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institute Daily Tokens"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "chat_turns_per_10min"
+        ],
+        "title": "MetaLimits"
+      },
+      "MetaResponse": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "title": "Contract Version"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "data_source": {
+            "type": "string",
+            "enum": [
+              "demo",
+              "live"
+            ],
+            "title": "Data Source"
+          },
+          "read_only": {
+            "type": "boolean",
+            "title": "Read Only"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "hod",
+              "teacher"
+            ],
+            "title": "Role"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "institute_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institute Name"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetaScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "features": {
+            "$ref": "#/components/schemas/MetaFeatures"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/MetaLimits"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "contract_version",
+          "enabled",
+          "data_source",
+          "read_only",
+          "role",
+          "features",
+          "limits"
+        ],
+        "title": "MetaResponse"
+      },
+      "MetaScope": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "institute",
+              "department",
+              "section",
+              "classes",
+              "none"
+            ],
+            "title": "Level"
+          },
+          "batch_count": {
+            "type": "integer",
+            "title": "Batch Count"
+          },
+          "student_count": {
+            "type": "integer",
+            "title": "Student Count"
+          },
+          "batches": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Batches",
+            "description": "batch names, max 50, sorted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "level",
+          "batch_count",
+          "student_count"
+        ],
+        "title": "MetaScope",
+        "description": "What the caller can see. level: institute (admin) > department (HOD) > section (proctor) > classes\n(teacher's own batch/subject pairs) > none (nothing assigned yet)."
+      },
+      "MyScopeTable": {
+        "additionalProperties": false,
+        "description": "`table` event from my_scope (\"meri classes\").",
+        "properties": {
+          "seq": {
+            "minimum": 0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "request_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "source": {
+            "const": "tool:my_scope",
+            "title": "Source",
+            "type": "string"
+          },
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "type": {
+            "const": "table",
+            "default": "table",
+            "title": "Type",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "enum": [
+                "Batch",
+                "Students",
+                "Role",
+                "Subjects"
+              ],
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "seq",
+          "request_id",
+          "source",
+          "as_of",
+          "title",
+          "columns",
+          "rows"
+        ],
+        "title": "MyScopeTable",
+        "type": "object"
+      },
+      "PaperPreview": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "paper_preview",
+            "title": "Type",
+            "default": "paper_preview"
+          },
+          "draft_id": {
+            "type": "string",
+            "title": "Draft Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "total_marks": {
+            "type": "number",
+            "title": "Total Marks"
+          },
+          "duration_min": {
+            "type": "integer",
+            "title": "Duration Min"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewQuestion"
+            },
+            "type": "array",
+            "title": "Questions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "draft_id",
+          "title",
+          "total_marks",
+          "duration_min",
+          "questions"
+        ],
+        "title": "PaperPreview"
+      },
+      "PendingApproval": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "pending_approval",
+            "title": "Type",
+            "default": "pending_approval"
+          },
+          "approval_id": {
+            "type": "string",
+            "title": "Approval Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "finalize_test",
+              "assign_to_section"
+            ],
+            "title": "Action"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "args_sha256": {
+            "type": "string",
+            "title": "Args Sha256"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "cancelled",
+              "expired"
+            ],
+            "title": "Status",
+            "default": "pending"
+          },
+          "result_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Ref"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "approval_id",
+          "action",
+          "summary",
+          "args_sha256",
+          "expires_at"
+        ],
+        "title": "PendingApproval",
+        "description": "Streamed with status \"pending\". Stored copies (GET /messages) carry the outcome once decided, and a pending\ncard past expires_at is returned as \"expired\", so a replay never shows a stale approve button."
+      },
+      "PreviewQuestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "qtype": {
+            "type": "string",
+            "enum": [
+              "mcq",
+              "numeric",
+              "assertion_reason",
+              "short_answer",
+              "long_answer",
+              "case_study",
+              "very_short"
+            ],
+            "title": "Qtype"
+          },
+          "marks": {
+            "type": "number",
+            "title": "Marks"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "answer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer"
+          },
+          "marking_scheme": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marking Scheme"
+          },
+          "sub_questions": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Questions"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "failed",
+              "manual_review",
+              "rubric_ok"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "section",
+          "qtype",
+          "marks",
+          "text",
+          "status"
+        ],
+        "title": "PreviewQuestion"
+      },
+      "QueryItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "last_used_at": {
+            "type": "string",
+            "title": "Last Used At"
+          },
+          "use_count": {
+            "type": "integer",
+            "title": "Use Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "last_used_at",
+          "use_count"
+        ],
+        "title": "QueryItem"
+      },
+      "RateLimitDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "const": "rate_limited",
+            "title": "Code",
+            "default": "rate_limited"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "user",
+              "institute"
+            ],
+            "title": "Scope"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "retry_after_s": {
+            "type": "integer",
+            "title": "Retry After S"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scope",
+          "message",
+          "retry_after_s"
+        ],
+        "title": "RateLimitDetail",
+        "description": "`detail` of a 429 from POST /agent/chat (also sent as the Retry-After header). Nothing was stored."
+      },
+      "RateLimitResponse": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/RateLimitDetail"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "RateLimitResponse"
+      },
+      "ReadyResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "not_ready"
+            ],
+            "title": "Status"
+          },
+          "checks": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Checks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status",
+          "checks"
+        ],
+        "title": "ReadyResponse"
+      },
+      "SectionComparisonChart": {
+        "additionalProperties": false,
+        "description": "`chart` event (kind bar) from section_comparison; only classes with data.",
+        "properties": {
+          "seq": {
+            "minimum": 0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "request_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "source": {
+            "const": "tool:section_comparison",
+            "title": "Source",
+            "type": "string"
+          },
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "type": {
+            "const": "chart",
+            "default": "chart",
+            "title": "Type",
+            "type": "string"
+          },
+          "kind": {
+            "const": "bar",
+            "title": "Kind",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/ChartSeries"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "y_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Y Unit"
+          }
+        },
+        "required": [
+          "seq",
+          "request_id",
+          "source",
+          "as_of",
+          "kind",
+          "title",
+          "series"
+        ],
+        "title": "SectionComparisonChart",
+        "type": "object"
+      },
+      "SectionComparisonTable": {
+        "additionalProperties": false,
+        "description": "`table` event from section_comparison: rank (ties share a rank, null = no data), class, %, held/tests,\nmarked/graded.",
+        "properties": {
+          "seq": {
+            "minimum": 0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "request_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "source": {
+            "const": "tool:section_comparison",
+            "title": "Source",
+            "type": "string"
+          },
+          "as_of": {
+            "title": "As Of",
+            "type": "string"
+          },
+          "type": {
+            "const": "table",
+            "default": "table",
+            "title": "Type",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "enum": [
+                "#",
+                "Class",
+                "%",
+                "Classes held",
+                "Marked",
+                "Tests",
+                "Graded"
+              ],
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "seq",
+          "request_id",
+          "source",
+          "as_of",
+          "title",
+          "columns",
+          "rows"
+        ],
+        "title": "SectionComparisonTable",
+        "type": "object"
+      },
+      "SessionItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "last_message_at": {
+            "type": "string",
+            "title": "Last Message At"
+          },
+          "message_count": {
+            "type": "integer",
+            "title": "Message Count"
+          },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "created_at",
+          "last_message_at",
+          "message_count",
+          "pinned"
+        ],
+        "title": "SessionItem"
+      },
+      "SessionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SessionItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/LegacySessionItem"
+            },
+            "type": "array",
+            "title": "Sessions",
+            "description": "deprecated alias of items (1.1)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SessionList"
+      },
+      "SessionPatch": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "pinned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SessionPatch"
+      },
+      "SessionStarted": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "session",
+            "title": "Type",
+            "default": "session"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "session_id",
+          "title"
+        ],
+        "title": "SessionStarted",
+        "description": "First event of every /agent/chat stream (seq 0): which session this turn belongs to."
+      },
+      "SpeakRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "hi",
+                  "en",
+                  "hi-en"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker"
+          },
+          "pace": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pace"
+          },
+          "phrase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phrase"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SpeakRequest"
+      },
+      "Speaker": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "female",
+              "male"
+            ],
+            "title": "Gender"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "gender"
+        ],
+        "title": "Speaker"
+      },
+      "Speech": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "speech",
+            "title": "Type",
+            "default": "speech"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "hi",
+              "en",
+              "hi-en"
+            ],
+            "title": "Language"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "text",
+          "language"
+        ],
+        "title": "Speech",
+        "description": "1.4 (voice turns only): the one- or two-sentence spoken headline of the answer. Hindi words come in Devanagari,\nEnglish words in Latin (the script the TTS reads best); the screen keeps the full prose / cards. Never cached."
+      },
+      "StatCard": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^tool:[a-z_]+$",
+            "title": "Source"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "type": {
+            "type": "string",
+            "const": "stat_card",
+            "title": "Type",
+            "default": "stat_card"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "source",
+          "as_of",
+          "title",
+          "value"
+        ],
+        "title": "StatCard"
+      },
+      "Suggestion": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "recent",
+              "template",
+              "entity"
+            ],
+            "title": "Type"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "text"
+        ],
+        "title": "Suggestion"
+      },
+      "Table": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^tool:[a-z_]+$",
+            "title": "Source"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "type": {
+            "type": "string",
+            "const": "table",
+            "title": "Type",
+            "default": "table"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "source",
+          "as_of",
+          "title",
+          "columns",
+          "rows"
+        ],
+        "title": "Table"
+      },
+      "TextDelta": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "text_delta",
+            "title": "Type",
+            "default": "text_delta"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "text"
+        ],
+        "title": "TextDelta"
+      },
+      "ThinkingStatus": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "thinking_status",
+            "title": "Type",
+            "default": "thinking_status"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Params"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "key"
+        ],
+        "title": "ThinkingStatus"
+      },
+      "TranscribeResponse": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "transcript": {
+            "type": "string",
+            "title": "Transcript"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "hi",
+              "en",
+              "hi-en"
+            ],
+            "title": "Language"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "repaired": {
+            "type": "boolean",
+            "title": "Repaired",
+            "default": false
+          },
+          "clarify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClarifyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed",
+            "default": false
+          },
+          "next": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "confirm",
+              "repeat",
+              "pick"
+            ],
+            "title": "Next",
+            "default": "auto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "transcript",
+          "language",
+          "confidence",
+          "duration_ms",
+          "provider"
+        ],
+        "title": "TranscribeResponse",
+        "description": "`clarify` set = the name was ambiguous inside the caller's scope: show the chips, do NOT auto-send."
+      },
+      "UiAction": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "ui_action",
+            "title": "Type",
+            "default": "ui_action"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "navigate",
+              "highlight_confirm"
+            ],
+            "title": "Action"
+          },
+          "route_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9_.]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Key"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Params"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "action"
+        ],
+        "title": "UiAction",
+        "description": "1.4: a UI instruction, never a data write. `navigate` opens a registry route (agent/routes/registry.json —\nthe frontend executes only keys in its copy, with the typed params); `highlight_confirm` points at the on-screen\nConfirm/Approve button after an approve-by-voice attempt (voice never approves)."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VerificationSummary": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "verification_summary",
+            "title": "Type",
+            "default": "verification_summary"
+          },
+          "objective_verified": {
+            "type": "integer",
+            "title": "Objective Verified"
+          },
+          "objective_total": {
+            "type": "integer",
+            "title": "Objective Total"
+          },
+          "rubric_checked": {
+            "type": "integer",
+            "title": "Rubric Checked"
+          },
+          "rubric_total": {
+            "type": "integer",
+            "title": "Rubric Total"
+          },
+          "manual_review": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Manual Review"
+          },
+          "marks_sum_ok": {
+            "type": "boolean",
+            "title": "Marks Sum Ok"
+          },
+          "duplicates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Duplicates"
+          },
+          "rounds": {
+            "type": "integer",
+            "title": "Rounds",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "objective_verified",
+          "objective_total",
+          "rubric_checked",
+          "rubric_total",
+          "manual_review",
+          "marks_sum_ok"
+        ],
+        "title": "VerificationSummary"
+      },
+      "VoiceConfig": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "kill_switch",
+                  "not_allowlisted",
+                  "not_configured"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "tts": {
+            "type": "string",
+            "enum": [
+              "sarvam",
+              "none"
+            ],
+            "title": "Tts"
+          },
+          "stt_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stt Provider"
+          },
+          "speakers": {
+            "items": {
+              "$ref": "#/components/schemas/Speaker"
+            },
+            "type": "array",
+            "title": "Speakers"
+          },
+          "default_speaker": {
+            "type": "string",
+            "title": "Default Speaker"
+          },
+          "paces": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Paces"
+          },
+          "max_seconds": {
+            "type": "integer",
+            "title": "Max Seconds"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "title": "Max Bytes"
+          },
+          "formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Formats"
+          },
+          "consent_version": {
+            "type": "string",
+            "title": "Consent Version"
+          },
+          "limits": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Limits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "tts",
+          "speakers",
+          "default_speaker",
+          "paces",
+          "max_seconds",
+          "max_bytes",
+          "formats",
+          "consent_version",
+          "limits"
+        ],
+        "title": "VoiceConfig"
+      }
+    }
   }
- }
 }

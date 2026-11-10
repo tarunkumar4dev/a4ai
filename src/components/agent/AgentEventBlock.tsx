@@ -15,6 +15,7 @@ import { FileCard } from "./FileCard";
 import { RankingTable } from "./RankingTable";
 import { ScopeCard } from "./ScopeCard";
 import { StatCard } from "./StatCard";
+import { UiActionCard } from "./UiActionCard";
 import { VerificationBadge } from "./VerificationBadge";
 
 export interface BlockHandlers {
@@ -30,6 +31,10 @@ export interface BlockHandlers {
   onPrefill?: (text: string) => void;
   /** `file` card download (GET /agent/files/{id}) */
   onDownloadFile?: (blockId: string) => void;
+  /** `ui_action navigate` card: open the registry route again (voice, 1.4) */
+  onNavigate?: (routeKey: string, params: Record<string, string>) => void;
+  /** approve-by-voice happened: point at the Approve/Confirm button (voice, 1.4) */
+  confirmHighlight?: boolean;
 }
 
 /** What a block knows about the rest of the chat (paper header from the blueprint, failed ids from the paper). */
@@ -112,12 +117,14 @@ export function AgentEventBlock({ block, h, ctx }: { block: Block; h: BlockHandl
     case "approval":
       return (
         <ApprovalCard block={block} busy={h.busy} onApprove={() => h.onApprove(block.id)} onCancel={() => h.onCancel(block.id)}
-          onEdit={() => prefill(EDIT_PREFILL)} onDownload={() => h.onDownload(block.id)} />
+          onEdit={() => prefill(EDIT_PREFILL)} onDownload={() => h.onDownload(block.id)} highlight={h.confirmHighlight} />
       );
     case "file":
       return <FileCard block={block} busy={h.busy} onDownload={() => h.onDownloadFile?.(block.id)} onAskAgain={() => send(`${block.ev.name} dobara banao`)} />;
     case "error":
       return <ErrorCard code={block.code} message={block.message} retryText={block.retryText} busy={h.busy} onRetry={h.onRetry} retryAt={block.retryAt} />;
+    case "ui_action":
+      return <UiActionCard ev={block.ev} onNavigate={h.onNavigate} />;
     default: {
       const unhandled: never = block;
       return unhandled;
