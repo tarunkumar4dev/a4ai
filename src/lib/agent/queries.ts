@@ -281,6 +281,21 @@ export function useAgentQueryClient(): QueryClient {
   return useQueryClient();
 }
 
+/** Warm the queries + suggestions cache on focus (≤ 1 per 30 s per user). */
+let lastPrefetch = 0;
+export function prefetchAgentCaches(qc: QueryClient, uid: string) {
+  const now = Date.now();
+  if (now - lastPrefetch < 30_000) return;
+  lastPrefetch = now;
+  const stale = 60_000;
+  void qc.prefetchQuery({ queryKey: agentKeys.queries(uid), staleTime: stale, queryFn: async ({ signal }) => {
+    const api = await getAgentApi(); try { return await api.listQueries({ limit: 20 }, signal); } catch { return []; }
+  }});
+  void qc.prefetchQuery({ queryKey: agentKeys.suggest(uid, ""), staleTime: stale, queryFn: async ({ signal }) => {
+    const api = await getAgentApi(); try { return await api.suggestions("", signal); } catch { return []; }
+  }});
+}
+
 /** A ref that always holds the latest value (callbacks inside timers / realtime). */
 export function useLatest<T>(v: T) {
   const r = useRef(v);

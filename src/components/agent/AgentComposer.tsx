@@ -7,7 +7,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Clip
 import { ArrowUp, Square, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { getAgentApi } from "@/lib/agent/api";
-import { clearRecentQueries, removeRecentQuery, useAgentQueryClient, useRecentQueries, useSuggestions } from "@/lib/agent/queries";
+import { clearRecentQueries, prefetchAgentCaches, removeRecentQuery, useAgentQueryClient, useRecentQueries, useSuggestions } from "@/lib/agent/queries";
 import { agentStore } from "@/lib/agent/store";
 import { comboKey, idleOptions, rankSuggestions, type SuggestOption } from "@/lib/agent/suggest";
 import { onComposerFocusRequest } from "@/lib/agent/surface";
@@ -172,7 +172,7 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
           <textarea id={inputId} ref={ref} rows={1} value={value} disabled={busy} maxLength={MAX_CHARS}
             role="combobox" aria-expanded={open} aria-controls={open ? listId : undefined} aria-autocomplete="list" aria-haspopup="listbox"
             aria-activedescendant={activeId}
-            onFocus={() => { setFocused(true); if (!codeFocus.current) setDismissed(false); }}
+            onFocus={() => { setFocused(true); if (!codeFocus.current) setDismissed(false); if (uid) prefetchAgentCaches(qc, uid); }}
             onPointerDown={() => setDismissed(false)}
             onChange={(e) => { setValue(e.target.value.slice(0, MAX_CHARS)); setDismissed(false); }}
             onKeyDown={onKeyDown} onPaste={onPaste}
