@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
-    "agent:contract": "node scripts/agent-contract.mjs"
+    "agent:contract": "node scripts/agent-contract.mjs",
+    "agent:routes": "node scripts/agent-routes.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
