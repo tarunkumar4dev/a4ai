@@ -1250,16 +1250,19 @@ export default function TeacherDashboardPage() {
   // Login already sends people to home_route; this covers landing on /dashboard
   // directly (e.g. being promoted while already on this page).
   const { access } = useAccess();
+  const location = useLocation();
   useEffect(() => {
     if (!access) return;
+    // Don't redirect away from /dashboard?tab=agent — the agent workspace is for all staff roles
+    const tab = new URLSearchParams(location.search).get("tab");
+    if (tab === "agent") return;
     if (access.home_route && access.home_route !== "/dashboard" && access.teaching_batch_ids.length === 0) {
       navigate(access.home_route, { replace: true });
     }
-  }, [access, navigate]);
+  }, [access, navigate, location.search]);
 
   const [activeTab, setActiveTab] = useState("dashboard");
   // deep link: /dashboard?tab=assignments&assignment=<id>&view=copies (Checking Link → "Submissions dekho")
-  const location = useLocation();
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get("tab");
     if (tab === "assignments" || tab === "modules" || tab === "agent") setActiveTab(tab);
