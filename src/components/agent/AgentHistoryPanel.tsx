@@ -10,7 +10,7 @@ import { getAgentApi } from "@/lib/agent/api";
 import { flattenGroups, groupSessions, relativeTime, rowOffsets, sessionTime, windowByOffsets, type HistoryRow } from "@/lib/agent/history";
 import { deleteSessionWithUndo, patchSessionOptimistic, useAgentQueryClient, useDebounced, useSessionLists } from "@/lib/agent/queries";
 import { agentStore } from "@/lib/agent/store";
-import type { SessionSummary } from "@/lib/agent/types";
+import type { SessionItem } from "@/lib/agent/types";
 import { AgentConfirm } from "./AgentConfirm";
 import { ESC_LAYER } from "./escLayer";
 import { NEW_CHAT_SHORTCUT } from "./shortcuts";
@@ -21,9 +21,9 @@ const ITEM_H = 48;
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onStartRename, onRename, onCancelRename, onPin, onDelete }: {
-  s: SessionSummary; active: boolean; now: number; disabled: boolean; editing: boolean;
-  onOpen: (s: SessionSummary) => void; onStartRename: (id: string) => void; onRename: (s: SessionSummary, title: string) => void;
-  onCancelRename: () => void; onPin: (s: SessionSummary) => void; onDelete: (s: SessionSummary) => void;
+  s: SessionItem; active: boolean; now: number; disabled: boolean; editing: boolean;
+  onOpen: (s: SessionItem) => void; onStartRename: (id: string) => void; onRename: (s: SessionItem, title: string) => void;
+  onCancelRename: () => void; onPin: (s: SessionItem) => void; onDelete: (s: SessionItem) => void;
 }) {
   const [title, setTitle] = useState(s.title);
   useEffect(() => { if (editing) setTitle(s.title); }, [editing, s.title]);
@@ -35,8 +35,8 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
     };
     return (
       <div className="flex h-full items-center px-1" {...{ [ESC_LAYER]: "" }}>
-        <label className="sr-only" htmlFor={`rename-${s.session_id}`}>Chat ka naya naam</label>
-        <input id={`rename-${s.session_id}`} autoFocus value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)}
+        <label className="sr-only" htmlFor={`rename-${s.id}`}>Chat ka naya naam</label>
+        <input id={`rename-${s.id}`} autoFocus value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)}
           onKeyDown={onKey} onBlur={() => onRename(s, title)} onFocus={(e) => e.currentTarget.select()}
           className={`h-10 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground ${focusRing}`} />
       </div>
@@ -44,7 +44,7 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
   }
   const when = relativeTime(sessionTime(s), now);
   return (
-    <div className={`group relative flex h-full items-center rounded-md ${active ? "bg-accent text-accent-foreground" : "hover:bg-muted"}`} data-testid="history-item" data-session={s.session_id}>
+    <div className={`group relative flex h-full items-center rounded-md ${active ? "bg-accent text-accent-foreground" : "hover:bg-muted"}`} data-testid="history-item" data-session={s.id}>
       <button type="button" onClick={() => onOpen(s)} disabled={disabled && !active} aria-current={active ? "page" : undefined}
         title={s.title}
         className={`flex h-full min-w-0 flex-1 items-center gap-2 rounded-md pl-2.5 pr-10 text-left disabled:opacity-60 ${focusRing}`}>
@@ -61,7 +61,7 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="z-[240] w-44">
-          <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onStartRename(s.session_id)}><Pencil aria-hidden="true" className="h-4 w-4" />Rename</DropdownMenuItem>
+          <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onStartRename(s.id)}><Pencil aria-hidden="true" className="h-4 w-4" />Rename</DropdownMenuItem>
           <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onPin(s)}>
             {s.pinned ? <><PinOff aria-hidden="true" className="h-4 w-4" />Unpin</> : <><Pin aria-hidden="true" className="h-4 w-4" />Pin</>}
           </DropdownMenuItem>
@@ -93,12 +93,15 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(id); }, []);
 
-  const groups = useMemo(() => groupSessions(pinnedShown, restShown, now, search), [pinnedShown, restShown, now, search]);
+  // local title filter only while the server's answer is on its way (the server also matches message text)
+  const serverDone = !!q && q === search.trim() && !!pinned.data && !!rest.data;
+  const localQ = serverDone ? "" : search;
+  const groups = useMemo(() => groupSessions(pinnedShown, restShown, now, localQ), [pinnedShown, restShown, now, localQ]);
   const rows = useMemo(() => flattenGroups(groups), [groups]);
   const offsets = useMemo(() => rowOffsets(rows.map((r) => (r.kind === "header" ? HEADER_H : ITEM_H))), [rows]);
 
   const [editing, setEditing] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<SessionSummary | null>(null);
+  const [confirm, setConfirm] = useState<SessionItem | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState({ top: 0, height: 600 });
@@ -122,49 +125,49 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
     if (rows.length && end >= rows.length - 4 && rest.hasNextPage && !rest.isFetchingNextPage && !rest.isError) void rest.fetchNextPage();
   }, [end, rows.length, rest]);
 
-  const open = useCallback((s: SessionSummary) => { agentStore.openSession(s.session_id, s.title); onPicked?.(); }, [onPicked]);
+  const open = useCallback((s: SessionItem) => { agentStore.openSession(s.id, s.title); onPicked?.(); }, [onPicked]);
   const startNew = () => { agentStore.newChat(); onPicked?.(); };
 
-  const rename = useCallback((s: SessionSummary, title: string) => {
+  const rename = useCallback((s: SessionItem, title: string) => {
     setEditing(null);
     const t = title.trim();
     if (!t || t === s.title || !uid) return;
     void (async () => {
       try {
-        const saved = await patchSessionOptimistic(qc, uid, await getAgentApi(), s.session_id, { title: t });
-        agentStore.sessionRenamed(s.session_id, saved.title);
+        const saved = await patchSessionOptimistic(qc, uid, await getAgentApi(), s.id, { title: t });
+        agentStore.sessionRenamed(s.id, saved.title);
       } catch (err) { toast.error((err as Error).message); }
     })();
   }, [qc, uid]);
 
-  const pin = useCallback((s: SessionSummary) => {
+  const pin = useCallback((s: SessionItem) => {
     if (!uid) return;
     void (async () => {
-      try { await patchSessionOptimistic(qc, uid, await getAgentApi(), s.session_id, { pinned: !s.pinned }); } catch (err) { toast.error((err as Error).message); }
+      try { await patchSessionOptimistic(qc, uid, await getAgentApi(), s.id, { pinned: !s.pinned }); } catch (err) { toast.error((err as Error).message); }
     })();
   }, [qc, uid]);
 
-  const remove = (s: SessionSummary) => {
+  const remove = (s: SessionItem) => {
     setConfirm(null);
     if (!uid) return;
     void getAgentApi().then((api) => {
-      const wasActive = activeKey === s.session_id;
-      const h = deleteSessionWithUndo(qc, uid, api, s.session_id, {
+      const wasActive = activeKey === s.id;
+      const h = deleteSessionWithUndo(qc, uid, api, s.id, {
         onError: (msg) => toast.error(msg),
-        onCommitted: () => agentStore.sessionDeleted(s.session_id),
+        onCommitted: () => agentStore.sessionDeleted(s.id),
       });
       if (wasActive) agentStore.newChat();
       toast("Chat delete ho gayi", {
         description: s.title,
         duration: 5000,
-        action: { label: "Undo", onClick: () => { if (h.undo() && wasActive) agentStore.openSession(s.session_id, s.title); } },
+        action: { label: "Undo", onClick: () => { if (h.undo() && wasActive) agentStore.openSession(s.id, s.title); } },
       });
     });
   };
 
   const renderRow = (r: HistoryRow) => (r.kind === "header"
     ? <p className="flex h-full items-end px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground" role="presentation" data-testid="history-group">{r.label}</p>
-    : <Row s={r.session} active={r.session.session_id === activeKey} now={now} disabled={busy} editing={editing === r.session.session_id}
+    : <Row s={r.session} active={r.session.id === activeKey} now={now} disabled={busy} editing={editing === r.session.id}
         onOpen={open} onStartRename={setEditing} onRename={rename} onCancelRename={() => setEditing(null)} onPin={pin} onDelete={setConfirm} />);
 
   const loading = (pinned.isPending || rest.isPending) && !rows.length && !!uid;

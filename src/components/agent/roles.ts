@@ -1,88 +1,97 @@
-// Who sees the agent and what it suggests. Staff only (primary_role admin/hod/proctor/teacher); students never.
+// Who sees the agent, which role it speaks to, and what it suggests. Staff only (primary_role admin / hod /
+// proctor / teacher); students never. A teacher can be several things at once (HOD + subject teacher, proctor +
+// subject teacher): the agent role is the WIDEST scope — admin > HOD > proctor > teacher.
 import type { LucideIcon } from "lucide-react";
-import { AlertTriangle, BarChart3, CalendarCheck, ClipboardList, FileText, GraduationCap, UserSearch, Users } from "lucide-react";
+import {
+  AlertTriangle, BarChart3, CalendarCheck, ClipboardList, FileSpreadsheet, FileText, GraduationCap, ListChecks, Users,
+} from "lucide-react";
 
 export type StaffRole = "admin" | "hod" | "proctor" | "teacher";
 const STAFF: ReadonlySet<string> = new Set(["admin", "hod", "proctor", "teacher"]);
 
 export const isStaffRole = (role: string | null | undefined): role is StaffRole => !!role && STAFF.has(role);
 
-/** Badge text. The agent backend's own role (meta.role) wins over the app's primary_role. */
-export function roleLabel(metaRole: string | null | undefined, primaryRole: string | null | undefined): string {
-  const r = metaRole ?? primaryRole ?? "";
-  if (r === "admin") return "Admin";
-  if (r === "hod") return "HOD";
-  if (r === "proctor") return "Proctor";
-  return "Teacher";
+/** The subset of get_my_access() this file needs. */
+export interface AccessLike {
+  primary_role?: string | null;
+  hod_department_ids?: string[] | null;
+  proctor_section_ids?: string[] | null;
+}
+
+/**
+ * The role the agent should speak to. The backend's own role (meta.role: admin | hod | teacher — it has no
+ * "proctor") wins for admin / HOD; a teacher with proctor sections is a proctor here. Pure.
+ */
+export function agentRole(metaRole: string | null | undefined, access: AccessLike | null | undefined): StaffRole {
+  const p = access?.primary_role ?? null;
+  if (metaRole === "admin" || p === "admin") return "admin";
+  if (metaRole === "hod" || p === "hod" || (access?.hod_department_ids?.length ?? 0) > 0) return "hod";
+  if (p === "proctor" || (access?.proctor_section_ids?.length ?? 0) > 0) return "proctor";
+  return "teacher";
+}
+
+/** Badge text. */
+export function roleLabel(metaRole: string | null | undefined, primaryRole: string | null | undefined, access?: AccessLike | null): string {
+  const r = agentRole(metaRole, { ...(access ?? {}), primary_role: access?.primary_role ?? primaryRole });
+  return { admin: "Admin", hod: "HOD", proctor: "Proctor", teacher: "Teacher" }[r];
 }
 
 export interface Suggestion { Icon: LucideIcon; title: string; hint: string; prompt: string }
 
-export const SUGGESTIONS: Record<"admin" | "hod" | "teacher", Suggestion[]> = {
+export const SUGGESTIONS: Record<StaffRole, Suggestion[]> = {
   admin: [
-    { Icon: CalendarCheck, title: "Aaj ki attendance", hint: "Poore institute ka aaj ka haal", prompt: "Aaj ki attendance" },
-    { Icon: AlertTriangle, title: "Low attendance (<75%)", hint: "Kin students ko dhyan chahiye", prompt: "Low attendance students (<75%)" },
-    { Icon: UserSearch, title: "Sharma ma'am ki attendance", hint: "Kisi teacher ki classes ka record", prompt: "Sharma ma'am ki attendance" },
-    { Icon: FileText, title: "Tests banaye is mahine", hint: "Kis teacher ne kitne test banaye", prompt: "Is mahine kitne tests banaye gaye?" },
+    { Icon: CalendarCheck, title: "Aaj poore institute ki attendance", hint: "Har department ka aaj ka haal", prompt: "Aaj poore institute ki attendance" },
+    { Icon: BarChart3, title: "Department-wise comparison", hint: "Is mahine kaun aage, kaun peeche", prompt: "Department-wise comparison is mahine" },
+    { Icon: FileSpreadsheet, title: "75% se kam wale, Excel mein", hint: "Poore institute ki list download", prompt: "75% se kam attendance wale students, Excel mein" },
+    { Icon: FileText, title: "Tests banaye is mahine", hint: "Kis teacher ne kitne test banaye", prompt: "Is mahine teachers ne kitne tests banaye?" },
   ],
   hod: [
-    { Icon: CalendarCheck, title: "Department ki attendance", hint: "Aaj sab sections ka haal", prompt: "Aaj ki attendance" },
-    { Icon: AlertTriangle, title: "Low attendance (<75%)", hint: "Department ke students jinhe dhyan chahiye", prompt: "Low attendance students (<75%)" },
-    { Icon: BarChart3, title: "Attendance trend", hint: "Pichhle hafton ka graph", prompt: "Pichhle 4 hafte ka attendance trend" },
-    { Icon: FileText, title: "Tests banaye is mahine", hint: "Teachers ke banaye tests", prompt: "Is mahine kitne tests banaye gaye?" },
+    { Icon: BarChart3, title: "Department ka section-wise comparison", hint: "Attendance ranking, is mahine", prompt: "Department ka section-wise comparison" },
+    { Icon: CalendarCheck, title: "Department ki attendance", hint: "Aaj sab sections ka haal", prompt: "Is mahine department ki attendance" },
+    { Icon: FileSpreadsheet, title: "75% se kam wale, Excel mein", hint: "Department ke students ki list", prompt: "Department me 75% se kam attendance wale students, Excel mein" },
+    { Icon: FileText, title: "Teachers ke tests", hint: "Kisne kitne test banaye", prompt: "Is mahine teachers ne kitne tests banaye?" },
+  ],
+  proctor: [
+    { Icon: FileSpreadsheet, title: "Mere section ke 75% se kam wale, Excel mein", hint: "Download karke parents ko bhejein", prompt: "Mere section ke 75% se kam wale, Excel mein" },
+    { Icon: CalendarCheck, title: "Mere section ki attendance", hint: "Is hafte ka haal", prompt: "Mere section ki is hafte ki attendance" },
+    { Icon: AlertTriangle, title: "Lagatar absent students", hint: "Pichhle 7 din me", prompt: "Mere section me pichhle 7 din se absent students" },
+    { Icon: ListChecks, title: "Main kya kya dekh sakta hoon?", hint: "Mere sections aur subjects", prompt: "Main kya kya dekh sakta hoon?" },
   ],
   teacher: [
-    { Icon: Users, title: "Meri class ki attendance", hint: "Is mahine ka percentage", prompt: "Meri class ki attendance" },
+    { Icon: Users, title: "Meri classes ki attendance", hint: "Is mahine ka percentage", prompt: "Meri classes ki is mahine ki attendance" },
     { Icon: GraduationCap, title: "Class 10 trigonometry test banao", hint: "CBSE pattern, verified answers", prompt: "Class 10 trigonometry test banao, 40 marks" },
-    { Icon: AlertTriangle, title: "Low attendance students", hint: "75% se kam wale students", prompt: "Low attendance students (<75%)" },
-    { Icon: ClipboardList, title: "Marks summary", hint: "Assignments aur copies ke marks", prompt: "Meri class ka marks summary" },
+    { Icon: AlertTriangle, title: "75% se kam wale students", hint: "Meri classes me", prompt: "Meri classes me 75% se kam attendance wale students" },
+    { Icon: ClipboardList, title: "Marks summary", hint: "Mere tests ke marks", prompt: "Mere tests ke marks summary" },
   ],
 };
 
-export function suggestionsFor(metaRole: string | null | undefined, primaryRole: string | null | undefined): Suggestion[] {
-  const r = metaRole ?? primaryRole;
-  if (r === "admin") return SUGGESTIONS.admin;
-  if (r === "hod") return SUGGESTIONS.hod;
-  return SUGGESTIONS.teacher;
+export function suggestionsFor(role: StaffRole): Suggestion[] {
+  return SUGGESTIONS[role];
 }
 
-// ---- empty state from the caller's scope (v2: GET /agent/meta → scope) ------------------------------------
-export interface ScopeLike { batches: { name: string; students: number | null; via?: string | null; kind?: string | null }[]; total_students: number | null }
-
-/** "2 batches · 44 students" (null when the scope isn't known). Pure. */
-export function scopeSummary(scope: ScopeLike | null | undefined): string | null {
-  if (!scope || !scope.batches.length) return null;
-  const n = scope.batches.length;
-  const total = scope.total_students ?? (scope.batches.every((b) => typeof b.students === "number") ? scope.batches.reduce((a, b) => a + (b.students ?? 0), 0) : null);
-  const parts = [`${n} batch${n === 1 ? "" : "es"}`];
-  if (total !== null) parts.push(`${total} student${total === 1 ? "" : "s"}`);
-  return parts.join(" · ");
+/** "3 batches" / "Poora institute" — what the empty state says the caller can see. Pure. */
+export function scopeLine(role: StaffRole, batchCount: number | null): string | null {
+  if (role === "admin") return "Poora institute";
+  if (batchCount === null) return null;
+  if (batchCount === 0) return "Abhi koi batch assign nahi hai";
+  return `${batchCount} batch${batchCount === 1 ? "" : "es"}`;
 }
-
-const VIA: Record<string, string> = { teacher: "Aap padhate hain", proctor: "Aap proctor hain", hod: "Aapka department", admin: "Institute" };
 
 /**
- * Four empty-state cards: up to two about the caller's own batches (largest first), then role templates.
- * Never repeats a prompt. Pure.
+ * Four empty-state cards. Teachers: up to two of their own batches first ("<name> ki is mahine ki attendance" — the
+ * backend's own entity phrasing), then role starters. Other roles: their role starters. Never repeats. Pure.
  */
-export function emptyCards(scope: ScopeLike | null | undefined, metaRole: string | null | undefined, primaryRole: string | null | undefined): Suggestion[] {
+export function emptyCards(role: StaffRole, batches: { name: string }[] = []): Suggestion[] {
   const out: Suggestion[] = [];
-  const batches = [...(scope?.batches ?? [])].filter((b) => b.kind !== "Lab").sort((a, b) => (b.students ?? -1) - (a.students ?? -1));
-  for (const b of batches.slice(0, 2)) {
-    const n = b.students;
-    out.push({
-      Icon: Users,
-      title: `${b.name} ki attendance`,
-      hint: [n === null ? null : `${n} students`, b.via ? VIA[b.via] ?? null : null].filter(Boolean).join(" · ") || "Is mahine ka haal",
-      prompt: `${b.name} ki attendance`,
-    });
+  if (role === "teacher") {
+    for (const b of batches.slice(0, 2)) {
+      out.push({ Icon: Users, title: `${b.name} ki attendance`, hint: "Is mahine", prompt: `${b.name} ki is mahine ki attendance` });
+    }
   }
-  if (batches.length > 1 && out.length < 4) {
-    out.push({ Icon: BarChart3, title: "Mere sections compare karo", hint: `${batches.length} sections ki ranking`, prompt: "Sections ki attendance compare karo" });
-  }
-  for (const s of suggestionsFor(metaRole, primaryRole)) {
+  for (const s of SUGGESTIONS[role]) {
     if (out.length >= 4) break;
-    if (out.some((o) => o.prompt.toLowerCase() === s.prompt.toLowerCase() || o.title.toLowerCase() === s.title.toLowerCase())) continue;
+    if (out.some((o) => o.prompt.toLowerCase() === s.prompt.toLowerCase())) continue;
+    if (role === "teacher" && batches.length && s.title === "Meri classes ki attendance") continue;
     out.push(s);
   }
   return out.slice(0, 4);

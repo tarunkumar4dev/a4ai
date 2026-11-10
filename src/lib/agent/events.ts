@@ -1,35 +1,29 @@
-// Parsers for the a4ai Agent contract. The TYPES live in ./types.ts (one place) and are re-exported here so older
-// imports keep working. Every parser is tolerant: bad rows are dropped, unknown event types return null.
+// Runtime parsers for the a4ai Agent contract 1.2. TYPES come from ./types.ts (generated, ./api.gen.ts) and are
+// re-exported here so older imports keep working. Every parser is tolerant: bad rows are dropped, unknown event
+// types return null, missing optional lists become []. Outputs are the generated wire types themselves.
 import type {
-  AgentEvent, AgentEventType, AgentMeta, ComparisonRow, MessagesPage, QueryHistoryItem, ScopeBatch, ScopeSummary,
-  SessionSummary, SessionsPage, StoredFeedback, StoredMessage, Suggestion, SuggestionType,
+  AgentEvent, AgentEventType, AgentMeta, QueryItem, SessionItem, SessionList, StoredMessage, StoredMessagePage,
+  Suggestion, SuggestionType,
 } from "./types";
 export * from "./types";
 
-const KNOWN: ReadonlySet<string> = new Set<AgentEventType>([
-  "text_delta", "thinking_status", "stat_card", "chart", "table", "clarify", "blueprint",
-  "paper_preview", "verification_summary", "pending_approval", "final", "error",
-  "session", "my_scope", "section_comparison",
-]);
+/** Every `type` the UI accepts: the contract's 13 (MessageItem.events) + the pending `file` event. */
+export const EVENT_TYPES = [
+  "session", "text_delta", "thinking_status", "stat_card", "chart", "table", "clarify", "blueprint",
+  "paper_preview", "verification_summary", "pending_approval", "final", "error", "file",
+] as const satisfies readonly AgentEventType[];
+// compile-time: EVENT_TYPES lists every AgentEventType (adding one to the contract breaks the build here)
+type Missing = Exclude<AgentEventType, (typeof EVENT_TYPES)[number]>;
+const _allListed: Missing extends never ? true : Missing = true;
+void _allListed;
+
+const KNOWN: ReadonlySet<string> = new Set<string>(EVENT_TYPES);
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 const numOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const iso = (v: unknown): string => (typeof v === "string" ? v : "");
-
-function parseScopeBatches(v: unknown): ScopeBatch[] {
-  return arr<unknown>(v).filter(isObj).filter((b) => typeof b.name === "string" && b.name.trim()).slice(0, 200).map((b) => ({
-    batch_id: typeof b.batch_id === "string" ? b.batch_id : String(b.name),
-    name: String(b.name), students: numOrNull(b.students), kind: str(b.kind), department: str(b.department), via: str(b.via),
-  }));
-}
-
-function parseComparisonRows(v: unknown): ComparisonRow[] {
-  return arr<unknown>(v).filter(isObj).filter((r) => typeof r.name === "string").slice(0, 100).map((r) => ({
-    id: str(r.id), name: String(r.name), value: numOrNull(r.value), students: numOrNull(r.students), detail: str(r.detail),
-  }));
-}
 
 /** Tolerant: returns null for non-objects, unknown `type`s or missing seq/request_id. Fills safe defaults for lists. */
 export function parseAgentEvent(raw: unknown): AgentEvent | null {
@@ -38,7 +32,11 @@ export function parseAgentEvent(raw: unknown): AgentEvent | null {
   if (typeof t !== "string" || !KNOWN.has(t)) return null;
   if (typeof raw.seq !== "number" || typeof raw.request_id !== "string") return null;
   const e = { ...raw } as Record<string, unknown>;
-  switch (t) {
+  switch (t as AgentEventType) {
+    case "session":
+      if (typeof e.session_id !== "string" || !e.session_id) return null;
+      e.title = str(e.title) ?? "New chat";
+      break;
     case "text_delta": if (typeof e.text !== "string") return null; break;
     case "thinking_status": if (typeof e.key !== "string") return null; e.params = isObj(e.params) ? e.params : {}; break;
     case "stat_card":
@@ -58,27 +56,16 @@ export function parseAgentEvent(raw: unknown): AgentEvent | null {
     case "paper_preview": e.questions = arr(e.questions); break;
     case "verification_summary": e.manual_review = arr(e.manual_review); e.duplicates = arr(e.duplicates); if (typeof e.rounds !== "number") e.rounds = 0; break;
     case "pending_approval": if (typeof e.approval_id !== "string") return null; break;
-    case "final": if (typeof e.session_id !== "string") return null; break;
-    case "error": if (typeof e.message !== "string") e.message = "Something went wrong."; break;
-    case "session":
-      if (typeof e.session_id !== "string" || !e.session_id) return null;
-      e.title = str(e.title) ?? "New chat";
+    case "final":
+      if (typeof e.session_id !== "string") return null;
+      e.cancelled = e.cancelled === true;
       break;
-    case "my_scope":
-      e.batches = parseScopeBatches(e.batches);
-      e.total_students = numOrNull(e.total_students);
-      e.departments = arr<unknown>(e.departments).filter((d): d is string => typeof d === "string");
-      if (typeof e.role !== "string") e.role = "teacher";
-      if (typeof e.source !== "string") e.source = "tool:my_scope";
-      if (typeof e.as_of !== "string") e.as_of = "";
-      break;
-    case "section_comparison":
-      if (typeof e.title !== "string") e.title = "Section comparison";
-      if (typeof e.metric !== "string") e.metric = "Value";
-      e.rows = parseComparisonRows(e.rows);
-      e.higher_is_better = e.higher_is_better !== false;
-      if (typeof e.source !== "string") e.source = "tool:section_comparison";
-      if (typeof e.as_of !== "string") e.as_of = "";
+    case "error": if (typeof e.message !== "string") e.message = "Something went wrong."; if (typeof e.code !== "string") e.code = "internal"; break;
+    case "file":
+      if (typeof e.file_id !== "string" || !e.file_id) return null;
+      e.name = str(e.name) ?? "a4ai-export";
+      e.rows = numOrNull(e.rows);
+      e.expires_at = str(e.expires_at);
       break;
   }
   return e as unknown as AgentEvent;
@@ -125,74 +112,68 @@ export function decodeSseData(data: string): AgentEvent | null {
   try { return parseAgentEvent(JSON.parse(data)); } catch { return null; }
 }
 
-
-/** Tolerant decode of GET /agent/meta (null when the shape is unusable). `scope` only when the backend sends it. */
+// ---- REST -------------------------------------------------------------------------------------------
+/** GET /agent/meta (null when the shape is unusable). */
 export function parseAgentMeta(raw: unknown): AgentMeta | null {
   if (!isObj(raw)) return null;
   const ds = raw.data_source;
   if (ds !== "live" && ds !== "demo") return null;
   const role = raw.role === "admin" || raw.role === "hod" ? raw.role : "teacher";
-  const meta: AgentMeta = { data_source: ds, read_only: raw.read_only !== false, role, first_name: str(raw.first_name), institute_name: str(raw.institute_name) };
-  if (isObj(raw.scope)) {
-    const scope: ScopeSummary = { batches: parseScopeBatches(raw.scope.batches), total_students: numOrNull(raw.scope.total_students) };
-    meta.scope = scope;
-  }
-  return meta;
+  return { data_source: ds, read_only: raw.read_only !== false, role, first_name: str(raw.first_name), institute_name: str(raw.institute_name) };
 }
 
-function parseSession(s: Record<string, unknown>): SessionSummary {
+function parseSessionItem(s: Record<string, unknown>): SessionItem | null {
+  if (typeof s.id !== "string" || !s.id) return null;
   const created = iso(s.created_at);
   return {
-    session_id: s.session_id as string,
-    title: str(s.title) ?? "Untitled chat",
-    created_at: created,
-    updated_at: iso(s.updated_at) || created,
-    pinned: s.pinned === true,
+    id: s.id, title: str(s.title) ?? "Untitled chat", created_at: created,
+    last_message_at: iso(s.last_message_at) || created,
+    message_count: typeof s.message_count === "number" ? s.message_count : 0,
+    pinned: s.pinned === true, preview: str(s.preview),
   };
 }
 
-/** GET /agent/sessions → page. Also accepts the v1 shape ({ sessions } without cursor / pinned). */
-export function parseSessionsPage(raw: unknown): SessionsPage {
-  const list = isObj(raw) ? arr<unknown>(raw.sessions) : Array.isArray(raw) ? raw : [];
-  const sessions = list.filter(isObj).filter((s) => typeof s.session_id === "string" && s.session_id).map(parseSession).slice(0, 200);
-  return { sessions, next_cursor: isObj(raw) ? str(raw.next_cursor) : null };
-}
-
-/** v1 helper kept for callers that only want the list. */
-export const parseAgentSessions = (raw: unknown): SessionSummary[] => parseSessionsPage(raw).sessions.slice(0, 50);
-
-/** One stored message (bad events are dropped, unknown roles → null). */
-export function parseStoredMessage(raw: unknown): StoredMessage | null {
-  if (!isObj(raw) || typeof raw.seq !== "number" || (raw.role !== "user" && raw.role !== "assistant")) return null;
-  const r = isObj(raw.feedback) ? raw.feedback.rating : null;
-  const fb: StoredFeedback | null = r === "up" || r === "down" ? { rating: r, note: str((raw.feedback as Record<string, unknown>).note) } : null;
-  const m: StoredMessage = { seq: raw.seq, role: raw.role, created_at: iso(raw.created_at), feedback: fb, request_id: str(raw.request_id) };
-  if (raw.role === "user") m.text = typeof raw.text === "string" ? raw.text : "";
-  else {
-    m.events = arr<unknown>(raw.events).map(parseAgentEvent).filter((e): e is AgentEvent => e !== null);
-    m.stopped = raw.stopped === true;
+/** GET /agent/sessions → { items, next_cursor }. A 1.1 backend (only `sessions`) is mapped onto items. */
+export function parseSessionList(raw: unknown): SessionList {
+  if (!isObj(raw)) return { items: [], next_cursor: null };
+  let items = arr<unknown>(raw.items).filter(isObj).map(parseSessionItem).filter((s): s is SessionItem => s !== null);
+  if (!Array.isArray(raw.items)) {
+    items = arr<unknown>(raw.sessions).filter(isObj).map((s) => parseSessionItem({
+      id: s.session_id, title: s.title, created_at: s.created_at, last_message_at: s.updated_at, message_count: 0, pinned: false,
+    })).filter((s): s is SessionItem => s !== null);
   }
-  return m;
+  return { items: items.slice(0, 200), next_cursor: str(raw.next_cursor) };
 }
 
-/** GET /agent/sessions/{id}/messages → page, sorted oldest → newest by seq. */
-export function parseMessagesPage(raw: unknown): MessagesPage {
-  const list = isObj(raw) ? arr<unknown>(raw.messages) : [];
-  const messages = list.map(parseStoredMessage).filter((m): m is StoredMessage => m !== null).sort((a, b) => a.seq - b.seq);
-  return { messages, next_cursor: isObj(raw) ? str(raw.next_cursor) : null };
+/** PATCH /agent/sessions/{id} → SessionItem (null if the body isn't one). */
+export const parseSessionItemOrNull = (raw: unknown): SessionItem | null => (isObj(raw) ? parseSessionItem(raw) : null);
+
+/** One stored message (unknown role → null; bad events dropped). */
+export function parseMessageItem(raw: unknown): StoredMessage | null {
+  if (!isObj(raw) || typeof raw.seq !== "number" || (raw.role !== "user" && raw.role !== "assistant")) return null;
+  const events = Array.isArray(raw.events) ? raw.events.map(parseAgentEvent).filter((e): e is AgentEvent => e !== null) : null;
+  return { seq: raw.seq, role: raw.role, text: typeof raw.text === "string" ? raw.text : null, events, created_at: iso(raw.created_at) };
 }
 
-/** GET /agent/history/queries → items (newest first, blank texts dropped). */
-export function parseQueryHistory(raw: unknown): QueryHistoryItem[] {
-  const list = isObj(raw) ? arr<unknown>(raw.queries) : Array.isArray(raw) ? raw : [];
-  return list.filter(isObj).filter((q) => typeof q.id === "string" && typeof q.text === "string" && q.text.trim())
-    .map((q) => ({ id: q.id as string, text: (q.text as string).trim(), created_at: iso(q.created_at) })).slice(0, 100);
+/** GET /agent/sessions/{id}/messages → { items (ascending seq), next_cursor }. */
+export function parseMessageList(raw: unknown): StoredMessagePage {
+  if (!isObj(raw)) return { items: [], next_cursor: null };
+  const items = arr<unknown>(raw.items).map(parseMessageItem).filter((m): m is StoredMessage => m !== null).sort((a, b) => a.seq - b.seq);
+  return { items, next_cursor: str(raw.next_cursor) };
+}
+
+/** GET /agent/history/queries → QueryItem[] (newest first, blank texts dropped). */
+export function parseQueryItems(raw: unknown): QueryItem[] {
+  return arr<unknown>(raw).filter(isObj).filter((q) => typeof q.id === "string" && typeof q.text === "string" && q.text.trim())
+    .map((q) => ({
+      id: q.id as string, text: (q.text as string).trim(), last_used_at: iso(q.last_used_at),
+      use_count: typeof q.use_count === "number" ? q.use_count : 1,
+    })).slice(0, 100);
 }
 
 const SUGGESTION_TYPES: ReadonlySet<string> = new Set<SuggestionType>(["recent", "template", "entity"]);
-/** GET /agent/suggestions → [{type, text, hint}] (also accepts { suggestions: [...] }). */
+/** GET /agent/suggestions → Suggestion[]. */
 export function parseSuggestions(raw: unknown): Suggestion[] {
-  const list = Array.isArray(raw) ? raw : isObj(raw) ? arr<unknown>(raw.suggestions) : [];
-  return list.filter(isObj).filter((x) => typeof x.type === "string" && SUGGESTION_TYPES.has(x.type) && typeof x.text === "string" && x.text.trim())
-    .map((x) => ({ type: x.type as SuggestionType, text: (x.text as string).trim(), hint: str(x.hint), id: str(x.id) })).slice(0, 20);
+  return arr<unknown>(raw).filter(isObj).filter((x) => typeof x.type === "string" && SUGGESTION_TYPES.has(x.type) && typeof x.text === "string" && x.text.trim())
+    .map((x) => ({ type: x.type as SuggestionType, text: (x.text as string).trim(), hint: str(x.hint) })).slice(0, 20);
 }

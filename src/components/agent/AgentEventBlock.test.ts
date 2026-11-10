@@ -267,9 +267,11 @@ describe("pure helpers", () => {
     expect(isStaffRole("student")).toBe(false);
     expect(roleLabel("hod", "teacher")).toBe("HOD");
     expect(roleLabel(null, "admin")).toBe("Admin");
-    expect(suggestionsFor(null, "admin").map((s) => s.title)).toContain("Aaj ki attendance");
-    expect(suggestionsFor("teacher", "proctor").map((s) => s.title)).toContain("Class 10 trigonometry test banao");
-    expect(suggestionsFor(null, "teacher")).toHaveLength(4);
+    expect(suggestionsFor("admin").map((s) => s.title)).toContain("Aaj poore institute ki attendance");
+    expect(suggestionsFor("teacher").map((s) => s.title)).toContain("Class 10 trigonometry test banao");
+    expect(suggestionsFor("proctor").map((s) => s.prompt)).toContain("Mere section ke 75% se kam wale, Excel mein");
+    expect(suggestionsFor("hod").map((s) => s.prompt)).toContain("Department ka section-wise comparison");
+    for (const r of ["admin", "hod", "proctor", "teacher"] as const) expect(suggestionsFor(r)).toHaveLength(4);
   });
 
   it("dash never turns null into 0", () => {

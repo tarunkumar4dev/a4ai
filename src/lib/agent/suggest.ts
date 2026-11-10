@@ -1,6 +1,6 @@
 // Google-style suggestions for the agent input (pure): match scoring, merge + rank of server suggestions with the
 // local recent list and role templates, the highlighted parts, and the combobox keyboard rules.
-import type { QueryHistoryItem, Suggestion, SuggestionType } from "./types";
+import type { QueryItem, Suggestion, SuggestionType } from "./types";
 
 export interface SuggestOption {
   /** stable id for aria-activedescendant / React keys */ key: string;
@@ -33,7 +33,9 @@ const keyOf = (type: SuggestionType, text: string) => `${type}:${norm(text)}`;
  * (recent wins, an entity's hint is kept), sorted by match quality, then type (recent, entity, template), then
  * length, then the order the server sent. Pure.
  */
-export function rankSuggestions(q: string, input: { server: Suggestion[]; recent: QueryHistoryItem[]; templates: string[] }, limit = 8): SuggestOption[] {
+export function rankSuggestions(q: string, input: { server: Suggestion[]; recent: QueryItem[]; templates: string[] }, limit = 8): SuggestOption[] {
+  // the server's `recent` rows carry no id: find it in the history list (same normalized text) for the × button
+  const idByText = new Map(input.recent.map((r) => [norm(r.text), r.id]));
   const n = norm(q);
   if (!n) return [];
   type Cand = SuggestOption & { score: number; order: number };
@@ -51,7 +53,7 @@ export function rankSuggestions(q: string, input: { server: Suggestion[]; recent
     const winner = TYPE_RANK[type] < TYPE_RANK[prev.type] ? cand : prev;
     byText.set(k, { ...winner, hint: winner.hint ?? (winner === cand ? prev.hint : cand.hint), historyId: winner.historyId ?? (winner === cand ? prev.historyId : cand.historyId), score: Math.max(prev.score, s) });
   };
-  for (const s of input.server) offer(s.type, s.text, s.hint ?? null, s.type === "recent" ? s.id ?? null : null);
+  for (const s of input.server) offer(s.type, s.text, s.hint ?? null, s.type === "recent" ? idByText.get(norm(s.text)) ?? null : null);
   for (const r of input.recent) offer("recent", r.text, null, r.id);
   for (const t of input.templates) offer("template", t, null, null);
   return [...byText.values()]
@@ -62,7 +64,7 @@ export function rankSuggestions(q: string, input: { server: Suggestion[]; recent
 }
 
 /** Empty input → "Recent" (≤ 6, newest first) then "Try" templates not already in Recent. Pure. */
-export function idleOptions(recent: QueryHistoryItem[], templates: string[], maxRecent = 6, maxTry = 4): SuggestOption[] {
+export function idleOptions(recent: QueryItem[], templates: string[], maxRecent = 6, maxTry = 4): SuggestOption[] {
   const rec = recent.slice(0, maxRecent).map((r): SuggestOption => ({ key: `recent:${r.id}`, type: "recent", text: r.text, hint: null, historyId: r.id, section: "recent" }));
   const seen = new Set(rec.map((r) => norm(r.text)));
   const tries = templates.filter((t) => !seen.has(norm(t))).slice(0, maxTry)

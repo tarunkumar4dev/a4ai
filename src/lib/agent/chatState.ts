@@ -4,11 +4,11 @@
 // message and everything after it (the server does the same with regenerate_from_seq / edit_of_seq).
 // Timestamps are client clock (ms). `seq` = the server's per-session message number (1, 2, 3 …).
 import type {
-  AgentEvent, Blueprint, Chart, Clarify, MyScope, PaperPreview, PendingApproval, SectionComparison, StatCard, Table,
+  AgentEvent, Blueprint, Chart, Clarify, FileEvent, PaperPreview, PendingApproval, StatCard, Table,
   VerificationSummary,
 } from "./types";
 
-export type ApprovalState = "pending" | "approving" | "approved" | "cancelled" | "failed";
+export type ApprovalState = "pending" | "approving" | "approved" | "cancelled" | "failed" | "expired";
 
 export type Block =
   | { kind: "text"; id: string; text: string }
@@ -20,9 +20,11 @@ export type Block =
   | { kind: "paper_preview"; id: string; ev: PaperPreview }
   | { kind: "verification"; id: string; ev: VerificationSummary }
   | { kind: "approval"; id: string; ev: PendingApproval; state: ApprovalState; result: Record<string, unknown> | null; error: string | null }
-  | { kind: "my_scope"; id: string; ev: MyScope }
-  | { kind: "section_comparison"; id: string; ev: SectionComparison }
-  | { kind: "error"; id: string; code: string; message: string; retryText: string | null };
+  /** `file` (download card) — not in contract 1.2 yet */
+  | { kind: "file"; id: string; ev: FileEvent; state: FileState; error: string | null }
+  | { kind: "error"; id: string; code: string; message: string; retryText: string | null; /** 429: retry allowed from (ms) */ retryAt?: number | null };
+
+export type FileState = "ready" | "downloading" | "done" | "expired" | "failed";
 
 export type BlockKind = Block["kind"];
 
@@ -57,7 +59,8 @@ export interface ChatState {
 export type ChatAction =
   | { type: "send"; text: string; at?: number }
   | { type: "event"; ev: AgentEvent; at?: number }
-  | { type: "fail"; message: string; code?: string; at?: number }
+  | { type: "fail"; message: string; code?: string; retryAt?: number | null; at?: number }
+  | { type: "file"; blockId: string; state: FileState; error?: string | null }
   | { type: "end"; at?: number }
   | { type: "stop"; at?: number }
   | { type: "approval"; blockId: string; state: ApprovalState; result?: Record<string, unknown> | null; error?: string | null }
@@ -83,7 +86,10 @@ export function nextSeqs(turns: ChatTurn[]): { user: number; assistant: number }
 let counter = 0;
 const nid = (p: string) => `${p}-${Date.now().toString(36)}-${(counter++).toString(36)}`;
 
-/** Which block (if any) an event becomes. thinking_status / final -> null (status line / steps / session id). */
+/**
+ * Which block (if any) an event becomes. thinking_status / final / session → null (status line / steps / session id).
+ * Exhaustive: a new event type in the contract (api.gen.ts) is a compile error here until it is mapped.
+ */
 export function eventToBlock(ev: AgentEvent, retryText: string | null = null): Block | null {
   const id = `${ev.request_id}-${ev.seq}`;
   switch (ev.type) {
@@ -96,10 +102,16 @@ export function eventToBlock(ev: AgentEvent, retryText: string | null = null): B
     case "paper_preview": return { kind: "paper_preview", id, ev };
     case "verification_summary": return { kind: "verification", id, ev };
     case "pending_approval": return { kind: "approval", id, ev, state: "pending", result: null, error: null };
-    case "my_scope": return { kind: "my_scope", id, ev };
-    case "section_comparison": return { kind: "section_comparison", id, ev };
+    case "file": {
+      const exp = ev.expires_at ? Date.parse(ev.expires_at) : NaN;
+      return { kind: "file", id, ev, state: Number.isFinite(exp) && exp < Date.now() ? "expired" : "ready", error: null };
+    }
     case "error": return { kind: "error", id, code: ev.code, message: ev.message, retryText };
-    default: return null;
+    case "thinking_status": case "final": case "session": return null;
+    default: {
+      const unhandled: never = ev;
+      return unhandled;
+    }
   }
 }
 
@@ -211,7 +223,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         return { ...s, status: { key: ev.key, params } };
       }
       if (ev.type === "final") {
-        const s = withLastAssistant(state, at, (t) => finish(t, at));
+        // `cancelled: true` = the user pressed Stop (here or in another tab); the partial answer stays, marked
+        const s = withLastAssistant(state, at, (t) => (ev.cancelled ? { ...finish(t, at, "stopped"), stopped: true } : finish(t, at)));
         return { ...s, sessionId: ev.session_id || state.sessionId, busy: false, status: null, requestId: null };
       }
       if (ev.type === "text_delta") {
@@ -234,7 +247,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
     case "fail": {
       const s = withLastAssistant(state, at, (t) => finish({
-        ...t, blocks: [...t.blocks, { kind: "error", id: nid("e"), code: action.code ?? "network", message: action.message, retryText: state.lastUserText }],
+        ...t, blocks: [...t.blocks, { kind: "error", id: nid("e"), code: action.code ?? "network", message: action.message, retryText: state.lastUserText, retryAt: action.retryAt ?? null }],
       }, at, "stopped"));
       return { ...s, busy: false, status: null, requestId: null };
     }
@@ -251,6 +264,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "approval":
       return mapBlocks(state, action.blockId, (b) => (b.kind === "approval"
         ? { ...b, state: action.state, result: action.result ?? b.result, error: action.error ?? null } : b));
+    case "file":
+      return mapBlocks(state, action.blockId, (b) => (b.kind === "file" ? { ...b, state: action.state, error: action.error ?? null } : b));
     case "clarify_answered":
       return mapBlocks(state, action.blockId, (b) => (b.kind === "clarify" ? { ...b, answered: action.value } : b));
     case "feedback":

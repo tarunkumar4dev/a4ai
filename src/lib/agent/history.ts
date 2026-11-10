@@ -1,6 +1,6 @@
 // Chat history list helpers (pure): ChatGPT-style groups, title filter, relative times, flat rows for the
 // windowed list. Pinned chats always come first, whatever their date.
-import type { SessionSummary } from "./types";
+import type { SessionItem } from "./types";
 
 export type HistoryGroupKey = "pinned" | "today" | "yesterday" | "week" | "older";
 export const GROUP_LABEL: Record<HistoryGroupKey, string> = {
@@ -9,8 +9,8 @@ export const GROUP_LABEL: Record<HistoryGroupKey, string> = {
 const ORDER: HistoryGroupKey[] = ["pinned", "today", "yesterday", "week", "older"];
 const DAY = 86_400_000;
 
-export const sessionTime = (s: SessionSummary): number => {
-  const n = Date.parse(s.updated_at || s.created_at);
+export const sessionTime = (s: SessionItem): number => {
+  const n = Date.parse(s.last_message_at || s.created_at);
   return Number.isFinite(n) ? n : 0;
 };
 
@@ -35,18 +35,18 @@ export function titleMatches(title: string, q: string): boolean {
   return words.every((w) => t.includes(w));
 }
 
-export interface HistoryGroup { key: HistoryGroupKey; label: string; items: SessionSummary[] }
+export interface HistoryGroup { key: HistoryGroupKey; label: string; items: SessionItem[] }
 
 /**
  * Groups for the list. `pinned` and `rest` come from two server lists (pinned=true / pinned=false); a session that
  * is in both (a pin that raced a page load) is shown once, under Pinned. Optional title filter.
  */
-export function groupSessions(pinned: SessionSummary[], rest: SessionSummary[], now: number, q = ""): HistoryGroup[] {
+export function groupSessions(pinned: SessionItem[], rest: SessionItem[], now: number, q = ""): HistoryGroup[] {
   const seen = new Set<string>();
-  const buckets = new Map<HistoryGroupKey, SessionSummary[]>();
-  const add = (k: HistoryGroupKey, s: SessionSummary) => {
-    if (seen.has(s.session_id) || !titleMatches(s.title, q)) return;
-    seen.add(s.session_id);
+  const buckets = new Map<HistoryGroupKey, SessionItem[]>();
+  const add = (k: HistoryGroupKey, s: SessionItem) => {
+    if (seen.has(s.id) || !titleMatches(s.title, q)) return;
+    seen.add(s.id);
     buckets.set(k, [...(buckets.get(k) ?? []), s]);
   };
   for (const s of [...pinned].sort((a, b) => sessionTime(b) - sessionTime(a))) add("pinned", { ...s, pinned: true });
@@ -59,14 +59,14 @@ export function groupSessions(pinned: SessionSummary[], rest: SessionSummary[], 
 
 export type HistoryRow =
   | { kind: "header"; key: string; label: string }
-  | { kind: "item"; key: string; session: SessionSummary };
+  | { kind: "item"; key: string; session: SessionItem };
 
 /** Flat rows (group header, then its chats) for the windowed list. */
 export function flattenGroups(groups: HistoryGroup[]): HistoryRow[] {
   const rows: HistoryRow[] = [];
   for (const g of groups) {
     rows.push({ kind: "header", key: `h:${g.key}`, label: g.label });
-    for (const s of g.items) rows.push({ kind: "item", key: s.session_id, session: s });
+    for (const s of g.items) rows.push({ kind: "item", key: s.id, session: s });
   }
   return rows;
 }

@@ -7,7 +7,6 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Clip
 import { ArrowUp, Square, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { getAgentApi } from "@/lib/agent/api";
-import { takePendingDraft } from "@/lib/agent/persist";
 import { clearRecentQueries, removeRecentQuery, useAgentQueryClient, useRecentQueries, useSuggestions } from "@/lib/agent/queries";
 import { agentStore } from "@/lib/agent/store";
 import { comboKey, idleOptions, rankSuggestions, type SuggestOption } from "@/lib/agent/suggest";
@@ -35,7 +34,8 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   /** role-based "Try" prompts */ templates?: string[];
   /** no connection: typing still works, sending waits */ offline?: boolean;
 }) {
-  const [value, setValue] = useState("");
+  // the text survives closing the sheet / switching surfaces (store memory — never storage)
+  const [value, setValue] = useState(() => agentStore.composerText.slice(0, MAX_CHARS));
   const ref = useRef<HTMLTextAreaElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const hadFocus = useRef(false);
@@ -77,12 +77,6 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
 
   // the store keeps the latest text (not as state) so "Sign in again" can save it
   useEffect(() => { agentStore.composerText = value; }, [value]);
-
-  // back from "Sign in again": the text typed before the session expired
-  useEffect(() => {
-    const t = takePendingDraft();
-    if (t) setValue(t.slice(0, MAX_CHARS));
-  }, []);
 
   const focusEnd = () => requestAnimationFrame(() => {
     const el = ref.current;

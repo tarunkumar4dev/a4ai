@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createSseParser, decodeSseData, parseAgentEvent, parseAgentMeta, parseAgentSessions } from "./events";
+import { createSseParser, decodeSseData, parseAgentEvent, parseAgentMeta, parseSessionList } from "./events";
 
 describe("createSseParser", () => {
   it("splits events across chunk boundaries", () => {
@@ -59,8 +59,8 @@ describe("contract 1.1 additions", () => {
     expect(parseAgentMeta({ data_source: "demo", role: "root" })?.role).toBe("teacher");
   });
   it("GET /agent/sessions drops bad rows", () => {
-    const s = parseAgentSessions({ sessions: [{ session_id: "s1", title: "Aaj ki attendance", created_at: "2026-11-06T10:00:00+05:30", updated_at: "2026-11-06T10:01:00+05:30" }, { title: "x" }, null] });
-    expect(s).toHaveLength(1);
-    expect(parseAgentSessions(null)).toEqual([]);
+    const s = parseSessionList({ items: [{ id: "s1", title: "Aaj ki attendance", created_at: "2026-11-06T10:00:00+05:30", last_message_at: "2026-11-06T10:01:00+05:30", message_count: 2, pinned: false }, { title: "x" }, null] });
+    expect(s.items).toHaveLength(1);
+    expect(parseSessionList(null).items).toEqual([]);
   });
 });

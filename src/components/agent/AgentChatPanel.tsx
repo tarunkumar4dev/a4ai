@@ -5,15 +5,13 @@
 // they scroll into view) with a remembered intrinsic size, so a 100-turn chat costs about as much as a short one and
 // nothing jumps; the streaming turn is never skipped.
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { History, LogIn, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAccess } from "@/context/AccessProvider";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-import { rememberRedirectAfterLogin } from "@/lib/authHelpers";
+import { useMyScope } from "@/hooks/useMyScope";
 import { stepLabel } from "@/lib/agent/chatState";
-import { savePendingDraft } from "@/lib/agent/persist";
 import { useAgentQueryClient } from "@/lib/agent/queries";
 import { agentStore, useAgentStore } from "@/lib/agent/store";
 import { ErrorCard, type BlockHandlers } from "./AgentEventBlock";
@@ -21,7 +19,7 @@ import { AgentComposer } from "./AgentComposer";
 import { AgentEmptyState } from "./AgentEmptyState";
 import { AgentHeader } from "./AgentHeader";
 import { AgentMessage, buildContexts } from "./AgentMessage";
-import { emptyCards, roleLabel, scopeSummary, suggestionsFor } from "./roles";
+import { agentRole, emptyCards, roleLabel, scopeLine as scopeLineOf, suggestionsFor } from "./roles";
 
 /** Turns kept fully rendered at the bottom (the rest use content-visibility). */
 export const LIVE_TURNS = 6;
@@ -55,19 +53,18 @@ export function liveStatus(s: Pick<ReturnType<typeof useAgentStore>, "chat" | "a
   return s.chat.status ? `${stepLabel(s.chat.status.key, s.chat.status.params)}…` : "";
 }
 
+/**
+ * 401 after a silent token refresh: sign in again in a NEW TAB, so this page — and the text in the box — stays as it
+ * is (nothing is saved to storage). The store clears the prompt on SIGNED_IN / when this tab gets focus back.
+ */
 function SessionExpired() {
-  const navigate = useNavigate();
-  const signIn = () => {
-    savePendingDraft(agentStore.composerText || agentStore.getState().chat.lastUserText || "");
-    rememberRedirectAfterLogin();
-    navigate("/login");
-  };
+  const signIn = () => { window.open("/login", "_blank", "noopener"); };
   return (
     <div className="mx-auto mb-2 flex max-w-3xl items-start gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-sm" data-testid="session-expired">
       <LogIn aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
       <div className="min-w-0 flex-1">
         <p className="font-medium text-foreground">Session expire ho gaya</p>
-        <p className="text-xs text-muted-foreground">Dobara sign in karein — box me likha text yahin wapas milega.</p>
+        <p className="text-xs text-muted-foreground">Naye tab me sign in karein, phir yahan wapas aaiye — box me likha text yahin rahega.</p>
       </div>
       <Button type="button" size="sm" className="h-10 shrink-0" onClick={signIn}>Sign in again</Button>
     </div>
@@ -89,10 +86,12 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const pinned = useRef(true);
   const ctx = useMemo(() => buildContexts(chat.turns), [chat.turns]);
   const firstName = s.meta?.first_name ?? firstNameOf(user?.user_metadata?.full_name ?? user?.user_metadata?.name);
-  const role = roleLabel(s.meta?.role, access?.primary_role);
-  const templates = useMemo(() => suggestionsFor(s.meta?.role, access?.primary_role).map((x) => x.prompt), [s.meta?.role, access?.primary_role]);
-  const cards = useMemo(() => emptyCards(s.meta?.scope, s.meta?.role, access?.primary_role), [s.meta?.scope, s.meta?.role, access?.primary_role]);
-  const scopeLine = scopeSummary(s.meta?.scope);
+  const myScope = useMyScope();
+  const who = agentRole(s.meta?.role, access);
+  const role = roleLabel(s.meta?.role, access?.primary_role, access);
+  const templates = useMemo(() => suggestionsFor(who).map((x) => x.prompt), [who]);
+  const cards = useMemo(() => emptyCards(who, myScope.batches), [who, myScope.batches]);
+  const scopeLine = scopeLineOf(who, myScope.loading ? null : myScope.batches.length);
 
   // stick to the bottom while new content arrives, unless the user scrolled up to read
   const size = chat.turns.reduce((n, t) => {
@@ -120,6 +119,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
     onDownload: agentStore.download,
     onSend: agentStore.send,
     onPrefill: agentStore.prefill,
+    onDownloadFile: agentStore.downloadFile,
   };
   const inputId = compact ? "agent-input-sheet" : "agent-input-page";
   const lastAssistant = [...chat.turns].reverse().find((t) => t.role === "assistant")?.id;

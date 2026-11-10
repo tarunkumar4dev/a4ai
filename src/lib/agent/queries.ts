@@ -7,7 +7,7 @@ import {
   useInfiniteQuery, useQuery, useQueryClient, type InfiniteData, type QueryClient, type QueryKey,
 } from "@tanstack/react-query";
 import { getAgentApi, isMissingEndpoint, type AgentApi } from "./api";
-import type { QueryHistoryItem, SessionPatch, SessionSummary, SessionsPage, Suggestion } from "./types";
+import type { QueryItem, SessionItem, SessionList, SessionPatch, Suggestion } from "./types";
 
 export const SESSIONS_PAGE = 20;
 export const SUGGEST_DEBOUNCE_MS = 120;
@@ -21,25 +21,25 @@ export const agentKeys = {
   suggest: (uid: string, q: string) => ["agent", uid, "suggest", q.trim().toLowerCase()] as const,
 };
 
-type Pages = InfiniteData<SessionsPage, string | null>;
-export type SessionsCache = Pages | SessionSummary[] | undefined;
+type Pages = InfiniteData<SessionList, string | null>;
+export type SessionsCache = Pages | SessionItem[] | undefined;
 
 // ---- pure cache transforms (exported for tests) -----------------------------------------------------
-const mapPages = (d: Pages, fn: (list: SessionSummary[]) => SessionSummary[]): Pages =>
-  ({ ...d, pages: d.pages.map((p) => ({ ...p, sessions: fn(p.sessions) })) });
+const mapPages = (d: Pages, fn: (list: SessionItem[]) => SessionItem[]): Pages =>
+  ({ ...d, pages: d.pages.map((p) => ({ ...p, items: fn(p.items) })) });
 
 /** Apply `fn` to every session list in a sessions cache entry (paged or plain). */
-export function mapSessionsCache(data: SessionsCache, fn: (list: SessionSummary[]) => SessionSummary[]): SessionsCache {
+export function mapSessionsCache(data: SessionsCache, fn: (list: SessionItem[]) => SessionItem[]): SessionsCache {
   if (!data) return data;
   if (Array.isArray(data)) return fn(data);
   return mapPages(data, fn);
 }
 
-const t = (s: SessionSummary) => Date.parse(s.updated_at || s.created_at) || 0;
+const t = (s: SessionItem) => Date.parse(s.last_message_at || s.created_at) || 0;
 
 /** Insert (or move) a session into the right place of a list, newest first. */
-export function upsertSorted(list: SessionSummary[], s: SessionSummary): SessionSummary[] {
-  const rest = list.filter((x) => x.session_id !== s.session_id);
+export function upsertSorted(list: SessionItem[], s: SessionItem): SessionItem[] {
+  const rest = list.filter((x) => x.id !== s.id);
   const i = rest.findIndex((x) => t(x) < t(s));
   return i === -1 ? [...rest, s] : [...rest.slice(0, i), s, ...rest.slice(i)];
 }
@@ -49,40 +49,40 @@ const metaOf = (key: QueryKey): CacheMeta => {
   const m = (key[3] ?? {}) as Partial<CacheMeta>;
   return { pinned: m.pinned === true, q: typeof m.q === "string" ? m.q : "" };
 };
-const fits = (s: SessionSummary, meta: CacheMeta) =>
+const fits = (s: SessionItem, meta: CacheMeta) =>
   s.pinned === meta.pinned && (!meta.q || s.title.toLowerCase().includes(meta.q.toLowerCase()));
 
 /** Put a session where it belongs in every cached list (pinned list vs the rest, search filters), removing it elsewhere. */
-export function placeSession(qc: QueryClient, uid: string, s: SessionSummary) {
+export function placeSession(qc: QueryClient, uid: string, s: SessionItem) {
   for (const [key, data] of qc.getQueriesData<SessionsCache>({ queryKey: agentKeys.sessionsRoot(uid) })) {
     if (!data) continue;
     const meta = metaOf(key);
     qc.setQueryData<SessionsCache>(key, (d) => {
       if (!d) return d;
-      if (!fits(s, meta)) return mapSessionsCache(d, (l) => l.filter((x) => x.session_id !== s.session_id));
+      if (!fits(s, meta)) return mapSessionsCache(d, (l) => l.filter((x) => x.id !== s.id));
       if (Array.isArray(d)) return upsertSorted(d, s);
       // paged: drop it everywhere, then insert into the first page whose range covers it (or the first page)
-      const cleaned = mapPages(d, (l) => l.filter((x) => x.session_id !== s.session_id));
-      const idx = Math.max(0, cleaned.pages.findIndex((p) => p.sessions.length === 0 || t(p.sessions[p.sessions.length - 1]) <= t(s)));
+      const cleaned = mapPages(d, (l) => l.filter((x) => x.id !== s.id));
+      const idx = Math.max(0, cleaned.pages.findIndex((p) => p.items.length === 0 || t(p.items[p.items.length - 1]) <= t(s)));
       const lastPage = cleaned.pages[cleaned.pages.length - 1];
-      const olderThanLoaded = idx === 0 && cleaned.pages.length > 0 && lastPage.next_cursor !== null && lastPage.sessions.length > 0 && t(lastPage.sessions[lastPage.sessions.length - 1]) > t(s);
+      const olderThanLoaded = idx === 0 && cleaned.pages.length > 0 && lastPage.next_cursor !== null && lastPage.items.length > 0 && t(lastPage.items[lastPage.items.length - 1]) > t(s);
       if (olderThanLoaded) return cleaned; // it will arrive with a later page
-      return { ...cleaned, pages: cleaned.pages.map((p, i) => (i === idx ? { ...p, sessions: upsertSorted(p.sessions, s) } : p)) };
+      return { ...cleaned, pages: cleaned.pages.map((p, i) => (i === idx ? { ...p, items: upsertSorted(p.items, s) } : p)) };
     });
   }
 }
 
-export function findSession(qc: QueryClient, uid: string, id: string): SessionSummary | null {
+export function findSession(qc: QueryClient, uid: string, id: string): SessionItem | null {
   for (const [, data] of qc.getQueriesData<SessionsCache>({ queryKey: agentKeys.sessionsRoot(uid) })) {
-    const list = !data ? [] : Array.isArray(data) ? data : data.pages.flatMap((p) => p.sessions);
-    const hit = list.find((s) => s.session_id === id);
+    const list = !data ? [] : Array.isArray(data) ? data : data.pages.flatMap((p) => p.items);
+    const hit = list.find((s) => s.id === id);
     if (hit) return hit;
   }
   return null;
 }
 
 export function removeSession(qc: QueryClient, uid: string, id: string) {
-  qc.setQueriesData<SessionsCache>({ queryKey: agentKeys.sessionsRoot(uid) }, (d) => mapSessionsCache(d, (l) => l.filter((x) => x.session_id !== id)));
+  qc.setQueriesData<SessionsCache>({ queryKey: agentKeys.sessionsRoot(uid) }, (d) => mapSessionsCache(d, (l) => l.filter((x) => x.id !== id)));
 }
 
 /** Snapshot every agent sessions cache; the returned function restores them. */
@@ -97,13 +97,13 @@ export class AgentMutationError extends Error {
 }
 
 /** Optimistic rename / pin: cache first, PATCH, rollback on error (throws AgentMutationError). */
-export async function patchSessionOptimistic(qc: QueryClient, uid: string, api: AgentApi, id: string, patch: SessionPatch): Promise<SessionSummary> {
+export async function patchSessionOptimistic(qc: QueryClient, uid: string, api: AgentApi, id: string, patch: SessionPatch): Promise<SessionItem> {
   const before = findSession(qc, uid, id);
   if (!before) throw new AgentMutationError("Chat nahi mili.");
   const rollback = snapshotSessions(qc, uid);
   const title = typeof patch.title === "string" ? patch.title.trim().slice(0, 80) : undefined;
   if (title !== undefined && !title) throw new AgentMutationError("Naam khaali nahi ho sakta.");
-  const optimistic: SessionSummary = { ...before, ...(title !== undefined ? { title } : {}), ...(typeof patch.pinned === "boolean" ? { pinned: patch.pinned } : {}) };
+  const optimistic: SessionItem = { ...before, ...(title !== undefined ? { title } : {}), ...(typeof patch.pinned === "boolean" ? { pinned: patch.pinned } : {}) };
   placeSession(qc, uid, optimistic);
   try {
     const saved = await api.patchSession(id, { ...patch, ...(title !== undefined ? { title } : {}) });
@@ -167,17 +167,18 @@ export const isDeletePending = (id: string) => pendingDeletes.has(id);
 export function addRecentQuery(qc: QueryClient, uid: string, text: string) {
   const clean = text.trim();
   if (!clean) return;
-  qc.setQueryData<QueryHistoryItem[]>(agentKeys.queries(uid), (list) => {
+  qc.setQueryData<QueryItem[]>(agentKeys.queries(uid), (list) => {
     if (!list) return list;
     const rest = list.filter((x) => x.text.toLowerCase() !== clean.toLowerCase());
-    return [{ id: `local-${Date.now().toString(36)}`, text: clean, created_at: new Date().toISOString() }, ...rest].slice(0, 50);
+    const prev = list.find((x) => x.text.toLowerCase() === clean.toLowerCase());
+    return [{ id: prev?.id ?? `local-${Date.now().toString(36)}`, text: clean, last_used_at: new Date().toISOString(), use_count: (prev?.use_count ?? 0) + 1 }, ...rest].slice(0, 50);
   });
 }
 
 export async function removeRecentQuery(qc: QueryClient, uid: string, api: AgentApi, id: string) {
   const key = agentKeys.queries(uid);
-  const before = qc.getQueryData<QueryHistoryItem[]>(key);
-  qc.setQueryData<QueryHistoryItem[]>(key, (l) => l?.filter((x) => x.id !== id));
+  const before = qc.getQueryData<QueryItem[]>(key);
+  qc.setQueryData<QueryItem[]>(key, (l) => l?.filter((x) => x.id !== id));
   qc.removeQueries({ queryKey: ["agent", uid, "suggest"] });
   if (id.startsWith("local-")) { void qc.invalidateQueries({ queryKey: key }); return; } // server id not known yet
   try { await api.deleteQuery(id); } catch (err) {
@@ -188,8 +189,8 @@ export async function removeRecentQuery(qc: QueryClient, uid: string, api: Agent
 
 export async function clearRecentQueries(qc: QueryClient, uid: string, api: AgentApi) {
   const key = agentKeys.queries(uid);
-  const before = qc.getQueryData<QueryHistoryItem[]>(key);
-  qc.setQueryData<QueryHistoryItem[]>(key, []);
+  const before = qc.getQueryData<QueryItem[]>(key);
+  qc.setQueryData<QueryItem[]>(key, []);
   qc.removeQueries({ queryKey: ["agent", uid, "suggest"] });
   try { await api.clearQueries(); } catch (err) {
     qc.setQueryData(key, before);
@@ -208,7 +209,7 @@ export function useSessionLists(uid: string | null, q: string) {
     queryFn: async ({ signal }) => {
       const api = await getAgentApi();
       const page = await api.listSessions({ pinned: true, q, limit: 50 }, signal);
-      return page.sessions.map((s) => ({ ...s, pinned: true }));
+      return page.items.map((s) => ({ ...s, pinned: true }));
     },
   });
   const rest = useInfiniteQuery({
@@ -222,7 +223,7 @@ export function useSessionLists(uid: string | null, q: string) {
     },
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
-  const restList = useMemo(() => rest.data?.pages.flatMap((p) => p.sessions) ?? [], [rest.data]);
+  const restList = useMemo(() => rest.data?.pages.flatMap((p) => p.items) ?? [], [rest.data]);
   return { pinned, rest, pinnedList: pinned.data ?? [], restList };
 }
 
@@ -235,7 +236,7 @@ export function useRecentQueries(uid: string | null, enabled = true) {
     queryFn: async ({ signal }) => {
       const api = await getAgentApi();
       try { return await api.listQueries({ limit: 20 }, signal); } catch (err) {
-        if (isMissingEndpoint(err)) return [] as QueryHistoryItem[];
+        if (isMissingEndpoint(err)) return [] as QueryItem[];
         throw err;
       }
     },

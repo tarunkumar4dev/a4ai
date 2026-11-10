@@ -23,8 +23,9 @@ export function ApprovalCard({ block, busy, onApprove, onCancel, onEdit, onDownl
   const { ev, state, result, error } = block;
   const label = ACTION_LABEL[ev.action] ?? { title: "Approval chahiye", effect: "" };
   const canDownload = state === "approved" && isAgentPdfPath(result?.download_path);
-  const open = state === "pending" || state === "failed" || state === "approving";
-  const expired = Number.isFinite(Date.parse(ev.expires_at)) && Date.parse(ev.expires_at) < Date.now();
+  const expired = state === "expired" || (state !== "approving" && Number.isFinite(Date.parse(ev.expires_at)) && Date.parse(ev.expires_at) < Date.now());
+  // an expired request can't be approved any more (also on replay: the contract stores no approval outcome)
+  const open = !expired && (state === "pending" || state === "failed" || state === "approving");
 
   return (
     <section className={`min-w-0 rounded-lg border bg-card p-4 text-card-foreground ${open ? "border-primary/50" : "border-border"}`} data-testid="approval">
@@ -70,6 +71,9 @@ export function ApprovalCard({ block, busy, onApprove, onCancel, onEdit, onDownl
         ) : null}
         {canDownload ? (
           <Button type="button" variant="secondary" className="h-11" onClick={onDownload}><Download aria-hidden="true" />Download PDF</Button>
+        ) : null}
+        {expired && state !== "approved" && state !== "cancelled" ? (
+          <p className="text-sm text-muted-foreground" data-testid="approval-expired">Expire ho gaya — kuch nahi badla. Dobara poochiye, naya approval milega.</p>
         ) : null}
         {state === "cancelled" ? (
           <p className="text-sm text-muted-foreground">Cancel kiya — kuch nahi badla. Request apne aap expire ho jayegi.</p>
