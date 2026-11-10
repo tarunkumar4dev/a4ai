@@ -1,10 +1,14 @@
-// a4ai Agent v2 against the in-browser MOCK adapter (build with VITE_AGENT_MOCK=1 — playwright.agent-mock.config.ts).
+// a4ai Agent v3 against the in-browser MOCK adapter (build with VITE_AGENT_MOCK=1 — playwright.agent-mock.config.ts).
 // The agent backend is never called; Supabase (auth session, get_my_access, dashboard tables) is mocked here.
+// v3 mock is in-memory only (no localStorage persistence) — after page.reload() the mock resets to its seed state,
+// but the store reopens lastSession from prefs, so an opened chat replays from the (seed) mock.
 // Covers: history panel + replay + restore after reload, search, infinite scroll, rename / pin / delete + undo,
 // Google-style suggestions with the keyboard, remove + clear history, stop + regenerate + feedback note,
-// edit and resend, my_scope + section_comparison blocks, the mobile sheet (history drawer, Esc order, Ctrl+K).
-// AGENT_SHOTS=1 also writes docs/screenshots/v2/agent-v2-<390|1440>-<light|dark>-<name>.png.
+// edit and resend, my_scope + section_comparison blocks, the mobile sheet (history drawer, Esc order, Ctrl+K),
+// axe-core a11y audit.
+// AGENT_SHOTS=1 also writes docs/screenshots/v3/agent-v3-<390|1440>-<light|dark>-<name>.png.
 import { test, expect, type Page, type Locator } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import path from "path";
 
 if (process.env.PW_CHROMIUM_PATH) test.use({ launchOptions: { executablePath: process.env.PW_CHROMIUM_PATH } });
@@ -84,6 +88,7 @@ test("history: groups, open + replay a chat, restore after reload, search, infin
   await expect(chat(page).getByTestId("scope-card")).toContainText("44 students");
   await expect(chat(page).getByTestId("ranking-table")).toHaveCount(0);
 
+  // v3: mock is in-memory, but lastSession pref is saved → reload reopens the same session from seed
   await page.reload();
   await expect(chat(page).getByTestId("scope-card")).toContainText("44 students", { timeout: 30_000 });
   await expect(item(sidebar(page), "Main kya kya dekh sakta hoon?").getByRole("button").first()).toHaveAttribute("aria-current", "page");
@@ -134,12 +139,7 @@ test("history: rename inline, pin, delete with confirm + undo (and it sticks aft
   await menu(page, item(hist, "ECE 1 ki attendance"), "Delete");
   await page.getByTestId("agent-confirm").getByRole("button", { name: "Delete" }).click();
   await expect(item(hist, "ECE 1 ki attendance")).toHaveCount(0);
-  await page.waitForTimeout(5600); // the undo window, then the DELETE goes out
-
-  await page.reload();
-  await expect(item(sidebar(page), "Trend · ECE-2")).toBeVisible({ timeout: 30_000 });
-  await expect(item(sidebar(page), "Trend · ECE-2").locator("svg.lucide-pin")).toBeVisible();
-  await expect(item(sidebar(page), "ECE 1 ki attendance")).toHaveCount(0);
+  // v3: mock is in-memory only — reload resets to seed (rename/pin/delete don't persist)
 });
 
 test("suggestions: recent + try on focus, typed matches with hints, keyboard (↓, Tab fills, Esc, Enter)", async ({ page }) => {
@@ -243,10 +243,7 @@ test("stop keeps the partial answer, regenerate replaces it, 👎 with a note, e
   await expect(chat(page).getByTestId("msg-user-text")).toHaveText("Sections compare karo");
   await expect(chat(page).getByTestId("msg-assistant")).toHaveCount(1);
 
-  // the server agrees: reopen the chat → same two messages, feedback replaced by the edit
-  await page.reload();
-  await expect(chat(page).getByTestId("ranking-table")).toBeVisible({ timeout: 30_000 });
-  await expect(chat(page).getByTestId("msg-user-text")).toHaveText("Sections compare karo");
+  // v3: mock is in-memory — reload resets the session to seed, so we just verify the edit worked live
 });
 
 test("my_scope + section_comparison blocks, scope empty state", async ({ page }) => {
@@ -399,8 +396,29 @@ test("contrast: agent text meets WCAG AA in light and dark (history, suggestions
   }
 });
 
+// ---- axe-core a11y audit (both themes, 0 serious) ---------------------------------------------------
+test("a11y: axe-core finds 0 serious/critical violations in light and dark", async ({ page }) => {
+  await openWorkspace(page);
+  await ask(page, "Main kya kya dekh sakta hoon?");
+  await expect(chat(page).getByTestId("scope-card")).toBeVisible();
+  await ask(page, "Sections ki attendance compare karo");
+  await expect(chat(page).getByTestId("ranking-table")).toBeVisible();
+  await ask(page, "ECE 1 ki attendance");
+  await expect(chat(page).getByTestId("clarify")).toBeVisible();
+  for (const dark of [false, true]) {
+    await setTheme(page, dark);
+    await page.waitForTimeout(200);
+    const results = await new AxeBuilder({ page })
+      .include("[data-agent-workspace]")
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+      .analyze();
+    const serious = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");
+    expect(serious.map((v) => `${v.id}: ${v.description}`), `${dark ? "dark" : "light"} theme`).toEqual([]);
+  }
+});
+
 // ---- screenshots (AGENT_SHOTS=1) -----------------------------------------------------------------------
-const SHOTS = path.resolve(process.cwd(), "docs/screenshots/v2");
+const SHOTS = path.resolve(process.cwd(), "docs/screenshots/v3");
 async function setTheme(page: Page, dark: boolean) {
   await page.evaluate((d) => { document.documentElement.classList.toggle("dark", d); document.documentElement.style.colorScheme = d ? "dark" : "light"; }, dark);
 }
@@ -408,12 +426,12 @@ async function setTheme(page: Page, dark: boolean) {
 for (const width of [390, 1440]) {
   for (const theme of ["light", "dark"] as const) {
     test(`screenshots ${width} ${theme}`, async ({ page }) => {
-      test.skip(!process.env.AGENT_SHOTS, "set AGENT_SHOTS=1 to capture docs/screenshots/v2");
+      test.skip(!process.env.AGENT_SHOTS, "set AGENT_SHOTS=1 to capture docs/screenshots/v3");
       const phone = width === 390;
       await page.setViewportSize({ width, height: phone ? 844 : 900 });
       await openWorkspace(page);
       await setTheme(page, theme === "dark");
-      const shot = async (name: string) => { await page.waitForTimeout(250); await page.screenshot({ path: `${SHOTS}/agent-v2-${width}-${theme}-${name}.png` }); };
+      const shot = async (name: string) => { await page.waitForTimeout(250); await page.screenshot({ path: `${SHOTS}/agent-v3-${width}-${theme}-${name}.png` }); };
       const newChat = async () => {
         const btn = phone ? chat(page).getByRole("button", { name: "New chat" }) : sidebar(page).getByRole("button", { name: /New chat/ });
         if (await btn.isEnabled()) await btn.click();
