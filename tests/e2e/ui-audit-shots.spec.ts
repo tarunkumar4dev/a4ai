@@ -58,7 +58,7 @@ async function install(page: Page) {
   });
 }
 
-const SHOTS = path.resolve(process.cwd(), "docs/ui/before");
+const SHOTS = path.resolve(process.cwd(), process.env.AGENT_SHOTS_DIR ?? "docs/ui/before");
 const chat = (page: Page) => page.getByTestId("agent-chat-page");
 const input = (page: Page) => chat(page).getByRole("combobox", { name: "Message a4ai Agent" });
 
