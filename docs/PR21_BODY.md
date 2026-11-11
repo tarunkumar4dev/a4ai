@@ -95,4 +95,27 @@ remaining are pre-existing (`AgentEventBlock.test.ts` meta casts, `FileCard.size
 **Not verified:** nothing was run in a real browser or on a phone. MediaRecorder, mic permission, autoplay and TTS
 playback on Chrome Android / iOS Safari are untested. Playwright e2e was not run or extended for voice.
 
+### UI polish pass
+
+| phase | commit | what |
+|---|---|---|
+| 0 | 4b2c7f3 | screenshots at 3 viewports x 2 themes (60 PNGs) + `docs/UI_AUDIT.md` with 20 issues ranked P0-P3 |
+| 1 | e43aceb | FIX: a4ai logo in empty state, all user text Hindi/Hinglish, dark mode contrast, safe-area, DataTable a11y, VoiceDock layout (centered 64px mic), full mock scenario, 18 files touched |
+| 2 | 8dd9a18 | after screenshots (78 PNGs) + `docs/UI_BEFORE_AFTER.md`, screenshot spec now uses `AGENT_SHOTS_DIR` env var |
+
+- **Bundle:** AgentChatPanel chunk **75.96 KB gzip**, VoiceDock chunk **7.9 KB gzip**. No new dependencies.
+- **Tests:** vitest 409/409, tsc clean (pre-existing errors unchanged), vite build OK.
+- Playwright e2e: 6/6 screenshot tests pass.
+
+**Seen in a real browser:** Playwright Chromium screenshots at 360/768/1440 in light + dark (78 PNGs in `docs/ui/after/`).
+
+**Written but not seen:** all Phase 1 changes were verified by tsc, vitest, and Playwright screenshots. Not tested on a real phone or with real backend data.
+
+**Not done:**
+- Chart x-axis label clipping at 360px (chart is lazy; no issues visible in screenshots but real data could overflow)
+- Voice states not visually tested (mic does not appear in mock without voice config endpoint)
+- Real phone one-handed reachability testing (Playwright can only simulate viewport size)
+- Contrast audit with a tool like axe (only visual check via screenshots)
+- The 5 phone tests from the spec (real Android device)
+
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
