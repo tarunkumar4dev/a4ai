@@ -8,7 +8,7 @@ import { AgentMarkdown } from "./AgentMarkdown";
 import { AgentMessage, buildContexts, groupBlocks } from "./AgentMessage";
 import { showAskA4ai } from "./AskA4aiLauncher";
 import { BLUEPRINT_OK, blueprintMessage, blueprintTotal } from "./BlueprintCard";
-import { chartRows } from "./AgentChart";
+import { chartRows, shortTick } from "./AgentChart";
 import { sortRows, toCsv } from "./DataTable";
 import { dataSourcePill } from "./AgentHeader";
 import { insertPlain } from "./AgentComposer";
@@ -291,5 +291,14 @@ describe("launcher", () => {
     expect(showAskA4ai("/dashboard", "none")).toBe(false);
     expect(showAskA4ai("/student/dashboard", "teacher")).toBe(false);
     expect(showAskA4ai("/contests", "admin")).toBe(false);
+  });
+});
+
+describe("chart axis labels at 360 px", () => {
+  it("long tick labels are cut with an ellipsis; short ones stay whole", () => {
+    expect(shortTick("ECE-2")).toBe("ECE-2");
+    expect(shortTick("Electronics A")).toBe("Electron…");
+    expect(shortTick(null)).toBe("");
+    expect(shortTick("Week 12", 9)).toBe("Week 12");
   });
 });

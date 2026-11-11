@@ -19,6 +19,8 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     ...devices["Desktop Chrome"],
+    // Chromium's fake microphone, so the voice screenshots can reach "listening" without hardware
+    launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
     trace: "retain-on-failure",
   },
   webServer: {

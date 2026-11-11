@@ -76,12 +76,12 @@ async function openWorkspace(page: Page) {
 }
 
 async function newChat(page: Page, phone: boolean) {
-  // At lg+ (>=1024) the sidebar has a New chat button; below that, the header has one
+  // At lg+ (>=1024) the sidebar has a Naya sawaal button; below that, the header has one
   const sidebar = page.getByTestId("history-sidebar");
   const sidebarVisible = await sidebar.isVisible().catch(() => false);
   const btn = sidebarVisible
-    ? sidebar.getByRole("button", { name: /New chat/ })
-    : chat(page).getByRole("button", { name: /New chat/ });
+    ? sidebar.getByRole("button", { name: /Naya sawaal/ })
+    : chat(page).getByRole("button", { name: /Naya sawaal/ });
   if (await btn.isEnabled({ timeout: 5_000 }).catch(() => false)) await btn.click();
 }
 
@@ -233,3 +233,48 @@ for (const [label, w, h] of viewports) {
     });
   }
 }
+
+// --- voice states: the mic appears only when GET /agent/voice/config says enabled, so it is faked here.
+// Chromium's fake mic device makes "listening" reachable without a real microphone.
+const VOICE_CONFIG = {
+  enabled: true, reason: null, tts: "sarvam", stt_provider: "sarvam",
+  speakers: [{ id: "anushka", label: "Anushka", gender: "female" }, { id: "abhilash", label: "Abhilash", gender: "male" }],
+  default_speaker: "anushka", paces: [0.85, 1.0, 1.15], max_seconds: 30, max_bytes: 1_048_576,
+  formats: ["audio/webm", "audio/mp4"], consent_version: "v1", limits: {},
+};
+
+test.describe("ui-audit voice", () => {
+  test.use({ permissions: ["microphone"] }); // fake mic device: launch flags in playwright.ui-audit.config.ts
+  for (const [label, w, h] of [["360", 360, 740], ["1440", 1440, 900]] as const) {
+    for (const theme of ["light", "dark"] as const) {
+      test(`ui-audit voice ${label} ${theme}`, async ({ page }) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: w, height: h });
+        await page.route("**/agent/voice/config", (r) => r.request().method() === "OPTIONS"
+          ? r.fulfill({ status: 204, headers: cors })
+          : r.fulfill({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify(VOICE_CONFIG) }));
+        const shot = async (name: string) => {
+          await page.waitForTimeout(300);
+          await page.screenshot({ path: `${SHOTS}/${label}-${theme}-${name}.png` });
+        };
+        await openWorkspace(page);
+        await setTheme(page, theme === "dark");
+        await expect(page.getByTestId("voice-consent")).toBeVisible({ timeout: 15_000 });
+        await shot("voice_consent");
+        await page.getByTestId("voice-consent-ok").click();
+        const mic = page.getByTestId("mic-button");
+        await expect(mic).toHaveAttribute("data-state", "idle");
+        const box = await mic.boundingBox();
+        expect(box!.width).toBeGreaterThanOrEqual(56); // spec: mic hit target >= 56 px
+        expect(await mic.getAttribute("aria-label")).toBeTruthy();
+        await shot("mic_idle");
+        await mic.click();
+        await expect(mic).toHaveAttribute("data-state", "listening", { timeout: 10_000 });
+        await expect(page.getByTestId("voice-state-label")).toHaveText("Sun raha hoon…");
+        await shot("mic_listening");
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(overflow).toBeLessThanOrEqual(0);
+      });
+    }
+  }
+});

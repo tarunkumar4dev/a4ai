@@ -23,6 +23,13 @@ export function chartRows(ev: Chart): Record<string, string | number | null>[] {
   });
 }
 
+/** Axis tick text: long labels (section / student names) are cut so more of them fit at 360 px; the tooltip and
+ * the screen-reader table keep the full name. Pure — exported for tests. */
+export const shortTick = (v: unknown, max = 9): string => {
+  const t = String(v ?? "");
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+};
+
 export function AgentChart({ ev }: { ev: Chart }) {
   const rows = chartRows(ev);
   const hasData = rows.some((r) => ev.series.some((_, i) => r[`s${i}`] !== null));
@@ -53,7 +60,7 @@ export function AgentChart({ ev }: { ev: Chart }) {
             {ev.kind === "line" ? (
               <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="x" {...axis} tickMargin={8} minTickGap={16} />
+                <XAxis dataKey="x" {...axis} tickMargin={8} minTickGap={16} tickFormatter={(v) => shortTick(v)} />
                 <YAxis {...axis} width={44} domain={yDomain} ticks={unit === "%" ? pctTicks : undefined} allowDecimals={false} tickFormatter={(v) => `${v}${unit === "%" ? "%" : ""}`} />
                 <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
                 {ev.series.map((s, i) => (
@@ -64,7 +71,7 @@ export function AgentChart({ ev }: { ev: Chart }) {
             ) : (
               <BarChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="x" {...axis} tickMargin={8} minTickGap={8} />
+                <XAxis dataKey="x" {...axis} tickMargin={8} minTickGap={4} tickFormatter={(v) => shortTick(v)} />
                 <YAxis {...axis} width={44} allowDecimals={false} tickFormatter={(v) => `${v}${unit === "%" ? "%" : ""}`} />
                 <ChartTooltip cursor={{ fill: "hsl(var(--muted))" }} content={<ChartTooltipContent />} />
                 {ev.series.map((s, i) => (

@@ -8,7 +8,7 @@ export function AgentEmptyState({ firstName, suggestions, disabled, onPick, comp
 }) {
   return (
     <div className={`mx-auto flex w-full max-w-2xl flex-col ${compact ? "pt-4" : "pt-6 sm:pt-12"}`} data-testid="agent-empty">
-      <img src="/ICON.ico" alt="a4ai" className="h-10 w-10 rounded-lg object-contain" />
+      <img src="/ICON.ico" alt="a4ai" className="h-10 w-10 rounded-lg object-contain dark:bg-white dark:p-1" />
       <h3 className={`mt-4 font-semibold tracking-tight text-foreground ${compact ? "text-xl" : "text-2xl sm:text-[28px]"}`}>
         Namaste{firstName ? `, ${firstName}` : ""}
       </h3>

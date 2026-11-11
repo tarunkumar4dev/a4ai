@@ -184,7 +184,7 @@ test("attendance answer: stat cards + prose, steps summary, history survives a r
   await expect(grid).toContainText("+2.1 pts vs Oct");
   await expect(grid).toContainText("Source: Attendance stats");
   await expect(chatPage(page).locator("strong", { hasText: "83.8%" })).toBeVisible();
-  await expect(page.getByTestId("steps")).toContainText(/2 steps · \d/);
+  await expect(page.getByTestId("steps")).toHaveText(/^2 steps$/);
   expect(m.chats[0]).toMatchObject({ message: "Meri class ki attendance", session_id: null });
   expect(m.chats[0].auth).toBe(`Bearer ${jwt}`);
   await expect(chatPage(page).getByLabel("Message a4ai Agent")).toBeEnabled();
@@ -316,7 +316,7 @@ for (const width of [390, 1440]) {
       await page.waitForTimeout(300);
       await shot("chart-table");
 
-      await page.getByTestId("agent-workspace").getByRole("button", { name: "New chat" }).locator("visible=true").first().click();
+      await page.getByTestId("agent-workspace").getByRole("button", { name: "Naya sawaal" }).locator("visible=true").first().click();
       await ask(page, "Class 10 trigonometry test banao, 40 marks");
       await expect(page.getByTestId("blueprint")).toBeVisible();
       await page.getByTestId("blueprint").scrollIntoViewIfNeeded();

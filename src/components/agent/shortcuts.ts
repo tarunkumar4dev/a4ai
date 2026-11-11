@@ -35,7 +35,7 @@ export function matchShortcut(e: KeyLike, target: EventTarget | null): ShortcutA
 
 export const SHORTCUTS: { keys: string; label: string }[] = [
   { keys: OPEN_SHORTCUT, label: "a4ai Agent kholo (dashboard par kahin bhi)" },
-  { keys: NEW_CHAT_SHORTCUT, label: "New chat" },
+  { keys: NEW_CHAT_SHORTCUT, label: "Naya sawaal" },
   { keys: "/", label: "Message box par jao" },
   { keys: "↑ ↓", label: "Suggestions me upar / neeche" },
   { keys: "Enter", label: "Bhejo / suggestion chalao" },

@@ -176,7 +176,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
   return (
     <nav aria-label="Pichhli chats" className="flex h-full min-h-0 flex-col" data-testid="agent-history">
       <div className="flex items-center gap-1.5 p-3 pb-2">
-        <button type="button" onClick={startNew} title={`New chat (${NEW_CHAT_SHORTCUT})`}
+        <button type="button" onClick={startNew} title={`Naya sawaal (${NEW_CHAT_SHORTCUT})`}
           className={`flex h-11 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted ${focusRing}`}>
           <SquarePen aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="truncate">Naya sawaal</span>
           <kbd className="ml-auto hidden shrink-0 rounded border border-border px-1 font-sans text-[10px] text-muted-foreground xl:inline">{NEW_CHAT_SHORTCUT}</kbd>

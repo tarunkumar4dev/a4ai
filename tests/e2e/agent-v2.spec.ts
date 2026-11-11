@@ -71,7 +71,8 @@ async function menu(page: Page, row: Locator, action: string) {
 
 test("history: groups, open + replay a chat, restore after reload, search, infinite scroll", async ({ page }) => {
   const calls = await openWorkspace(page);
-  expect(calls).toEqual([]); // mock adapter: no network to the agent
+  // mock adapter: no network to the agent. The voice layer's config check is not part of the mock adapter.
+  expect(calls.filter((u) => !u.endsWith("/agent/voice/config"))).toEqual([]);
   const hist = sidebar(page);
   await expect(hist.getByTestId("history-group").first()).toHaveText("Pinned");
   for (const g of ["Pinned", "Today", "Yesterday", "Previous 7 days"]) await expect(hist.getByTestId("history-group").filter({ hasText: new RegExp(`^${g}$`) })).toBeVisible();
@@ -81,7 +82,7 @@ test("history: groups, open + replay a chat, restore after reload, search, infin
   await expect(chat(page).getByTestId("msg-user-text")).toHaveText("Department ka section-wise comparison");
   await expect(chat(page).getByTestId("ranking-table")).toBeVisible();
   await expect(chat(page).getByTestId("agent-chart")).toBeVisible();
-  await expect(chat(page).getByTestId("steps")).toContainText(/1 step · /);
+  await expect(chat(page).getByTestId("steps")).toHaveText(/^1 step$/);
   await expect(chat(page).getByTestId("chat-title")).toHaveText("Department ka section-wise comparison");
 
   await item(hist, "Main kya kya dekh sakta hoon?").getByRole("button").first().click();
@@ -93,7 +94,7 @@ test("history: groups, open + replay a chat, restore after reload, search, infin
   await expect(chat(page).getByTestId("scope-card")).toContainText("59 students", { timeout: 30_000 });
   await expect(item(sidebar(page), "Main kya kya dekh sakta hoon?").getByRole("button").first()).toHaveAttribute("aria-current", "page");
 
-  const search = sidebar(page).getByRole("searchbox", { name: "Search chats" });
+  const search = sidebar(page).getByRole("searchbox", { name: "Chats dhoondho" });
   await search.fill("trend");
   await expect(sidebar(page).getByTestId("history-item")).toHaveCount(1);
   await expect(sidebar(page).getByTestId("history-item")).toContainText("Pichhle 4 hafte ka attendance trend");
@@ -115,7 +116,7 @@ test("history: rename inline, pin, delete with confirm + undo (and it sticks aft
   await openWorkspace(page);
   const hist = sidebar(page);
   const row = item(hist, "Pichhle 4 hafte ka attendance trend");
-  await menu(page, row, "Rename");
+  await menu(page, row, "Naam badlo");
   const box = hist.getByLabel("Chat ka naya naam");
   await box.fill("Trend · ECE-2");
   await box.press("Enter");
@@ -128,28 +129,28 @@ test("history: rename inline, pin, delete with confirm + undo (and it sticks aft
   await expect.poll(async () => (await hist.getByTestId("history-item").allInnerTexts()).slice(0, 3).some((t) => t.includes("Trend · ECE-2"))).toBe(true);
 
   const victim = item(hist, "ECE 1 ki attendance");
-  await menu(page, victim, "Delete");
+  await menu(page, victim, "Mitao");
   const confirm = page.getByTestId("agent-confirm");
   await expect(confirm).toContainText("Chat delete karein?");
-  await confirm.getByRole("button", { name: "Delete" }).click();
+  await confirm.getByRole("button", { name: "Mitao" }).click();
   await expect(victim).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(item(hist, "ECE 1 ki attendance")).toHaveCount(1);
 
-  await menu(page, item(hist, "ECE 1 ki attendance"), "Delete");
-  await page.getByTestId("agent-confirm").getByRole("button", { name: "Delete" }).click();
+  await menu(page, item(hist, "ECE 1 ki attendance"), "Mitao");
+  await page.getByTestId("agent-confirm").getByRole("button", { name: "Mitao" }).click();
   await expect(item(hist, "ECE 1 ki attendance")).toHaveCount(0);
   // v3: mock is in-memory only — reload resets to seed (rename/pin/delete don't persist)
 });
 
 test("suggestions: recent + try on focus, typed matches with hints, keyboard (↓, Tab fills, Esc, Enter)", async ({ page }) => {
   await openWorkspace(page);
-  await page.getByTestId("history-sidebar").getByRole("button", { name: /New chat/ }).click();
+  await page.getByTestId("history-sidebar").getByRole("button", { name: /Naya sawaal/ }).click();
   await input(page).click();
   const list = page.getByTestId("agent-suggestions");
   await expect(list).toBeVisible();
-  await expect(list.getByText("Recent", { exact: true })).toBeVisible();
-  await expect(list.getByText("Try", { exact: true })).toBeVisible();
+  await expect(list.getByText("Pichhle sawaal", { exact: true })).toBeVisible();
+  await expect(list.getByText("Ye poochiye", { exact: true })).toBeVisible();
   await expect(list.locator('[data-type="recent"]')).toHaveCount(6);
   await expect(input(page)).toHaveAttribute("aria-expanded", "true");
 
@@ -203,11 +204,11 @@ test("suggestions: remove a recent one (×), clear history with confirm", async 
   await list.getByTestId("clear-history").click();
   const confirm = page.getByTestId("agent-confirm");
   await expect(confirm).toContainText("Search history clear karein?");
-  await confirm.getByRole("button", { name: "Clear history" }).click();
+  await confirm.getByRole("button", { name: "History mitao" }).click();
   await expect(page.getByText("Search history clear ho gayi.")).toBeVisible();
   await input(page).click();
   await expect(page.getByTestId("agent-suggestions").locator('[data-type="recent"]')).toHaveCount(0);
-  await expect(page.getByTestId("agent-suggestions").getByText("Try", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("agent-suggestions").getByText("Ye poochiye", { exact: true })).toBeVisible();
   await expect(page.getByTestId("clear-history")).toHaveCount(0);
 });
 
@@ -248,7 +249,7 @@ test("stop keeps the partial answer, regenerate replaces it, 👎 with a note, e
 
 test("my_scope + section_comparison blocks, scope empty state", async ({ page }) => {
   await openWorkspace(page);
-  await page.getByTestId("history-sidebar").getByRole("button", { name: /New chat/ }).click();
+  await page.getByTestId("history-sidebar").getByRole("button", { name: /Naya sawaal/ }).click();
   await expect(page.getByTestId("scope-summary")).toHaveText("Aapke paas: 3 batches · 59 students");
   await expect(chat(page).getByRole("button", { name: /ECE-1 ki attendance/ })).toBeVisible();
   await expect(chat(page).getByRole("button", { name: /ECE-2 ki attendance/ })).toBeVisible();
@@ -284,16 +285,16 @@ test("mobile sheet: Ask a4ai, history drawer inside the sheet, Esc closes the dr
   const box = await sheet.boundingBox();
   expect(box?.width).toBeGreaterThanOrEqual(389);
 
-  await sheet.getByRole("button", { name: "Chat history" }).click();
+  await sheet.getByRole("button", { name: "Pichhli chats" }).click();
   const drawer = page.getByTestId("sheet-history");
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole("searchbox", { name: "Search chats" })).toBeFocused();
+  await expect(drawer.getByRole("searchbox", { name: "Chats dhoondho" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(drawer).toHaveCount(0);
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("button", { name: "Chat history" })).toBeFocused();
+  await expect(sheet.getByRole("button", { name: "Pichhli chats" })).toBeFocused();
 
-  await sheet.getByRole("button", { name: "Chat history" }).click();
+  await sheet.getByRole("button", { name: "Pichhli chats" }).click();
   await drawer.getByTestId("history-item").filter({ hasText: "Department ka section-wise comparison" }).getByRole("button").first().click();
   await expect(drawer).toHaveCount(0);
   await expect(sheet.getByTestId("ranking-table")).toBeVisible();
@@ -433,14 +434,14 @@ for (const width of [390, 1440]) {
       await setTheme(page, theme === "dark");
       const shot = async (name: string) => { await page.waitForTimeout(250); await page.screenshot({ path: `${SHOTS}/agent-v3-${width}-${theme}-${name}.png` }); };
       const newChat = async () => {
-        const btn = phone ? chat(page).getByRole("button", { name: "New chat" }) : sidebar(page).getByRole("button", { name: /New chat/ });
+        const btn = phone ? chat(page).getByRole("button", { name: "Naya sawaal" }) : sidebar(page).getByRole("button", { name: /Naya sawaal/ });
         if (await btn.isEnabled()) await btn.click();
       };
       await newChat();
       await shot("empty");
 
       if (phone) {
-        await chat(page).getByRole("button", { name: "Chat history" }).click();
+        await chat(page).getByRole("button", { name: "Pichhli chats" }).click();
         await expect(page.getByRole("dialog").getByTestId("agent-history")).toBeVisible();
         await shot("history");
         await page.keyboard.press("Escape");
@@ -490,7 +491,7 @@ for (const width of [390, 1440]) {
       await page.waitForTimeout(500);
       await setTheme(page, theme === "dark"); // the dashboard re-applies its theme on mount
       await shot("sheet");
-      await page.getByTestId("agent-chat-sheet").getByRole("button", { name: "Chat history" }).click();
+      await page.getByTestId("agent-chat-sheet").getByRole("button", { name: "Pichhli chats" }).click();
       await expect(page.getByTestId("sheet-history")).toBeVisible();
       await shot("sheet-history");
 

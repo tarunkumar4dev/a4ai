@@ -209,7 +209,7 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
         ) : <span className={compact ? "hidden truncate sm:inline" : "hidden sm:inline"}>{compact ? "Sirf aapke institute ka data" : "Numbers sirf aapke institute ke data se"}</span>}
       </div>
       <AgentConfirm open={confirmClear} onOpenChange={setConfirmClear} title="Search history clear karein?"
-        description="Aapke pichhle sawaal suggestions se hat jayenge. Chats delete nahi hongi." confirmLabel="Clear history" onConfirm={clearAll} />
+        description="Aapke pichhle sawaal suggestions se hat jayenge. Chats delete nahi hongi." confirmLabel="History mitao" onConfirm={clearAll} />
     </form>
   );
 }
