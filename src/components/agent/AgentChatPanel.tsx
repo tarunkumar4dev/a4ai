@@ -169,7 +169,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
 
       <p aria-live="polite" className="sr-only" data-testid="agent-status">{liveStatus(s)}</p>
 
-      <div className="border-t border-border bg-card">
+      <div className="border-t border-border bg-card pb-[env(safe-area-inset-bottom,0px)]">
         {offline ? (
           <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}>
             <p className="mx-auto flex max-w-3xl items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 py-2 text-xs text-foreground" data-testid="agent-offline">

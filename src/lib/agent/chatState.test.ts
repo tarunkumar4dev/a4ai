@@ -114,7 +114,7 @@ describe("steps timeline (thinking_status tool.* / status.*)", () => {
     expect(steps(s)).toHaveLength(2);
     s = at(s, ev({ type: "final", session_id: "s1" }), 4200);
     expect(steps(s).every((x) => x.status === "done")).toBe(true);
-    expect(stepsSummary(s.turns[1])).toBe("2 steps · 4.2s");
+    expect(stepsSummary(s.turns[1])).toBe("2 steps");
   });
 
   it("stop / error mark running steps stopped; history kept", () => {

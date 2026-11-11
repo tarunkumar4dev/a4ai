@@ -6,7 +6,7 @@ import { ArrowUpLeft, Clock, Sparkles, Trash2, Users, X } from "lucide-react";
 import { highlightParts, type SuggestOption } from "@/lib/agent/suggest";
 
 const ICON = { recent: Clock, entity: Users, template: Sparkles } as const;
-const TYPE_LABEL = { recent: "Recent", entity: "Batch / student", template: "Try" } as const;
+const TYPE_LABEL = { recent: "Pichhle sawaal", entity: "Batch / student", template: "Ye poochiye" } as const;
 
 export const optionId = (listId: string, i: number) => `${listId}-opt-${i}`;
 
@@ -28,7 +28,7 @@ export function AgentSuggestions({ listId, options, active, query, onRun, onFill
 }) {
   const sections: { key: SuggestOption["section"]; label: string | null; items: { o: SuggestOption; i: number }[] }[] = [];
   options.forEach((o, i) => {
-    const label = o.section === "recent" ? "Recent" : o.section === "try" ? "Try" : null;
+    const label = o.section === "recent" ? "Pichhle sawaal" : o.section === "try" ? "Ye poochiye" : null;
     const last = sections[sections.length - 1];
     if (last && last.key === o.section) last.items.push({ o, i });
     else sections.push({ key: o.section, label, items: [{ o, i }] });
@@ -84,7 +84,7 @@ export function AgentSuggestions({ listId, options, active, query, onRun, onFill
         <div className="sticky bottom-0 border-t border-border bg-popover px-1.5 py-1">
           <button type="button" onClick={onClear} data-testid="clear-history"
             className="flex h-11 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />Clear history
+            <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />History mitao
           </button>
         </div>
       ) : null}

@@ -56,10 +56,10 @@ export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading
         </div>
       </div>
       <ShortcutsHelp />
-      <button type="button" onClick={onNewChat} disabled={!canNew} title={`New chat (${NEW_CHAT_SHORTCUT})`}
+      <button type="button" onClick={onNewChat} disabled={!canNew} title={`Naya sawaal (${NEW_CHAT_SHORTCUT})`}
         className={`inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 ${newChatInSidebar ? "lg:hidden" : ""}`}>
-        <SquarePen aria-hidden="true" className="h-4 w-4" /><span className={compact ? "sr-only" : "hidden sm:inline"}>New chat</span>
-        {compact ? null : <span className="sr-only sm:hidden">New chat</span>}
+        <SquarePen aria-hidden="true" className="h-4 w-4" /><span className={compact ? "sr-only" : "hidden sm:inline"}>Naya sawaal</span>
+        {compact ? null : <span className="sr-only sm:hidden">Naya sawaal</span>}
       </button>
       {trailing}
     </header>

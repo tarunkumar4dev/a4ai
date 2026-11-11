@@ -83,7 +83,7 @@ export default function AskA4aiLauncher() {
           <div className="relative flex min-h-0 flex-1 flex-col">
             <AgentChatPanel variant="sheet" autoFocus
               leading={(
-                <button ref={historyBtn} type="button" onClick={() => setHistory(true)} aria-label="Chat history" title="Chat history"
+                <button ref={historyBtn} type="button" onClick={() => setHistory(true)} aria-label="Pichhli chats" title="Pichhli chats"
                   aria-expanded={history} className={iconBtn}>
                   <History aria-hidden="true" className="h-5 w-5" />
                 </button>

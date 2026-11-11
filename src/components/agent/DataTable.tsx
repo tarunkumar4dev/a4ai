@@ -78,7 +78,7 @@ export function DataTable({ ev }: { ev: Table }) {
       ) : (
         <>
           {/* sm+: real table, header sticks while the body scrolls inside the card */}
-          <div className="hidden max-h-96 overflow-auto border-t border-border sm:block">
+          <div className="hidden max-h-96 overflow-auto border-t border-border sm:block" tabIndex={0} role="region" aria-label={ev.title}>
             <table className="w-full text-left text-sm">
               <thead className="sticky top-0 z-[1] bg-card">
                 <tr>

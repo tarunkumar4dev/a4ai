@@ -292,11 +292,10 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 export const turnText = (t: ChatTurn): string =>
   t.blocks.filter((b): b is Extract<Block, { kind: "text" }> => b.kind === "text").map((b) => b.text.trim()).filter(Boolean).join("\n\n");
 
-/** "3 steps · 4.2s" */
+/** "3 steps" — timing hidden (teacher does not need it). */
 export function stepsSummary(t: ChatTurn): string {
   const n = t.steps?.length ?? 0;
-  const ms = typeof t.endedAt === "number" && typeof t.at === "number" ? Math.max(0, t.endedAt - t.at) : (t.steps ?? []).reduce((a, s) => a + (s.ms ?? 0), 0);
-  return `${n} step${n === 1 ? "" : "s"} · ${fmtMs(ms)}`;
+  return `${n} step${n === 1 ? "" : "s"}`;
 }
 
 export function fmtMs(ms: number | null | undefined): string {

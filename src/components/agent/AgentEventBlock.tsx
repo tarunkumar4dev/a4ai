@@ -45,7 +45,7 @@ const ERROR_TITLE: Record<string, string> = {
   forbidden: "Access nahi hai",
   not_found: "Nahi mila",
   invalid_input: "Request samajh nahi aayi",
-  provider_error: "AI service busy hai",
+  provider_error: "Service abhi busy hai",
   internal: "Kuch gadbad ho gayi",
   unauthorized: "Sign in chahiye",
   rate_limited: "Thoda rukiye",
@@ -83,7 +83,7 @@ export function ErrorCard({ code, message, retryText, busy, onRetry, retryAt }: 
         <p className="mt-0.5 break-words text-muted-foreground">{message}</p>
         {retryText ? (
           <Button type="button" variant="outline" className="mt-3 h-11" disabled={busy || wait > 0} onClick={() => onRetry(retryText)}>
-            <RotateCcw aria-hidden="true" />{wait > 0 ? `Retry (${wait}s)` : "Retry"}
+            <RotateCcw aria-hidden="true" />{wait > 0 ? `Dobara (${wait}s)` : "Dobara try karein"}
           </Button>
         ) : null}
       </div>

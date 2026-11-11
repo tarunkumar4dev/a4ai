@@ -71,22 +71,22 @@ export default function AgentWorkspace() {
       <AgentChatPanel variant="page"
         leading={(
           <>
-            <button ref={historyBtn} type="button" onClick={() => setDrawer(true)} aria-label="Chat history" title="Chat history" className={`${iconBtn} lg:hidden`}>
+            <button ref={historyBtn} type="button" onClick={() => setDrawer(true)} aria-label="Pichhli chats" title="Pichhli chats" className={`${iconBtn} lg:hidden`}>
               <History aria-hidden="true" className="h-5 w-5" />
             </button>
             {collapsed ? (
-              <button ref={expandBtn} type="button" onClick={() => setCollapse(false)} aria-label="Show chat history" title="Show chat history" className={`${iconBtn} hidden lg:grid`}>
+              <button ref={expandBtn} type="button" onClick={() => setCollapse(false)} aria-label="Pichhli chats dikhao" title="Pichhli chats dikhao" className={`${iconBtn} hidden lg:grid`}>
                 <PanelLeftOpen aria-hidden="true" className="h-5 w-5" />
               </button>
             ) : null}
           </>
         )}
         newChatInSidebar={!collapsed} />
-      <AgentSheetFrame open={drawer} onOpenChange={setDrawer} side="left" title="Chat history" description="a4ai Agent ki pichhli chats" returnFocus={historyBtn}
+      <AgentSheetFrame open={drawer} onOpenChange={setDrawer} side="left" title="Pichhli chats" description="a4ai Agent ki pichhli chats" returnFocus={historyBtn}
         className="w-[88vw] max-w-sm">
         <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-          <p className="text-sm font-semibold">Chat history</p>
-          <SheetClose className={iconBtn} aria-label="Close chat history">
+          <p className="text-sm font-semibold">Pichhli chats</p>
+          <SheetClose className={iconBtn} aria-label="Band karein">
             <X aria-hidden="true" className="h-5 w-5" />
           </SheetClose>
         </div>

@@ -28,14 +28,14 @@ export default function SheetHistory({ onClose, onPicked }: { onClose: () => voi
   }, [onClose]);
 
   return (
-    <div ref={box} {...{ [ESC_LAYER]: "" }} role="region" aria-label="Chat history"
+    <div ref={box} {...{ [ESC_LAYER]: "" }} role="region" aria-label="Pichhli chats"
       className="absolute inset-0 z-10 flex flex-col bg-card" data-testid="sheet-history">
       <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-        <button type="button" onClick={onClose} aria-label="Back to chat"
+        <button type="button" onClick={onClose} aria-label="Chat par wapas jao"
           className="grid h-11 w-11 place-items-center rounded-md text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <ArrowLeft aria-hidden="true" className="h-5 w-5" />
         </button>
-        <p className="text-sm font-semibold">Chat history</p>
+        <p className="text-sm font-semibold">Pichhli chats</p>
       </div>
       <div className="min-h-0 flex-1">
         <AgentHistoryPanel uid={user?.id ?? null} activeKey={s.activeKey} busy={s.chat.busy} onPicked={onPicked} autoFocusSearch />

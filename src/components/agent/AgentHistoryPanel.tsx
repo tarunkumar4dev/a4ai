@@ -61,13 +61,13 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="z-[240] w-44">
-          <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onStartRename(s.id)}><Pencil aria-hidden="true" className="h-4 w-4" />Rename</DropdownMenuItem>
+          <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onStartRename(s.id)}><Pencil aria-hidden="true" className="h-4 w-4" />Naam badlo</DropdownMenuItem>
           <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onPin(s)}>
             {s.pinned ? <><PinOff aria-hidden="true" className="h-4 w-4" />Unpin</> : <><Pin aria-hidden="true" className="h-4 w-4" />Pin</>}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="min-h-10 gap-2 text-destructive focus:text-destructive dark:text-red-400 dark:focus:text-red-400" onSelect={() => onDelete(s)}>
-            <Trash2 aria-hidden="true" className="h-4 w-4" />Delete
+            <Trash2 aria-hidden="true" className="h-4 w-4" />Mitao
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -174,15 +174,15 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
   const failed = (pinned.isError || rest.isError) && !rows.length;
 
   return (
-    <nav aria-label="Chat history" className="flex h-full min-h-0 flex-col" data-testid="agent-history">
+    <nav aria-label="Pichhli chats" className="flex h-full min-h-0 flex-col" data-testid="agent-history">
       <div className="flex items-center gap-1.5 p-3 pb-2">
         <button type="button" onClick={startNew} title={`New chat (${NEW_CHAT_SHORTCUT})`}
           className={`flex h-11 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted ${focusRing}`}>
-          <SquarePen aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="truncate">New chat</span>
+          <SquarePen aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="truncate">Naya sawaal</span>
           <kbd className="ml-auto hidden shrink-0 rounded border border-border px-1 font-sans text-[10px] text-muted-foreground xl:inline">{NEW_CHAT_SHORTCUT}</kbd>
         </button>
         {onCollapse ? (
-          <button type="button" onClick={onCollapse} aria-label="Hide chat history" title="Hide chat history"
+          <button type="button" onClick={onCollapse} aria-label="Chats chhupao" title="Chats chhupao"
             className={`grid h-11 w-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground ${focusRing}`}>
             <PanelLeftClose aria-hidden="true" className="h-4 w-4" />
           </button>
@@ -191,8 +191,8 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
       <div className="px-3 pb-2">
         <div className="relative">
           <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <label htmlFor="agent-history-search" className="sr-only">Search chats</label>
-          <input ref={searchRef} id="agent-history-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search chats"
+          <label htmlFor="agent-history-search" className="sr-only">Chats dhoondho</label>
+          <input ref={searchRef} id="agent-history-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Chats dhoondho"
             onKeyDown={(e) => { if (e.key === "Escape" && search) { e.preventDefault(); e.stopPropagation(); setSearch(""); } }}
             {...(search ? { [ESC_LAYER]: "" } : {})}
             className={`h-10 w-full rounded-md border border-input bg-card pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${focusRing}`} />
@@ -209,7 +209,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
       <div ref={scroller} onScroll={(e) => setView({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight || 600 })}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-testid="history-scroller">
         {loading ? (
-          <div className="space-y-2 px-1 pt-2" aria-label="Loading chats">
+          <div className="space-y-2 px-1 pt-2" aria-label="Chats load ho rahi hain">
             {Array.from({ length: 6 }, (_, i) => <div key={i} className="h-9 rounded-md bg-muted/70" />)}
           </div>
         ) : failed ? (
@@ -217,7 +217,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
             Chats load nahi ho payi.
             <button type="button" onClick={() => { void pinned.refetch(); void rest.refetch(); }}
               className={`inline-flex h-10 items-center gap-1.5 rounded-md border border-border px-3 text-sm text-foreground hover:bg-muted ${focusRing}`}>
-              <RotateCcw aria-hidden="true" className="h-4 w-4" />Retry
+              <RotateCcw aria-hidden="true" className="h-4 w-4" />Dobara try karein
             </button>
           </div>
         ) : !rows.length ? (
@@ -237,17 +237,17 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
             })}
           </div>
         )}
-        {rest.isFetchingNextPage ? <p className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground"><Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />Loading more…</p> : null}
+        {rest.isFetchingNextPage ? <p className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground"><Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />Aur load ho rahi hain…</p> : null}
         {rest.isError && rows.length ? (
           <button type="button" onClick={() => void rest.fetchNextPage()} className={`mx-auto mt-2 flex h-10 items-center gap-1.5 rounded-md px-3 text-xs text-muted-foreground hover:bg-muted ${focusRing}`}>
-            <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />Aur chats load nahi hui — Retry
+            <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />Aur chats load nahi hui — dobara try karein
           </button>
         ) : null}
       </div>
 
       <AgentConfirm open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }} title="Chat delete karein?"
         description={`“${confirm?.title ?? ""}” aur uske saare messages hat jayenge. 5 second tak Undo kar sakte hain.`}
-        confirmLabel="Delete" onConfirm={() => { if (confirm) remove(confirm); }} />
+        confirmLabel="Mitao" onConfirm={() => { if (confirm) remove(confirm); }} />
     </nav>
   );
 }

@@ -175,29 +175,36 @@ for (const [label, w, h] of viewports) {
       await expect(chat(page).getByTestId("agent-error")).toBeVisible({ timeout: 15_000 });
       await shot("error");
 
-      // --- blueprint (injected) ---
+      // --- blueprint + paper + verification + approval ---
       await newChat(page, phone);
       await ask(page, "Class 10 trigonometry test banao, 20 marks");
-      // Wait for the default response, then we'll verify the blueprint component renders
-      await expect(chat(page).getByTestId("msg-assistant").last()).toBeVisible({ timeout: 15_000 });
-      // The mock doesn't produce blueprints — check if the testid exists anyway
-      const bpCount = await chat(page).getByTestId("blueprint").count();
-      if (bpCount > 0) {
-        await chat(page).getByTestId("blueprint").scrollIntoViewIfNeeded();
+      // The mock now produces blueprint → paper → verification → approval
+      await expect(chat(page).getByTestId("approval")).toBeVisible({ timeout: 30_000 });
+
+      // scroll to blueprint
+      const bp = chat(page).getByTestId("blueprint");
+      if (await bp.count() > 0) {
+        await bp.scrollIntoViewIfNeeded();
         await shot("blueprint");
-      } else {
-        // Take a shot of what the "test banao" query actually produces
-        await shot("blueprint_missing");
       }
-
-      // --- paper_preview (injected via contract fixture shape) ---
-      // For states that the mock can't produce, we'll take what we can and note the gap
-
-      // --- verification ---
-      // Same — note in audit
-
-      // --- approval (pending) ---
-      // Same — note in audit
+      // scroll to paper preview
+      const pp = chat(page).getByTestId("paper-preview");
+      if (await pp.count() > 0) {
+        await pp.scrollIntoViewIfNeeded();
+        await shot("paper_preview");
+      }
+      // scroll to verification
+      const vb = chat(page).getByTestId("verification");
+      if (await vb.count() > 0) {
+        await vb.scrollIntoViewIfNeeded();
+        await shot("verification");
+      }
+      // scroll to approval
+      const ap = chat(page).getByTestId("approval");
+      if (await ap.count() > 0) {
+        await ap.scrollIntoViewIfNeeded();
+        await shot("approval");
+      }
 
       // --- sheet (Ask a4ai button) ---
       await page.goto("/dashboard");

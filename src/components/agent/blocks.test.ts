@@ -83,7 +83,7 @@ describe("error states", () => {
   });
   it("429 card: Retry waits for the countdown; 503 card: Retry now", () => {
     const wait = renderToStaticMarkup(createElement(ErrorCard, { code: "rate_limited", message: "m", retryText: "q", onRetry: vi.fn(), retryAt: Date.now() + 30_000 }));
-    expect(wait).toMatch(/disabled=""[^>]*>.*Retry \(3\d?s\)|Retry \(\d+s\)/);
+    expect(wait).toMatch(/disabled=""[^>]*>.*Dobara \(3\d?s\)|Dobara \(\d+s\)/);
     expect(wait).toContain("Thoda rukiye");
     const now = renderToStaticMarkup(createElement(ErrorCard, { code: "unavailable", message: "m", retryText: "q", onRetry: vi.fn() }));
     expect(now).toContain("Agent abhi available nahi");

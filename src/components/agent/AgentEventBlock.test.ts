@@ -141,7 +141,7 @@ describe("AgentEventBlock: event → component", () => {
     const out = html({ kind: "error", id: "1", code: "network", message: "a4ai Agent tak nahi pahunch paye.", retryText: "Aaj ki attendance" });
     expect(out).toContain('data-testid="agent-error"');
     expect(out).not.toContain('role="alert"'); // announced by the one status line instead
-    expect(out).toMatch(/Retry</);
+    expect(out).toMatch(/Dobara try karein</);
   });
 });
 
@@ -195,7 +195,7 @@ describe("message rendering", () => {
       { id: "s3", key: "status.verifying", params: {}, status: "done" as const, startedAt: 3, ms: 2000 },
     ];
     const done = renderToStaticMarkup(createElement(AgentMessage, { turn: turn([{ kind: "text", id: "t", text: "ok" }], { steps }), h, ctx: new Map(), onFeedback: vi.fn() }));
-    expect(done).toContain("3 steps · 4.2s");
+    expect(done).toContain("3 steps");
     expect(done).toContain('aria-label="Copy answer"');
     expect(done).toContain('aria-label="Helpful"');
     expect(done).not.toContain("aria-live");

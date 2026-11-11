@@ -1,6 +1,5 @@
-// What sits next to the message box when voice is on: the mic, the transcript strip (aria-live: transcript, "Maine
-// suna … Sahi hai?", clarify chips, "Dobara boliye", limits, mic denied), the first-use consent line + example
-// chips, mute and the voice/speed settings. Lazy-loaded (components/voice/index.tsx). Design tokens only.
+// Voice dock: the transcript strip, consent, settings (above the composer) and the mic button (beside the
+// composer input). The mic is rendered in a separate container so the parent can lay it beside the text box.
 import { useEffect, useState } from "react";
 import { Check, Mic, MicOff, Pencil, RefreshCw, Settings2, Volume2, VolumeX, WifiOff } from "lucide-react";
 import { useVoice } from "@/lib/voice/useVoice";
@@ -87,20 +86,30 @@ export default function VoiceDock({ uid, compact, offline }: { uid: string | nul
       {strip ? <div className="mb-2 rounded-lg border border-border bg-muted/40 px-3 py-2">{strip}</div> : null}
       {/* the ONE aria-live region of the voice layer: transcript, prompts, and the caption of what is being read out */}
       <p aria-live="polite" aria-atomic="true" className="sr-only" data-testid="voice-live">{v.liveText}</p>
-      <div className="mb-2 flex items-center justify-end gap-2">
-        <button type="button" onClick={() => v.setPrefs({ muted: !v.prefs.muted })} aria-pressed={v.prefs.muted}
-          aria-label={v.prefs.muted ? "Awaaz on karein / Unmute replies" : "Awaaz band karein / Mute replies"} title={v.prefs.muted ? "Awaaz on" : "Awaaz band"}
-          className="grid h-11 w-11 place-items-center rounded-lg text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="voice-mute">
-          {v.prefs.muted ? <VolumeX aria-hidden="true" className="h-5 w-5" /> : <Volume2 aria-hidden="true" className="h-5 w-5" />}
-        </button>
-        <button type="button" onClick={() => setSettings((x) => !x)} aria-expanded={settings} aria-label="Awaaz ki settings / Voice settings" title="Voice settings"
-          className="grid h-11 w-11 place-items-center rounded-lg text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="voice-settings-toggle">
-          <Settings2 aria-hidden="true" className="h-5 w-5" />
-        </button>
-        <MicButton state={s.state} level={s.level} meter={!v.lite} disabled={offline || v.busy && s.state === "idle" || v.needsConsent}
-          onTap={v.tap} onHoldStart={v.holdStart} onHoldEnd={v.holdEnd} />
+      <div className="mb-2 flex items-center justify-between gap-2">
+        {/* voice state label — visible when not idle */}
+        <p className={`text-xs text-muted-foreground ${s.state === "idle" ? "invisible" : ""}`} data-testid="voice-state-label">
+          {label.hi}
+        </p>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => v.setPrefs({ muted: !v.prefs.muted })} aria-pressed={v.prefs.muted}
+            aria-label={v.prefs.muted ? "Awaaz on karein / Unmute replies" : "Awaaz band karein / Mute replies"} title={v.prefs.muted ? "Awaaz on" : "Awaaz band"}
+            className="grid h-11 w-11 place-items-center rounded-lg text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="voice-mute">
+            {v.prefs.muted ? <VolumeX aria-hidden="true" className="h-5 w-5" /> : <Volume2 aria-hidden="true" className="h-5 w-5" />}
+          </button>
+          <button type="button" onClick={() => setSettings((x) => !x)} aria-expanded={settings} aria-label="Awaaz ki settings / Voice settings" title="Voice settings"
+            className="grid h-11 w-11 place-items-center rounded-lg text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="voice-settings-toggle">
+            <Settings2 aria-hidden="true" className="h-5 w-5" />
+          </button>
+        </div>
       </div>
       {settings && v.config ? <VoiceSettings config={v.config} prefs={v.prefs} onChange={v.setPrefs} onClose={() => setSettings(false)} /> : null}
+      {/* Mic button rendered as a separate block for the parent to position beside the composer */}
+      <div className="flex justify-center pb-2" data-testid="voice-mic-slot">
+        <MicButton state={s.state} level={s.level} meter={!v.lite} size="lg"
+          disabled={offline || (v.busy && s.state === "idle") || v.needsConsent}
+          onTap={v.tap} onHoldStart={v.holdStart} onHoldEnd={v.holdEnd} />
+      </div>
     </div>
   );
 }

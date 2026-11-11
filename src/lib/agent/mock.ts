@@ -75,7 +75,7 @@ const src = (name: string) => ({ source: `tool:${name}`, as_of: new Date().toISO
 
 function scenario(text: string): { events: Draft[]; delay: number } {
   const t = text.toLowerCase();
-  if (/\bfail\b/.test(t)) return { delay: 60, events: [...tool("resolve_entity", 300), { type: "error", code: "provider_error", message: "AI service abhi busy hai. Thodi der me retry karein.", retryable: true, partial: {} }] };
+  if (/\bfail\b/.test(t)) return { delay: 60, events: [...tool("resolve_entity", 300), { type: "error", code: "provider_error", message: "Service abhi busy hai. Thodi der me retry karein.", retryable: true, partial: {} }] };
   if (/excel|export|xlsx/.test(t)) {
     const fileId = nextId("file").slice(0, 32).replace(/-/g, "");
     load().files.set(fileId, { name: "below-75-ece2.xlsx", csv: "Student,Section,%,Marked\nAarav Gupta,ECE-2,61.1,18\nDiya Verma,ECE-2,66.7,18\n", expires: Date.now() + 15 * 60_000 });
@@ -125,6 +125,39 @@ function scenario(text: string): { events: Draft[]; delay: number } {
     return { delay: 70, events: [...tool("resolve_entity", 380), ...tool("attendance_stats", 1100),
       { type: "stat_card", ...src("attendance_stats"), title: "Attendance · ECE-2", value: "83.8", unit: "%", period: "1–9 Nov 2026", delta: "+2.1 pts vs previous 9 days", subtitle: "396 marks · 18 classes" },
       { type: "text_delta", text: "ECE-2 ki attendance is mahine **83.8%** hai — pichhle 9 din se 2.1 points zyada." }] };
+  }
+  if (/test banao|paper bana|paper generate/.test(t)) {
+    const draftId = nextId("drft").slice(0, 36);
+    const approvalId = nextId("appr").slice(0, 36);
+    return { delay: 80, events: [
+      ...tool("blueprint_defaults", 400),
+      { type: "blueprint", class_grade: 10, subject: "Mathematics", chapters: ["Introduction to Trigonometry"],
+        total_marks: 20, duration_min: 45,
+        sections: [
+          { section: "A", qtype: "mcq" as const, count: 4, marks_each: 1 },
+          { section: "B", qtype: "short_answer" as const, count: 2, marks_each: 3 },
+          { section: "C", qtype: "long_answer" as const, count: 2, marks_each: 5 },
+        ],
+      },
+      ...tool("generate_questions", 3200),
+      { type: "paper_preview", draft_id: draftId, title: "Trigonometry — Unit Test",
+        total_marks: 20, duration_min: 45,
+        questions: [
+          { id: "q1", section: "A", qtype: "mcq" as const, marks: 1, text: "The value of $\\tan 45^\\circ$ is:", options: ["0", "1", "$\\sqrt{3}$", "$\\frac{1}{\\sqrt{3}}$"], answer: "(b) 1", marking_scheme: null, sub_questions: null, status: "verified" as const },
+          { id: "q2", section: "A", qtype: "mcq" as const, marks: 1, text: "If $\\sin A = \\frac{1}{2}$, then $A$ is:", options: ["$30^\\circ$", "$45^\\circ$", "$60^\\circ$", "$90^\\circ$"], answer: "(a) 30°", marking_scheme: null, sub_questions: null, status: "verified" as const },
+          { id: "q3", section: "A", qtype: "mcq" as const, marks: 1, text: "$\\cos 0^\\circ$ ka maan kya hai?", options: ["0", "1", "$\\frac{1}{2}$", "$\\sqrt{2}$"], answer: "(b) 1", marking_scheme: null, sub_questions: null, status: "verified" as const },
+          { id: "q4", section: "A", qtype: "mcq" as const, marks: 1, text: "$\\sec 60^\\circ$ ka maan hai:", options: ["1", "2", "$\\frac{1}{2}$", "$\\sqrt{2}$"], answer: "(b) 2", marking_scheme: null, sub_questions: null, status: "rubric_ok" as const },
+          { id: "q5", section: "B", qtype: "short_answer" as const, marks: 3, text: "Agar $\\tan \\theta = \\frac{3}{4}$ ho, toh $\\sin \\theta$ aur $\\cos \\theta$ ka maan nikaliye.", options: null, answer: "$\\sin \\theta = 3/5$, $\\cos \\theta = 4/5$", marking_scheme: ["Formula likhne par 1", "Correct values par 2"], sub_questions: null, status: "verified" as const },
+          { id: "q6", section: "B", qtype: "short_answer" as const, marks: 3, text: "Prove kariye: $\\sin^2 \\theta + \\cos^2 \\theta = 1$", options: null, answer: null, marking_scheme: ["Identity likhne par 1", "Proof par 2"], sub_questions: null, status: "manual_review" as const },
+          { id: "q7", section: "C", qtype: "long_answer" as const, marks: 5, text: "Ek 15 m oonchi building ke top se ek tower ka elevation angle 60° hai aur bottom se 45° hai. Tower ki height nikaliye.", options: null, answer: "15(√3 + 1) m", marking_scheme: ["Diagram par 1", "Equation par 2", "Answer par 2"], sub_questions: null, status: "verified" as const },
+          { id: "q8", section: "C", qtype: "long_answer" as const, marks: 5, text: "Ek $\\triangle ABC$ mein, jahan $\\angle B = 90°$, AB = 5 cm aur BC = 12 cm hai. $\\sin A$, $\\cos A$ aur $\\tan A$ nikaliye.", options: null, answer: "sin A = 12/13, cos A = 5/13, tan A = 12/5", marking_scheme: ["Hypotenuse par 1", "Har ratio par 1 (×3)", "Units par 1"], sub_questions: null, status: "verified" as const },
+        ],
+      },
+      ...tool("verify_paper", 1800),
+      { type: "verification_summary", objective_verified: 4, objective_total: 4, rubric_checked: 3, rubric_total: 4, manual_review: ["q6"], marks_sum_ok: true, duplicates: [], rounds: 2 },
+      { type: "text_delta", text: "Paper tayyar hai — 8 sawaal, 20 marks, 45 min. 4 MCQ verified, 1 sawaal manual check chahiye (q6)." },
+      { type: "pending_approval", approval_id: approvalId, action: "finalize_test" as const, summary: "Class 10 Mathematics — 8 sawaal, 20 marks. Test History me save hoga.", args_sha256: "a".repeat(64), expires_at: new Date(Date.now() + 15 * 60_000).toISOString(), status: "pending" as const },
+    ] };
   }
   return { delay: 60, events: [{ type: "thinking_status", key: "status.thinking", params: {} }, { type: "text_delta", text: "Is sawaal ke liye mere paas abhi koi data tool nahi hai — attendance, marks ya test ke baare me poochiye." }] };
 }
