@@ -1,20 +1,14 @@
 // Floating mic on mobile dashboards (next to "Ask a4ai"): one tap opens the agent sheet and starts listening.
 // Hidden on sm+ (the composer mic is there) and when voice is off for this user / institute.
-import { useEffect, useState } from "react";
 import { Mic } from "lucide-react";
-import { voiceConfig } from "@/lib/voice/api";
+import { useVoiceConfig } from "@/lib/voice/useVoiceConfig";
 import { recordingSupported } from "@/lib/voice/ptt";
 import { requestVoiceStart } from "@/lib/voice/surface";
 
 export default function FloatingMic({ uid, onOpen }: { uid: string | null; onOpen: () => void }) {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    if (!uid || !recordingSupported()) { setOn(false); return; }
-    const ac = new AbortController();
-    voiceConfig(ac.signal).then((c) => setOn(c.enabled)).catch(() => setOn(false));
-    return () => ac.abort();
-  }, [uid]);
-  if (!on) return null;
+  const canRecord = recordingSupported();
+  const config = useVoiceConfig(canRecord ? uid : null);
+  if (!config?.enabled) return null;
   return (
     <button type="button" onClick={() => { onOpen(); requestVoiceStart(); }} aria-label="Bol kar poochhiye / Speak your question" title="Bol kar poochhiye"
       data-testid="floating-mic"

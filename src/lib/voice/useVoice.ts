@@ -7,7 +7,8 @@ import { agentStore, useAgentStore } from "@/lib/agent/store";
 import { useAgentQueryClient } from "@/lib/agent/queries";
 import type { VoiceConfig } from "@/lib/agent/types";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-import { idempotencyKey, speak, transcribe, voiceConfig } from "./api";
+import { idempotencyKey, speak, transcribe } from "./api";
+import { useVoiceConfig } from "./useVoiceConfig";
 import { createPlayer, synthLang, synthSupported, type Player } from "./player";
 import { AUTO_SEND_PAUSE_MS, MAX_BYTES, liteVoice, recordingSupported } from "./ptt";
 import { hasConsent, loadPrefs, savePrefs, withConsent, type VoicePrefs } from "./prefs";
@@ -43,7 +44,6 @@ export function useVoice(uid: string | null): Voice {
   const store = useAgentStore(uid ?? "anon", useAgentQueryClient());
   const net = useNetworkStatus();
   const [session, dispatch] = useReducer(sessionReducer, initialSession);
-  const [config, setConfig] = useState<VoiceConfig | null>(null);
   const [prefs, setPrefsState] = useState<VoicePrefs>(() => loadPrefs(uid));
   const rec = useRef<Recording | null>(null);
   const player = useRef<Player | null>(null);
@@ -55,12 +55,8 @@ export function useVoice(uid: string | null): Voice {
   const lite = net === "slow" || liteVoice(connection());
 
   useEffect(() => { setPrefsState(loadPrefs(uid)); }, [uid]);
-  useEffect(() => {
-    if (!uid) return;
-    const ac = new AbortController();
-    voiceConfig(ac.signal).then(setConfig).catch(() => setConfig(null));
-    return () => ac.abort();
-  }, [uid]);
+  // refetched when the agent becomes reachable again and on tab focus while voice is off (./useVoiceConfig)
+  const config: VoiceConfig | null = useVoiceConfig(uid, store.metaStatus === "ok");
   useEffect(() => () => { rec.current?.cancel(); player.current?.stop(); clearTimeout(autoSend.current); upload.current?.abort(); }, []);
 
   const enabled = !!config?.enabled && supported;
