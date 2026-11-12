@@ -17,7 +17,7 @@ function Countdown({ sendAt, onEdit, onSend }: { sendAt: number; onEdit: () => v
   const left = Math.max(0, sendAt - Date.now());
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-muted-foreground">{left > 0 ? "Bhej raha hoon…" : "Bhej diya"}</span>
+      <span className="text-xs tabular-nums text-muted-foreground" data-testid="voice-countdown">{left > 0 ? `${Math.ceil(left / 1000)} sec mein bhej dunga · badalna ho to Edit dabaiye` : "Bhej diya"}</span>
       <button type="button" className={btn} onClick={onEdit} data-testid="voice-edit"><Pencil aria-hidden="true" className="h-4 w-4" />Edit</button>
       <button type="button" className={primary} onClick={onSend} data-testid="voice-send-now"><Check aria-hidden="true" className="h-4 w-4" />Bhejo</button>
     </div>

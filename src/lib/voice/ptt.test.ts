@@ -11,6 +11,13 @@ describe("SilenceDetector", () => {
     for (const [t, rms] of levels) { out = d.feed(rms, t); if (out) return { out, at: t, d }; }
     return { out, at: null, d };
   };
+  it("a 2 s thinking pause mid-sentence does not stop the mic", () => {
+    const frames: Array<[number, number]> = [];
+    for (let t = 0; t < 1000; t += 50) frames.push([t, 0.2]);          // speech
+    for (let t = 1000; t < 3000; t += 50) frames.push([t, 0.005]);     // 2 s pause
+    for (let t = 3000; t < 4000; t += 50) frames.push([t, 0.2]);       // speech again
+    expect(run(frames).out).toBeNull();
+  });
   it("stops after silence that follows speech", () => {
     const frames: Array<[number, number]> = [];
     for (let t = 0; t < 1000; t += 50) frames.push([t, 0.2]);          // 1 s of speech
@@ -22,14 +29,14 @@ describe("SilenceDetector", () => {
   });
   it("gives up when nothing is said", () => {
     const frames: Array<[number, number]> = [];
-    for (let t = 0; t < 8000; t += 50) frames.push([t, 0.004]);
+    for (let t = 0; t < 12000; t += 50) frames.push([t, 0.004]);
     const r = run(frames);
     expect(r.out).toBe("empty");
     expect(r.at).toBeGreaterThanOrEqual(SILENCE_NO_SPEECH_MS - 50);
   });
   it("a short tap of noise is not speech", () => {
     const frames: Array<[number, number]> = [[0, 0.3], [50, 0.3], [100, 0.3]];
-    for (let t = 150; t < 8000; t += 50) frames.push([t, 0.004]);
+    for (let t = 150; t < 12000; t += 50) frames.push([t, 0.004]);
     expect(run(frames).out).toBe("empty");
   });
   it("hard stops at MAX_MS even while someone keeps talking", () => {
@@ -41,7 +48,7 @@ describe("SilenceDetector", () => {
   });
   it("adapts to a noisy room: constant fan noise is not speech", () => {
     const frames: Array<[number, number]> = [];
-    for (let t = 0; t < 8000; t += 50) frames.push([t, 0.03]);  // steady noise under the speech threshold
+    for (let t = 0; t < 12000; t += 50) frames.push([t, 0.03]); // steady noise under the speech threshold
     expect(run(frames).out).toBe("empty");
   });
 });

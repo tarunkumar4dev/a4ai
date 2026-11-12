@@ -7,9 +7,9 @@ export type VoiceState = "idle" | "listening" | "transcribing" | "thinking" | "s
 export const MAX_MS = 30_000;            // backend rejects longer audio (Sarvam REST limit)
 export const MAX_BYTES = 1_048_576;
 export const MIN_SPEECH_MS = 400;        // shorter than this = a tap, not speech
-export const SILENCE_AFTER_SPEECH_MS = 1200; // quiet this long after speech → stop
-export const SILENCE_NO_SPEECH_MS = 5000;    // nothing said at all → stop (and say "Dobara boliye")
-export const AUTO_SEND_PAUSE_MS = 800;   // transcript shown, then sent unless the user taps Edit
+export const SILENCE_AFTER_SPEECH_MS = 2500; // quiet this long after speech → stop (people pause mid-sentence to think)
+export const SILENCE_NO_SPEECH_MS = 8000;    // nothing said at all → stop (and say "Dobara boliye")
+export const AUTO_SEND_PAUSE_MS = 5000;  // transcript + Edit shown this long (with a seconds countdown), then sent
 export const LEVEL_SPEECH = 0.06;        // RMS (0..1) above this = speech; calibrated per session by `noiseFloor`
 export const SPACE_HOLD_MS = 150;        // desktop: Space held longer than a keypress = talk
 
