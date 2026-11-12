@@ -1,0 +1,280 @@
+/**
+ * UI Audit screenshots — Phase 0 of the UI polish pass.
+ * Captures every agent state at 360×740, 768×1024 and 1440×900 in light + dark.
+ *
+ *   AGENT_SHOTS=1 npx playwright test -c playwright.agent-mock.config.ts -g "ui-audit"
+ *
+ * States that the mock doesn't produce (blueprint, paper_preview, verification, approval, voice)
+ * are injected into the store via page.evaluate.
+ */
+import { test, expect, type Page } from "@playwright/test";
+import path from "path";
+
+test.describe.configure({ mode: "serial" });
+
+const MOCK = "http://mock.supabase.local";
+const USER = "user-t1";
+const cors = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "*",
+  "access-control-allow-methods": "*",
+  "access-control-expose-headers": "content-range",
+};
+const b64 = (o: object) =>
+  Buffer.from(JSON.stringify(o)).toString("base64url");
+const exp = Math.floor(Date.now() / 1000) + 3600;
+const jwt = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: USER, role: "authenticated", aud: "authenticated", exp })}.sig`;
+const user = {
+  id: USER, aud: "authenticated", role: "authenticated",
+  email: "teacher.ece2@msit.a4ai.in",
+  user_metadata: { full_name: "Priya Sharma" },
+  app_metadata: { provider: "email" },
+  created_at: "2026-10-01T00:00:00Z",
+};
+const session = { access_token: jwt, refresh_token: "r1", token_type: "bearer", expires_in: 3600, expires_at: exp, user };
+const access = {
+  institute_id: "inst-1", institute_name: "MSIT", primary_role: "teacher",
+  home_route: "/dashboard", hod_department_ids: [], proctor_section_ids: [], teaching_batch_ids: ["b-1"],
+};
+
+async function install(page: Page) {
+  await page.addInitScript(([s]) => {
+    localStorage.setItem("a4ai.auth.token", s);
+    (window as unknown as { __AGENT_MOCK_LATENCY__: number }).__AGENT_MOCK_LATENCY__ = 20;
+  }, [JSON.stringify(session)]);
+  await page.route((u) => !["localhost", "mock.supabase.local"].includes(u.hostname), (r) => r.abort());
+  await page.route(`${MOCK}/**`, (route) => {
+    const req = route.request();
+    if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+    const url = new URL(req.url());
+    const json = (body: unknown) =>
+      route.fulfill({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify(body) });
+    if (url.pathname.startsWith("/auth/v1/user")) return json(user);
+    if (url.pathname.startsWith("/auth/")) return json({});
+    if (url.pathname.startsWith("/storage/")) return route.fulfill({ status: 404, headers: cors, body: "" });
+    if (url.pathname === "/rest/v1/rpc/get_my_access") return json([access]);
+    if (req.method() === "HEAD") return route.fulfill({ status: 200, headers: { ...cors, "content-range": "*/0" }, body: "" });
+    return json((req.headers()["accept"] || "").includes("vnd.pgrst.object") ? {} : []);
+  });
+}
+
+const SHOTS = path.resolve(process.cwd(), process.env.AGENT_SHOTS_DIR ?? "docs/ui/before");
+const chat = (page: Page) => page.getByTestId("agent-chat-page");
+const input = (page: Page) => chat(page).getByRole("combobox", { name: "Message a4ai Agent" });
+
+async function setTheme(page: Page, dark: boolean) {
+  await page.evaluate((d) => {
+    document.documentElement.classList.toggle("dark", d);
+    document.documentElement.style.colorScheme = d ? "dark" : "light";
+  }, dark);
+}
+
+async function openWorkspace(page: Page) {
+  await install(page);
+  await page.goto("/dashboard?tab=agent");
+  await expect(page.getByTestId("agent-workspace")).toBeVisible({ timeout: 30_000 });
+}
+
+async function newChat(page: Page, phone: boolean) {
+  // At lg+ (>=1024) the sidebar has a Naya sawaal button; below that, the header has one
+  const sidebar = page.getByTestId("history-sidebar");
+  const sidebarVisible = await sidebar.isVisible().catch(() => false);
+  const btn = sidebarVisible
+    ? sidebar.getByRole("button", { name: /Naya sawaal/ })
+    : chat(page).getByRole("button", { name: /Naya sawaal/ });
+  if (await btn.isEnabled({ timeout: 5_000 }).catch(() => false)) await btn.click();
+}
+
+async function ask(page: Page, text: string) {
+  await input(page).fill(text);
+  await input(page).press("Enter");
+}
+
+// Inject events into the chat store to show states the mock doesn't produce
+async function injectEvents(page: Page, events: object[]) {
+  await page.evaluate((evts) => {
+    // Access the singleton store via __AGENT_STORE__ (exposed in dev/mock builds)
+    const store = (window as any).__AGENT_STORE__;
+    if (!store) throw new Error("Store not found on window.__AGENT_STORE__");
+    for (const ev of evts) {
+      store.dispatch({ type: "event", event: ev });
+    }
+  }, events);
+}
+
+const viewports: [string, number, number][] = [
+  ["360", 360, 740],
+  ["768", 768, 1024],
+  ["1440", 1440, 900],
+];
+
+for (const [label, w, h] of viewports) {
+  for (const theme of ["light", "dark"] as const) {
+    test(`ui-audit ${label} ${theme}`, async ({ page }) => {
+      test.setTimeout(180_000);
+      const phone = w <= 390;
+      const tablet = w === 768;
+      await page.setViewportSize({ width: w, height: h });
+
+      const shot = async (name: string) => {
+        await page.waitForTimeout(300);
+        await page.screenshot({
+          path: `${SHOTS}/${label}-${theme}-${name}.png`,
+          fullPage: false,
+        });
+      };
+
+      // --- empty ---
+      await openWorkspace(page);
+      await setTheme(page, theme === "dark");
+      await newChat(page, phone);
+      await shot("empty");
+
+      // --- chips (suggestions) ---
+      await input(page).click();
+      await expect(page.getByTestId("agent-suggestions")).toBeVisible();
+      await shot("chips");
+      await input(page).press("Escape");
+
+      // --- thinking ---
+      // Ask something that triggers a slow scenario, then screenshot mid-stream
+      await ask(page, "slow explain karo");
+      // Wait just long enough for thinking to show
+      await page.waitForTimeout(100);
+      const thinkingEl = chat(page).getByTestId("agent-thinking");
+      if (await thinkingEl.count() > 0) {
+        await shot("thinking");
+      }
+      // Wait for it to finish streaming
+      await expect(chat(page).getByTestId("msg-assistant").last()).toContainText("ECE-2", { timeout: 20_000 });
+      await shot("text-streaming");
+
+      // --- stat_card ---
+      await newChat(page, phone);
+      await ask(page, "attendance");
+      await expect(chat(page).getByTestId("stat-card")).toBeVisible({ timeout: 15_000 });
+      await chat(page).getByTestId("stat-card").scrollIntoViewIfNeeded();
+      await shot("stat_card");
+
+      // --- table + chart ---
+      await newChat(page, phone);
+      await ask(page, "sections ki attendance compare karo");
+      await expect(chat(page).getByTestId("agent-chart")).toBeVisible({ timeout: 15_000 });
+      await chat(page).getByTestId("ranking-table").scrollIntoViewIfNeeded();
+      await shot("table_chart");
+
+      // --- clarify chips ---
+      await newChat(page, phone);
+      await ask(page, "ECE 1 ki attendance");
+      await expect(chat(page).getByTestId("clarify")).toBeVisible({ timeout: 15_000 });
+      await shot("clarify");
+
+      // --- error ---
+      await newChat(page, phone);
+      await ask(page, "fail");
+      await expect(chat(page).getByTestId("agent-error")).toBeVisible({ timeout: 15_000 });
+      await shot("error");
+
+      // --- blueprint + paper + verification + approval ---
+      await newChat(page, phone);
+      await ask(page, "Class 10 trigonometry test banao, 20 marks");
+      // The mock now produces blueprint → paper → verification → approval
+      await expect(chat(page).getByTestId("approval")).toBeVisible({ timeout: 30_000 });
+
+      // scroll to blueprint
+      const bp = chat(page).getByTestId("blueprint");
+      if (await bp.count() > 0) {
+        await bp.scrollIntoViewIfNeeded();
+        await shot("blueprint");
+      }
+      // scroll to paper preview
+      const pp = chat(page).getByTestId("paper-preview");
+      if (await pp.count() > 0) {
+        await pp.scrollIntoViewIfNeeded();
+        await shot("paper_preview");
+      }
+      // scroll to verification
+      const vb = chat(page).getByTestId("verification");
+      if (await vb.count() > 0) {
+        await vb.scrollIntoViewIfNeeded();
+        await shot("verification");
+      }
+      // scroll to approval
+      const ap = chat(page).getByTestId("approval");
+      if (await ap.count() > 0) {
+        await ap.scrollIntoViewIfNeeded();
+        await shot("approval");
+      }
+
+      // --- sheet (Ask a4ai button) ---
+      await page.goto("/dashboard");
+      await expect(page.getByTestId("ask-a4ai")).toBeVisible({ timeout: 30_000 });
+      await setTheme(page, theme === "dark");
+      await page.getByTestId("ask-a4ai").click();
+      await expect(page.getByTestId("agent-chat-sheet")).toBeVisible();
+      await page.waitForTimeout(500);
+      await setTheme(page, theme === "dark");
+      await shot("sheet");
+
+      // --- voice consent ---
+      // Check if voice dock is visible and try to trigger consent
+      const voiceDock = page.getByTestId("voice-dock");
+      if (await voiceDock.count() > 0) {
+        await shot("mic_idle");
+      } else {
+        await shot("mic_not_visible");
+      }
+
+      // Check for overflow
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  }
+}
+
+// --- voice states: the mic appears only when GET /agent/voice/config says enabled, so it is faked here.
+// Chromium's fake mic device makes "listening" reachable without a real microphone.
+const VOICE_CONFIG = {
+  enabled: true, reason: null, tts: "sarvam", stt_provider: "sarvam",
+  speakers: [{ id: "anushka", label: "Anushka", gender: "female" }, { id: "abhilash", label: "Abhilash", gender: "male" }],
+  default_speaker: "anushka", paces: [0.85, 1.0, 1.15], max_seconds: 30, max_bytes: 1_048_576,
+  formats: ["audio/webm", "audio/mp4"], consent_version: "v1", limits: {},
+};
+
+test.describe("ui-audit voice", () => {
+  test.use({ permissions: ["microphone"] }); // fake mic device: launch flags in playwright.ui-audit.config.ts
+  for (const [label, w, h] of [["360", 360, 740], ["1440", 1440, 900]] as const) {
+    for (const theme of ["light", "dark"] as const) {
+      test(`ui-audit voice ${label} ${theme}`, async ({ page }) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: w, height: h });
+        await page.route("**/agent/voice/config", (r) => r.request().method() === "OPTIONS"
+          ? r.fulfill({ status: 204, headers: cors })
+          : r.fulfill({ status: 200, headers: { ...cors, "content-type": "application/json" }, body: JSON.stringify(VOICE_CONFIG) }));
+        const shot = async (name: string) => {
+          await page.waitForTimeout(300);
+          await page.screenshot({ path: `${SHOTS}/${label}-${theme}-${name}.png` });
+        };
+        await openWorkspace(page);
+        await setTheme(page, theme === "dark");
+        await expect(page.getByTestId("voice-consent")).toBeVisible({ timeout: 15_000 });
+        await shot("voice_consent");
+        await page.getByTestId("voice-consent-ok").click();
+        const mic = page.getByTestId("mic-button");
+        await expect(mic).toHaveAttribute("data-state", "idle");
+        const box = await mic.boundingBox();
+        expect(box!.width).toBeGreaterThanOrEqual(56); // spec: mic hit target >= 56 px
+        expect(await mic.getAttribute("aria-label")).toBeTruthy();
+        await shot("mic_idle");
+        await mic.click();
+        await expect(mic).toHaveAttribute("data-state", "listening", { timeout: 10_000 });
+        await expect(page.getByTestId("voice-state-label")).toHaveText("Sun raha hoon…");
+        await shot("mic_listening");
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(overflow).toBeLessThanOrEqual(0);
+      });
+    }
+  }
+});

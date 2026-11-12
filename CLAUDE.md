@@ -520,6 +520,18 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   one transition allowed past lite.css (`.a4-net-banner` in index.css). Safari/Firefox: slow only shows via the probe
   after a change event, and "Wi-Fi without internet" isn't detected (no polling while healthy).
 
+- [x] a4ai Agent UI (6 Nov, branch claude/youthful-archimedes-tw0p0s): `/dashboard?tab=agent` workspace + "Ask a4ai" sheet share
+  one store (`src/lib/agent/store.ts`), history per user in localStorage (cleared on sign-out). Notes, mount-point diffs,
+  colour exceptions, known gaps: `docs/AGENT_UI_NOTES.md`. e2e `tests/e2e/agent.spec.ts` (agent + Supabase mocked).
+  Known: admin/HOD get bounced from /dashboard by the dashboard's home_route rule → they use the sheet.
+- [x] a4ai Agent UI v2 (9 Nov, same branch, PR #21): server-owned chat history (ChatGPT-style panel / drawer / in-sheet
+  drawer, pin / rename / delete + undo, windowed + infinite scroll), Google-style suggestions combobox, Copy / Regenerate /
+  👍👎+note / Edit-and-resend / Stop (cancel endpoint), ScopeCard + SectionComparison, Ctrl/⌘+K · Ctrl/⌘+Shift+O · "/".
+  All types in `src/lib/agent/types.ts`; `AGENT_API_V2.md` wasn't published, so the UI runs against the typed mock
+  (`VITE_AGENT_MOCK=1`, `src/lib/agent/mock.ts`). Assumed shapes + what's blocked on the backend: `docs/AGENT_UI.md`.
+  e2e: `npx playwright test -c playwright.agent-mock.config.ts` (12, incl. a WCAG contrast audit). Agent surfaces sit on
+  `bg-card` because the app's `--muted-foreground` on `--background` is only 4.44:1.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
