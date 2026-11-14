@@ -166,7 +166,7 @@ const AI_TOOLS_DATA = [
     tagline: "Past 10-year board questions",
     desc: "Search, filter, and assign verified Previous Year Questions with official marking rubrics and step-by-step solutions.",
     cta: "Browse PYQs",
-    href: "/practice/zone",
+    href: "/practice",
     highlights: ["CBSE past 10 years", "Chapter-wise breakdown", "Marking scheme included"],
     tint: "bg-[#FFF1EC] text-[#D93F4D]"
   }

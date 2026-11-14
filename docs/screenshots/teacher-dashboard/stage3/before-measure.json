@@ -1,0 +1,190 @@
+{
+  "width-320": {
+    "h1": {
+      "weight": "700",
+      "color": "rgb(17, 24, 39)",
+      "bg": "rgba(0, 0, 0, 0)",
+      "radius": "0px",
+      "height": 16,
+      "font": "-apple-system"
+    },
+    "h1Text": "a4aiEngine V1",
+    "rootBg": "rgb(249, 250, 251)",
+    "rootColor": "rgb(17, 24, 39)",
+    "tabs": [
+      {
+        "tab": "builder",
+        "h": 45,
+        "active": false
+      },
+      {
+        "tab": "check",
+        "h": 45,
+        "active": false
+      },
+      {
+        "tab": "ai",
+        "h": 45,
+        "active": true
+      },
+      {
+        "tab": "contest-pdf",
+        "h": 45,
+        "active": false
+      }
+    ],
+    "submit": {
+      "weight": "700",
+      "color": "rgb(255, 255, 255)",
+      "bg": "rgba(0, 0, 0, 0)",
+      "radius": "12px",
+      "height": 46,
+      "font": "-apple-system"
+    },
+    "submitText": "Generate TestGenerate",
+    "blurOrbs": 2,
+    "hasPro": false,
+    "overflow": 0
+  },
+  "width-390": {
+    "h1": {
+      "weight": "700",
+      "color": "rgb(17, 24, 39)",
+      "bg": "rgba(0, 0, 0, 0)",
+      "radius": "0px",
+      "height": 16,
+      "font": "-apple-system"
+    },
+    "h1Text": "a4aiEngine V1",
+    "rootBg": "rgb(249, 250, 251)",
+    "rootColor": "rgb(17, 24, 39)",
+    "tabs": [
+      {
+        "tab": "builder",
+        "h": 45,
+        "active": false
+      },
+      {
+        "tab": "check",
+        "h": 45,
+        "active": false
+      },
+      {
+        "tab": "ai",
+        "h": 45,
+        "active": true
+      },
+      {
+        "tab": "contest-pdf",
+        "h": 45,
+        "active": false
+      }
+    ],
+    "submit": {
+      "weight": "700",
+      "color": "rgb(255, 255, 255)",
+      "bg": "rgba(0, 0, 0, 0)",
+      "radius": "12px",
+      "height": 46,
+      "font": "-apple-system"
+    },
+    "submitText": "Generate TestGenerate",
+    "blurOrbs": 2,
+    "hasPro": false,
+    "overflow": 0
+  },
+  "width-768": {
+    "h1": {
+      "weight": "700",
+      "color": "rgb(17, 24, 39)",
+      "bg": "rgba(0, 0, 0, 0)",
+      "radius": "0px",
+      "height": 28,
+      "font": "-apple-system"
+    },
+    "h1Text": "a4aiEngine V1",
+    "rootBg": "rgb(249, 250, 251)",
+    "rootColor": "rgb(17, 24, 39)",
+    "tabs": [
+      {
+        "tab": "builder",
+        "h": 45,
+        "active": false
+      },
+      {
+        "tab": "check",
+        "h": 45,
+        "active": false
+      },
+      {
+        "tab": "ai",
+        "h": 45,
+        "active": true
+      },
+      {
+        "tab": "contest-pdf",
+        "h": 45,
+        "active": false
+      }
+    ],
+    "submit": {
+      "weight": "700",
+      "color": "rgb(255, 255, 255)",
+      "bg": "rgba(0, 0, 0, 0)",
+      "radius": "12px",
+      "height": 50,
+      "font": "-apple-system"
+    },
+    "submitText": "Generate TestGenerate",
+    "blurOrbs": 2,
+    "hasPro": false,
+    "overflow": 0
+  },
+  "width-1440": {
+    "h1": {
+      "weight": "700",
+      "color": "rgb(17, 24, 39)",
+      "bg": "rgba(0, 0, 0, 0)",
+      "radius": "0px",
+      "height": 28,
+      "font": "-apple-system"
+    },
+    "h1Text": "a4aiEngine V1",
+    "rootBg": "rgb(249, 250, 251)",
+    "rootColor": "rgb(17, 24, 39)",
+    "tabs": [
+      {
+        "tab": "builder",
+        "h": 45,
+        "active": false
+      },
+      {
+        "tab": "check",
+        "h": 45,
+        "active": false
+      },
+      {
+        "tab": "ai",
+        "h": 45,
+        "active": true
+      },
+      {
+        "tab": "contest-pdf",
+        "h": 45,
+        "active": false
+      }
+    ],
+    "submit": {
+      "weight": "700",
+      "color": "rgb(255, 255, 255)",
+      "bg": "rgba(0, 0, 0, 0)",
+      "radius": "12px",
+      "height": 50,
+      "font": "-apple-system"
+    },
+    "submitText": "Generate TestGenerate",
+    "blurOrbs": 2,
+    "hasPro": false,
+    "overflow": 0
+  }
+}

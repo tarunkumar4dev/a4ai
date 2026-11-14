@@ -33,6 +33,11 @@ interface Voucher {
 
 interface CoinContextType {
   coins: number;
+  /** The balance actually read from profiles.coins; null while loading or when it could not be read.
+   *  (`coins` falls back to 100 in those cases — never show that as someone's real balance.) */
+  balance: number | null;
+  /** profiles.total_coins_earned as read; null when unknown (`totalEarned` falls back to 100). */
+  earned: number | null;
   totalEarned: number;
   transactions: CoinTransaction[];
   vouchers: Voucher[];
@@ -50,6 +55,8 @@ interface CoinProviderProps {
 
 export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
   const [coins, setCoins] = useState(0);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [earned, setEarned] = useState<number | null>(null);
   const [totalEarned, setTotalEarned] = useState(0);
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -244,6 +251,8 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
   // Keyed on the user id, not the user object: AuthProvider hands out a new
   // object on every session/profile refresh, which used to load coins 3x per page.
   useEffect(() => {
+    setBalance(null); // never show the previous user's balance on a shared device
+    setEarned(null);
     if (userId) {
       loadCoinData();
     } else {
@@ -273,6 +282,8 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
         setCoins(100);
         setTotalEarned(100);
       } else {
+        setBalance(typeof profile?.coins === "number" ? profile.coins : null);
+        setEarned(typeof profile?.total_coins_earned === "number" ? profile.total_coins_earned : null);
         setCoins(profile?.coins || 100);
         setTotalEarned(profile?.total_coins_earned || 100);
       }
@@ -312,6 +323,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
       const newTotalEarned = totalEarned + amount;
 
       setCoins(newCoinBalance);
+      setBalance((b) => (b == null ? null : newCoinBalance));
       setTotalEarned(newTotalEarned);
 
       const { error: updateError } = await supabase
@@ -328,6 +340,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
       if (updateError) {
         console.error('Error updating coins in database:', updateError);
         setCoins(coins);
+        setBalance((b) => (b == null ? null : coins));
         setTotalEarned(totalEarned);
         return;
       }
@@ -351,6 +364,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Error adding coins:', error);
       setCoins(coins);
+      setBalance((b) => (b == null ? null : coins));
       setTotalEarned(totalEarned);
     }
   };
@@ -362,6 +376,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
     try {
       const newCoinBalance = coins - amount;
       setCoins(newCoinBalance);
+      setBalance((b) => (b == null ? null : newCoinBalance));
 
       const { error: updateError } = await supabase
         .from('profiles')
@@ -374,6 +389,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
       if (updateError) {
         console.error('Error spending coins in database:', updateError);
         setCoins(coins);
+        setBalance((b) => (b == null ? null : coins));
         return false;
       }
 
@@ -396,6 +412,7 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Error spending coins:', error);
       setCoins(coins);
+      setBalance((b) => (b == null ? null : coins));
       return false;
     }
   };
@@ -417,6 +434,8 @@ export const CoinProvider: React.FC<CoinProviderProps> = ({ children }) => {
 
   const value: CoinContextType = {
     coins,
+    balance,
+    earned,
     totalEarned,
     transactions,
     vouchers,

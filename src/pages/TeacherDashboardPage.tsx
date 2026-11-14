@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import StaticSarthi from "@/components/chat/StaticSarthi";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/providers/AuthProvider";
+import { useAccess } from "@/context/AccessProvider";
 import { supabase } from "@/lib/supabaseClient";
 import ProctorSectionView, { useProctorCheck } from "@/components/attendance/ProctorSectionView";
 import { downloadTestDocument, fetchQuestionsForTest, type TestQuestionData } from "@/utils/testPdfExporter";
@@ -1240,6 +1241,21 @@ export default function TeacherDashboardPage() {
   const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
 
   const { isProctor } = useProctorCheck();
+
+  // A pure HOD / admin (one who doesn't teach any batch) belongs on their own
+  // dashboard — /hod or /institute. We keep /dashboard open to admin/hod too so
+  // an HOD who is ALSO a subject teacher can still use the teacher tools here,
+  // so only redirect when they teach nothing (teaching_batch_ids empty).
+  // Login already sends people to home_route; this covers landing on /dashboard
+  // directly (e.g. being promoted while already on this page).
+  const { access } = useAccess();
+  useEffect(() => {
+    if (!access) return;
+    if (access.home_route && access.home_route !== "/dashboard" && access.teaching_batch_ids.length === 0) {
+      navigate(access.home_route, { replace: true });
+    }
+  }, [access, navigate]);
+
   const [activeTab, setActiveTab] = useState("dashboard");
   // deep link: /dashboard?tab=assignments&assignment=<id>&view=copies (Checking Link → "Submissions dekho")
   const location = useLocation();

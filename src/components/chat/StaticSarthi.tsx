@@ -81,11 +81,8 @@ const STUDENT_TOPICS: Topic[] = [
     id: "practice",
     question: "How do I practice questions?",
     keywords: ["practice", "question", "pyq", "chapter", "solve", "revise"],
-    answer: "Open Practice, pick your class, subject and chapter, and solve questions with answers and explanations.",
-    actions: [
-      { label: "Practice", path: "/practice" },
-      { label: "Daily practice", path: "/daily-practice" },
-    ],
+    answer: "Open Practice, pick your class, subject and chapter, and solve NCERT questions 10 at a time. Solved examples show their answers; mark each question \"I got it\" or \"Review later\".",
+    actions: [{ label: "Practice", path: "/practice" }],
   },
   {
     id: "contests",

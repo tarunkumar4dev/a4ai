@@ -21,12 +21,16 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
+<<<<<<< HEAD
 import { useAttendanceQueue } from "@/hooks/useAttendanceQueue";
 import {
   attendanceKey, countDifferences, discardQueuedSave, flushAttendanceQueue, getQueuedSave, keepMyMarks,
   queueAttendanceSave, sendAttendance, waitForFlush, type AttendanceSave, type Marks,
 } from "@/lib/offline/attendanceQueue";
 import type { QueueItem } from "@/lib/offline/secureQueue";
+=======
+import NotifyParentsModal, { type NotifyAttendanceRecord } from "./NotifyParentsModal";
+>>>>>>> origin/main
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -42,6 +46,9 @@ interface Student {
   status: Status;
   /** this month's %, only when the server returned one */
   pct?: number;
+  /** students.parent_phone / parent_name — who the "Notify Parents" modal messages */
+  parentPhone?: string | null;
+  parentName?: string | null;
 }
 
 interface SessionTarget {
@@ -200,6 +207,7 @@ function PendingSaves({ items, onSync, onKeepMine, onDiscard }: {
 ═══════════════════════════════════════════════════════════ */
 export default function TeacherAttendanceView() {
   const { user } = useAuth();
+  const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Teacher";
 
   const [selected, setSelected] = useState<SessionTarget | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
@@ -217,6 +225,7 @@ export default function TeacherAttendanceView() {
   const [hasSaved, setHasSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+<<<<<<< HEAD
   /** the current marks are on this device, not on the server yet */
   const [queuedLocal, setQueuedLocal] = useState(false);
   const queued = useAttendanceQueue(user?.id);
@@ -224,6 +233,13 @@ export default function TeacherAttendanceView() {
   const baseMarks = useRef<Marks>({});
   const queuedMarks = useRef<Marks>({});
   const seenQueued = useRef(false);
+=======
+  // Attendance exactly as the server holds it — what "Notify Parents" messages about, so editing the sheet
+  // afterwards can't send a parent a status the server doesn't have.
+  const [savedSheet, setSavedSheet] = useState<Student[] | null>(null);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [instName, setInstName] = useState("");
+>>>>>>> origin/main
 
   const [instId, setInstId] = useState<string | null>(null);
   const [noInstitute, setNoInstitute] = useState(false);
@@ -267,6 +283,9 @@ export default function TeacherAttendanceView() {
       setNoInstitute(!targetInstId);
       if (!targetInstId) { setSessions([]); setAssigns([]); setLoading(false); return; }
       setInstId(targetInstId);
+      // Signs the parent message. Optional: the modal falls back to a generic name.
+      supabase.from("institutes").select("name").eq("id", targetInstId).maybeSingle()
+        .then(({ data }) => setInstName(data?.name || ""));
       const ds = toDateStr(date);
 
       const [sessRes, tgtRes, ctRes] = await Promise.all([
@@ -338,11 +357,16 @@ export default function TeacherAttendanceView() {
   // ── Open session ──
   const open = useCallback(async (t: SessionTarget) => {
     setSelected(t); setStudents([]); setOriginal([]); setDirty(false); setSearch(""); setFilter("all");
+<<<<<<< HEAD
     setLastSaved(null); setSaveError(null); setSheetError(null); setHasSaved(false); setLoadingSheet(true);
     setQueuedLocal(false); seenQueued.current = false; baseMarks.current = {};
+=======
+    setLastSaved(null); setSaveError(null); setSheetError(null); setHasSaved(false);
+    setSavedSheet(null); setNotifyOpen(false); setLoadingSheet(true);
+>>>>>>> origin/main
     try {
       const ds = toDateStr(date);
-      const { data: stu, error: stuErr } = await supabase.from("students").select("id, name, roll_no")
+      const { data: stu, error: stuErr } = await supabase.from("students").select("id, name, roll_no, parent_phone, parent_name")
         .eq("batch_id", t.batchId).eq("is_active", true).order("roll_no");
       if (stuErr) throw stuErr;
       if (!stu?.length) { setLoadingSheet(false); return; }
@@ -382,12 +406,22 @@ export default function TeacherAttendanceView() {
 
       const loaded: Student[] = stu.map((s: any) => ({
         id: s.id, name: s.name, rollNo: s.roll_no || undefined,
+<<<<<<< HEAD
         status: waiting?.marks[s.id] || saved[s.id] || "present", pct: pctMap[s.id],
       }));
       setStudents(loaded); setOriginal(loaded.map(s => ({ ...s })));
       setHasSaved(Object.keys(saved).length > 0);
       baseMarks.current = waiting ? waiting.base : saved;
       if (waiting) { queuedMarks.current = waiting.marks; setQueuedLocal(true); }
+=======
+        status: saved[s.id] || "present", pct: pctMap[s.id],
+        parentPhone: s.parent_phone, parentName: s.parent_name,
+      }));
+      setStudents(loaded); setOriginal(loaded.map(s => ({ ...s })));
+      setHasSaved(Object.keys(saved).length > 0);
+      // Marks the server already holds can be notified without re-saving (Save is disabled when nothing changed).
+      if (Object.keys(saved).length) setSavedSheet(loaded.map(s => ({ ...s })));
+>>>>>>> origin/main
       if (sid) setSelected(prev => (prev ? { ...prev, sessionId: sid } : prev));
     } catch (e) {
       console.error("attendance sheet:", e);
@@ -453,6 +487,7 @@ export default function TeacherAttendanceView() {
       baseMarks.current = marks; seenQueued.current = false; setQueuedLocal(false);
       setSelected(prev => (prev ? { ...prev, sessionId: res.sessionId, isMarked: true } : prev));
       setOriginal(students.map(s => ({ ...s }))); setDirty(false); setHasSaved(true);
+      setSavedSheet(students.map(s => ({ ...s })));
       setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
       const ctName = classTeachers[selected.batchId];
       toast.success(`Saved: ${selected.subjectName} · ${classLabel(selected)}${ctName && ctName !== "you" ? ` · sent to ${ctName}` : ""}`);
@@ -548,6 +583,8 @@ export default function TeacherAttendanceView() {
   const lCount = useMemo(() => students.filter(s => s.status === "leave").length, [students]);
   const pct = students.length ? Math.round((pCount / students.length) * 100) : 0;
   const changed = useMemo(() => dirty ? students.reduce((a, s, i) => s.status !== original[i]?.status ? a + 1 : a, 0) : 0, [students, original, dirty]);
+  // Counted on the saved sheet, not the live one, so the button's N matches what parents would be told.
+  const savedAbsent = useMemo(() => (savedSheet || []).filter(s => s.status === "absent").length, [savedSheet]);
 
   const confirmDialog = (
     <AlertDialog open={!!confirm} onOpenChange={o => { if (!o) setConfirm(null); }}>
@@ -699,6 +736,25 @@ export default function TeacherAttendanceView() {
   return (
     <>
       {confirmDialog}
+      {notifyOpen && savedSheet && (
+        <NotifyParentsModal
+          onClose={() => setNotifyOpen(false)}
+          attendanceRecords={savedSheet.map((s): NotifyAttendanceRecord => ({
+            student_id: s.id,
+            student_name: s.name,
+            status: s.status,
+            guardian_phone: s.parentPhone ?? null,
+            guardian_name: s.parentName ?? null,
+          }))}
+          sessionInfo={{
+            institute_name: instName || "your institute",
+            section_name: classLabel(selected),
+            subject_name: selected.subjectName,
+            teacher_name: name,
+            date,
+          }}
+        />
+      )}
       {/* att-sheet: index.css hides the help bubble while this is open (it sat on the P/A/L buttons) */}
       <div ref={sheetRef} className="att-root att-sheet space-y-3 text-[#1B1B1B] dark:text-white">
         {/* Header — sticky at every width so Save stays in reach after scrolling a long class */}
@@ -736,6 +792,13 @@ export default function TeacherAttendanceView() {
                 </div>
               </div>
               <p role="status" aria-live="polite" className={`mt-1.5 text-xs font-medium ${statusLine.tone}`}>{statusLine.text}</p>
+              {/* Offered only on what the server already holds: after a save, before any further edit. */}
+              {savedSheet && !dirty && !saving && savedAbsent > 0 && (
+                <button type="button" onClick={() => setNotifyOpen(true)}
+                  className={`${BTN_SECONDARY} mt-2 w-full border-[#25D366] text-[#128C4A] sm:w-auto ${FOCUS}`}>
+                  📱 Notify Parents (Absent: {savedAbsent})
+                </button>
+              )}
             </>
           )}
         </div>

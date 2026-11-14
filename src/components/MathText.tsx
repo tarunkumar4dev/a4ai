@@ -9,6 +9,9 @@ interface MathTextProps {
   className?: string;
 }
 
+// Text shown as-is (KaTeX failed, or plain text): always escaped, never parsed as HTML.
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
 const MathText = ({ text, className = "" }: MathTextProps) => {
   const rendered = useMemo(() => {
     if (!text) return "";
@@ -30,8 +33,8 @@ const MathText = ({ text, className = "" }: MathTextProps) => {
                 strict: false,
               });
             } catch {
-              // If KaTeX fails, return cleaned text
-              return latex;
+              // If KaTeX fails, show the source as plain text
+              return esc(latex);
             }
           }
           // Regular text — escape HTML
@@ -43,7 +46,7 @@ const MathText = ({ text, className = "" }: MathTextProps) => {
         })
         .join("");
     } catch {
-      return text;
+      return esc(text);
     }
   }, [text]);
 

@@ -380,9 +380,9 @@ export default function SignupPage() {
   };
 
   const roles = [
-    { id: "student", title: "Student", icon: GraduationCap, color: "text-blue-500", desc: "100 Welcome Coins" },
-    { id: "teacher", title: "Teacher", icon: School, color: "text-slate-900", desc: "200 Welcome Coins" },
-    { id: "institute", title: "Institute", icon: Building2, color: "text-green-500", desc: "500 Welcome Coins" },
+    { id: "student", title: "Student", icon: GraduationCap, color: "text-blue-500", desc: "Contests, practice & flashcards" },
+    { id: "teacher", title: "Teacher", icon: School, color: "text-slate-900", desc: "Tests, copy checking & classes" },
+    { id: "institute", title: "Institute", icon: Building2, color: "text-green-500", desc: "Batches, staff & attendance" },
   ];
 
   return (

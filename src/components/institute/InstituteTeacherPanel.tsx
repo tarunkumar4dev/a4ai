@@ -28,6 +28,10 @@ type BatchInfo = {
   name: string;
   class_level?: string;
   student_count?: number;
+  /** Subjects I teach in this batch (teaching_assignments) — a batch is a class, a class has subjects. */
+  subjects?: string[];
+  /** I'm the class teacher (proctor) of this batch's section — I see it for every subject, not just mine. */
+  isProctor?: boolean;
 };
 
 export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: string; userEmail?: string }) {
@@ -90,27 +94,55 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
 
       // 5. My batches = useMyScope (teaching_assignments / timetable + proctor sections).
       //    No teacher_batches, no department fallback, no whole-institute fallback → true empty state if unassigned.
-      const batchRows = scope.batches.map(b => ({ id: b.id, name: b.name, class_level: b.class_level || undefined }));
+      const batchRows: BatchInfo[] = scope.batches.map(b => ({
+        id: b.id,
+        name: b.name,
+        class_level: b.class_level || undefined,
+        isProctor: !!b.section_id && scope.proctorSectionIds.includes(b.section_id),
+      }));
       setBatches(batchRows);
       setTotalStudents(0);
 
       if (batchRows && batchRows.length > 0) {
-        // Get student counts per batch
-        const { data: stuCounts } = await supabase
-          .from("students")
-          .select("batch_id")
-          .eq("institute_id", instId)
-          .eq("is_active", true)
-          .in("batch_id", batchRows.map(b => b.id));
+        const batchIds = batchRows.map(b => b.id);
+        // Student counts + the subject I teach in each batch. The batch name alone ("ECE 1") doesn't say
+        // which subject it is for me, and a teacher can hold several subjects in the same class.
+        const [{ data: stuCounts }, { data: taRows }] = await Promise.all([
+          supabase
+            .from("students")
+            .select("batch_id")
+            .eq("institute_id", instId)
+            .eq("is_active", true)
+            .in("batch_id", batchIds),
+          userId
+            ? supabase
+                .from("teaching_assignments")
+                .select("batch_id, subjects(name, code)")
+                .eq("teacher_id", userId)
+                .eq("is_active", true)
+                .in("batch_id", batchIds)
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
 
         const countMap: Record<string, number> = {};
         stuCounts?.forEach(s => {
           if (s.batch_id) countMap[s.batch_id] = (countMap[s.batch_id] || 0) + 1;
         });
 
+        const subjMap: Record<string, string[]> = {};
+        (taRows || []).forEach((r: any) => {
+          // PostgREST returns the embed as an object (or a 1-element array depending on the relation)
+          const subj = Array.isArray(r.subjects) ? r.subjects[0] : r.subjects;
+          const label: string | undefined = subj?.name || subj?.code;
+          if (!label) return;
+          if (!subjMap[r.batch_id]) subjMap[r.batch_id] = [];
+          if (!subjMap[r.batch_id].includes(label)) subjMap[r.batch_id].push(label);
+        });
+
         const enriched = batchRows.map(b => ({
           ...b,
           student_count: countMap[b.id] || 0,
+          subjects: subjMap[b.id] || [],
         }));
         setBatches(enriched);
         setTotalStudents(Object.values(countMap).reduce((a, b) => a + b, 0));
@@ -242,11 +274,23 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {batches.map(b => (
               <div key={b.id} className="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-white/5">
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-8 h-8 rounded-lg bg-[#FFF5F2] dark:bg-orange-500/10 flex items-center justify-center text-[#FF7043] text-sm shrink-0">📚</div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="m-0 text-[13px] font-bold text-slate-800 dark:text-white">{b.name}</p>
-                    {b.class_level && <p className="m-0 text-[11px] text-slate-400 font-medium">Class {b.class_level}</p>}
+                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                      {b.class_level && <span className="text-[11px] text-slate-400 font-medium">Class {b.class_level}</span>}
+                      {(b.subjects || []).map(s => (
+                        <span key={s} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                          📖 {s}
+                        </span>
+                      ))}
+                      {b.isProctor && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300">
+                          Class teacher
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-200/70 dark:bg-slate-700/60 px-2.5 py-0.5 rounded-full shrink-0">
