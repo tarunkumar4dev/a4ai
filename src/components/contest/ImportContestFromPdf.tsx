@@ -2,6 +2,9 @@
 // "Create contest from PDF": PDF → Storage → backend parse job → teacher reviews / fixes → the existing
 // CreateContestModal (configure → share). Used on /dashboard/test-generator?tab=contest-pdf (/contests links there).
 // {jobId, storagePath, startedAt} (and later the reviewed draft) live in sessionStorage, so a refresh resumes.
+// After the review the same questions can also be saved as a question bank ("Save as Question Bank" / "Build paper
+// from these questions") — see QuestionBankPanel ("My question banks", at the bottom of this tab). The contest
+// flow itself is unchanged.
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, FileText, Loader2, Pencil, Plus, Trash2, UploadCloud, X } from "lucide-react";
@@ -9,6 +12,8 @@ import { toast } from "sonner";
 import MathText from "@/components/MathText";
 import LoginModal from "@/components/LoginModal";
 import { CreateContestModal } from "./CreateContestModal";
+import QuestionBankPanel, { SaveBankDialog } from "./QuestionBankPanel";
+import { MAX_BANK_QUESTIONS, createBank, toBankQuestions } from "@/lib/questionBankApi";
 import { supabase } from "@/lib/supabaseClient";
 import { isoDate } from "@/lib/localDate";
 import { useAuth } from "@/providers/AuthProvider";
@@ -120,6 +125,13 @@ export default function ImportContestFromPdf() {
   const [showModal, setShowModal] = useState(false);
   const [saveToHistory, setSaveToHistory] = useState(false);
   const [createdLink, setCreatedLink] = useState<string | null>(null);
+  // question bank: the name dialog ("save" only, or "build" = save, then open Build paper), the bank made from
+  // the questions as they are now, and what the "My question banks" panel should reload / open
+  const [bankDialog, setBankDialog] = useState<null | "save" | "build">(null);
+  const [savingBank, setSavingBank] = useState(false);
+  const [savedBank, setSavedBank] = useState<{ id: string; sig: string } | null>(null);
+  const [bankRefresh, setBankRefresh] = useState(0);
+  const [buildBankId, setBuildBankId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   /** the chosen PDF — lets "Try again" upload it again if the stored copy is gone (lost on refresh) */
   const [file, setFile] = useState<File | null>(null);
@@ -247,6 +259,7 @@ export default function ImportContestFromPdf() {
     setFile(null);
     setPhase("pick"); setStoragePath(null); setJobId(null); setJob(null); setFailure(null); setPickError(null);
     setMeta(null); setItems([]); setEditing(null); setCreatedLink(null); setFileName("");
+    setSavedBank(null); setBankDialog(null);
   }, []);
 
   const upload = async (f: File) => {
@@ -353,6 +366,50 @@ export default function ImportContestFromPdf() {
     else toast.success("Also saved in your Test History.");
   };
 
+  // ── question bank (the reviewed questions, exactly as they are on screen) ──
+  const itemsSig = useMemo(() => JSON.stringify(items.map((it) => [it.q, it.checked])), [items]);
+  const bankIsCurrent = !!savedBank && savedBank.sig === itemsSig;
+  const bankBlocker = items.length === 0 ? "There are no questions to save."
+    : items.length > MAX_BANK_QUESTIONS ? `A question bank can hold ${MAX_BANK_QUESTIONS} questions; this paper has ${items.length}.` : null;
+
+  const saveBank = async (name: string) => {
+    if (!meta) return;
+    const thenBuild = bankDialog === "build";
+    setSavingBank(true);
+    try {
+      const res = await createBank({
+        name,
+        questions: toBankQuestions(items.map((it) => ({ q: it.q, confirmed: it.checked, usable: !needsFix(it) }))),
+        source_filename: fileName || null, source_tag: meta.title || null,
+        subject: subject || null, class_grade: classGrade || null, board: meta.board || null,
+      });
+      if (!alive.current) return;
+      setSavedBank({ id: res.bank.id, sig: itemsSig });
+      setBankRefresh((n) => n + 1);
+      setBankDialog(null);
+      toast.success(`Saved “${res.bank.name}” — ${res.stats.saved} question${res.stats.saved === 1 ? "" : "s"}.`, thenBuild ? undefined : {
+        action: { label: "View", onClick: () => document.getElementById("my-question-banks")?.scrollIntoView({ behavior: "smooth", block: "start" }) },
+      });
+      res.warnings.forEach((w) => toast.message(w));
+      if (thenBuild) setBuildBankId(res.bank.id);
+    } catch (e: any) {
+      if (alive.current) toast.error(e?.message || "Could not save the question bank.");
+    } finally {
+      if (alive.current) setSavingBank(false);
+    }
+  };
+  const openBankAction = (kind: "save" | "build") => {
+    if (bankBlocker) { toast.error(bankBlocker); return; }
+    if (!gateAction("save question bank")) return;
+    setEditing(null);
+    if (bankIsCurrent && savedBank) {
+      if (kind === "build") setBuildBankId(savedBank.id);
+      else document.getElementById("my-question-banks")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    setBankDialog(kind);
+  };
+
   if (role === "student") {
     return <div className="max-w-xl mx-auto rounded-2xl border border-gray-200 bg-white p-6 text-sm text-gray-600">Only teachers can create contests.</div>;
   }
@@ -361,7 +418,7 @@ export default function ImportContestFromPdf() {
   const inputCls = "mt-1 w-full rounded-xl border px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-300";
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4 pb-40">
+    <div className={`max-w-3xl mx-auto space-y-4 ${phase === "review" ? "pb-56" : "pb-40"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-black text-gray-900 leading-tight">Create contest from PDF</h2>
@@ -520,8 +577,25 @@ export default function ImportContestFromPdf() {
                   </button>
                 </>
               )}
+              {/* question bank: the same reviewed questions, kept for building printable papers */}
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => openBankAction("save")} disabled={savingBank} data-testid="save-as-bank"
+                  className="py-3 rounded-2xl bg-white border border-gray-300 text-gray-900 font-bold text-xs sm:text-sm disabled:opacity-60">
+                  {bankIsCurrent ? "✓ Saved as question bank" : "Save as Question Bank"}
+                </button>
+                <button onClick={() => openBankAction("build")} disabled={savingBank} data-testid="build-from-these"
+                  className="py-3 rounded-2xl bg-white border border-gray-300 text-gray-900 font-bold text-xs sm:text-sm disabled:opacity-60">
+                  Build paper from these questions
+                </button>
+              </div>
             </div>
           </div>
+
+          {bankDialog && (
+            <SaveBankDialog
+              defaultName={meta.title?.trim() || [subject, classGrade && asClassLabel(classGrade)].filter(Boolean).join(" – ") || fileName.replace(/\.pdf$/i, "") || "Question bank"}
+              count={items.length} busy={savingBank} onSave={saveBank} onClose={() => setBankDialog(null)} />
+          )}
 
           {showModal && (
             <CreateContestModal
@@ -541,6 +615,10 @@ export default function ImportContestFromPdf() {
             />
           )}
         </>
+      )}
+
+      {phase !== "uploading" && phase !== "starting" && phase !== "processing" && (
+        <QuestionBankPanel refreshKey={bankRefresh} buildBankId={buildBankId} onBuildOpened={() => setBuildBankId(null)} />
       )}
 
       <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} action="share" onLoginSuccess={() => setShowLoginModal(false)} />
