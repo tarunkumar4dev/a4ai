@@ -21,16 +21,13 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
-<<<<<<< HEAD
 import { useAttendanceQueue } from "@/hooks/useAttendanceQueue";
 import {
   attendanceKey, countDifferences, discardQueuedSave, flushAttendanceQueue, getQueuedSave, keepMyMarks,
   queueAttendanceSave, sendAttendance, waitForFlush, type AttendanceSave, type Marks,
 } from "@/lib/offline/attendanceQueue";
 import type { QueueItem } from "@/lib/offline/secureQueue";
-=======
 import NotifyParentsModal, { type NotifyAttendanceRecord } from "./NotifyParentsModal";
->>>>>>> origin/main
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -225,7 +222,6 @@ export default function TeacherAttendanceView() {
   const [hasSaved, setHasSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
-<<<<<<< HEAD
   /** the current marks are on this device, not on the server yet */
   const [queuedLocal, setQueuedLocal] = useState(false);
   const queued = useAttendanceQueue(user?.id);
@@ -233,13 +229,11 @@ export default function TeacherAttendanceView() {
   const baseMarks = useRef<Marks>({});
   const queuedMarks = useRef<Marks>({});
   const seenQueued = useRef(false);
-=======
   // Attendance exactly as the server holds it — what "Notify Parents" messages about, so editing the sheet
   // afterwards can't send a parent a status the server doesn't have.
   const [savedSheet, setSavedSheet] = useState<Student[] | null>(null);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [instName, setInstName] = useState("");
->>>>>>> origin/main
 
   const [instId, setInstId] = useState<string | null>(null);
   const [noInstitute, setNoInstitute] = useState(false);
@@ -357,13 +351,9 @@ export default function TeacherAttendanceView() {
   // ── Open session ──
   const open = useCallback(async (t: SessionTarget) => {
     setSelected(t); setStudents([]); setOriginal([]); setDirty(false); setSearch(""); setFilter("all");
-<<<<<<< HEAD
-    setLastSaved(null); setSaveError(null); setSheetError(null); setHasSaved(false); setLoadingSheet(true);
-    setQueuedLocal(false); seenQueued.current = false; baseMarks.current = {};
-=======
     setLastSaved(null); setSaveError(null); setSheetError(null); setHasSaved(false);
     setSavedSheet(null); setNotifyOpen(false); setLoadingSheet(true);
->>>>>>> origin/main
+    setQueuedLocal(false); seenQueued.current = false; baseMarks.current = {};
     try {
       const ds = toDateStr(date);
       const { data: stu, error: stuErr } = await supabase.from("students").select("id, name, roll_no, parent_phone, parent_name")
@@ -406,22 +396,16 @@ export default function TeacherAttendanceView() {
 
       const loaded: Student[] = stu.map((s: any) => ({
         id: s.id, name: s.name, rollNo: s.roll_no || undefined,
-<<<<<<< HEAD
         status: waiting?.marks[s.id] || saved[s.id] || "present", pct: pctMap[s.id],
+        parentPhone: s.parent_phone, parentName: s.parent_name,
       }));
       setStudents(loaded); setOriginal(loaded.map(s => ({ ...s })));
       setHasSaved(Object.keys(saved).length > 0);
       baseMarks.current = waiting ? waiting.base : saved;
       if (waiting) { queuedMarks.current = waiting.marks; setQueuedLocal(true); }
-=======
-        status: saved[s.id] || "present", pct: pctMap[s.id],
-        parentPhone: s.parent_phone, parentName: s.parent_name,
-      }));
-      setStudents(loaded); setOriginal(loaded.map(s => ({ ...s })));
-      setHasSaved(Object.keys(saved).length > 0);
       // Marks the server already holds can be notified without re-saving (Save is disabled when nothing changed).
-      if (Object.keys(saved).length) setSavedSheet(loaded.map(s => ({ ...s })));
->>>>>>> origin/main
+      // "Notify Parents" uses the server's marks only — never marks still waiting on this device.
+      if (Object.keys(saved).length) setSavedSheet(loaded.map(s => ({ ...s, status: saved[s.id] || "present" })));
       if (sid) setSelected(prev => (prev ? { ...prev, sessionId: sid } : prev));
     } catch (e) {
       console.error("attendance sheet:", e);
@@ -518,8 +502,10 @@ export default function TeacherAttendanceView() {
     baseMarks.current = queuedMarks.current;
     seenQueued.current = false;
     setQueuedLocal(false); setHasSaved(true);
+    // the server now holds the synced marks, so "Notify Parents" can use them
+    setSavedSheet(students.map(s => ({ ...s, status: queuedMarks.current[s.id] || "present" })));
     setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
-  }, [queued, queuedLocal, selected, date]);
+  }, [queued, queuedLocal, selected, date, students]);
 
   // The class list's "Marked" badges are stale after a sync.
   const queuedCount = queued.length;
