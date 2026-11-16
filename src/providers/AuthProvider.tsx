@@ -12,6 +12,8 @@ import {
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import { clearAllDrafts } from "@/lib/testGenDraft";
+import { wipeAll } from "@/lib/offline/secureQueue";
+import { toast } from "sonner";
 
 interface AuthContextType {
   session: Session | null;
@@ -83,7 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // every sign-out path ends here (most pages call supabase.auth.signOut directly), so a shared device
       // doesn't keep the Test Generator drafts
-      if (event === "SIGNED_OUT") clearAllDrafts();
+      if (event === "SIGNED_OUT") {
+        clearAllDrafts();
+        // same for attendance saves still waiting for the internet; the teacher is told, it can't sync without a login
+        wipeAll().then((lost) => {
+          if (lost) toast.warning(`${lost} unsynced attendance save${lost === 1 ? " was" : "s were"} removed from this device.`);
+        });
+      }
     });
 
     return () => subscription.unsubscribe();
