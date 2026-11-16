@@ -1,4 +1,4 @@
-// One realistic fixture per event the backend can send (contract 1.4), typed with the GENERATED types. The mapped
+// One realistic fixture per event the backend can send (contract 1.5), typed with the GENERATED types. The mapped
 // type makes the object incomplete — a compile error — as soon as `npm run agent:contract` brings a new event type.
 // contract.test.ts also checks this list against the OpenAPI JSON snapshot at runtime.
 import type { ContractEvent, FileReady } from "../types";
@@ -23,6 +23,7 @@ export const CONTRACT_FIXTURES: Fixtures = {
   error: { type: "error", seq: 11, request_id: R, code: "provider_error", message: "AI service abhi busy hai.", retryable: false, partial: {} },
   speech: { type: "speech", seq: 16, request_id: R, text: "ECE 1 की attendance इस महीने 83.8% रही।", language: "hi-en" },
   ui_action: { type: "ui_action", seq: 17, request_id: R, action: "navigate", route_key: "dashboard.attendance", params: {}, label: "Attendance" },
+  audio: { type: "audio", seq: 18, request_id: R, index: 0, mime: "audio/mpeg", data: "SUQzAwAAAAAA", chars: 38, ttfa_ms: 640 },
   final: { type: "final", seq: 12, request_id: R, session_id: "6b0e1c2d-1111-4aaa-8bbb-000000000001", usage: {}, cancelled: false },
 };
 

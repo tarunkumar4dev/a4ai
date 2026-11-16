@@ -62,7 +62,11 @@ export type FeedbackRequest = Schemas["FeedbackRequest"];
 export type FeedbackResponse = Schemas["FeedbackResponse"];
 export type Rating = FeedbackRequest["rating"];
 export type CancelResponse = Schemas["CancelResponse"];
-export type ChatRequest = Schemas["ChatRequest"];
+// openapi-typescript marks fields that have a server default as required; the server fills them, so they are optional here
+export type ChatRequest = Omit<Schemas["ChatRequest"], "cancel_current"> & { cancel_current?: boolean };
+/** 1.5: POST /agent/voice/chat — a chat message plus how the answer is spoken (tts "stream" = `audio` events). */
+export type VoiceChatOpts = Partial<Pick<Schemas["VoiceChatRequest"], "tts" | "speaker" | "pace">>;
+export type SpeechAudioEvent = Extract<AgentEvent, { type: "audio" }>;
 export type ApproveRequest = Schemas["ApproveRequest"];
 export type SessionsQuery = NonNullable<operations["list_sessions_agent_sessions_get"]["parameters"]["query"]>;
 export type MessagesQuery = NonNullable<operations["list_messages_agent_sessions__session_id__messages_get"]["parameters"]["query"]>;

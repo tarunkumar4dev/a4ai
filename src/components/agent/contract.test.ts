@@ -27,12 +27,12 @@ const eventRefs = ((spec as { components: { schemas: { MessageItem: { properties
   .components.schemas.MessageItem.properties.events.anyOf.find((x) => x.items)!.items!.oneOf).map((r) => r.$ref.split("/").pop()!);
 const typeOf = (name: string) => { const t = schemas[name].properties?.type; return t?.const ?? t?.default ?? null; };
 
-describe("contract 1.4 ↔ UI", () => {
-  it("the snapshot lists 16 event schemas (1.4 adds speech + ui_action) and every one has a fixture", () => {
+describe("contract 1.5 ↔ UI", () => {
+  it("the snapshot lists 17 event schemas (1.4 adds speech + ui_action, 1.5 audio) and every one has a fixture", () => {
     const types = eventRefs.map(typeOf);
     expect(types).not.toContain(null);
     expect([...types].sort()).toEqual(Object.keys(CONTRACT_FIXTURES).sort());
-    expect(types).toHaveLength(16);
+    expect(types).toHaveLength(17);
     expect([...EVENT_TYPES].sort()).toEqual([...types].sort());
   });
 
@@ -44,7 +44,7 @@ describe("contract 1.4 ↔ UI", () => {
   });
 
   it("every event maps to a block or to state, and every block renders", () => {
-    const blockless = new Set(["session", "thinking_status", "final", "speech"]); // speech lives on the turn (turn.speech)
+    const blockless = new Set(["session", "thinking_status", "final", "speech", "audio"]); // speech: turn.speech; audio: the voice player
     for (const ev of [...Object.values(CONTRACT_FIXTURES), SCOPE_TABLE, RANKING_TABLE, FILE_FIXTURE] as AgentEvent[]) {
       const block = eventToBlock(ev, "retry me");
       if (blockless.has(ev.type)) { expect(block, ev.type).toBeNull(); continue; }

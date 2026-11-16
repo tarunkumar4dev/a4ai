@@ -92,7 +92,7 @@ describe("transition (push-to-talk state machine)", () => {
   it("answers are spoken, tapping the mic stops playback, errors always land in idle", () => {
     expect(transition("thinking", { type: "answer_done", speech: true })).toEqual({ state: "speaking", action: "play" });
     expect(transition("thinking", { type: "answer_done", speech: false })).toEqual({ state: "idle" });
-    expect(transition("speaking", { type: "tap" })).toEqual({ state: "idle", action: "stop_play" });
+    expect(transition("speaking", { type: "tap" })).toEqual({ state: "listening", action: "barge_in" }); // barge-in
     expect(transition("speaking", { type: "speech_done" })).toEqual({ state: "idle" });
     for (const s of ["idle", "listening", "transcribing", "thinking", "speaking"] as VoiceState[]) {
       expect(transition(s, { type: "error" }).state).toBe("idle");

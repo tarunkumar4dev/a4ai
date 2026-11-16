@@ -1,5 +1,8 @@
 // The voice orchestrator (lazy chunk): mic → recorder → POST /agent/voice/transcribe → transcript strip →
-// agentStore.sendVoice → the normal stream → `speech` event → TTS audio (or speechSynthesis on a slow network).
+// agentStore.sendVoice → the normal stream. 1.5: with server TTS the answer's SPEECH line arrives as `audio` chunks
+// WHILE the model writes (./audioBus → ./streamPlayer, gapless Web Audio); otherwise the old path: `speech` event at
+// the end → /speak (or speechSynthesis on a slow network). While speaking, a tap — or the user talking over the
+// answer (hot mic, ./recorder startBargeInMonitor) — stops it at once, cancels the running answer and listens.
 // Everything the UI shows comes from the pure reducer in ./session; this hook only wires the browser APIs.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AgentHttpError } from "@/lib/agent/client";
@@ -10,9 +13,11 @@ import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { idempotencyKey, speak, transcribe } from "./api";
 import { useVoiceConfig } from "./useVoiceConfig";
 import { createPlayer, synthLang, synthSupported, type Player } from "./player";
+import { onVoiceAudio } from "./audioBus";
+import { browserAudioCtx, createStreamPlayer, type StreamPlayer } from "./streamPlayer";
 import { AUTO_SEND_PAUSE_MS, MAX_BYTES, liteVoice, recordingSupported } from "./ptt";
 import { hasConsent, loadPrefs, savePrefs, withConsent, type VoicePrefs } from "./prefs";
-import { MicDenied, MicUnsupported, startRecording, type Recording } from "./recorder";
+import { MicDenied, MicUnsupported, startBargeInMonitor, startRecording, type Recording } from "./recorder";
 import { initialSession, liveText, sessionReducer, type VoiceSession } from "./session";
 import { onVoiceStartRequest } from "./surface";
 
@@ -51,13 +56,41 @@ export function useVoice(uid: string | null): Voice {
   const upload = useRef<AbortController | null>(null);
   const voiceTurn = useRef(false);          // the running stream is a voice turn → speak its answer
   const spokenFor = useRef<string | null>(null);
+  const stream = useRef<StreamPlayer | null>(null);   // this voice turn's streamed answer audio (1.5)
+  const hotMic = useRef<(() => void) | null>(null);   // barge-in monitor while speaking
+  const bargeRef = useRef<() => void>(() => undefined);
   const supported = useMemo(() => recordingSupported(), []);
   const lite = net === "slow" || liteVoice(connection());
 
   useEffect(() => { setPrefsState(loadPrefs(uid)); }, [uid]);
   // refetched when the agent becomes reachable again and on tab focus while voice is off (./useVoiceConfig)
   const config: VoiceConfig | null = useVoiceConfig(uid, store.metaStatus === "ok");
-  useEffect(() => () => { rec.current?.cancel(); player.current?.stop(); clearTimeout(autoSend.current); upload.current?.abort(); }, []);
+  const stopHotMic = useCallback(() => { hotMic.current?.(); hotMic.current = null; }, []);
+  const startHotMic = useCallback(() => {
+    if (lite || hotMic.current) return;
+    let cancelled = false;
+    hotMic.current = () => { cancelled = true; };
+    void startBargeInMonitor(() => bargeRef.current()).then((stop) => {
+      if (cancelled) stop(); else hotMic.current = stop;
+    });
+  }, [lite]);
+  useEffect(() => () => {
+    rec.current?.cancel(); player.current?.stop(); stream.current?.stop(); hotMic.current?.();
+    clearTimeout(autoSend.current); upload.current?.abort();
+  }, []);
+
+  // 1.5: streamed answer audio for the running voice turn → gapless player; "speaking" starts with the first sound
+  useEffect(() => onVoiceAudio((c) => {
+    if (!voiceTurn.current) return;
+    if (!stream.current) {
+      stream.current = createStreamPlayer({
+        ctx: browserAudioCtx,
+        onStart: () => { dispatch({ type: "ptt", ev: { type: "audio_start" } }); startHotMic(); },
+        onIdle: () => { stopHotMic(); dispatch({ type: "ptt", ev: { type: "speech_done" } }); },
+      });
+    }
+    stream.current.push({ index: c.index, data: c.data, mime: c.mime });
+  }), [startHotMic, stopHotMic]);
 
   const enabled = !!config?.enabled && supported;
   const needsConsent = enabled && !hasConsent(prefs, config?.consent_version ?? "");
@@ -75,6 +108,11 @@ export function useVoice(uid: string | null): Voice {
   useEffect(() => {
     if (store.chat.busy || !voiceTurn.current || !last || last.role !== "assistant" || !last.done) return;
     voiceTurn.current = false;
+    if (stream.current && stream.current.received > 0) {   // already spoken (or speaking) from the stream
+      spokenFor.current = last.id;
+      stream.current.end();
+      return;
+    }
     const speech = last.speech;
     const spoken = speech?.text ?? (last.blocks.find((b) => b.kind === "clarify") ? "Kaun sa? Screen par chuniye." : null);
     if (!spoken || prefs.muted || spokenFor.current === last.id) { dispatch({ type: "ptt", ev: { type: "answer_done", speech: false } }); return; }
@@ -84,13 +122,14 @@ export function useVoice(uid: string | null): Voice {
     const lang = speech?.language ?? "hi-en";
     void (async () => {
       try {
+        startHotMic();
         if (!lite && config?.tts === "sarvam") {
           const blob = await speak({ text: spoken, language: lang as "hi" | "en" | "hi-en", speaker: prefs.speaker, pace: prefs.pace });
           if (blob) { await p.play(blob); return; }
         }
         if (synthSupported()) await p.play({ synth: spoken, lang: synthLang(lang), rate: prefs.pace });
       } catch { /* caption stays on screen */ }
-      finally { dispatch({ type: "ptt", ev: { type: "speech_done" } }); }
+      finally { stopHotMic(); dispatch({ type: "ptt", ev: { type: "speech_done" } }); }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.chat.busy, last?.id, last?.done]);
@@ -99,10 +138,14 @@ export function useVoice(uid: string | null): Voice {
   const sendNow = useCallback((text: string) => {
     clearTimeout(autoSend.current);
     if (!text.trim()) return;
+    stream.current?.stop();
+    stream.current = null;
     voiceTurn.current = true;
     dispatch({ type: "sent" });
-    agentStore.sendVoice(text);
-  }, []);
+    // server TTS streamed while the model writes, unless muted / slow network / TTS off (then the old path)
+    const tts = !lite && !prefs.muted && config?.tts === "sarvam" ? "stream" : "off";
+    agentStore.sendVoice(text, { tts, speaker: prefs.speaker ?? undefined, pace: prefs.pace }, store.chat.busy);
+  }, [lite, prefs.muted, prefs.speaker, prefs.pace, config?.tts, store.chat.busy]);
 
   // ---- record → upload ----------------------------------------------------------------------------------------------
   const finishRecording = useCallback(async (r: Recording) => {
@@ -135,8 +178,8 @@ export function useVoice(uid: string | null): Voice {
     }
   }, [sendNow]);
 
-  const begin = useCallback(async () => {
-    if (!enabled || store.chat.busy || rec.current) return;
+  const begin = useCallback(async (force = false) => {
+    if (!enabled || (store.chat.busy && !force) || rec.current) return;
     player.current?.stop();
     dispatch({ type: "ptt", ev: { type: "tap" } }); // idle → listening at once
     try {
@@ -158,11 +201,24 @@ export function useVoice(uid: string | null): Voice {
     }
   }, [enabled, lite, store.chat.busy, finishRecording]);
 
+  // barge-in: stop the answer now (audio + the running stream / pending TTS on the server) and listen at once
+  const bargeIn = useCallback(() => {
+    stopHotMic();
+    player.current?.stop();
+    stream.current?.stop();
+    stream.current = null;
+    voiceTurn.current = false;
+    if (store.chat.busy) agentStore.stop();
+    dispatch({ type: "ptt", ev: { type: "speech_done" } });
+    void begin(true);
+  }, [store.chat.busy, begin, stopHotMic]);
+  bargeRef.current = bargeIn;
+
   const tap = useCallback(() => {
     if (session.state === "listening" && rec.current) { void finishRecording(rec.current); return; }
-    if (session.state === "speaking") { player.current?.stop(); dispatch({ type: "ptt", ev: { type: "tap" } }); return; }
+    if (session.state === "speaking") { bargeIn(); return; }
     if (session.state === "idle") void begin();
-  }, [session.state, begin, finishRecording]);
+  }, [session.state, begin, bargeIn, finishRecording]);
 
   // floating mic (mobile dashboards) opens the sheet and asks the dock to start
   useEffect(() => onVoiceStartRequest(() => { if (session.state === "idle") void begin(); }), [session.state, begin]);

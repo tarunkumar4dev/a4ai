@@ -7,10 +7,10 @@ import type {
 } from "./types";
 export * from "./types";
 
-/** Every `type` the UI accepts: the contract's 16 event types (1.4 adds speech + ui_action). */
+/** Every `type` the UI accepts: the contract's 17 event types (1.4 adds speech + ui_action, 1.5 adds audio). */
 export const EVENT_TYPES = [
   "session", "text_delta", "thinking_status", "stat_card", "chart", "table", "clarify", "blueprint",
-  "paper_preview", "verification_summary", "pending_approval", "file", "final", "error", "speech", "ui_action",
+  "paper_preview", "verification_summary", "pending_approval", "file", "final", "error", "speech", "ui_action", "audio",
 ] as const satisfies readonly AgentEventType[];
 // compile-time: EVENT_TYPES lists every AgentEventType (adding one to the contract breaks the build here)
 type Missing = Exclude<AgentEventType, (typeof EVENT_TYPES)[number]>;
@@ -79,6 +79,12 @@ export function parseAgentEvent(raw: unknown): AgentEvent | null {
     case "speech":
       if (typeof e.text !== "string" || !e.text.trim()) return null;
       if (e.language !== "hi" && e.language !== "en" && e.language !== "hi-en") e.language = "hi-en";
+      break;
+    case "audio":
+      // 1.5 streamed TTS chunk: index orders playback; data is a whole small audio file (base64)
+      if (typeof e.index !== "number" || e.index < 0 || typeof e.data !== "string" || !e.data) return null;
+      if (typeof e.mime !== "string") e.mime = "audio/mpeg";
+      e.ttfa_ms = numOrNull(e.ttfa_ms) ?? undefined;
       break;
     case "ui_action":
       if (e.action !== "navigate" && e.action !== "highlight_confirm") return null;

@@ -13,7 +13,7 @@ import {
   parseSessionList, parseSuggestions,
 } from "./events";
 import type {
-  AgentEvent, CancelResponse, ChatRequest, FeedbackRequest, MessagesQuery, MetaResponse, QueryItem, SessionItem,
+  AgentEvent, CancelResponse, ChatRequest, VoiceChatOpts, FeedbackRequest, MessagesQuery, MetaResponse, QueryItem, SessionItem,
   SessionList, SessionPatch, SessionsQuery, StoredMessagePage, Suggestion,
 } from "./types";
 
@@ -25,6 +25,8 @@ export interface StreamOptions {
   signal?: AbortSignal;
   /** the message was spoken: POST /agent/voice/chat (same body / events, plus a `speech` event) */
   voice?: boolean;
+  /** 1.5 voice only: how the answer is spoken (tts "stream" → `audio` events while the model writes) */
+  voiceOpts?: VoiceChatOpts;
 }
 
 export interface AgentApi {
@@ -115,8 +117,9 @@ export const httpApi: AgentApi = {
     const j = await res.json().catch(() => null) as CancelResponse | null;
     return j && typeof j.request_id === "string" ? j : null;
   },
-  async chat({ body, onEvent, onRequestId, signal, voice }) {
-    const res = await authedFetch(voice ? "/agent/voice/chat" : "/agent/chat", { method: "POST", json: chatBody(body), accept: "text/event-stream", signal });
+  async chat({ body, onEvent, onRequestId, signal, voice, voiceOpts }) {
+    const json = voice ? { ...chatBody(body), ...voiceBody(voiceOpts) } : chatBody(body);
+    const res = await authedFetch(voice ? "/agent/voice/chat" : "/agent/chat", { method: "POST", json, accept: "text/event-stream", signal });
     if (!res.body) throw new AgentHttpError(res.status, "Empty response");
     const rid = res.headers.get("x-agent-request-id");
     if (rid) onRequestId?.(rid);
@@ -141,6 +144,16 @@ export function chatBody(b: ChatRequest): ChatRequest {
   if (typeof b.regenerate_from_seq === "number") out.regenerate_from_seq = b.regenerate_from_seq;
   else out.message = b.message ?? null;
   if (typeof b.edit_of_seq === "number") out.edit_of_seq = b.edit_of_seq;
+  if (b.cancel_current) out.cancel_current = true;
+  return out;
+}
+
+/** The voice-only fields of POST /agent/voice/chat (1.5): only the ones that are set. */
+export function voiceBody(o?: VoiceChatOpts): VoiceChatOpts {
+  const out: VoiceChatOpts = {};
+  if (o?.tts) out.tts = o.tts;
+  if (o?.speaker) out.speaker = o.speaker;
+  if (typeof o?.pace === "number") out.pace = o.pace;
   return out;
 }
 

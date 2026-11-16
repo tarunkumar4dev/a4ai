@@ -9,9 +9,18 @@ export const MAX_BYTES = 1_048_576;
 export const MIN_SPEECH_MS = 400;        // shorter than this = a tap, not speech
 export const SILENCE_AFTER_SPEECH_MS = 2500; // quiet this long after speech → stop (people pause mid-sentence to think)
 export const SILENCE_NO_SPEECH_MS = 8000;    // nothing said at all → stop (and say "Dobara boliye")
+// Adaptive end of speech: a very short reply ("haan", "nahi", "10B") is over after a short pause, so it goes to STT
+// in about a second; anything longer keeps the patient SILENCE_AFTER_SPEECH_MS (people pause mid-sentence to think).
+export const SHORT_UTTERANCE_MS = 900;       // speech shorter than this counts as a short reply
+export const SILENCE_AFTER_SHORT_MS = 900;   // … and ends after this much quiet
+// Barge-in while the answer is being spoken (hot mic, echo-cancelled): voice clearly above the room AND above an
+// absolute floor for BARGE_MS → stop the answer and listen. Higher than LEVEL_SPEECH so the speaker's own audio
+// leaking into the mic does not trigger it.
 export const AUTO_SEND_PAUSE_MS = 5000;  // transcript + Edit shown this long (with a seconds countdown), then sent
 export const LEVEL_SPEECH = 0.06;        // RMS (0..1) above this = speech; calibrated per session by `noiseFloor`
 export const SPACE_HOLD_MS = 150;        // desktop: Space held longer than a keypress = talk
+export const LEVEL_BARGE = 0.12;
+export const BARGE_MS = 300;
 
 /** The recorder calls `feed(rms, nowMs)` ~20×/s; `feed` answers "stop" when the utterance is over. */
 export class SilenceDetector {
@@ -38,13 +47,28 @@ export class SilenceDetector {
     if (speaking) { this.lastSpeech = now; this.speechMs += dt; }
     if (now - this.start >= MAX_MS) return this.speechMs >= MIN_SPEECH_MS ? "stop" : "empty";
     if (this.lastSpeech === null) return now - this.start >= SILENCE_NO_SPEECH_MS ? "empty" : null;
-    if (now - this.lastSpeech >= SILENCE_AFTER_SPEECH_MS) return this.speechMs >= MIN_SPEECH_MS ? "stop" : "empty";
+    const quiet = now - this.lastSpeech;
+    if (this.speechMs < SHORT_UTTERANCE_MS && this.speechMs >= MIN_SPEECH_MS && quiet >= SILENCE_AFTER_SHORT_MS) return "stop";
+    if (quiet >= SILENCE_AFTER_SPEECH_MS) return this.speechMs >= MIN_SPEECH_MS ? "stop" : "empty";
     return null;
   }
 
   /** true when enough speech was heard to be worth uploading */
   get hasSpeech(): boolean { return this.speechMs >= MIN_SPEECH_MS; }
   get noiseFloor(): number { return this.floor; }
+}
+
+/** Barge-in: `feed(rms, nowMs)` ~20×/s while the answer plays; true once the user has clearly been talking for
+ *  BARGE_MS (louder than the adapting noise floor ×4 and than LEVEL_BARGE). Pure. */
+export class BargeInDetector {
+  private floor = 0;
+  private since: number | null = null;
+  feed(rms: number, now: number): boolean {
+    const loud = rms > Math.max(LEVEL_BARGE, this.floor * 4);
+    if (!loud) { this.floor = this.floor === 0 ? rms : this.floor * 0.9 + rms * 0.1; this.since = null; return false; }
+    if (this.since === null) this.since = now;
+    return now - this.since >= BARGE_MS;
+  }
 }
 
 /** The MIME MediaRecorder should use, in preference order. null = recording unsupported. Pure. */
@@ -72,10 +96,11 @@ export type Event =
   | { type: "sent" }                     // user (or the auto-send pause) sent the transcript
   | { type: "answer_done"; speech: boolean }
   | { type: "speech_done" }
+  | { type: "audio_start" }              // 1.5: the first streamed TTS chunk started while the answer is still coming
   | { type: "error" }
   | { type: "denied" };
 
-export interface Transition { state: VoiceState; action?: "start_rec" | "stop_rec" | "upload" | "send" | "play" | "discard" | "say_repeat" | "stop_play" }
+export interface Transition { state: VoiceState; action?: "start_rec" | "stop_rec" | "upload" | "send" | "play" | "discard" | "say_repeat" | "stop_play" | "barge_in" }
 
 /** The state machine. Pure: (state, event) → (next state, side effect to run). */
 export function transition(state: VoiceState, ev: Event): Transition {
@@ -83,7 +108,7 @@ export function transition(state: VoiceState, ev: Event): Transition {
     case "tap":
       if (state === "idle") return { state: "listening", action: "start_rec" };
       if (state === "listening") return { state: "transcribing", action: "stop_rec" };   // instant feedback
-      if (state === "speaking") return { state: "idle", action: "stop_play" };           // tapping the mic stops playback
+      if (state === "speaking") return { state: "listening", action: "barge_in" };       // tap over the answer: stop it, listen
       return { state };                                                                  // transcribing / thinking: ignore
     case "silence":
       if (state !== "listening") return { state };
@@ -98,6 +123,7 @@ export function transition(state: VoiceState, ev: Event): Transition {
       return { state: "idle" };  // confirm / pick: the user taps
     case "sent": return { state: "thinking" };
     case "answer_done": return ev.speech ? { state: "speaking", action: "play" } : { state: "idle" };
+    case "audio_start": return state === "thinking" ? { state: "speaking" } : { state };
     case "speech_done": return { state: "idle" };
     case "error": case "denied": return { state: "idle", action: state === "listening" ? "stop_rec" : undefined };
     default: return { state };

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "a4ai Agent",
-    "description": "a4ai Agent API (contract 1.4). Human-readable spec: docs/AGENT_API_V2.md. Auth: Authorization: Bearer <Supabase access token>. Foreign ids return 404.",
-    "version": "1.4"
+    "description": "a4ai Agent API (contract 1.5). Human-readable spec: docs/AGENT_API_V2.md. Auth: Authorization: Bearer <Supabase access token>. Foreign ids return 404.",
+    "version": "1.5"
   },
   "paths": {
     "/agent/meta": {
@@ -987,13 +987,13 @@
           "agent-voice"
         ],
         "summary": "Voice Chat",
-        "description": "The transcript becomes a normal chat message (same session, history, retention, clear-all). The only\ndifferences: the model is told the message was spoken (untrusted, keep it short, one-line refusals) and ends its\nanswer with a `speech` event. Writes stay behind the on-screen approval gate — this endpoint never approves.",
+        "description": "The transcript becomes a normal chat message (same session, history, retention, clear-all). The only\ndifferences: the model is told the message was spoken (untrusted, keep it short, one-line refusals) and starts\nits answer with a SPEECH line; that line is spoken while it streams (`audio` events, agent/voice/stream_tts.py)\nand is also sent as a `speech` event. Writes stay behind the on-screen approval gate — this endpoint never\napproves.",
         "operationId": "voice_chat_agent_voice_chat_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChatRequest"
+                "$ref": "#/components/schemas/VoiceChatRequest"
               }
             }
           },
@@ -1001,7 +1001,7 @@
         },
         "responses": {
           "200": {
-            "description": "SSE, as POST /agent/chat, plus a `speech` event",
+            "description": "SSE, as POST /agent/chat, plus `speech` and (1.5) `audio` events",
             "content": {
               "application/json": {
                 "schema": {}
@@ -1027,6 +1027,7 @@
       "AgentEvent": {
         "discriminator": {
           "mapping": {
+            "audio": "#/components/schemas/SpeechAudio",
             "blueprint": "#/components/schemas/Blueprint",
             "chart": "#/components/schemas/Chart",
             "clarify": "#/components/schemas/Clarify",
@@ -1094,6 +1095,9 @@
           },
           {
             "$ref": "#/components/schemas/UiAction"
+          },
+          {
+            "$ref": "#/components/schemas/SpeechAudio"
           }
         ],
         "description": "One SSE frame of POST /agent/chat (`data: <json>`). Discriminated by `type`."
@@ -1411,6 +1415,11 @@
               }
             ],
             "title": "Edit Of Seq"
+          },
+          "cancel_current": {
+            "type": "boolean",
+            "title": "Cancel Current",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -1894,11 +1903,15 @@
                     },
                     {
                       "$ref": "#/components/schemas/UiAction"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpeechAudio"
                     }
                   ],
                   "discriminator": {
                     "propertyName": "type",
                     "mapping": {
+                      "audio": "#/components/schemas/SpeechAudio",
                       "blueprint": "#/components/schemas/Blueprint",
                       "chart": "#/components/schemas/Chart",
                       "clarify": "#/components/schemas/Clarify",
@@ -3025,6 +3038,69 @@
         "title": "Speech",
         "description": "1.4 (voice turns only): the one- or two-sentence spoken headline of the answer. Hindi words come in Devanagari,\nEnglish words in Latin (the script the TTS reads best); the screen keeps the full prose / cards. Never cached."
       },
+      "SpeechAudio": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Seq"
+          },
+          "request_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id"
+          },
+          "type": {
+            "type": "string",
+            "const": "audio",
+            "title": "Type",
+            "default": "audio"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Index"
+          },
+          "mime": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Mime"
+          },
+          "data": {
+            "type": "string",
+            "title": "Data"
+          },
+          "chars": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Chars"
+          },
+          "ttfa_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttfa Ms"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "seq",
+          "request_id",
+          "index",
+          "mime",
+          "data",
+          "chars"
+        ],
+        "title": "SpeechAudio",
+        "description": "1.5 (voice turns, server TTS): one chunk of the spoken SPEECH line, synthesized while the model is still\nwriting. `index` orders the chunks (0, 1, 2 …; a failed chunk is skipped, never re-sent); `data` is the whole\naudio file for that chunk, base64. `ttfa_ms` (chunk 0 only): ms from the start of the answering LLM step to this\naudio. Never stored in the chat history."
+      },
       "StatCard": {
         "properties": {
           "seq": {
@@ -3559,6 +3635,98 @@
           "marks_sum_ok"
         ],
         "title": "VerificationSummary"
+      },
+      "VoiceChatRequest": {
+        "properties": {
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "regenerate_from_seq": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regenerate From Seq"
+          },
+          "edit_of_seq": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Of Seq"
+          },
+          "cancel_current": {
+            "type": "boolean",
+            "title": "Cancel Current",
+            "default": false
+          },
+          "tts": {
+            "type": "string",
+            "enum": [
+              "stream",
+              "off"
+            ],
+            "title": "Tts",
+            "default": "off"
+          },
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker"
+          },
+          "pace": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pace"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "VoiceChatRequest",
+        "description": "POST /agent/voice/chat body: a normal chat message plus how the answer should be spoken (1.5).\ntts=\"stream\": the server speaks the SPEECH line while the model writes it (`audio` events, contract 1.5);\ntts=\"off\" (default, the 1.4 behaviour): no server audio — the client calls /speak or speechSynthesis."
       },
       "VoiceConfig": {
         "properties": {

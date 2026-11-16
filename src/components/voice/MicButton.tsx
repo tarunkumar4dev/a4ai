@@ -56,7 +56,7 @@ export function MicButton({ state, level, disabled, onTap, onHoldStart, onHoldEn
   const busy = state === "transcribing" || state === "thinking";
   const dim = size === "lg" ? "h-16 w-16" : "h-14 w-14";
   const tone = state === "listening" ? "bg-destructive text-destructive-foreground"
-    : state === "speaking" ? "bg-secondary text-secondary-foreground"
+    : state === "speaking" ? "bg-secondary text-secondary-foreground ring-2 ring-primary/40 motion-safe:animate-pulse"
     : busy ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90";
   return (
     <button type="button" onClick={onTap} disabled={disabled || busy} aria-label={aria} aria-pressed={state === "listening"}
@@ -64,7 +64,7 @@ export function MicButton({ state, level, disabled, onTap, onHoldStart, onHoldEn
       className={`grid ${dim} shrink-0 place-items-center rounded-full shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed ${tone} ${className}`}>
       {state === "listening" ? (meter ? <LevelMeter level={level} /> : <Square aria-hidden="true" className="h-5 w-5" fill="currentColor" />)
         : busy ? <Loader2 aria-hidden="true" className="h-6 w-6 motion-safe:animate-spin" />
-        : state === "speaking" ? <Volume2 aria-hidden="true" className="h-6 w-6" />
+        : state === "speaking" ? <Volume2 aria-hidden="true" className="h-6 w-6 motion-safe:animate-pulse" />
         : <Mic aria-hidden="true" className="h-6 w-6" />}
     </button>
   );

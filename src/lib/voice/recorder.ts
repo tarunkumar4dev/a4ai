@@ -1,7 +1,7 @@
 // Browser recorder: getUserMedia (noise suppression, echo cancellation, AGC) → MediaRecorder → one Blob.
 // Level meter from an AnalyserNode (RMS 0..1, ~20×/s) drives the SilenceDetector (./ptt.ts) for auto-stop and the UI
 // meter. Audio stays in memory; the Blob is handed to the caller and dropped. Loaded lazily (never in the main bundle).
-import { AUDIO_CONSTRAINTS, MAX_MS, SilenceDetector, pickMimeType } from "./ptt";
+import { AUDIO_CONSTRAINTS, BargeInDetector, MAX_MS, SilenceDetector, pickMimeType } from "./ptt";
 
 export interface Recording {
   mimeType: string;
@@ -94,4 +94,41 @@ export async function startRecording(opts: RecorderOptions = {}): Promise<Record
     stop: () => { stopNow(); return finished; },
     cancel: () => { stopped = true; try { if (rec.state !== "inactive") rec.stop(); } catch { /* ignore */ } release(); },
   };
+}
+
+/** Hot mic while the answer is spoken (barge-in): level only, nothing is recorded or sent. `onBargeIn` fires once
+ *  when BargeInDetector hears the user talking over the answer; the caller stops playback and starts a recording.
+ *  Echo cancellation (AUDIO_CONSTRAINTS) keeps the answer's own audio mostly out of the mic. Returns stop(). */
+export async function startBargeInMonitor(onBargeIn: () => void): Promise<() => void> {
+  if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext !== "function") return () => undefined;
+  let stream: MediaStream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS }); } catch { return () => undefined; }
+  const ctx = new AudioContext();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  const det = new BargeInDetector();
+  let raf = 0;
+  let last = 0;
+  let live = true;
+  const stop = () => {
+    if (!live) return;
+    live = false;
+    cancelAnimationFrame(raf);
+    stream.getTracks().forEach((t) => t.stop());
+    void ctx.close().catch(() => undefined);
+  };
+  const tick = (now: number) => {
+    if (!live) return;
+    raf = requestAnimationFrame(tick);
+    if (now - last < 50) return;
+    last = now;
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    if (det.feed(Math.sqrt(sum / buf.length), now)) { stop(); onBargeIn(); }
+  };
+  raf = requestAnimationFrame(tick);
+  return stop;
 }

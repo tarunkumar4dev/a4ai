@@ -51,13 +51,13 @@ describe("mic states (session reducer)", () => {
     expect(p.notice?.kind).toBe("pick");
     expect(p.state).toBe("idle");
   });
-  it("answer → speaking (caption = speech) → tap stops → idle", () => {
+  it("answer → speaking (caption = speech) → tap = barge-in → listening", () => {
     let s: VoiceSession = { ...initialSession, state: "thinking" };
     s = step(s, { type: "ptt", ev: { type: "answer_done", speech: true } });
     expect(s.state).toBe("speaking");
     expect(liveText(s, "10A की attendance 80% रही।")).toBe("10A की attendance 80% रही।");
     s = step(s, { type: "ptt", ev: { type: "tap" } });
-    expect(s.state).toBe("idle");
+    expect(s.state).toBe("listening");
   });
   it("mic denied / unsupported / limit / network drop all land in idle with a message and keep the transcript", () => {
     const d = step(step(initialSession, { type: "ptt", ev: { type: "tap" } }), { type: "ptt", ev: { type: "denied" } });

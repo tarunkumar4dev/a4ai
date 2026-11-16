@@ -11,11 +11,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import { AgentHttpError, isAgentPdfPath } from "./client";
 import { getAgentApi, isMissingEndpoint } from "./api";
 import { chatReducer, initialChatState, type Block, type ChatAction, type ChatState, type Feedback } from "./chatState";
-import type { AgentEvent, ChatRequest, MetaResponse, SessionItem, StoredMessage } from "./types";
+import type { AgentEvent, ChatRequest, MetaResponse, SessionItem, StoredMessage, VoiceChatOpts } from "./types";
 import { clearAgentStorage, isSafeId, loadPref, purgeLegacyAgentStorage, savePref, titleFrom } from "./persist";
 import { replayMessages } from "./replay";
 import { addRecentQuery, agentKeys, findSession, placeSession, removeSession } from "./queries";
 import { emitUiAction } from "@/lib/voice/uiActions";
+import { emitVoiceAudio } from "@/lib/voice/audioBus";
 
 export type MetaStatus = "idle" | "loading" | "ok" | "error";
 /** Loading the open chat's messages from the server. */
@@ -286,7 +287,7 @@ class AgentStore {
   /** Flush synchronously (end of stream) so `end` / errors land after every queued event. */
   private drain() { if (this.queue.length) this.flushQueue(); }
 
-  private stream(body: ChatRequest, voice = false) {
+  private stream(body: ChatRequest, voice = false, voiceOpts?: VoiceChatOpts) {
     const ac = new AbortController();
     this.ctrl = ac;
     const { uid } = this.state;
@@ -297,11 +298,13 @@ class AgentStore {
       try {
         const api = await getAgentApi();
         await api.chat({
-          body, signal: ac.signal, voice,
+          body, signal: ac.signal, voice, voiceOpts,
           onRequestId: (rid) => { if (!ac.signal.aborted && sameChat() && this.state.chat.busy) this.set({ chat: { ...this.state.chat, requestId: rid } }); },
           onEvent: (ev) => {
             if (ac.signal.aborted) return;
             if (!sameChat()) return;
+            // 1.5 streamed TTS: straight to the player, never into chat state (base64 audio stays out of React)
+            if (ev.type === "audio") { emitVoiceAudio(ev); return; }
             this.enqueue(ev, this.state.activeKey);
             // live only (never on replay): a registry route to open — the listener resolves the key, never a URL
             if (ev.type === "ui_action" && ev.action === "navigate" && ev.route_key) emitUiAction({ routeKey: ev.route_key, params: ev.params ?? {}, label: ev.label ?? null });
@@ -338,16 +341,23 @@ class AgentStore {
     placeSession(this.qc, uid, s);
   }
 
-  send = (raw: string, opts?: { voice?: boolean }) => {
+  send = (raw: string, opts?: { voice?: boolean; voiceOpts?: VoiceChatOpts; bargeIn?: boolean }) => {
     const text = raw.trim().slice(0, 4000);
-    if (!text || this.state.chat.busy) return;
+    if (!text) return;
+    // barge-in (voice): the user spoke over the answer — stop it here and tell the server to stop it too
+    const bargeIn = opts?.bargeIn === true && this.state.chat.busy;
+    if (bargeIn) this.stop();
+    if (this.state.chat.busy) return;
     if (this.state.load === "loading") { this.loadCtrl?.abort(); this.set({ load: "ok" }); }
     this.dispatch({ type: "send", text });
-    this.stream({ message: text, session_id: this.state.chat.sessionId }, opts?.voice === true);
+    const body: ChatRequest = { message: text, session_id: this.state.chat.sessionId };
+    if (opts?.bargeIn) body.cancel_current = true;
+    this.stream(body, opts?.voice === true, opts?.voiceOpts);
   };
 
-  /** A spoken message (voice layer): same chat, same history; the server adds a `speech` event. */
-  sendVoice = (raw: string) => this.send(raw, { voice: true });
+  /** A spoken message (voice layer): same chat, same history; the server adds `speech` (and with tts "stream",
+   *  `audio`) events. bargeIn: the previous answer is still running / speaking and is cut off. */
+  sendVoice = (raw: string, voiceOpts?: VoiceChatOpts, bargeIn = false) => this.send(raw, { voice: true, voiceOpts, bargeIn });
 
   /** Regenerate an assistant answer (the server deletes it and everything after, then re-answers). */
   regenerate = (turnId: string) => {

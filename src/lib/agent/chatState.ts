@@ -113,7 +113,7 @@ export function eventToBlock(ev: AgentEvent, retryText: string | null = null): B
     }
     case "error": return { kind: "error", id, code: ev.code, message: ev.message, retryText };
     case "ui_action": return { kind: "ui_action", id, ev };
-    case "thinking_status": case "final": case "session": case "speech": return null;
+    case "thinking_status": case "final": case "session": case "speech": case "audio": return null;
     default: {
       const unhandled: never = ev;
       return unhandled;
