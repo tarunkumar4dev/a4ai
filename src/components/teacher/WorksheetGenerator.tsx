@@ -156,7 +156,9 @@ export const WorksheetGenerator: React.FC = () => {
 
     try {
       const teacherId = user?.id;
-      if (!teacherId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!teacherId || !accessToken) {
         setError('Please login first');
         setStep('upload');
         return;
@@ -177,7 +179,8 @@ export const WorksheetGenerator: React.FC = () => {
 
       const res = await fetch(`${API_URL}/worksheet/generate-direct`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // the backend now verifies the login token and ignores body teacher_id (Gate 2 #1)
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           teacher_id: teacherId,
           storage_path: storagePath,

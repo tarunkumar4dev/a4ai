@@ -202,10 +202,12 @@ export const api = {
     ncertChapters?: string[];
     userId?: string;
     cbsePattern?: boolean;
-  }): Promise<GenerateTestResponse> {
+  }, requestId?: string): Promise<GenerateTestResponse> {
+    // Idempotency-Key: the backend reserves one quota unit under it, so a resend of the same attempt (lost
+    // response on a weak network) answers 409 instead of generating and charging a second paper.
     return apiFetch<GenerateTestResponse>(
       "/api/v1/test-generator/generate-frontend",
-      { method: "POST", body: JSON.stringify(payload) }
+      { method: "POST", body: JSON.stringify(payload), headers: requestId ? { "Idempotency-Key": requestId } : {} }
     );
   },
 

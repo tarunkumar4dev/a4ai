@@ -1,6 +1,6 @@
 // src/hooks/useTestGenerator.ts
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { api, GenerateTestResponse, ApiError } from "@/lib/api";
 import type { FormSchema } from "@/lib/schema";
 import { FORMAT_MAP } from "@/components/TestRowEditor";
@@ -25,6 +25,10 @@ export function useTestGenerator(): UseTestGeneratorReturn {
     setError(null);
     setProgress("");
   }, []);
+
+  // One Idempotency-Key per attempt; the same key is reused when the identical form is resent after a failure
+  // that may have reached the server (network error / timeout), so a lost response never costs a second paper.
+  const attemptRef = useRef<{ hash: string; key: string } | null>(null);
 
   const generate = useCallback(async (formData: FormSchema) => {
     setIsLoading(true);
@@ -130,7 +134,11 @@ export function useTestGenerator(): UseTestGeneratorReturn {
         quantity: r.quantity,
       })));
 
-      const response = await api.generateTest(payload);
+      const hash = JSON.stringify(payload);
+      const attempt = attemptRef.current?.hash === hash ? attemptRef.current : { hash, key: crypto.randomUUID() };
+      attemptRef.current = attempt;
+      const response = await api.generateTest(payload, attempt.key);
+      attemptRef.current = null;
 
       if (!response.ok) {
         throw new Error("Generation failed — please try again");
@@ -159,10 +167,17 @@ export function useTestGenerator(): UseTestGeneratorReturn {
           );
         } else if (err.status === 422) {
           setError(`Invalid input: ${typeof err.detail === "string" ? err.detail : JSON.stringify(err.detail)}`);
+        } else if (err.status === 409) {
+          // already generated under this key: the paper is in History; next click is a fresh attempt
+          attemptRef.current = null;
+          const detail = (typeof err.detail === "object" ? err.detail : {}) as { message?: string };
+          setError(detail.message || "This paper was already generated. Open it from History.");
         } else if (err.status === 429) {
           setError(
             "Rate limit reached. Please wait a minute and try again."
           );
+        } else if (err.status === 503) {
+          setError(typeof err.detail === "string" ? err.detail : "AI is busy right now. Please try again in a few minutes.");
         } else if (err.status === 500) {
           setError(
             "The generator hit a server error. Your settings are still filled in; try again."

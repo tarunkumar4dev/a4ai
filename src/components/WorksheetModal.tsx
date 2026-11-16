@@ -101,14 +101,16 @@ const WorksheetModal: React.FC<WorksheetModalProps> = ({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const teacherId = sessionData?.session?.user?.id;
-      if (!teacherId) { setError('Please login first'); setStep('form'); return; }
+      const accessToken = sessionData?.session?.access_token;
+      if (!teacherId || !accessToken) { setError('Please login first'); setStep('form'); return; }
 
       const finalSubject = subject === 'Other' ? customSubject : subject;
       const finalClass = classLevel === 'Other' ? customClass : classLevel;
 
       const res = await fetch(`${API_URL}/modules/${moduleId}/generate-worksheet`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // the backend now verifies the login token and ignores body teacher_id (Gate 2 #1)
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           teacher_id: teacherId,
           num_questions: numQuestions,

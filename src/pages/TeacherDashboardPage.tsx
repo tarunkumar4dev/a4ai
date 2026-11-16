@@ -21,6 +21,7 @@ const WorksheetGenerator = lazy(() => import("@/components/teacher/WorksheetGene
 const TeacherCalendarTab = lazy(() => import("@/components/teacher/TeacherCalendarTab"));
 const TeacherStudentsTab = lazy(() => import("@/components/teacher/TeacherStudentsTab"));
 const TeacherAnalyticsTab = lazy(() => import("@/components/teacher/TeacherAnalyticsTab"));
+const AgentWorkspace = lazy(() => import("@/components/agent/AgentWorkspace"));
 const CheckingLinkModal = lazy(() =>
   import("@/components/teacher/copySubmissions/CheckingLink").then((m) => ({ default: m.CheckingLinkModal })),
 );
@@ -1249,19 +1250,22 @@ export default function TeacherDashboardPage() {
   // Login already sends people to home_route; this covers landing on /dashboard
   // directly (e.g. being promoted while already on this page).
   const { access } = useAccess();
+  const location = useLocation();
   useEffect(() => {
     if (!access) return;
+    // Don't redirect away from /dashboard?tab=agent — the agent workspace is for all staff roles
+    const tab = new URLSearchParams(location.search).get("tab");
+    if (tab === "agent") return;
     if (access.home_route && access.home_route !== "/dashboard" && access.teaching_batch_ids.length === 0) {
       navigate(access.home_route, { replace: true });
     }
-  }, [access, navigate]);
+  }, [access, navigate, location.search]);
 
   const [activeTab, setActiveTab] = useState("dashboard");
   // deep link: /dashboard?tab=assignments&assignment=<id>&view=copies (Checking Link → "Submissions dekho")
-  const location = useLocation();
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get("tab");
-    if (tab === "assignments" || tab === "modules") setActiveTab(tab);
+    if (tab === "assignments" || tab === "modules" || tab === "agent") setActiveTab(tab);
   }, [location.search]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1377,6 +1381,7 @@ export default function TeacherDashboardPage() {
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
     { id: "ai-tools", Icon: Icons.Sparkles, label: "AI Tools", color: "text-amber-500" },
+    ...(access && access.primary_role !== "none" ? [{ id: "agent", Icon: Icons.Sparkles, label: "a4ai Agent", color: "text-violet-500" }] : []),
   ];
 
   const finalNavItems = navItems;
@@ -2112,6 +2117,8 @@ export default function TeacherDashboardPage() {
                 user={user}
               />
             )}
+
+            {activeTab === "agent" && <AgentWorkspace />}
 
             {/* ===== ANALYTICS TAB ===== */}
             {activeTab === "analytics" && (
