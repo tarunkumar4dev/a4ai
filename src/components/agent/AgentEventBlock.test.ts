@@ -249,8 +249,8 @@ describe("pure helpers", () => {
   });
 
   it("data source pill", () => {
-    expect(dataSourcePill({ data_source: "live", read_only: true, role: "admin", first_name: null, institute_name: null }, "ok")).toMatchObject({ label: "Live · read-only", tone: "live" });
-    expect(dataSourcePill({ data_source: "demo", read_only: true, role: "teacher", first_name: null, institute_name: null }, "ok")).toMatchObject({ label: "Demo data", tone: "demo" });
+    expect(dataSourcePill({ data_source: "live", read_only: true }, "ok")).toMatchObject({ label: "Live · read-only", tone: "live" });
+    expect(dataSourcePill({ data_source: "demo", read_only: true }, "ok")).toMatchObject({ label: "Demo data", tone: "demo" });
     expect(dataSourcePill(null, "loading")).toMatchObject({ label: "Connecting…", tone: "unknown" });
     expect(dataSourcePill(null, "error").tone).toBe("unknown");
   });

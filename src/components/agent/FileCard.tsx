@@ -8,13 +8,11 @@ import { asOfLabel } from "./format";
 
 type FileBlock = Extract<Block, { kind: "file" }>;
 
-const size = (n: number | null | undefined) => (typeof n === "number" && n > 0 ? (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`) : null);
 
 /** "6 rows · expires 9 Nov, 10:12 pm IST". Pure. */
 export function fileMeta(ev: FileBlock["ev"]): string {
   return [
     typeof ev.rows === "number" ? `${ev.rows} row${ev.rows === 1 ? "" : "s"}` : null,
-    size(ev.size_bytes),
     ev.expires_at ? `expires ${asOfLabel(ev.expires_at)}` : null,
   ].filter(Boolean).join(" · ");
 }

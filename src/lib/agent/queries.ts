@@ -292,7 +292,7 @@ export function prefetchAgentCaches(qc: QueryClient, uid: string) {
     const api = await getAgentApi(); try { return await api.listQueries({ limit: 20 }, signal); } catch { return []; }
   }});
   void qc.prefetchQuery({ queryKey: agentKeys.suggest(uid, ""), staleTime: stale, queryFn: async ({ signal }) => {
-    const api = await getAgentApi(); try { return await api.suggestions("", signal); } catch { return []; }
+    const api = await getAgentApi(); try { return await api.suggestions({ q: "", limit: 8 }, signal); } catch { return []; }
   }});
 }
 

@@ -9,7 +9,7 @@ import { ShortcutsHelp } from "./ShortcutsHelp";
 import { NEW_CHAT_SHORTCUT } from "./shortcuts";
 
 /** Pill text + tone. emerald / amber are the documented exception to "tokens only" (no success/warning tokens). */
-export function dataSourcePill(meta: MetaResponse | null, status: MetaStatus): { label: string; tone: "live" | "demo" | "unknown"; title: string } {
+export function dataSourcePill(meta: Pick<MetaResponse, "data_source" | "read_only"> | null, status: MetaStatus): { label: string; tone: "live" | "demo" | "unknown"; title: string } {
   if (status === "ok" && meta?.data_source === "live") {
     return { label: meta.read_only ? "Live · read-only" : "Live", tone: "live", title: "Aapke institute ka asli data. Agent kuch bhi badal nahi sakta." };
   }
