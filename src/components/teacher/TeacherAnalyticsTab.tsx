@@ -15,6 +15,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import * as XLSX from "xlsx";
 import { useMyScope } from "@/hooks/useMyScope";
+import { DELIVERED_TESTS_FILTER } from "@/lib/paperQuality";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -332,6 +333,7 @@ export default function TeacherAnalyticsTab({
         .from("tests")
         .select("id, exam_title, board, class_grade, subject, total_questions, total_marks, status, created_at")
         .eq("teacher_id", user.id)
+        .or(DELIVERED_TESTS_FILTER)
         .order("created_at", { ascending: false })
         .limit(50);
 

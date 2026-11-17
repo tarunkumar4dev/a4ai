@@ -19,6 +19,7 @@ import GeneratedTestView from "./GeneratedTestView";
 import { useTestGenerator } from "@/hooks/useTestGenerator";
 import { useAuth } from "@/providers/AuthProvider";
 import { loadDraft, saveDraft } from "@/lib/testGenDraft";
+import { generationStage } from "@/lib/paperQuality";
 
 // ═══════════════════════════════════════════════════════════════════════
 // SUBJECT CONFIG
@@ -40,7 +41,7 @@ const CLASS_OPTIONS = ["Class 9", "Class 10", "Class 11", "Class 12"];
 // ═══════════════════════════════════════
 // GENERATION STATUS
 // The generate call returns one response when the paper is finished. There is no progress feed,
-// so this shows elapsed time only: no percentage, no invented estimate.
+// so the stage text is driven by elapsed time only (generationStage): no percentage, no invented estimate.
 // ═══════════════════════════════════════
 
 // Collects every validation message (nested rows included) so the teacher sees what to fix after a failed submit.
@@ -72,10 +73,10 @@ const GenerationStatus = ({ running, seconds }: { running: boolean; seconds: num
     <div role="status" aria-live="polite" className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4">
       <Loader2 size={18} className="mt-0.5 flex-shrink-0 animate-spin text-[#111111]" aria-hidden="true" />
       <div className="min-w-0">
-        <p className="text-sm font-bold text-[#1B1B1B]">Generating your paper…</p>
+        <p className="text-sm font-bold text-[#1B1B1B]">{generationStage(seconds)}</p>
         <p className="mt-0.5 text-xs text-gray-500">
-          Elapsed {seconds}s. The paper is sent only when it is finished, so there is no partial progress to show.
-          You can leave this page open; your settings stay filled in.
+          Generating your paper — elapsed {seconds}s. The paper is sent only when it is finished; answers are
+          verified right after. You can leave this page open; your settings stay filled in.
         </p>
       </div>
     </div>

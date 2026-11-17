@@ -10,6 +10,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useMyScope } from "@/hooks/useMyScope";
 import { humanError } from "./checkerFetch";
 import { buildRubric, uploadPage, MAX_PAGES, STRICTNESS_LABEL, type Strictness } from "./copyCheckerApi";
+import { DELIVERED_TESTS_FILTER } from "@/lib/paperQuality";
 
 /** A usable check name from a question-paper file, or "" for camera / chat names like IMG_2031.jpg. */
 export function titleFromFile(file?: File): string {
@@ -53,7 +54,8 @@ export default function NewCheckSession({ initialTestId, onCreated, onCancel }: 
     if (!user) return;
     supabase.from("tests")
       .select("id, exam_title, subject, class_grade, total_marks, created_at")
-      .eq("teacher_id", user.id).order("created_at", { ascending: false }).limit(40)
+      .eq("teacher_id", user.id).or(DELIVERED_TESTS_FILTER)
+      .order("created_at", { ascending: false }).limit(40)
       .then(async ({ data }) => {
         const list: SavedTest[] = data || [];
         // Some tests (mostly old drafts) have no saved questions → no answers to build a scheme from.

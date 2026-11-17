@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useAuth } from "@/providers/AuthProvider";
+import { DELIVERED_TESTS_FILTER } from "@/lib/paperQuality";
 
 export type PlanSlug = "free" | "starter" | "pro" | "institute_start" | "institute_scale" | "institute_enterprise";
 
@@ -60,6 +61,7 @@ export function useSubscription() {
           .from("tests")
           .select("id", { count: "exact", head: true })
           .eq("teacher_id", user.id)
+          .or(DELIVERED_TESTS_FILTER)   // a failed generation is not a used paper
           .gte("created_at", startOfMonth),
       ]);
 

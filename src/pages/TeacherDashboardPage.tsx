@@ -11,6 +11,7 @@ import { downloadTestDocument, fetchQuestionsForTest, type TestQuestionData } fr
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { type TestLinkInfo, testLinks } from "@/lib/uploadLink/testLink";
+import { DELIVERED_TESTS_FILTER } from "@/lib/paperQuality";
 
 // Each tab is its own chunk: opening the dashboard downloads only what the
 // first screen needs; a tab's code is fetched the first time it is opened.
@@ -1300,6 +1301,7 @@ export default function TeacherDashboardPage() {
       .from("tests")
       .select("id, exam_title, board, class_grade, subject, status, total_questions, total_marks, created_at")
       .eq("teacher_id", userId)
+      .or(DELIVERED_TESTS_FILTER)
       .order("created_at", { ascending: false })
       .limit(50)
       .then(({ data, error }) => {

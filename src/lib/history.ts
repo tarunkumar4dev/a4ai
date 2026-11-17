@@ -3,6 +3,7 @@
 // filtered by logged-in teacher. `test_papers` was a dead legacy table.
 // Shows ALL statuses (draft/saved) so teachers see results immediately.
 import { supabase } from "@/lib/supabaseClient";
+import { DELIVERED_TESTS_FILTER } from "@/lib/paperQuality";
 
 export type PaperRow = {
   id: string;
@@ -27,11 +28,12 @@ export async function fetchRecentPapers(limit = 50): Promise<PaperRow[]> {
     throw new Error("Not logged in — cannot fetch test history");
   }
 
-  // NO status filter — show ALL papers (draft + saved)
+  // Draft + saved papers. A paper still generating, or one whose generation failed, has no questions to open.
   const { data, error } = await supabase
     .from("tests")
     .select("id,created_at,exam_title,subject,board,class_grade,status,total_questions,total_marks")
     .eq("teacher_id", user.id)
+    .or(DELIVERED_TESTS_FILTER)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -136,7 +138,8 @@ export async function getTestCounts(): Promise<{ total: number; draft: number; s
   const { count: total, error: totalError } = await supabase
     .from("tests")
     .select("*", { count: "exact", head: true })
-    .eq("teacher_id", user.id);
+    .eq("teacher_id", user.id)
+    .or(DELIVERED_TESTS_FILTER);
 
   if (totalError) {
     console.error("Error counting total tests:", totalError);

@@ -3,6 +3,7 @@ import {
   acceptFix,
   afterTeacherEdit,
   applyVerdicts,
+  generationStage,
   paperShortfall,
   summarizeVerification,
 } from "./paperQuality";
@@ -105,5 +106,13 @@ describe("paperShortfall", () => {
     expect(paperShortfall({ requestedQuestions: 10, deliveredQuestions: 10 })).toBeNull();
     expect(paperShortfall({})).toBeNull(); // older backend: no numbers, no banner
     expect(paperShortfall(undefined)).toBeNull();
+  });
+});
+
+describe("generationStage", () => {
+  it("follows elapsed time", () => {
+    expect([0, 4, 5, 24, 25, 90].map(generationStage)).toEqual([
+      "Preparing…", "Preparing…", "Writing questions…", "Writing questions…", "Almost done…", "Almost done…",
+    ]);
   });
 });

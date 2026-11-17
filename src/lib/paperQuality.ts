@@ -1,5 +1,5 @@
-// Generated-paper quality helpers (fix/p0-quality): answer-key verdicts and honest validation status.
-// Pure functions, unit-tested in paperQuality.test.ts.
+// Generated-paper quality helpers (fix/p0-quality): answer-key verdicts, honest validation status,
+// requested-vs-delivered shortfall, staged progress text. Pure functions, unit-tested in paperQuality.test.ts.
 
 import type { VerifyAnswersResponse } from "@/lib/api";
 
@@ -99,3 +99,19 @@ export function paperShortfall(meta: Record<string, unknown> | null | undefined)
   if (!Number.isFinite(requested) || !Number.isFinite(delivered) || delivered >= requested) return null;
   return { requested, delivered };
 }
+
+/**
+ * Stage text while a paper is being generated. Driven by elapsed time only: the generate call returns one
+ * response when the paper is finished, so there is no real progress feed.
+ */
+export function generationStage(seconds: number): string {
+  if (seconds < 5) return "Preparing…";
+  if (seconds < 25) return "Writing questions…";
+  return "Almost done…";
+}
+
+/**
+ * PostgREST .or() filter for tests rows that are real papers: everything except a paper that is still generating
+ * or whose generation failed (those are kept out of history lists and usage counts). NULL status = old row, kept.
+ */
+export const DELIVERED_TESTS_FILTER = "status.is.null,status.not.in.(generating,failed)";
