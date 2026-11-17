@@ -36,7 +36,7 @@ import { useGuestAccess } from "@/hooks/useGuestAccess";
 import LoginModal from "@/components/LoginModal";
 import { toast } from "sonner";
 import { backendUrl } from "@/lib/apiBase";
-import { acceptFix, afterTeacherEdit, applyVerdicts, summarizeVerification } from "@/lib/paperQuality";
+import { acceptFix, afterTeacherEdit, applyVerdicts, paperShortfall, summarizeVerification } from "@/lib/paperQuality";
 import type { QuestionVerification } from "@/lib/paperQuality";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -1237,6 +1237,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   // 🚩 FIX: Only approved questions go to PDF/Contest/Copy
   const activeQuestions = questions.filter((q) => q.status === "approved");
   const verifySummary = summarizeVerification(questions);
+  const shortfall = paperShortfall(result.meta);
 
   // ── Checking Link: the saved test as a TestRef (needs the questions in the DB → save first) ──
   const testRef = {
@@ -1343,6 +1344,11 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                 <span className="text-gray-400 font-bold">{pendingCount} pending</span>
                 <span className="text-red-500 font-bold">{rejectedCount} rejected</span>
               </div>
+              {shortfall && (
+                <div role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  Requested {shortfall.requested} questions, AI could deliver {shortfall.delivered}. You can regenerate or continue.
+                </div>
+              )}
               {verify && (
                 <div className="mt-2 text-xs font-semibold">
                   {verify.state === "running" && (

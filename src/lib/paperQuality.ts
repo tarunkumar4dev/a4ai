@@ -91,3 +91,11 @@ export function summarizeVerification(questions: Verifiable[]): VerifySummary {
   }
   return out;
 }
+
+/** { requested, delivered } when the paper came back with fewer questions than asked for, else null. */
+export function paperShortfall(meta: Record<string, unknown> | null | undefined): { requested: number; delivered: number } | null {
+  const requested = Number(meta?.requestedQuestions);
+  const delivered = Number(meta?.deliveredQuestions);
+  if (!Number.isFinite(requested) || !Number.isFinite(delivered) || delivered >= requested) return null;
+  return { requested, delivered };
+}

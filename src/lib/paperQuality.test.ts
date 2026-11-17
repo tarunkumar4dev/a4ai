@@ -3,6 +3,7 @@ import {
   acceptFix,
   afterTeacherEdit,
   applyVerdicts,
+  paperShortfall,
   summarizeVerification,
 } from "./paperQuality";
 import type { QuestionVerification } from "./paperQuality";
@@ -95,5 +96,14 @@ describe("summarizeVerification", () => {
   it("counts verdicts", () => {
     const qs = [q("a", { verification: { verdict: "ok" } }), q("b", { verification: { verdict: "fix" } }), q("c")];
     expect(summarizeVerification(qs)).toEqual({ verified: 1, suggested: 1, flagged: 0 });
+  });
+});
+
+describe("paperShortfall", () => {
+  it("only when fewer were delivered than requested", () => {
+    expect(paperShortfall({ requestedQuestions: 38, deliveredQuestions: 31 })).toEqual({ requested: 38, delivered: 31 });
+    expect(paperShortfall({ requestedQuestions: 10, deliveredQuestions: 10 })).toBeNull();
+    expect(paperShortfall({})).toBeNull(); // older backend: no numbers, no banner
+    expect(paperShortfall(undefined)).toBeNull();
   });
 });
