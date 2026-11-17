@@ -54,13 +54,18 @@ export interface GeneratedQuestion {
 
 export interface AnswerVerdict {
   id: string;
-  verdict: "fix" | "reject";
+  verdict: "ok" | "fix" | "reject";
   issue?: string;
   correctAnswer?: string;
+  correct_answer?: string;
   explanation?: string;
 }
 
 export interface VerifyAnswersResponse {
+  /** false: the checker could not run. The paper is still usable; nothing was checked. */
+  available?: boolean;
+  /** false: the checker is the same model family that wrote the paper. */
+  checker_independent?: boolean;
   results: AnswerVerdict[];
   checked: number;
   unchecked: number;
@@ -258,7 +263,9 @@ export const api = {
    * Second-model check of a generated paper's answer key (runs after the paper is shown).
    * POST /api/v1/test-generator/verify-answers
    */
-  async verifyAnswers(payload: { subject: string; classGrade: string; questions: any[] }): Promise<VerifyAnswersResponse> {
+  async verifyAnswers(payload: { subject: string; classGrade: string; testId?: string; questions: any[] }): Promise<VerifyAnswersResponse> {
+    // testId: the backend runs one checker pass per paper and answers a repeat from its cache. (No
+    // Idempotency-Key header here: the backend's CORS allow-list does not include it.)
     return apiFetch<VerifyAnswersResponse>("/api/v1/test-generator/verify-answers", {
       method: "POST",
       body: JSON.stringify(payload),

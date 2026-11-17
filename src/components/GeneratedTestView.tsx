@@ -36,6 +36,8 @@ import { useGuestAccess } from "@/hooks/useGuestAccess";
 import LoginModal from "@/components/LoginModal";
 import { toast } from "sonner";
 import { backendUrl } from "@/lib/apiBase";
+import { acceptFix, afterTeacherEdit, applyVerdicts, summarizeVerification } from "@/lib/paperQuality";
+import type { QuestionVerification } from "@/lib/paperQuality";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -89,13 +91,13 @@ interface QuestionWithStatus extends GeneratedQuestion {
   // v8: Statistics question table
   question_table?: QuestionTable | null;
   questionTable?: QuestionTable | null;
-  // Result of the background answer-key check (fix = key corrected, reject = teacher should review)
-  verification?: { verdict: "fix" | "reject"; issue?: string; previousAnswer?: string };
+  // Result of the background answer-key check (ok = verified, fix = corrected key suggested, reject = review)
+  verification?: QuestionVerification;
 }
 
 type VerifyState =
   | { state: "running" }
-  | { state: "done"; fixed: number; flagged: number; unchecked: number; checked: number }
+  | { state: "done"; unchecked: number }
   | { state: "failed" };
 
 // ── v8: Markdown table stripper ───────────────────────────────────────
@@ -404,8 +406,45 @@ const QuestionTableView = ({ table }: { table: QuestionTable }) => {
 // Question Card
 // ═══════════════════════════════════════════════════════════════════════
 
+// Checker verdict that needs the teacher: a suggested key (Accept) or a question to review.
+const VerdictPanel = ({ question, onAcceptFix }: { question: QuestionWithStatus; onAcceptFix: (id: string) => void }) => {
+  const v = question.verification;
+  if (!v || v.verdict === "ok") return null;
+  if (v.verdict === "reject") {
+    return (
+      <div className="mx-5 mb-3 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800">
+        <span className="font-bold">Review this question.</span>{" "}
+        {v.issue || "The checker could not confirm the answer key."}
+      </div>
+    );
+  }
+  if (v.accepted) {
+    return (
+      <div className="mx-5 mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-2.5 text-xs text-sky-900">
+        <span className="font-bold">Key corrected.</span>{" "}
+        {v.previousAnswer ? <>Previous key: <MathText text={v.previousAnswer} /></> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-2.5 text-xs text-sky-900">
+      <div className="min-w-0">
+        <p><span className="font-bold">Suggested key:</span> <MathText text={v.suggestedAnswer || ""} /></p>
+        {v.issue && <p className="mt-0.5 text-sky-800">{v.issue}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={() => onAcceptFix(question.id)}
+        className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700 active:bg-sky-800"
+      >
+        Accept corrected key
+      </button>
+    </div>
+  );
+};
+
 const QuestionCard = ({
-  question, index, showAnswer, onStatusChange, onEdit, onSaveEdit,
+  question, index, showAnswer, onStatusChange, onEdit, onSaveEdit, onAcceptFix,
 }: {
   question: QuestionWithStatus;
   index: number;
@@ -413,6 +452,7 @@ const QuestionCard = ({
   onStatusChange: (id: string, status: QuestionStatus) => void;
   onEdit: (id: string, field: string, value: any) => void;
   onSaveEdit: (id: string) => void;
+  onAcceptFix: (id: string) => void;
 }) => {
   const [expanded, setExpanded] = useState(false);
   const labels = ["A", "B", "C", "D", "E", "F"];
@@ -480,20 +520,39 @@ const QuestionCard = ({
                 MANUAL
               </span>
             )}
+            {question.verification?.verdict === "ok" && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full"
+                title={question.verification.independent === false
+                  ? "Checked by the same model family that wrote the paper — not an independent check."
+                  : "A second, independent AI model solved this question and agrees with the answer key."}
+              >
+                <CheckCircle2 size={11} />
+                {question.verification.independent === false ? "AI-checked (same model)" : "AI-verified (independent model)"}
+              </span>
+            )}
             {question.verification?.verdict === "fix" && (
               <span
                 className="text-[10px] font-bold text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full"
-                title={`${question.verification.issue || "Answer key corrected"}${question.verification.previousAnswer ? `\nPrevious key: ${question.verification.previousAnswer}` : ""}`}
+                title={`${question.verification.issue || "The checker suggests a different answer key"}${question.verification.previousAnswer ? `\nPrevious key: ${question.verification.previousAnswer}` : ""}`}
               >
-                KEY CORRECTED
+                {question.verification.accepted ? "KEY CORRECTED" : "KEY CORRECTION SUGGESTED"}
               </span>
             )}
             {question.verification?.verdict === "reject" && (
               <span
-                className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full"
+                className="text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full"
                 title={question.verification.issue || "Please review this question"}
               >
-                REVIEW: {(question.verification.issue || "check this question").slice(0, 60)}
+                Review this question
+              </span>
+            )}
+            {!question.verification && question.validationStatus === "needs_review" && !(question as any).isManual && (
+              <span
+                className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full"
+                title="The answer key has not been checked by a second model yet."
+              >
+                Not yet verified
               </span>
             )}
           </div>
@@ -648,6 +707,8 @@ const QuestionCard = ({
           )}
         </div>
       )}
+
+      <VerdictPanel question={question} onAcceptFix={onAcceptFix} />
 
       {/* Fix 3: Show answer for Short/Long/non-MCQ questions */}
       {showAnswer
@@ -926,6 +987,11 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   const [verify, setVerify] = useState<VerifyState | null>(null);
   useEffect(() => {
     if (!result.testId || !result.questions?.length) return;
+    // A paper restored from this browser's saved progress already carries its verdicts: no second paid pass.
+    if (questions.some((q) => q.verification)) {
+      setVerify({ state: "done", unchecked: 0 });
+      return;
+    }
     let cancelled = false;
     const original = new Map(result.questions.map((q) => [q.id, q.correctAnswer]));
     setVerify({ state: "running" });
@@ -933,28 +999,17 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
       .verifyAnswers({
         subject: result.meta?.subject || "",
         classGrade: result.meta?.classGrade || "",
+        testId: result.testId,
         questions: result.questions,
       })
       .then((res) => {
         if (cancelled) return;
-        const byId = new Map(res.results.map((r) => [r.id, r]));
-        setQuestions((prev) =>
-          prev.map((q) => {
-            const v = byId.get(q.id);
-            if (!v || q.verification) return q;
-            const untouched = !q.editData && q.correctAnswer === original.get(q.id);
-            if (v.verdict === "fix" && v.correctAnswer && untouched) {
-              return {
-                ...q,
-                correctAnswer: v.correctAnswer,
-                explanation: v.explanation || q.explanation,
-                verification: { verdict: "fix", issue: v.issue, previousAnswer: q.correctAnswer },
-              };
-            }
-            return { ...q, verification: { verdict: "reject", issue: v.issue } };
-          })
-        );
-        setVerify({ state: "done", fixed: res.fixed, flagged: res.flagged, unchecked: res.unchecked, checked: res.checked });
+        if (res.available === false || !Array.isArray(res.results)) {
+          setVerify({ state: "failed" });
+          return;
+        }
+        setQuestions((prev) => applyVerdicts(prev, res, original));
+        setVerify({ state: "done", unchecked: res.unchecked || 0 });
       })
       .catch(() => {
         if (!cancelled) setVerify({ state: "failed" });
@@ -1114,16 +1169,25 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
     setQuestions((prev) =>
       prev.map((q) => {
         if (q.id !== id || !q.editData) return q;
-        return {
+        const edited = {
           ...q,
           text: q.editData.text || q.text,
           options: q.editData.options || q.options,
           correctAnswer: q.editData.correctAnswer || q.correctAnswer,
-          status: "approved",
+          status: "approved" as QuestionStatus,
           editData: undefined,
         };
+        const changed = edited.text !== q.text || edited.correctAnswer !== q.correctAnswer
+          || JSON.stringify(edited.options || []) !== JSON.stringify(q.options || []);
+        // An edited question is no longer the one the checker verified.
+        return afterTeacherEdit(edited, changed);
       })
     );
+  }, []);
+
+  // Teacher accepts the checker's corrected key for one question.
+  const handleAcceptFix = useCallback((id: string) => {
+    setQuestions((prev) => prev.map((q) => (q.id === id ? acceptFix(q) : q)));
   }, []);
 
   // ── Bulk ─────────────────────────────────────────────────────────
@@ -1172,6 +1236,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
   // ── Export ────────────────────────────────────────────────────────
   // 🚩 FIX: Only approved questions go to PDF/Contest/Copy
   const activeQuestions = questions.filter((q) => q.status === "approved");
+  const verifySummary = summarizeVerification(questions);
 
   // ── Checking Link: the saved test as a TestRef (needs the questions in the DB → save first) ──
   const testRef = {
@@ -1282,15 +1347,16 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
                 <div className="mt-2 text-xs font-semibold">
                   {verify.state === "running" && (
                     <span className="inline-flex items-center gap-1.5 text-sky-700 bg-sky-50 px-2.5 py-1 rounded-full">
-                      <Loader2 size={12} className="animate-spin" /> Verifying answer key…
+                      <Loader2 size={12} className="animate-spin" /> Verifying answers…
                     </span>
                   )}
                   {verify.state === "done" && (
                     <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
                       <CheckCircle2 size={12} />
                       Answer key checked
-                      {verify.fixed > 0 && ` · ${verify.fixed} corrected`}
-                      {verify.flagged > 0 && ` · ${verify.flagged} to review`}
+                      {verifySummary.verified > 0 && ` · ${verifySummary.verified} verified`}
+                      {verifySummary.suggested > 0 && ` · ${verifySummary.suggested} corrected key${verifySummary.suggested === 1 ? "" : "s"} suggested`}
+                      {verifySummary.flagged > 0 && ` · ${verifySummary.flagged} to review`}
                       {verify.unchecked > 0 && ` · ${verify.unchecked} could not be checked`}
                     </span>
                   )}
@@ -1503,6 +1569,7 @@ const GeneratedTestView = ({ result, onReset, logoBase64 }: GeneratedTestViewPro
               onStatusChange={handleStatusChange}
               onEdit={handleEdit}
               onSaveEdit={handleSaveEdit}
+              onAcceptFix={handleAcceptFix}
             />
           ))}
         </div>
