@@ -145,6 +145,8 @@ export function chatBody(b: ChatRequest): ChatRequest {
   else out.message = b.message ?? null;
   if (typeof b.edit_of_seq === "number") out.edit_of_seq = b.edit_of_seq;
   if (b.cancel_current) out.cancel_current = true;
+  // the default is left out, so an older backend (extra="forbid") still accepts every Hinglish request
+  if (b.language && b.language !== "hinglish") out.language = b.language;
   return out;
 }
 

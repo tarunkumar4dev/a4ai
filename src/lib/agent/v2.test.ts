@@ -69,6 +69,12 @@ describe("contract 1.3 parsers", () => {
     expect(chatBody({ message: "ignored", session_id: "s", regenerate_from_seq: 4 })).toEqual({ session_id: "s", regenerate_from_seq: 4 });
     expect(chatBody({ message: "hi", session_id: "s", edit_of_seq: 3, regenerate_from_seq: null })).toEqual({ session_id: "s", message: "hi", edit_of_seq: 3 });
   });
+
+  it("chat body: language only when it is not the hinglish default (old backends reject unknown fields)", () => {
+    expect(chatBody({ message: "hi", language: "hinglish" })).toEqual({ session_id: null, message: "hi" });
+    expect(chatBody({ message: "hi", language: "en" })).toEqual({ session_id: null, message: "hi", language: "en" });
+    expect(chatBody({ message: "hi", language: "hi" })).toEqual({ session_id: null, message: "hi", language: "hi" });
+  });
 });
 
 // ---- suggestions ------------------------------------------------------------------------------------------

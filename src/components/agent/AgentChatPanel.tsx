@@ -7,12 +7,10 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { History, LogIn, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/providers/AuthProvider";
-import { useAccess } from "@/context/AccessProvider";
-import { useNetworkStatus } from "@/hooks/useNetworkStatus";
-import { useMyScope } from "@/hooks/useMyScope";
+import { useAgentAccess, useAgentNet, useAgentScope, useAgentUser } from "@/lib/agent/env";
 import { stepLabel } from "@/lib/agent/chatState";
 import { useAgentQueryClient } from "@/lib/agent/queries";
+import { htmlLang, useAgentLang } from "@/lib/agent/i18n";
 import { agentStore, useAgentStore } from "@/lib/agent/store";
 import { ErrorCard, type BlockHandlers } from "./AgentEventBlock";
 import { AgentComposer } from "./AgentComposer";
@@ -77,18 +75,19 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   variant?: "page" | "sheet"; leading?: ReactNode; trailing?: ReactNode; autoFocus?: boolean;
   /** the workspace sidebar (lg+) has its own New chat button */ newChatInSidebar?: boolean;
 }) {
-  const { user } = useAuth();
-  const { access } = useAccess();
+  const user = useAgentUser();
+  const access = useAgentAccess();
   const s = useAgentStore(user?.id ?? "anon", useAgentQueryClient());
-  const net = useNetworkStatus();
+  const net = useAgentNet();
   const offline = net === "offline";
   const { chat } = s;
   const compact = variant === "sheet";
+  const lang = useAgentLang();
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const ctx = useMemo(() => buildContexts(chat.turns), [chat.turns]);
   const firstName = s.meta?.first_name ?? firstNameOf(user?.user_metadata?.full_name ?? user?.user_metadata?.name);
-  const myScope = useMyScope();
+  const myScope = useAgentScope();
   const who = agentRole(s.meta?.role, access);
   const role = roleLabel(s.meta?.role, access?.primary_role, access);
   const templates = useMemo(() => suggestionsFor(who).map((x) => x.prompt), [who]);
@@ -136,7 +135,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const firstLive = Math.max(0, chat.turns.length - LIVE_TURNS);
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card font-halenoir text-card-foreground" data-testid={`agent-chat-${variant}`}>
+    <div lang={htmlLang(lang)} className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card font-halenoir text-card-foreground" data-testid={`agent-chat-${variant}`}>
       <AgentHeader meta={s.meta} metaStatus={s.metaStatus} role={role} compact={compact} newChatInSidebar={newChatInSidebar}
         title={chat.title ?? null}
         canNew={chat.turns.length > 0 || !!chat.sessionId} onNewChat={() => agentStore.newChat()} leading={leading} trailing={trailing} />

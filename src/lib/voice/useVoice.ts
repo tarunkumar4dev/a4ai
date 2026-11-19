@@ -9,7 +9,7 @@ import { AgentHttpError } from "@/lib/agent/client";
 import { agentStore, useAgentStore } from "@/lib/agent/store";
 import { useAgentQueryClient } from "@/lib/agent/queries";
 import type { VoiceConfig } from "@/lib/agent/types";
-import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { useAgentNet } from "@/lib/agent/env";
 import { idempotencyKey, speak, transcribe } from "./api";
 import { useVoiceConfig } from "./useVoiceConfig";
 import { createPlayer, synthLang, synthSupported, type Player } from "./player";
@@ -47,7 +47,7 @@ const connection = () => (typeof navigator === "undefined" ? null : (navigator a
 
 export function useVoice(uid: string | null): Voice {
   const store = useAgentStore(uid ?? "anon", useAgentQueryClient());
-  const net = useNetworkStatus();
+  const net = useAgentNet();
   const [session, dispatch] = useReducer(sessionReducer, initialSession);
   const [prefs, setPrefsState] = useState<VoicePrefs>(() => loadPrefs(uid));
   const rec = useRef<Recording | null>(null);

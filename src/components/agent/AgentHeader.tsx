@@ -5,6 +5,7 @@ import { SquarePen } from "lucide-react";
 import type { MetaResponse } from "@/lib/agent/events";
 import type { MetaStatus } from "@/lib/agent/store";
 import { AgentMark } from "./AgentMessage";
+import { LanguageMenu } from "./LanguageMenu";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { NEW_CHAT_SHORTCUT } from "./shortcuts";
 
@@ -55,6 +56,7 @@ export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading
             : meta?.institute_name ? <span className="hidden truncate text-xs text-muted-foreground sm:inline">{meta.institute_name}</span> : null}
         </div>
       </div>
+      <LanguageMenu />
       <ShortcutsHelp />
       <button type="button" onClick={onNewChat} disabled={!canNew} title={`Naya sawaal (${NEW_CHAT_SHORTCUT})`}
         className={`inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 ${newChatInSidebar ? "lg:hidden" : ""}`}>
