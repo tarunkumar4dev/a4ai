@@ -1,6 +1,7 @@
 // Event block → component. Theme tokens only (light + dark). All actions are real <button>s.
 // Assistant prose goes through AgentMarkdown (no raw HTML); paper text through AgentMath (KaTeX trust:false + DOMPurify).
 import { useEffect, useState } from "react";
+import { useAgentT, type AgentKey } from "@/lib/agent/i18n";
 import { AlertCircle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Block } from "@/lib/agent/chatState";
@@ -40,20 +41,11 @@ export interface BlockHandlers {
 /** What a block knows about the rest of the chat (paper header from the blueprint, failed ids from the paper). */
 export interface BlockContext { paper?: PaperContext; failedIds?: string[] }
 
-const ERROR_TITLE: Record<string, string> = {
-  budget_exceeded: "Aaj ki limit khatam",
-  forbidden: "Access nahi hai",
-  not_found: "Nahi mila",
-  invalid_input: "Request samajh nahi aayi",
-  provider_error: "Service abhi busy hai",
-  internal: "Kuch gadbad ho gayi",
-  unauthorized: "Sign in chahiye",
-  rate_limited: "Thoda rukiye",
-  network: "Connection nahi bana",
-  unavailable: "Agent abhi available nahi",
-  server: "Server me dikkat",
-  offline: "Aap offline hain",
-  expired: "Approval expire ho gaya",
+const ERROR_CODES = new Set(["budget_exceeded", "forbidden", "not_found", "invalid_input", "provider_error", "internal", "unauthorized",
+  "rate_limited", "network", "unavailable", "server", "offline", "expired"]);
+/** stream error codes whose backend text is curated Hinglish: other languages get our own message for the code */
+const STREAM_MESSAGE: Record<string, AgentKey> = {
+  provider_error: "error.unavailable", internal: "error.generic", budget_exceeded: "error.unavailable", invalid_input: "error.invalid",
 };
 
 /** Seconds left until `retryAt` (0 when free to retry), ticking once a second. */
@@ -75,15 +67,18 @@ export function ErrorCard({ code, message, retryText, busy, onRetry, retryAt }: 
   /** 429: Retry is disabled until then (ms since epoch) */ retryAt?: number | null;
 }) {
   const wait = useCountdown(retryAt);
+  const { t, lang } = useAgentT();
+  const title = ERROR_CODES.has(code) ? t(`errtitle.${code}` as AgentKey) : t("error.title");
+  const text = lang !== "hinglish" && STREAM_MESSAGE[code] ? t(STREAM_MESSAGE[code]) : message;
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm" data-testid="agent-error">
+    <div className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm" data-testid="agent-error" data-code={code}>
       <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-destructive dark:text-red-400" />
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-foreground">{ERROR_TITLE[code] ?? "Jawab nahi aa paya"}</p>
-        <p className="mt-0.5 break-words text-muted-foreground">{message}</p>
+        <p className="font-medium text-foreground">{title}</p>
+        <p className="agent-prose mt-0.5 break-words text-muted-foreground">{text}</p>
         {retryText ? (
           <Button type="button" variant="outline" className="mt-3 h-11" disabled={busy || wait > 0} onClick={() => onRetry(retryText)}>
-            <RotateCcw aria-hidden="true" />{wait > 0 ? `Dobara (${wait}s)` : "Dobara try karein"}
+            <RotateCcw aria-hidden="true" />{wait > 0 ? t("action.retryIn", { s: wait }) : t("action.retry")}
           </Button>
         ) : null}
       </div>

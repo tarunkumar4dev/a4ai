@@ -74,7 +74,8 @@ describe("file card (`file` event, contract 1.3)", () => {
 describe("error states", () => {
   it("401 / 429 (with Retry-After) / 503 / 5xx / offline → friendly Hinglish", () => {
     expect(friendlyError(new AgentHttpError(401, "x"))?.code).toBe("unauthorized");
-    expect(friendlyError(new AgentHttpError(429, "x", 42), 1000)).toEqual({ code: "rate_limited", message: "Bahut saari requests. 42 second baad dobara try karein.", retryAt: 43_000 });
+    expect(friendlyError(new AgentHttpError(429, "x", 42), 1000)).toEqual({ code: "rate_limited", message: "Bahut zyada requests ho gayi. 42 second baad try karein.", retryAt: 43_000 });
+    for (const st of [500, 502, 503, 418]) expect(friendlyError(new AgentHttpError(st, "internal detail"))?.message).not.toMatch(/HTTP|d{3}|internal/);
     expect(friendlyError(new AgentHttpError(503, "x"))?.code).toBe("unavailable");
     expect(friendlyError(new AgentHttpError(502, "x"))?.code).toBe("server");
     expect(friendlyError(new DOMException("x", "AbortError"))).toBeNull();

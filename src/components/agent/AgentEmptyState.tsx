@@ -7,11 +7,12 @@ import { useAgentT } from "@/lib/agent/i18n";
 import { AgentMark } from "./AgentMessage";
 import type { Suggestion } from "./roles";
 
-export function AgentEmptyState({ firstName, suggestions, disabled, onPick, compact, role, scopeLine, noBatch, hideCards }: {
+export function AgentEmptyState({ firstName, suggestions, disabled, onPick, compact, role, scopeLine, noBatch, hideCards, connecting }: {
   firstName: string | null; suggestions: Suggestion[]; disabled?: boolean; onPick: (prompt: string) => void; compact?: boolean;
   /** "Teacher" */ role: string;
   /** "3 batch · 44 students" */ scopeLine?: string | null;
   /** the user has no batch yet: explain it next to the chip */ noBatch?: boolean;
+  /** GET /agent/meta still on its way: the scope chip is a skeleton (not a "Connecting…" pill) */ connecting?: boolean;
   /** the typeahead is open (2+ characters typed): cards step aside so the two never overlap */ hideCards?: boolean;
 }) {
   const { t } = useAgentT();
@@ -22,6 +23,7 @@ export function AgentEmptyState({ firstName, suggestions, disabled, onPick, comp
         {firstName ? t("greeting", { name: firstName }) : t("greeting.noName")}
       </h3>
       <p className="agent-prose mt-1 text-[15px] text-muted-foreground">{t("subtitle")}</p>
+      {connecting && !scopeLine ? <span aria-hidden="true" className="mt-3 block h-8 w-44 rounded-full bg-muted motion-safe:animate-pulse" data-testid="scope-skeleton" /> : null}
       {scopeLine ? (
         <div className="mt-3 flex items-center gap-1">
           <p className={`inline-flex min-h-8 w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium ${noBatch ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200" : "border-border bg-muted text-foreground"}`} data-testid="scope-summary">

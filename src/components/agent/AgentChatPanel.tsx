@@ -6,7 +6,8 @@
 // nothing jumps; the streaming turn is never skipped.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { History, LogIn, WifiOff } from "lucide-react";
+import { ArrowDown, History, Loader2, LogIn, RefreshCw, WifiOff } from "lucide-react";
+import { connectionView, type ConnectionView } from "@/lib/agent/connection";
 import { Button } from "@/components/ui/button";
 import { useAgentAccess, useAgentNet, useAgentScope, useAgentUser } from "@/lib/agent/env";
 import { stepLabel } from "@/lib/agent/chatState";
@@ -55,6 +56,41 @@ export function liveStatus(s: Pick<ReturnType<typeof useAgentStore>, "chat" | "a
   return s.chat.status ? `${stepLabel(s.chat.status.key, s.chat.status.params, lang)}…` : "";
 }
 
+/** One line above the composer for every connection problem; nothing when ready (no permanent badge). */
+function ConnectionStrip({ view, onRetry }: { view: ConnectionView; onRetry: () => void }) {
+  const { t } = useAgentT();
+  if (view === "none" || view === "connecting") return null;
+  const retry = (
+    <Button type="button" variant="outline" size="sm" className="h-9 shrink-0 gap-1.5 rounded-full" onClick={onRetry} data-testid="connection-retry">
+      <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />{t("action.retry")}
+    </Button>
+  );
+  const box = "mx-auto flex max-w-3xl items-center gap-2 rounded-2xl border px-3 py-2 text-[13px]";
+  if (view === "offline") return (
+    <p className={`${box} border-border bg-muted/60 text-foreground`} data-testid="agent-offline">
+      <WifiOff aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="agent-prose"><strong className="font-medium">{t("status.offline")}.</strong> {t("status.offlineNote")}</span>
+    </p>
+  );
+  if (view === "reconnecting") return (
+    <p className={`${box} border-transparent text-muted-foreground`} data-testid="agent-connection" data-state="reconnecting">
+      <Loader2 aria-hidden="true" className="h-4 w-4 shrink-0 motion-safe:animate-spin" /><span className="agent-prose">{t("status.reconnecting")}</span>
+    </p>
+  );
+  if (view === "slow") return (
+    <div className={`${box} border-border bg-muted/40 text-foreground`} data-testid="agent-connection" data-state="slow">
+      <Loader2 aria-hidden="true" className="h-4 w-4 shrink-0 text-primary motion-safe:animate-spin" />
+      <span className="agent-prose min-w-0 flex-1">{t("status.slow")}</span>{retry}
+    </div>
+  );
+  return (
+    <div className={`${box} border-destructive/30 bg-destructive/5 text-foreground`} data-testid="agent-connection" data-state="failed" role="status">
+      <WifiOff aria-hidden="true" className="h-4 w-4 shrink-0 text-destructive dark:text-red-400" />
+      <span className="agent-prose min-w-0 flex-1"><strong className="block font-medium">{t("status.failed")}</strong><span className="text-muted-foreground">{t("status.failedHelp")}</span></span>{retry}
+    </div>
+  );
+}
+
 /**
  * 401 after a silent token refresh: sign in again in a NEW TAB, so this page — and the text in the box — stays as it
  * is (nothing is saved to storage). The store clears the prompt on SIGNED_IN / when this tab gets focus back.
@@ -93,6 +129,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const onTextChange = useCallback((v: string) => setTyping(v.trim().length >= 2), []);
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  const [awayFromBottom, setAway] = useState(false);
   const ctx = useMemo(() => buildContexts(chat.turns), [chat.turns]);
   const firstName = s.meta?.first_name ?? firstNameOf(user?.user_metadata?.full_name ?? user?.user_metadata?.name);
   const myScope = useAgentScope();
@@ -131,11 +168,22 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
     if (!chat.turns.length) el.scrollTop = 0; // the empty state reads from the top (greeting first on phones)
     else if (pinned.current) el.scrollTop = el.scrollHeight;
   }, [size, s.activeKey, s.load, chat.turns.length]);
-  useEffect(() => { pinned.current = true; }, [chat.turns.length, s.activeKey]);
+  useEffect(() => { pinned.current = true; setAway(false); }, [chat.turns.length, s.activeKey]);
+  // auto-scroll only while the user is near the bottom; scrolled up → it pauses and a "Jump to latest" pill shows
   const onScroll = () => {
     const el = scroller.current;
-    if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (!el) return;
+    pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setAway(!pinned.current);
   };
+  const jumpToLatest = () => {
+    const el = scroller.current;
+    if (!el) return;
+    pinned.current = true;
+    setAway(false);
+    el.scrollTo({ top: el.scrollHeight, behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
+  const conn = connectionView(s.metaStatus, offline);
 
   const h: BlockHandlers = {
     busy: chat.busy,
@@ -160,7 +208,8 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
         canNew={chat.turns.length > 0 || !!chat.sessionId} onNewChat={() => agentStore.newChat()} leading={leading} trailing={trailing}
         wide={wide} onToggleWide={onToggleWide} onClearSearch={user?.id ? () => setConfirmClear(true) : null} />
 
-      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]" data-testid="agent-scroller">
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div ref={scroller} onScroll={onScroll} aria-busy={chat.busy} className="min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none]" data-testid="agent-scroller">
         <div className={`mx-auto w-full max-w-3xl space-y-6 [container-type:inline-size] ${compact ? "px-3 py-4" : "px-3 py-5 sm:px-6"}`}>
           {s.loadNote ? (
             <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground" data-testid="load-note">
@@ -176,7 +225,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
             <ErrorCard code={offline ? "offline" : "network"} message={t("chat.loadFailed")} retryText="retry" busy={false} onRetry={() => agentStore.retryLoad()} />
           ) : chat.turns.length === 0 ? (
             <AgentEmptyState firstName={firstName} suggestions={cards} compact={compact} scopeLine={scopeLine} role={role}
-              noBatch={hasBatch === false} disabled={chat.busy || offline} onPick={agentStore.send} hideCards={typing} />
+              noBatch={hasBatch === false} disabled={chat.busy || offline} onPick={agentStore.send} hideCards={typing} connecting={conn === "connecting" || conn === "slow" || conn === "reconnecting"} />
           ) : chat.turns.map((t, i) => (
             <div key={t.id} className={i < firstLive ? "[content-visibility:auto] [contain-intrinsic-size:auto_320px]" : undefined}>
               <AgentMessage turn={t} h={h} ctx={ctx} isLast={t.id === lastAssistant}
@@ -186,16 +235,19 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
         </div>
       </div>
 
+      {awayFromBottom && chat.turns.length > 0 ? (
+        <button type="button" onClick={jumpToLatest} data-testid="jump-latest"
+          className="absolute bottom-3 left-1/2 z-10 inline-flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-[13px] font-medium text-foreground shadow-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <ArrowDown aria-hidden="true" className="h-4 w-4" />{t("chat.jumpLatest")}
+        </button>
+      ) : null}
+      </div>
+
       <p aria-live="polite" className="sr-only" data-testid="agent-status">{liveStatus(s, Date.now(), t, lang)}</p>
 
       <div className="border-t border-border bg-card pb-[env(safe-area-inset-bottom,0px)]">
-        {offline ? (
-          <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}>
-            <p className="mx-auto flex max-w-3xl items-center gap-2 rounded-xl border border-border bg-muted/60 px-3 py-2 text-[13px] text-foreground" data-testid="agent-offline">
-              <WifiOff aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span><strong className="font-medium">{t("status.offline")}.</strong> {t("status.offlineNote")}</span>
-            </p>
-          </div>
+        {conn !== "none" && conn !== "connecting" ? (
+          <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}><ConnectionStrip view={conn} onRetry={agentStore.retryMeta} /></div>
         ) : null}
         {s.authExpired ? <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}><SessionExpired /></div> : null}
         <LazyVoiceComposer inputId={inputId} busy={chat.busy} onSend={agentStore.send} onStop={agentStore.stop}

@@ -166,6 +166,20 @@ export const hinglish = {
   "error.empty": "Jawab khaali aaya. Dobara try karein.",
   "error.msgcap": "Message limit ho gaya. Naya chat start karein.",
 
+  "errtitle.budget_exceeded": "Aaj ki limit khatam",
+  "errtitle.forbidden": "Access nahi hai",
+  "errtitle.not_found": "Nahi mila",
+  "errtitle.invalid_input": "Request samajh nahi aayi",
+  "errtitle.provider_error": "Service abhi busy hai",
+  "errtitle.internal": "Kuch gadbad ho gayi",
+  "errtitle.unauthorized": "Sign in chahiye",
+  "errtitle.rate_limited": "Thoda rukiye",
+  "errtitle.network": "Connection nahi bana",
+  "errtitle.unavailable": "Agent abhi available nahi",
+  "errtitle.server": "Server me dikkat",
+  "errtitle.offline": "Internet nahi hai",
+  "errtitle.expired": "Approval expire ho gaya",
+
   // activity steps (real thinking_status events)
   "step.default": "Kaam chal raha hai",
   "step.tool.resolve_entity": "Naam dhoondh rahe hain",
