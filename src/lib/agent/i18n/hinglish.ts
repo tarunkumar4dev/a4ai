@@ -126,6 +126,7 @@ export const hinglish = {
   "chat.loading": "Chat load ho rahi hai",
   "chat.loadFailed": "Ye chat load nahi ho payi.",
   "chat.jumpLatest": "Naye jawab par jaayein",
+  "chat.replied": "Jawab aa gaya.",
   "chat.stopped": "Jawab rok diya gaya.",
   "chat.failedLive": "Jawab nahi aa paya: {message}",
   "session.title": "Session expire ho gaya",

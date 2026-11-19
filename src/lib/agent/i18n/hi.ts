@@ -120,6 +120,7 @@ export const hi: Dict = {
   "chat.loading": "चैट लोड हो रही है",
   "chat.loadFailed": "यह चैट लोड नहीं हो पाई।",
   "chat.jumpLatest": "नए जवाब पर जाएँ",
+  "chat.replied": "जवाब आ गया।",
   "chat.stopped": "जवाब रोक दिया गया।",
   "chat.failedLive": "जवाब नहीं आ पाया: {message}",
   "session.title": "सेशन खत्म हो गया",

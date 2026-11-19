@@ -50,6 +50,18 @@ export default function AskA4aiLauncher() {
 
   useEffect(() => { if (!open) setHistory(false); }, [open]);
 
+  // phones: the system back gesture closes the sheet (one history entry while it is open, removed on close)
+  useEffect(() => {
+    if (!open || typeof window === "undefined" || !window.matchMedia?.("(max-width: 639px)").matches) return;
+    window.history.pushState({ ...(window.history.state ?? {}), a4aiAgentSheet: true }, "");
+    const onPop = () => setOpen(false);
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      if (window.history.state?.a4aiAgentSheet) window.history.back(); // closed by the UI, not by Back
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!staffRoute) return;
     const onKey = (e: KeyboardEvent) => {

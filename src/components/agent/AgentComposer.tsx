@@ -216,7 +216,7 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
             <PopoverTrigger className="-mr-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="agent-trust">
               <span className={`agent-prose truncate ${focused && !touch ? "sr-only" : ""}`}>{t("trust")}</span><Info aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
             </PopoverTrigger>
-            <PopoverContent side="top" align="end" className="agent-prose z-[240] w-[min(18rem,calc(100vw-2rem))] p-3 text-sm">{t("trust.help")}</PopoverContent>
+            <PopoverContent side="top" align="end" data-agent-root="" className="agent-prose z-[240] w-[min(18rem,calc(100vw-2rem))] p-3 text-sm">{t("trust.help")}</PopoverContent>
           </Popover>
         )}
       </div>

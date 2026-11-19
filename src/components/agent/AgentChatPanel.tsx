@@ -48,7 +48,7 @@ export function liveStatus(s: Pick<ReturnType<typeof useAgentStore>, "chat" | "a
     const err = last.blocks.find((b) => b.kind === "error");
     if (err && err.kind === "error") return t ? t("chat.failedLive", { message: err.message }) : `Jawab nahi aa paya: ${err.message}`;
     if (last.stopped) return t ? t("chat.stopped") : "Jawab rok diya gaya.";
-    return "";
+    return t ? t("chat.replied") : ""; // one announcement for the finished answer, never per token
   }
   const last = s.chat.turns[s.chat.turns.length - 1];
   const running = [...(last?.steps ?? [])].reverse().find((x) => x.status === "running");
@@ -203,7 +203,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
   const firstLive = Math.max(0, chat.turns.length - LIVE_TURNS);
 
   return (
-    <div lang={htmlLang(lang)} className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card font-halenoir text-card-foreground" data-testid={`agent-chat-${variant}`}>
+    <div lang={htmlLang(lang)} data-agent-root="" className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-card font-halenoir text-card-foreground" data-testid={`agent-chat-${variant}`}>
       <AgentHeader meta={s.meta} compact={compact} newChatInSidebar={newChatInSidebar} title={chat.title ?? null}
         canNew={chat.turns.length > 0 || !!chat.sessionId} onNewChat={() => agentStore.newChat()} leading={leading} trailing={trailing}
         wide={wide} onToggleWide={onToggleWide} onClearSearch={user?.id ? () => setConfirmClear(true) : null} />

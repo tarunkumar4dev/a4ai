@@ -18,6 +18,27 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Noto Sans Devanagari (OFL, public/fonts/NotoSansDevanagari-OFL.txt), self-hosted variable 400-600, Google
+   Fonts devanagari subset. unicode-range makes it lazy: the 120 KB file is fetched only when Devanagari text is
+   actually rendered (e.g. the agent panel in हिन्दी), never for Latin-only pages. The fallback face is a local
+   Devanagari font scaled close to Noto's metrics, so the swap moves text as little as possible (CLS). */
+@font-face {
+  font-family: 'Noto Sans Devanagari a4ai';
+  src: url('/fonts/NotoSansDevanagari-var.woff2') format('woff2');
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0900-097F, U+1CD0-1CF4, U+1CF7-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF, U+11B00-11B0A;
+}
+@font-face {
+  font-family: 'Devanagari Fallback a4ai';
+  src: local('Nirmala UI'), local('Mangal'), local('Kohinoor Devanagari'), local('Noto Sans Devanagari'), local('Lohit Devanagari');
+  size-adjust: 104%;
+  ascent-override: 105%;
+  descent-override: 48%;
+  unicode-range: U+0900-097F, U+200C-200D, U+20B9, U+25CC, U+A8E0-A8FF;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -250,3 +271,22 @@ body:has(.att-sheet) .a4-help { display: none; }
   opacity: 0.75;
 }
 .a4-net-close:hover { opacity: 1; }
+
+/* ---- a4ai Agent panel typography (src/components/agent) ------------------------------------------------------
+   Latin keeps Plus Jakarta Sans; Devanagari glyphs fall through to Noto (then the metric-matched local fallback).
+   Hindi (lang="hi" — NOT hi-Latn, which is Hinglish in Roman script): line-height ≥ 1.6, no letter-spacing, no italics,
+   no case transforms. Nothing in the panel is smaller than 12px. */
+[data-agent-root] {
+  font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari a4ai', 'Devanagari Fallback a4ai', ui-sans-serif, system-ui, sans-serif;
+}
+[data-agent-root][lang="hi"] .agent-prose,
+[data-agent-root] .agent-prose[lang="hi"] {
+  line-height: 1.7; /* ≥ 1.6 for matras; 15px body → ~26px */
+  letter-spacing: 0;
+  font-style: normal;
+  text-transform: none;
+}
+[data-agent-root][lang="hi"] h3 { letter-spacing: 0; line-height: 1.4; }
+@media (prefers-reduced-motion: reduce) {
+  [data-agent-root] *, [data-agent-root] *::before, [data-agent-root] *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

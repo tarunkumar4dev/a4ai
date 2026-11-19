@@ -118,6 +118,7 @@ export const en: Dict = {
   "chat.loading": "Loading chat",
   "chat.loadFailed": "This chat couldn't be loaded.",
   "chat.jumpLatest": "Jump to latest",
+  "chat.replied": "Answer ready.",
   "chat.stopped": "Answer stopped.",
   "chat.failedLive": "No answer: {message}",
   "session.title": "Your session expired",

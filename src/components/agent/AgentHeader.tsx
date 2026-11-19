@@ -55,7 +55,7 @@ export function AgentHeader({ meta, onNewChat, canNew, leading, trailing, compac
             <MoreHorizontal aria-hidden="true" className="h-[18px] w-[18px]" />
           </DropdownMenuTrigger>
         </IconTip>
-        <DropdownMenuContent align="end" className="z-[240] min-w-52">
+        <DropdownMenuContent align="end" className="z-[240] min-w-52" data-agent-root="">
           {onToggleWide ? (
             <DropdownMenuItem className="hidden min-h-10 gap-2 sm:flex" onSelect={onToggleWide} data-testid="agent-expand">
               {wide ? <Minimize2 aria-hidden="true" className="h-4 w-4" /> : <Maximize2 aria-hidden="true" className="h-4 w-4" />}

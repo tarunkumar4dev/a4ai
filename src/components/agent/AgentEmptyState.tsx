@@ -3,7 +3,7 @@
 // stays visible but disabled (still focusable, so the reason is read out); the chip then explains what to do.
 import { Info, Lock, Users } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useAgentT } from "@/lib/agent/i18n";
+import { htmlLang, useAgentT } from "@/lib/agent/i18n";
 import { AgentMark } from "./AgentMessage";
 import type { Suggestion } from "./roles";
 
@@ -15,7 +15,7 @@ export function AgentEmptyState({ firstName, suggestions, disabled, onPick, comp
   /** GET /agent/meta still on its way: the scope chip is a skeleton (not a "Connecting…" pill) */ connecting?: boolean;
   /** the typeahead is open (2+ characters typed): cards step aside so the two never overlap */ hideCards?: boolean;
 }) {
-  const { t } = useAgentT();
+  const { t, lang } = useAgentT();
   return (
     <div className={`mx-auto flex w-full max-w-2xl flex-col ${compact ? "pt-2" : "pt-6 sm:pt-12"}`} data-testid="agent-empty">
       <AgentMark className="h-10 w-10 rounded-xl [&>svg]:h-5 [&>svg]:w-5" />
@@ -35,7 +35,7 @@ export function AgentEmptyState({ firstName, suggestions, disabled, onPick, comp
                 className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <Info aria-hidden="true" className="h-4 w-4" />
               </PopoverTrigger>
-              <PopoverContent align="start" className="agent-prose z-[240] w-[min(20rem,calc(100vw-2rem))] p-3 text-sm" data-testid="scope-help-text">{t("scope.noneHelp")}</PopoverContent>
+              <PopoverContent align="start" lang={htmlLang(lang)} data-agent-root="" className="agent-prose z-[240] w-[min(20rem,calc(100vw-2rem))] p-3 text-sm" data-testid="scope-help-text">{t("scope.noneHelp")}</PopoverContent>
             </Popover>
           ) : null}
         </div>

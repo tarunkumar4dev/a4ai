@@ -14,7 +14,7 @@ export function LanguageMenu({ className = "" }: { className?: string }) {
         <Globe aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
         <span lang={htmlLang(lang)} className="text-[13px] leading-none">{LANG_NAMES[lang].code}</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="z-[240] w-44">
+      <DropdownMenuContent align="end" className="z-[240] w-44" data-agent-root="">
         <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">{t("header.lang")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={lang} onValueChange={(v) => { if (isAgentLang(v)) agentLang.set(v); }}>
           {AGENT_LANGS.map((l) => (
