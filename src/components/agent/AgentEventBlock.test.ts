@@ -12,7 +12,8 @@ import { chartRows, shortTick } from "./AgentChart";
 import { sortRows, toCsv } from "./DataTable";
 import { insertPlain } from "./AgentComposer";
 import { questionActionMessage } from "./PaperPreview";
-import { isStaffRole, roleLabel, suggestionsFor } from "./roles";
+import { isStaffRole } from "./roles";
+import { roleLabel, suggestionsFor } from "./starters";
 import { dash } from "./format";
 
 // the chart / paper are lazy chunks in the app; render them directly here

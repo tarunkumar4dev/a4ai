@@ -10,7 +10,7 @@ import { ArrowDown, History, Loader2, LogIn, RefreshCw, WifiOff } from "lucide-r
 import { connectionView, type ConnectionView } from "@/lib/agent/connection";
 import { Button } from "@/components/ui/button";
 import { useAgentAccess, useAgentNet, useAgentScope, useAgentUser } from "@/lib/agent/env";
-import { stepLabel } from "@/lib/agent/chatState";
+import { stepLabel } from "@/lib/agent/stepLabel";
 import { clearRecentQueries, useAgentQueryClient } from "@/lib/agent/queries";
 import { getAgentApi } from "@/lib/agent/api";
 import { htmlLang, useAgentT, type TFn } from "@/lib/agent/i18n";
@@ -19,7 +19,8 @@ import { ErrorCard, type BlockHandlers } from "./AgentEventBlock";
 import { AgentEmptyState } from "./AgentEmptyState";
 import { AgentHeader } from "./AgentHeader";
 import { AgentMessage, buildContexts } from "./AgentMessage";
-import { agentRole, emptyCards, roleLabel, scopeLine as scopeLineOf, templatesFor } from "./roles";
+import { agentRole } from "./roles";
+import { emptyCards, roleLabel, scopeLine as scopeLineOf, templatesFor } from "./starters";
 import { AgentConfirm } from "./AgentConfirm";
 import { LazyVoiceComposer } from "@/components/voice/LazyVoiceComposer";
 import { emitUiAction } from "@/lib/voice/uiActions";

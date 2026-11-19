@@ -6,7 +6,7 @@
 // Streaming: events are queued and applied once per animation frame (one React update per frame, not per token).
 // Approval Cancel is LOCAL ONLY — /agent/approve executes the action, so only the Approve button calls it.
 import { useEffect, useSyncExternalStore } from "react";
-import { agentLang, htmlLang, tNow } from "./i18n";
+import { agentLang, htmlLang } from "./i18n/lang";
 import { toast } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
 import { AgentHttpError, isAgentPdfPath } from "./client";
@@ -44,6 +44,21 @@ export interface FriendlyError { message: string; code: string; retryAt?: number
 
 /** HTTP / network failure → what the user reads (in the panel language) + a code for the card title. Never the
  *  backend's own text or an HTTP status. Pure (clock injectable). */
+/** Hinglish text of the HTTP errors (== hinglish.ts, checked by a test). The error card shows the panel language by code. */
+export const HX_ERR = {
+  "error.session": "Session expire ho gaya. Dobara login karein.",
+  "error.forbidden": "a4ai Agent sirf institute staff ke liye hai.",
+  "error.notFound": "Ye chat ya request nahi mili. Naya chat shuru karein.",
+  "error.expired": "Ye approval expire ho gaya. Dobara poochiye, naya approval milega.",
+  "error.invalid": "Ye request samajh nahi aayi. Sawaal thoda badal kar poochiye.",
+  "error.unavailable": "a4ai Agent abhi available nahi hai. Thodi der me dobara try karein.",
+  "error.server": "Server me dikkat aayi. Dobara try karein.",
+  "error.generic": "Kuch gadbad ho gayi. Dobara try karein.",
+  "error.offline": "Internet nahi hai. Internet aate hi dobara try karein.",
+  "error.network": "a4ai Agent tak nahi pahunch paaye. Internet check karke dobara try karein.",
+} as const;
+const tNow = (k: keyof typeof HX_ERR | "error.rate", p?: { s: number }) => (k === "error.rate" ? `Bahut zyada requests ho gayi. ${p?.s ?? 30} second baad try karein.` : HX_ERR[k]);
+
 export function friendlyError(err: unknown, now = Date.now()): FriendlyError | null {
   if (err instanceof DOMException && err.name === "AbortError") return null;
   if (err instanceof AgentHttpError) {

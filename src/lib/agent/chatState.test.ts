@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { chatReducer, eventToBlock, initialChatState, statusLabel, stepLabel, stepsSummary, type ChatState } from "./chatState";
+import { chatReducer, eventToBlock, initialChatState, statusLabel, stepsSummary, type ChatState } from "./chatState";
+import { stepLabel } from "./stepLabel";
 import { agentBaseUrl, agentUrl } from "./config";
 import { isAgentPdfPath } from "./client";
 import type { AgentEvent } from "./events";

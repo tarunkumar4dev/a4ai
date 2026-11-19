@@ -10,7 +10,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { fmtMs, stepLabel, type ChatTurn, type Step } from "@/lib/agent/chatState";
+import { fmtMs, type ChatTurn, type Step } from "@/lib/agent/chatState";
+import { stepLabel } from "@/lib/agent/stepLabel";
 
 const STEP_ICON: Record<string, LucideIcon> = {
   "tool.resolve_entity": Search,

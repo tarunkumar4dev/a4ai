@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DICTS, LANG_STORAGE_KEY, agentLang, htmlLang, translate, type AgentKey, type Dict } from "./index";
 import { hinglish } from "./hinglish";
 
@@ -77,5 +77,26 @@ describe("translate", () => {
 
   it("lang attributes", () => {
     expect([htmlLang("en"), htmlLang("hi"), htmlLang("hinglish")]).toEqual(["en", "hi", "hi-Latn"]);
+  });
+});
+
+describe("launcher labels (kept outside the dictionaries for the initial bundle)", () => {
+  it("match the dictionaries", async () => {
+    const { LAUNCHER_LABELS } = await import("@/components/agent/AskA4aiLauncher");
+    for (const l of ["hinglish", "en", "hi"] as const) {
+      expect(LAUNCHER_LABELS[l].history).toBe(DICTS[l]["header.history"]);
+      expect(LAUNCHER_LABELS[l].close).toBe(DICTS[l]["header.close"]);
+      expect(DICTS[l]["subtitle"].startsWith(LAUNCHER_LABELS[l].desc.replace(/।$/, ""))).toBe(true);
+    }
+  });
+});
+
+describe("store error text (inline, kept out of the initial bundle's dictionaries)", () => {
+  it("is the same as the Hinglish dictionary", async () => {
+    vi.mock("@/lib/supabaseClient", () => ({ supabase: { auth: { onAuthStateChange: vi.fn(), getSession: vi.fn(async () => ({ data: { session: null } })) } } }));
+    const { HX_ERR, friendlyError } = await import("../store");
+    for (const [k, v] of Object.entries(HX_ERR)) expect([k, v]).toEqual([k, DICTS.hinglish[k as AgentKey]]);
+    const { AgentHttpError } = await import("../client");
+    expect(friendlyError(new AgentHttpError(429, "x", 12))?.message).toBe(translate("hinglish", "error.rate", { s: 12 }));
   });
 });

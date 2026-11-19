@@ -46,6 +46,9 @@ const ERROR_CODES = new Set(["budget_exceeded", "forbidden", "not_found", "inval
 /** stream error codes whose backend text is curated Hinglish: other languages get our own message for the code */
 const STREAM_MESSAGE: Record<string, AgentKey> = {
   provider_error: "error.unavailable", internal: "error.generic", budget_exceeded: "error.unavailable", invalid_input: "error.invalid",
+  // HTTP / network failures (store.friendlyError codes)
+  unauthorized: "error.session", forbidden: "error.forbidden", not_found: "error.notFound", expired: "error.expired",
+  unavailable: "error.unavailable", server: "error.server", http: "error.generic", offline: "error.offline", network: "error.network",
 };
 
 /** Seconds left until `retryAt` (0 when free to retry), ticking once a second. */
@@ -69,7 +72,9 @@ export function ErrorCard({ code, message, retryText, busy, onRetry, retryAt }: 
   const wait = useCountdown(retryAt);
   const { t, lang } = useAgentT();
   const title = ERROR_CODES.has(code) ? t(`errtitle.${code}` as AgentKey) : t("error.title");
-  const text = lang !== "hinglish" && STREAM_MESSAGE[code] ? t(STREAM_MESSAGE[code]) : message;
+  const text = lang === "hinglish" ? message
+    : code === "rate_limited" ? t("error.rate", { s: retryAt ? Math.max(1, Math.ceil((retryAt - Date.now()) / 1000)) : 30 })
+    : STREAM_MESSAGE[code] ? t(STREAM_MESSAGE[code]) : message;
   return (
     <div className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm" data-testid="agent-error" data-code={code}>
       <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-destructive dark:text-red-400" />

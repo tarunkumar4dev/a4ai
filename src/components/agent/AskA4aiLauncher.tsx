@@ -6,7 +6,8 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { History, Sparkles, X } from "lucide-react";
-import { useAgentT } from "@/lib/agent/i18n";
+import { useAgentLang } from "@/lib/agent/i18n/lang";
+import type { AgentLang } from "@/lib/agent/i18n/types";
 import { IconTip, iconBtn } from "./IconTip";
 import { useAccess } from "@/context/AccessProvider";
 import { useAuth } from "@/providers/AuthProvider";
@@ -26,6 +27,13 @@ export function showAskA4ai(pathname: string, role: string | null | undefined, s
   return !(pathname.replace(/\/+$/, "") === "/dashboard" && new URLSearchParams(search).get("tab") === "agent");
 }
 
+// The launcher is in the initial bundle: it keeps its four labels here instead of importing the dictionaries
+// (~45 KB). Same text as hinglish.ts / en.ts / hi.ts (header.history, header.close, brand.title, subtitle).
+export const LAUNCHER_LABELS: Record<AgentLang, { history: string; close: string; title: string; desc: string }> = {
+  hinglish: { history: "Pichhli chats", close: "Band karein", title: "a4ai Agent", desc: "Attendance, marks ya naya test — seedha poochiye." },
+  en: { history: "Past chats", close: "Close", title: "a4ai Agent", desc: "Ask about attendance, marks, or create a new test." },
+  hi: { history: "पिछली चैट", close: "बंद करें", title: "a4ai Agent", desc: "अटेंडेंस, मार्क्स या नया टेस्ट — सीधे पूछिए।" },
+};
 const WIDE_KEY = "a4ai.agent.wide";
 const readWide = () => { try { return localStorage.getItem(WIDE_KEY) === "1"; } catch { return false; } };
 
@@ -36,7 +44,7 @@ export default function AskA4aiLauncher() {
   const [open, setOpen] = useState(false);
   const closeSheet = useCallback(() => setOpen(false), []);
   const [history, setHistory] = useState(false);
-  const { t } = useAgentT();
+  const L = LAUNCHER_LABELS[useAgentLang()];
   const [wide, setWide] = useState(readWide);
   const toggleWide = useCallback(() => setWide((w) => {
     try { localStorage.setItem(WIDE_KEY, w ? "0" : "1"); } catch { /* private mode */ }
@@ -98,23 +106,23 @@ export default function AskA4aiLauncher() {
         className="fixed bottom-20 right-4 z-[105] inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 font-halenoir text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:bottom-24 sm:right-6">
         <Sparkles aria-hidden="true" className="h-4 w-4" /> Ask a4ai
       </button>
-      <AgentSheetFrame open={open} onOpenChange={setOpen} side="right" title={t("brand.title")} description={t("subtitle")}
+      <AgentSheetFrame open={open} onOpenChange={setOpen} side="right" title={L.title} description={L.desc}
         onOpenAutoFocus={(e) => e.preventDefault()} returnFocus={btn}
         className={`w-full sm:w-[420px] sm:min-w-[360px] sm:max-w-[calc(100vw-2rem)] motion-safe:transition-[width] motion-safe:duration-200 ${wide ? "sm:w-[720px]" : ""}`}>
         <Suspense fallback={<div className="flex h-14 items-center gap-2 border-b border-border px-3" aria-busy="true"><span className="h-8 w-8 rounded-lg bg-muted" /><span className="h-4 w-28 rounded bg-muted" /></div>}>
           <div className="relative flex min-h-0 flex-1 flex-col">
             <AgentChatPanel variant="sheet" autoFocus wide={wide} onToggleWide={toggleWide}
               leading={(
-                <IconTip label={t("header.history")}>
-                  <button ref={historyBtn} type="button" onClick={() => setHistory(true)} aria-label={t("header.history")}
+                <IconTip label={L.history}>
+                  <button ref={historyBtn} type="button" onClick={() => setHistory(true)} aria-label={L.history}
                     aria-expanded={history} className={iconBtn} data-testid="agent-history">
                     <History aria-hidden="true" className="h-[18px] w-[18px]" />
                   </button>
                 </IconTip>
               )}
               trailing={(
-                <IconTip label={t("header.close")}>
-                  <SheetClose aria-label={t("header.close")} className={iconBtn} data-testid="agent-close">
+                <IconTip label={L.close}>
+                  <SheetClose aria-label={L.close} className={iconBtn} data-testid="agent-close">
                     <X aria-hidden="true" className="h-5 w-5" />
                   </SheetClose>
                 </IconTip>

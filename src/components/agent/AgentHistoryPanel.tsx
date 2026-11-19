@@ -3,8 +3,10 @@
 // Server-owned (GET /agent/sessions, pinned + paged rest, infinite scroll). The list is windowed: only the rows on
 // screen (+ overscan) are in the DOM, so hundreds of chats stay cheap.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { useAgentT } from "@/lib/agent/i18n";
-import { groupLabel } from "@/lib/agent/history";
+import { translate, useAgentT, type AgentKey, type AgentLang } from "@/lib/agent/i18n";
+import type { HistoryGroupKey } from "@/lib/agent/history";
+
+const groupLabel = (k: HistoryGroupKey, lang: AgentLang) => translate(lang, `history.${k}` as AgentKey);
 import { Loader2, MessageSquare, MoreHorizontal, PanelLeftClose, Pencil, Pin, PinOff, RotateCcw, Search, SquarePen, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";

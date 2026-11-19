@@ -5,7 +5,7 @@ import { Info, Lock, Users } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { htmlLang, useAgentT } from "@/lib/agent/i18n";
 import { AgentMark } from "./AgentMessage";
-import type { Suggestion } from "./roles";
+import type { Suggestion } from "./starters";
 
 export function AgentEmptyState({ firstName, suggestions, disabled, onPick, compact, role, scopeLine, noBatch, hideCards, connecting }: {
   firstName: string | null; suggestions: Suggestion[]; disabled?: boolean; onPick: (prompt: string) => void; compact?: boolean;

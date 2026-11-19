@@ -119,7 +119,7 @@ export default function VoiceComposer(props: Props) {
         <>
           <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-destructive motion-safe:animate-pulse" />
           <span className="min-w-0 flex-1">
-            <span className="font-medium text-destructive dark:text-red-400">{t("voice.listening")}</span>
+            <span className="font-medium text-red-700 dark:text-red-400">{t("voice.listening")}</span>
             {view.interim ? <span className="agent-prose mt-0.5 block text-foreground" data-testid="voice-interim">{view.interim}</span> : null}
           </span>
           {typeof view.level === "number" && !v.lite ? <span className="text-destructive dark:text-red-400"><LevelMeter level={view.level} /></span> : null}
