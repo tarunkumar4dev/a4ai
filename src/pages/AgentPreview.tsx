@@ -110,6 +110,7 @@ export default function AgentPreview() {
   useMemo(() => { setAgentApiForTests(previewApi(state)); agentStore._reset(); }, [state, nonce]);
   useEffect(() => {
     previewVoice.set(state.startsWith("voice-") ? (state.slice(6) as PreviewVoiceState) : null);
+    if (state === "voice-ready") { const id = setTimeout(() => agentStore.prefill("Meri classes ki is mahine ki attendance"), 700); return () => clearTimeout(id); }
     const text = AUTO_SEND[state];
     if (!text) return;
     const id = setTimeout(() => agentStore.send(text), 700);

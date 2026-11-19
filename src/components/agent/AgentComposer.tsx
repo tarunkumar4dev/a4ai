@@ -33,7 +33,7 @@ export function insertPlain(value: string, start: number, end: number, pasted: s
   return { value: value.slice(0, start) + ins + value.slice(end), caret: start + ins.length };
 }
 
-export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, inputId, compact, uid, templates, offline, mic, above, onTextChange }: {
+export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, inputId, compact, uid, templates, offline, mic, above, onTextChange, footerStart }: {
   busy: boolean; onSend: (text: string) => void; onStop: () => void;
   draftRequest?: { text: string; nonce: number } | null; autoFocus?: boolean; inputId: string; compact?: boolean;
   /** signed-in user (suggestions + recent history); null = no suggestions */ uid?: string | null;
@@ -42,6 +42,7 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   /** the mic button (voice input), beside Send */ mic?: ReactNode;
   /** a strip inside the composer card, above the text (voice state / live transcript) */ above?: ReactNode;
   /** every text change (voice input reads it to know whether its transcript was edited) */ onTextChange?: (v: string) => void;
+  /** small controls at the start of the line under the box (voice settings) */ footerStart?: ReactNode;
 }) {
   const { t } = useAgentT();
   // the text survives closing the sheet / switching surfaces (store memory — never storage)
@@ -205,7 +206,7 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
         ) : null}
       </div>
       <div className="mx-auto mt-1.5 flex min-h-5 max-w-3xl items-center justify-between gap-2 px-2 text-xs text-muted-foreground">
-        {focused && !touch ? <span className="hidden truncate sm:inline" data-testid="composer-hint">{t("composer.hint")}</span> : <span />}
+        <span className="flex min-w-0 items-center gap-1">{footerStart}{focused && !touch ? <span className="hidden truncate sm:inline" data-testid="composer-hint">{t("composer.hint")}</span> : null}</span>
         {near ? (
           <span id={`${inputId}-count`} className={`shrink-0 tabular-nums ${value.length >= MAX_CHARS ? "font-medium text-destructive dark:text-red-400" : ""}`}>
             {value.length} / {MAX_CHARS}

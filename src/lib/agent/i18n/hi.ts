@@ -208,6 +208,9 @@ export const hi: Dict = {
   "voice.timeout": "रिकॉर्डिंग बंद हो गई।",
   "voice.noSpeech": "कुछ सुनाई नहीं दिया। दोबारा बोलिए।",
   "voice.dismiss": "ठीक है",
+  "voice.mute": "आवाज़ बंद करें",
+  "voice.unmute": "आवाज़ चालू करें",
+  "voice.settings": "आवाज़ की सेटिंग्स",
 
   "shortcut.open": "a4ai Agent खोलें (डैशबोर्ड पर कहीं भी)",
   "shortcut.newChat": "नया सवाल",

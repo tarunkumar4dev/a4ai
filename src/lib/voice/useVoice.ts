@@ -15,7 +15,7 @@ import { useVoiceConfig } from "./useVoiceConfig";
 import { createPlayer, synthLang, synthSupported, type Player } from "./player";
 import { onVoiceAudio } from "./audioBus";
 import { browserAudioCtx, createStreamPlayer, type StreamPlayer } from "./streamPlayer";
-import { AUTO_SEND_PAUSE_MS, MAX_BYTES, liteVoice, recordingSupported } from "./ptt";
+import { MAX_BYTES, liteVoice, recordingSupported } from "./ptt";
 import { hasConsent, loadPrefs, savePrefs, withConsent, type VoicePrefs } from "./prefs";
 import { MicDenied, MicUnsupported, startBargeInMonitor, startRecording, type Recording } from "./recorder";
 import { initialSession, liveText, sessionReducer, type VoiceSession } from "./session";
@@ -39,6 +39,9 @@ export interface Voice {
   pick: (value: string) => void;     // clarify chip from the transcript step
   retry: () => void;                 // network drop → send the kept transcript again
   typeInstead: () => void;           // put the transcript in the box, clear the strip
+  /** the composer's Send: an unedited transcript goes out as a voice turn (spoken answer) → true; else false */
+  sendTranscript: (text: string) => boolean;
+  dismiss: () => void;               // close the strip (ready / error notices)
   liveText: string;
   busy: boolean;
 }
@@ -53,6 +56,7 @@ export function useVoice(uid: string | null): Voice {
   const rec = useRef<Recording | null>(null);
   const player = useRef<Player | null>(null);
   const autoSend = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pending = useRef<string | null>(null); // the transcript put into the box, until it is sent or edited away
   const upload = useRef<AbortController | null>(null);
   const voiceTurn = useRef(false);          // the running stream is a voice turn → speak its answer
   const spokenFor = useRef<string | null>(null);
@@ -160,11 +164,13 @@ export function useVoice(uid: string | null): Voice {
     try {
       const t = await transcribe(blob, r.mimeType.split(";")[0], idempotencyKey(), ac.signal);
       const next = t.next ?? (t.clarify ? "pick" : "auto");
-      dispatch({ type: "transcript", text: t.transcript, next, clarify: t.clarify ? { question: t.clarify.question, chips: t.clarify.chips } : null });
-      if (next === "auto") {
-        clearTimeout(autoSend.current);
-        autoSend.current = setTimeout(() => sendNow(t.transcript), AUTO_SEND_PAUSE_MS);
-      }
+      if (next === "auto" || next === "confirm") {
+        // never sent by itself: the transcript goes into the message box for review; Send sends it (as a voice turn)
+        const text = t.transcript.trim();
+        pending.current = text || null;
+        dispatch({ type: "ready", text });
+        if (text) agentStore.prefill(text);
+      } else dispatch({ type: "transcript", text: t.transcript, next, clarify: t.clarify ? { question: t.clarify.question, chips: t.clarify.chips } : null });
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       if (err instanceof AgentHttpError) {
@@ -176,7 +182,7 @@ export function useVoice(uid: string | null): Voice {
     } finally {
       if (upload.current === ac) upload.current = null;
     }
-  }, [sendNow]);
+  }, []);
 
   const begin = useCallback(async (force = false) => {
     if (!enabled || (store.chat.busy && !force) || rec.current) return;
@@ -251,9 +257,18 @@ export function useVoice(uid: string | null): Voice {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.chat.busy, last?.id]);
 
+  const sendTranscript = useCallback((text: string) => {
+    const p = pending.current;
+    pending.current = null;
+    if (!p || text.trim() !== p) { if (session.notice?.kind === "ready") dispatch({ type: "clear" }); return false; }
+    sendNow(p);
+    return true;
+  }, [sendNow, session.notice?.kind]);
+  const dismiss = useCallback(() => { dispatch({ type: "clear" }); }, []);
+
   const speech = session.state === "speaking" ? lastSpeech?.text ?? null : null;
   return {
     session, config, enabled, supported, lite, prefs, needsConsent, speech, tap, holdStart, holdEnd, acceptConsent, setPrefs,
-    edit, confirmSend, pick, retry, typeInstead, liveText: liveText(session, speech), busy: store.chat.busy,
+    edit, confirmSend, pick, retry, typeInstead, sendTranscript, dismiss, liveText: liveText(session, speech), busy: store.chat.busy,
   };
 }

@@ -206,6 +206,9 @@ export const en: Dict = {
   "voice.timeout": "Recording stopped.",
   "voice.noSpeech": "Didn't hear anything. Please speak again.",
   "voice.dismiss": "OK",
+  "voice.mute": "Mute replies",
+  "voice.unmute": "Unmute replies",
+  "voice.settings": "Voice settings",
 
   "shortcut.open": "Open a4ai Agent (anywhere on the dashboard)",
   "shortcut.newChat": "New chat",

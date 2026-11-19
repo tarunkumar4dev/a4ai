@@ -219,6 +219,9 @@ export const hinglish = {
   "voice.timeout": "Recording band ho gayi.",
   "voice.noSpeech": "Kuch suna nahi. Dobara boliye.",
   "voice.dismiss": "Theek hai",
+  "voice.mute": "Awaaz band karein",
+  "voice.unmute": "Awaaz on karein",
+  "voice.settings": "Awaaz ki settings",
 
   // keyboard shortcuts
   "shortcut.open": "a4ai Agent kholo (dashboard par kahin bhi)",

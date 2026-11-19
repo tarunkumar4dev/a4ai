@@ -15,13 +15,12 @@ import { getAgentApi } from "@/lib/agent/api";
 import { htmlLang, useAgentT, type TFn } from "@/lib/agent/i18n";
 import { agentStore, useAgentStore } from "@/lib/agent/store";
 import { ErrorCard, type BlockHandlers } from "./AgentEventBlock";
-import { AgentComposer } from "./AgentComposer";
 import { AgentEmptyState } from "./AgentEmptyState";
 import { AgentHeader } from "./AgentHeader";
 import { AgentMessage, buildContexts } from "./AgentMessage";
 import { agentRole, emptyCards, roleLabel, scopeLine as scopeLineOf, templatesFor } from "./roles";
 import { AgentConfirm } from "./AgentConfirm";
-import { LazyVoiceDock } from "@/components/voice";
+import { LazyVoiceComposer } from "@/components/voice/LazyVoiceComposer";
 import { emitUiAction } from "@/lib/voice/uiActions";
 
 /** Turns kept fully rendered at the bottom (the rest use content-visibility). */
@@ -199,8 +198,7 @@ export default function AgentChatPanel({ variant = "page", leading, trailing, au
           </div>
         ) : null}
         {s.authExpired ? <div className={compact ? "px-3 pt-2" : "px-3 pt-2 sm:px-6"}><SessionExpired /></div> : null}
-        {user?.id ? <div className="pt-2"><LazyVoiceDock uid={user.id} compact={compact} offline={offline} /></div> : null}
-        <AgentComposer inputId={inputId} busy={chat.busy} onSend={agentStore.send} onStop={agentStore.stop}
+        <LazyVoiceComposer inputId={inputId} busy={chat.busy} onSend={agentStore.send} onStop={agentStore.stop}
           draftRequest={s.draft} autoFocus={autoFocus} compact={compact} uid={user?.id ?? null} templates={templates} offline={offline} onTextChange={onTextChange} />
       </div>
       <AgentConfirm open={confirmClear} onOpenChange={setConfirmClear} title={t("clear.title")} description={t("clear.body")}
