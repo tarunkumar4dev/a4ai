@@ -7,6 +7,7 @@ import type {
   AgentEvent, Blueprint, Chart, Clarify, FileReady, PaperPreview, PendingApproval, StatCard, Table, UiAction,
   VerificationSummary,
 } from "./types";
+import { translate, type AgentKey, type AgentLang } from "./i18n";
 
 export type ApprovalState = "pending" | "approving" | "approved" | "cancelled" | "failed" | "expired";
 
@@ -303,39 +304,23 @@ export function fmtMs(ms: number | null | undefined): string {
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
-// ---- Hinglish activity labels (timeline + the one aria-live status line) ----------------------
-const STEP_LABELS: Record<string, string> = {
-  "tool.resolve_entity": "Naam dhoondh raha hoon",
-  "tool.attendance_stats": "Attendance nikal raha hoon",
-  "tool.low_attendance_list": "Kam attendance wale students dekh raha hoon",
-  "tool.attendance_trend": "Trend bana raha hoon",
-  "tool.marks_stats": "Marks dekh raha hoon",
-  "tool.tests_created_by_teacher": "Tests gin raha hoon",
-  "tool.blueprint_defaults": "Blueprint bana raha hoon",
-  "tool.generate_questions": "Sawaal likh raha hoon",
-  "tool.verify_paper": "Verify kar raha hoon",
-  "tool.regenerate_failed": "Galat sawaal dobara likh raha hoon",
-  "tool.save_draft": "Draft save kar raha hoon",
-  "tool.finalize_test": "Test final kar raha hoon",
-  "tool.assign_to_section": "Section ko bhej raha hoon",
-  "tool.export_pdf": "PDF bana raha hoon",
-  "tool.my_scope": "Aapke batches dekh raha hoon",
-  "tool.section_comparison": "Sections compare kar raha hoon",
-  "status.thinking": "Soch raha hoon",
-  "status.querying": "Data dekh raha hoon",
-  "status.retrieving_ncert": "NCERT padh raha hoon",
-  "status.generating": "Sawaal likh raha hoon",
-  "status.verifying": "Verify kar raha hoon",
-  "status.regenerating": "Galat sawaal dobara likh raha hoon",
-};
+// ---- activity labels (timeline + the one aria-live status line), from the agent dictionaries -----------------
+const STEP_KEYS = new Set([
+  "tool.resolve_entity", "tool.attendance_stats", "tool.low_attendance_list", "tool.attendance_trend", "tool.marks_stats",
+  "tool.tests_created_by_teacher", "tool.blueprint_defaults", "tool.generate_questions", "tool.verify_paper",
+  "tool.regenerate_failed", "tool.save_draft", "tool.finalize_test", "tool.assign_to_section", "tool.export_pdf",
+  "tool.my_scope", "tool.section_comparison", "status.thinking", "status.querying", "status.retrieving_ncert",
+  "status.generating", "status.verifying", "status.regenerating",
+]);
 
-export function stepLabel(key: string, params: Record<string, unknown> = {}): string {
-  const base = STEP_LABELS[key] ?? "Kaam chal raha hai";
-  if (key === "status.generating" && typeof params.n === "number") return `${params.n} sawaal likh raha hoon`;
-  if (key === "status.verifying" && typeof params.round === "number" && params.round > 1) return `${base} · round ${params.round}`;
+export function stepLabel(key: string, params: Record<string, unknown> = {}, lang: AgentLang = "hinglish"): string {
+  const t = (k: string, p?: Record<string, string | number>) => translate(lang, k as AgentKey, p);
+  const base = STEP_KEYS.has(key) ? t(`step.${key}`) : t("step.default");
+  if (key === "status.generating" && typeof params.n === "number") return t("step.status.generatingN", { n: params.n });
+  if (key === "status.verifying" && typeof params.round === "number" && params.round > 1) return `${base} · ${t("step.round", { n: params.round })}`;
   if (key === "status.regenerating") {
     const n = Array.isArray(params.ids) ? params.ids.length : typeof params.count === "number" ? params.count : null;
-    if (n) return `${n} galat sawaal dobara likh raha hoon`;
+    if (n) return t("step.status.regeneratingN", { n });
   }
   return base;
 }

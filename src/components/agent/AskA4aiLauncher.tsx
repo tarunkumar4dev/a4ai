@@ -6,6 +6,8 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { History, Sparkles, X } from "lucide-react";
+import { useAgentT } from "@/lib/agent/i18n";
+import { IconTip, iconBtn } from "./IconTip";
 import { useAccess } from "@/context/AccessProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { LazyFloatingMic } from "@/components/voice";
@@ -24,7 +26,8 @@ export function showAskA4ai(pathname: string, role: string | null | undefined, s
   return !(pathname.replace(/\/+$/, "") === "/dashboard" && new URLSearchParams(search).get("tab") === "agent");
 }
 
-const iconBtn = "grid h-11 w-11 shrink-0 place-items-center rounded-md text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const WIDE_KEY = "a4ai.agent.wide";
+const readWide = () => { try { return localStorage.getItem(WIDE_KEY) === "1"; } catch { return false; } };
 
 export default function AskA4aiLauncher() {
   const { access } = useAccess();
@@ -33,6 +36,12 @@ export default function AskA4aiLauncher() {
   const [open, setOpen] = useState(false);
   const closeSheet = useCallback(() => setOpen(false), []);
   const [history, setHistory] = useState(false);
+  const { t } = useAgentT();
+  const [wide, setWide] = useState(readWide);
+  const toggleWide = useCallback(() => setWide((w) => {
+    try { localStorage.setItem(WIDE_KEY, w ? "0" : "1"); } catch { /* private mode */ }
+    return !w;
+  }), []);
   const btn = useRef<HTMLButtonElement>(null);
   const historyBtn = useRef<HTMLButtonElement>(null);
   const workspaceOpen = useAgentWorkspaceOpen();
@@ -77,21 +86,26 @@ export default function AskA4aiLauncher() {
         className="fixed bottom-20 right-4 z-[105] inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 font-halenoir text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:bottom-24 sm:right-6">
         <Sparkles aria-hidden="true" className="h-4 w-4" /> Ask a4ai
       </button>
-      <AgentSheetFrame open={open} onOpenChange={setOpen} side="right" title="a4ai Agent" description="Attendance, marks aur verified CBSE test papers."
-        onOpenAutoFocus={(e) => e.preventDefault()} returnFocus={btn} className="w-full sm:w-[440px]">
-        <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading…</p>}>
+      <AgentSheetFrame open={open} onOpenChange={setOpen} side="right" title={t("brand.title")} description={t("subtitle")}
+        onOpenAutoFocus={(e) => e.preventDefault()} returnFocus={btn}
+        className={`w-full sm:w-[420px] sm:min-w-[360px] sm:max-w-[calc(100vw-2rem)] motion-safe:transition-[width] motion-safe:duration-200 ${wide ? "sm:w-[720px]" : ""}`}>
+        <Suspense fallback={<div className="flex h-14 items-center gap-2 border-b border-border px-3" aria-busy="true"><span className="h-8 w-8 rounded-lg bg-muted" /><span className="h-4 w-28 rounded bg-muted" /></div>}>
           <div className="relative flex min-h-0 flex-1 flex-col">
-            <AgentChatPanel variant="sheet" autoFocus
+            <AgentChatPanel variant="sheet" autoFocus wide={wide} onToggleWide={toggleWide}
               leading={(
-                <button ref={historyBtn} type="button" onClick={() => setHistory(true)} aria-label="Pichhli chats" title="Pichhli chats"
-                  aria-expanded={history} className={iconBtn}>
-                  <History aria-hidden="true" className="h-5 w-5" />
-                </button>
+                <IconTip label={t("header.history")}>
+                  <button ref={historyBtn} type="button" onClick={() => setHistory(true)} aria-label={t("header.history")}
+                    aria-expanded={history} className={iconBtn} data-testid="agent-history">
+                    <History aria-hidden="true" className="h-[18px] w-[18px]" />
+                  </button>
+                </IconTip>
               )}
               trailing={(
-                <SheetClose aria-label="Close" className={iconBtn}>
-                  <X aria-hidden="true" className="h-5 w-5" />
-                </SheetClose>
+                <IconTip label={t("header.close")}>
+                  <SheetClose aria-label={t("header.close")} className={iconBtn} data-testid="agent-close">
+                    <X aria-hidden="true" className="h-5 w-5" />
+                  </SheetClose>
+                </IconTip>
               )} />
             {history ? <SheetHistory onClose={() => { setHistory(false); historyBtn.current?.focus(); }} onPicked={() => { setHistory(false); requestAnimationFrame(requestComposerFocus); }} /> : null}
           </div>

@@ -80,11 +80,9 @@ export function translate(lang: AgentLang, key: AgentKey, params?: Params): stri
   const form = pluralRule(lang).select(n) === "one" ? v.one : v.other;
   return fill(form, { ...params, n: typeof params?.n === "number" ? formatNumber(params.n) : String(params?.n ?? 0) });
 }
-export type PluralParams = Params & { n: number };
-export type TFn = {
-  (key: Exclude<AgentKey, PluralKey>, params?: Params): string;
-  (key: PluralKey, params: PluralParams): string;
-};
+/** t(key, params): plural keys (PluralKey) take params.n. */
+export type TFn = (key: AgentKey, params?: Params) => string;
+export type { PluralKey };
 
 export function useAgentLang(): AgentLang {
   return useSyncExternalStore(agentLang.subscribe, () => get().ui, () => DEFAULT_AGENT_LANG);

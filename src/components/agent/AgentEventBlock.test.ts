@@ -10,7 +10,6 @@ import { showAskA4ai } from "./AskA4aiLauncher";
 import { BLUEPRINT_OK, blueprintMessage, blueprintTotal } from "./BlueprintCard";
 import { chartRows, shortTick } from "./AgentChart";
 import { sortRows, toCsv } from "./DataTable";
-import { dataSourcePill } from "./AgentHeader";
 import { insertPlain } from "./AgentComposer";
 import { questionActionMessage } from "./PaperPreview";
 import { isStaffRole, roleLabel, suggestionsFor } from "./roles";
@@ -204,8 +203,8 @@ describe("message rendering", () => {
   it("running steps show Hinglish labels", () => {
     const steps = [{ id: "s1", key: "tool.resolve_entity", params: {}, status: "done" as const, startedAt: 1, ms: 400 }, { id: "s2", key: "tool.attendance_stats", params: {}, status: "running" as const, startedAt: 2, ms: null }];
     const out = renderToStaticMarkup(createElement(AgentMessage, { turn: turn([], { done: false, steps }), h, ctx: new Map(), onFeedback: vi.fn() }));
-    expect(out).toContain("Naam dhoondh raha hoon");
-    expect(out).toContain("Attendance nikal raha hoon");
+    expect(out).toContain("Naam dhoondh rahe hain");
+    expect(out).toContain("Attendance nikal rahe hain");
     expect(out).toContain("animate-spin");
     expect(out).toContain("400ms");
   });
@@ -246,13 +245,6 @@ describe("pure helpers", () => {
     expect(sortRows(rows, 1, "asc").map((r) => r[0])).toEqual(["A", "C", "D", "B"]);
     expect(sortRows(rows, 1, "desc").map((r) => r[0])).toEqual(["D", "C", "A", "B"]);
     expect(toCsv(["Name", "Note"], [['Sharma, "R"', null]])).toBe('Name,Note\n"Sharma, ""R""",');
-  });
-
-  it("data source pill", () => {
-    expect(dataSourcePill({ data_source: "live", read_only: true }, "ok")).toMatchObject({ label: "Live · read-only", tone: "live" });
-    expect(dataSourcePill({ data_source: "demo", read_only: true }, "ok")).toMatchObject({ label: "Demo data", tone: "demo" });
-    expect(dataSourcePill(null, "loading")).toMatchObject({ label: "Connecting…", tone: "unknown" });
-    expect(dataSourcePill(null, "error").tone).toBe("unknown");
   });
 
   it("paste inserts plain text within the 4000 limit", () => {

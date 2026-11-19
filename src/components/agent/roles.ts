@@ -2,6 +2,8 @@
 // proctor / teacher); students never. A teacher can be several things at once (HOD + subject teacher, proctor +
 // subject teacher): the agent role is the WIDEST scope — admin > HOD > proctor > teacher.
 import type { LucideIcon } from "lucide-react";
+import { translate, type AgentKey, type TFn } from "@/lib/agent/i18n";
+import type { MetaResponse } from "@/lib/agent/types";
 import {
   AlertTriangle, BarChart3, CalendarCheck, ClipboardList, FileSpreadsheet, FileText, GraduationCap, ListChecks, Users,
 } from "lucide-react";
@@ -30,71 +32,109 @@ export function agentRole(metaRole: string | null | undefined, access: AccessLik
   return "teacher";
 }
 
-/** Badge text. */
-export function roleLabel(metaRole: string | null | undefined, primaryRole: string | null | undefined, access?: AccessLike | null): string {
+const hx: TFn = ((k: AgentKey, p?: Record<string, string | number>) => translate("hinglish", k, p)) as TFn;
+
+/** Role name for the scope chip ("Teacher · 3 batch"). */
+export function roleLabel(metaRole: string | null | undefined, primaryRole: string | null | undefined, access?: AccessLike | null, t: TFn = hx): string {
   const r = agentRole(metaRole, { ...(access ?? {}), primary_role: access?.primary_role ?? primaryRole });
-  return { admin: "Admin", hod: "HOD", proctor: "Proctor", teacher: "Teacher" }[r];
+  return t(`role.${r}` as AgentKey);
 }
 
-export interface Suggestion { Icon: LucideIcon; title: string; hint: string; prompt: string }
+type Features = Partial<MetaResponse["features"]> | null | undefined;
+type Need = "batch" | "paper_generation" | "defaulters_export";
 
-export const SUGGESTIONS: Record<StaffRole, Suggestion[]> = {
+export interface Suggestion {
+  id: string; Icon: LucideIcon; title: string; hint: string; prompt: string;
+  /** set → shown but not clickable, with this reason (e.g. no batch assigned yet) */ disabledReason?: string | null;
+}
+interface Starter { id: string; Icon: LucideIcon; base: string; needs: Need[] }
+
+/** Starter cards per role. Every one maps to a real backend tool; `needs` = what must exist for it to work. */
+export const STARTERS: Record<StaffRole, Starter[]> = {
   admin: [
-    { Icon: CalendarCheck, title: "Aaj poore institute ki attendance", hint: "Har department ka aaj ka haal", prompt: "Aaj poore institute ki attendance" },
-    { Icon: BarChart3, title: "Department-wise comparison", hint: "Is mahine kaun aage, kaun peeche", prompt: "Department-wise comparison is mahine" },
-    { Icon: FileSpreadsheet, title: "75% se kam wale, Excel mein", hint: "Poore institute ki list download", prompt: "75% se kam attendance wale students, Excel mein" },
-    { Icon: FileText, title: "Tests banaye is mahine", hint: "Kis teacher ne kitne test banaye", prompt: "Is mahine teachers ne kitne tests banaye?" },
+    { id: "today", Icon: CalendarCheck, base: "starter.admin.today", needs: [] },
+    { id: "compare", Icon: BarChart3, base: "starter.admin.compare", needs: [] },
+    { id: "low", Icon: FileSpreadsheet, base: "starter.admin.low", needs: ["defaulters_export"] },
+    { id: "tests", Icon: FileText, base: "starter.admin.tests", needs: [] },
   ],
   hod: [
-    { Icon: BarChart3, title: "Department ka section-wise comparison", hint: "Attendance ranking, is mahine", prompt: "Department ka section-wise comparison" },
-    { Icon: CalendarCheck, title: "Department ki attendance", hint: "Aaj sab sections ka haal", prompt: "Is mahine department ki attendance" },
-    { Icon: FileSpreadsheet, title: "75% se kam wale, Excel mein", hint: "Department ke students ki list", prompt: "Department me 75% se kam attendance wale students, Excel mein" },
-    { Icon: FileText, title: "Teachers ke tests", hint: "Kisne kitne test banaye", prompt: "Is mahine teachers ne kitne tests banaye?" },
+    { id: "compare", Icon: BarChart3, base: "starter.hod.compare", needs: [] },
+    { id: "attendance", Icon: CalendarCheck, base: "starter.hod.attendance", needs: [] },
+    { id: "low", Icon: FileSpreadsheet, base: "starter.hod.low", needs: ["defaulters_export"] },
+    { id: "tests", Icon: FileText, base: "starter.hod.tests", needs: [] },
   ],
   proctor: [
-    { Icon: FileSpreadsheet, title: "Mere section ke 75% se kam wale, Excel mein", hint: "Download karke parents ko bhejein", prompt: "Mere section ke 75% se kam wale, Excel mein" },
-    { Icon: CalendarCheck, title: "Mere section ki attendance", hint: "Is hafte ka haal", prompt: "Mere section ki is hafte ki attendance" },
-    { Icon: AlertTriangle, title: "Lagatar absent students", hint: "Pichhle 7 din me", prompt: "Mere section me pichhle 7 din se absent students" },
-    { Icon: ListChecks, title: "Main kya kya dekh sakta hoon?", hint: "Mere sections aur subjects", prompt: "Main kya kya dekh sakta hoon?" },
+    { id: "low", Icon: FileSpreadsheet, base: "starter.proctor.low", needs: ["batch", "defaulters_export"] },
+    { id: "attendance", Icon: CalendarCheck, base: "starter.proctor.attendance", needs: ["batch"] },
+    { id: "absent", Icon: AlertTriangle, base: "starter.proctor.absent", needs: ["batch"] },
+    { id: "scope", Icon: ListChecks, base: "starter.proctor.scope", needs: [] },
   ],
   teacher: [
-    { Icon: Users, title: "Meri classes ki attendance", hint: "Is mahine ka percentage", prompt: "Meri classes ki is mahine ki attendance" },
-    { Icon: GraduationCap, title: "Class 10 trigonometry test banao", hint: "CBSE pattern, verified answers", prompt: "Class 10 trigonometry test banao, 40 marks" },
-    { Icon: AlertTriangle, title: "75% se kam wale students", hint: "Meri classes me", prompt: "Meri classes me 75% se kam attendance wale students" },
-    { Icon: ClipboardList, title: "Marks summary", hint: "Mere tests ke marks", prompt: "Mere tests ke marks summary" },
+    { id: "attendance", Icon: Users, base: "starter.teacher.attendance", needs: ["batch"] },
+    { id: "test", Icon: GraduationCap, base: "starter.teacher.test", needs: ["paper_generation"] },
+    { id: "low", Icon: AlertTriangle, base: "starter.teacher.low", needs: ["batch"] },
+    { id: "marks", Icon: ClipboardList, base: "starter.teacher.marks", needs: ["batch"] },
   ],
 };
 
-export function suggestionsFor(role: StaffRole): Suggestion[] {
-  return SUGGESTIONS[role];
+const card = (s: Starter, t: TFn): Suggestion => ({
+  id: s.id, Icon: s.Icon,
+  title: t(`${s.base}.title` as AgentKey), hint: t(`${s.base}.hint` as AgentKey), prompt: t(`${s.base}.prompt` as AgentKey),
+});
+
+/** The role's starters as plain suggestions (typeahead templates use the prompts). Pure. */
+export function suggestionsFor(role: StaffRole, t: TFn = hx): Suggestion[] {
+  return STARTERS[role].map((s) => card(s, t));
 }
 
-/** "3 batches · 44 students" / "Poora institute" — what the empty state says the caller can see. Pure. */
-export function scopeLine(role: StaffRole, batchCount: number | null, studentCount?: number | null): string | null {
-  if (role === "admin") return "Poora institute";
+export interface ScopeOpts {
+  t?: TFn;
+  /** false = the user has NO batch (attendance / marks cannot work yet); null / undefined = unknown or not relevant */
+  hasBatch?: boolean | null;
+  features?: Features;
+}
+
+const featureOff = (needs: Need[], f: Features) =>
+  needs.some((n) => (n === "paper_generation" || n === "defaulters_export") && f && f[n] === false);
+
+/** Prompts the typeahead may offer: only starters that can work for this user right now. Pure. */
+export function templatesFor(role: StaffRole, o: ScopeOpts = {}): string[] {
+  const t = o.t ?? hx;
+  return STARTERS[role].filter((s) => !featureOff(s.needs, o.features) && !(o.hasBatch === false && s.needs.includes("batch")))
+    .map((s) => card(s, t).prompt);
+}
+
+/** "Teacher · 3 batch · 44 students" / "Admin · Poora institute" / "Teacher · Abhi koi batch assign nahi hai". Pure. */
+export function scopeLine(role: StaffRole, batchCount: number | null, studentCount?: number | null, t: TFn = hx): string | null {
+  if (role === "admin") return t("scope.admin");
   if (batchCount === null) return null;
-  if (batchCount === 0) return "Abhi koi batch assign nahi hai";
-  const b = `${batchCount} batch${batchCount === 1 ? "" : "es"}`;
-  if (typeof studentCount === "number" && studentCount > 0) return `${b} · ${studentCount} student${studentCount === 1 ? "" : "s"}`;
+  if (batchCount === 0) return t("scope.none");
+  const b = t("scope.batches", { n: batchCount });
+  if (typeof studentCount === "number" && studentCount > 0) return `${b} · ${t("scope.students", { n: studentCount })}`;
   return b;
 }
 
 /**
- * Four empty-state cards. Teachers: up to two of their own batches first ("<name> ki is mahine ki attendance" — the
- * backend's own entity phrasing), then role starters. Other roles: their role starters. Never repeats. Pure.
+ * Four empty-state cards, ONE surface (the typeahead never repeats them on an empty box). Teachers: up to two of their
+ * own batches first ("<name> ki attendance"), then role starters. A starter whose feature is off is left out; one that
+ * needs a batch the user does not have is shown disabled with the reason, after the ones that work. Pure.
  */
-export function emptyCards(role: StaffRole, batches: { name: string }[] = []): Suggestion[] {
+export function emptyCards(role: StaffRole, batches: { name: string }[] = [], o: ScopeOpts = {}): Suggestion[] {
+  const t = o.t ?? hx;
   const out: Suggestion[] = [];
   if (role === "teacher") {
     for (const b of batches.slice(0, 2)) {
-      out.push({ Icon: Users, title: `${b.name} ki attendance`, hint: "Is mahine", prompt: `${b.name} ki is mahine ki attendance` });
+      out.push({ id: `batch:${b.name}`, Icon: Users, title: t("starter.batch.title", { batch: b.name }), hint: t("starter.batch.hint"), prompt: t("starter.batch.prompt", { batch: b.name }) });
     }
   }
-  for (const s of SUGGESTIONS[role]) {
-    if (out.length >= 4) break;
-    if (out.some((o) => o.prompt.toLowerCase() === s.prompt.toLowerCase())) continue;
-    if (role === "teacher" && batches.length && s.title === "Meri classes ki attendance") continue;
-    out.push(s);
+  const blocked: Suggestion[] = [];
+  for (const s of STARTERS[role]) {
+    if (featureOff(s.needs, o.features)) continue;
+    const c = card(s, t);
+    if (out.some((x) => x.prompt.toLowerCase() === c.prompt.toLowerCase())) continue;
+    if (role === "teacher" && batches.length && s.id === "attendance") continue;
+    if (o.hasBatch === false && s.needs.includes("batch")) blocked.push({ ...c, disabledReason: t("scope.needsBatch") });
+    else out.push(c);
   }
-  return out.slice(0, 4);
+  return [...out, ...blocked].slice(0, 4);
 }

@@ -115,7 +115,8 @@ export default function AgentPreview() {
     const id = setTimeout(() => agentStore.send(text), 700);
     return () => clearTimeout(id);
   }, [state, nonce]);
-  useEffect(() => () => { setAgentApiForTests(null); previewVoice.set(null); }, []);
+  // again in an effect: React StrictMode (dev) runs effect cleanups once on mount, which would drop the mock
+  useEffect(() => { setAgentApiForTests(previewApi(state)); return () => { setAgentApiForTests(null); previewVoice.set(null); }; }, [state, nonce]);
 
   const env: AgentEnv = useMemo(() => ({
     user: { id: uid, user_metadata: { full_name: state === "admin" ? "Rohit Mehra" : "Asha Verma" } },

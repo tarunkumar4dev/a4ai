@@ -2,10 +2,12 @@
 // stacked above the agent sheet (z 245/250) — ui/alert-dialog is z-50, under the sheet (z 220/230).
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { buttonVariants } from "@/components/ui/button";
+import { useAgentT } from "@/lib/agent/i18n";
 
 export function AgentConfirm({ open, onOpenChange, title, description, confirmLabel, onConfirm }: {
   open: boolean; onOpenChange: (o: boolean) => void; title: string; description: string; confirmLabel: string; onConfirm: () => void;
 }) {
+  const { t } = useAgentT();
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
@@ -16,7 +18,7 @@ export function AgentConfirm({ open, onOpenChange, title, description, confirmLa
             <AlertDialog.Description className="break-words text-sm text-muted-foreground">{description}</AlertDialog.Description>
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <AlertDialog.Cancel className={`${buttonVariants({ variant: "outline" })} h-11`}>Cancel</AlertDialog.Cancel>
+            <AlertDialog.Cancel className={`${buttonVariants({ variant: "outline" })} h-11`}>{t("common.cancel")}</AlertDialog.Cancel>
             <AlertDialog.Action className={`${buttonVariants({ variant: "destructive" })} h-11`} onClick={onConfirm}>{confirmLabel}</AlertDialog.Action>
           </div>
         </AlertDialog.Content>

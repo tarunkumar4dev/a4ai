@@ -1,69 +1,79 @@
-// Chat header: title, role badge, data-source pill (GET /agent/meta), New chat. `leading` / `trailing` slots hold
-// the history button (phones) and the sheet's close button.
-import type { ReactNode } from "react";
-import { SquarePen } from "lucide-react";
+// Chat header, 56 px: ONE agent avatar · "a4ai Agent" (+ open chat title / institute, a Demo chip only on demo data) ·
+// at most four labelled icons — language, history, new chat, close — plus a ⋯ menu (wider panel, keyboard shortcuts,
+// clear search history). No role badge, no permanent connection pill (the connection strip lives above the composer).
+import { useState, type ReactNode } from "react";
+import { Eraser, Keyboard, Maximize2, Minimize2, MoreHorizontal, SquarePen } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { MetaResponse } from "@/lib/agent/events";
-import type { MetaStatus } from "@/lib/agent/store";
+import { useAgentT } from "@/lib/agent/i18n";
 import { AgentMark } from "./AgentMessage";
+import { IconTip, iconBtn } from "./IconTip";
 import { LanguageMenu } from "./LanguageMenu";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { NEW_CHAT_SHORTCUT } from "./shortcuts";
 
-/** Pill text + tone. emerald / amber are the documented exception to "tokens only" (no success/warning tokens). */
-export function dataSourcePill(meta: Pick<MetaResponse, "data_source" | "read_only"> | null, status: MetaStatus): { label: string; tone: "live" | "demo" | "unknown"; title: string } {
-  if (status === "ok" && meta?.data_source === "live") {
-    return { label: meta.read_only ? "Live · read-only" : "Live", tone: "live", title: "Aapke institute ka asli data. Agent kuch bhi badal nahi sakta." };
-  }
-  if (status === "ok" && meta?.data_source === "demo") return { label: "Demo data", tone: "demo", title: "Ye sample data hai, asli institute ka nahi." };
-  return { label: "Connecting…", tone: "unknown", title: status === "error" ? "Agent se connect nahi ho paya. Message bhejne par dobara try hoga." : "Agent se connect ho raha hai" };
-}
-
-const TONE = {
-  live: "border-emerald-600/25 bg-emerald-50 text-emerald-800 dark:border-emerald-400/25 dark:bg-emerald-950/50 dark:text-emerald-300",
-  demo: "border-amber-600/25 bg-amber-50 text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/50 dark:text-amber-300",
-  unknown: "border-border bg-muted text-muted-foreground",
-} as const;
-const DOT = { live: "bg-emerald-600 dark:bg-emerald-400", demo: "bg-amber-500 dark:bg-amber-400", unknown: "bg-muted-foreground/60" } as const;
-
-export function DataSourcePill({ meta, status }: { meta: MetaResponse | null; status: MetaStatus }) {
-  const p = dataSourcePill(meta, status);
-  return (
-    <span title={p.title} data-testid="data-source" data-tone={p.tone}
-      className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 text-[11px] font-medium ${TONE[p.tone]}`}>
-      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${DOT[p.tone]}`} />{p.label}
-    </span>
-  );
-}
-
-export function AgentHeader({ meta, metaStatus, role, onNewChat, canNew, leading, trailing, compact, newChatInSidebar, title }: {
-  meta: MetaResponse | null; metaStatus: MetaStatus; role: string; onNewChat: () => void; canNew: boolean;
+export function AgentHeader({ meta, onNewChat, canNew, leading, trailing, compact, newChatInSidebar, title, wide, onToggleWide, onClearSearch }: {
+  meta: MetaResponse | null; onNewChat: () => void; canNew: boolean;
   /** the open chat's title */ title?: string | null;
-  leading?: ReactNode; trailing?: ReactNode; compact?: boolean;
+  /** the history button (sheet / phones) */ leading?: ReactNode;
+  /** the close button (sheet) */ trailing?: ReactNode;
+  compact?: boolean;
   /** the workspace sidebar (lg+) already has a New chat button */ newChatInSidebar?: boolean;
+  /** sheet on desktop: 420 ↔ 720 px */ wide?: boolean; onToggleWide?: () => void;
+  /** clear the recent-question history (suggestions) — null when there is none */ onClearSearch?: (() => void) | null;
 }) {
+  const { t } = useAgentT();
+  const [shortcuts, setShortcuts] = useState(false);
+  const sub = title ?? meta?.institute_name ?? null;
+  const fine = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: fine)").matches;
   return (
-    <header className={`flex items-center gap-2 border-b border-border bg-card ${compact ? "px-3 py-2" : "px-3 py-2.5 sm:px-5"}`}>
-      {leading}
-      <AgentMark className="hidden sm:grid" />
+    <header className={`flex h-14 shrink-0 items-center gap-1 border-b border-border bg-card ${compact ? "pl-3 pr-1.5" : "pl-3 pr-2 sm:pl-5"}`} data-testid="agent-header">
+      <AgentMark className="mr-1.5 h-8 w-8 rounded-lg" />
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="truncate text-[15px] font-semibold leading-tight text-foreground">a4ai Agent</h2>
-          <span data-testid="role-badge" className="shrink-0 rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-secondary-foreground">{role}</span>
-        </div>
-        <div className="mt-0.5 flex min-w-0 items-center gap-2">
-          <DataSourcePill meta={meta} status={metaStatus} />
-          {title ? <span className="min-w-0 truncate text-xs text-muted-foreground" data-testid="chat-title" title={title}>{title}</span>
-            : meta?.institute_name ? <span className="hidden truncate text-xs text-muted-foreground sm:inline">{meta.institute_name}</span> : null}
-        </div>
+        <h2 className="truncate text-[15px] font-semibold leading-5 text-foreground">{t("brand.title")}</h2>
+        {sub || meta?.data_source === "demo" ? (
+          <p className="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-muted-foreground">
+            {meta?.data_source === "demo" ? (
+              <span title={t("header.demoHelp")} data-testid="data-source" data-tone="demo"
+                className="shrink-0 rounded bg-amber-100 px-1 font-medium text-amber-900 dark:bg-amber-950/60 dark:text-amber-300">{t("header.demo")}</span>
+            ) : null}
+            {sub ? <span className="min-w-0 truncate" data-testid={title ? "chat-title" : undefined} title={sub}>{sub}</span> : null}
+          </p>
+        ) : null}
       </div>
       <LanguageMenu />
-      <ShortcutsHelp />
-      <button type="button" onClick={onNewChat} disabled={!canNew} title={`Naya sawaal (${NEW_CHAT_SHORTCUT})`}
-        className={`inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 ${newChatInSidebar ? "lg:hidden" : ""}`}>
-        <SquarePen aria-hidden="true" className="h-4 w-4" /><span className={compact ? "sr-only" : "hidden sm:inline"}>Naya sawaal</span>
-        {compact ? null : <span className="sr-only sm:hidden">Naya sawaal</span>}
-      </button>
+      {leading}
+      <IconTip label={`${t("header.newChat")} (${NEW_CHAT_SHORTCUT})`}>
+        <button type="button" onClick={onNewChat} disabled={!canNew} aria-label={t("header.newChat")} data-testid="agent-new-chat"
+          className={`${iconBtn} ${newChatInSidebar ? "lg:hidden" : ""}`}>
+          <SquarePen aria-hidden="true" className="h-[18px] w-[18px]" />
+        </button>
+      </IconTip>
+      <DropdownMenu>
+        <IconTip label={t("header.more")}>
+          <DropdownMenuTrigger aria-label={t("header.more")} className={iconBtn} data-testid="agent-more">
+            <MoreHorizontal aria-hidden="true" className="h-[18px] w-[18px]" />
+          </DropdownMenuTrigger>
+        </IconTip>
+        <DropdownMenuContent align="end" className="z-[240] min-w-52">
+          {onToggleWide ? (
+            <DropdownMenuItem className="hidden min-h-10 gap-2 sm:flex" onSelect={onToggleWide} data-testid="agent-expand">
+              {wide ? <Minimize2 aria-hidden="true" className="h-4 w-4" /> : <Maximize2 aria-hidden="true" className="h-4 w-4" />}
+              {wide ? t("header.collapse") : t("header.expand")}
+            </DropdownMenuItem>
+          ) : null}
+          {fine ? (
+            <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => setShortcuts(true)}>
+              <Keyboard aria-hidden="true" className="h-4 w-4" />{t("header.shortcuts")}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem className="min-h-10 gap-2" disabled={!onClearSearch} onSelect={() => onClearSearch?.()} data-testid="clear-history">
+            <Eraser aria-hidden="true" className="h-4 w-4" />{t("header.clearSearch")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {trailing}
+      <ShortcutsHelp open={shortcuts} onOpenChange={setShortcuts} />
     </header>
   );
 }

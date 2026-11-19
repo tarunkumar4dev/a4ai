@@ -15,12 +15,12 @@ export function AgentSheetFrame({ open, onOpenChange, side, title, description, 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[220] bg-black/40 dark:bg-black/60" />
+        <Dialog.Overlay className="fixed inset-0 z-[220] bg-black/40 dark:bg-black/60 motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:fade-in-0 motion-safe:data-[state=open]:duration-200" />
         <Dialog.Content ref={content} onOpenAutoFocus={onOpenAutoFocus}
           // an open suggestions list / rename box / inner drawer takes Esc first; the sheet closes on the next Esc
           onEscapeKeyDown={(e) => { if (hasEscLayer(content.current)) e.preventDefault(); }}
           onCloseAutoFocus={(e) => { if (returnFocus?.current) { e.preventDefault(); returnFocus.current.focus(); } }}
-          className={`fixed z-[230] flex h-[100dvh] flex-col border-border bg-card font-halenoir text-card-foreground shadow-xl outline-none ${pos} ${className}`}>
+          className={`fixed z-[230] flex h-[100dvh] flex-col border-border bg-card pt-[env(safe-area-inset-top,0px)] font-halenoir text-card-foreground shadow-2xl outline-none ${side === "right" ? "motion-safe:data-[state=open]:slide-in-from-right" : "motion-safe:data-[state=open]:slide-in-from-left"} motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:duration-[180ms] motion-safe:data-[state=open]:ease-out ${pos} ${className}`}>
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
           <Dialog.Description className="sr-only">{description}</Dialog.Description>
           {children}
