@@ -6,7 +6,7 @@
 // Streaming: events are queued and applied once per animation frame (one React update per frame, not per token).
 // Approval Cancel is LOCAL ONLY — /agent/approve executes the action, so only the Approve button calls it.
 import { useEffect, useSyncExternalStore } from "react";
-import { agentLang, tNow } from "./i18n";
+import { agentLang, htmlLang, tNow } from "./i18n";
 import { toast } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
 import { AgentHttpError, isAgentPdfPath } from "./client";
@@ -398,7 +398,7 @@ class AgentStore {
     if (bargeIn) this.stop();
     if (this.state.chat.busy) return;
     if (this.state.load === "loading") { this.loadCtrl?.abort(); this.set({ load: "ok" }); }
-    this.dispatch({ type: "send", text });
+    this.dispatch({ type: "send", text, lang: htmlLang(agentLang.get().ui) });
     const body: ChatRequest = { message: text, session_id: this.state.chat.sessionId };
     if (opts?.bargeIn) body.cancel_current = true;
     this.stream(body, opts?.voice === true, opts?.voiceOpts);

@@ -143,9 +143,9 @@ describe("message actions", () => {
   const msg = (t: ChatTurn) => renderToStaticMarkup(createElement(AgentMessage, { turn: t, h, ctx: new Map(), isLast: true, onFeedback: vi.fn(), onRegenerate: vi.fn(), onEdit: vi.fn() }));
   it("assistant: Copy, Regenerate, 👍, 👎; stopped mark; user Edit; none while streaming", () => {
     const out = msg(turn({ blocks: [{ kind: "text", id: "t", text: "Jawab" }] }));
-    for (const label of ["Copy answer", "Regenerate", "Helpful", "Not helpful"]) expect(out).toContain(`aria-label="${label}"`);
+    for (const label of ["Copy karein", "Naya jawab banao", "Kaam ka", "Kaam ka nahi"]) expect(out).toContain(`aria-label="${label}"`);
     expect(msg(turn({ stopped: true, blocks: [{ kind: "text", id: "t", text: "Aadha" }] }))).toContain('data-testid="msg-stopped"');
-    expect(msg({ id: "u1", role: "user", text: "Q", blocks: [], done: true, at: 1, seq: 1 })).toContain('aria-label="Edit message"');
+    expect(msg({ id: "u1", role: "user", text: "Q", blocks: [], done: true, at: 1, seq: 1 })).toContain('aria-label="Sawaal badlo"');
     expect(msg(turn({ done: false, blocks: [{ kind: "text", id: "t", text: "…" }] }))).not.toContain('data-testid="msg-actions"');
   });
 });

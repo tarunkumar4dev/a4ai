@@ -195,8 +195,8 @@ describe("message rendering", () => {
     ];
     const done = renderToStaticMarkup(createElement(AgentMessage, { turn: turn([{ kind: "text", id: "t", text: "ok" }], { steps }), h, ctx: new Map(), onFeedback: vi.fn() }));
     expect(done).toContain("3 steps");
-    expect(done).toContain('aria-label="Copy answer"');
-    expect(done).toContain('aria-label="Helpful"');
+    expect(done).toContain('aria-label="Copy karein"');
+    expect(done).toContain('aria-label="Kaam ka"');
     expect(done).not.toContain("aria-live");
   });
 

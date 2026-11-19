@@ -39,7 +39,7 @@ export function BlueprintCard({ ev, disabled, onConfirm }: { ev: Blueprint; disa
   const input = "h-11 w-full rounded-md border border-input bg-background px-2 text-center text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60";
 
   return (
-    <section className="min-w-0 rounded-lg border border-border bg-card text-card-foreground" data-testid="blueprint">
+    <section className="min-w-0 rounded-2xl border border-border bg-card text-card-foreground" data-testid="blueprint">
       <header className="flex items-start gap-3 px-4 pb-3 pt-4">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><ListChecks aria-hidden="true" className="h-4 w-4" /></span>
         <div className="min-w-0">
@@ -51,7 +51,7 @@ export function BlueprintCard({ ev, disabled, onConfirm }: { ev: Blueprint; disa
       </header>
 
       <div className="border-t border-border">
-        <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_3.25rem_3.25rem_2.5rem] items-center gap-2 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_3.25rem_3.25rem_2.5rem] items-center gap-2 px-4 py-2 text-xs font-medium text-muted-foreground">
           <span>Sec</span><span>Type</span><span className="text-center">Qs</span><span className="text-center">Marks</span><span className="text-right">Total</span>
         </div>
         {rows.map((r, i) => (

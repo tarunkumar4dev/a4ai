@@ -1,10 +1,16 @@
 // Chat history list helpers (pure): ChatGPT-style groups, title filter, relative times, flat rows for the
 // windowed list. Pinned chats always come first, whatever their date.
 import type { SessionItem } from "./types";
+import { translate, type AgentKey, type AgentLang } from "./i18n";
 
 export type HistoryGroupKey = "pinned" | "today" | "yesterday" | "week" | "older";
+const GROUP_KEY: Record<HistoryGroupKey, AgentKey> = {
+  pinned: "history.pinned", today: "history.today", yesterday: "history.yesterday", week: "history.week", older: "history.older",
+};
+/** Group heading in a language (Today / Aaj / आज). */
+export const groupLabel = (k: HistoryGroupKey, lang: AgentLang = "en") => translate(lang, GROUP_KEY[k]);
 export const GROUP_LABEL: Record<HistoryGroupKey, string> = {
-  pinned: "Pinned", today: "Today", yesterday: "Yesterday", week: "Previous 7 days", older: "Older",
+  pinned: groupLabel("pinned"), today: groupLabel("today"), yesterday: groupLabel("yesterday"), week: groupLabel("week"), older: groupLabel("older"),
 };
 const ORDER: HistoryGroupKey[] = ["pinned", "today", "yesterday", "week", "older"];
 const DAY = 86_400_000;

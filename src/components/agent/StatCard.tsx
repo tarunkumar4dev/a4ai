@@ -17,7 +17,7 @@ function DeltaLine({ delta }: { delta: string }) {
 export function StatCard({ ev, footer = true }: { ev: StatCardEvent; footer?: boolean }) {
   const hasValue = ev.value !== null && ev.value !== undefined && String(ev.value).trim() !== "";
   return (
-    <div className="flex min-w-0 flex-col rounded-lg border border-border bg-card p-4 text-card-foreground" data-testid="stat-card">
+    <div className="flex min-w-0 flex-col rounded-2xl border border-border bg-card p-4 text-card-foreground" data-testid="stat-card">
       <p className="text-xs font-medium text-muted-foreground">{ev.title}</p>
       <p className="mt-1.5 flex items-baseline gap-1 text-3xl font-semibold tracking-tight tabular-nums text-foreground">
         {dash(ev.value)}

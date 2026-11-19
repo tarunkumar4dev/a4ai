@@ -38,6 +38,7 @@ export type Feedback = "up" | "down" | null;
 export interface ChatTurn {
   id: string; role: "user" | "assistant"; text: string; blocks: Block[]; done: boolean;
   /** created (ms since epoch) */ at: number;
+  /** user turns: the panel language when it was sent (BCP 47, for the lang attribute) */ lang?: string;
   /** assistant: when the stream ended */ endedAt?: number | null;
   steps?: Step[];
   /** thumbs up/down (POST /agent/feedback when the message has a seq) */ feedback?: Feedback;
@@ -60,7 +61,7 @@ export interface ChatState {
 }
 
 export type ChatAction =
-  | { type: "send"; text: string; at?: number }
+  | { type: "send"; text: string; at?: number; lang?: string }
   | { type: "event"; ev: AgentEvent; at?: number }
   | { type: "fail"; message: string; code?: string; retryAt?: number | null; at?: number }
   | { type: "file"; blockId: string; state: FileState; error?: string | null }
@@ -181,7 +182,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state, busy: true, lastUserText: text, status: { key: "status.thinking", params: {} }, requestId: null, confirmHighlightAt: null,
         turns: [...state.turns,
-          { id: nid("u"), role: "user", text, blocks: [], done: true, at, seq: seqs.user },
+          { id: nid("u"), role: "user", text, blocks: [], done: true, at, seq: seqs.user, ...(action.lang ? { lang: action.lang } : {}) },
           { id: nid("a"), role: "assistant", text: "", blocks: [], done: false, at, steps: [], endedAt: null, seq: seqs.assistant }],
       };
     }

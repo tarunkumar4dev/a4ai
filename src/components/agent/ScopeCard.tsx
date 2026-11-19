@@ -47,7 +47,7 @@ export function ScopeCard({ ev, disabled, onSend, onPrefill }: {
   const rows = scopeRows(ev);
   const shown = all ? rows : rows.slice(0, SHOW);
   return (
-    <section className="min-w-0 rounded-lg border border-border bg-card text-card-foreground" data-testid="scope-card" aria-label="Aapka scope">
+    <section className="min-w-0 rounded-2xl border border-border bg-card text-card-foreground" data-testid="scope-card" aria-label="Aapka scope">
       <header className="flex items-start gap-3 p-4 pb-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Users aria-hidden="true" className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1">
@@ -70,7 +70,7 @@ export function ScopeCard({ ev, disabled, onSend, onPrefill }: {
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="block text-sm font-semibold tabular-nums text-foreground">{dash(b.students)}</span>
-                  <span className="block text-[11px] text-muted-foreground">students</span>
+                  <span className="block text-xs text-muted-foreground">students</span>
                 </span>
                 <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
               </button>
