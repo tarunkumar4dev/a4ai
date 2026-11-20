@@ -21,7 +21,7 @@ import {
   fetchBatches, fetchStudents, fetchStudentCounts, fetchDepartments, fetchSections, fetchSubjects, fetchTeaching,
   fetchProctors, fetchBranding, fetchStudentBatches,
 } from "@/pages/institute/instituteQueries";
-import { membershipMap } from "@/lib/studentUpload/batchAssign";
+import { membershipMap, studentMatchesFilter } from "@/lib/studentUpload/batchAssign";
 
 // Not needed for the first screen: loaded when their tab / modal opens (xlsx only comes with these)
 const loadAttendance = () => import("@/components/attendance/HODAttendanceDashboard");
@@ -768,14 +768,16 @@ export default function InstituteDashboardPage() {
 
   const filteredStudents = useMemo(() => {
     const q = debouncedSearch.toLowerCase().trim();
-    let list = students.filter(s => matchesDept(s.department_id) && matchesSection(s.section_id));
+    // dept / section also through the student's batches (student_batches): students.section_id is often empty
+    const list = students.filter(s => studentMatchesFilter(s, memberships.get(s.id), batchById, deptFilter, sectionFilter));
     if (!q) return list;
     return list.filter(s =>
       s.name.toLowerCase().includes(q) ||
       (s.roll_no || "").toLowerCase().includes(q) ||
-      (s.batch_name || "").toLowerCase().includes(q)
+      (s.batch_name || "").toLowerCase().includes(q) ||
+      [...(memberships.get(s.id) ?? [])].some(id => (batchById.get(id)?.name || "").toLowerCase().includes(q))
     );
-  }, [students, debouncedSearch, deptFilter, sectionFilter]);
+  }, [students, debouncedSearch, deptFilter, sectionFilter, memberships, batchById]);
 
   const batchChart = useMemo(() =>
     batches.slice(0, 12).map((b) => ({
@@ -786,7 +788,7 @@ export default function InstituteDashboardPage() {
   const sectionsOfDept = (deptId: string) => sections.filter(s => s.department_id === deptId);
   const teachersOfDept = (deptId: string) => teachers.filter(t => t.department_id === deptId);
   const batchesOfDept = (deptId: string) => batches.filter(b => b.department_id === deptId);
-  const studentsOfDept = (deptId: string) => students.filter(s => s.department_id === deptId);
+  const studentsOfDept = (deptId: string) => students.filter(s => studentMatchesFilter(s, memberships.get(s.id), batchById, deptId, ""));
   const hodOfDept = (deptId: string) => hods.find(h => h.department_id === deptId);
 
   const setupTasks = [
