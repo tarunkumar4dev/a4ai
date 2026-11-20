@@ -19,8 +19,9 @@ import { LazySection, SectionSkeleton } from "@/components/LazySection";
 import {
   instKey, resolveKey, invalidateInstitute, type InstituteMutation, resolveInstitute, fetchMeta, fetchTeachers,
   fetchBatches, fetchStudents, fetchStudentCounts, fetchDepartments, fetchSections, fetchSubjects, fetchTeaching,
-  fetchProctors, fetchBranding,
+  fetchProctors, fetchBranding, fetchStudentBatches,
 } from "@/pages/institute/instituteQueries";
+import { membershipMap } from "@/lib/studentUpload/batchAssign";
 
 // Not needed for the first screen: loaded when their tab / modal opens (xlsx only comes with these)
 const loadAttendance = () => import("@/components/attendance/HODAttendanceDashboard");
@@ -29,6 +30,8 @@ const loadBulkUpload = () => import("@/components/institute/BulkStudentUpload");
 const HODAttendanceDashboard = lazy(loadAttendance);
 const BatchManagementPanel = lazy(loadBatchSettings);
 const BulkStudentUpload = lazy(loadBulkUpload);
+const loadBatchAssign = () => import("@/components/institute/StudentBatchAssignModal");
+const StudentBatchAssignModal = lazy(loadBatchAssign);
 // keyed by nav tab id; Batch settings sits in the Analytics tab
 const PRELOAD: Record<string, () => Promise<unknown>> = { attendance: loadAttendance, analytics: loadBatchSettings };
 
@@ -62,8 +65,8 @@ interface Institute { id: string; name: string; join_code: string; max_teachers:
 interface Department { id: string; institute_id: string; name: string; student_code: string; teacher_code: string; }
 interface Section { id: string; department_id: string; name: string; year: number | null; }
 interface Teacher { id: string; user_id: string; role: string; status: string; joined_at: string; user_email?: string; user_name?: string; department_id?: string | null; }
-interface Batch { id: string; name: string; class_level: string; subject: string; description: string; is_active: boolean; department_id?: string | null; section_id?: string | null; }
-interface Student { id: string; name: string; roll_no: string; class_level: string; parent_name: string; parent_phone: string; batch_id: string; batch_name?: string; is_active: boolean; department_id?: string | null; section_id?: string | null; }
+interface Batch { id: string; name: string; class_level: string; subject: string; description: string; is_active: boolean; department_id?: string | null; section_id?: string | null; is_lab?: boolean | null; }
+interface Student { id: string; name: string; roll_no: string; class_level: string; parent_name: string; parent_phone: string; batch_id: string; batch_name?: string; is_active: boolean; department_id?: string | null; section_id?: string | null; lab_batch_id?: string | null; }
 
 const NO_TEACHERS: Teacher[] = [];
 const NO_BATCHES: Batch[] = [];
@@ -166,12 +169,17 @@ export default function InstituteDashboardPage() {
   const subjectsQ = useQuery({ queryKey: k("subjects"), queryFn: () => fetchSubjects(instId!), ...live });
   const teachingQ = useQuery({ queryKey: k("teaching"), queryFn: () => fetchTeaching(instId!), ...live });
   const proctorsQ = useQuery({ queryKey: k("proctors"), queryFn: () => fetchProctors(instId!), ...live });
+  const studentBatchesQ = useQuery({ queryKey: k("studentBatches"), queryFn: () => fetchStudentBatches(instId!), ...live });
   const brandingQ = useQuery({ queryKey: k("branding"), queryFn: () => fetchBranding(instId!), enabled: !!instId, staleTime: Infinity });
 
   const institute = (metaQ.data as Institute | undefined) ?? null;
   const teachers = (teachersQ.data as Teacher[] | undefined) ?? NO_TEACHERS;
   const batches = (batchesQ.data as Batch[] | undefined) ?? NO_BATCHES;
   const students = (studentsQ.data as Student[] | undefined) ?? NO_STUDENTS;
+  // student → batch ids (student_batches, migration 33; falls back to batch_id + lab_batch_id until it is run)
+  const memberships = useMemo(() => membershipMap(studentBatchesQ.data, students), [studentBatchesQ.data, students]);
+  const multiBatchReady = studentBatchesQ.data != null;
+  const batchById = useMemo(() => new Map(batches.map(b => [b.id, b])), [batches]);
   const departments = (deptsQ.data as Department[] | undefined) ?? NO_DEPTS;
   const sections = (sectionsQ.data as Section[] | undefined) ?? NO_SECTIONS;
   const subjects = subjectsQ.data ?? NO_SUBJECTS;
@@ -215,6 +223,8 @@ export default function InstituteDashboardPage() {
   const [showAddDept, setShowAddDept] = useState(false);
   const [showAddSection, setShowAddSection] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(() => new Set());
+  const [assignStudentIds, setAssignStudentIds] = useState<string[] | null>(null);
   const [assignTeacherBatches, setAssignTeacherBatches] = useState<{ teacherId: string; teacherName: string } | null>(null);
   // Class-teacher (proctor) modal: memberId = institute_members.id, which is what assign_proctor wants.
   const [assignProctorFor, setAssignProctorFor] = useState<{ memberId: string; userId: string; teacherName: string; deptId: string | null } | null>(null);
@@ -1432,7 +1442,13 @@ export default function InstituteDashboardPage() {
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <p className="text-[13px] text-slate-500 font-bold">{search || deptFilter || sectionFilter ? `${filteredStudents.length} match${filteredStudents.length !== 1 ? "es" : ""}` : `${totalStudents} total`}</p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {selectedStudentIds.size > 0 && (
+                    <button onClick={() => setAssignStudentIds([...selectedStudentIds])} onPointerEnter={loadBatchAssign} onFocus={loadBatchAssign}
+                      className="btn-orange px-4 py-2.5 rounded-xl text-[13px]" title="Add or remove batches for the selected students">
+                      <Icons.Layers /> Assign batches ({selectedStudentIds.size})
+                    </button>
+                  )}
                   <button onClick={downloadAccessCodesCSV} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]" title="Download access codes CSV for parents">📥 Access Codes CSV</button>
                   <button onClick={() => setShowBulkUpload(true)} onPointerEnter={loadBulkUpload} onFocus={loadBulkUpload} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]"><Icons.Upload /> Bulk Upload</button>
                   <button onClick={() => setShowAddStudent(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px]"><Icons.Plus /> Add Student</button>
@@ -1461,6 +1477,34 @@ export default function InstituteDashboardPage() {
                 </div>
               )}
 
+              {filteredStudents.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 mb-2 px-1">
+                  <label className="flex items-center gap-2 text-[12px] font-bold text-slate-500 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-[#FF7043]"
+                      checked={filteredStudents.every(s => selectedStudentIds.has(s.id))}
+                      ref={el => { if (el) el.indeterminate = filteredStudents.some(s => selectedStudentIds.has(s.id)) && !filteredStudents.every(s => selectedStudentIds.has(s.id)); }}
+                      onChange={e => {
+                        const on = e.target.checked;
+                        setSelectedStudentIds(prev => {
+                          const next = new Set(prev);
+                          for (const s of filteredStudents) { if (on) next.add(s.id); else next.delete(s.id); }
+                          return next;
+                        });
+                      }}
+                    />
+                    Select all shown ({filteredStudents.length})
+                  </label>
+                  {selectedStudentIds.size > 0 && (
+                    <button onClick={() => setSelectedStudentIds(new Set())} className="text-[12px] font-bold text-slate-400 hover:text-slate-600">Clear selection</button>
+                  )}
+                  {!multiBatchReady && studentBatchesQ.isSuccess && (
+                    <span className="text-[11px] text-amber-700">Several batches per student need the server update (migration 33).</span>
+                  )}
+                </div>
+              )}
+
               {filteredStudents.length === 0 ? (
                 <div className="bg-white rounded-2xl p-12 text-center card-shadow border border-slate-50">
                   <div className="w-12 h-12 rounded-full bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center mx-auto mb-3"><Icons.User /></div>
@@ -1469,7 +1513,22 @@ export default function InstituteDashboardPage() {
               ) : (
                 <div className="space-y-3">
                   {filteredStudents.map(s => (
-                    <div key={s.id} onClick={() => navigate(`/institute/students/${s.id}`)} className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row cursor-pointer hover:border-[#FF7043]/30 hover:shadow-md transition-all">
+                    <div key={s.id} onClick={() => navigate(`/institute/students/${s.id}`)} className={`bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border anim-row cursor-pointer hover:border-[#FF7043]/30 hover:shadow-md transition-all ${selectedStudentIds.has(s.id) ? "border-[#FF7043]/50" : "border-slate-50"}`}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${s.name}`}
+                        className="w-4 h-4 accent-[#FF7043] shrink-0"
+                        checked={selectedStudentIds.has(s.id)}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => {
+                          const on = e.target.checked;
+                          setSelectedStudentIds(prev => {
+                            const next = new Set(prev);
+                            if (on) next.add(s.id); else next.delete(s.id);
+                            return next;
+                          });
+                        }}
+                      />
                       <div className="w-10 h-10 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center font-bold text-sm shrink-0">{getInitials(s.name)}</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1477,9 +1536,21 @@ export default function InstituteDashboardPage() {
                           {s.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(s.department_id)}</span>}
                           {s.section_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600">{sectionName(s.section_id)}</span>}
                         </div>
-                        <p className="text-[11px] font-medium text-slate-400 truncate">{s.batch_name} · Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}{(s as any).student_access_codes?.[0]?.access_code ? ` · 🔑 ${(s as any).student_access_codes[0].access_code}` : ""}</p>
+                        {(() => {
+                          const named = [...(memberships.get(s.id) ?? [])]
+                            .map(id => batchById.get(id)).filter((b): b is Batch => !!b);
+                          return named.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 my-0.5">
+                              {named.map(b => (
+                                <span key={b.id} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${b.id === s.batch_id ? "bg-orange-50 text-[#E64A19]" : "bg-slate-100 text-slate-600"}`} title={b.id === s.batch_id ? "Main batch (attendance)" : undefined}>{b.name}</span>
+                              ))}
+                            </div>
+                          ) : <span className="text-[10px] font-bold text-slate-400">No batch</span>;
+                        })()}
+                        <p className="text-[11px] font-medium text-slate-400 truncate">Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}{(s as any).student_access_codes?.[0]?.access_code ? ` · 🔑 ${(s as any).student_access_codes[0].access_code}` : ""}</p>
                       </div>
                       <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">Class {s.class_level || "—"}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setAssignStudentIds([s.id]); }} onPointerEnter={loadBatchAssign} title="Batches" aria-label={`Batches for ${s.name}`} className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Layers /></button>
                       <button onClick={(e) => { e.stopPropagation(); contactParent(s); }} title="Message parent" className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Phone /></button>
                       <button onClick={(e) => { e.stopPropagation(); removeStudent(s.id); }} title="Remove student" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                     </div>
@@ -1517,7 +1588,7 @@ export default function InstituteDashboardPage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {filteredBatches.map(b => {
-                    const count = students.filter(s => s.batch_id === b.id).length;
+                    const count = students.filter(s => memberships.get(s.id)?.has(b.id)).length;
                     return (
                       <div key={b.id} className="bg-white rounded-2xl p-5 card-shadow card-hover border border-slate-50 relative group anim-row">
                         <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1917,6 +1988,23 @@ export default function InstituteDashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {assignStudentIds && (
+        <LazySection label="Assign batches" fallback={
+          <div className="fixed inset-0 z-[200] bg-slate-900/40 flex items-center justify-center p-4">
+            <div className="w-full max-w-lg"><SectionSkeleton label="batches" rows={5} /></div>
+          </div>
+        }>
+          <StudentBatchAssignModal
+            students={students.filter(s => assignStudentIds.includes(s.id))}
+            batches={batches}
+            departments={departments}
+            memberships={memberships}
+            onSaved={() => { setSelectedStudentIds(new Set()); invalidate("assignBatches"); }}
+            onClose={() => setAssignStudentIds(null)}
+          />
+        </LazySection>
       )}
 
       {showBulkUpload && (

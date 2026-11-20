@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 export type InstituteResource =
   | "meta" | "teachers" | "batches" | "students" | "studentCounts"
-  | "departments" | "sections" | "subjects" | "teaching" | "proctors" | "branding";
+  | "departments" | "sections" | "subjects" | "teaching" | "proctors" | "branding" | "studentBatches";
 
 export const instKey = (instituteId: string, resource: InstituteResource) =>
   ["institute", instituteId, resource] as const;
@@ -15,16 +15,17 @@ export const resolveKey = (userId: string) => ["institute-resolve", userId] as c
 
 const EVERYTHING: readonly InstituteResource[] = [
   "meta", "teachers", "batches", "students", "studentCounts", "departments", "sections", "subjects", "teaching",
-  "proctors",
+  "proctors", "studentBatches",
 ];
 
 /** What each dashboard mutation changes in the DB (incl. FK side effects), so only that is fetched again. */
 export const INVALIDATES = {
   addBatch: ["batches", "subjects"],        // may also insert the batch's subject
   deleteBatch: ["batches"],                 // soft delete (is_active=false); students keep batch_id
-  addStudent: ["students", "studentCounts"],
-  removeStudent: ["students", "studentCounts"],
-  bulkUpload: ["students", "studentCounts"], // also creates access codes (embedded in the students query)
+  addStudent: ["students", "studentCounts", "studentBatches"],     // the sync trigger (33) mirrors batch_id
+  removeStudent: ["students", "studentCounts", "studentBatches"],  // memberships cascade
+  bulkUpload: ["students", "studentCounts", "studentBatches"], // also creates access codes (embedded in the students query)
+  assignBatches: ["students", "studentCounts", "studentBatches"], // set_student_batches may change batch_id / lab_batch_id
   removeTeacher: ["teachers", "proctors"],  // a removed member's proctor_assignments go with them
   teacherRole: ["teachers"],                // promote / demote HOD, change department
   teaching: ["teaching"],                   // assign / remove subject or batch
@@ -33,7 +34,7 @@ export const INVALIDATES = {
   regenDeptCode: ["departments"],
   deleteDept: EVERYTHING,                   // sections cascade; teachers/batches/students lose the department
   addSection: ["sections"],
-  deleteSection: ["sections", "batches", "students", "studentCounts", "teachers", "proctors"], // members lose the section
+  deleteSection: ["sections", "batches", "students", "studentCounts", "teachers", "proctors", "studentBatches"], // members lose the section
   joinCode: ["meta"],
 } as const satisfies Record<string, readonly InstituteResource[]>;
 
@@ -121,6 +122,27 @@ export async function fetchStudents(id: string) {
     rows.push(...data);
   }
   return rows.map((s: any) => ({ ...s, batch_name: s.batches?.name || "Unassigned" }));
+}
+
+/**
+ * Student ↔ batch memberships (student_batches, migration 33), incl. every main + lab batch (mirrored by a trigger).
+ * Returns null when the table doesn't exist yet (33 not run) — the page then falls back to students.batch_id.
+ */
+export async function fetchStudentBatches(id: string): Promise<{ student_id: string; batch_id: string }[] | null> {
+  const rows: { student_id: string; batch_id: string }[] = [];
+  for (;;) {
+    const { data, error } = await supabase.from("student_batches")
+      .select("student_id, batch_id, batches!inner(institute_id)")
+      .eq("batches.institute_id", id)
+      .order("student_id", { ascending: true }).order("batch_id", { ascending: true })
+      .range(rows.length, rows.length + STUDENT_PAGE - 1);
+    if (error) {
+      if (error.code === "PGRST205" || error.code === "42P01") return null; // table not created yet
+      throw error;
+    }
+    rows.push(...(data || []).map((r: any) => ({ student_id: r.student_id, batch_id: r.batch_id })));
+    if (!data || data.length < STUDENT_PAGE) return rows;
+  }
 }
 
 /** Server-side counts (RLS applies), independent of how many rows a list request returns. */

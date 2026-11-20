@@ -28,7 +28,7 @@ import {
 
 const RESOURCES: InstituteResource[] = [
   "meta", "teachers", "batches", "students", "studentCounts", "departments", "sections", "subjects", "teaching",
-  "proctors", "branding",
+  "proctors", "branding", "studentBatches",
 ];
 
 beforeEach(() => {
@@ -45,7 +45,7 @@ describe("invalidation contract", () => {
     const qc = { invalidateQueries: vi.fn().mockResolvedValue(undefined) };
     await invalidateInstitute(qc as any, "inst-A", "addStudent");
     expect(qc.invalidateQueries.mock.calls.map(c => c[0].queryKey)).toEqual([
-      ["institute", "inst-A", "students"], ["institute", "inst-A", "studentCounts"],
+      ["institute", "inst-A", "students"], ["institute", "inst-A", "studentCounts"], ["institute", "inst-A", "studentBatches"],
     ]);
     expect(instKey("inst-A", "students")).not.toEqual(instKey("inst-B", "students"));
   });
