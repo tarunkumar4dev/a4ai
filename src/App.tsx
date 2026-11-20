@@ -36,6 +36,7 @@ import { countItems } from "@/lib/offline/secureQueue";
 /* ---------- Vercel Analytics ---------- */
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
+import { HOD_ENABLED } from "@/config/features";
 
 /* ---------- Lazy Marketing Pages ---------- */
 const LandingPage = lazy(() => import("./pages/LandingPage"));
@@ -355,9 +356,11 @@ const App = () => {
                       <Route 
                         path="/hod" 
                         element={
-                          <RoleRoute allow={['admin', 'hod']}>
-                            <HODDashboardPage />
-                          </RoleRoute>
+                          HOD_ENABLED ? (
+                            <RoleRoute allow={['admin', 'hod']}>
+                              <HODDashboardPage />
+                            </RoleRoute>
+                          ) : <Navigate to="/dashboard" replace /> /* HOD UI off (src/config/features.ts) */
                         } 
                       />
 
@@ -370,9 +373,9 @@ const App = () => {
                         } 
                       />
 
-                      <Route path="/admin" element={<Navigate to="/hod" replace />} />
-                      <Route path="/hod-dashboard" element={<Navigate to="/hod" replace />} />
-                      <Route path="/hod/dashboard" element={<Navigate to="/hod" replace />} /> 
+                      <Route path="/admin" element={<Navigate to={HOD_ENABLED ? "/hod" : "/dashboard"} replace />} />
+                      <Route path="/hod-dashboard" element={<Navigate to={HOD_ENABLED ? "/hod" : "/dashboard"} replace />} />
+                      <Route path="/hod/dashboard" element={<Navigate to={HOD_ENABLED ? "/hod" : "/dashboard"} replace />} /> 
                       <Route path="/q/:slug" element={<CommunityQuizPlayPage />} />
                       <Route path="/institute/students/:studentId" element={<RoleRoute allow={['admin', 'hod', 'proctor', 'teacher']}><StudentProfilePage /></RoleRoute>} />
                       <Route path="/join-institute" element={<PrivateRoute><JoinInstitutePage /></PrivateRoute>} />

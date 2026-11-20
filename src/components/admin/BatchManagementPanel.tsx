@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { teacherDisplayName } from "@/lib/teacherName";
+import { PROCTOR_UI_ENABLED } from "@/config/features";
 
 /* ───── TYPES ───── */
 interface Batch {
@@ -116,11 +117,11 @@ export default function BatchManagementPanel({ instituteId }: { instituteId: str
         .neq("is_active", false)
         .order("name");
 
-      // Student counts
+      // Student counts = every member of the batch (student_batches, migration 33: main + lab + extra batches)
       const bIds = (bData || []).map((b: any) => b.id);
       const { data: stuCounts } = await supabase
-        .from("students").select("batch_id")
-        .in("batch_id", bIds).eq("is_active", true);
+        .from("student_batches").select("batch_id, students!inner(is_active)")
+        .in("batch_id", bIds).eq("students.is_active", true);
       const cMap: Record<string, number> = {};
       stuCounts?.forEach((s: any) => { cMap[s.batch_id] = (cMap[s.batch_id] || 0) + 1; });
 
@@ -322,7 +323,7 @@ export default function BatchManagementPanel({ instituteId }: { instituteId: str
       {/* Header */}
       <div className="glass-panel rounded-[28px] sm:rounded-[40px] p-5 sm:p-7">
         <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">Batch &amp; Teacher Setup</h2>
-        <p className="text-sm text-slate-500 mt-1">Assign proctors to sections and subject teachers to batches.</p>
+        <p className="text-sm text-slate-500 mt-1">{PROCTOR_UI_ENABLED ? "Assign proctors to sections and subject teachers to batches." : "Assign subject teachers to batches."}</p>
       </div>
 
       {batches.length === 0 && (
@@ -348,8 +349,8 @@ export default function BatchManagementPanel({ instituteId }: { instituteId: str
               </div>
             </div>
 
-            {/* Proctor assignment */}
-            <div className="mb-5 p-4 rounded-2xl bg-slate-50/50 dark:bg-white/5 border border-slate-100 dark:border-white/10">
+            {/* Proctor assignment (hidden while the HOD / class-teacher UI is off — src/config/features.ts) */}
+            {PROCTOR_UI_ENABLED && <div className="mb-5 p-4 rounded-2xl bg-slate-50/50 dark:bg-white/5 border border-slate-100 dark:border-white/10">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-slate-500"><I.Shield /></span>
                 <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Proctor (class teacher)</span>
@@ -376,7 +377,7 @@ export default function BatchManagementPanel({ instituteId }: { instituteId: str
                   <span className="text-[11px] font-bold text-amber-600 inset-pill border-none px-3 py-1.5 rounded-full">Not set</span>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* Teaching assignments */}
             <div>

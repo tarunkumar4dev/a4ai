@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { useAttendanceQueue } from "@/hooks/useAttendanceQueue";
+import { HOD_ENABLED, PROCTOR_UI_ENABLED } from "@/config/features";
 import {
   attendanceKey, countDifferences, discardQueuedSave, flushAttendanceQueue, getQueuedSave, keepMyMarks,
   queueAttendanceSave, sendAttendance, waitForFlush, type AttendanceSave, type Marks,
@@ -356,9 +357,13 @@ export default function TeacherAttendanceView() {
     setQueuedLocal(false); seenQueued.current = false; baseMarks.current = {};
     try {
       const ds = toDateStr(date);
-      const { data: stu, error: stuErr } = await supabase.from("students").select("id, name, roll_no, parent_phone, parent_name")
-        .eq("batch_id", t.batchId).eq("is_active", true).order("roll_no");
+      // Every member of the batch (student_batches = main + lab + extra batches, migration 33) — the same list
+      // get_class_roster / save_class_attendance use since 34. students.batch_id alone misses extra-batch students.
+      const { data: stuRows, error: stuErr } = await supabase.from("students")
+        .select("id, name, roll_no, parent_phone, parent_name, student_batches!inner(batch_id)")
+        .eq("student_batches.batch_id", t.batchId).eq("is_active", true).order("roll_no");
       if (stuErr) throw stuErr;
+      const stu = (stuRows || []).map(({ student_batches: _sb, ...s }) => s);
       if (!stu?.length) { setLoadingSheet(false); return; }
 
       let sid = t.sessionId ?? null;
@@ -473,7 +478,7 @@ export default function TeacherAttendanceView() {
       setOriginal(students.map(s => ({ ...s }))); setDirty(false); setHasSaved(true);
       setSavedSheet(students.map(s => ({ ...s })));
       setLastSaved(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
-      const ctName = classTeachers[selected.batchId];
+      const ctName = PROCTOR_UI_ENABLED ? classTeachers[selected.batchId] : undefined;
       toast.success(`Saved: ${selected.subjectName} · ${classLabel(selected)}${ctName && ctName !== "you" ? ` · sent to ${ctName}` : ""}`);
     } else if (res.kind === "retry") {
       try {
@@ -619,7 +624,7 @@ export default function TeacherAttendanceView() {
         ) : noInstitute && !loading ? (
           <div className={`${CARD} p-4`}>
             <p className="text-sm font-semibold">You're not part of an institute yet</p>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Attendance works for classes in an institute. Join yours with the code from your admin or HOD.</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Attendance works for classes in an institute. Join yours with the code from your {HOD_ENABLED ? "admin or HOD" : "admin"}.</p>
             <Link to="/join-institute" className={`${BTN_PRIMARY} mt-3 ${FOCUS}`}>Join an institute</Link>
           </div>
         ) : (
@@ -646,7 +651,7 @@ export default function TeacherAttendanceView() {
                           <span className="block truncate text-sm font-semibold">{s.subjectName}</span>
                           <span className="block truncate text-xs text-gray-500 dark:text-slate-400">
                             {classLabel(s)}{s.room ? ` · Room ${s.room}` : ""} · {s.studentCount} students
-                            {classTeachers[s.batchId] ? ` · Class teacher: ${classTeachers[s.batchId]}` : ""}
+                            {PROCTOR_UI_ENABLED && classTeachers[s.batchId] ? ` · Class teacher: ${classTeachers[s.batchId]}` : ""}
                           </span>
                         </span>
                         {queued.some(q => q.body.key === attendanceKey(s.batchId, s.subjectId, toDateStr(date), s.timetableSlotId))
@@ -670,7 +675,7 @@ export default function TeacherAttendanceView() {
               {!loading && assigns.length === 0 ? (
                 <div className="rounded-xl bg-gray-50 px-4 py-4 dark:bg-slate-800">
                   <p className="text-sm font-semibold">No classes assigned to you yet</p>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Ask your HOD to assign you a subject in a section.</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">{HOD_ENABLED ? "Ask your HOD to assign you a subject in a section." : "Ask your admin to assign you a batch (Teachers → 📚 Batches)."}</p>
                 </div>
               ) : (
               <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end">
@@ -683,7 +688,7 @@ export default function TeacherAttendanceView() {
                       ? myBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)
                       : <>
                           {myBatches.length > 0 && <optgroup label="My classes">{myBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>}
-                          <optgroup label="Other classes (HOD / admin access)">{otherBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>
+                          <optgroup label={HOD_ENABLED ? "Other classes (HOD / admin access)" : "Other classes (admin access)"}>{otherBatches.map(b => <option key={b.id} value={b.id}>{b.nm}</option>)}</optgroup>
                         </>}
                   </select>
                 </label>
@@ -754,7 +759,7 @@ export default function TeacherAttendanceView() {
               <p className="truncate text-xs text-gray-500 dark:text-slate-400">
                 {date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} · {students.length} students
                 {selected.timeSlot && ` · ${selected.timeSlot}`}
-                {classTeachers[selected.batchId] && ` · Class teacher: ${classTeachers[selected.batchId]}`}
+                {PROCTOR_UI_ENABLED && classTeachers[selected.batchId] && ` · Class teacher: ${classTeachers[selected.batchId]}`}
               </p>
             </div>
           </div>
@@ -800,8 +805,14 @@ export default function TeacherAttendanceView() {
           </div>
         ) : students.length === 0 ? (
           <div className={`${CARD} p-4`}>
-            <p className="text-sm font-semibold">This class has no active students</p>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Students are added by your HOD or admin.</p>
+            {HOD_ENABLED ? (
+              <>
+                <p className="text-sm font-semibold">This class has no active students</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Students are added by your HOD or admin.</p>
+              </>
+            ) : (
+              <p className="text-sm font-semibold">Is batch me abhi koi student nahi. Admin se students add karwayein.</p>
+            )}
           </div>
         ) : (
           <>

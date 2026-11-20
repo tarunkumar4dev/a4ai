@@ -265,7 +265,7 @@ export function resolveRows(rows: Record<string, unknown>[], ctx: UploadContext)
 
     for (const f of found) {
       if (!f.item.department_id) {
-        warnings.push(`Batch "${f.item.name}" has no department yet — set it in the Batches tab so HOD/teachers of the department see it`);
+        warnings.push(`Batch "${f.item.name}" has no department yet — set it in the Batches tab so the department's teachers see it`);
       }
       if (f.how === "fuzzy") warnings.push(`"${f.item.name}" was picked from a partial name — check it`);
     }

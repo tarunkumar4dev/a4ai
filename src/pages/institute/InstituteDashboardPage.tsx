@@ -22,6 +22,8 @@ import {
   fetchProctors, fetchBranding, fetchStudentBatches,
 } from "@/pages/institute/instituteQueries";
 import { membershipMap, studentMatchesFilter } from "@/lib/studentUpload/batchAssign";
+import { HOD_ENABLED, PROCTOR_UI_ENABLED } from "@/config/features";
+import { pickSubjectForBatch, newSubjectCode } from "@/lib/teachingAssign";
 
 // Not needed for the first screen: loaded when their tab / modal opens (xlsx only comes with these)
 const loadAttendance = () => import("@/components/attendance/HODAttendanceDashboard");
@@ -469,6 +471,29 @@ export default function InstituteDashboardPage() {
     if (error) return toast.error(error.message);
     toast.success("Subject removed");
     invalidate("teaching");
+  };
+
+  /**
+   * One click: teacher → batch. Attendance needs a (batch, subject) pair in teaching_assignments, so the subject is
+   * picked from the batch (subject field / name / section) or, if the institute has none that fits, created with the
+   * batch's name. Both inserts are admin-only under RLS (subj_insert / ta_insert = is_institute_admin).
+   */
+  const assignBatchToTeacher = async (teacherUserId: string, batch: Batch) => {
+    if (!institute) return;
+    let subject = pickSubjectForBatch(batch, sections.find(s => s.id === batch.section_id)?.name ?? null, subjects);
+    if (!subject) {
+      const name = (batch.subject || batch.name).trim().slice(0, 80);
+      const { data, error } = await supabase.from("subjects").insert({
+        institute_id: institute.id,
+        department_id: batch.department_id || null,
+        name,
+        code: newSubjectCode(name, subjects.map(s => s.code)),
+      }).select("id, name, code, department_id").single();
+      if (error) return toast.error(`Couldn't create a subject for ${batch.name}: ${error.message}`);
+      subject = data;
+      invalidate("addBatch"); // refreshes subjects
+    }
+    await assignSubjectToTeacher(teacherUserId, batch.id, subject!.id);
   };
 
   /** Removes every subject this teacher teaches in this batch (teaching_assignments). */
@@ -1220,6 +1245,7 @@ export default function InstituteDashboardPage() {
                             </div>
                           </div>
 
+                          {HOD_ENABLED && (
                           <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 mb-4">
                             <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0"><Icons.Crown /></div>
                             <div className="flex-1 min-w-0">
@@ -1240,6 +1266,7 @@ export default function InstituteDashboardPage() {
                               <button onClick={() => setAssignHodDept(d)} className="btn-orange px-3 py-1.5 rounded-lg text-[11px]"><Icons.UserPlus /> {dHod ? "Replace" : "Assign"}</button>
                             </div>
                           </div>
+                          )}
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
                             {[
@@ -1347,13 +1374,13 @@ export default function InstituteDashboardPage() {
                   {filteredTeachers.map(t => (
                     <React.Fragment key={t.id}>
                       <div className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.role === "hod" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-500"}`}>
-                          {t.role === "hod" ? <Icons.Crown /> : <Icons.User />}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${HOD_ENABLED && t.role === "hod" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-500"}`}>
+                          {HOD_ENABLED && t.role === "hod" ? <Icons.Crown /> : <Icons.User />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-[13px] font-bold text-slate-800 truncate">{teacherDisplayName(t)}</p>
-                            {t.role === "hod" && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 inline-flex items-center gap-1"><Icons.Crown /> HOD</span>}
+                            {HOD_ENABLED && t.role === "hod" && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 inline-flex items-center gap-1"><Icons.Crown /> HOD</span>}
                             {t.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(t.department_id)}</span>}
                           </div>
                           <p className="text-[11px] font-medium text-slate-400">{t.joined_at ? `Joined ${fmtDate(t.joined_at)}` : "Pending"}</p>
@@ -1377,13 +1404,13 @@ export default function InstituteDashboardPage() {
                         >
                           📚 Batches ({(teacherBatchMap[t.user_id] || []).length})
                         </button>
-                        <button
+                        {PROCTOR_UI_ENABLED && <button
                           onClick={e => { e.stopPropagation(); setAssignProctorFor({ memberId: t.id, userId: t.user_id, teacherName: teacherDisplayName(t), deptId: t.department_id || null }); }}
                           className="text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors"
                           title="Make this teacher the class teacher (proctor) of a section"
                         >
                           👤 Class teacher ({(sectionsOfProctor[t.id] || []).length})
-                        </button>
+                        </button>}
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${t.status === "active" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>{t.status}</span>
                         <button onClick={e => { e.stopPropagation(); removeTeacher(t.id, t.user_id); }} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                       </div>
@@ -1844,7 +1871,7 @@ export default function InstituteDashboardPage() {
         </div>
       )}
 
-      {assignHodDept && (
+      {HOD_ENABLED && assignHodDept && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-slate-900/40 backdrop-blur-md anim-in" onClick={() => setAssignHodDept(null)}>
           <div className="glass-overlay rounded-[32px] p-8 max-w-md w-full relative anim-pop max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
@@ -1886,7 +1913,7 @@ export default function InstituteDashboardPage() {
               <button onClick={() => setAssignTeacherBatches(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
             </div>
             <p className="text-sm text-slate-500 mb-1">Teacher: <strong>{assignTeacherBatches.teacherName}</strong></p>
-            <p className="text-xs text-slate-400 mb-4">A teacher is assigned to a batch through a subject (teaching_assignments).</p>
+            <p className="text-xs text-slate-400 mb-4">Assign = the teacher can see this batch's students and mark its attendance. The subject is picked for you; choose another one if needed.</p>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {batches.map(b => {
                 const isAssigned = (teacherBatchMap[assignTeacherBatches.teacherId] || []).includes(b.id);
@@ -1906,16 +1933,25 @@ export default function InstituteDashboardPage() {
                         Remove
                       </button>
                     ) : (
-                      <select
-                        value=""
-                        onChange={e => { if (e.target.value) assignSubjectToTeacher(assignTeacherBatches.teacherId, b.id, e.target.value); }}
-                        className="px-2 py-1.5 rounded-lg text-xs font-bold bg-indigo-500 text-white outline-none cursor-pointer max-w-[150px]"
-                      >
-                        <option value="">Assign with subject…</option>
-                        {subjects.filter(s => !b.department_id || !s.department_id || s.department_id === b.department_id).map(s => (
-                          <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ""}</option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => assignBatchToTeacher(assignTeacherBatches.teacherId, b)}
+                          className="px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-colors"
+                        >
+                          Assign
+                        </button>
+                        <select
+                          value=""
+                          aria-label={`Assign ${b.name} with a specific subject`}
+                          onChange={e => { if (e.target.value) assignSubjectToTeacher(assignTeacherBatches.teacherId, b.id, e.target.value); }}
+                          className="px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 outline-none cursor-pointer max-w-[110px]"
+                        >
+                          <option value="">Subject…</option>
+                          {subjects.filter(s => !b.department_id || !s.department_id || s.department_id === b.department_id).map(s => (
+                            <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ""}</option>
+                          ))}
+                        </select>
+                      </div>
                     )}
                   </div>
                 );
@@ -1926,7 +1962,7 @@ export default function InstituteDashboardPage() {
         </div>
       )}
 
-      {assignProctorFor && (
+      {PROCTOR_UI_ENABLED && assignProctorFor && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAssignProctorFor(null)}>
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">

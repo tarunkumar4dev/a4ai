@@ -7,6 +7,7 @@ import { act } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isStudentOnly, resolveHomeRoute } from "./homeRoute";
+import { HOD_ENABLED } from "@/config/features";
 
 const auth = { role: "student" as string | null };
 const access = { value: null as null | Record<string, unknown> };
@@ -33,7 +34,9 @@ describe("resolveHomeRoute", () => {
     expect(resolveHomeRoute(none, "institute")).toBe("/institute");
   });
   it("institute staff follow the server's home_route, whatever they picked at signup", () => {
-    expect(resolveHomeRoute(hod, "student")).toBe("/hod");
+    expect(resolveHomeRoute({ primary_role: "admin", home_route: "/institute" }, "student")).toBe("/institute");
+    // /hod only while the HOD UI is on (src/config/features.ts; both states in features.test.tsx)
+    expect(resolveHomeRoute(hod, "student")).toBe(HOD_ENABLED ? "/hod" : "/dashboard");
     expect(resolveHomeRoute({ primary_role: "teacher", home_route: "" }, "teacher")).toBe("/dashboard");
   });
   it("access check failed (null) → signup role", () => {

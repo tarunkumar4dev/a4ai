@@ -307,8 +307,9 @@ export default function TeacherAnalyticsTab({
         batchFilter.length > 0
           ? supabase
               .from("students")
-              .select("id, name, roll_no, batch_id")
-              .in("batch_id", batchFilter)
+              // members of the batches through student_batches (main + lab + extra batches)
+              .select("id, name, roll_no, batch_id, student_batches!inner(batch_id)")
+              .in("student_batches.batch_id", batchFilter)
               .eq("is_active", true)
               .order("roll_no")
           : Promise.resolve({ data: [] });
@@ -359,13 +360,12 @@ export default function TeacherAnalyticsTab({
         asgQuery,
       ]);
 
-      const loadedStudents: StudentRecord[] = (stuRes.data || []).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        rollNo: s.roll_no || "",
-        batchId: s.batch_id,
-        batchName: batchMap.get(s.batch_id)?.name,
-      }));
+      const loadedStudents: StudentRecord[] = (stuRes.data || []).map((s: any) => {
+        // show the main batch if it's one of mine, else the first of my batches the student is in
+        const mine: string[] = (s.student_batches || []).map((m: { batch_id: string }) => m.batch_id);
+        const batchId = mine.includes(s.batch_id) ? s.batch_id : mine[0] ?? s.batch_id;
+        return { id: s.id, name: s.name, rollNo: s.roll_no || "", batchId, batchName: batchMap.get(batchId)?.name };
+      });
       setStudents(loadedStudents);
 
       const loadedSessions: AttendanceSession[] = (sessRes.data || []).map((s: any) => ({

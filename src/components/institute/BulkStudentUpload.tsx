@@ -10,6 +10,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { HOD_ENABLED } from "@/config/features";
 import * as XLSX from "xlsx";
 import {
   MAX_ROWS, UPLOAD_FIELDS, type ResolvedRow, type UploadField,
@@ -395,7 +396,7 @@ export default function BulkStudentUpload({
             {noDeptBatches.length > 0 && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
                 <b>Reminder:</b> {noDeptBatches.map(b => `"${b.name}"`).join(", ")} {noDeptBatches.length === 1 ? "has" : "have"} no department.
-                Students will be saved, but the department's HOD and teachers won't see {noDeptBatches.length === 1 ? "this batch" : "these batches"} until
+                Students will be saved, but the department's {HOD_ENABLED ? "HOD and teachers" : "teachers"} won't see {noDeptBatches.length === 1 ? "this batch" : "these batches"} until
                 you set the department (Batches tab).
               </div>
             )}
