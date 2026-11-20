@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { useMyScope } from "@/hooks/useMyScope";
 import { openWhatsApp as openWa } from "@/lib/whatsapp";
 import { indianMobile10, maskParentPhone, toStoredParentPhone } from "@/lib/parentNotify";
+import { HOD_ENABLED } from "@/config/features";
+import { displayBatchId, inBatch, mergeRosterRows } from "@/lib/teacherRoster";
 import {
   Users,
   Search,
@@ -53,6 +55,8 @@ export interface StudentRecord {
   roll_no?: string | null;
   class_level?: string | null;
   batch_id?: string | null;
+  /** every batch this student is in (student_batches + main + lab) — migration 33 */
+  batch_ids?: string[];
   batch_name?: string;
   section_id?: string | null;
   parent_name?: string | null;
@@ -190,23 +194,26 @@ export default function TeacherStudentsTab({
         return;
       }
 
-      // 3. Fetch Students of my batches (+ students of my proctor sections)
-      let stuQuery = supabase
-        .from("students")
-        .select("*")
-        .eq("institute_id", instId)
-        .eq("is_active", true);
-
-      if (!scope.isAdmin) {
-        const stuOr: string[] = [];
-        if (batchRows.length) stuOr.push(`batch_id.in.(${batchRows.map((b) => b.id).join(",")})`);
-        if (scope.proctorSectionIds.length) stuOr.push(`section_id.in.(${scope.proctorSectionIds.join(",")})`);
-        stuQuery = stuQuery.or(stuOr.join(","));
-      }
-
-      const { data: rawStudents, error: stuError } = await stuQuery.order("name", {
-        ascending: true,
-      });
+      // 3. Students of my batches = every MEMBER (student_batches, migration 33 — also mirrors batch_id / lab_batch_id),
+      //    so a student in "Maths" + "Science" shows for both teachers; + students of my proctor sections.
+      //    RLS (stu_select + stu_select_batch_member) decides which rows come back.
+      const myBatchIds = batchRows.map((b) => b.id);
+      const queries = scope.isAdmin
+        ? [supabase.from("students").select("*, student_batches(batch_id)").eq("institute_id", instId).eq("is_active", true)]
+        : [
+            ...(myBatchIds.length
+              ? [supabase.from("students").select("*, student_batches!inner(batch_id)")
+                  .eq("institute_id", instId).eq("is_active", true).in("student_batches.batch_id", myBatchIds)]
+              : []),
+            ...(scope.proctorSectionIds.length
+              ? [supabase.from("students").select("*").eq("institute_id", instId).eq("is_active", true)
+                  .in("section_id", scope.proctorSectionIds)]
+              : []),
+          ];
+      const results = await Promise.all(queries.map((q) => q.order("name", { ascending: true })));
+      const stuError = results.find((r) => r.error)?.error ?? null;
+      const rawStudents = stuError ? null : mergeRosterRows(...results.map((r) => r.data as any[]))
+        .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)));
 
       if (stuError) {
         console.error("Error loading students:", stuError);
@@ -279,8 +286,10 @@ export default function TeacherStudentsTab({
       }
 
       // 6. Enrich students
+      const myBatchSet = new Set(Object.keys(allBatchesMap));
       const enriched: StudentRecord[] = stuList.map((s: any) => {
-        const b = allBatchesMap[s.batch_id];
+        const shownBatch = displayBatchId(s, myBatchSet);
+        const b = shownBatch ? allBatchesMap[shownBatch] : undefined;
         const att = attendanceMap[s.id];
         return {
           ...s,
@@ -317,7 +326,7 @@ export default function TeacherStudentsTab({
     // Only admin / HOD may add students (RLS stu_insert), and only into batches they manage.
     const targetBatch = scope.manageableBatches.find((b) => b.id === addForm.batch_id);
     if (!scope.canManageStudents || !targetBatch) {
-      toast.error("Only the admin or HOD can add students to this batch.");
+      toast.error(HOD_ENABLED ? "Only the admin or HOD can add students to this batch." : "Only the admin can add students to this batch.");
       return;
     }
 
@@ -508,7 +517,7 @@ export default function TeacherStudentsTab({
 
     // Batch Filter
     if (selectedBatchId !== "all") {
-      result = result.filter((s) => s.batch_id === selectedBatchId);
+      result = result.filter((s) => inBatch(s, selectedBatchId));
     }
 
     // Attendance Filter
@@ -843,7 +852,7 @@ export default function TeacherStudentsTab({
 
           {/* Individual Batch Pills */}
           {batches.map((b) => {
-            const count = students.filter((s) => s.batch_id === b.id).length;
+            const count = students.filter((s) => inBatch(s, b.id)).length;
             const isSelected = selectedBatchId === b.id;
             return (
               <button
@@ -930,16 +939,20 @@ export default function TeacherStudentsTab({
           </div>
           <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-1">
             {noScope
-              ? "No batch is assigned to you yet — contact your HOD"
+              ? (HOD_ENABLED ? "No batch is assigned to you yet — contact your HOD" : "Aapko abhi koi batch assign nahi hua — admin se contact karein")
               : students.length === 0
               ? "No students enrolled yet"
               : "No students match your filter"}
           </h4>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-6">
             {noScope
-              ? "When your HOD assigns you as a subject or class teacher for a section, its students will appear here."
+              ? (HOD_ENABLED
+                  ? "When your HOD assigns you as a subject or class teacher for a section, its students will appear here."
+                  : "Jab admin aapko kisi batch me assign karega, us batch ke students yahan dikhenge.")
               : students.length === 0
-              ? "Your assigned batches currently have no enrolled students. Ask your HOD or institute administrator to add them."
+              ? (HOD_ENABLED
+                  ? "Your assigned batches currently have no enrolled students. Ask your HOD or institute administrator to add them."
+                  : "Is batch me abhi koi student nahi. Admin se students add karwayein.")
               : "Try adjusting your search query, batch filter, or attendance status to find who you're looking for."}
           </p>
           {students.length === 0 ? (

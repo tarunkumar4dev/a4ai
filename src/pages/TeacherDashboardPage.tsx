@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { type TestLinkInfo, testLinks } from "@/lib/uploadLink/testLink";
 import { DELIVERED_TESTS_FILTER } from "@/lib/paperQuality";
+import { effectiveHomeRoute, PROCTOR_UI_ENABLED } from "@/config/features";
 
 // Each tab is its own chunk: opening the dashboard downloads only what the
 // first screen needs; a tab's code is fetched the first time it is opened.
@@ -1257,8 +1258,9 @@ export default function TeacherDashboardPage() {
     // Don't redirect away from /dashboard?tab=agent — the agent workspace is for all staff roles
     const tab = new URLSearchParams(location.search).get("tab");
     if (tab === "agent") return;
-    if (access.home_route && access.home_route !== "/dashboard" && access.teaching_batch_ids.length === 0) {
-      navigate(access.home_route, { replace: true });
+    const home = effectiveHomeRoute(access.home_route); // /hod → /dashboard while the HOD UI is off
+    if (home !== "/dashboard" && access.teaching_batch_ids.length === 0) {
+      navigate(home, { replace: true });
     }
   }, [access, navigate, location.search]);
 
@@ -1378,7 +1380,7 @@ export default function TeacherDashboardPage() {
     { id: "assignments", Icon: Icons.FileText, label: "Assignments", color: "text-sky-500" },
     { id: "attendance", Icon: Icons.Clock, label: "Attendance", color: "text-violet-500" },
     { id: "students", Icon: Icons.Users, label: "Students", color: "text-orange-500" },
-    ...(isProctor ? [{ id: "section", Icon: Icons.Grid, label: "My Section", color: "text-teal-500" }] : []),
+    ...(isProctor && PROCTOR_UI_ENABLED ? [{ id: "section", Icon: Icons.Grid, label: "My Section", color: "text-teal-500" }] : []),
     { id: "modules", Icon: Icons.FolderOpen, label: "Modules", color: "text-purple-500" },
     { id: "tests", Icon: Icons.History, label: "Test History", color: "text-rose-500" },
     { id: "analytics", Icon: Icons.Chart, label: "Analytics", color: "text-emerald-500" },
@@ -2093,7 +2095,7 @@ export default function TeacherDashboardPage() {
               </div>
             )}
 
-            {activeTab === "section" && (
+            {activeTab === "section" && PROCTOR_UI_ENABLED && (
               <div className="space-y-6 sm:space-y-8">
                 <ProctorSectionView />
               </div>

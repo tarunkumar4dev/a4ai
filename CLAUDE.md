@@ -570,6 +570,30 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   batch_id/lab_batch_id). Teacher-side lists (useMyScope / TeacherStudentsTab) still filter on batch_id. Moving
   batch_id A → B drops an explicit extra membership of A. HOD can't bulk-upload / assign (admin only by request).
 
+- [x] HOD off + simple teacher attendance (20 Nov, branch feat/hod-off-simple-attendance, uncommitted).
+  Root cause (live, read-only): teacher Tarun has teaching_assignments Science/Science; Science batch has 0 students
+  by students.batch_id but 12 in student_batches → get_class_roster / save_class_attendance / class-list counts
+  (all read students.batch_id only) showed 0. Also found: a non-member user still has 2 teaching_assignments on
+  Education Beast's Mathematics batch, and a4_my_teaching_batch_ids didn't check membership → RLS let them see students.
+  `34_roster_from_student_batches.sql` (+ rollback = live bodies verbatim): a4_batch_student_ids (internal) used by
+  get_class_roster, save_class_attendance, get_my_teaching_targets, get_teacher_day_sessions, get_monthly_attendance;
+  a4_my_teaching_batch_ids now requires an active membership (or owner). Edit windows / audit trigger / policies
+  untouched. Local test `supabase/tests/34_roster_test.py` 25/25 (reproduces the bug first).
+  Frontend: `src/config/features.ts` HOD_ENABLED = false (+ PROCTOR_UI_ENABLED follows it, effectiveHomeRoute):
+  /hod → /dashboard, Departments HOD card + Assign HOD modal, teacher HOD badge, "Class teacher" button + modal,
+  Batch settings proctor picker, teacher "My Section" tab + attendance banner + "Class teacher:" labels, HOD texts.
+  Teacher students tab / teacher panel / batch settings counts from student_batches (`src/lib/teacherRoster.ts`).
+  Admin Teachers → 📚 Batches → one-click "Assign" (subject picked by `src/lib/teachingAssign.ts`, or created with
+  the batch's name; admin-only RLS). Tests: features.test.ts (flag off/on), teacherRoster, teachingAssign.
+- [x] 34 applied on live (20 Nov; all 5 RPCs use a4_batch_student_ids; as Rahul get_class_roster → Accounts Rahul Sir 21).
+  Live frontend still showed "0 students": the attendance SHEET reads `students` directly with `.eq("batch_id")`, not the
+  RPC → now `student_batches!inner(batch_id)` (TeacherAttendanceView), same for Assignments student counts and the
+  Analytics student list. Rule: never list a batch's students by students.batch_id — go through student_batches.
+- [ ] Deploy; test teacher Rahul → Accounts Rahul Sir shows 21, save; Tarun → Science 12; admin one-click Assign.
+- Known after 34: proctor / section RPCs (get_proctor_section_*, get_section_context, get_my_proctor_sections) still
+  count students.batch_id only (UI hidden while the flag is off). MSIT's HOD (hod.ece) now lands on /dashboard.
+  HOD / proctor DB powers are unchanged (RLS as before).
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

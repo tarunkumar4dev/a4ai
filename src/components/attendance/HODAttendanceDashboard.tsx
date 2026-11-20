@@ -21,6 +21,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import * as XLSX from "xlsx";
+import { HOD_ENABLED } from "@/config/features";
 import {
   Calendar as CalendarIcon,
   CalendarDays,
@@ -1168,7 +1169,7 @@ export default function HODAttendanceDashboard({
             <Users className="w-4 h-4 text-orange-500" />
             <span>Faculty Attendance Tracker</span>
             <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-700">
-              Admin / HOD
+              {HOD_ENABLED ? "Admin / HOD" : "Admin"}
             </span>
           </button>
 

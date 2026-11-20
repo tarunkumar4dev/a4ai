@@ -6,6 +6,7 @@
 import React from "react";
 import TeacherAttendanceView from "./TeacherAttendanceView";
 import { useProctorCheck } from "./ProctorSectionView";
+import { PROCTOR_UI_ENABLED } from "@/config/features";
 
 export default function AttendancePage({ onOpenSection }: {
   /** Switch the teacher dashboard to the "My Section" tab. Optional. */
@@ -15,7 +16,7 @@ export default function AttendancePage({ onOpenSection }: {
 
   return (
     <div className="w-full space-y-4 sm:space-y-6">
-      {isProctor && (
+      {isProctor && PROCTOR_UI_ENABLED && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-900">
           <p className="min-w-0 text-sm text-[#1B1B1B] dark:text-slate-200">
             You're class teacher of <b>{proctorSections.map(s => s.name).join(", ")}</b>. See every subject's marking, correct marks and export the monthly sheet in My Section.

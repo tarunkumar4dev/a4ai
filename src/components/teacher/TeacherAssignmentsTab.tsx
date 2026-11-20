@@ -253,11 +253,12 @@ export default function TeacherAssignmentsTab() {
 
       const batchStudentCount: Record<string, number> = {};
       if (instId && scopeIds.length > 0) {
+        // student_batches: a student counts in every batch they belong to (main + lab + extra)
         let countQuery = supabase
-          .from("students")
-          .select("batch_id")
-          .eq("institute_id", instId)
-          .eq("is_active", true);
+          .from("student_batches")
+          .select("batch_id, students!inner(institute_id, is_active)")
+          .eq("students.institute_id", instId)
+          .eq("students.is_active", true);
         if (!scope.isAdmin) countQuery = countQuery.in("batch_id", scopeIds);
         const { data: studentCounts } = await countQuery;
 

@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { useMyScope } from "@/hooks/useMyScope";
 import { Building2 } from "lucide-react";
+import { HOD_ENABLED, PROCTOR_UI_ENABLED } from "@/config/features";
 
 type InstituteInfo = {
   id: string;
@@ -108,11 +109,11 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
         // Student counts + the subject I teach in each batch. The batch name alone ("ECE 1") doesn't say
         // which subject it is for me, and a teacher can hold several subjects in the same class.
         const [{ data: stuCounts }, { data: taRows }] = await Promise.all([
+          // every member of my batches (student_batches, migration 33: main + lab + extra batches)
           supabase
-            .from("students")
-            .select("batch_id")
-            .eq("institute_id", instId)
-            .eq("is_active", true)
+            .from("student_batches")
+            .select("student_id, batch_id, students!inner(is_active)")
+            .eq("students.is_active", true)
             .in("batch_id", batchIds),
           userId
             ? supabase
@@ -145,7 +146,7 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
           subjects: subjMap[b.id] || [],
         }));
         setBatches(enriched);
-        setTotalStudents(Object.values(countMap).reduce((a, b) => a + b, 0));
+        setTotalStudents(new Set((stuCounts || []).map((s: any) => s.student_id)).size); // a student in 2 of my batches counts once
       }
 
       // 6. Logo: the <img> just tries the public URL and hides itself if there is none —
@@ -199,7 +200,7 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
 
   if (!institute || !member) return null;
 
-  const roleLabel = member.role === "hod" ? "HOD" : member.role === "admin" ? "Administrator" : "Teacher";
+  const roleLabel = member.role === "hod" && HOD_ENABLED ? "HOD" : member.role === "admin" ? "Administrator" : "Teacher";
 
   // ── Main Card ─────────────────────────────────────────────────
   return (
@@ -285,7 +286,7 @@ export default function InstituteTeacherPanel({ userId, userEmail }: { userId?: 
                           📖 {s}
                         </span>
                       ))}
-                      {b.isProctor && (
+                      {b.isProctor && PROCTOR_UI_ENABLED && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300">
                           Class teacher
                         </span>
