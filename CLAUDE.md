@@ -549,6 +549,27 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   - ProctorSectionView saves (reason required) are online-only. Sign-out deletes unsynced saves, with a warning.
   - `docs/offline-mode-idea.png` is the wider idea (drafts, notes, service worker); only attendance is built.
 
+- [x] Multi-batch students + bulk upload fix (20 Nov, branch feat/student-batches, uncommitted). Live read-only check:
+  no junction table; Education Beast = 0 students, depts "6th/7th/8th/10th class", "XI - Commerce", "XII - Commerce",
+  1 section (science, 10th), 1 batch "ECONOMICS BATCH 11th" with department_id + section_id NULL. Old bug: the file's
+  class column never chose a department (only the dropdown / a matched batch did) → dept NULL → "All" only.
+  `33_student_batches.sql` (+ rollback): student_batches (PK student+batch, FKs cascade), guard trigger (same
+  institute, assigned_by/at server-set), sync trigger students.batch_id/lab_batch_id → student_batches (kept as main/lab;
+  attendance still reads them), backfill, RLS (select = own/visible batch/stu_select scope; writes admin only),
+  agent_ro_read mirrored (agent_ro has no table grant on students either), additive stu_select_batch_member +
+  a4_can_view_student extra-batch rule, RPCs bulk_add_students (invoker, admin, ≤ 500, per-row sub-transaction,
+  advisory lock + 2500/min/institute) and set_student_batches (invoker, admin, one transaction, re-fills main/lab).
+  Local test `supabase/tests/33_student_batches_test.py` 63/63. Frontend: `src/lib/studentUpload/` (normalize = alias
+  matching built from the real dept/section/batch lists; resolveRows = preview + reasons + failed-rows CSV;
+  batchAssign = tri-state plan), BulkStudentUpload rewritten (preview green/yellow/red, report, CSV), students tab:
+  select + "Assign batches" + per-row batches button, chips from student_batches (fallback batch_id/lab_batch_id).
+- [x] 33 applied on live (20 Nov) + VERIFY: 0 unmirrored, 95 rows, 6 policies, anon none, triggers on, RLS on.
+  "ECONOMICS BATCH 11th" department = XI - Commerce.
+- [ ] Merge PR → deploy, then upload a test file as admin (Education Beast) + assign one student to 2 batches.
+- Known after 33: a student in an EXTRA batch is not on that batch's attendance roster (get_class_roster reads
+  batch_id/lab_batch_id). Teacher-side lists (useMyScope / TeacherStudentsTab) still filter on batch_id. Moving
+  batch_id A → B drops an explicit extra membership of A. HOD can't bulk-upload / assign (admin only by request).
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

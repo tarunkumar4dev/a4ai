@@ -1,13 +1,20 @@
 // src/components/institute/BulkStudentUpload.tsx
 // ──────────────────────────────────────────────────────────────────────
-// Bulk student upload via Excel/CSV
-// Supports: XLSX, XLS, CSV files
+// Bulk student upload via Excel/CSV (.xlsx, .xls, .csv · ≤ 5 MB · ≤ 500 rows)
+// 1. read the file in the browser → 2. preview: every row matched to a real department / section / batches
+//    (src/lib/studentUpload) — green = matched, yellow = check, red = can't upload, with the reason
+// 3. upload the ready rows with ONE call to bulk_add_students (migration 33: admin only, RLS applies,
+//    each row = student + all its batches, or nothing) → 4. report + failed rows as CSV.
 // ──────────────────────────────────────────────────────────────────────
 
-import React, { useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import {
+  MAX_ROWS, UPLOAD_FIELDS, type ResolvedRow, type UploadField,
+  autoMapHeaders, batchesWithoutDepartment, checkUploadFile, failedRowsCsv, resolveRows,
+} from "@/lib/studentUpload/resolveRows";
 
 interface Batch {
   id: string;
@@ -36,6 +43,15 @@ interface BulkStudentUploadProps {
   onUploadComplete: () => void;
   onClose: () => void;
 }
+
+interface ReportRow { row: number; name: string; reason: string; raw: Record<string, unknown> }
+interface Report { total: number; created: number; failed: ReportRow[] }
+
+const FIELD_LABEL: Record<UploadField, string> = {
+  name: "Name", roll_no: "Roll no", class_level: "Class", department: "Department", section: "Section",
+  batch: "Batch(es)", lab_batch: "Lab batch", parent_name: "Parent name", parent_phone: "Parent phone",
+  phone: "Student phone", email: "Email",
+};
 
 const Icons = {
   Upload: () => (
@@ -79,6 +95,29 @@ const Icons = {
   ),
 };
 
+const HOW_LABEL: Record<string, string> = {
+  exact: "", alias: "matched", fuzzy: "partial name", picked: "picked above", "from batch": "from batch", "from section": "section's batch",
+};
+
+function Chip({ name, how, tone }: { name: string; how?: string; tone: "ok" | "warn" }) {
+  const cls = tone === "ok" ? "bg-green-50 text-green-700 border-green-100" : "bg-amber-50 text-amber-800 border-amber-200";
+  const note = how ? HOW_LABEL[how] : "";
+  return (
+    <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-md border ${cls} mr-1 mb-0.5`}>
+      {name}{note ? <span className="font-medium opacity-70"> · {note}</span> : null}
+    </span>
+  );
+}
+
+function downloadCsv(content: string, filename: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export default function BulkStudentUpload({
   instituteId,
   batches,
@@ -88,298 +127,159 @@ export default function BulkStudentUpload({
   onClose,
 }: BulkStudentUploadProps) {
   const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [previewData, setPreviewData] = useState<any[]>([]);
-  const [errors, setErrors] = useState<string[]>([]);
-  const [step, setStep] = useState<"upload" | "preview" | "processing">("upload");
-  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [step, setStep] = useState<"upload" | "preview" | "processing" | "report">("upload");
+  const [mapping, setMapping] = useState<Partial<Record<UploadField, string>>>({});
   const [selectedBatch, setSelectedBatch] = useState<string>("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("");
   const [selectedSection, setSelectedSection] = useState<string>("");
+  const [onlyProblems, setOnlyProblems] = useState(false);
+  const [report, setReport] = useState<Report | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const requiredFields = ["name"];
-  const allFields = ["name", "roll_no", "class_level", "parent_name", "parent_phone", "phone", "email", "batch", "lab_batch"];
+  const resolved = useMemo<ResolvedRow[]>(() => resolveRows(rows, {
+    departments, sections, batches, mapping,
+    pickedDepartmentId: selectedDepartment, pickedSectionId: selectedSection, pickedBatchId: selectedBatch,
+  }), [rows, departments, sections, batches, mapping, selectedDepartment, selectedSection, selectedBatch]);
+
+  const ready = resolved.filter(r => r.payload);
+  const problems = resolved.filter(r => !r.payload);
+  const warned = resolved.filter(r => r.status === "warn");
+  const noDeptBatches = useMemo(() => batchesWithoutDepartment(resolved), [resolved]);
+
+  // Reminder for batches without a department (e.g. "ECONOMICS BATCH 11th" on 20 Nov 2026)
+  useEffect(() => {
+    if (noDeptBatches.length > 0) {
+      console.warn("[bulk upload] batches without department_id — set them in the Batches tab:",
+        noDeptBatches.map(b => `${b.name} (${b.id})`));
+    }
+  }, [noDeptBatches]);
+
+  const reset = () => {
+    setStep("upload"); setFile(null); setRows([]); setHeaders([]); setReport(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
-
-    const validTypes = [
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/vnd.ms-excel",
-      "text/csv",
-    ];
-    const extension = selectedFile.name.split(".").pop()?.toLowerCase();
-    const validExtensions = ["xlsx", "xls", "csv"];
-
-    if (!validTypes.includes(selectedFile.type) && !validExtensions.includes(extension || "")) {
-      toast.error("Please upload an Excel file (.xlsx, .xls, or .csv)");
+    const problem = checkUploadFile(selectedFile);
+    if (problem) {
+      toast.error(problem);
+      e.target.value = "";
       return;
     }
-
     setFile(selectedFile);
     parseFile(selectedFile);
   };
 
-  const parseFile = (file: File) => {
+  const parseFile = (f: File) => {
     const reader = new FileReader();
+    reader.onerror = () => toast.error("Could not read the file.");
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        if (!sheet) { toast.error("The file has no sheet."); return; }
+        // Header row as written (also columns that are empty in the first data row)
+        const headerRow = (XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false })[0] ?? [])
+          .map(h => String(h ?? "").trim()).filter(Boolean);
+        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", blankrows: false })
+          .filter(r => Object.values(r).some(v => String(v ?? "").trim() !== ""));
 
-        if (jsonData.length === 0) {
+        if (json.length === 0 || headerRow.length === 0) {
           toast.error("The file appears to be empty");
           return;
         }
-
-        const headers = Object.keys(jsonData[0]);
-        const autoMapping: Record<string, string> = {};
-        // Order matters for the loose (includes) pass: more specific fields first —
-        // parent_phone before phone ("parent mobile"), lab_batch before batch ("lab_batch").
-        const fieldMap: Record<string, string[]> = {
-          name: ["name", "student name", "student_name", "full name", "fullname", "studentsname", "candidate name", "student"],
-          roll_no: ["roll", "roll no", "roll_no", "roll number", "rollnumber", "rollno", "enrollment", "enrollment no", "enrollment number", "adm no", "admission no", "id"],
-          class_level: ["class", "class level", "class_level", "grade", "standard", "year", "sem", "semester", "branch"],
-          parent_name: ["parent", "parent name", "parent_name", "father", "father name", "father's name", "fathers name", "mother", "guardian"],
-          parent_phone: ["parent phone", "parent_phone", "parent mobile", "parent contact", "father phone", "father mobile", "mother phone", "guardian phone", "guardian mobile"],
-          phone: ["phone", "student phone", "student mobile", "mobile", "mobile number", "mobile no", "phone number", "contact", "contact no", "whatsapp"],
-          email: ["email", "student email", "email id", "mail", "email address"],
-          lab_batch: ["lab batch", "lab_batch", "lab group"],
-          batch: ["batch", "batch name", "section", "group", "class batch"]
-        };
-        const clean = (v: string) => v.toLowerCase().trim();
-        const strip = (v: string) => clean(v).replace(/[^a-z0-9]/g, "");
-        const usedHeaders = new Set<string>();
-        const assign = (loose: boolean) => {
-          for (const [field, aliases] of Object.entries(fieldMap)) {
-            if (autoMapping[field]) continue;
-            const header = headers.find(h => !usedHeaders.has(h) && aliases.some(alias =>
-              loose
-                ? strip(h).includes(strip(alias))
-                : clean(h) === clean(alias) || strip(h) === strip(alias)));
-            if (header) {
-              autoMapping[field] = header;
-              usedHeaders.add(header);
-            }
-          }
-        };
-        assign(false); // 1. exact header matches win ("phone" → phone, "parent_phone" → parent_phone)
-        assign(true);  // 2. then loose includes-matches for whatever is still unmapped
-
-        setMapping(autoMapping);
-        setPreviewData(jsonData);
+        if (json.length > MAX_ROWS) {
+          toast.error(`The file has ${json.length} students. Upload at most ${MAX_ROWS} at a time — split the file.`);
+          return;
+        }
+        const map = autoMapHeaders(headerRow);
+        setHeaders(headerRow);
+        setMapping(map);
+        setRows(json);
         setStep("preview");
-        setErrors([]);
-        toast.success(`Loaded ${jsonData.length} rows from ${file.name}`);
+        if (!map.name) toast.warning('No "Name" column found — pick it under Column mapping.');
+        else toast.success(`Loaded ${json.length} rows from ${f.name}`);
       } catch (error) {
         console.error("Parse error:", error);
         toast.error("Failed to parse the file. Please check the format.");
       }
     };
-    reader.readAsArrayBuffer(file);
+    reader.readAsArrayBuffer(f);
   };
 
-  const getMappedValue = (row: any, field: string): string => {
-    const colName = mapping[field];
-    return colName ? (row[colName] ?? "").toString().trim() : "";
-  };
-
-  const validateRow = (row: any, index: number): string | null => {
-    const name = getMappedValue(row, "name");
-    if (!name) {
-      return `Row ${index + 2}: Student name is required`;
-    }
-    return null;
-  };
-
-  const handlePreviewSubmit = () => {
-    const newErrors: string[] = [];
-    previewData.forEach((row, index) => {
-      const error = validateRow(row, index);
-      if (error) newErrors.push(error);
+  const setField = (field: UploadField, header: string) => {
+    setMapping(prev => {
+      const next = { ...prev };
+      // one header → one field
+      for (const k of Object.keys(next) as UploadField[]) if (next[k] === header) delete next[k];
+      if (header) next[field] = header; else delete next[field];
+      return next;
     });
-
-    if (newErrors.length > 0) {
-      setErrors(newErrors);
-      toast.error(`Found ${newErrors.length} validation errors`);
-      return;
-    }
-
-    setStep("processing");
-    uploadStudents();
   };
 
   const uploadStudents = async () => {
-    const hasBatchColumn = Boolean(mapping["batch"]);
-    let targetBatch = selectedBatch;
-
-    // If no batch is selected and no batch in column, check if there's only 1 batch
-    if (!targetBatch && !hasBatchColumn) {
-      if (batches.length === 1) {
-        targetBatch = batches[0].id;
-        setSelectedBatch(targetBatch);
-      } else if (batches.length > 1) {
-        toast.error("Please select a Batch for the students from the dropdown.");
-        setStep("preview");
-        return;
-      }
+    if (ready.length === 0) {
+      toast.error("No rows are ready to upload. Fix the red rows first.");
+      return;
     }
-
-    setUploading(true);
-    let successCount = 0;
-    let failCount = 0;
-    let lastErrorMsg = "";
-    const hasLabColumn = Boolean(mapping["lab_batch"]);
-    let labUnmatched = 0;
-    const sectionName = (id?: string | null) => sections.find(s => s.id === id)?.name || "";
+    setStep("processing");
+    const clientFailed: ReportRow[] = problems.map(r => ({
+      row: r.row, name: r.name, reason: r.errors.join("; "), raw: r.raw,
+    }));
 
     try {
-      const preparedRecords: any[] = [];
-
-      for (let i = 0; i < previewData.length; i++) {
-        const row = previewData[i];
-        const studentName = getMappedValue(row, "name");
-        if (!studentName) continue;
-
-        // Resolve batch — exact name first; a partial match never picks a lab batch
-        // ("ECE-2" must resolve to the main batch "ECE-2", not "ECE-2 A").
-        let rowBatchId = targetBatch || null;
-        if (hasBatchColumn) {
-          const rowBatchName = getMappedValue(row, "batch").toLowerCase();
-          if (rowBatchName) {
-            const foundBatch =
-              batches.find(b => b.name.toLowerCase().trim() === rowBatchName) ||
-              batches.find(b => !b.is_lab && !/ [abc]$/i.test(b.name.trim()) && b.name.toLowerCase().includes(rowBatchName));
-            if (foundBatch) rowBatchId = foundBatch.id;
-          }
-        }
-        const rowBatch = batches.find(b => b.id === rowBatchId);
-        // Section / department: dropdown wins, else taken from the matched batch (so they are never silently null)
-        const rowSectionId = selectedSection || rowBatch?.section_id || null;
-        const rowDepartmentId = selectedDepartment || rowBatch?.department_id || null;
-
-        // Lab batch ("ECE-2 A" or just "A") → a batch of the SAME section. Column absent → field not sent at all.
-        let labBatchId: string | null = null;
-        if (hasLabColumn) {
-          const labVal = getMappedValue(row, "lab_batch").toLowerCase();
-          if (labVal) {
-            const secName = sectionName(rowSectionId).toLowerCase();
-            const lab = batches.find(b =>
-              b.section_id === rowSectionId && b.id !== rowBatchId &&
-              (b.name.toLowerCase().trim() === labVal || (!!secName && b.name.toLowerCase().trim() === `${secName} ${labVal}`)));
-            if (lab) labBatchId = lab.id;
-            else labUnmatched++;
-          }
-        }
-
-        // Parent's number → parent_phone; the student's own number → phone (06a)
-        const phoneVal = getMappedValue(row, "parent_phone") || null;
-
-        preparedRecords.push({
-          institute_id: instituteId,
-          name: studentName,
-          roll_no: getMappedValue(row, "roll_no") || null,
-          class_level: getMappedValue(row, "class_level") || null,
-          parent_name: getMappedValue(row, "parent_name") || null,
-          parent_phone: phoneVal,
-          ...(mapping["phone"] ? { phone: getMappedValue(row, "phone") || null } : {}), // needs 06a_students_phone.sql
-          email: getMappedValue(row, "email") || null,
-          batch_id: rowBatchId,
-          department_id: rowDepartmentId,
-          section_id: rowSectionId,
-          ...(hasLabColumn ? { lab_batch_id: labBatchId } : {}), // needs 05_student_portal.sql
-          is_active: true,
-        });
-      }
-
-      if (preparedRecords.length === 0) {
-        toast.error("No valid student rows found to upload.");
+      const { data, error } = await supabase.rpc("bulk_add_students", {
+        p_institute_id: instituteId,
+        p_rows: ready.map(r => r.payload!),
+      });
+      if (error) {
+        const missing = error.code === "PGRST202" || error.code === "42883";
+        toast.error(missing
+          ? "The server isn't updated for this upload yet (migration 33_student_batches.sql). Ask the admin to run it."
+          : error.code === "42501" ? "Only an institute admin can bulk-upload students."
+          : `Upload failed: ${error.message}`);
         setStep("preview");
-        setUploading(false);
         return;
       }
 
-      // Bulk insert in chunks of 50
-      const CHUNK_SIZE = 50;
-      for (let i = 0; i < preparedRecords.length; i += CHUNK_SIZE) {
-        const chunk = preparedRecords.slice(i, i + CHUNK_SIZE);
-        const { data, error } = await supabase
-          .from("students")
-          .insert(chunk)
-          .select("id");
+      const res = data as { created: number; failed: number; results: { row: number; ok: boolean; error?: string }[] };
+      const byRow = new Map(ready.map(r => [r.row, r]));
+      const serverFailed: ReportRow[] = (res.results || []).filter(x => !x.ok).map(x => {
+        const r = byRow.get(x.row);
+        return { row: x.row, name: r?.name ?? "", reason: x.error || "Not saved", raw: r?.raw ?? {} };
+      });
+      const failed = [...clientFailed, ...serverFailed].sort((a, b) => a.row - b.row);
+      setReport({ total: resolved.length, created: res.created ?? 0, failed });
+      setStep("report");
 
-        if (error) {
-          console.error("Batch insert error, falling back to per-row insert:", error);
-          lastErrorMsg = error.message;
-          // Fallback to row-by-row insert for this chunk so one invalid row doesn't break others
-          for (const item of chunk) {
-            const { error: rowErr } = await supabase.from("students").insert(item);
-            if (rowErr) {
-              console.error("Row insert error:", rowErr, item);
-              failCount++;
-              lastErrorMsg = rowErr.message;
-            } else {
-              successCount++;
-            }
-          }
-        } else {
-          successCount += (data?.length || chunk.length);
-        }
-      }
-
-      if (successCount > 0) {
-        toast.success(`Successfully uploaded ${successCount} student${successCount !== 1 ? "s" : ""}!${failCount > 0 ? ` (${failCount} failed)` : ""}`);
-        if (labUnmatched > 0) {
-          toast.warning(`${labUnmatched} row(s): lab batch not found in their section — uploaded without a lab batch. Create lab batches A/B/C in /hod first.`);
-        }
-        // Auto-generate access codes for newly uploaded students
-        try {
-          await supabase.rpc("generate_student_access_codes", { p_institute_id: instituteId });
-          toast.success("Access codes generated!");
-        } catch { /* codes can be generated later */ }
-
+      if ((res.created ?? 0) > 0) {
+        // Access codes for the new students (admin/HOD only, server-side)
+        const { error: codeErr } = await supabase.rpc("generate_student_access_codes", { p_institute_id: instituteId });
+        if (codeErr) toast.warning("Students saved, but access codes weren't generated. Use “Access Codes” later.");
         onUploadComplete();
-        onClose();
-      } else {
-        toast.error(`Upload failed: ${lastErrorMsg || "Could not insert students into database"}`);
-        setStep("preview");
       }
-    } catch (error: any) {
-      console.error("Upload process error:", error);
-      toast.error(`Upload failed: ${error.message || "An unexpected error occurred"}`);
+    } catch (err: any) {
+      console.error("Upload process error:", err);
+      toast.error(`Upload failed: ${err?.message || "network error"}. Nothing was changed for rows that didn't reach the server.`);
       setStep("preview");
-    } finally {
-      setUploading(false);
     }
   };
 
-  const downloadTemplate = () => {
-    const defaultBatchName = batches[0]?.name || "CSE - 1";
-    const exampleData = [
-      {
-        "Student Name": "Aarav Sharma",
-        "Roll No": "101",
-        "Class Level": "BTECH",
-        "Parent Name": "Rajesh Sharma",
-        "Mobile Number": "9876543210",
-        "Email": "aarav@example.com",
-        "Batch": defaultBatchName,
-      },
-      {
-        "Student Name": "Priya Verma",
-        "Roll No": "102",
-        "Class Level": "BTECH",
-        "Parent Name": "Suresh Verma",
-        "Mobile Number": "9876543211",
-        "Email": "priya@example.com",
-        "Batch": defaultBatchName,
-      },
-    ];
+  const downloadFailed = (list: ReportRow[]) => {
+    downloadCsv(failedRowsCsv(headers, list), `students_to_fix_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
 
+  const downloadTemplate = () => {
+    const d = departments[0]?.name || "10th class";
+    const exampleData = [
+      { "Student Name": "Aarav Sharma", "Roll No": "101", "Class": d, "Section": sections[0]?.name || "", "Batch": batches.filter(b => !b.is_lab).slice(0, 2).map(b => b.name).join(", "), "Parent Name": "Rajesh Sharma", "Parent Phone": "9876543210", "Email": "aarav@example.com" },
+      { "Student Name": "Priya Verma", "Roll No": "102", "Class": "X", "Section": "", "Batch": "", "Parent Name": "Suresh Verma", "Parent Phone": "9876543211", "Email": "" },
+    ];
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(exampleData);
     XLSX.utils.book_append_sheet(wb, ws, "Students");
@@ -387,20 +287,20 @@ export default function BulkStudentUpload({
     toast.success("Template downloaded!");
   };
 
+  const shown = onlyProblems ? resolved.filter(r => r.status !== "ok") : resolved;
+  const selectCls = "w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-[#FF7043] focus:ring-2 focus:ring-[#FF7043]/20";
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-slate-900/40 backdrop-blur-md">
-      <div className="bg-white rounded-[32px] p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto relative shadow-2xl border border-slate-100">
+      <div className="bg-white rounded-[32px] p-6 sm:p-8 max-w-4xl w-full max-h-[92vh] overflow-y-auto relative shadow-2xl border border-slate-100">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-2xl font-black text-slate-900">Bulk Upload Students</h3>
             <p className="text-sm text-slate-500 font-medium mt-1">
-              Upload multiple students at once using an Excel file
+              Excel or CSV · up to {MAX_ROWS} students · 5 MB
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
-          >
+          <button onClick={onClose} aria-label="Close" className="p-2 rounded-xl hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600">
             <Icons.X />
           </button>
         </div>
@@ -411,225 +311,157 @@ export default function BulkStudentUpload({
               className="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center hover:border-[#FF7043] transition-colors cursor-pointer bg-slate-50/50"
               onClick={() => fileInputRef.current?.click()}
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" />
               <div className="w-16 h-16 rounded-2xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center mx-auto mb-4">
                 <Icons.Upload />
               </div>
               <p className="text-lg font-bold text-slate-800">Drop your Excel file here</p>
-              <p className="text-sm text-slate-500 font-medium mt-1">
-                or click to browse · Supports .xlsx, .xls, .csv
+              <p className="text-sm text-slate-500 font-medium mt-1">or click to browse · .xlsx, .xls, .csv</p>
+              <p className="mt-4 text-xs text-slate-400">
+                Required: <span className="font-bold text-[#FF7043]">Name</span> · Class (X, 10, 10th, Class 10 all work) ·
+                Batch (several allowed: <span className="font-mono">science, maths 10</span>) · Section · Lab batch · Roll no · Parent phone
               </p>
-              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400">
-                <span>Required column:</span>
-                <span className="font-bold text-[#FF7043]">name</span>
-                <span>·</span>
-                <span>Optional:</span>
-                <span className="font-bold">roll_no, class_level, parent_name, parent_phone</span>
-              </div>
             </div>
 
             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center">
-                  <Icons.FileSpreadsheet />
-                </div>
+                <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center"><Icons.FileSpreadsheet /></div>
                 <div>
                   <p className="text-sm font-bold text-slate-800">Download Template</p>
-                  <p className="text-xs text-slate-500">Get a sample file with the correct format</p>
+                  <p className="text-xs text-slate-500">Uses your real class and batch names</p>
                 </div>
               </div>
-              <button
-                onClick={downloadTemplate}
-                className="px-4 py-2 rounded-lg bg-[#FF7043] text-white font-bold text-sm hover:bg-[#F4511E] transition-colors"
-              >
-                Download
-              </button>
+              <button onClick={downloadTemplate} className="px-4 py-2 rounded-lg bg-[#FF7043] text-white font-bold text-sm hover:bg-[#F4511E] transition-colors">Download</button>
             </div>
 
             <div className="flex justify-end gap-3">
-              <button
-                onClick={onClose}
-                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
+              <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
             </div>
           </div>
         )}
 
         {step === "preview" && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl border border-green-100">
-              <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center">
-                <Icons.FileSpreadsheet />
-              </div>
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="w-10 h-10 rounded-xl bg-green-100 text-green-600 flex items-center justify-center"><Icons.FileSpreadsheet /></div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-slate-800 truncate">{file?.name}</p>
-                <p className="text-xs text-slate-500">{previewData.length} rows loaded</p>
+                <p className="text-xs text-slate-500">{rows.length} rows</p>
               </div>
-              <button
-                onClick={() => { setStep("upload"); setFile(null); setPreviewData([]); }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-              >
-                <Icons.X />
-              </button>
+              <button onClick={reset} aria-label="Choose another file" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.X /></button>
             </div>
 
-            <div>
-              <p className="text-sm font-bold text-slate-800 mb-2">Column Mapping</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 bg-slate-50 rounded-xl p-3">
-                {allFields.map((field) => (
-                  <div key={field} className="flex items-center gap-2">
-                    <span className={`text-xs font-bold ${requiredFields.includes(field) ? "text-[#FF7043]" : "text-slate-400"}`}>
-                      {field} {requiredFields.includes(field) && "*"}
-                    </span>
-                    <span className="text-xs text-slate-500">→</span>
-                    <span className="text-xs font-medium text-slate-700">
-                      {mapping[field] || <span className="text-slate-400">(not mapped)</span>}
-                    </span>
-                  </div>
+            <details className="bg-slate-50 rounded-xl p-3" open={!mapping.name}>
+              <summary className="text-sm font-bold text-slate-800 cursor-pointer">Column mapping</summary>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
+                {UPLOAD_FIELDS.map(field => (
+                  <label key={field} className="flex items-center gap-2 text-xs">
+                    <span className={`w-24 shrink-0 font-bold ${field === "name" ? "text-[#FF7043]" : "text-slate-500"}`}>{FIELD_LABEL[field]}{field === "name" && " *"}</span>
+                    <select className="flex-1 min-w-0 p-1.5 bg-white border border-slate-200 rounded-lg text-xs" value={mapping[field] ?? ""} onChange={e => setField(field, e.target.value)}>
+                      <option value="">(none)</option>
+                      {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </label>
                 ))}
               </div>
-              <p className="text-xs text-slate-400 mt-2">
-                * Required field. Make sure your file has a column named "name".
-              </p>
-            </div>
+              <p className="text-[11px] text-slate-400 mt-2">Class is used to find the department when there is no Department column.</p>
+            </details>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Department (optional)</label>
-                <select
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-[#FF7043] focus:ring-2 focus:ring-[#FF7043]/20"
-                  value={selectedDepartment}
-                  onChange={(e) => {
-                    setSelectedDepartment(e.target.value);
-                    setSelectedSection("");
-                  }}
-                >
-                  <option value="">None</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
+                <label className="text-xs font-bold text-slate-500 block mb-1">Department for all rows</label>
+                <select className={selectCls} value={selectedDepartment} onChange={e => { setSelectedDepartment(e.target.value); setSelectedSection(""); setSelectedBatch(""); }}>
+                  <option value="">Use the file (Class / Department)</option>
+                  {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Section (optional)</label>
-                <select
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-[#FF7043] focus:ring-2 focus:ring-[#FF7043]/20"
-                  value={selectedSection}
-                  onChange={(e) => setSelectedSection(e.target.value)}
-                  disabled={!selectedDepartment}
-                >
-                  <option value="">None</option>
-                  {sections
-                    .filter((s) => s.department_id === selectedDepartment)
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
+                <label className="text-xs font-bold text-slate-500 block mb-1">Section for all rows</label>
+                <select className={selectCls} value={selectedSection} onChange={e => setSelectedSection(e.target.value)} disabled={!selectedDepartment}>
+                  <option value="">Use the file</option>
+                  {sections.filter(s => s.department_id === selectedDepartment).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">
-                  Batch {mapping["batch"] ? <span className="text-slate-400 font-normal">(Auto-mapped from file, or select override)</span> : <span className="text-red-500">*</span>}
-                </label>
-                <select
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:border-[#FF7043] focus:ring-2 focus:ring-[#FF7043]/20"
-                  value={selectedBatch}
-                  onChange={(e) => setSelectedBatch(e.target.value)}
-                >
-                  <option value="">{mapping["batch"] ? "Use 'Batch' from Excel" : "Select a Batch..."}</option>
-                  {(selectedDepartment && batches.some((b: any) => b.department_id === selectedDepartment)
-                    ? batches.filter((b: any) => !b.department_id || b.department_id === selectedDepartment)
-                    : batches
-                  ).map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
+                <label className="text-xs font-bold text-slate-500 block mb-1">Batch for all rows</label>
+                <select className={selectCls} value={selectedBatch} onChange={e => setSelectedBatch(e.target.value)}>
+                  <option value="">Use the file (Batch column)</option>
+                  {batches.filter(b => !selectedDepartment || !b.department_id || b.department_id === selectedDepartment)
+                    .map(b => <option key={b.id} value={b.id}>{b.name}{b.department_id ? "" : " (no department)"}</option>)}
                 </select>
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-bold text-slate-800">Preview (first 5 rows)</p>
-                {errors.length > 0 && (
-                  <span className="text-xs font-bold text-red-500 flex items-center gap-1">
-                    <Icons.AlertCircle /> {errors.length} error(s)
-                  </span>
-                )}
-              </div>
-              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 sticky top-0">
-                    <tr>
-                      {allFields.map((field) => (
-                        <th key={field} className="px-3 py-2 text-left text-xs font-bold text-slate-500">
-                          {field} {requiredFields.includes(field) && "*"}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewData.slice(0, 5).map((row, idx) => (
-                      <tr key={idx} className="border-t border-slate-100">
-                        {allFields.map((field) => (
-                          <td key={field} className="px-3 py-2 text-xs text-slate-700">
-                            {getMappedValue(row, field) || <span className="text-slate-300">—</span>}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {previewData.length > 5 && (
-                <p className="text-xs text-slate-400 mt-1">+ {previewData.length - 5} more rows</p>
-              )}
-            </div>
-
-            {errors.length > 0 && (
-              <div className="p-4 bg-red-50 rounded-xl border border-red-100 max-h-32 overflow-y-auto">
-                <p className="text-xs font-bold text-red-600 mb-1">Validation Errors:</p>
-                <ul className="space-y-0.5">
-                  {errors.slice(0, 10).map((err, idx) => (
-                    <li key={idx} className="text-xs text-red-500 flex items-start gap-1">
-                      <span>•</span>
-                      <span>{err}</span>
-                    </li>
-                  ))}
-                  {errors.length > 10 && (
-                    <li className="text-xs text-red-400">+ {errors.length - 10} more errors</li>
-                  )}
-                </ul>
+            {noDeptBatches.length > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                <b>Reminder:</b> {noDeptBatches.map(b => `"${b.name}"`).join(", ")} {noDeptBatches.length === 1 ? "has" : "have"} no department.
+                Students will be saved, but the department's HOD and teachers won't see {noDeptBatches.length === 1 ? "this batch" : "these batches"} until
+                you set the department (Batches tab).
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+              <span className="px-2.5 py-1 rounded-full bg-green-50 text-green-700">{ready.length - warned.length} ready</span>
+              {warned.length > 0 && <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800">{warned.length} ready, check</span>}
+              {problems.length > 0 && <span className="px-2.5 py-1 rounded-full bg-red-50 text-red-600">{problems.length} can't upload</span>}
+              <label className="ml-auto flex items-center gap-1.5 text-slate-500 font-medium cursor-pointer">
+                <input type="checkbox" checked={onlyProblems} onChange={e => setOnlyProblems(e.target.checked)} /> Only rows to check
+              </label>
+              {problems.length > 0 && (
+                <button onClick={() => downloadFailed(problems.map(r => ({ row: r.row, name: r.name, reason: r.errors.join("; "), raw: r.raw })))}
+                  className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200">
+                  ⬇ Rows to fix (CSV)
+                </button>
+              )}
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-auto max-h-[42vh]">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 sticky top-0 z-10">
+                  <tr className="text-left text-[11px] font-bold text-slate-500">
+                    <th className="px-3 py-2">Row</th>
+                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Department</th>
+                    <th className="px-3 py-2">Section</th>
+                    <th className="px-3 py-2">Batches</th>
+                    <th className="px-3 py-2 min-w-[220px]">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.map(r => (
+                    <tr key={r.row} className={`border-t border-slate-100 align-top ${r.status === "error" ? "bg-red-50/40" : ""}`}>
+                      <td className="px-3 py-2 text-xs text-slate-400">{r.row}</td>
+                      <td className="px-3 py-2 text-xs font-bold text-slate-800">{r.name || <span className="text-red-500">—</span>}</td>
+                      <td className="px-3 py-2">{r.department ? <Chip name={r.department.item.name} how={r.department.how} tone="ok" /> : <span className="text-slate-300 text-xs">—</span>}</td>
+                      <td className="px-3 py-2">{r.section ? <Chip name={r.section.item.name} how={r.section.how} tone="ok" /> : <span className="text-slate-300 text-xs">—</span>}</td>
+                      <td className="px-3 py-2">
+                        {r.batches.map(b => <Chip key={b.item.id} name={b.item.name} how={b.how} tone={b.how === "fuzzy" || !b.item.department_id ? "warn" : "ok"} />)}
+                        {r.lab && !r.batches.some(b => b.item.id === r.lab!.item.id) && <Chip name={`Lab: ${r.lab.item.name}`} tone="ok" />}
+                        {r.batches.length === 0 && !r.lab && <span className="text-slate-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {r.status === "ok" && <span className="text-green-700 font-bold">✓ Ready</span>}
+                        {r.errors.map((e, i) => <p key={i} className="text-red-600">✕ {e}</p>)}
+                        {r.warnings.map((w, i) => <p key={i} className="text-amber-700">! {w}</p>)}
+                      </td>
+                    </tr>
+                  ))}
+                  {shown.length === 0 && (
+                    <tr><td colSpan={6} className="px-3 py-6 text-center text-xs text-slate-400">Every row is ready.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-slate-100">
+              <button onClick={reset} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Back</button>
               <button
-                onClick={() => { setStep("upload"); setErrors([]); }}
-                className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
-              >
-                Back
-              </button>
-              <button
-                onClick={handlePreviewSubmit}
-                disabled={errors.length > 0 || uploading}
+                onClick={uploadStudents}
+                disabled={ready.length === 0}
                 className="px-6 py-2.5 rounded-xl bg-[#FF7043] text-white font-bold text-sm hover:bg-[#F4511E] transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {uploading ? (
-                  <>
-                    <Icons.Loader /> Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Icons.Check /> Upload {previewData.length} Students
-                  </>
-                )}
+                <Icons.Check /> Upload {ready.length} student{ready.length !== 1 ? "s" : ""}
+                {problems.length > 0 ? ` (skip ${problems.length})` : ""}
               </button>
             </div>
           </div>
@@ -637,11 +469,58 @@ export default function BulkStudentUpload({
 
         {step === "processing" && (
           <div className="py-12 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center mx-auto mb-4">
-              <Icons.Loader />
+            <div className="w-16 h-16 rounded-full bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center mx-auto mb-4"><Icons.Loader /></div>
+            <p className="text-lg font-bold text-slate-800">Uploading {ready.length} students…</p>
+            <p className="text-sm text-slate-500 mt-1">Please keep this window open</p>
+          </div>
+        )}
+
+        {step === "report" && report && (
+          <div className="space-y-5" aria-live="polite">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-4 rounded-2xl bg-slate-50"><p className="text-2xl font-black text-slate-800">{report.total}</p><p className="text-xs font-bold text-slate-500">rows in file</p></div>
+              <div className="p-4 rounded-2xl bg-green-50"><p className="text-2xl font-black text-green-700">{report.created}</p><p className="text-xs font-bold text-green-700">added</p></div>
+              <div className="p-4 rounded-2xl bg-red-50"><p className="text-2xl font-black text-red-600">{report.failed.length}</p><p className="text-xs font-bold text-red-600">not added</p></div>
             </div>
-            <p className="text-lg font-bold text-slate-800">Uploading Students...</p>
-            <p className="text-sm text-slate-500 mt-1">Please wait, this may take a moment</p>
+
+            {noDeptBatches.length > 0 && report.created > 0 && (
+              <p className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                <b>Note:</b> set a department for {noDeptBatches.map(b => `"${b.name}"`).join(", ")} in the Batches tab.
+              </p>
+            )}
+
+            {report.failed.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-bold text-slate-800">Rows not added</p>
+                  <button onClick={() => downloadFailed(report.failed)} className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold">
+                    ⬇ Download to fix (CSV)
+                  </button>
+                </div>
+                <div className="border border-slate-200 rounded-xl overflow-auto max-h-[40vh]">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr className="text-left font-bold text-slate-500"><th className="px-3 py-2">Row</th><th className="px-3 py-2">Name</th><th className="px-3 py-2">Reason</th></tr>
+                    </thead>
+                    <tbody>
+                      {report.failed.map(f => (
+                        <tr key={f.row} className="border-t border-slate-100 align-top">
+                          <td className="px-3 py-2 text-slate-400">{f.row}</td>
+                          <td className="px-3 py-2 font-bold text-slate-800">{f.name || "—"}</td>
+                          <td className="px-3 py-2 text-red-600">{f.reason}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2">Fix these rows in the CSV and upload it again — the extra “Row” and “Error” columns are ignored.</p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <button onClick={reset} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">Upload another file</button>
+              <button onClick={onClose} className="px-6 py-2.5 rounded-xl bg-[#FF7043] text-white font-bold text-sm hover:bg-[#F4511E] transition-colors">Done</button>
+            </div>
           </div>
         )}
       </div>
