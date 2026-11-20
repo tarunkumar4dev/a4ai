@@ -31,6 +31,25 @@ export function planBatchChange(
   return { add: add.sort(), remove: remove.sort() };
 }
 
+/**
+ * Dept / section filter for the students list. A student matches through their own department_id / section_id
+ * OR through any batch they're in (student_batches): e.g. section "Maths" lists everyone in the "Mathematics"
+ * batch even when students.section_id is empty. "" = no filter, "none" = no department / section at all.
+ */
+export function studentMatchesFilter(
+  student: { department_id?: string | null; section_id?: string | null },
+  batchIds: Iterable<string> | undefined,
+  batchById: ReadonlyMap<string, { department_id?: string | null; section_id?: string | null }>,
+  deptFilter: string,
+  sectionFilter: string,
+): boolean {
+  const own = [...(batchIds ?? [])].map(id => batchById.get(id)).filter(Boolean) as { department_id?: string | null; section_id?: string | null }[];
+  const depts = new Set([student.department_id, ...own.map(b => b.department_id)].filter(Boolean));
+  const secs = new Set([student.section_id, ...own.map(b => b.section_id)].filter(Boolean));
+  const ok = (filter: string, set: Set<unknown>) => !filter || (filter === "none" ? set.size === 0 : set.has(filter));
+  return ok(deptFilter, depts) && ok(sectionFilter, secs);
+}
+
 /** Memberships by student. Without student_batches (migration 33 not run) the main + lab columns are used. */
 export function membershipMap(
   rows: { student_id: string; batch_id: string }[] | null | undefined,
