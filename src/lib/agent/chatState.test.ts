@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { chatReducer, eventToBlock, initialChatState, statusLabel, stepLabel, stepsSummary, type ChatState } from "./chatState";
+import { chatReducer, eventToBlock, initialChatState, statusLabel, stepsSummary, type ChatState } from "./chatState";
+import { stepLabel } from "./stepLabel";
 import { agentBaseUrl, agentUrl } from "./config";
 import { isAgentPdfPath } from "./client";
 import type { AgentEvent } from "./events";
@@ -135,12 +136,14 @@ describe("steps timeline (thinking_status tool.* / status.*)", () => {
   });
 
   it("Hinglish step labels", () => {
-    expect(stepLabel("tool.resolve_entity")).toBe("Naam dhoondh raha hoon");
-    expect(stepLabel("tool.low_attendance_list")).toBe("Kam attendance wale students dekh raha hoon");
-    expect(stepLabel("tool.generate_questions")).toBe("Sawaal likh raha hoon");
-    expect(stepLabel("status.verifying", { round: 2 })).toBe("Verify kar raha hoon · round 2");
-    expect(stepLabel("tool.regenerate_failed")).toBe("Galat sawaal dobara likh raha hoon");
+    expect(stepLabel("tool.resolve_entity")).toBe("Naam dhoondh rahe hain");
+    expect(stepLabel("tool.low_attendance_list")).toBe("Kam attendance wale students dekh rahe hain");
+    expect(stepLabel("tool.generate_questions")).toBe("Sawaal likh rahe hain");
+    expect(stepLabel("status.verifying", { round: 2 })).toBe("Verify kar rahe hain · round 2");
+    expect(stepLabel("tool.regenerate_failed")).toBe("Galat sawaal dobara likh rahe hain");
     expect(stepLabel("tool.mystery")).toBe("Kaam chal raha hai");
+    expect(stepLabel("tool.attendance_stats", {}, "en")).toBe("Reading attendance");
+    expect(stepLabel("status.generating", { n: 8 }, "hi")).toBe("8 सवाल लिख रहे हैं");
   });
 });
 

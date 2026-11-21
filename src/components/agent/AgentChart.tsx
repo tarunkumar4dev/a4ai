@@ -44,7 +44,7 @@ export function AgentChart({ ev }: { ev: Chart }) {
   const axis = { stroke: "hsl(var(--muted-foreground))", fontSize: 11, tickLine: false, axisLine: false } as const;
 
   return (
-    <figure className="min-w-0 rounded-lg border border-border bg-card p-4 text-card-foreground" data-testid="agent-chart">
+    <figure className="min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground" data-testid="agent-chart">
       <figcaption className="flex items-start justify-between gap-3">
         <span className="text-sm font-semibold">{ev.title}</span>
         {unit ? <span className="shrink-0 text-xs text-muted-foreground">{unit}</span> : null}

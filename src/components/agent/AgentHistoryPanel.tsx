@@ -3,6 +3,10 @@
 // Server-owned (GET /agent/sessions, pinned + paged rest, infinite scroll). The list is windowed: only the rows on
 // screen (+ overscan) are in the DOM, so hundreds of chats stay cheap.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { translate, useAgentT, type AgentKey, type AgentLang } from "@/lib/agent/i18n";
+import type { HistoryGroupKey } from "@/lib/agent/history";
+
+const groupLabel = (k: HistoryGroupKey, lang: AgentLang) => translate(lang, `history.${k}` as AgentKey);
 import { Loader2, MessageSquare, MoreHorizontal, PanelLeftClose, Pencil, Pin, PinOff, RotateCcw, Search, SquarePen, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -25,6 +29,7 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
   onOpen: (s: SessionItem) => void; onStartRename: (id: string) => void; onRename: (s: SessionItem, title: string) => void;
   onCancelRename: () => void; onPin: (s: SessionItem) => void; onDelete: (s: SessionItem) => void;
 }) {
+  const { t } = useAgentT();
   const [title, setTitle] = useState(s.title);
   useEffect(() => { if (editing) setTitle(s.title); }, [editing, s.title]);
 
@@ -35,7 +40,7 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
     };
     return (
       <div className="flex h-full items-center px-1" {...{ [ESC_LAYER]: "" }}>
-        <label className="sr-only" htmlFor={`rename-${s.id}`}>Chat ka naya naam</label>
+        <label className="sr-only" htmlFor={`rename-${s.id}`}>{t("history.renameLabel")}</label>
         <input id={`rename-${s.id}`} autoFocus value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)}
           onKeyDown={onKey} onBlur={() => onRename(s, title)} onFocus={(e) => e.currentTarget.select()}
           className={`h-10 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground ${focusRing}`} />
@@ -50,7 +55,7 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
         className={`flex h-full min-w-0 flex-1 items-center gap-2 rounded-md pl-2.5 pr-10 text-left disabled:opacity-60 ${focusRing}`}>
         {s.pinned ? <Pin aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> : null}
         <span className={`min-w-0 flex-1 truncate text-sm ${active ? "font-medium" : "text-foreground"}`}>{s.title}</span>
-        <span className={`shrink-0 text-[11px] tabular-nums group-hover:invisible group-focus-within:invisible ${active ? "text-accent-foreground/75" : "text-muted-foreground"}`}>{when}</span>
+        <span className={`shrink-0 text-xs tabular-nums group-hover:invisible group-focus-within:invisible ${active ? "text-accent-foreground/75" : "text-muted-foreground"}`}>{when}</span>
         <span className="sr-only">{s.pinned ? ", pinned" : ""}</span>
       </button>
       <DropdownMenu modal={false}>
@@ -61,13 +66,13 @@ const Row = memo(function Row({ s, active, now, disabled, editing, onOpen, onSta
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="z-[240] w-44">
-          <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onStartRename(s.id)}><Pencil aria-hidden="true" className="h-4 w-4" />Naam badlo</DropdownMenuItem>
+          <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onStartRename(s.id)}><Pencil aria-hidden="true" className="h-4 w-4" />{t("history.rename")}</DropdownMenuItem>
           <DropdownMenuItem className="min-h-10 gap-2" onSelect={() => onPin(s)}>
-            {s.pinned ? <><PinOff aria-hidden="true" className="h-4 w-4" />Unpin</> : <><Pin aria-hidden="true" className="h-4 w-4" />Pin</>}
+            {s.pinned ? <><PinOff aria-hidden="true" className="h-4 w-4" />{t("history.unpin")}</> : <><Pin aria-hidden="true" className="h-4 w-4" />{t("history.pin")}</>}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="min-h-10 gap-2 text-destructive focus:text-destructive dark:text-red-400 dark:focus:text-red-400" onSelect={() => onDelete(s)}>
-            <Trash2 aria-hidden="true" className="h-4 w-4" />Mitao
+            <Trash2 aria-hidden="true" className="h-4 w-4" />{t("history.delete")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -81,6 +86,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
   /** desktop: collapse the panel */ onCollapse?: () => void;
   autoFocusSearch?: boolean;
 }) {
+  const { t, lang } = useAgentT();
   const qc = useAgentQueryClient();
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim(), 200);
@@ -157,16 +163,16 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
         onCommitted: () => agentStore.sessionDeleted(s.id),
       });
       if (wasActive) agentStore.newChat();
-      toast("Chat delete ho gayi", {
+      toast(t("history.deleted"), {
         description: s.title,
         duration: 5000,
-        action: { label: "Undo", onClick: () => { if (h.undo() && wasActive) agentStore.openSession(s.id, s.title); } },
+        action: { label: t("history.undo"), onClick: () => { if (h.undo() && wasActive) agentStore.openSession(s.id, s.title); } },
       });
     });
   };
 
   const renderRow = (r: HistoryRow) => (r.kind === "header"
-    ? <p className="flex h-full items-end px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground" role="presentation" data-testid="history-group">{r.label}</p>
+    ? <p className="flex h-full items-end px-2.5 pb-1 text-xs font-medium text-muted-foreground" role="presentation" data-testid="history-group">{groupLabel(r.key.slice(2) as Parameters<typeof groupLabel>[0], lang)}</p>
     : <Row s={r.session} active={r.session.id === activeKey} now={now} disabled={busy} editing={editing === r.session.id}
         onOpen={open} onStartRename={setEditing} onRename={rename} onCancelRename={() => setEditing(null)} onPin={pin} onDelete={setConfirm} />);
 
@@ -174,15 +180,15 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
   const failed = (pinned.isError || rest.isError) && !rows.length;
 
   return (
-    <nav aria-label="Pichhli chats" className="flex h-full min-h-0 flex-col" data-testid="agent-history">
+    <nav aria-label={t("header.history")} className="flex h-full min-h-0 flex-col" data-testid="agent-history">
       <div className="flex items-center gap-1.5 p-3 pb-2">
         <button type="button" onClick={startNew} title={`Naya sawaal (${NEW_CHAT_SHORTCUT})`}
           className={`flex h-11 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted ${focusRing}`}>
-          <SquarePen aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="truncate">Naya sawaal</span>
-          <kbd className="ml-auto hidden shrink-0 rounded border border-border px-1 font-sans text-[10px] text-muted-foreground xl:inline">{NEW_CHAT_SHORTCUT}</kbd>
+          <SquarePen aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="truncate">{t("header.newChat")}</span>
+          <kbd className="ml-auto hidden shrink-0 rounded border border-border px-1 font-sans text-xs text-muted-foreground xl:inline">{NEW_CHAT_SHORTCUT}</kbd>
         </button>
         {onCollapse ? (
-          <button type="button" onClick={onCollapse} aria-label="Chats chhupao" title="Chats chhupao"
+          <button type="button" onClick={onCollapse} aria-label={t("history.hide")} title={t("history.hide")}
             className={`grid h-11 w-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground ${focusRing}`}>
             <PanelLeftClose aria-hidden="true" className="h-4 w-4" />
           </button>
@@ -191,14 +197,14 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
       <div className="px-3 pb-2">
         <div className="relative">
           <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <label htmlFor="agent-history-search" className="sr-only">Chats dhoondho</label>
-          <input ref={searchRef} id="agent-history-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Chats dhoondho"
+          <label htmlFor="agent-history-search" className="sr-only">{t("history.search")}</label>
+          <input ref={searchRef} id="agent-history-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("history.search")}
             onKeyDown={(e) => { if (e.key === "Escape" && search) { e.preventDefault(); e.stopPropagation(); setSearch(""); } }}
             {...(search ? { [ESC_LAYER]: "" } : {})}
             className={`h-10 w-full rounded-md border border-input bg-card pl-8 pr-8 text-sm text-foreground placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden ${focusRing}`} />
           {searching ? <Loader2 aria-hidden="true" className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             : search ? (
-              <button type="button" onClick={() => { setSearch(""); searchRef.current?.focus(); }} aria-label="Clear search"
+              <button type="button" onClick={() => { setSearch(""); searchRef.current?.focus(); }} aria-label={t("history.clearSearch")}
                 className={`absolute right-1 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:text-foreground ${focusRing}`}>
                 <X aria-hidden="true" className="h-4 w-4" />
               </button>
@@ -209,7 +215,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
       <div ref={scroller} onScroll={(e) => setView({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight || 600 })}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-testid="history-scroller">
         {loading ? (
-          <div className="space-y-2 px-1 pt-2" aria-label="Chats load ho rahi hain">
+          <div className="space-y-2 px-1 pt-2" aria-label={t("history.loading")}>
             {Array.from({ length: 6 }, (_, i) => <div key={i} className="h-9 rounded-md bg-muted/70" />)}
           </div>
         ) : failed ? (
@@ -223,7 +229,7 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
         ) : !rows.length ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-xs text-muted-foreground" data-testid="history-empty">
             <MessageSquare aria-hidden="true" className="h-5 w-5" />
-            {search.trim() ? <>“{search.trim()}” se koi chat nahi mili.</> : "Aapki chats yahan dikhengi."}
+            {search.trim() ? t("history.noMatch", { q: search.trim() }) : t("history.empty")}
           </div>
         ) : (
           <div style={{ height: total, position: "relative" }}>
@@ -240,14 +246,14 @@ export function AgentHistoryPanel({ uid, activeKey, busy, onPicked, onCollapse, 
         {rest.isFetchingNextPage ? <p className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground"><Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />Aur load ho rahi hain…</p> : null}
         {rest.isError && rows.length ? (
           <button type="button" onClick={() => void rest.fetchNextPage()} className={`mx-auto mt-2 flex h-10 items-center gap-1.5 rounded-md px-3 text-xs text-muted-foreground hover:bg-muted ${focusRing}`}>
-            <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />Aur chats load nahi hui — dobara try karein
+            <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />{t("history.loadMoreFailed")}
           </button>
         ) : null}
       </div>
 
-      <AgentConfirm open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }} title="Chat delete karein?"
-        description={`“${confirm?.title ?? ""}” aur uske saare messages hat jayenge. 5 second tak Undo kar sakte hain.`}
-        confirmLabel="Mitao" onConfirm={() => { if (confirm) remove(confirm); }} />
+      <AgentConfirm open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }} title={t("history.deleteTitle")}
+        description={t("history.deleteBody", { title: confirm?.title ?? "" })}
+        confirmLabel={t("history.delete")} onConfirm={() => { if (confirm) remove(confirm); }} />
     </nav>
   );
 }

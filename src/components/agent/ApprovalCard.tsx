@@ -29,13 +29,13 @@ export function ApprovalCard({ block, busy, onApprove, onCancel, onEdit, onDownl
   const open = !expired && (state === "pending" || state === "failed" || state === "approving");
 
   return (
-    <section className={`min-w-0 rounded-lg border bg-card p-4 text-card-foreground ${open ? "border-primary/50" : "border-border"}`} data-testid="approval">
+    <section className={`min-w-0 rounded-2xl border bg-card p-4 text-card-foreground ${open ? "border-primary/50" : "border-border"}`} data-testid="approval">
       <div className="flex items-start gap-3">
         <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${state === "approved" ? "bg-primary/10 text-primary" : "bg-muted text-foreground"}`}>
           {state === "approved" ? <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> : <ShieldAlert aria-hidden="true" className="h-4 w-4" />}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Aapki approval chahiye</p>
+          <p className="text-xs font-medium text-muted-foreground">Aapki approval chahiye</p>
           <h4 className="mt-0.5 text-sm font-semibold">{label.title}</h4>
           <p className="mt-1 break-words text-sm text-foreground">{ev.summary}</p>
           {open ? (

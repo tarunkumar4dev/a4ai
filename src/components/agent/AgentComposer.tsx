@@ -1,23 +1,29 @@
-// Message box with Google-style suggestions (ARIA combobox). Grows up to ~6 lines, Enter sends, Shift+Enter = new
-// line, 4000-char limit (counter near the limit), paste is always plain text, Stop while a reply streams.
-// Focused + empty → "Recent" (≤ 6, each with ×) and role-based "Try"; typing → merged recent / entity / template
-// suggestions (debounced 120 ms, see queries.ts) with the match highlighted. Keys: ↑/↓ move, Enter runs, Tab or →
-// (caret at the end) fills without sending, Shift+Delete removes a recent one, Esc closes.
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
-import { ArrowUp, Square, WifiOff } from "lucide-react";
+// Message box with Google-style suggestions (ARIA combobox). Grows 1–6 lines, 4000-char limit (counter near the
+// limit), paste is always plain text, Send turns into Stop while a reply streams. Enter sends and Shift+Enter is a new
+// line on desktop; on touch screens Enter is a new line and the Send button sends (enterKeyHint="send"). Enter never
+// sends while an IME is composing (Hindi keyboards). Suggestions appear only after 2+ typed characters (the empty
+// box has ONE suggestion surface: the starter cards) — merged recent / entity / template, ≤ 4, match highlighted.
+// Keys: ↑/↓ move, Enter runs, Tab or → (caret at the end) fills without sending, Shift+Delete removes a recent one.
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from "react";
+import { ArrowUp, Info, Square, WifiOff } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useAgentT } from "@/lib/agent/i18n";
 import { toast } from "sonner";
 import { getAgentApi } from "@/lib/agent/api";
-import { clearRecentQueries, prefetchAgentCaches, removeRecentQuery, useAgentQueryClient, useRecentQueries, useSuggestions } from "@/lib/agent/queries";
+import { prefetchAgentCaches, removeRecentQuery, useAgentQueryClient, useRecentQueries, useSuggestions } from "@/lib/agent/queries";
 import { agentStore } from "@/lib/agent/store";
-import { comboKey, idleOptions, rankSuggestions, type SuggestOption } from "@/lib/agent/suggest";
+import { comboKey, rankSuggestions, type SuggestOption } from "@/lib/agent/suggest";
 import { onComposerFocusRequest } from "@/lib/agent/surface";
-import { AgentConfirm } from "./AgentConfirm";
 import { AgentSuggestions, optionId } from "./AgentSuggestions";
 import { ESC_LAYER } from "./escLayer";
 
 export const MAX_CHARS = 4000;
 const COUNTER_FROM = 3600;
 const MAX_HEIGHT = 168; // ≈ 6 lines of 15px/1.5 + padding
+/** typeahead opens from this many typed characters */
+export const TYPEAHEAD_MIN = 2;
+const TYPEAHEAD_MAX = 4;
+const coarsePointer = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
 
 /** Insert plain text at the selection, cut to the limit. Pure — exported for tests. */
 export function insertPlain(value: string, start: number, end: number, pasted: string, max = MAX_CHARS): { value: string; caret: number } {
@@ -27,13 +33,18 @@ export function insertPlain(value: string, start: number, end: number, pasted: s
   return { value: value.slice(0, start) + ins + value.slice(end), caret: start + ins.length };
 }
 
-export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, inputId, compact, uid, templates, offline }: {
+export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, inputId, compact, uid, templates, offline, mic, above, onTextChange, footerStart }: {
   busy: boolean; onSend: (text: string) => void; onStop: () => void;
   draftRequest?: { text: string; nonce: number } | null; autoFocus?: boolean; inputId: string; compact?: boolean;
   /** signed-in user (suggestions + recent history); null = no suggestions */ uid?: string | null;
   /** role-based "Try" prompts */ templates?: string[];
   /** no connection: typing still works, sending waits */ offline?: boolean;
+  /** the mic button (voice input), beside Send */ mic?: ReactNode;
+  /** a strip inside the composer card, above the text (voice state / live transcript) */ above?: ReactNode;
+  /** every text change (voice input reads it to know whether its transcript was edited) */ onTextChange?: (v: string) => void;
+  /** small controls at the start of the line under the box (voice settings) */ footerStart?: ReactNode;
 }) {
+  const { t } = useAgentT();
   // the text survives closing the sheet / switching surfaces (store memory — never storage)
   const [value, setValue] = useState(() => agentStore.composerText.slice(0, MAX_CHARS));
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -50,20 +61,19 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   const codeFocus = useRef(false);
   const focusByCode = (el: HTMLTextAreaElement | null) => { if (!el) return; codeFocus.current = true; el.focus(); codeFocus.current = false; };
   const [active, setActive] = useState(-1);
-  const [confirmClear, setConfirmClear] = useState(false);
+  const touch = useMemo(coarsePointer, []);
 
   const recent = useRecentQueries(uid ?? null, focused);
   const typed = value.trim();
-  const suggest = useSuggestions(uid ?? null, value, focused && !!typed && !busy);
+  const longEnough = typed.length >= TYPEAHEAD_MIN;
+  const suggest = useSuggestions(uid ?? null, value, focused && longEnough && !busy);
   const recentList = useMemo(() => recent.data ?? [], [recent.data]);
   const tpl = useMemo(() => templates ?? [], [templates]);
   const options: SuggestOption[] = useMemo(() => {
-    if (!uid) return [];
-    if (!typed) return idleOptions(recentList, tpl);
-    return rankSuggestions(typed, { server: suggest.data ?? [], recent: recentList, templates: tpl });
-  }, [uid, typed, recentList, tpl, suggest.data]);
-  const canClear = !typed && recentList.length > 0;
-  const open = focused && !dismissed && !busy && !value.includes("\n") && (options.length > 0 || canClear);
+    if (!uid || !longEnough) return [];
+    return rankSuggestions(typed, { server: suggest.data ?? [], recent: recentList, templates: tpl }, TYPEAHEAD_MAX);
+  }, [uid, typed, longEnough, recentList, tpl, suggest.data]);
+  const open = focused && !dismissed && !busy && !value.includes("\n") && options.length > 0;
 
   useEffect(() => { setActive(-1); }, [typed, options.length]);
 
@@ -76,7 +86,7 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   }, [value]);
 
   // the store keeps the latest text (not as state) so "Sign in again" can save it
-  useEffect(() => { agentStore.composerText = value; }, [value]);
+  useEffect(() => { agentStore.composerText = value; onTextChange?.(value); }, [value, onTextChange]);
 
   const focusEnd = () => requestAnimationFrame(() => {
     const el = ref.current;
@@ -120,18 +130,9 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
   };
   const remove = (o: SuggestOption) => {
     if (!uid || !o.historyId) return;
-    void getAgentApi().then((api) => removeRecentQuery(qc, uid, api, o.historyId!)).catch((err: Error) => toast.error(err.message));
+    void getAgentApi().then((api) => removeRecentQuery(qc, uid, api, o.historyId!)).catch(() => toast.error(t("error.generic")));
     focusByCode(ref.current);
   };
-  const clearAll = () => {
-    setConfirmClear(false);
-    if (!uid) return;
-    void getAgentApi().then((api) => clearRecentQueries(qc, uid, api))
-      .then(() => toast.success("Search history clear ho gayi."))
-      .catch((err: Error) => toast.error(err.message));
-    focusEnd();
-  };
-
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
     if (open && e.key === "Delete" && e.shiftKey && active >= 0 && options[active]?.type === "recent") {
@@ -150,7 +151,9 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
       case "close": e.preventDefault(); setDismissed(true); setActive(-1); return;
       default: break;
     }
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(value); }
+    // IME composition (Hindi / Devanagari keyboards): Enter picks a word, it never sends (keyCode 229 = Android IMEs)
+    const composing = e.nativeEvent.isComposing || e.keyCode === 229;
+    if (e.key === "Enter" && !e.shiftKey && !composing && !touch) { e.preventDefault(); send(value); }
   };
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const text = e.clipboardData.getData("text/plain");
@@ -163,53 +166,60 @@ export function AgentComposer({ busy, onSend, onStop, draftRequest, autoFocus, i
 
   const near = value.length >= COUNTER_FROM;
   const activeId = open && active >= 0 && active < options.length ? optionId(listId, active) : undefined;
+  const pad = compact ? "px-3" : "px-3 sm:px-6";
   return (
-    <form className={compact ? "px-3 pb-3 pt-2" : "px-3 pb-3 pt-2 sm:px-6 sm:pb-5"} onSubmit={(e) => { e.preventDefault(); send(value); }}>
+    <form className={`${pad} pb-3 pt-2 ${compact ? "" : "sm:pb-4"}`} onSubmit={(e) => { e.preventDefault(); send(value); }}>
       <div ref={wrap} className="relative mx-auto max-w-3xl" {...(open ? { [ESC_LAYER]: "" } : {})}
         onBlur={(e) => { if (!wrap.current?.contains(e.relatedTarget as Node | null)) { setFocused(false); setActive(-1); } }}>
-        <div className="flex items-end gap-2 rounded-2xl border border-input bg-card p-1.5 pl-3 shadow-sm focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/30">
-          <label htmlFor={inputId} className="sr-only">Message a4ai Agent</label>
-          <textarea id={inputId} ref={ref} rows={1} value={value} disabled={busy} maxLength={MAX_CHARS}
-            role="combobox" aria-expanded={open} aria-controls={open ? listId : undefined} aria-autocomplete="list" aria-haspopup="listbox"
-            aria-activedescendant={activeId}
-            onFocus={() => { setFocused(true); if (!codeFocus.current) setDismissed(false); if (uid) prefetchAgentCaches(qc, uid); }}
-            onPointerDown={() => setDismissed(false)}
-            onChange={(e) => { setValue(e.target.value.slice(0, MAX_CHARS)); setDismissed(false); }}
-            onKeyDown={onKeyDown} onPaste={onPaste}
-            placeholder={busy ? "Jawab aa raha hai…" : offline ? "Offline — connection aate hi bhej paayenge" : "Poochiye — attendance, marks, test…"}
-            aria-describedby={near ? `${inputId}-count` : undefined}
-            className="max-h-[168px] min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
-          {busy ? (
-            <button type="button" onClick={onStop} aria-label="Stop" title="Stop"
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-border bg-background text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="agent-stop">
-              <Square aria-hidden="true" className="h-4 w-4" fill="currentColor" />
-            </button>
-          ) : (
-            <button type="submit" disabled={!value.trim() || offline} aria-label={offline ? "Send (offline)" : "Send"}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:bg-muted disabled:text-muted-foreground">
-              {offline ? <WifiOff aria-hidden="true" className="h-5 w-5" /> : <ArrowUp aria-hidden="true" className="h-5 w-5" />}
-            </button>
-          )}
+        <div className="rounded-[22px] border border-input bg-card shadow-sm focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/30">
+          {above}
+          <div className="flex items-end gap-1.5 p-1.5 pl-4">
+            <label htmlFor={inputId} className="sr-only">{t("composer.label")}</label>
+            <textarea id={inputId} ref={ref} rows={1} value={value} disabled={busy} maxLength={MAX_CHARS} enterKeyHint={touch ? "enter" : "send"}
+              role="combobox" aria-expanded={open} aria-controls={open ? listId : undefined} aria-autocomplete="list" aria-haspopup="listbox"
+              aria-activedescendant={activeId}
+              onFocus={() => { setFocused(true); if (!codeFocus.current) setDismissed(false); if (uid) prefetchAgentCaches(qc, uid); }}
+              onPointerDown={() => setDismissed(false)}
+              onChange={(e) => { setValue(e.target.value.slice(0, MAX_CHARS)); setDismissed(false); }}
+              onKeyDown={onKeyDown} onPaste={onPaste}
+              placeholder={busy ? t("composer.placeholderBusy") : offline ? t("composer.placeholderOffline") : t("composer.placeholder")}
+              aria-describedby={near ? `${inputId}-count` : undefined}
+              className="agent-prose max-h-[168px] min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-6 text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            {mic}
+            {busy ? (
+              <button type="button" onClick={onStop} aria-label={t("composer.stop")} title={t("composer.stop")}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border bg-background text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="agent-stop">
+                <Square aria-hidden="true" className="h-4 w-4" fill="currentColor" />
+              </button>
+            ) : (
+              <button type="submit" disabled={!value.trim() || offline} aria-label={offline ? t("composer.sendOffline") : t("composer.send")} title={t("composer.send")} data-testid="agent-send"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:bg-muted disabled:text-muted-foreground">
+                {offline ? <WifiOff aria-hidden="true" className="h-5 w-5" /> : <ArrowUp aria-hidden="true" className="h-5 w-5" />}
+              </button>
+            )}
+          </div>
         </div>
         {open ? (
           <AgentSuggestions listId={listId} options={options} active={active} query={typed}
             onRun={(o) => send(o.text)} onFill={fill} onRemove={remove} onHover={setActive}
-            onClear={() => setConfirmClear(true)} canClear={canClear} loading={suggest.isFetching} />
+            onClear={() => undefined} canClear={false} loading={suggest.isFetching} />
         ) : null}
       </div>
-      <div className="mx-auto mt-1.5 flex max-w-3xl items-center justify-between gap-2 px-1 text-[11px] text-muted-foreground">
-        {compact ? (
-          <span className="hidden truncate sm:inline">Enter = bhejo · Shift+Enter = nayi line</span>
-        ) : <span className="hidden sm:inline">Enter = bhejo · Shift+Enter = nayi line · ↑↓ suggestions</span>}
-        <span className="truncate sm:hidden">Numbers sirf aapke institute ke data se</span>
+      <div className="mx-auto mt-1.5 flex min-h-5 max-w-3xl items-center justify-between gap-2 px-2 text-xs text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-1">{footerStart}{focused && !touch ? <span className="hidden truncate sm:inline" data-testid="composer-hint">{t("composer.hint")}</span> : null}</span>
         {near ? (
           <span id={`${inputId}-count`} className={`shrink-0 tabular-nums ${value.length >= MAX_CHARS ? "font-medium text-destructive dark:text-red-400" : ""}`}>
             {value.length} / {MAX_CHARS}
           </span>
-        ) : <span className={compact ? "hidden truncate sm:inline" : "hidden sm:inline"}>{compact ? "Sirf aapke institute ka data" : "Numbers sirf aapke institute ke data se"}</span>}
+        ) : (
+          <Popover>
+            <PopoverTrigger className="-mr-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="agent-trust">
+              <span className={`agent-prose truncate ${focused && !touch ? "sr-only" : ""}`}>{t("trust")}</span><Info aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" data-agent-root="" className="agent-prose z-[240] w-[min(18rem,calc(100vw-2rem))] p-3 text-sm">{t("trust.help")}</PopoverContent>
+          </Popover>
+        )}
       </div>
-      <AgentConfirm open={confirmClear} onOpenChange={setConfirmClear} title="Search history clear karein?"
-        description="Aapke pichhle sawaal suggestions se hat jayenge. Chats delete nahi hongi." confirmLabel="History mitao" onConfirm={clearAll} />
     </form>
   );
 }

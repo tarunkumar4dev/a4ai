@@ -23,7 +23,7 @@ export function RankingTable({ ev, disabled, onSend }: { ev: Table; disabled?: b
   const [, , , heldLabel = "Classes held", markedLabel = "Marked"] = ev.columns;
   const metric = (ev.title.split(" by ")[0] || "%").trim();
   return (
-    <section className="min-w-0 rounded-lg border border-border bg-card text-card-foreground" data-testid="ranking">
+    <section className="min-w-0 rounded-2xl border border-border bg-card text-card-foreground" data-testid="ranking">
       <header className="p-4 pb-2">
         <h4 className="text-sm font-semibold text-foreground">{ev.title}</h4>
         {best ? (
@@ -36,7 +36,7 @@ export function RankingTable({ ev, disabled, onSend }: { ev: Table; disabled?: b
       <table className="w-full border-t border-border text-sm" data-testid="ranking-table">
         <caption className="sr-only">{ev.title}: rank, class, {metric}, {heldLabel}, {markedLabel}</caption>
         <thead>
-          <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+          <tr className="text-left text-xs text-muted-foreground">
             <th scope="col" className="w-10 px-4 py-2 font-medium">#</th>
             <th scope="col" className="px-2 py-2 font-medium">Class</th>
             <th scope="col" className="px-2 py-2 text-right font-medium">%</th>

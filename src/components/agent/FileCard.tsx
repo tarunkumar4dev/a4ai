@@ -21,7 +21,7 @@ export function FileCard({ block, onDownload, onAskAgain, busy }: { block: FileB
   const { ev, state, error } = block;
   const expired = state === "expired";
   return (
-    <section className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card p-3.5 text-card-foreground" data-testid="file-card" data-state={state}>
+    <section className="flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-card p-3.5 text-card-foreground" data-testid="file-card" data-state={state}>
       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${expired ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"}`}>
         {expired ? <TimerOff aria-hidden="true" className="h-5 w-5" /> : <FileSpreadsheet aria-hidden="true" className="h-5 w-5" />}
       </span>

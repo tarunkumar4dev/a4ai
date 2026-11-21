@@ -15,7 +15,9 @@ import { AgentMessage } from "./AgentMessage";
 import { AgentSuggestions } from "./AgentSuggestions";
 import { FileCard, fileMeta } from "./FileCard";
 import { rankingRows } from "./RankingTable";
-import { agentRole, emptyCards, roleLabel, scopeLine } from "./roles";
+import { agentRole } from "./roles";
+import { emptyCards, roleLabel, scopeLine, templatesFor } from "./starters";
+import { translate, type TFn } from "@/lib/agent/i18n";
 import { scopeQuestion, scopeRows, scopeTotal } from "./ScopeCard";
 import { isEditable, matchShortcut } from "./shortcuts";
 import { stepIcon } from "./StepTimeline";
@@ -73,7 +75,8 @@ describe("file card (`file` event, contract 1.3)", () => {
 describe("error states", () => {
   it("401 / 429 (with Retry-After) / 503 / 5xx / offline → friendly Hinglish", () => {
     expect(friendlyError(new AgentHttpError(401, "x"))?.code).toBe("unauthorized");
-    expect(friendlyError(new AgentHttpError(429, "x", 42), 1000)).toEqual({ code: "rate_limited", message: "Bahut saari requests. 42 second baad dobara try karein.", retryAt: 43_000 });
+    expect(friendlyError(new AgentHttpError(429, "x", 42), 1000)).toEqual({ code: "rate_limited", message: "Bahut zyada requests ho gayi. 42 second baad try karein.", retryAt: 43_000 });
+    for (const st of [500, 502, 503, 418]) expect(friendlyError(new AgentHttpError(st, "internal detail"))?.message).not.toMatch(/HTTP|d{3}|internal/);
     expect(friendlyError(new AgentHttpError(503, "x"))?.code).toBe("unavailable");
     expect(friendlyError(new AgentHttpError(502, "x"))?.code).toBe("server");
     expect(friendlyError(new DOMException("x", "AbortError"))).toBeNull();
@@ -115,6 +118,25 @@ describe("roles", () => {
     expect(scopeLine("teacher", 1)).toBe("1 batch");
     expect(scopeLine("teacher", null)).toBeNull();
   });
+  it("no batch: attendance / marks cards stay but are disabled with a reason; test card first and clickable", () => {
+    const c = emptyCards("teacher", [], { hasBatch: false });
+    expect(c[0].id).toBe("test");
+    expect(c[0].disabledReason).toBeFalsy();
+    expect(c.slice(1).every((x) => !!x.disabledReason)).toBe(true);
+    expect(c.map((x) => x.id)).toEqual(["test", "attendance", "low", "marks"]);
+    expect(templatesFor("teacher", { hasBatch: false })).toEqual(["Class 10 trigonometry test banao, 40 marks"]);
+    expect(scopeLine("teacher", 0)).toBe("Abhi koi batch assign nahi hai");
+  });
+  it("features the backend turned off are not offered", () => {
+    expect(emptyCards("teacher", [], { features: { paper_generation: false } }).map((x) => x.id)).not.toContain("test");
+    expect(emptyCards("admin", [], { features: { defaulters_export: false } }).map((x) => x.id)).toEqual(["today", "compare", "tests"]);
+  });
+  it("cards and scope line follow the language", () => {
+    const t = (k: Parameters<TFn>[0], p?: Parameters<TFn>[1]) => translate("en", k, p);
+    expect(emptyCards("teacher", [{ name: "ECE-1" }], { t })[0].prompt).toBe("ECE-1 attendance this month");
+    expect(scopeLine("teacher", 3, 44, t)).toBe("3 batches · 44 students");
+    expect(roleLabel("teacher", "teacher", null, (k) => translate("hi", k))).toBe("टीचर");
+  });
 });
 
 const turn = (o: Partial<ChatTurn>): ChatTurn => ({ id: "a1", role: "assistant", text: "", blocks: [], done: true, at: 1, seq: 2, ...o });
@@ -122,9 +144,9 @@ describe("message actions", () => {
   const msg = (t: ChatTurn) => renderToStaticMarkup(createElement(AgentMessage, { turn: t, h, ctx: new Map(), isLast: true, onFeedback: vi.fn(), onRegenerate: vi.fn(), onEdit: vi.fn() }));
   it("assistant: Copy, Regenerate, 👍, 👎; stopped mark; user Edit; none while streaming", () => {
     const out = msg(turn({ blocks: [{ kind: "text", id: "t", text: "Jawab" }] }));
-    for (const label of ["Copy answer", "Regenerate", "Helpful", "Not helpful"]) expect(out).toContain(`aria-label="${label}"`);
+    for (const label of ["Copy karein", "Naya jawab banao", "Kaam ka", "Kaam ka nahi"]) expect(out).toContain(`aria-label="${label}"`);
     expect(msg(turn({ stopped: true, blocks: [{ kind: "text", id: "t", text: "Aadha" }] }))).toContain('data-testid="msg-stopped"');
-    expect(msg({ id: "u1", role: "user", text: "Q", blocks: [], done: true, at: 1, seq: 1 })).toContain('aria-label="Edit message"');
+    expect(msg({ id: "u1", role: "user", text: "Q", blocks: [], done: true, at: 1, seq: 1 })).toContain('aria-label="Sawaal badlo"');
     expect(msg(turn({ done: false, blocks: [{ kind: "text", id: "t", text: "…" }] }))).not.toContain('data-testid="msg-actions"');
   });
 });
@@ -163,7 +185,7 @@ describe("shortcuts, step icons, live region", () => {
     const now = 1_000_000;
     const base = { turns: [] as ChatTurn[], status: null, sessionId: null, busy: false, lastUserText: null };
     const asst = (o: Partial<ChatTurn>): ChatTurn => ({ id: "a", role: "assistant", text: "", blocks: [], done: true, at: now - 2000, endedAt: now - 1000, ...o });
-    expect(liveStatus({ authExpired: false, chat: { ...base, busy: true, turns: [asst({ done: false, steps: [{ id: "s", key: "tool.my_scope", params: {}, status: "running", startedAt: 0, ms: null }] })] } }, now)).toBe("Aapke batches dekh raha hoon…");
+    expect(liveStatus({ authExpired: false, chat: { ...base, busy: true, turns: [asst({ done: false, steps: [{ id: "s", key: "tool.my_scope", params: {}, status: "running", startedAt: 0, ms: null }] })] } }, now)).toBe("Aapke batches dekh rahe hain…");
     expect(liveStatus({ authExpired: false, chat: { ...base, turns: [asst({ blocks: [{ kind: "error", id: "e", code: "network", message: "Connection nahi bana", retryText: "q" }] })] } }, now)).toBe("Jawab nahi aa paya: Connection nahi bana");
     expect(liveStatus({ authExpired: false, chat: { ...base, turns: [asst({ stopped: true, endedAt: now - 60_000 })] } }, now)).toBe("");
     expect(liveStatus({ authExpired: true, chat: base }, now)).toMatch(/Session expire/);

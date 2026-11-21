@@ -36,7 +36,7 @@ export function VerificationBadge({ ev, failedIds = [] }: { ev: VerificationSumm
   const Icon = clean ? ShieldCheck : AlertTriangle;
 
   return (
-    <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-4 py-3 text-sm ${tone}`} data-testid="verification">
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border px-4 py-3 text-sm ${tone}`} data-testid="verification">
       <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
       <p className="min-w-[12rem] flex-1 font-medium tabular-nums">
         {verificationLine(ev).split(" · ").map((part, i) => (

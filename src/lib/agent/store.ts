@@ -6,6 +6,7 @@
 // Streaming: events are queued and applied once per animation frame (one React update per frame, not per token).
 // Approval Cancel is LOCAL ONLY — /agent/approve executes the action, so only the Approve button calls it.
 import { useEffect, useSyncExternalStore } from "react";
+import { agentLang, htmlLang } from "./i18n/lang";
 import { toast } from "sonner";
 import type { QueryClient } from "@tanstack/react-query";
 import { AgentHttpError, isAgentPdfPath } from "./client";
@@ -18,7 +19,8 @@ import { addRecentQuery, agentKeys, findSession, placeSession, removeSession } f
 import { emitUiAction } from "@/lib/voice/uiActions";
 import { emitVoiceAudio } from "@/lib/voice/audioBus";
 
-export type MetaStatus = "idle" | "loading" | "ok" | "error";
+import { META_SLOW_MS, META_TIMEOUT_MS, nextRetryDelay, type MetaStatus } from "./connection";
+export type { MetaStatus };
 /** Loading the open chat's messages from the server. */
 export type LoadStatus = "idle" | "loading" | "ok" | "error";
 
@@ -40,27 +42,41 @@ export interface AgentStoreState {
 
 export interface FriendlyError { message: string; code: string; retryAt?: number | null }
 
-/** HTTP / network failure → what the user reads (Hinglish) + a code for the card title. Pure (clock injectable). */
+/** HTTP / network failure → what the user reads (in the panel language) + a code for the card title. Never the
+ *  backend's own text or an HTTP status. Pure (clock injectable). */
+/** Hinglish text of the HTTP errors (== hinglish.ts, checked by a test). The error card shows the panel language by code. */
+export const HX_ERR = {
+  "error.session": "Session expire ho gaya. Dobara login karein.",
+  "error.forbidden": "a4ai Agent sirf institute staff ke liye hai.",
+  "error.notFound": "Ye chat ya request nahi mili. Naya chat shuru karein.",
+  "error.expired": "Ye approval expire ho gaya. Dobara poochiye, naya approval milega.",
+  "error.invalid": "Ye request samajh nahi aayi. Sawaal thoda badal kar poochiye.",
+  "error.unavailable": "a4ai Agent abhi available nahi hai. Thodi der me dobara try karein.",
+  "error.server": "Server me dikkat aayi. Dobara try karein.",
+  "error.generic": "Kuch gadbad ho gayi. Dobara try karein.",
+  "error.offline": "Internet nahi hai. Internet aate hi dobara try karein.",
+  "error.network": "a4ai Agent tak nahi pahunch paaye. Internet check karke dobara try karein.",
+} as const;
+const tNow = (k: keyof typeof HX_ERR | "error.rate", p?: { s: number }) => (k === "error.rate" ? `Bahut zyada requests ho gayi. ${p?.s ?? 30} second baad try karein.` : HX_ERR[k]);
+
 export function friendlyError(err: unknown, now = Date.now()): FriendlyError | null {
   if (err instanceof DOMException && err.name === "AbortError") return null;
   if (err instanceof AgentHttpError) {
-    if (err.status === 401) return { code: "unauthorized", message: "Aapka session expire ho gaya. Dobara sign in karein — likha hua text yahin rahega." };
-    if (err.status === 403) return { code: "forbidden", message: "a4ai Agent sirf institute staff ke liye hai." };
-    if (err.status === 404) return { code: "not_found", message: "Ye chat ya request nahi mili. Naya chat shuru karein." };
-    if (err.status === 410) return { code: "expired", message: "Ye approval expire ho gaya. Dobara poochiye, naya approval milega." };
-    if (err.status === 422) return { code: "invalid_input", message: "Ye request samajh nahi aayi. Sawaal thoda badal kar poochiye." };
+    if (err.status === 401) return { code: "unauthorized", message: tNow("error.session") };
+    if (err.status === 403) return { code: "forbidden", message: tNow("error.forbidden") };
+    if (err.status === 404) return { code: "not_found", message: tNow("error.notFound") };
+    if (err.status === 410) return { code: "expired", message: tNow("error.expired") };
+    if (err.status === 422) return { code: "invalid_input", message: tNow("error.invalid") };
     if (err.status === 429) {
       const sec = err.retryAfterSec ?? 30;
-      return { code: "rate_limited", message: `Bahut saari requests. ${sec} second baad dobara try karein.`, retryAt: now + sec * 1000 };
+      return { code: "rate_limited", message: tNow("error.rate", { s: sec }), retryAt: now + sec * 1000 };
     }
-    if (err.status === 503) return { code: "unavailable", message: "a4ai Agent abhi available nahi hai (server busy ya band). Thodi der me retry karein." };
-    if (err.status >= 500) return { code: "server", message: `a4ai Agent server me dikkat aayi (HTTP ${err.status}). Retry karein.` };
-    return { code: "http", message: `a4ai Agent error (HTTP ${err.status}). Dobara try karein.` };
+    if (err.status === 503) return { code: "unavailable", message: tNow("error.unavailable") };
+    if (err.status >= 500) return { code: "server", message: tNow("error.server") };
+    return { code: "http", message: tNow("error.generic") };
   }
-  if (typeof navigator !== "undefined" && navigator.onLine === false) {
-    return { code: "offline", message: "Aap offline hain. Internet aate hi Retry dabaiye." };
-  }
-  return { code: "network", message: "a4ai Agent tak nahi pahunch paye. Connection check karke retry karein." };
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return { code: "offline", message: tNow("error.offline") };
+  return { code: "network", message: tNow("error.network") };
 }
 
 export const isTempKey = (k: string) => k.startsWith("c-");
@@ -108,9 +124,11 @@ class AgentStore {
       uid, activeKey: active ?? newKey(), chat: active ? { ...initialChatState, sessionId: active } : initialChatState,
       meta: null, metaStatus: "idle", draft: null, load: active ? "loading" : "idle", loadNote: null, authExpired: false,
     });
+    this.stopMeta();
     void this.refreshMeta();
     if (active) void this.fetchMessages(active);
     this.hookAuth();
+    this.hookOnline();
   }
 
   private forgetUser(uid: string | null) {
@@ -132,6 +150,7 @@ class AgentStore {
         this.abort();
         this.forgetUser(this.state.uid);
         if (this.qc) this.qc.removeQueries({ queryKey: ["agent"] });
+        this.stopMeta();
         this.set({ uid: null, chat: initialChatState, meta: null, metaStatus: "idle", activeKey: newKey(), load: "idle", loadNote: null, draft: null, authExpired: false });
       });
       // "Sign in again" happens in another tab: re-check the session when this tab gets focus back
@@ -148,16 +167,60 @@ class AgentStore {
     if (err instanceof AgentHttpError && err.status === 401) this.set({ authExpired: true });
   }
 
-  async refreshMeta() {
-    if (this.state.metaStatus === "loading") return;
-    this.set({ metaStatus: "loading" });
+  // ---- connection (GET /agent/meta): timeout, "slow" after 8 s, backoff retries, manual Retry — ./connection.ts ----
+  private metaCtrl: AbortController | null = null;
+  private metaTimers: ReturnType<typeof setTimeout>[] = [];
+  private onlineHooked = false;
+  private stopMeta() {
+    this.metaTimers.forEach(clearTimeout);
+    this.metaTimers = [];
+    this.metaCtrl?.abort();
+    this.metaCtrl = null;
+  }
+
+  async refreshMeta(attempt = 0) {
+    if (this.metaCtrl && attempt === 0) return; // one at a time (a retry is already scheduled or running)
+    this.metaTimers.forEach(clearTimeout);
+    this.metaTimers = [];
+    const ac = new AbortController();
+    this.metaCtrl = ac;
+    const uid = this.state.uid;
+    const stale = () => this.metaCtrl !== ac || this.state.uid !== uid;
+    if (this.state.metaStatus !== "slow") this.set({ metaStatus: attempt > 0 ? "reconnecting" : "loading" });
+    this.metaTimers.push(setTimeout(() => { if (!stale() && this.state.metaStatus !== "ok") this.set({ metaStatus: "slow" }); }, META_SLOW_MS));
+    this.metaTimers.push(setTimeout(() => ac.abort(), META_TIMEOUT_MS)); // a socket that accepts but never answers
     try {
       const api = await getAgentApi();
-      this.set({ meta: await api.meta(), metaStatus: "ok" });
+      const meta = await api.meta(ac.signal);
+      if (stale()) return;
+      this.metaTimers.forEach(clearTimeout);
+      this.metaTimers = [];
+      this.metaCtrl = null;
+      this.set({ meta, metaStatus: "ok" });
     } catch (err) {
+      if (stale()) return;
+      this.metaTimers.forEach(clearTimeout);
+      this.metaTimers = [];
       this.onAuthError(err);
-      this.set({ metaStatus: "error" });
+      const fatal = err instanceof AgentHttpError && (err.status === 401 || err.status === 403);
+      const delay = fatal || (typeof navigator !== "undefined" && navigator.onLine === false) ? null : nextRetryDelay(attempt);
+      if (delay === null) { this.metaCtrl = null; this.set({ metaStatus: "error" }); return; }
+      if (this.state.metaStatus !== "slow") this.set({ metaStatus: "reconnecting" });
+      // keep metaCtrl set while waiting, so a second refreshMeta() does not start a parallel attempt
+      this.metaTimers.push(setTimeout(() => { if (!stale()) void this.refreshMeta(attempt + 1); }, delay));
     }
+  }
+
+  /** The Retry button / back online: start over now. */
+  retryMeta = () => {
+    this.stopMeta();
+    void this.refreshMeta();
+  };
+
+  private hookOnline() {
+    if (this.onlineHooked || typeof window === "undefined") return;
+    this.onlineHooked = true;
+    window.addEventListener("online", () => { if (this.state.uid && this.state.metaStatus === "error") this.retryMeta(); });
   }
 
   private rememberActive() {
@@ -288,6 +351,7 @@ class AgentStore {
   private drain() { if (this.queue.length) this.flushQueue(); }
 
   private stream(body: ChatRequest, voice = false, voiceOpts?: VoiceChatOpts) {
+    body = { ...body, language: agentLang.reply() }; // the reply language picked in the panel (sent only if not hinglish)
     const ac = new AbortController();
     this.ctrl = ac;
     const { uid } = this.state;
@@ -349,7 +413,7 @@ class AgentStore {
     if (bargeIn) this.stop();
     if (this.state.chat.busy) return;
     if (this.state.load === "loading") { this.loadCtrl?.abort(); this.set({ load: "ok" }); }
-    this.dispatch({ type: "send", text });
+    this.dispatch({ type: "send", text, lang: htmlLang(agentLang.get().ui) });
     const body: ChatRequest = { message: text, session_id: this.state.chat.sessionId };
     if (opts?.bargeIn) body.cancel_current = true;
     this.stream(body, opts?.voice === true, opts?.voiceOpts);
@@ -502,6 +566,7 @@ class AgentStore {
   /** Tests only: a fresh store state (no user). */
   _reset() {
     this.abort();
+    this.stopMeta();
     this.state = { uid: null, activeKey: newKey(), chat: initialChatState, meta: null, metaStatus: "idle", draft: null, load: "idle", loadNote: null, authExpired: false };
     this.composerText = "";
   }

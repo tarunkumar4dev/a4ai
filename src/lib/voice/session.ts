@@ -6,7 +6,8 @@ export type Notice =
   | { kind: "repeat" }                        // nothing usable: "Dobara boliye"
   | { kind: "confirm"; text: string }         // low confidence: "Maine suna: … Sahi hai?"
   | { kind: "pick"; text: string; question: string; chips: { label: string; value: string; hint?: string | null }[] }
-  | { kind: "auto"; text: string; sendAt: number }  // sending after the pause unless Edit is tapped
+  | { kind: "auto"; text: string; sendAt: number }  // (legacy 1.4 floating mic) sending after the pause unless Edit
+  | { kind: "ready"; text: string }          // the transcript is in the message box: the user reviews it and presses Send
   | { kind: "denied" }                        // mic permission refused
   | { kind: "unsupported" }                   // no MediaRecorder
   | { kind: "limit"; message: string; retryAt: number | null }
@@ -30,6 +31,7 @@ export type SessionAction =
   | { type: "transcript"; text: string; next: "auto" | "confirm" | "repeat" | "pick"; clarify?: { question: string; chips: { label: string; value: string; hint?: string | null }[] } | null; at?: number }
   | { type: "notice"; notice: Notice }
   | { type: "edit" }           // user tapped Edit on the auto-send strip
+  | { type: "ready"; text: string } // transcript put into the message box (never sent by itself)
   | { type: "sent" }
   | { type: "clear" };
 
@@ -56,6 +58,7 @@ export function sessionReducer(s: VoiceSession, a: SessionAction): VoiceSession 
       if (a.next === "confirm") return { ...base, notice: { kind: "confirm", text: a.text } };
       return { ...base, state: "transcribing", notice: { kind: "auto", text: a.text, sendAt: at + AUTO_SEND_PAUSE_MS } };
     }
+    case "ready": return { ...s, state: "idle", level: 0, transcript: a.text || null, notice: a.text ? { kind: "ready", text: a.text } : { kind: "repeat" } };
     case "notice": return { ...s, state: "idle", level: 0, notice: a.notice };
     case "edit": return { ...s, state: "idle", notice: null };
     case "sent": return { ...s, state: "thinking", notice: null };
@@ -69,7 +72,7 @@ export function liveText(s: VoiceSession, speech: string | null): string {
   if (s.state === "speaking" && speech) return speech;
   if (s.notice?.kind === "confirm") return `Maine suna: ${s.notice.text}. Sahi hai?`;
   if (s.notice?.kind === "repeat") return "Dobara boliye.";
-  if (s.notice?.kind === "auto") return s.notice.text;
+  if (s.notice?.kind === "auto" || s.notice?.kind === "ready") return s.notice.text;
   if (s.notice?.kind === "pick") return s.notice.question;
   return s.transcript ?? "";
 }

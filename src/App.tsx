@@ -39,6 +39,8 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 
 /* ---------- Lazy Marketing Pages ---------- */
 const LandingPage = lazy(() => import("./pages/LandingPage"));
+// dev only: the agent panel in every state, against the mock (not in production builds — Vite drops the branch)
+const AgentPreview = import.meta.env.DEV ? lazy(() => import("./pages/AgentPreview")) : null;
 const JoinContestPageAurora = lazy(() => import("@/pages/JoinContestPageAurora"));
 const Rules = lazy(() => import("@/pages/Rules"));
 const StudentProfilePage = lazy(() => import("./pages/StudentProfilePage"));
@@ -532,6 +534,7 @@ const App = () => {
                       {/* ============================================ */}
                       {/*  CATCH-ALL                                   */}
                       {/* ============================================ */}
+                      {AgentPreview ? <Route path="/__agent-preview" element={<AgentPreview />} /> : null}
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                     <Analytics />
