@@ -7,12 +7,15 @@
 // Backward compatible: dept/section nullable, works without them
 // ──────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect, useMemo, useRef, useCallback, lazy } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, lazy } from "react";
+import { Link, useLocation, useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/providers/AuthProvider";
 import { supabase } from "@/lib/supabaseClient";
 import { teacherDisplayName } from "@/lib/teacherName";
-import { toast } from "sonner";
+import { toast } from "@/pages/institute/instituteToast";
+import { type InstituteTab, type InstituteView, readInstituteView, patchInstituteView, rememberScroll, recallScroll } from "@/pages/institute/instituteUrlState";
+import { useBackToClose, modalsOf } from "@/hooks/useBackToClose";
+import { batchSubjectColor, subjectVars } from "@/lib/subjectColors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customStyles, Icons } from "@/pages/institute/dashboardTheme";
 import { LazySection, SectionSkeleton } from "@/components/LazySection";
@@ -34,6 +37,10 @@ const BatchManagementPanel = lazy(loadBatchSettings);
 const BulkStudentUpload = lazy(loadBulkUpload);
 const loadBatchAssign = () => import("@/components/institute/StudentBatchAssignModal");
 const StudentBatchAssignModal = lazy(loadBatchAssign);
+const loadStudentEdit = () => import("@/components/institute/StudentEditModal");
+const StudentEditModal = lazy(loadStudentEdit);
+const loadBatchStudents = () => import("@/components/institute/BatchStudentsModal");
+const BatchStudentsModal = lazy(loadBatchStudents);
 // keyed by nav tab id; Batch settings sits in the Analytics tab
 const PRELOAD: Record<string, () => Promise<unknown>> = { attendance: loadAttendance, analytics: loadBatchSettings };
 
@@ -68,7 +75,7 @@ interface Department { id: string; institute_id: string; name: string; student_c
 interface Section { id: string; department_id: string; name: string; year: number | null; }
 interface Teacher { id: string; user_id: string; role: string; status: string; joined_at: string; user_email?: string; user_name?: string; department_id?: string | null; }
 interface Batch { id: string; name: string; class_level: string; subject: string; description: string; is_active: boolean; department_id?: string | null; section_id?: string | null; is_lab?: boolean | null; }
-interface Student { id: string; name: string; roll_no: string; class_level: string; parent_name: string; parent_phone: string; batch_id: string; batch_name?: string; is_active: boolean; department_id?: string | null; section_id?: string | null; lab_batch_id?: string | null; }
+interface Student { id: string; name: string; roll_no: string; class_level: string; parent_name: string; parent_phone: string; batch_id: string; batch_name?: string; is_active: boolean; department_id?: string | null; section_id?: string | null; lab_batch_id?: string | null; phone?: string | null; email?: string | null; }
 
 const NO_TEACHERS: Teacher[] = [];
 const NO_BATCHES: Batch[] = [];
@@ -141,7 +148,25 @@ export default function InstituteDashboardPage() {
   const { user, signOut } = useAuth();
   const displayName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Admin";
 
-  const [activeTab, setActiveTab] = useState("overview");
+  // Tab, filters and search live in the URL (instituteUrlState.ts): Back from a profile / reload keeps the view.
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navType = useNavigationType();
+  const view = readInstituteView(searchParams);
+  const activeTab = view.tab;
+  const deptFilter = view.dept;
+  const sectionFilter = view.section;
+  /** Changes the URL view. Tab changes add a history entry (Back = previous tab), the rest replace the current one.
+   *  Reads window.location (not the render's params) so two calls in one handler don't overwrite each other. */
+  const updateView = useCallback((patch: Partial<InstituteView>, opts?: { replace?: boolean }) => {
+    const next = patchInstituteView(new URLSearchParams(window.location.search), patch).toString();
+    if (next === window.location.search.replace(/^\?/, "")) return;
+    navigate({ pathname: window.location.pathname, search: next ? `?${next}` : "" }, { replace: opts?.replace ?? !("tab" in patch) });
+  }, [navigate]);
+  const setActiveTab = (tab: string, opts?: { replace?: boolean }) => updateView({ tab: tab as InstituteTab }, opts);
+  const setDeptFilter = (dept: string) => updateView({ dept, section: "" });
+  const setSectionFilter = (section: string) => updateView({ section });
+
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -227,6 +252,8 @@ export default function InstituteDashboardPage() {
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(() => new Set());
   const [assignStudentIds, setAssignStudentIds] = useState<string[] | null>(null);
+  const [editStudentId, setEditStudentId] = useState<string | null>(null);
+  const [batchMembersId, setBatchMembersId] = useState<string | null>(null);
   const [assignTeacherBatches, setAssignTeacherBatches] = useState<{ teacherId: string; teacherName: string } | null>(null);
   // Class-teacher (proctor) modal: memberId = institute_members.id, which is what assign_proctor wants.
   const [assignProctorFor, setAssignProctorFor] = useState<{ memberId: string; userId: string; teacherName: string; deptId: string | null } | null>(null);
@@ -243,9 +270,23 @@ export default function InstituteDashboardPage() {
   const [newDept, setNewDept] = useState({ name: "" });
   const [newSection, setNewSection] = useState({ department_id: "", name: "", year: "" });
 
-  const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState<string>("");
-  const [sectionFilter, setSectionFilter] = useState<string>("");
+  // Search box: typed text here, the URL's ?q= is what filters (written 300 ms after the last key, replace).
+  const urlQ = view.q;
+  const debouncedSearch = urlQ;
+  const [search, setSearch] = useState(urlQ);
+  const ownQ = useRef(urlQ); // last q this page wrote — anything else came from Back / Forward
+  useEffect(() => {
+    if (urlQ !== ownQ.current) { ownQ.current = urlQ; setSearch(urlQ); }
+  }, [urlQ]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const q = search.trim();
+      if (q === readInstituteView(new URLSearchParams(window.location.search)).q) return;
+      ownQ.current = q;
+      updateView({ q }, { replace: true });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search, updateView]);
 
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -255,16 +296,47 @@ export default function InstituteDashboardPage() {
   const [editingName, setEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState("");
 
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Phone / browser Back closes whatever is open instead of leaving the page
+  useBackToClose(mobileMenuOpen, () => setMobileMenuOpen(false), "menu");
+  useBackToClose(showAddBatch, () => setShowAddBatch(false), "addBatch");
+  useBackToClose(showAddStudent, () => setShowAddStudent(false), "addStudent");
+  useBackToClose(showAddDept, () => setShowAddDept(false), "addDept");
+  useBackToClose(showAddSection, () => setShowAddSection(false), "addSection");
+  useBackToClose(showBulkUpload, () => setShowBulkUpload(false), "bulkUpload");
+  useBackToClose(!!assignStudentIds, () => setAssignStudentIds(null), "assignBatches");
+  useBackToClose(!!editStudentId, () => setEditStudentId(null), "editStudent");
+  useBackToClose(!!batchMembersId, () => setBatchMembersId(null), "batchStudents");
+  useBackToClose(!!assignTeacherBatches, () => setAssignTeacherBatches(null), "teacherBatches");
+  useBackToClose(!!assignProctorFor, () => setAssignProctorFor(null), "proctor");
+  useBackToClose(!!assignHodDept, () => setAssignHodDept(null), "hod");
 
-  useEffect(() => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 300);
-    return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
-  }, [search]);
+  // Scroll position of <main> per URL: Back (POP) restores it, a new tab (PUSH) starts at the top,
+  // filters / search (REPLACE) and opening a modal leave it alone.
+  const mainRef = useRef<HTMLElement>(null);
+  const scrollKey = location.pathname + location.search;
+  const onMainScroll = (e: React.UIEvent<HTMLElement>) => {
+    // Opening a lazy page (a profile) hides this one with display:none first (Suspense) — that resets the
+    // scroll to 0 and must not overwrite the position Back should restore.
+    if (e.currentTarget.clientHeight === 0) return;
+    rememberScroll(scrollKey, e.currentTarget.scrollTop);
+  };
+  useLayoutEffect(() => {
+    const el = mainRef.current;
+    if (!el || modalsOf(location.state).length > 0) return;
+    if (navType === "POP") {
+      const top = recallScroll(scrollKey);
+      if (top != null) el.scrollTop = top;
+    } else if (navType === "PUSH") el.scrollTop = 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per history entry (and once the page is on screen)
+  }, [location.key, loading]);
+  // Also save on unmount (opening a profile), in case the last scroll event hasn't fired yet. Skipped when Suspense
+  // already hid the page (clientHeight 0): then the scroll events' value stands.
+  const scrollKeyRef = useRef(scrollKey);
+  scrollKeyRef.current = scrollKey;
+  useLayoutEffect(() => {
+    const el = mainRef.current;
+    return () => { if (el && el.clientHeight > 0) rememberScroll(scrollKeyRef.current, el.scrollTop); };
+  }, [loading]);
 
   useEffect(() => {
     if (studentsQ.error) {
@@ -804,6 +876,30 @@ export default function InstituteDashboardPage() {
     );
   }, [students, debouncedSearch, deptFilter, sectionFilter, memberships, batchById]);
 
+  const allShownSelected = filteredStudents.length > 0 && filteredStudents.every(s => selectedStudentIds.has(s.id));
+  const someShownSelected = filteredStudents.some(s => selectedStudentIds.has(s.id));
+  const toggleStudent = (id: string) => setSelectedStudentIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  // A removed student must leave the selection (set_student_batches rejects the whole call for an unknown id)
+  useEffect(() => {
+    setSelectedStudentIds(prev => {
+      if (prev.size === 0) return prev;
+      const ids = new Set(students.map(s => s.id));
+      const next = new Set([...prev].filter(id => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [students]);
+
+  // students per batch (all memberships: main, lab and extra batches)
+  const batchCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of students) for (const bid of memberships.get(s.id) ?? []) m.set(bid, (m.get(bid) ?? 0) + 1);
+    return m;
+  }, [students, memberships]);
+
   const batchChart = useMemo(() =>
     batches.slice(0, 12).map((b) => ({
       label: b.class_level ? `C${b.class_level}` : b.name.slice(0, 5),
@@ -973,7 +1069,7 @@ export default function InstituteDashboardPage() {
             {navItems.map(item => (
               <button
                 key={item.id}
-                onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }}
+                onClick={() => { setActiveTab(item.id, { replace: mobileMenuOpen }); setMobileMenuOpen(false); }}
                 onPointerEnter={PRELOAD[item.id]}
                 onFocus={PRELOAD[item.id]}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-[14px] transition-colors ${activeTab === item.id ? "active-nav-item" : "text-slate-500 hover:bg-slate-50 font-medium"}`}
@@ -1019,7 +1115,7 @@ export default function InstituteDashboardPage() {
       </aside>
 
       {/* ═══════════ MAIN ═══════════ */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <main ref={mainRef} onScroll={onMainScroll} className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <div className={`px-4 sm:px-6 lg:px-8 py-6 sm:py-8 mx-auto w-full ${activeTab === "attendance" ? "max-w-7xl" : "max-w-5xl"}`}>
 
           <div className="flex items-center gap-2 mb-4 lg:hidden">
@@ -1109,7 +1205,7 @@ export default function InstituteDashboardPage() {
                   type="text"
                   placeholder="Search students by name, roll no, batch..."
                   value={search}
-                  onChange={e => { setSearch(e.target.value); if (e.target.value && activeTab !== "students") setActiveTab("students"); }}
+                  onChange={e => { setSearch(e.target.value); if (e.target.value) setActiveTab("students"); }}
                   className="bg-transparent border-none outline-none text-[14px] font-medium w-full text-slate-700 placeholder-slate-400"
                 />
                 {search && <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600 p-1"><Icons.X /></button>}
@@ -1431,9 +1527,9 @@ export default function InstituteDashboardPage() {
                             });
                             return (
                               <div key={bid} className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  📚 {b.name}
-                                  <button onClick={() => removeBatchFromTeacher(t.user_id, bid)} className="text-indigo-400 hover:text-red-500 ml-0.5">×</button>
+                                <span className="subj-chip text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={subjectVars(batchSubjectColor(b))}>
+                                  📚 {b.name}{b.class_level ? ` · ${b.class_level}` : ""}
+                                  <button onClick={() => removeBatchFromTeacher(t.user_id, bid)} aria-label={`Remove ${b.name} from this teacher`} className="opacity-60 hover:opacity-100 hover:text-red-500 ml-0.5">×</button>
                                 </span>
                                 {assignedSubjects.map(a => {
                                   const subj = subjects.find(s => s.id === a.subject_id);
@@ -1469,70 +1565,89 @@ export default function InstituteDashboardPage() {
           {/* ── STUDENTS TAB ── */}
           {activeTab === "students" && (
             <div className="anim-entrance" style={{ animationDelay: "0.05s" }}>
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <p className="text-[13px] text-slate-500 font-bold">{search || deptFilter || sectionFilter ? `${filteredStudents.length} match${filteredStudents.length !== 1 ? "es" : ""}` : `${totalStudents} total`}</p>
                 <div className="flex flex-wrap gap-2">
-                  {selectedStudentIds.size > 0 && (
-                    <button onClick={() => setAssignStudentIds([...selectedStudentIds])} onPointerEnter={loadBatchAssign} onFocus={loadBatchAssign}
-                      className="btn-orange px-4 py-2.5 rounded-xl text-[13px]" title="Add or remove batches for the selected students">
-                      <Icons.Layers /> Assign batches ({selectedStudentIds.size})
-                    </button>
-                  )}
                   <button onClick={downloadAccessCodesCSV} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]" title="Download access codes CSV for parents">📥 Access Codes CSV</button>
                   <button onClick={() => setShowBulkUpload(true)} onPointerEnter={loadBulkUpload} onFocus={loadBulkUpload} className="btn-ghost px-4 py-2.5 rounded-xl text-[13px]"><Icons.Upload /> Bulk Upload</button>
                   <button onClick={() => setShowAddStudent(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px]"><Icons.Plus /> Add Student</button>
                 </div>
               </div>
 
-              {departments.length > 0 && (
-                <div className="space-y-2 mb-4">
-                  <div className="flex flex-wrap items-center gap-2">
+              {/* Stays on screen while the list scrolls: search, filters, selection + Assign batches */}
+              <div className="sticky-bar -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 pt-3 pb-3 mb-3 space-y-2" data-testid="students-toolbar">
+                <div className="flex items-center bg-white px-3 py-2 rounded-xl border border-slate-200">
+                  <span className="text-slate-400 mr-2"><Icons.Search /></span>
+                  <input
+                    type="text"
+                    enterKeyHint="search"
+                    aria-label="Search students"
+                    placeholder="Search by name, roll no, batch..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="bg-transparent border-none outline-none text-[14px] font-medium w-full text-slate-700 placeholder-slate-400"
+                  />
+                  {search && <button onClick={() => setSearch("")} aria-label="Clear search" className="text-slate-400 hover:text-slate-600 p-1"><Icons.X /></button>}
+                </div>
+
+                {departments.length > 0 && (
+                  <div className="chip-row">
                     <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1"><Icons.Filter /> Dept:</span>
-                    <button onClick={() => { setDeptFilter(""); setSectionFilter(""); }} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
-                    <button onClick={() => { setDeptFilter("none"); setSectionFilter(""); }} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "none" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Unassigned</button>
+                    <button onClick={() => setDeptFilter("")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
+                    <button onClick={() => setDeptFilter("none")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "none" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Unassigned</button>
                     {departments.map(d => (
-                      <button key={d.id} onClick={() => { setDeptFilter(d.id); setSectionFilter(""); }} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === d.id ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{d.name}</button>
+                      <button key={d.id} onClick={() => setDeptFilter(d.id)} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === d.id ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{d.name}</button>
                     ))}
                   </div>
-                  {availSectionsForFilter.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1"><Icons.Layers /> Section:</span>
-                      <button onClick={() => setSectionFilter("")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${sectionFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
-                      {availSectionsForFilter.map(s => (
-                        <button key={s.id} onClick={() => setSectionFilter(s.id)} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${sectionFilter === s.id ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{s.name}{s.year ? ` · Y${s.year}` : ""}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+                {availSectionsForFilter.length > 0 && (
+                  <div className="chip-row">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1"><Icons.Layers /> Section:</span>
+                    <button onClick={() => setSectionFilter("")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${sectionFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
+                    {availSectionsForFilter.map(s => (
+                      <button key={s.id} onClick={() => setSectionFilter(s.id)} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${sectionFilter === s.id ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{s.name}{s.year ? ` · Y${s.year}` : ""}</button>
+                    ))}
+                  </div>
+                )}
 
-              {filteredStudents.length > 0 && (
-                <div className="flex flex-wrap items-center gap-3 mb-2 px-1">
-                  <label className="flex items-center gap-2 text-[12px] font-bold text-slate-500 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 accent-[#FF7043]"
-                      checked={filteredStudents.every(s => selectedStudentIds.has(s.id))}
-                      ref={el => { if (el) el.indeterminate = filteredStudents.some(s => selectedStudentIds.has(s.id)) && !filteredStudents.every(s => selectedStudentIds.has(s.id)); }}
-                      onChange={e => {
-                        const on = e.target.checked;
-                        setSelectedStudentIds(prev => {
-                          const next = new Set(prev);
-                          for (const s of filteredStudents) { if (on) next.add(s.id); else next.delete(s.id); }
-                          return next;
-                        });
-                      }}
-                    />
-                    Select all shown ({filteredStudents.length})
-                  </label>
-                  {selectedStudentIds.size > 0 && (
-                    <button onClick={() => setSelectedStudentIds(new Set())} className="text-[12px] font-bold text-slate-400 hover:text-slate-600">Clear selection</button>
-                  )}
-                  {!multiBatchReady && studentBatchesQ.isSuccess && (
-                    <span className="text-[11px] text-amber-700">Several batches per student need the server update (migration 33).</span>
-                  )}
-                </div>
-              )}
+                {filteredStudents.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-h-[38px]">
+                    <label className="flex items-center gap-2 text-[12px] font-bold text-slate-500 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-[#FF7043]"
+                        checked={allShownSelected}
+                        ref={el => { if (el) el.indeterminate = someShownSelected && !allShownSelected; }}
+                        onChange={e => {
+                          const on = e.target.checked;
+                          setSelectedStudentIds(prev => {
+                            const next = new Set(prev);
+                            for (const s of filteredStudents) { if (on) next.add(s.id); else next.delete(s.id); }
+                            return next;
+                          });
+                        }}
+                      />
+                      Select all shown ({filteredStudents.length})
+                    </label>
+                    {selectedStudentIds.size > 0 && (
+                      <>
+                        <span className="text-[12px] font-bold text-[#E64A19]">{selectedStudentIds.size} selected</span>
+                        <button onClick={() => setAssignStudentIds([...selectedStudentIds])} onPointerEnter={loadBatchAssign} onFocus={loadBatchAssign}
+                          className="btn-orange px-4 py-2 rounded-xl text-[13px]" title="Add or remove batches for the selected students">
+                          <Icons.Layers /> Assign batches ({selectedStudentIds.size})
+                        </button>
+                        <button onClick={() => setSelectedStudentIds(new Set())} className="text-[12px] font-bold text-slate-400 hover:text-slate-600">Clear selection</button>
+                      </>
+                    )}
+                    {selectedStudentIds.size === 0 && (
+                      <span className="text-[11px] text-slate-400">Tap a student to select · Edit to change details or batches</span>
+                    )}
+                    {!multiBatchReady && studentBatchesQ.isSuccess && (
+                      <span className="text-[11px] text-amber-700">Several batches per student need the server update (migration 33).</span>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {filteredStudents.length === 0 ? (
                 <div className="bg-white rounded-2xl p-12 text-center card-shadow border border-slate-50">
@@ -1541,49 +1656,71 @@ export default function InstituteDashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredStudents.map(s => (
-                    <div key={s.id} onClick={() => navigate(`/institute/students/${s.id}`)} className={`bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border anim-row cursor-pointer hover:border-[#FF7043]/30 hover:shadow-md transition-all ${selectedStudentIds.has(s.id) ? "border-[#FF7043]/50" : "border-slate-50"}`}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${s.name}`}
-                        className="w-4 h-4 accent-[#FF7043] shrink-0"
-                        checked={selectedStudentIds.has(s.id)}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => {
-                          const on = e.target.checked;
-                          setSelectedStudentIds(prev => {
-                            const next = new Set(prev);
-                            if (on) next.add(s.id); else next.delete(s.id);
-                            return next;
-                          });
+                  {filteredStudents.map(s => {
+                    const selected = selectedStudentIds.has(s.id);
+                    const named = [...(memberships.get(s.id) ?? [])]
+                      .map(id => batchById.get(id)).filter((b): b is Batch => !!b)
+                      .sort((a, b) => Number(b.id === s.batch_id) - Number(a.id === s.batch_id) || a.name.localeCompare(b.name));
+                    const code = (s as any).student_access_codes?.[0]?.access_code;
+                    return (
+                      <div
+                        key={s.id}
+                        data-testid="student-row"
+                        aria-selected={selected}
+                        onClick={e => {
+                          // the whole card selects; buttons / links inside do their own thing; dragging to copy text doesn't select
+                          if ((e.target as HTMLElement).closest("button, a, input, select, label")) return;
+                          if (window.getSelection()?.toString()) return;
+                          toggleStudent(s.id);
                         }}
-                      />
-                      <div className="w-10 h-10 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center font-bold text-sm shrink-0">{getInitials(s.name)}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[13px] font-bold text-slate-800 truncate">{s.name}</p>
-                          {s.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(s.department_id)}</span>}
-                          {s.section_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600">{sectionName(s.section_id)}</span>}
+                        className={`bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border-2 anim-row cursor-pointer transition-colors ${selected ? "border-[#FF7043]/60" : "border-transparent hover:border-slate-200"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${s.name}`}
+                          className="w-5 h-5 accent-[#FF7043] shrink-0 cursor-pointer"
+                          checked={selected}
+                          onChange={() => toggleStudent(s.id)}
+                        />
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${selected ? "bg-[#FF7043] text-white" : "bg-[#FFF5F2] text-[#FF7043]"}`}>
+                          {selected ? <Icons.Check /> : getInitials(s.name)}
                         </div>
-                        {(() => {
-                          const named = [...(memberships.get(s.id) ?? [])]
-                            .map(id => batchById.get(id)).filter((b): b is Batch => !!b);
-                          return named.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 my-0.5">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-[13px] font-bold text-slate-800 truncate">{s.name}</p>
+                            {s.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(s.department_id)}</span>}
+                            {s.section_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600">{sectionName(s.section_id)}</span>}
+                          </div>
+                          {named.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 my-1">
                               {named.map(b => (
-                                <span key={b.id} className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${b.id === s.batch_id ? "bg-orange-50 text-[#E64A19]" : "bg-slate-100 text-slate-600"}`} title={b.id === s.batch_id ? "Main batch (attendance)" : undefined}>{b.name}</span>
+                                <span key={b.id} className="subj-chip inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style={subjectVars(batchSubjectColor(b))}
+                                  title={b.id === s.batch_id ? `${b.name} — main batch (attendance)` : b.name}>
+                                  {b.id === s.batch_id && <span aria-hidden className="subj-dot w-1.5 h-1.5 rounded-full" />}
+                                  {b.name}
+                                </span>
                               ))}
                             </div>
-                          ) : <span className="text-[10px] font-bold text-slate-400">No batch</span>;
-                        })()}
-                        <p className="text-[11px] font-medium text-slate-400 truncate">Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}{(s as any).student_access_codes?.[0]?.access_code ? ` · 🔑 ${(s as any).student_access_codes[0].access_code}` : ""}</p>
+                          ) : <span className="text-[10px] font-bold text-slate-400">No batch</span>}
+                          <p className="text-[11px] font-medium text-slate-400 truncate">Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}{code ? ` · 🔑 ${code}` : ""}</p>
+                        </div>
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">Class {s.class_level || "—"}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => setEditStudentId(s.id)} onPointerEnter={loadStudentEdit} onFocus={loadStudentEdit}
+                            title="Edit details and batches" aria-label={`Edit ${s.name}`}
+                            className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[12px] font-bold text-slate-500 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors">
+                            <Icons.Edit /> <span className="hidden sm:inline">Edit</span>
+                          </button>
+                          <Link to={`/institute/students/${s.id}`} title="Open profile" aria-label={`Open profile of ${s.name}`}
+                            className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[12px] font-bold text-slate-500 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors">
+                            <Icons.Profile /> <span className="hidden sm:inline">Profile</span>
+                          </Link>
+                          <button onClick={() => contactParent(s)} title="Message parent" aria-label={`Message parent of ${s.name}`} className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Phone /></button>
+                          <button onClick={() => removeStudent(s.id)} title="Remove student" aria-label={`Remove ${s.name}`} className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">Class {s.class_level || "—"}</span>
-                      <button onClick={(e) => { e.stopPropagation(); setAssignStudentIds([s.id]); }} onPointerEnter={loadBatchAssign} title="Batches" aria-label={`Batches for ${s.name}`} className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Layers /></button>
-                      <button onClick={(e) => { e.stopPropagation(); contactParent(s); }} title="Message parent" className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Phone /></button>
-                      <button onClick={(e) => { e.stopPropagation(); removeStudent(s.id); }} title="Remove student" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1598,12 +1735,12 @@ export default function InstituteDashboardPage() {
               </div>
 
               {departments.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 mb-4">
+                <div className="chip-row mb-4">
                   <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1"><Icons.Filter /> Dept:</span>
-                  <button onClick={() => { setDeptFilter(""); setSectionFilter(""); }} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
-                  <button onClick={() => { setDeptFilter("none"); setSectionFilter(""); }} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "none" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Unassigned</button>
+                  <button onClick={() => setDeptFilter("")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
+                  <button onClick={() => setDeptFilter("none")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "none" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Unassigned</button>
                   {departments.map(d => (
-                    <button key={d.id} onClick={() => { setDeptFilter(d.id); setSectionFilter(""); }} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === d.id ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{d.name}</button>
+                    <button key={d.id} onClick={() => setDeptFilter(d.id)} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === d.id ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{d.name}</button>
                   ))}
                 </div>
               )}
@@ -1617,20 +1754,33 @@ export default function InstituteDashboardPage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                   {filteredBatches.map(b => {
-                    const count = students.filter(s => memberships.get(s.id)?.has(b.id)).length;
+                    const count = batchCounts.get(b.id) ?? 0;
+                    const c = batchSubjectColor(b);
                     return (
-                      <div key={b.id} className="bg-white rounded-2xl p-5 card-shadow card-hover border border-slate-50 relative group anim-row">
-                        <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => deleteBatch(b.id)} title="Delete batch" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
+                      <div key={b.id} data-testid="batch-card" onClick={() => setBatchMembersId(b.id)} onPointerEnter={loadBatchStudents}
+                        style={subjectVars(c)}
+                        className="bg-white rounded-2xl p-5 pt-6 card-shadow card-hover border border-slate-50 relative group anim-row overflow-hidden cursor-pointer flex flex-col">
+                        <div aria-hidden className="subj-accent absolute top-0 left-0 right-0 h-1.5" />
+                        <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
+                          <button onClick={e => { e.stopPropagation(); deleteBatch(b.id); }} title="Delete batch" aria-label={`Delete batch ${b.name}`} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                         </div>
-                        <div className="w-11 h-11 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center mb-3"><Icons.Layers /></div>
-                        <h4 className="text-[14px] font-bold text-slate-800">{b.name}</h4>
-                        <p className="text-[12px] font-medium text-slate-400 mb-3">{b.class_level ? `Class ${b.class_level}` : "No class set"}{b.subject ? ` · ${b.subject}` : ""}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">{count} student{count !== 1 ? "s" : ""}</span>
+                        <div className="subj-tile w-11 h-11 rounded-xl flex items-center justify-center mb-3 font-black text-[12px] tracking-wide" aria-hidden>
+                          {c.short || <Icons.Layers />}
+                        </div>
+                        <h4 className="text-[14px] font-bold text-slate-800 pr-8">{b.name}</h4>
+                        <p className="text-[12px] font-medium text-slate-400 mb-3">
+                          {b.class_level ? `Class ${b.class_level}` : "No class set"}
+                          {c.label ? ` · ${c.label}` : b.subject ? ` · ${b.subject}` : ""}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          <span className="subj-chip text-[10px] font-bold px-2.5 py-1 rounded-full">{count} student{count !== 1 ? "s" : ""}</span>
                           {b.department_id && <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-teal-50 text-teal-600">{deptName(b.department_id)}</span>}
                           {b.section_id && <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-cyan-50 text-cyan-600">{sectionName(b.section_id)}</span>}
                         </div>
+                        <button onClick={e => { e.stopPropagation(); setBatchMembersId(b.id); }} onFocus={loadBatchStudents}
+                          className="mt-auto self-start text-[12px] font-bold text-[#FF7043] hover:underline">
+                          View / edit students →
+                        </button>
                       </div>
                     );
                   })}
@@ -1922,7 +2072,9 @@ export default function InstituteDashboardPage() {
                     className={"flex items-center justify-between p-3 rounded-xl border transition-colors " + (isAssigned ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-100 hover:border-slate-200")}
                   >
                     <div>
-                      <p className="text-sm font-bold text-slate-800">{b.name}</p>
+                      <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        <span aria-hidden className="subj-dot w-2.5 h-2.5 rounded-full shrink-0" style={subjectVars(batchSubjectColor(b))} />{b.name}
+                      </p>
                       <p className="text-xs text-slate-400">{b.class_level ? "Class " + b.class_level : ""} {b.department_id ? "· " + deptName(b.department_id) : ""}</p>
                     </div>
                     {isAssigned ? (
@@ -2044,6 +2196,51 @@ export default function InstituteDashboardPage() {
           />
         </LazySection>
       )}
+
+      {editStudentId && (() => {
+        const st = students.find(x => x.id === editStudentId);
+        if (!st) return null;
+        return (
+          <LazySection label="Edit student" fallback={
+            <div className="fixed inset-0 z-[200] bg-slate-900/40 flex items-center justify-center p-4">
+              <div className="w-full max-w-lg"><SectionSkeleton label="student" rows={5} /></div>
+            </div>
+          }>
+            <StudentEditModal
+              student={st}
+              batches={batches}
+              departments={departments}
+              sections={sections}
+              memberships={memberships}
+              onSaved={() => invalidate("editStudent")}
+              onClose={() => setEditStudentId(null)}
+            />
+          </LazySection>
+        );
+      })()}
+
+      {batchMembersId && (() => {
+        const b = batchById.get(batchMembersId);
+        if (!b) return null;
+        return (
+          <LazySection label="Batch students" fallback={
+            <div className="fixed inset-0 z-[200] bg-slate-900/40 flex items-center justify-center p-4">
+              <div className="w-full max-w-lg"><SectionSkeleton label="students" rows={5} /></div>
+            </div>
+          }>
+            <BatchStudentsModal
+              batch={b}
+              students={students}
+              memberships={memberships}
+              batchById={batchById}
+              departments={departments}
+              sections={sections}
+              onSaved={() => invalidate("batchMembers")}
+              onClose={() => setBatchMembersId(null)}
+            />
+          </LazySection>
+        );
+      })()}
 
       {showBulkUpload && (
         <LazySection label="Bulk upload" fallback={

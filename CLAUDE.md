@@ -594,6 +594,20 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   count students.batch_id only (UI hidden while the flag is off). MSIT's HOD (hod.ece) now lands on /dashboard.
   HOD / proctor DB powers are unchanged (RLS as before).
 
+- [x] Institute students / batches bugs (21 Nov, branch `Bugs`, uncommitted; frontend only, no migration):
+  /institute view lives in the URL (`src/pages/institute/instituteUrlState.ts`: `?tab=&dept=&section=&q=`; tab = push,
+  filters / search = replace) + `<main>` scroll restored on Back → profile Back lands on the same list (profile Back
+  falls back to `/institute?tab=students` without in-app history). `src/hooks/useBackToClose.ts`: phone / browser Back
+  closes the open modal / mobile menu (history entry per modal, state `a4modals` stack; UI close pops it). Institute
+  toasts = `src/pages/institute/instituteToast.ts` (bottom-center translucent `.a4-snack`, 2nd transition allowed past
+  lite.css). Students tab: sticky toolbar (search, filters, Select all, Assign batches), card click = select, profile
+  only via "Profile", ✎ Edit = `StudentEditModal` (details + batches, one Save). Batch card → `BatchStudentsModal`
+  (view / remove / add members). Subject colours `src/lib/subjectColors.ts` (fixed per subject, matched on live names
+  ACC/BS/BST/ECO/MATHS/SCI/SST/ENG/ALL). Shared batch picker `BatchChecklist`, save helpers `studentEditing.ts`.
+  Tests: subjectColors / instituteUrlState unit, 5 new e2e in institute-dashboard.spec.ts.
+- Known after the students / batches fixes: selection is lost when the page unmounts (profile open); a Suspense
+  fallback hides the dashboard with display:none before a lazy page mounts — scroll handlers must ignore that (clientHeight 0).
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.

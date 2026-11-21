@@ -6,6 +6,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import { useAccess } from "@/context/AccessProvider";
+import { INSTITUTE_STUDENTS_URL } from "@/pages/institute/instituteUrlState";
 
 /* ─── Avatar ─────────────────────────────────────────────────────── */
 function Avatar({ gender, size = 80 }: { gender?: string | null; size?: number }) {
@@ -132,6 +133,13 @@ export default function StudentProfilePage() {
   const [error, setError]       = useState<string | null>(null);
   const [denied, setDenied]     = useState(false);
   const { access, loading: accessLoading } = useAccess();
+  // Back = the page the profile was opened from (same tab + filters, see instituteUrlState.ts). Opened in a new
+  // tab / from a link there is no in-app history: go to the students list (admin) or the user's home.
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else navigate(access?.primary_role === "admin" ? INSTITUTE_STUDENTS_URL : (access?.home_route || "/dashboard"), { replace: true });
+  };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (studentId && !accessLoading) load(); }, [studentId, accessLoading]);
@@ -272,7 +280,7 @@ export default function StudentProfilePage() {
       <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "12px 20px", fontSize: 14, color: "#B45309", fontWeight: 600, maxWidth: 400, textAlign: "center" }}>
         🔒 No access — this student is not in your section or batch.
       </div>
-      <button onClick={() => navigate(-1)} style={{ background: "#FF7043", color: "#fff", border: "none", borderRadius: 10, padding: "10px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>← Go Back</button>
+      <button onClick={goBack} style={{ background: "#FF7043", color: "#fff", border: "none", borderRadius: 10, padding: "10px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>← Go Back</button>
     </div>
   );
 
@@ -282,7 +290,7 @@ export default function StudentProfilePage() {
       <div style={{ background: "#FEE2E2", borderRadius: 12, padding: "12px 20px", fontSize: 14, color: "#DC2626", fontWeight: 600, maxWidth: 400, textAlign: "center" }}>
         ⚠️ {error || "Student not found"}
       </div>
-      <button onClick={() => navigate(-1)} style={{ background: "#FF7043", color: "#fff", border: "none", borderRadius: 10, padding: "10px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>← Go Back</button>
+      <button onClick={goBack} style={{ background: "#FF7043", color: "#fff", border: "none", borderRadius: 10, padding: "10px 24px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>← Go Back</button>
     </div>
   );
 
@@ -316,7 +324,7 @@ export default function StudentProfilePage() {
 
       {/* ── Sticky Top Bar ── */}
       <div style={{ background: "#fff", borderBottom: "1px solid #F1F5F9", padding: "12px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" }}>
-        <button onClick={() => navigate(-1)}
+        <button onClick={goBack}
           style={{ display: "flex", alignItems: "center", gap: 6, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "8px 14px", fontWeight: 700, fontSize: 13, color: "#475569", cursor: "pointer" }}>
           ← Back
         </button>

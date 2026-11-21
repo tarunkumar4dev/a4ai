@@ -25,6 +25,7 @@ const students = Array.from({ length: 43 }, (_, i) => ({
 type Opts = { accessFailures?: number };
 class Db {
   log: { method: string; table: string; query: string }[] = [];
+  writes: { method: string; table: string; body: any }[] = [];
   chunks: string[] = [];
   depts = [{ id: "d-1", institute_id: INST, name: "ECE", student_code: "A4I-ECE-STU-AAAA", teacher_code: "A4I-ECE-TCH-BBBB" }];
   accessFailures: number;
@@ -56,6 +57,11 @@ class Db {
 
     const table = url.pathname.replace("/rest/v1/", "");
     this.log.push({ method: req.method(), table, query: url.search });
+    if (req.method() !== "GET" && req.method() !== "HEAD") {
+      let body: any = null;
+      try { body = JSON.parse(req.postData() || "null"); } catch { /* not JSON */ }
+      this.writes.push({ method: req.method(), table, body });
+    }
     const one = (req.headers()["accept"] || "").includes("vnd.pgrst.object");
     const q = url.searchParams;
 
@@ -67,6 +73,11 @@ class Db {
       if (q.get("owner_id")) return this.json(route, [{ id: INST }]);
       return this.json(route, { id: INST, name: "MSIT", join_code: "JOIN42", max_teachers: 50, max_students: 500, monthly_test_limit: 100 });
     }
+    if (table === "rpc/set_student_batches") {
+      const b = this.writes.at(-1)!.body;
+      return this.json(route, { students: b.p_student_ids.length, added: b.p_add.length * b.p_student_ids.length, removed: b.p_remove.length * b.p_student_ids.length });
+    }
+    if (table === "students" && req.method() === "PATCH") return this.json(route, [{ id: q.get("id")?.replace("eq.", "") }]);
     if (table === "students") {
       if (req.method() === "HEAD") {
         const n = q.get("batch_id") === "is.null" ? 1 : students.length;
@@ -84,7 +95,11 @@ class Db {
     }
     const lists: Record<string, unknown[]> = {
       institute_members: [{ id: "m-1", user_id: "user-t1", institute_id: INST, role: "teacher", status: "active", joined_at: "2026-10-10T00:00:00Z", user_name: "Teacher One", user_email: "teacher.ece2@msit.a4ai.in", department_id: "d-1" }],
-      batches: [{ id: "b-1", institute_id: INST, name: "ECE-2", class_level: "2025", subject: "", description: "", is_active: true, department_id: "d-1", section_id: "s-1", created_at: "2026-10-10T00:00:00Z" }],
+      batches: [
+        { id: "b-1", institute_id: INST, name: "ECE-2", class_level: "2025", subject: "", description: "", is_active: true, department_id: "d-1", section_id: "s-1", created_at: "2026-10-10T00:00:00Z" },
+        { id: "b-2", institute_id: INST, name: "MATHS", class_level: "12", subject: "MATHS", description: "", is_active: true, department_id: "d-1", section_id: null, created_at: "2026-10-09T00:00:00Z" },
+      ],
+      student_batches: students.filter(s => s.batch_id).map(s => ({ student_id: s.id, batch_id: s.batch_id })),
       sections: [{ id: "s-1", department_id: "d-1", name: "ECE-2", year: 2025, departments: { institute_id: INST } }],
       subjects: [{ id: "sub-1", name: "DSA", code: "DSA101", department_id: "d-1" }],
       teaching_assignments: [{ teacher_id: "user-t1", batch_id: "b-1", subject_id: "sub-1" }],
@@ -196,4 +211,124 @@ test("one failed access check is retried silently", async ({ page }) => {
   const db = new Db({ accessFailures: 1 });
   await openDashboard(page, db);
   expect(new URL(page.url()).pathname).toBe("/institute");
+});
+
+/* ───────── Students / batches management (bugs reported 20 Nov) ───────── */
+
+const mainScroll = (page: Page) => page.locator("main").evaluate(el => el.scrollTop);
+const row = (page: Page, name: string) => page.getByTestId("student-row").filter({ hasText: name });
+
+test("tab + filter live in the URL; Back from a profile returns to the same list and scroll position", async ({ page }) => {
+  const db = new Db();
+  await openDashboard(page, db);
+  await nav(page, "Students").click();
+  await expect(page).toHaveURL(/\/institute\?tab=students$/);
+  await page.getByTestId("students-toolbar").getByRole("button", { name: "ECE", exact: true }).click();
+  await expect(page).toHaveURL(/tab=students&dept=d-1/);
+
+  await page.locator("main").evaluate(el => { el.scrollTop = 900; });
+  // the list's scroll position at the moment of the click (Playwright scrolls the link into view first)
+  await page.evaluate(() => document.addEventListener("click", () => {
+    (window as any).__clickTop = document.querySelector("main")!.scrollTop;
+  }, { capture: true, once: true }));
+  await row(page, "Student 20").getByRole("link", { name: /Open profile/ }).click();
+  await expect(page).toHaveURL(/\/institute\/students\/stu-20$/);
+  const before = await page.evaluate(() => (window as any).__clickTop as number);
+  expect(before).toBeGreaterThan(500);
+  await page.goBack();
+  await expect(page).toHaveURL(/tab=students&dept=d-1/);
+  await expect(row(page, "Student 20")).toBeVisible();
+  expect(Math.abs((await mainScroll(page)) - before)).toBeLessThan(5);
+
+  // the profile page's own Back button does the same
+  await row(page, "Student 21").getByRole("link", { name: /Open profile/ }).click();
+  await page.getByRole("button", { name: /Go Back|Back/ }).first().click();
+  await expect(page).toHaveURL(/tab=students&dept=d-1/);
+
+  // Back once more = the previous tab (Dashboard)
+  await page.goBack();
+  await expect(page).toHaveURL(/\/institute$/);
+  await expect(page.locator("main").getByText("JOIN42").first()).toBeVisible();
+});
+
+test("tapping a student selects it (no profile); the toolbar with Assign batches stays on screen", async ({ page }) => {
+  const db = new Db();
+  await openDashboard(page, db);
+  await nav(page, "Students").click();
+  await row(page, "Student 03").getByText("Student 03").click();
+  await expect(page).toHaveURL(/\/institute\?tab=students$/);
+  await expect(row(page, "Student 03").getByRole("checkbox")).toBeChecked();
+  await row(page, "Student 05").click({ position: { x: 300, y: 10 } });
+  await expect(page.getByText("2 selected")).toBeVisible();
+
+  await page.locator("main").evaluate(el => { el.scrollTop = el.scrollHeight; });
+  const assign = page.getByTestId("students-toolbar").getByRole("button", { name: "Assign batches (2)" });
+  await expect(assign).toBeInViewport();
+  await assign.click();
+  await expect(page.getByRole("dialog", { name: "Batches for 2 students" })).toBeVisible();
+});
+
+test("Edit student saves the changed details and batches; the toast sits at the bottom", async ({ page }) => {
+  const db = new Db();
+  await openDashboard(page, db);
+  await nav(page, "Students").click();
+  await row(page, "Student 00").getByRole("button", { name: "Edit Student 00" }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit Student 00" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Roll no.").fill("999");
+  await dialog.getByLabel("Parent phone").fill("9876543210");
+  await dialog.locator("label", { hasText: "MATHS" }).getByRole("checkbox").check();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+
+  await expect(page.getByText("Student 00 updated")).toBeVisible();
+  const patch = db.writes.find(w => w.method === "PATCH" && w.table === "students");
+  expect(patch?.body).toEqual({ roll_no: "999", parent_phone: "9876543210" });
+  const rpc = db.writes.find(w => w.table === "rpc/set_student_batches");
+  expect(rpc?.body).toEqual({ p_student_ids: ["stu-0"], p_add: ["b-2"], p_remove: [] });
+
+  const toast = page.locator("[data-sonner-toaster][data-y-position='bottom'] [data-sonner-toast]", { hasText: "Student 00 updated" });
+  await expect(toast).toBeVisible();
+  const box = await toast.boundingBox();
+  expect(box!.y).toBeGreaterThan(900 / 2);
+  await expect(dialog).toHaveCount(0);
+});
+
+test("a batch card lists its students; remove + add are saved for that batch", async ({ page }) => {
+  const db = new Db();
+  await openDashboard(page, db);
+  await nav(page, "Batches").click();
+  await page.getByTestId("batch-card").filter({ hasText: "ECE-2" }).click();
+  const dialog = page.getByRole("dialog", { name: "ECE-2" });
+  await expect(dialog.getByRole("tab", { name: "In this batch (42)" })).toBeVisible();
+  await dialog.getByPlaceholder("Search by name or roll no.").fill("Student 01");
+  await dialog.getByRole("button", { name: "Remove" }).click();
+  await dialog.getByRole("tab", { name: /Add students/ }).click();
+  await dialog.getByPlaceholder("Search by name or roll no.").fill("");
+  await dialog.locator("label", { hasText: "Student 42" }).getByRole("checkbox").check();
+  await dialog.getByRole("button", { name: "Save 2 changes" }).click();
+
+  await expect(page.getByText("ECE-2: 1 added, 1 removed")).toBeVisible();
+  const calls = db.writes.filter(w => w.table === "rpc/set_student_batches").map(w => w.body);
+  expect(calls).toEqual([
+    { p_student_ids: ["stu-1"], p_add: [], p_remove: ["b-1"] },
+    { p_student_ids: ["stu-42"], p_add: ["b-1"], p_remove: [] },
+  ]);
+});
+
+test("Back closes an open modal and stays on the page; closing with Cancel leaves no extra history entry", async ({ page }) => {
+  const db = new Db();
+  await openDashboard(page, db);
+  await nav(page, "Students").click();
+  await row(page, "Student 00").getByRole("button", { name: "Edit Student 00" }).click();
+  await expect(page.getByRole("dialog", { name: "Edit Student 00" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("dialog", { name: "Edit Student 00" })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/institute\?tab=students$/);
+
+  await page.getByRole("button", { name: "Add Student", exact: true }).click();
+  await expect(page.getByPlaceholder("Student name *")).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByPlaceholder("Student name *")).toHaveCount(0);
+  await page.goBack(); // straight to the previous tab, not a dead "modal" entry
+  await expect(page).toHaveURL(/\/institute$/);
 });

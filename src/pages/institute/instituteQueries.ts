@@ -26,6 +26,8 @@ export const INVALIDATES = {
   removeStudent: ["students", "studentCounts", "studentBatches"],  // memberships cascade
   bulkUpload: ["students", "studentCounts", "studentBatches"], // also creates access codes (embedded in the students query)
   assignBatches: ["students", "studentCounts", "studentBatches"], // set_student_batches may change batch_id / lab_batch_id
+  editStudent: ["students", "studentCounts", "studentBatches"],   // students row update + set_student_batches
+  batchMembers: ["students", "studentCounts", "studentBatches"],  // set_student_batches for one batch
   removeTeacher: ["teachers", "proctors"],  // a removed member's proctor_assignments go with them
   teacherRole: ["teachers"],                // promote / demote HOD, change department
   teaching: ["teaching"],                   // assign / remove subject or batch

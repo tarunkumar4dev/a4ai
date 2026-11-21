@@ -9,7 +9,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { toast } from "sonner";
+import { toast } from "@/pages/institute/instituteToast";
 import { HOD_ENABLED } from "@/config/features";
 import * as XLSX from "xlsx";
 import {

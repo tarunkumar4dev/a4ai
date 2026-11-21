@@ -272,6 +272,36 @@ body:has(.att-sheet) .a4-help { display: none; }
 }
 .a4-net-close:hover { opacity: 1; }
 
+/* Institute dashboard toasts (src/pages/institute/instituteToast.ts): bottom-center, translucent snackbar.
+   Its slide/fade is the second transition lite.css lets through (one small transform/opacity layer). */
+[data-sonner-toast].a4-snack {
+  background: rgba(15, 23, 42, 0.8) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 14px !important;
+  padding: 12px 16px !important;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.45) !important;
+}
+[data-sonner-toast].a4-snack[data-type="error"] { background: rgba(127, 29, 29, 0.88) !important; }
+[data-sonner-toast].a4-snack[data-type="warning"] { background: rgba(120, 53, 15, 0.88) !important; }
+[data-sonner-toast].a4-snack[data-type="success"] [data-icon] { color: #4ade80; }
+[data-sonner-toast].a4-snack[data-type="error"] [data-icon] { color: #fca5a5; }
+[data-sonner-toast].a4-snack[data-type="warning"] [data-icon] { color: #fcd34d; }
+[data-sonner-toast].a4-snack[data-type="info"] [data-icon] { color: #93c5fd; }
+[data-sonner-toast].a4-snack [data-description] { color: rgba(255, 255, 255, 0.8) !important; }
+[data-sonner-toast].a4-snack [data-close-button] {
+  background: rgb(30, 41, 59) !important;
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-sonner-toast].a4-snack {
+    transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 320ms ease, height 320ms ease !important;
+  }
+}
+
 /* ---- a4ai Agent panel typography (src/components/agent) ------------------------------------------------------
    Latin keeps Plus Jakarta Sans; Devanagari glyphs fall through to Noto (then the metric-matched local fallback).
    Hindi (lang="hi" — NOT hi-Latn, which is Hinglish in Roman script): line-height ≥ 1.6, no letter-spacing, no italics,
