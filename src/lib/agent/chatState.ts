@@ -37,6 +37,7 @@ export type Feedback = "up" | "down" | null;
 export interface ChatTurn {
   id: string; role: "user" | "assistant"; text: string; blocks: Block[]; done: boolean;
   /** created (ms since epoch) */ at: number;
+  /** user turns: the panel language when it was sent (BCP 47, for the lang attribute) */ lang?: string;
   /** assistant: when the stream ended */ endedAt?: number | null;
   steps?: Step[];
   /** thumbs up/down (POST /agent/feedback when the message has a seq) */ feedback?: Feedback;
@@ -59,7 +60,7 @@ export interface ChatState {
 }
 
 export type ChatAction =
-  | { type: "send"; text: string; at?: number }
+  | { type: "send"; text: string; at?: number; lang?: string }
   | { type: "event"; ev: AgentEvent; at?: number }
   | { type: "fail"; message: string; code?: string; retryAt?: number | null; at?: number }
   | { type: "file"; blockId: string; state: FileState; error?: string | null }
@@ -180,7 +181,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state, busy: true, lastUserText: text, status: { key: "status.thinking", params: {} }, requestId: null, confirmHighlightAt: null,
         turns: [...state.turns,
-          { id: nid("u"), role: "user", text, blocks: [], done: true, at, seq: seqs.user },
+          { id: nid("u"), role: "user", text, blocks: [], done: true, at, seq: seqs.user, ...(action.lang ? { lang: action.lang } : {}) },
           { id: nid("a"), role: "assistant", text: "", blocks: [], done: false, at, steps: [], endedAt: null, seq: seqs.assistant }],
       };
     }
@@ -301,43 +302,6 @@ export function stepsSummary(t: ChatTurn): string {
 export function fmtMs(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms)) return "";
   return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
-// ---- Hinglish activity labels (timeline + the one aria-live status line) ----------------------
-const STEP_LABELS: Record<string, string> = {
-  "tool.resolve_entity": "Naam dhoondh raha hoon",
-  "tool.attendance_stats": "Attendance nikal raha hoon",
-  "tool.low_attendance_list": "Kam attendance wale students dekh raha hoon",
-  "tool.attendance_trend": "Trend bana raha hoon",
-  "tool.marks_stats": "Marks dekh raha hoon",
-  "tool.tests_created_by_teacher": "Tests gin raha hoon",
-  "tool.blueprint_defaults": "Blueprint bana raha hoon",
-  "tool.generate_questions": "Sawaal likh raha hoon",
-  "tool.verify_paper": "Verify kar raha hoon",
-  "tool.regenerate_failed": "Galat sawaal dobara likh raha hoon",
-  "tool.save_draft": "Draft save kar raha hoon",
-  "tool.finalize_test": "Test final kar raha hoon",
-  "tool.assign_to_section": "Section ko bhej raha hoon",
-  "tool.export_pdf": "PDF bana raha hoon",
-  "tool.my_scope": "Aapke batches dekh raha hoon",
-  "tool.section_comparison": "Sections compare kar raha hoon",
-  "status.thinking": "Soch raha hoon",
-  "status.querying": "Data dekh raha hoon",
-  "status.retrieving_ncert": "NCERT padh raha hoon",
-  "status.generating": "Sawaal likh raha hoon",
-  "status.verifying": "Verify kar raha hoon",
-  "status.regenerating": "Galat sawaal dobara likh raha hoon",
-};
-
-export function stepLabel(key: string, params: Record<string, unknown> = {}): string {
-  const base = STEP_LABELS[key] ?? "Kaam chal raha hai";
-  if (key === "status.generating" && typeof params.n === "number") return `${params.n} sawaal likh raha hoon`;
-  if (key === "status.verifying" && typeof params.round === "number" && params.round > 1) return `${base} · round ${params.round}`;
-  if (key === "status.regenerating") {
-    const n = Array.isArray(params.ids) ? params.ids.length : typeof params.count === "number" ? params.count : null;
-    if (n) return `${n} galat sawaal dobara likh raha hoon`;
-  }
-  return base;
 }
 
 // ---- status line labels (localized; kept for callers that want en/hi) ---------------------------

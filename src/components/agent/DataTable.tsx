@@ -58,7 +58,7 @@ export function DataTable({ ev }: { ev: Table }) {
   };
 
   return (
-    <section className="min-w-0 rounded-lg border border-border bg-card text-card-foreground" data-testid="data-table">
+    <section className="min-w-0 rounded-2xl border border-border bg-card text-card-foreground" data-testid="data-table">
       <header className="flex items-center justify-between gap-2 px-4 pb-2 pt-3">
         <h4 className="min-w-0 text-sm font-semibold">
           {ev.title} <span className="font-normal text-muted-foreground">· {ev.rows.length}</span>

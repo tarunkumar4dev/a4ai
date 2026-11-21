@@ -3,14 +3,14 @@
 // Esc layer (./escLayer), so the first Esc closes only this drawer, not the sheet.
 import { useEffect, useRef } from "react";
 import { ArrowLeft } from "lucide-react";
-import { useAuth } from "@/providers/AuthProvider";
+import { useAgentUser } from "@/lib/agent/env";
 import { useAgentQueryClient } from "@/lib/agent/queries";
 import { useAgentStore } from "@/lib/agent/store";
 import { AgentHistoryPanel } from "./AgentHistoryPanel";
 import { ESC_LAYER } from "./escLayer";
 
 export default function SheetHistory({ onClose, onPicked }: { onClose: () => void; onPicked: () => void }) {
-  const { user } = useAuth();
+  const user = useAgentUser();
   const s = useAgentStore(user?.id ?? "anon", useAgentQueryClient());
   const box = useRef<HTMLDivElement>(null);
 

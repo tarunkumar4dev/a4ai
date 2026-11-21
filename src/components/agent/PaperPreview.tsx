@@ -94,10 +94,10 @@ export function PaperPreview({ ev, ctx, disabled, onSend, onPrefill }: {
   const classLine = [ctx?.class_grade ? `Class ${ctx.class_grade}` : null, ctx?.subject ?? null].filter(Boolean).join(" · ");
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-lg border border-border bg-card text-card-foreground" data-testid="paper-preview">
+    <article className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card text-card-foreground" data-testid="paper-preview">
       <header className="border-b border-border px-4 pb-4 pt-3 text-center sm:px-6">
-        <p className="text-left"><span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Draft · abhi final nahi</span></p>
-        <h4 className="mt-2 text-base font-semibold uppercase tracking-wide">{ev.title}</h4>
+        <p className="text-left"><span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">Draft · abhi final nahi</span></p>
+        <h4 className="mt-2 text-base font-semibold">{ev.title}</h4>
         {classLine ? <p className="mt-0.5 text-sm text-muted-foreground">{classLine}</p> : null}
         <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-xs font-medium sm:text-sm">
           <span>Time: {durationLabel(ev.duration_min)}</span>
@@ -124,7 +124,7 @@ export function PaperPreview({ ev, ctx, disabled, onSend, onPrefill }: {
                     <div className="min-w-0 flex-1">
                       {isCase ? (
                         <div className="rounded-md border border-border bg-muted/40 p-3">
-                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Case study</p>
+                          <p className="mb-1 text-xs font-semibold text-muted-foreground">Case study</p>
                           <AgentMath text={q.text} className="block break-words" />
                         </div>
                       ) : <AgentMath text={q.text} className="block break-words" />}

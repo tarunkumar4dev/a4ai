@@ -1,3 +1,4 @@
+import type { AgentKey } from "@/lib/agent/i18n";
 // Keyboard shortcuts of the agent (pure matching + labels). Wired up in AskA4aiLauncher (global, dashboard routes)
 // and listed in the "?" popover (ShortcutsHelp).
 export const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || "");
@@ -33,13 +34,13 @@ export function matchShortcut(e: KeyLike, target: EventTarget | null): ShortcutA
   return null;
 }
 
-export const SHORTCUTS: { keys: string; label: string }[] = [
-  { keys: OPEN_SHORTCUT, label: "a4ai Agent kholo (dashboard par kahin bhi)" },
-  { keys: NEW_CHAT_SHORTCUT, label: "Naya sawaal" },
-  { keys: "/", label: "Message box par jao" },
-  { keys: "↑ ↓", label: "Suggestions me upar / neeche" },
-  { keys: "Enter", label: "Bhejo / suggestion chalao" },
-  { keys: "Tab  →", label: "Suggestion box me bharo (bheje bina)" },
-  { keys: "Shift+Enter", label: "Nayi line" },
-  { keys: "Esc", label: "Suggestions / sheet band karo" },
+export const SHORTCUTS: { keys: string; label: AgentKey }[] = [
+  { keys: OPEN_SHORTCUT, label: "shortcut.open" },
+  { keys: NEW_CHAT_SHORTCUT, label: "shortcut.newChat" },
+  { keys: "/", label: "shortcut.focus" },
+  { keys: "↑ ↓", label: "shortcut.move" },
+  { keys: "Enter", label: "shortcut.run" },
+  { keys: "Tab  →", label: "shortcut.fill" },
+  { keys: "Shift+Enter", label: "shortcut.newline" },
+  { keys: "Esc", label: "shortcut.close" },
 ];

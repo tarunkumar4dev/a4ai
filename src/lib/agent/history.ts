@@ -3,6 +3,7 @@
 import type { SessionItem } from "./types";
 
 export type HistoryGroupKey = "pinned" | "today" | "yesterday" | "week" | "older";
+/** English headings (tests / fallback); the panel shows them in its language (history.* dictionary keys). */
 export const GROUP_LABEL: Record<HistoryGroupKey, string> = {
   pinned: "Pinned", today: "Today", yesterday: "Yesterday", week: "Previous 7 days", older: "Older",
 };

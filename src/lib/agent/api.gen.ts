@@ -272,6 +272,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agent/admin/voice-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Voice Usage
+         * @description Voice questions per institute for one month (default: the current IST month) — counts only, no user ids.
+         *     Who may read: an institute admin (own institute only) with a normal session token, or the ops token
+         *     (AGENT_METRICS_TOKEN, every institute).
+         */
+        get: operations["admin_voice_usage_agent_admin_voice_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/agent/metrics": {
         parameters: {
             query?: never;
@@ -498,6 +520,12 @@ export interface components {
              * @default false
              */
             cancel_current: boolean;
+            /**
+             * Language
+             * @default hinglish
+             * @enum {string}
+             */
+            language: "en" | "hi" | "hinglish";
         };
         /** Clarify */
         Clarify: {
@@ -1300,10 +1328,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /** VerificationSummary */
         VerificationSummary: {
@@ -1356,6 +1380,12 @@ export interface components {
              * @default false
              */
             cancel_current: boolean;
+            /**
+             * Language
+             * @default hinglish
+             * @enum {string}
+             */
+            language: "en" | "hi" | "hinglish";
             /**
              * Tts
              * @default off
@@ -1979,6 +2009,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadyResponse"];
+                };
+            };
+        };
+    };
+    admin_voice_usage_agent_admin_voice_usage_get: {
+        parameters: {
+            query?: {
+                month?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
