@@ -119,6 +119,23 @@ export const customStyles = `
 
   .dept-accent { position: absolute; top:0; left:0; right:0; height: 3px; background: #FF7043; }
 
+  /* Subject colours (src/lib/subjectColors.ts → subjectVars): same colour per subject everywhere */
+  .subj-chip { background: var(--s-bg); color: var(--s-fg); border: 1px solid var(--s-bd); }
+  .subj-dot { background: var(--s-fg); }
+  .subj-accent { background: var(--s-fg); }
+  .subj-tile { background: var(--s-bg); color: var(--s-fg); }
+  .dark-mode .subj-chip { background: var(--s-bg-d); color: var(--s-fg-d); border-color: var(--s-bd-d); }
+  .dark-mode .subj-dot, .dark-mode .subj-accent { background: var(--s-fg-d); }
+  .dark-mode .subj-tile { background: var(--s-bg-d); color: var(--s-fg-d); }
+
+  /* Toolbar that stays on screen while the list scrolls (main is the scroll area) */
+  .sticky-bar { position: sticky; top: 0; z-index: 30; background: #F7F9FC; box-shadow: 0 10px 12px -14px rgba(15,23,42,.35); }
+  .dark-mode .sticky-bar { background: #0F1420; box-shadow: 0 10px 12px -14px rgba(0,0,0,.8); }
+  .chip-row { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+  .chip-row::-webkit-scrollbar { display: none; }
+  .chip-row > * { flex: none; }
+  @media (min-width: 640px) { .chip-row { flex-wrap: wrap; overflow: visible; } }
+
   .dashboard-root.dark-mode { background-color: #0F1420; color: #E8EDF5; }
   .dark-mode .bg-white { background-color: #171D2B !important; }
   .dark-mode .bg-slate-50 { background-color: #1B2231 !important; }
@@ -182,5 +199,7 @@ export const Icons = {
   Image: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>,
   Upload: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
   Calendar: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
+  Edit: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>,
+  Profile: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M15 8h2M15 12h2M7 16h10" /></svg>,
 };
 
