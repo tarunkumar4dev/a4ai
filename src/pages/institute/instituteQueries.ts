@@ -38,6 +38,7 @@ export const INVALIDATES = {
   addSection: ["sections"],
   deleteSection: ["sections", "batches", "students", "studentCounts", "teachers", "proctors", "studentBatches"], // members lose the section
   joinCode: ["meta"],
+  classTree: ["departments", "subjects", "batches", "teaching", "studentBatches", "students", "studentCounts"], // Classes screen (flag): class / subject / batch / teacher writes
 } as const satisfies Record<string, readonly InstituteResource[]>;
 
 export type InstituteMutation = keyof typeof INVALIDATES;

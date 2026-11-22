@@ -25,8 +25,9 @@ import {
   fetchProctors, fetchBranding, fetchStudentBatches,
 } from "@/pages/institute/instituteQueries";
 import { membershipMap, studentMatchesFilter } from "@/lib/studentUpload/batchAssign";
-import { HOD_ENABLED, PROCTOR_UI_ENABLED } from "@/config/features";
-import { pickSubjectForBatch, newSubjectCode } from "@/lib/teachingAssign";
+import { HOD_ENABLED, PROCTOR_UI_ENABLED, CLASS_SUBJECT_BATCH_ENABLED, sectionsVisible } from "@/config/features";
+import { buildClassTree } from "@/pages/institute/classes/classTree";
+import { newSubjectCode } from "@/lib/teachingAssign";
 
 // Not needed for the first screen: loaded when their tab / modal opens (xlsx only comes with these)
 const loadAttendance = () => import("@/components/attendance/HODAttendanceDashboard");
@@ -35,6 +36,9 @@ const loadBulkUpload = () => import("@/components/institute/BulkStudentUpload");
 const HODAttendanceDashboard = lazy(loadAttendance);
 const BatchManagementPanel = lazy(loadBatchSettings);
 const BulkStudentUpload = lazy(loadBulkUpload);
+// Class → Subject → Batch screens (CLASS_SUBJECT_BATCH_ENABLED only; never loaded while the flag is off)
+const ClassesTab = lazy(() => import("@/pages/institute/classes/ClassesTab"));
+const TeachersSimple = lazy(() => import("@/pages/institute/classes/TeachersSimple"));
 const loadBatchAssign = () => import("@/components/institute/StudentBatchAssignModal");
 const StudentBatchAssignModal = lazy(loadBatchAssign);
 const loadStudentEdit = () => import("@/components/institute/StudentEditModal");
@@ -70,7 +74,7 @@ const makeDeptCode = (name: string, kind: "STU" | "TCH") => `A4I-${deptShort(nam
 /* ═══════════════════════════════════════════════════════════════════
    INTERFACES
    ═══════════════════════════════════════════════════════════════════ */
-interface Institute { id: string; name: string; join_code: string; max_teachers: number; max_students: number; monthly_test_limit: number; }
+interface Institute { id: string; name: string; join_code: string; max_teachers: number; max_students: number; monthly_test_limit: number; hierarchy_mode?: string | null; }
 interface Department { id: string; institute_id: string; name: string; student_code: string; teacher_code: string; }
 interface Section { id: string; department_id: string; name: string; year: number | null; }
 interface Teacher { id: string; user_id: string; role: string; status: string; joined_at: string; user_email?: string; user_name?: string; department_id?: string | null; }
@@ -153,7 +157,10 @@ export default function InstituteDashboardPage() {
   const location = useLocation();
   const navType = useNavigationType();
   const view = readInstituteView(searchParams);
-  const activeTab = view.tab;
+  // Flag on: Departments + Batches are replaced by the Classes screen; flag off: "classes" does not exist (old links fall back).
+  const activeTab: InstituteTab = CLASS_SUBJECT_BATCH_ENABLED
+    ? (view.tab === "departments" || view.tab === "batches" ? "classes" : view.tab)
+    : (view.tab === "classes" ? "overview" : view.tab);
   const deptFilter = view.dept;
   const sectionFilter = view.section;
   /** Changes the URL view. Tab changes add a history entry (Back = previous tab), the rest replace the current one.
@@ -213,19 +220,6 @@ export default function InstituteDashboardPage() {
   const logoUrl = brandingQ.data?.logoUrl ?? null;
   const bannerUrl = brandingQ.data?.bannerUrl ?? null;
 
-  // Teacher → batches is derived from teaching_assignments (legacy teacher_batches is no longer read or written)
-  const { teacherSubjectMap, teacherBatchMap } = useMemo(() => {
-    const taMap: Record<string, { batch_id: string; subject_id: string }[]> = {};
-    const tbMap: Record<string, string[]> = {};
-    teachingQ.data?.forEach((ta: any) => {
-      if (!taMap[ta.teacher_id]) taMap[ta.teacher_id] = [];
-      taMap[ta.teacher_id].push({ batch_id: ta.batch_id, subject_id: ta.subject_id });
-      if (!tbMap[ta.teacher_id]) tbMap[ta.teacher_id] = [];
-      if (!tbMap[ta.teacher_id].includes(ta.batch_id)) tbMap[ta.teacher_id].push(ta.batch_id);
-    });
-    return { teacherSubjectMap: taMap, teacherBatchMap: tbMap };
-  }, [teachingQ.data]);
-
   // Class teachers. proctor_assignments.teacher_id is an institute_members.id (NOT a user_id),
   // so both maps are keyed/valued by member id — same as `teacher.id` in this page.
   const { proctorOfSection, sectionsOfProctor } = useMemo(() => {
@@ -254,7 +248,6 @@ export default function InstituteDashboardPage() {
   const [assignStudentIds, setAssignStudentIds] = useState<string[] | null>(null);
   const [editStudentId, setEditStudentId] = useState<string | null>(null);
   const [batchMembersId, setBatchMembersId] = useState<string | null>(null);
-  const [assignTeacherBatches, setAssignTeacherBatches] = useState<{ teacherId: string; teacherName: string } | null>(null);
   // Class-teacher (proctor) modal: memberId = institute_members.id, which is what assign_proctor wants.
   const [assignProctorFor, setAssignProctorFor] = useState<{ memberId: string; userId: string; teacherName: string; deptId: string | null } | null>(null);
   const [proctorBusy, setProctorBusy] = useState(false);
@@ -306,7 +299,6 @@ export default function InstituteDashboardPage() {
   useBackToClose(!!assignStudentIds, () => setAssignStudentIds(null), "assignBatches");
   useBackToClose(!!editStudentId, () => setEditStudentId(null), "editStudent");
   useBackToClose(!!batchMembersId, () => setBatchMembersId(null), "batchStudents");
-  useBackToClose(!!assignTeacherBatches, () => setAssignTeacherBatches(null), "teacherBatches");
   useBackToClose(!!assignProctorFor, () => setAssignProctorFor(null), "proctor");
   useBackToClose(!!assignHodDept, () => setAssignHodDept(null), "hod");
 
@@ -396,6 +388,7 @@ export default function InstituteDashboardPage() {
 
   const handleAddBatch = async () => {
     if (!newBatch.name.trim() || !institute) return;
+    let subjectProblem = "";
     try {
       const { error } = await supabase.from("batches").insert({
         institute_id: institute.id,
@@ -416,17 +409,22 @@ export default function InstituteDashboardPage() {
           (!newBatch.department_id || s.department_id === newBatch.department_id)
         );
         if (!exists) {
-          await supabase.from("subjects").insert({
+          // The batch row is already saved; the subject must not fail silently (UNIQUE(institute_id, code) used to swallow it)
+          const subject = (c: string) => supabase.from("subjects").insert({
             institute_id: institute.id,
             name: subName,
-            code,
+            code: c,
             department_id: newBatch.department_id || null,
             is_active: true,
           });
+          let { error: subErr } = await subject(code);
+          if (subErr?.code === "23505") ({ error: subErr } = await subject(newSubjectCode(subName, subjects.map(s => s.code))));
+          if (subErr) subjectProblem = subErr.message;
         }
       }
 
-      toast.success("Batch created!");
+      if (subjectProblem) toast.warning(`Batch created, but its subject "${newBatch.subject.trim()}" was NOT created: ${subjectProblem}`);
+      else toast.success("Batch created!");
       setShowAddBatch(false);
       setNewBatch({ name: "", class_level: "", subject: "", description: "", department_id: "", section_id: "" });
       invalidate("addBatch");
@@ -476,10 +474,15 @@ export default function InstituteDashboardPage() {
     if (!confirm("Remove this teacher from the institute? This cannot be undone.")) return;
     // Legacy cleanup only — teacher_batches is never written anymore
     if (userId) await supabase.from("teacher_batches").delete().eq("teacher_id", userId);
+    if (CLASS_SUBJECT_BATCH_ENABLED && userId && instId) {
+      const { error: taErr } = await supabase.from("teaching_assignments").delete().eq("teacher_id", userId).eq("institute_id", instId);
+      if (taErr) return toast.error(`Could not remove the teacher's batches: ${taErr.message}`);
+    }
     const { error } = await supabase.from("institute_members").delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Teacher removed");
     invalidate("removeTeacher");
+    if (CLASS_SUBJECT_BATCH_ENABLED) invalidate("teaching");
   };
 
   const promoteToHod = async (teacherId: string, departmentId: string) => {
@@ -509,76 +512,6 @@ export default function InstituteDashboardPage() {
     if (error) return toast.error(error.message);
     toast.success("HOD demoted to teacher");
     invalidate("teacherRole");
-  };
-
-  const setTeacherDept = async (teacherId: string, deptId: string | null) => {
-    const { error } = await supabase.from("institute_members")
-      .update({ department_id: deptId }).eq("id", teacherId);
-    if (error) return toast.error(error.message);
-    toast.success("Department updated");
-    invalidate("teacherRole");
-  };
-
-  const assignSubjectToTeacher = async (teacherUserId: string, batchId: string, subjectId: string) => {
-    if (!institute) return;
-    const { error } = await supabase.from("teaching_assignments").insert({
-      institute_id: institute.id,
-      teacher_id: teacherUserId,
-      batch_id: batchId,
-      subject_id: subjectId,
-    });
-    if (error && error.code !== "23505") return toast.error(error.message);
-    toast.success("Subject assigned!");
-    invalidate("teaching");
-  };
-
-  const removeSubjectFromTeacher = async (teacherUserId: string, batchId: string, subjectId: string) => {
-    if (!institute) return;
-    const { error } = await supabase.from("teaching_assignments")
-      .delete()
-      .eq("teacher_id", teacherUserId)
-      .eq("batch_id", batchId)
-      .eq("subject_id", subjectId)
-      .eq("institute_id", institute.id);
-    if (error) return toast.error(error.message);
-    toast.success("Subject removed");
-    invalidate("teaching");
-  };
-
-  /**
-   * One click: teacher → batch. Attendance needs a (batch, subject) pair in teaching_assignments, so the subject is
-   * picked from the batch (subject field / name / section) or, if the institute has none that fits, created with the
-   * batch's name. Both inserts are admin-only under RLS (subj_insert / ta_insert = is_institute_admin).
-   */
-  const assignBatchToTeacher = async (teacherUserId: string, batch: Batch) => {
-    if (!institute) return;
-    let subject = pickSubjectForBatch(batch, sections.find(s => s.id === batch.section_id)?.name ?? null, subjects);
-    if (!subject) {
-      const name = (batch.subject || batch.name).trim().slice(0, 80);
-      const { data, error } = await supabase.from("subjects").insert({
-        institute_id: institute.id,
-        department_id: batch.department_id || null,
-        name,
-        code: newSubjectCode(name, subjects.map(s => s.code)),
-      }).select("id, name, code, department_id").single();
-      if (error) return toast.error(`Couldn't create a subject for ${batch.name}: ${error.message}`);
-      subject = data;
-      invalidate("addBatch"); // refreshes subjects
-    }
-    await assignSubjectToTeacher(teacherUserId, batch.id, subject!.id);
-  };
-
-  /** Removes every subject this teacher teaches in this batch (teaching_assignments). */
-  const removeBatchFromTeacher = async (teacherUserId: string, batchId: string) => {
-    if (!institute) return;
-    const { error } = await supabase.from("teaching_assignments")
-      .delete()
-      .eq("teacher_id", teacherUserId)
-      .eq("batch_id", batchId)
-      .eq("institute_id", institute.id);
-    if (error) return toast.error(error.message);
-    toast.success("Batch removed");
-    invalidate("teaching");
   };
 
   /**
@@ -922,7 +855,31 @@ export default function InstituteDashboardPage() {
   ];
   const setupDone = setupTasks.filter(t => t.done).length;
 
-  const navItems = [
+  // ── Class → Subject → Batch → Teacher (flag only) ──
+  const showSections = sectionsVisible(institute?.hierarchy_mode);
+  const csbBatchCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    memberships.forEach(set => set.forEach(b => counts.set(b, (counts.get(b) ?? 0) + 1)));
+    return counts;
+  }, [memberships]);
+  const studentCountOf = useCallback((id: string) => csbBatchCounts.get(id) ?? 0, [csbBatchCounts]);
+  const classTree = useMemo(() => {
+    return buildClassTree({
+      classes: departments, subjects, batches, teaching: teachingQ.data ?? [],
+      studentCount: studentCountOf,
+      activeTeacherIds: new Set(teachers.map(t => t.user_id)),
+    });
+  }, [departments, subjects, batches, teachingQ.data, studentCountOf, teachers]);
+  const studentsInClass = (classId: string) => students.filter(s => s.department_id === classId).length;
+
+  const navItems = CLASS_SUBJECT_BATCH_ENABLED ? [
+    { id: "overview", icon: Icons.Grid, label: "Dashboard" },
+    { id: "classes", icon: Icons.Layers, label: "Classes", badge: totalDepartments || undefined },
+    { id: "teachers", icon: Icons.Users, label: "Teachers", badge: totalTeachersAll || undefined },
+    { id: "students", icon: Icons.User, label: "Students", badge: totalStudents || undefined },
+    { id: "attendance", icon: Icons.Calendar, label: "Attendance" },
+    { id: "analytics", icon: Icons.Chart, label: "Analytics" },
+  ] : [
     { id: "overview", icon: Icons.Grid, label: "Dashboard" },
     { id: "departments", icon: Icons.Building, label: "Departments", badge: totalDepartments || undefined },
     { id: "teachers", icon: Icons.Users, label: "Teachers", badge: totalTeachersAll || undefined },
@@ -1088,8 +1045,8 @@ export default function InstituteDashboardPage() {
           <p className="text-[11px] font-bold text-slate-400 px-2 mb-2 mt-6">Quick Actions</p>
           <div className="px-2 flex flex-wrap items-center gap-2 mb-6">
             <button onClick={() => setShowAddStudent(true)} title="Add student" className="p-2.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#FFF5F2] hover:text-[#FF7043] transition-colors"><Icons.UserPlus /></button>
-            <button onClick={() => setShowAddBatch(true)} title="New batch" className="p-2.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#FFF5F2] hover:text-[#FF7043] transition-colors"><Icons.Layers /></button>
-            <button onClick={() => setShowAddDept(true)} title="New department" className="p-2.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#FFF5F2] hover:text-[#FF7043] transition-colors"><Icons.Building /></button>
+            <button onClick={() => (CLASS_SUBJECT_BATCH_ENABLED ? setActiveTab("classes") : setShowAddBatch(true))} title="New batch" className="p-2.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#FFF5F2] hover:text-[#FF7043] transition-colors"><Icons.Layers /></button>
+            <button onClick={() => (CLASS_SUBJECT_BATCH_ENABLED ? setActiveTab("classes") : setShowAddDept(true))} title="New department" className="p-2.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#FFF5F2] hover:text-[#FF7043] transition-colors"><Icons.Building /></button>
             <button onClick={copyCode} title="Copy join code" className="p-2.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#FFF5F2] hover:text-[#FF7043] transition-colors"><Icons.Key /></button>
             <button onClick={() => setShowBulkUpload(true)} title="Bulk upload students" className="p-2.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#FFF5F2] hover:text-[#FF7043] transition-colors"><Icons.Upload /></button>
             <button onClick={() => navigate("/dashboard/test-generator")} title="Generate test" className="p-2.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-[#FFF5F2] hover:text-[#FF7043] transition-colors"><Icons.Zap /></button>
@@ -1257,7 +1214,7 @@ export default function InstituteDashboardPage() {
                 {batchChart.length > 0 ? <BatchBars data={batchChart} /> : (
                   <div className="h-40 flex flex-col items-center justify-center text-center">
                     <p className="text-sm text-slate-500 font-medium mb-3">No batches yet — create one to see enrollment</p>
-                    <button onClick={() => setShowAddBatch(true)} className="btn-orange px-5 py-2.5 rounded-xl text-[13px]">Create Batch</button>
+                    <button onClick={() => (CLASS_SUBJECT_BATCH_ENABLED ? setActiveTab("classes") : setShowAddBatch(true))} className="btn-orange px-5 py-2.5 rounded-xl text-[13px]">Create Batch</button>
                   </div>
                 )}
               </div>
@@ -1291,6 +1248,23 @@ export default function InstituteDashboardPage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* ── CLASSES TAB (Class → Subject → Batch → Teacher; flag only) ── */}
+          {CLASS_SUBJECT_BATCH_ENABLED && activeTab === "classes" && institute && (
+            <LazySection label="Classes" fallback={<SectionSkeleton label="classes" rows={6} />}>
+              <ClassesTab
+                instituteId={institute.id}
+                classes={departments}
+                subjects={subjects}
+                batches={batches}
+                teaching={teachingQ.data ?? []}
+                teachers={teachers}
+                studentCount={studentCountOf}
+                studentsInClass={studentsInClass}
+                onChanged={() => invalidate("classTree")}
+              />
+            </LazySection>
           )}
 
           {/* ── DEPARTMENTS TAB ── */}
@@ -1446,118 +1420,20 @@ export default function InstituteDashboardPage() {
                     <span className="truncate">{typeof window !== "undefined" ? window.location.origin : "app.a4ai.in"}/join?code={institute.join_code}</span>
                   </button>
                 </div>
-                {departments.length > 0 && <p className="text-[11px] text-slate-400 font-medium mt-3">Tip: use department-specific codes from the Departments tab to auto-assign teachers to a department.</p>}
+                {!CLASS_SUBJECT_BATCH_ENABLED && departments.length > 0 && <p className="text-[11px] text-slate-400 font-medium mt-3">Tip: use department-specific codes from the Departments tab to auto-assign teachers to a department.</p>}
               </div>
 
-              {departments.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1"><Icons.Filter /> Filter:</span>
-                  <button onClick={() => setDeptFilter("")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
-                  <button onClick={() => setDeptFilter("none")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "none" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Unassigned</button>
-                  {departments.map(d => (
-                    <button key={d.id} onClick={() => setDeptFilter(d.id)} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === d.id ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{d.name}</button>
-                  ))}
-                </div>
-              )}
-
-              {filteredTeachers.length === 0 ? (
-                <div className="bg-white rounded-2xl p-12 text-center card-shadow border border-slate-50">
-                  <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mx-auto mb-3"><Icons.Users /></div>
-                  <p className="text-sm text-slate-500 font-medium">{teachers.length === 0 ? "No teachers yet. Share the join code above." : "No teachers match this filter."}</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredTeachers.map(t => (
-                    <React.Fragment key={t.id}>
-                      <div className="bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border border-slate-50 anim-row">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${HOD_ENABLED && t.role === "hod" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-500"}`}>
-                          {HOD_ENABLED && t.role === "hod" ? <Icons.Crown /> : <Icons.User />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-[13px] font-bold text-slate-800 truncate">{teacherDisplayName(t)}</p>
-                            {HOD_ENABLED && t.role === "hod" && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 inline-flex items-center gap-1"><Icons.Crown /> HOD</span>}
-                            {t.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(t.department_id)}</span>}
-                          </div>
-                          <p className="text-[11px] font-medium text-slate-400">{t.joined_at ? `Joined ${fmtDate(t.joined_at)}` : "Pending"}</p>
-                        </div>
-                        {departments.length > 0 && (
-                          <select
-                            value={t.department_id || ""}
-                            onChange={e => { e.stopPropagation(); setTeacherDept(t.id, e.target.value || null); }}
-                            className="text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 outline-none cursor-pointer hover:border-[#FF7043]"
-                            title="Change department"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <option value="">No dept</option>
-                            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                          </select>
-                        )}
-                        <button
-                          onClick={e => { e.stopPropagation(); setAssignTeacherBatches({ teacherId: t.user_id, teacherName: t.user_name || t.user_email || "Teacher" }); }}
-                          className="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
-                          title="Assign batches to this teacher"
-                        >
-                          📚 Batches ({(teacherBatchMap[t.user_id] || []).length})
-                        </button>
-                        {PROCTOR_UI_ENABLED && <button
-                          onClick={e => { e.stopPropagation(); setAssignProctorFor({ memberId: t.id, userId: t.user_id, teacherName: teacherDisplayName(t), deptId: t.department_id || null }); }}
-                          className="text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg transition-colors"
-                          title="Make this teacher the class teacher (proctor) of a section"
-                        >
-                          👤 Class teacher ({(sectionsOfProctor[t.id] || []).length})
-                        </button>}
-                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${t.status === "active" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"}`}>{t.status}</span>
-                        <button onClick={e => { e.stopPropagation(); removeTeacher(t.id, t.user_id); }} title="Remove teacher" className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
-                      </div>
-                      {(teacherBatchMap[t.user_id] || []).length > 0 && (
-                        <div className="px-4 pb-2 -mt-2 space-y-1.5">
-                          {(teacherBatchMap[t.user_id] || []).map(bid => {
-                            const b = batches.find(x => x.id === bid);
-                            if (!b) return null;
-                            const assignedSubjects = (teacherSubjectMap[t.user_id] || []).filter(a => a.batch_id === bid);
-                            const targetDeptId = b.department_id || t.department_id;
-                            const availableSubjects = subjects.filter(s => {
-                              if (assignedSubjects.some(a => a.subject_id === s.id)) return false;
-                              // If target department is known, ONLY show subjects belonging to that department
-                              if (targetDeptId) {
-                                return s.department_id === targetDeptId;
-                              }
-                              return true;
-                            });
-                            return (
-                              <div key={bid} className="flex flex-wrap items-center gap-1.5">
-                                <span className="subj-chip text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={subjectVars(batchSubjectColor(b))}>
-                                  📚 {b.name}{b.class_level ? ` · ${b.class_level}` : ""}
-                                  <button onClick={() => removeBatchFromTeacher(t.user_id, bid)} aria-label={`Remove ${b.name} from this teacher`} className="opacity-60 hover:opacity-100 hover:text-red-500 ml-0.5">×</button>
-                                </span>
-                                {assignedSubjects.map(a => {
-                                  const subj = subjects.find(s => s.id === a.subject_id);
-                                  return subj ? (
-                                    <span key={a.subject_id} className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                      📖 {subj.name}
-                                      <button onClick={() => removeSubjectFromTeacher(t.user_id, bid, a.subject_id)} className="text-emerald-400 hover:text-red-500 ml-0.5">×</button>
-                                    </span>
-                                  ) : null;
-                                })}
-                                {availableSubjects.length > 0 && (
-                                  <select
-                                    value=""
-                                    onChange={e => { if (e.target.value) assignSubjectToTeacher(t.user_id, bid, e.target.value); }}
-                                    className="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 outline-none cursor-pointer hover:border-emerald-400"
-                                  >
-                                    <option value="">+ Subject</option>
-                                    {availableSubjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                                  </select>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </div>
+              {classTree && (
+                <LazySection label="Teachers" fallback={<SectionSkeleton label="teachers" rows={4} />}>
+                  <TeachersSimple
+                    instituteId={institute.id}
+                    teachers={teachers}
+                    tree={classTree}
+                    onChanged={() => invalidate("classTree")}
+                    onRemoveTeacher={removeTeacher}
+                    onOpenClasses={() => setActiveTab("classes")}
+                  />
+                </LazySection>
               )}
             </div>
           )}
@@ -1592,7 +1468,7 @@ export default function InstituteDashboardPage() {
 
                 {departments.length > 0 && (
                   <div className="chip-row">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1"><Icons.Filter /> Dept:</span>
+                    <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1"><Icons.Filter /> {CLASS_SUBJECT_BATCH_ENABLED ? "Class" : "Dept"}:</span>
                     <button onClick={() => setDeptFilter("")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
                     <button onClick={() => setDeptFilter("none")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${deptFilter === "none" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>Unassigned</button>
                     {departments.map(d => (
@@ -1600,7 +1476,7 @@ export default function InstituteDashboardPage() {
                     ))}
                   </div>
                 )}
-                {availSectionsForFilter.length > 0 && (
+                {showSections && availSectionsForFilter.length > 0 && (
                   <div className="chip-row">
                     <span className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1"><Icons.Layers /> Section:</span>
                     <button onClick={() => setSectionFilter("")} className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${sectionFilter === "" ? "bg-[#FF7043] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>All</button>
@@ -2050,65 +1926,6 @@ export default function InstituteDashboardPage() {
                   </button>
                 ))
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {assignTeacherBatches && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setAssignTeacherBatches(null)}>
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Assign Batches</h3>
-              <button onClick={() => setAssignTeacherBatches(null)} className="text-slate-400 hover:text-slate-600 text-xl font-bold">×</button>
-            </div>
-            <p className="text-sm text-slate-500 mb-1">Teacher: <strong>{assignTeacherBatches.teacherName}</strong></p>
-            <p className="text-xs text-slate-400 mb-4">Assign = the teacher can see this batch's students and mark its attendance. The subject is picked for you; choose another one if needed.</p>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {batches.map(b => {
-                const isAssigned = (teacherBatchMap[assignTeacherBatches.teacherId] || []).includes(b.id);
-                return (
-                  <div key={b.id}
-                    className={"flex items-center justify-between p-3 rounded-xl border transition-colors " + (isAssigned ? "bg-indigo-50 border-indigo-200" : "bg-white border-slate-100 hover:border-slate-200")}
-                  >
-                    <div>
-                      <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                        <span aria-hidden className="subj-dot w-2.5 h-2.5 rounded-full shrink-0" style={subjectVars(batchSubjectColor(b))} />{b.name}
-                      </p>
-                      <p className="text-xs text-slate-400">{b.class_level ? "Class " + b.class_level : ""} {b.department_id ? "· " + deptName(b.department_id) : ""}</p>
-                    </div>
-                    {isAssigned ? (
-                      <button
-                        onClick={() => removeBatchFromTeacher(assignTeacherBatches.teacherId, b.id)}
-                        className="px-4 py-1.5 rounded-lg text-xs font-bold transition-colors bg-red-50 text-red-600 hover:bg-red-100"
-                      >
-                        Remove
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => assignBatchToTeacher(assignTeacherBatches.teacherId, b)}
-                          className="px-4 py-1.5 rounded-lg text-xs font-bold bg-indigo-500 text-white hover:bg-indigo-600 transition-colors"
-                        >
-                          Assign
-                        </button>
-                        <select
-                          value=""
-                          aria-label={`Assign ${b.name} with a specific subject`}
-                          onChange={e => { if (e.target.value) assignSubjectToTeacher(assignTeacherBatches.teacherId, b.id, e.target.value); }}
-                          className="px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 outline-none cursor-pointer max-w-[110px]"
-                        >
-                          <option value="">Subject…</option>
-                          {subjects.filter(s => !b.department_id || !s.department_id || s.department_id === b.department_id).map(s => (
-                            <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ""}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {batches.length === 0 && <p className="text-center text-slate-400 py-4">No batches created yet</p>}
             </div>
           </div>
         </div>

@@ -570,29 +570,16 @@ export default function HODDashboardPage() {
     setModal("subject");
   };
 
+  // The teacher is assigned to BATCHES only; the database fills the subject from each batch (migration 40).
   const assignSubjectTeacher = async () => {
-    const { subjectId, newName, teacher, batchIds } = subjForm;
-    if (!openSection || !instId || !deptId || !teacher || (!subjectId && !newName.trim())) return;
+    const { teacher, batchIds } = subjForm;
+    if (!openSection || !instId || !deptId || !teacher) return;
     if (batchIds.length === 0) return toast.error("Pick at least one batch.");
     setBusy(true);
     try {
-      let sid = subjectId;
-      if (!sid) {
-        const name = newName.trim();
-        const existing = subjects.find(s => sameName(s.name, name));
-        if (existing) sid = existing.id;
-        else {
-          const code = name.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase() + "101";
-          const { data, error } = await supabase.from("subjects")
-            .insert({ institute_id: instId, name, code, department_id: deptId, is_active: true })
-            .select("id").single();
-          if (error) throw error;
-          sid = data.id;
-        }
-      }
       for (const bId of batchIds) {
         const { error } = await supabase.from("teaching_assignments").insert({
-          institute_id: instId, teacher_id: teacher.user_id, batch_id: bId, subject_id: sid,
+          institute_id: instId, teacher_id: teacher.user_id, batch_id: bId,
         });
         if (error && error.code !== "23505") throw error;
       }
@@ -1367,27 +1354,16 @@ export default function HODDashboardPage() {
         <Modal title="Assign subject" subtitle={openSection.name} onClose={() => setModal(null)}>
           {!subjForm.teacher ? (
             <div className="space-y-3">
-              <select className="field" value={subjForm.subjectId} onChange={e => setSubjForm({ ...subjForm, subjectId: e.target.value, newName: "" })}>
-                <option value="">— New subject —</option>
-                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}{s.code ? ` (${s.code})` : ""}</option>)}
-              </select>
-              {!subjForm.subjectId && (
-                <input className="field" placeholder="New subject name, e.g. Data Structures" value={subjForm.newName}
-                  onChange={e => setSubjForm({ ...subjForm, newName: e.target.value })} />
-              )}
-              <p className="text-[11px] font-bold text-slate-400 uppercase pt-2">Teacher</p>
-              {(subjForm.subjectId || subjForm.newName.trim())
-                ? <TeacherPicker members={members} deptId={deptId} instId={instId} onPick={m => setSubjForm({ ...subjForm, teacher: m })} />
-                : <p className="text-[12px] text-slate-400">Pick or type a subject first.</p>}
+              <p className="text-[11px] font-bold text-slate-400 uppercase">Teacher</p>
+              <TeacherPicker members={members} deptId={deptId} instId={instId} onPick={m => setSubjForm({ ...subjForm, teacher: m })} />
             </div>
           ) : (
             <div className="space-y-4">
               <div className="p-4 rounded-2xl bg-slate-50 text-[13px] space-y-1">
-                <div><span className="text-slate-400">Subject:</span> <b>{subjects.find(s => s.id === subjForm.subjectId)?.name || subjForm.newName}</b></div>
                 <div><span className="text-slate-400">Teacher:</span> <b>{nameOf(subjForm.teacher)}</b></div>
               </div>
               <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">Teaches which batches?</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase mb-2">Teaches which batches? (the subject comes from the batch)</p>
                 <div className="space-y-1.5">
                   {(perSection[openSection.id]?.batches || []).map(b => (
                     <label key={b.id} className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-slate-50 cursor-pointer text-[13px] font-bold text-slate-700">

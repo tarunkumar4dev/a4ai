@@ -11,6 +11,9 @@ export interface BatchLite {
   department_id?: string | null;
   section_id?: string | null;
   is_lab?: boolean | null;
+  /** Class → Subject → Batch model: the batch's subject (batches.subject = its name, kept in sync by migration 39). */
+  subject_id?: string | null;
+  subject?: string | null;
 }
 
 /** exact = same text after normalising · alias = same class number / stream ("X" → "10th class") · fuzzy = unique partial batch name */
@@ -222,4 +225,14 @@ export function matchLabBatch(
     if (hits.length > 1) return { status: "ambiguous", candidates: hits };
   }
   return { status: "none" };
+}
+
+/** "Eco" ≈ "Economics", "Maths" ≈ "Mathematics": equal after compacting, or one is a ≥3-letter prefix of the other. */
+export function sameSubjectName(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = compact(a ?? ""), y = compact(b ?? "");
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  const stem = short.length > 4 && short.endsWith("s") ? short.slice(0, -1) : short;
+  return stem.length >= 3 && long.startsWith(stem);
 }

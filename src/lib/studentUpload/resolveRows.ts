@@ -4,7 +4,7 @@
 // checks everything again under RLS — this is for the preview and the report.
 import {
   type BatchLite, type DeptLite, type Match, type MatchHow, type SectionLite,
-  matchBatch, matchDepartment, matchLabBatch, matchSection, splitList,
+  matchBatch, matchDepartment, matchLabBatch, matchSection, sameSubjectName, splitList,
 } from "./normalize";
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -43,11 +43,17 @@ export function sanitizeCell(value: unknown): string {
 
 export type UploadField =
   | "name" | "roll_no" | "class_level" | "department" | "section" | "batch" | "lab_batch"
-  | "parent_name" | "parent_phone" | "phone" | "email";
+  | "parent_name" | "parent_phone" | "phone" | "email"
+  /** only with the Class → Subject → Batch model (UploadContext.subjectMode); never offered otherwise */
+  | "subject";
 
 export const UPLOAD_FIELDS: UploadField[] = [
   "name", "roll_no", "class_level", "department", "section", "batch", "lab_batch",
   "parent_name", "parent_phone", "phone", "email",
+];
+/** Same list plus the optional Subject column (Class → Subject → Batch model; sections are not shown). */
+export const UPLOAD_FIELDS_WITH_SUBJECT: UploadField[] = [
+  "name", "roll_no", "class_level", "department", "subject", "batch", "parent_name", "parent_phone", "phone", "email",
 ];
 
 /**
@@ -68,14 +74,16 @@ const FIELD_ALIASES: [UploadField, string[]][] = [
   ["batch", ["batch", "batches", "batch name", "batch names", "group", "class batch"]],
 ];
 
+const SUBJECT_ALIAS: [UploadField, string[]] = ["subject", ["subject", "subjects", "subject name", "subject names"]];
+
 /** Header → field. Exact names win first ("phone" → phone), then loose includes-matches. One header → one field. */
-export function autoMapHeaders(headers: string[]): Partial<Record<UploadField, string>> {
+export function autoMapHeaders(headers: string[], opts?: { subject?: boolean }): Partial<Record<UploadField, string>> {
   const clean = (v: string) => v.toLowerCase().trim();
   const strip = (v: string) => clean(v).replace(/[^a-z0-9]/g, "");
   const mapping: Partial<Record<UploadField, string>> = {};
   const used = new Set<string>();
   const assign = (loose: boolean) => {
-    for (const [field, aliases] of FIELD_ALIASES) {
+    for (const [field, aliases] of (opts?.subject ? [...FIELD_ALIASES, SUBJECT_ALIAS] : FIELD_ALIASES)) {
       if (mapping[field]) continue;
       const header = headers.find(h => !used.has(h) && aliases.some(alias =>
         loose ? strip(h).includes(strip(alias)) && strip(alias).length >= 4
@@ -101,9 +109,11 @@ export interface UploadContext {
   pickedDepartmentId?: string;
   pickedSectionId?: string;
   pickedBatchId?: string;
+  /** Class → Subject → Batch model: read the optional Subject column and match batches per subject (off = unchanged behaviour) */
+  subjectMode?: boolean;
 }
 
-export interface Resolved<T> { item: T; how: MatchHow | "picked" | "from batch" | "from section" }
+export interface Resolved<T> { item: T; how: MatchHow | "picked" | "from batch" | "from section" | "from subject" }
 
 export interface BulkRowPayload {
   row: number;
@@ -217,10 +227,34 @@ export function resolveRows(rows: Record<string, unknown>[], ctx: UploadContext)
     } else {
       const names = splitList(sectionAsBatch ? sectionValue : get(raw, "batch"));
       if (names.length > MAX_BATCHES_PER_STUDENT) errors.push(`At most ${MAX_BATCHES_PER_STUDENT} batches per student`);
-      for (const n of names.slice(0, MAX_BATCHES_PER_STUDENT)) {
-        const m = matchBatch(n, batches, dept?.id ?? null, section?.id ?? null);
-        if (m.status === "matched") { if (!found.some(f => f.item.id === m.item.id)) found.push({ item: m.item, how: m.how }); }
+      const subjectValues = ctx.subjectMode ? splitList(get(raw, "subject")) : [];
+      // "Batch A, Batch A" + "Accounts, Economics": same count → paired by position; otherwise any listed subject may match
+      const paired = subjectValues.length > 1 && subjectValues.length === names.length;
+      let ofSubject = (b: BatchLite) => subjectValues.some(v => sameSubjectName(b.subject, v));
+      for (const [idx, n] of names.slice(0, MAX_BATCHES_PER_STUDENT).entries()) {
+        const wanted = paired ? [subjectValues[idx]] : subjectValues;
+        ofSubject = (b: BatchLite) => wanted.some(v => sameSubjectName(b.subject, v));
+        let m = matchBatch(n, batches, dept?.id ?? null, section?.id ?? null);
+        // the same batch name under two subjects ("Batch A"): the Subject column decides
+        if (subjectValues.length && m.status === "ambiguous") {
+          const narrowed = m.candidates.filter(ofSubject);
+          if (narrowed.length === 1) m = { status: "matched", item: narrowed[0], how: "exact" };
+        }
+        if (m.status === "matched") {
+          if (subjectValues.length && m.item.subject && !ofSubject(m.item)) {
+            errors.push(`Batch "${m.item.name}" is a ${m.item.subject} batch, not ${wanted.map(v => `"${v}"`).join(" / ")}`);
+          } else if (!found.some(f => f.item.id === m.item.id)) found.push({ item: m.item, how: m.how });
+        }
         else errors.push(describe(m, "Batch", n, dept ? ` in "${dept.name}"` : "", batches.filter(b => !dept || !b.department_id || b.department_id === dept.id)));
+      }
+      // Subject given but no batch: the subject's only batch in the class (several batches → the file must name one)
+      if (names.length === 0 && subjectValues.length) {
+        for (const v of subjectValues.slice(0, MAX_BATCHES_PER_STUDENT)) {
+          const hits = batches.filter(b => !b.is_lab && sameSubjectName(b.subject, v) && (!dept || !b.department_id || b.department_id === dept.id));
+          if (hits.length === 1) { if (!found.some(f => f.item.id === hits[0].id)) found.push({ item: hits[0], how: "from subject" }); }
+          else if (hits.length > 1) errors.push(`Subject "${v}" has ${hits.length} batches${dept ? ` in "${dept.name}"` : ""} (${list(hits, 4)}): add a Batch column`);
+          else errors.push(`Subject "${v}" not found${dept ? ` in "${dept.name}"` : ""}`);
+        }
       }
     }
 

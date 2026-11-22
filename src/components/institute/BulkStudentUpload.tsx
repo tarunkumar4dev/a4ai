@@ -10,10 +10,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/pages/institute/instituteToast";
-import { HOD_ENABLED } from "@/config/features";
+import { HOD_ENABLED, CLASS_SUBJECT_BATCH_ENABLED } from "@/config/features";
 import * as XLSX from "xlsx";
 import {
-  MAX_ROWS, UPLOAD_FIELDS, type ResolvedRow, type UploadField,
+  MAX_ROWS, UPLOAD_FIELDS, UPLOAD_FIELDS_WITH_SUBJECT, type ResolvedRow, type UploadField,
   autoMapHeaders, batchesWithoutDepartment, checkUploadFile, failedRowsCsv, resolveRows,
 } from "@/lib/studentUpload/resolveRows";
 
@@ -23,6 +23,8 @@ interface Batch {
   section_id?: string | null;
   department_id?: string | null;
   is_lab?: boolean | null;
+  subject_id?: string | null;
+  subject?: string | null;
 }
 
 interface Department {
@@ -51,8 +53,12 @@ interface Report { total: number; created: number; failed: ReportRow[] }
 const FIELD_LABEL: Record<UploadField, string> = {
   name: "Name", roll_no: "Roll no", class_level: "Class", department: "Department", section: "Section",
   batch: "Batch(es)", lab_batch: "Lab batch", parent_name: "Parent name", parent_phone: "Parent phone",
-  phone: "Student phone", email: "Email",
+  phone: "Student phone", email: "Email", subject: "Subject",
 };
+
+// Class → Subject → Batch model (flag): an optional Subject column picks the batch when a batch name exists under several subjects
+const SUBJECT_MODE = CLASS_SUBJECT_BATCH_ENABLED;
+const FIELDS = SUBJECT_MODE ? UPLOAD_FIELDS_WITH_SUBJECT : UPLOAD_FIELDS;
 
 const Icons = {
   Upload: () => (
@@ -142,6 +148,7 @@ export default function BulkStudentUpload({
   const resolved = useMemo<ResolvedRow[]>(() => resolveRows(rows, {
     departments, sections, batches, mapping,
     pickedDepartmentId: selectedDepartment, pickedSectionId: selectedSection, pickedBatchId: selectedBatch,
+    subjectMode: SUBJECT_MODE,
   }), [rows, departments, sections, batches, mapping, selectedDepartment, selectedSection, selectedBatch]);
 
   const ready = resolved.filter(r => r.payload);
@@ -198,7 +205,7 @@ export default function BulkStudentUpload({
           toast.error(`The file has ${json.length} students. Upload at most ${MAX_ROWS} at a time — split the file.`);
           return;
         }
-        const map = autoMapHeaders(headerRow);
+        const map = autoMapHeaders(headerRow, SUBJECT_MODE ? { subject: true } : undefined);
         setHeaders(headerRow);
         setMapping(map);
         setRows(json);
@@ -355,7 +362,7 @@ export default function BulkStudentUpload({
             <details className="bg-slate-50 rounded-xl p-3" open={!mapping.name}>
               <summary className="text-sm font-bold text-slate-800 cursor-pointer">Column mapping</summary>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
-                {UPLOAD_FIELDS.map(field => (
+                {FIELDS.map(field => (
                   <label key={field} className="flex items-center gap-2 text-xs">
                     <span className={`w-24 shrink-0 font-bold ${field === "name" ? "text-[#FF7043]" : "text-slate-500"}`}>{FIELD_LABEL[field]}{field === "name" && " *"}</span>
                     <select className="flex-1 min-w-0 p-1.5 bg-white border border-slate-200 rounded-lg text-xs" value={mapping[field] ?? ""} onChange={e => setField(field, e.target.value)}>
