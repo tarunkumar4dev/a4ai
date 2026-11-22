@@ -1,6 +1,6 @@
 # Class → Subject → Batch → Teacher
 
-Branch `feat/class-subject-batch` (from `origin/main` 964b9f1). **Nothing here is applied to production; the UI is behind a flag that ships OFF.**
+Branch `feat/class-subject-batch` (from `origin/main` 964b9f1). **Nothing here is applied to production by Claude.** (Update 22 Nov: there are no paying clients, so this is now THE model: `CLASS_SUBJECT_BATCH_ENABLED` defaults to `true` and migration 40 applies to every institute.)
 Background: [docs/audit/institute_hierarchy_audit.md](../audit/institute_hierarchy_audit.md) (on the `feat/hod-off-simple-attendance` working copy).
 
 ## 1. Target model
@@ -40,9 +40,9 @@ Tests: `supabase/tests/39_40_class_subject_batch_test.py` (pgserver, 56 checks).
 * Delete is blocked, with the reason, while students are enrolled (batch), attendance/timetable exists (batch, subject), or children exist (subject, class).
 * Every write goes through `src/pages/institute/classes/classesApi.ts`, which throws a readable error; nothing is swallowed.
 
-## 4. UI (flag `CLASS_SUBJECT_BATCH_ENABLED` in `src/config/features.ts`, default `false`)
+## 4. UI (`CLASS_SUBJECT_BATCH_ENABLED` in `src/config/features.ts`, default `true`)
 
-| Screen | With the flag ON |
+| Screen | Behaviour |
 |---|---|
 | **Classes** (new nav item; replaces *Departments* and *Batches*) | One tree: Class → Subjects → Batches. Inline add / rename / delete at every level. Each batch row: student count + teacher dropdown. Legacy batches without a subject are listed in an amber box with a "Choose subject…" dropdown. |
 | **Teachers** | Join-code box as before, then a list of teachers. Under each: read-only *Class → Subject → Batch* chips and ONE "+ Add batch" picker grouped *Class › Subject*. No department dropdown, no "+ Subject" dropdown, no Batches modal, no filter chips. |
@@ -51,16 +51,18 @@ Tests: `supabase/tests/39_40_class_subject_batch_test.py` (pgserver, 56 checks).
 | **Bulk upload** | Same flow. Class column → department. New optional *Subject* column: it picks between batches that share a name under different subjects (paired by position when the lists have the same length), checks a named batch belongs to the row's subject, and with Subject but no Batch uses the subject's only batch in the class. |
 | Teacher removal | also deletes the teacher's assignments (server trigger does it anyway after 40). |
 
-With the flag OFF the dashboard renders as before, with two intended exceptions: `handleAddBatch` now reports a failed subject insert (and retries with a collision-proof code) instead of swallowing it, and `?tab=classes` falls back to Overview.
+Removed because migration 40 would override or reject them: the old Teachers-tab assign UI (department dropdown, "+ Subject", the Batches modal, `assignSubjectToTeacher` / `assignBatchToTeacher`), the subject picker of `BatchManagementPanel` and of the HOD "Assign subject" modal (both now send teacher + batch only). `handleAddBatch` reports a failed subject insert instead of swallowing it. The flag now only switches the navigation (Classes screen instead of Departments + Batches, section filters hidden for `simple` institutes); turning it off does NOT bring the old assign paths back.
 
-## 5. Backfill (dry run only)
+## 5. Backfill
 
-`scripts/class_subject_batch_backfill.py report --institute "Education Beast"` (read-only SELECTs) writes
-`supabase/backfill/class_subject_batch_map.csv`, `…_ta_actions.csv` and `docs/design/class_subject_batch_backfill_report.md`; you edit the `decision` columns; `… sql --institute-id <uuid>` then *generates* `class_subject_batch_apply.sql` (one transaction, not run). Rules: class = `batches.department_id` (or inferred from `class_level` when it matches exactly one class); subject = same-name subject in that class (EXACT), unique near-match (FUZZY), institute-wide subject that moves into its home class (ADOPT, one class only), otherwise CREATE; `ALL` batches and ambiguous ones are NEEDS_DECISION. Orphan TA rows → DELETE; a TA on a soft-deleted batch → REPOINT (proposes the live batch with the same name).
+`scripts/class_subject_batch_backfill.py report --institute "Education Beast"` (read-only SELECTs) writes `supabase/backfill/class_subject_batch_map.csv`, `…_ta_actions.csv` and `docs/design/class_subject_batch_backfill_report.md`. `… apply --institute-id <uuid>` reads the (edited) CSVs and writes the ONE paste-able file `supabase/apply/class_subject_batch_apply.sql` (backup, 39, reload, backfill, VERIFY with expected numbers, 40, commented restore).
+Decisions for Education Beast (22 Nov): `ALL` ×3 → a new subject "All Subjects" in each class; the "Mathematics" batch (Maths + English) is **split**: it keeps Maths, a new batch "Mathematics - English" takes the English subject and the same students via `student_batches`; Rahul's assignment on the deleted ACCOUNTS batch is REPOINTed to "Accounts Rahul Sir"; an institute-wide subject (Eco) moves into its home class (11th Commerce), the other class that wanted it (12th) gets its own.
+Orphan assignments: the audit counted 6 in the whole database; the script deletes the 3 of Education Beast only. The other 3 belong to MSIT (a removed teacher's old rows); they stay as legacy rows and the VERIFY query reports them as "OTHER institutes, left alone".
+Local proof: `supabase/tests/class_subject_batch_apply_test.py` plans a small EB-like institute with the real script, runs blocks a to f of the generated file, checks every VERIFY row, then runs the un-commented restore block and compares the four tables with the backup.
 
 ## 6. Assumptions (please confirm or correct)
 
-1. `departments` = class/stream for **every** institute using the flag; colleges keep `hierarchy_mode = 'full'` and the old UI path (MSIT).
+1. `departments` = class/stream for **every** institute (no paying clients, no opt-in). Colleges with several subjects per batch (MSIT demo) lose the old assign flow; their batches without a subject cannot get new teachers until each gets a subject (or is split).
 2. One subject belongs to one class. A subject shared by two classes becomes two subject rows.
 3. A batch has exactly one subject. School-style batches with several subjects (EB "Mathematics" has Maths + English assignments; MSIT ECE-2 has many) cannot be represented — the extra subject has to become its own batch.
 4. One teacher per batch in the new UI; co-teaching stays possible in the database.
@@ -72,8 +74,9 @@ With the flag OFF the dashboard renders as before, with two intended exceptions:
 
 ## 7. Apply order on production
 
-1. Deploy the frontend **with the flag OFF** (safe; only the `handleAddBatch` error fix and the extra tab id change).
-2. Run `39_class_subject_batch.sql` (+ `notify pgrst, 'reload schema';`). Additive, no data changes.
-3. Run the backfill dry run, edit the CSVs, generate and review `class_subject_batch_apply.sql`, run it. Check its VERIFY (0 batches without subject, 0 orphan TA, 0 class mismatches).
-4. Run `40_teaching_assignment_integrity.sql` and, **in the same window**, deploy the build with `CLASS_SUBJECT_BATCH_ENABLED = true`. Reason: after 40 the old teacher-assignment buttons (explicit subject) are overridden by the batch's subject and are rejected on batches without a subject.
-5. Test matrix: admin creates class → subject → batch → picks teacher; teacher sees only that batch and can mark attendance; bulk upload of the ECE-2-style file with and without a Subject column; remove a teacher → no TA rows left.
+1. Run `supabase/apply/class_subject_batch_apply.sql` in the Supabase SQL editor, block by block as commented: (a) backup into schema `a4_backup_20261122` (not `public`: tables in `public` are readable through the REST API), (b) migration 39, (c) `notify pgrst, 'reload schema'`, (d) backfill, (e) VERIFY (every row `ok = true`, else stop and use block g), (f) migration 40.
+2. Merge + deploy the frontend (flag is `true`). Deploying before 40 is fine; the Classes screen works with 39 + the backfill alone.
+3. Test matrix: admin creates class → subject → batch → picks teacher; the teacher sees only that batch and can mark attendance; bulk upload with and without a Subject column; remove a teacher → no assignments left.
+4. Later: `drop schema a4_backup_20261122 cascade;` (it holds copies of batches and assignments).
+
+Numbering: 39 / 40 are these. The checker's AI_UNREADABLE migration will be 41+ (35-38 belong to `wip/maths-analytics`).

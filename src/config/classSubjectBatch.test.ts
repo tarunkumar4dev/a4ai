@@ -1,11 +1,16 @@
-// CLASS_SUBJECT_BATCH_ENABLED (src/config/features.ts): default OFF → production unchanged.
+// CLASS_SUBJECT_BATCH_ENABLED (src/config/features.ts): class → subject → batch is the default model.
 import { describe, expect, it } from "vitest";
 import { CLASS_SUBJECT_BATCH_ENABLED, sectionsVisible } from "./features";
 import { INSTITUTE_TABS, readInstituteView } from "@/pages/institute/instituteUrlState";
 
 describe("class → subject → batch flag", () => {
-  it("ships OFF", () => {
-    expect(CLASS_SUBJECT_BATCH_ENABLED).toBe(false);
+  it("ships ON (it is the model; migration 40 applies to every institute)", () => {
+    expect(CLASS_SUBJECT_BATCH_ENABLED).toBe(true);
+  });
+  it("sections are hidden by default for simple institutes", () => {
+    expect(sectionsVisible("simple")).toBe(false);
+    expect(sectionsVisible(undefined)).toBe(false);
+    expect(sectionsVisible("full")).toBe(true);
   });
   it("sections: always visible with the flag off; with it on only for 'full' (college) institutes", () => {
     expect(sectionsVisible("simple", false)).toBe(true);

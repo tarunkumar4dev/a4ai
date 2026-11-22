@@ -1,7 +1,7 @@
 -- 40_teaching_assignment_integrity.sql — Class → Subject → Batch model, part 2 (enforcement). Needs 39.
--- APPLY ONLY AFTER THE BACKFILL: from here on a teaching_assignments row can only be created on a batch that has a
--- subject (batches.subject_id). Every legacy UI path that inserts a TA with an explicit subject on a subject-less batch
--- is rejected with "This batch has no subject yet" (see docs/design/class_subject_batch.md §7 for the order).
+-- Applies to EVERY institute (no opt-in switch). APPLY ONLY AFTER THE BACKFILL: from here on a teaching_assignments row can
+-- only be created on a batch that has a subject (batches.subject_id). The app no longer has any screen that sends a subject
+-- for a teacher (Classes screen / Teachers tab / BatchManagementPanel / HOD page all send teacher + batch only).
 --
 --  1. BEFORE INSERT/UPDATE trigger on teaching_assignments
 --       - batch must exist and belong to ta.institute_id

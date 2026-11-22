@@ -103,7 +103,6 @@ export default function BatchManagementPanel({ instituteId }: { instituteId: str
 
   // For the add assignment form (per batch)
   const [newTeacher, setNewTeacher] = useState<Record<string, string>>({});
-  const [newSubject, setNewSubject] = useState<Record<string, string>>({});
 
   // ── Load all data ──
   const load = useCallback(async () => {
@@ -257,25 +256,23 @@ export default function BatchManagementPanel({ instituteId }: { instituteId: str
   // ── Add teaching assignment ──
   const addAssignment = useCallback(async (batchId: string) => {
     const tid = newTeacher[batchId];
-    const sid = newSubject[batchId];
-    if (!tid || !sid) { add("Select both teacher and subject", false); return; }
+    if (!tid) { add("Select a teacher", false); return; }
     setAddingAssign(batchId);
+    // Teacher → batch only: the subject is filled by the database from the batch (migration 40)
     const { error } = await supabase.from("teaching_assignments").insert({
       institute_id: instituteId,
       teacher_id: tid,
       batch_id: batchId,
-      subject_id: sid,
       is_active: true,
     });
     if (error) { add(error.message.includes("unique") ? "Already assigned" : error.message, false); }
     else {
-      add("Teacher assigned to subject");
+      add("Teacher assigned to the batch");
       setNewTeacher(p => ({ ...p, [batchId]: "" }));
-      setNewSubject(p => ({ ...p, [batchId]: "" }));
       load();
     }
     setAddingAssign(null);
-  }, [newTeacher, newSubject, instituteId, add, load]);
+  }, [newTeacher, instituteId, add, load]);
 
   // ── Remove teaching assignment ──
   const removeAssignment = useCallback(async (assignId: string, batchId: string) => {
@@ -418,14 +415,6 @@ export default function BatchManagementPanel({ instituteId }: { instituteId: str
                 >
                   <option value="">Teacher…</option>
                   {memberOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select>
-                <select
-                  value={newSubject[batch.id] || ""}
-                  onChange={(e) => setNewSubject(p => ({ ...p, [batch.id]: e.target.value }))}
-                  className="flex-1 min-w-[160px] inset-pill border-none rounded-2xl px-3 py-2.5 text-sm font-bold text-slate-700 dark:text-white bg-transparent outline-none"
-                >
-                  <option value="">Subject…</option>
-                  {subjects.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
                 </select>
                 <button
                   onClick={() => addAssignment(batch.id)}

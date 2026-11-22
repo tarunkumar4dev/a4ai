@@ -22,14 +22,16 @@ export function effectiveHomeRoute(route: string | null | undefined, hodEnabled 
 }
 
 /**
- * Class → Subject → Batch → Teacher model (docs/design/class_subject_batch.md). Default OFF: production is unchanged.
+ * Class → Subject → Batch → Teacher model (docs/design/class_subject_batch.md). This is now THE model (default ON; migration 40
+ * applies to every institute). The Teachers tab is always the simple view; the flag only controls navigation: 
  * true:  institute dashboard gets a "Classes" tree screen (one screen: class → subjects → batches → teacher), the Teachers
  *        tab becomes a read-only "Class → Subject → Batch" list with one "Add batch" picker (no department dropdown, no
  *        "+ Subject" dropdown), sections are hidden for institutes with hierarchy_mode = 'simple', and bulk upload can match
  *        batches per subject (optional "Subject" column).
- * Needs migrations 39 (+ the backfill) and 40 on the database. The server accepts both models; nothing here changes RLS.
+ * Needs migrations 39 (+ the backfill) and 40 on the database. false = old Departments / Batches tabs and section filters come back,
+ * but teachers can NOT be assigned the old way any more (the database derives the subject from the batch).
  */
-export const CLASS_SUBJECT_BATCH_ENABLED = false;
+export const CLASS_SUBJECT_BATCH_ENABLED = true;
 
 /** Sections are only shown when the flag is off or the institute is a 'full' (college) hierarchy. */
 export function sectionsVisible(hierarchyMode: string | null | undefined, enabled = CLASS_SUBJECT_BATCH_ENABLED): boolean {
