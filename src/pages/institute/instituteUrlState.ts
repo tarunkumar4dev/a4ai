@@ -3,7 +3,7 @@
 // profile — or a reload — lands on the same tab with the same filters instead of the Dashboard tab.
 // Tab changes are history entries (Back goes to the previous tab); filters / search replace the current entry.
 
-export const INSTITUTE_TABS = ["overview", "departments", "teachers", "students", "batches", "attendance", "analytics"] as const;
+export const INSTITUTE_TABS = ["overview", "departments", "teachers", "students", "batches", "attendance", "analytics", "classes"] as const;
 export type InstituteTab = (typeof INSTITUTE_TABS)[number];
 
 export interface InstituteView { tab: InstituteTab; dept: string; section: string; q: string }

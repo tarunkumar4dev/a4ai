@@ -20,3 +20,18 @@ export function effectiveHomeRoute(route: string | null | undefined, hodEnabled 
   const r = route || "/dashboard";
   return !hodEnabled && (r === "/hod" || r.startsWith("/hod/")) ? "/dashboard" : r;
 }
+
+/**
+ * Class → Subject → Batch → Teacher model (docs/design/class_subject_batch.md). Default OFF: production is unchanged.
+ * true:  institute dashboard gets a "Classes" tree screen (one screen: class → subjects → batches → teacher), the Teachers
+ *        tab becomes a read-only "Class → Subject → Batch" list with one "Add batch" picker (no department dropdown, no
+ *        "+ Subject" dropdown), sections are hidden for institutes with hierarchy_mode = 'simple', and bulk upload can match
+ *        batches per subject (optional "Subject" column).
+ * Needs migrations 39 (+ the backfill) and 40 on the database. The server accepts both models; nothing here changes RLS.
+ */
+export const CLASS_SUBJECT_BATCH_ENABLED = false;
+
+/** Sections are only shown when the flag is off or the institute is a 'full' (college) hierarchy. */
+export function sectionsVisible(hierarchyMode: string | null | undefined, enabled = CLASS_SUBJECT_BATCH_ENABLED): boolean {
+  return !enabled || hierarchyMode === "full";
+}
