@@ -162,3 +162,21 @@ export function classLevelOf(className: string): string | null {
   const m = /^\s*(\d{1,2})/.exec(className);
   return m ? m[1] : null;
 }
+
+/** Same name ignoring case, spaces and punctuation ("BST" = "bst", "Business Studies" ≠ "BST"). */
+export function isSameName(a: string, b: string): boolean {
+  const k = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  return !!k(a) && k(a) === k(b);
+}
+
+/** Default name for a new batch: "<Subject> Batch N", N = one more than the batches the subject has (or than its highest "Batch N"). */
+export function nextBatchName(subjectName: string, existingBatchNames: string[]): string {
+  const esc = subjectName.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${esc}\\s+batch\\s+(\\d+)$`, "i");
+  let max = 0;
+  for (const n of existingBatchNames) {
+    const m = re.exec(n.trim());
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `${subjectName.trim()} Batch ${Math.max(max, existingBatchNames.length) + 1}`;
+}
