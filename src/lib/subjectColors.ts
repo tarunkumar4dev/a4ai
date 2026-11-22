@@ -105,3 +105,18 @@ export function subjectVars(c: SubjectColor): CSSProperties {
     "--s-fg-d": c.fgDark, "--s-bg-d": c.bgDark, "--s-bd-d": c.bdDark,
   } as CSSProperties;
 }
+
+/** Stable colour for a person (teacher avatar): same text → same tone, from the same palette as unknown subjects. */
+export function personColor(seed: string | null | undefined): SubjectColor {
+  const low = (seed || "?").trim().toLowerCase();
+  let h = 7;
+  for (const ch of low) h = (h * 33 + ch.charCodeAt(0)) >>> 0;
+  return { key: `person:${low}`, label: "", short: initialsOf(seed), ...HASH_TONES[h % HASH_TONES.length] };
+}
+
+/** "Rahul Verma" → "RV", "Deepak" → "D", "" → "?" */
+export function initialsOf(name: string | null | undefined): string {
+  const parts = (name || "").trim().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return (parts.length === 1 ? parts[0].slice(0, 1) : parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}

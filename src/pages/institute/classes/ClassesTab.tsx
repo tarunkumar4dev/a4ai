@@ -2,14 +2,18 @@
 // The whole hierarchy on ONE screen: Class → Subject → Batch, with the batch's teacher and student count on each batch row.
 // Shown only behind CLASS_SUBJECT_BATCH_ENABLED. Data comes from the dashboard's own queries (props); every write goes through
 // classesApi.ts and any error is shown, never swallowed. Deletes are blocked (with the reason) while students / attendance exist.
-import React, { useMemo, useState } from "react";
+// Look: classesTheme.tsx (colour per subject, tinted blocks, pills). Behaviour is unchanged by the styling.
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "@/pages/institute/instituteToast";
 import { teacherDisplayName } from "@/lib/teacherName";
+import { personColor, initialsOf, subjectColorOf, subjectVars } from "@/lib/subjectColors";
 import {
-  buildClassTree, classDeleteBlock, subjectDeleteBlock, batchDeleteBlock,
+  buildClassTree, classDeleteBlock, subjectDeleteBlock, batchDeleteBlock, isSameName, nextBatchName,
   type BatchRow, type ClassRow, type SubjectRow, type TeachingRow, type ClassNode, type SubjectNode, type BatchNode,
 } from "./classTree";
+import { ClassesStyles } from "./classesTheme";
+import { CIcons } from "./classesIcons";
 import * as api from "./classesApi";
 
 export interface TeacherLite { id: string; user_id: string; user_name?: string | null; user_email?: string | null; role?: string }
@@ -27,16 +31,38 @@ export interface ClassesTabProps {
   onChanged: () => void | Promise<unknown>;
 }
 
-const row = "flex flex-wrap items-center gap-2";
-const ghostBtn = "text-[11px] font-bold px-2 py-1 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors";
-const dangerBtn = "text-[11px] font-bold px-2 py-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors";
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** "+ Add …" → input + Add / Cancel. Calls onAdd(name) and keeps itself open (clears) so several can be added in a row. */
-function InlineAdd({ label, placeholder, onAdd }: { label: string; placeholder: string; onAdd: (name: string) => Promise<void> }) {
+function Pill({ tone, icon, children, title }: { tone?: "orange" | "indigo" | "green" | "amber" | "slate" | "subject"; icon?: React.ReactNode; children: React.ReactNode; title?: string }) {
+  return <span className={`csb-pill ${tone === "subject" ? "csb-s" : `csb-t-${tone ?? "slate"}`}`} title={title}>{icon}{children}</span>;
+}
+
+function Chevron({ open, onClick, label }: { open: boolean; onClick: () => void; label: string }) {
+  return <button className="csb-chev" data-open={open} aria-label={label} aria-expanded={open} onClick={onClick}><CIcons.Chevron /></button>;
+}
+
+/** Height-animated container (grid rows 0fr → 1fr). Closed content stays mounted but hidden (no focus, no screen reader). */
+function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+  return <div className="csb-collapse" data-open={open}><div className="csb-collapse-inner">{children}</div></div>;
+}
+
+/** "+ Add …" → input + Add / Done. Calls onAdd(name) and stays open (clears) so several can be added in a row. */
+function InlineAdd({ label, placeholder, onAdd, defaultValue = "", className = "" }: {
+  label: string; placeholder: string; onAdd: (name: string) => Promise<void>; defaultValue?: string; className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
-  if (!open) return <button className={ghostBtn} onClick={() => setOpen(true)}>+ {label}</button>;
+  const lastDefault = useRef(defaultValue);
+  // keep the suggested name current ("… Batch 3" → "… Batch 4" after an add) unless the user has typed something else
+  useEffect(() => {
+    if (open && (value === lastDefault.current || value === "")) setValue(defaultValue);
+    lastDefault.current = defaultValue;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultValue]);
+  if (!open) {
+    return <button className={`csb-add ${className}`} onClick={() => { setValue(defaultValue); lastDefault.current = defaultValue; setOpen(true); }}><CIcons.Plus /> {label}</button>;
+  }
   const submit = async () => {
     if (!value.trim() || busy) return;
     setBusy(true);
@@ -44,18 +70,21 @@ function InlineAdd({ label, placeholder, onAdd }: { label: string; placeholder: 
     setBusy(false);
   };
   return (
-    <span className={row}>
-      <input autoFocus className="field-soft !py-1 !px-2 text-[12px] w-44" placeholder={placeholder} value={value} maxLength={80}
+    <span className={`flex flex-wrap items-center gap-2 mt-2 ${className}`}>
+      <input autoFocus className="csb-input" placeholder={placeholder} value={value} maxLength={80}
+        onFocus={e => e.currentTarget.select()}
         onChange={e => setValue(e.target.value)}
         onKeyDown={e => { if (e.key === "Enter") submit(); if (e.key === "Escape") { setOpen(false); setValue(""); } }} />
-      <button className="btn-orange px-3 py-1 rounded-lg text-[11px]" disabled={busy || !value.trim()} onClick={submit}>Add</button>
-      <button className={ghostBtn} onClick={() => { setOpen(false); setValue(""); }}>Done</button>
+      <button className="btn-orange px-3 py-1.5 rounded-lg text-[11px]" disabled={busy || !value.trim()} onClick={submit}>Add</button>
+      <button className="csb-link" onClick={() => { setOpen(false); setValue(""); }}>Done</button>
     </span>
   );
 }
 
-/** Name that turns into an input on "Rename". */
-function RenameName({ name, className, onSave }: { name: string; className: string; onSave: (n: string) => Promise<void> }) {
+/** Name that turns into an input on "Rename" (pencil icon button). */
+function RenameName({ name, nameClass, onSave, chip, muted, mutedTitle }: {
+  name: string; nameClass?: string; onSave: (n: string) => Promise<void>; chip?: boolean; muted?: boolean; mutedTitle?: string;
+}) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
   const save = async () => {
@@ -64,21 +93,25 @@ function RenameName({ name, className, onSave }: { name: string; className: stri
   };
   if (!editing) {
     return (
-      <span className={row}>
-        <span className={className}>{name}</span>
-        <button className={ghostBtn} aria-label={`Rename ${name}`} onClick={() => { setValue(name); setEditing(true); }}>Rename</button>
+      <span className="inline-flex items-center gap-1 min-w-0">
+        <span className={chip ? `csb-chip ${muted ? "csb-chip-muted" : ""}` : nameClass} title={muted ? mutedTitle : undefined}>{name}</span>
+        <button className="csb-icon-btn" aria-label={`Rename ${name}`} title="Rename" onClick={() => { setValue(name); setEditing(true); }}><CIcons.Pencil /></button>
       </span>
     );
   }
   return (
-    <span className={row}>
-      <input autoFocus className="field-soft !py-1 !px-2 text-[12px] w-48" value={value} maxLength={80} onChange={e => setValue(e.target.value)}
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <input autoFocus className="csb-input" value={value} maxLength={80} onChange={e => setValue(e.target.value)}
         onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setEditing(false); setValue(name); } }} />
-      <button className="btn-orange px-3 py-1 rounded-lg text-[11px]" onClick={save}>Save</button>
-      <button className={ghostBtn} onClick={() => { setEditing(false); setValue(name); }}>Cancel</button>
+      <button className="btn-orange px-3 py-1.5 rounded-lg text-[11px]" onClick={save}>Save</button>
+      <button className="csb-link" onClick={() => { setEditing(false); setValue(name); }}>Cancel</button>
     </span>
   );
 }
+
+const DeleteBtn = ({ label, onClick }: { label: string; onClick: () => void }) => (
+  <button className="csb-icon-btn is-danger" aria-label={label} title="Delete" onClick={onClick}><CIcons.Trash /></button>
+);
 
 export default function ClassesTab(p: ClassesTabProps) {
   const { instituteId, teachers } = p;
@@ -135,15 +168,20 @@ export default function ClassesTab(p: ClassesTabProps) {
 
   const allSubjectOptions = tree.classes.flatMap(c => c.subjects.map(s => ({ id: s.id, label: `${c.name} › ${s.name}` })));
 
-  const batchRow = (b: BatchNode) => {
+  const teacherPicker = (b: BatchNode) => {
     const current = b.teacherIds[0] ?? "";
+    const name = current ? teacherName(current) : "";
+    const pc = current ? personColor(name) : null;
     return (
-      <div key={b.id} className={`${row} py-1.5 pl-2 border-l-2 border-slate-100`} data-testid={`batch-${b.id}`}>
-        <RenameName name={b.name} className="text-[13px] font-bold text-slate-700" onSave={n => run(() => api.renameBatch(supabase, b.id, n), "Batch renamed")} />
-        <span className="text-[11px] font-medium text-slate-400">{b.students} student{b.students === 1 ? "" : "s"}</span>
+      <div className={`csb-teacher ${current ? "csb-t-green" : "csb-t-amber"}`}>
+        {pc ? (
+          <span className="csb-avatar csb-s" style={subjectVars(pc)} title={name} aria-hidden="true">{initialsOf(name)}</span>
+        ) : (
+          <span className="csb-avatar" title="No teacher yet" aria-hidden="true"><CIcons.Person /></span>
+        )}
         <select
           aria-label={`Teacher of ${b.name}`}
-          className="ml-auto text-[12px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none cursor-pointer hover:border-[#FF7043] max-w-[200px]"
+          className="csb-select" data-state={current ? "assigned" : "none"}
           value={current} disabled={busy}
           onChange={e => quietly(() => api.setBatchTeacher(supabase, instituteId, b.id, e.target.value || null), e.target.value ? "Teacher assigned" : "Teacher removed")}
         >
@@ -151,101 +189,115 @@ export default function ClassesTab(p: ClassesTabProps) {
           {teachers.map(t => <option key={t.user_id} value={t.user_id}>{teacherName(t.user_id)}</option>)}
         </select>
         {b.teacherIds.length > 1 && (
-          <span className="text-[10px] font-bold text-amber-600" title={b.teacherIds.map(teacherName).join(", ")}>+{b.teacherIds.length - 1} more</span>
+          <span className="text-[10px] font-bold csb-pill csb-t-amber" title={b.teacherIds.map(teacherName).join(", ")}>+{b.teacherIds.length - 1} more</span>
         )}
-        <button className={dangerBtn} aria-label={`Delete ${b.name}`} onClick={() => delBatch(b)}>Delete</button>
       </div>
     );
   };
 
-  const subjectBlock = (c: ClassNode, s: SubjectNode) => (
-    <div key={s.id} className="mt-2 ml-3 sm:ml-5">
-      <div className={row}>
-        <button className="text-slate-400 text-[11px] w-4" aria-label={collapsed.has(s.id) ? "Expand subject" : "Collapse subject"} onClick={() => toggle(s.id)}>{collapsed.has(s.id) ? "▸" : "▾"}</button>
-        <RenameName name={s.name} className="text-[14px] font-extrabold text-slate-800" onSave={n => run(() => api.renameSubject(supabase, s.id, n), "Subject renamed")} />
-        <span className="text-[11px] font-medium text-slate-400">{s.batches.length} batch{s.batches.length === 1 ? "" : "es"} · {s.students} student{s.students === 1 ? "" : "s"}</span>
-        <span className="ml-auto" />
-        <button className={dangerBtn} aria-label={`Delete subject ${s.name}`} onClick={() => delSubject(s)}>Delete</button>
-      </div>
-      {!collapsed.has(s.id) && (
-        <div className="ml-5 mt-1 space-y-0.5">
-          {s.batches.map(batchRow)}
-          <InlineAdd label="Add batch" placeholder="Batch name, e.g. Eco Batch A"
-            onAdd={n => run(() => api.createBatch(supabase, { instituteId, classId: c.id, className: c.name, subjectId: s.id, name: n }), "Batch created")} />
+  const batchRow = (b: BatchNode, subjectName: string) => (
+    <div key={b.id} className="csb-row csb-hov" data-testid={`batch-${b.id}`}>
+      <RenameName name={b.name} chip muted={isSameName(b.name, subjectName)}
+        mutedTitle="Same name as the subject (old data) — rename it, e.g. “Batch 1”"
+        onSave={n => run(() => api.renameBatch(supabase, b.id, n), "Batch renamed")} />
+      <Pill tone="subject" icon={<CIcons.Users />}>{plural(b.students, "student")}</Pill>
+      <span className="csb-grow" />
+      {teacherPicker(b)}
+      <DeleteBtn label={`Delete ${b.name}`} onClick={() => delBatch(b)} />
+    </div>
+  );
+
+  const subjectBlock = (c: ClassNode, s: SubjectNode) => {
+    const open = !collapsed.has(s.id);
+    return (
+      <div key={s.id} className="csb-subject" style={subjectVars(subjectColorOf(s.name))}>
+        <div className="flex flex-wrap items-center gap-2 csb-hov">
+          <Chevron open={open} label={open ? "Collapse subject" : "Expand subject"} onClick={() => toggle(s.id)} />
+          <span className="csb-dot" aria-hidden="true" />
+          <RenameName name={s.name} nameClass="csb-subj-name" onSave={n => run(() => api.renameSubject(supabase, s.id, n), "Subject renamed")} />
+          <Pill tone="subject" icon={<CIcons.Layers />}>{plural(s.batches.length, "batch", "batches")}</Pill>
+          <Pill tone="subject" icon={<CIcons.Users />}>{plural(s.students, "student")}</Pill>
+          <span className="csb-grow" />
+          <DeleteBtn label={`Delete subject ${s.name}`} onClick={() => delSubject(s)} />
         </div>
-      )}
+        <Collapse open={open}>
+          <div className="pl-1 pt-1 pb-0.5">
+            {s.batches.map(b => batchRow(b, s.name))}
+            <InlineAdd label="Add batch" placeholder="Batch name, e.g. Eco Batch A"
+              defaultValue={nextBatchName(s.name, s.batches.map(b => b.name))}
+              onAdd={n => run(() => api.createBatch(supabase, { instituteId, classId: c.id, className: c.name, subjectId: s.id, name: n }), "Batch created")} />
+          </div>
+        </Collapse>
+      </div>
+    );
+  };
+
+  const subjectPicker = (b: { id: string; name: string; students: number }, options: { id: string; label: string }[], placeholder: string) => (
+    <div key={b.id} className="flex flex-wrap items-center gap-2 py-1">
+      <span className="csb-chip">{b.name}</span>
+      <Pill tone="amber" icon={<CIcons.Users />}>{plural(b.students, "student")}</Pill>
+      <select aria-label={`Subject for ${b.name}`} className="csb-select ml-auto" value="" disabled={busy}
+        onChange={e => e.target.value && quietly(() => api.setBatchSubject(supabase, b.id, e.target.value), "Subject set")}>
+        <option value="">{placeholder}</option>
+        {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+      </select>
     </div>
   );
 
   return (
-    <div className="space-y-4" data-testid="classes-tab">
+    <div className="csb-root space-y-4" data-testid="classes-tab">
+      <ClassesStyles />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[13px] text-slate-500 font-bold">Class → Subject → Batch → Teacher</p>
-          <p className="text-[12px] text-slate-400 font-medium">Everything on one screen. A teacher is assigned to a batch; the subject comes from the batch.</p>
+          <p className="text-[15px] font-extrabold" style={{ color: "var(--c-text)" }}>Class → Subject → Batch → Teacher</p>
+          <p className="csb-hint">Everything on one screen. A teacher is assigned to a batch; the subject comes from the batch.</p>
         </div>
-        <InlineAdd label="Add class" placeholder="e.g. 11th Commerce" onAdd={n => run(() => api.createClass(supabase, instituteId, n), "Class created")} />
+        <InlineAdd label="Add class" placeholder="e.g. 11th Commerce" className="csb-add-top" onAdd={n => run(() => api.createClass(supabase, instituteId, n), "Class created")} />
       </div>
 
       {tree.classes.length === 0 && (
-        <div className="bg-white rounded-2xl p-10 text-center card-shadow border border-slate-50">
-          <p className="text-sm text-slate-500 font-medium">No classes yet. Add one (for example "11th Commerce"), then its subjects and batches.</p>
+        <div className="csb-empty">
+          <div className="csb-tile mx-auto mb-3"><CIcons.Cap /></div>
+          No classes yet. Add one (for example "11th Commerce"), then its subjects and batches.
         </div>
       )}
 
-      {tree.classes.map(c => (
-        <section key={c.id} className="bg-white rounded-2xl p-4 card-shadow border border-slate-50" data-testid={`class-${c.id}`}>
-          <div className={row}>
-            <button className="text-slate-400 text-[12px] w-4" aria-label={collapsed.has(c.id) ? "Expand class" : "Collapse class"} onClick={() => toggle(c.id)}>{collapsed.has(c.id) ? "▸" : "▾"}</button>
-            <RenameName name={c.name} className="text-[16px] font-extrabold text-slate-900" onSave={n => run(() => api.renameClass(supabase, c.id, n), "Class renamed")} />
-            <span className="text-[11px] font-medium text-slate-400">{c.subjects.length} subject{c.subjects.length === 1 ? "" : "s"} · {c.students} student{c.students === 1 ? "" : "s"}</span>
-            <span className="ml-auto" />
-            <button className={dangerBtn} aria-label={`Delete class ${c.name}`} onClick={() => delClass(c)}>Delete</button>
-          </div>
-          {!collapsed.has(c.id) && (
-            <>
-              {c.subjects.map(s => subjectBlock(c, s))}
-              {c.looseBatches.length > 0 && (
-                <div className="mt-3 ml-3 sm:ml-5 p-2 rounded-xl bg-amber-50/60 border border-amber-100">
-                  <p className="text-[11px] font-bold text-amber-700 mb-1">Batches without a subject (old data): pick a subject for each</p>
-                  {c.looseBatches.map(b => (
-                    <div key={b.id} className={`${row} py-1`}>
-                      <span className="text-[13px] font-bold text-slate-700">{b.name}</span>
-                      <span className="text-[11px] text-slate-400">{b.students} students</span>
-                      <select aria-label={`Subject for ${b.name}`} className="ml-auto text-[12px] font-bold bg-white border border-amber-200 rounded-lg px-2 py-1" value="" disabled={busy}
-                        onChange={e => e.target.value && quietly(() => api.setBatchSubject(supabase, b.id, e.target.value), "Subject set")}>
-                        <option value="">Choose subject…</option>
-                        {c.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="mt-2 ml-3 sm:ml-5">
+      {tree.classes.map(c => {
+        const open = !collapsed.has(c.id);
+        return (
+          <section key={c.id} className="csb-card" data-testid={`class-${c.id}`}>
+            <div className="csb-head csb-hov">
+              <Chevron open={open} label={open ? "Collapse class" : "Expand class"} onClick={() => toggle(c.id)} />
+              <span className="csb-tile"><CIcons.Cap /></span>
+              <RenameName name={c.name} nameClass="csb-title" onSave={n => run(() => api.renameClass(supabase, c.id, n), "Class renamed")} />
+              <Pill tone="indigo" icon={<CIcons.Book />}>{plural(c.subjects.length, "subject")}</Pill>
+              <Pill tone="orange" icon={<CIcons.Users />}>{plural(c.students, "student")}</Pill>
+              <span className="csb-grow" />
+              <DeleteBtn label={`Delete class ${c.name}`} onClick={() => delClass(c)} />
+            </div>
+            <Collapse open={open}>
+              <div className="csb-body">
+                {c.subjects.map(s => subjectBlock(c, s))}
+                {c.looseBatches.length > 0 && (
+                  <div className="csb-warn csb-t-amber">
+                    <p className="text-[11px] font-extrabold mb-1">Batches without a subject (old data): pick a subject for each</p>
+                    {c.looseBatches.map(b => subjectPicker(b, c.subjects.map(s => ({ id: s.id, label: s.name })), "Choose subject…"))}
+                  </div>
+                )}
                 <InlineAdd label="Add subject" placeholder="e.g. Economics"
                   onAdd={n => run(() => api.createSubject(supabase, instituteId, c.id, n, p.subjects.map(s => s.code)), "Subject created")} />
               </div>
-            </>
-          )}
-        </section>
-      ))}
+            </Collapse>
+          </section>
+        );
+      })}
 
       {(tree.unassigned.some(b => !b.classId) || tree.classless.length > 0) && (
-        <section className="bg-white rounded-2xl p-4 card-shadow border border-amber-100">
-          <p className="text-[13px] font-extrabold text-amber-700">Old data without a class</p>
-          <p className="text-[11px] text-slate-400 mb-2">These batches / subjects have no class. Pick a subject (inside a class above) for each batch; classless subjects can be moved by recreating them under a class.</p>
-          {tree.unassigned.filter(b => !b.classId).map(b => (
-            <div key={b.id} className={`${row} py-1`}>
-              <span className="text-[13px] font-bold text-slate-700">{b.name}</span>
-              <span className="text-[11px] text-slate-400">{b.students} students</span>
-              <select aria-label={`Subject for ${b.name}`} className="ml-auto text-[12px] font-bold bg-white border border-amber-200 rounded-lg px-2 py-1" value="" disabled={busy}
-                onChange={e => e.target.value && quietly(() => api.setBatchSubject(supabase, b.id, e.target.value), "Subject set")}>
-                <option value="">Choose class › subject…</option>
-                {allSubjectOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
-            </div>
-          ))}
-          {tree.classless.map(s => <p key={s.id} className="text-[12px] text-slate-500 py-0.5">Subject without a class: <b>{s.name}</b> ({s.batches.length} batches)</p>)}
+        <section className="csb-warn csb-t-amber">
+          <p className="text-[13px] font-extrabold">Old data without a class</p>
+          <p className="text-[11px] mb-2" style={{ opacity: 0.85 }}>These batches / subjects have no class. Pick a subject (inside a class above) for each batch; classless subjects can be moved by recreating them under a class.</p>
+          {tree.unassigned.filter(b => !b.classId).map(b => subjectPicker(b, allSubjectOptions, "Choose class › subject…"))}
+          {tree.classless.map(s => <p key={s.id} className="text-[12px] py-0.5">Subject without a class: <b>{s.name}</b> ({s.batches.length} batches)</p>)}
         </section>
       )}
     </div>
