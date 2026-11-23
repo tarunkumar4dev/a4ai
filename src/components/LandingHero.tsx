@@ -4,6 +4,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Check } from "lucide-react";
 import FeatureShowcase from "@/components/landing/FeatureShowcase";
+import GooglePlayButton from "@/components/landing/GooglePlayButton";
 
 const CAPABILITY_CHIPS = [
   "NCERT Question Bank",
@@ -38,7 +39,7 @@ export default function LandingHero() {
               connected workspace.
             </p>
 
-            <div className="flex flex-col min-[420px]:flex-row items-stretch min-[420px]:items-center gap-3 sm:gap-4">
+            <div className="flex flex-col min-[420px]:flex-row flex-wrap items-stretch min-[420px]:items-center gap-3 sm:gap-4">
               <Link
                 to="/dashboard/test-generator"
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#111111] px-7 min-h-[50px] text-[15px] font-bold text-white hover:bg-[#222222] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F95D6A] focus-visible:ring-offset-2"
@@ -52,6 +53,7 @@ export default function LandingHero() {
               >
                 View Pricing
               </Link>
+              <GooglePlayButton className="min-h-[50px]" />
             </div>
           </div>
 
