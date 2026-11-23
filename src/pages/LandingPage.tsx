@@ -3,6 +3,7 @@ import Navbar from "@/components/Navbar";
 import LandingHero from "@/components/LandingHero";
 import Footer from "@/components/Footer";
 import Partners from "@/components/landing/Partners";
+import GooglePlayButton from "@/components/landing/GooglePlayButton";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -711,7 +712,7 @@ const FinalCTA = memo(function FinalCTA() {
           Join educators across India who create curriculum-accurate test papers and grade assignments in minutes.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-4 mb-6">
           <Link
             to="/dashboard/test-generator"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#111111] px-8 py-3.5 text-[15px] font-bold text-white hover:bg-[#222222]"
@@ -728,6 +729,7 @@ const FinalCTA = memo(function FinalCTA() {
             <Crown className="h-4 w-4" />
             <span>View Pricing</span>
           </Link>
+          <GooglePlayButton className="w-full sm:w-auto min-h-[48px] py-2.5" />
         </div>
 
         <p className="text-xs sm:text-sm text-[#5D6570]">
