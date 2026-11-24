@@ -62,31 +62,37 @@ export default function TeachersSimple({ instituteId, teachers, tree, onChanged,
         for (const o of free) byGroup.set(`${o.className} › ${o.subjectName}`, [...(byGroup.get(`${o.className} › ${o.subjectName}`) ?? []), o]);
         return (
           <div key={t.id} className="csb-card" data-testid={`teacher-${t.user_id}`}>
-            <div className="flex flex-wrap items-center gap-3 p-4 csb-hov">
-              <span className="csb-avatar csb-s" style={{ ...subjectVars(personColor(display)), width: 38, height: 38, fontSize: 13 }} aria-hidden="true">{initialsOf(display)}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-extrabold truncate" style={{ color: "var(--c-text)" }}>{display}</p>
-                <div className="mt-0.5">
-                  {groups.length === 0
-                    ? <span className="csb-pill csb-t-amber">No batches yet</span>
-                    : <span className="csb-pill csb-t-indigo"><CIcons.Layers />{mine.size} batch{mine.size === 1 ? "" : "es"}</span>}
+            {/* Narrow phones: stack identity above the actions row so the "N batches" pill never
+                sits on top of the "+ Add batch" select. From sm+ it stays a single row. */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-3 p-4 csb-hov">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <span className="csb-avatar csb-s" style={{ ...subjectVars(personColor(display)), width: 38, height: 38, fontSize: 13 }} aria-hidden="true">{initialsOf(display)}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-extrabold truncate" style={{ color: "var(--c-text)" }}>{display}</p>
+                  <div className="mt-0.5">
+                    {groups.length === 0
+                      ? <span className="csb-pill csb-t-amber">No batches yet</span>
+                      : <span className="csb-pill csb-t-indigo"><CIcons.Layers />{mine.size} batch{mine.size === 1 ? "" : "es"}</span>}
+                  </div>
                 </div>
               </div>
-              <select
-                aria-label={`Add batch for ${display}`}
-                className="csb-add !mt-0 max-w-[260px]"
-                value="" disabled={busy !== null || free.length === 0}
-                onChange={e => e.target.value && act(`${t.user_id}:${e.target.value}`, () => addTeacherToBatch(supabase, instituteId, e.target.value, t.user_id), "Batch added")}
-              >
-                <option value="">+ Add batch</option>
-                {[...byGroup.entries()].map(([label, opts]) => (
-                  <optgroup key={label} label={label}>
-                    {opts.map(o => <option key={o.batchId} value={o.batchId}>{o.batchName} ({o.students} students)</option>)}
-                  </optgroup>
-                ))}
-              </select>
-              <button onClick={() => onRemoveTeacher(t.id, t.user_id)} title="Remove teacher from the institute" aria-label="Remove teacher"
-                className="csb-icon-btn is-danger"><CIcons.Trash /></button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <select
+                  aria-label={`Add batch for ${display}`}
+                  className="csb-add !mt-0 w-full sm:w-auto sm:max-w-[260px] min-w-0"
+                  value="" disabled={busy !== null || free.length === 0}
+                  onChange={e => e.target.value && act(`${t.user_id}:${e.target.value}`, () => addTeacherToBatch(supabase, instituteId, e.target.value, t.user_id), "Batch added")}
+                >
+                  <option value="">+ Add batch</option>
+                  {[...byGroup.entries()].map(([label, opts]) => (
+                    <optgroup key={label} label={label}>
+                      {opts.map(o => <option key={o.batchId} value={o.batchId}>{o.batchName} ({o.students} students)</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+                <button onClick={() => onRemoveTeacher(t.id, t.user_id)} title="Remove teacher from the institute" aria-label="Remove teacher"
+                  className="csb-icon-btn is-danger shrink-0"><CIcons.Trash /></button>
+              </div>
             </div>
             {groups.length > 0 && (
               <div className="px-4 pb-4 space-y-3">
