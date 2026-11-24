@@ -102,7 +102,14 @@ export default function AskA4aiLauncher() {
 
   return (
     <>
-      <LazyFloatingMic uid={user?.id ?? null} onOpen={() => { setOpen(true); setHistory(false); }} />
+      <LazyFloatingMic
+        uid={user?.id ?? null}
+        onOpen={() => { setOpen(true); setHistory(false); }}
+        /* Teacher dashboard has no bottom nav, so dock the mic to the right of the help bot
+           instead of the Institute / HOD centre-of-nav position (where it would overlap page
+           CTAs like "Create Test"). */
+        dockVariant={pathname.startsWith("/dashboard") ? "right" : "center"}
+      />
       <button ref={btn} type="button" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} data-testid="ask-a4ai"
         title={`Ask a4ai (${OPEN_SHORTCUT})`}
         className="fixed bottom-20 right-4 z-[105] hidden sm:inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 font-halenoir text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:bottom-24 sm:right-6">
