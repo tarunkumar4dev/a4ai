@@ -101,6 +101,10 @@ export const customStyles = `
   @keyframes scaleIn  { from { opacity:0; transform:scale(0.96);}       to { opacity:1; transform:scale(1);} }
   @keyframes dropIn   { from { opacity:0; transform:translateY(-10px) scale(0.97);} to { opacity:1; transform:translateY(0) scale(1);} }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* Agent animations (anim-agent-glow / ripple / wave) and .safe-area-bottom live in src/index.css
+     so Teacher dashboard (which does not inject this stylesheet) also gets them. */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
   .anim-in { animation: fadeIn .35s ease-out forwards; }
   .anim-entrance { animation: fadeInUp .5s cubic-bezier(0.16,1,0.3,1) forwards; opacity:0; }

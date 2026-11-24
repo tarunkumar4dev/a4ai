@@ -13,7 +13,7 @@ import { useAccess } from "@/context/AccessProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { LazyFloatingMic } from "@/components/voice";
 import { useVoiceNavigation } from "@/lib/voice/useVoiceNavigation";
-import { requestComposerFocus, useAgentWorkspaceOpen } from "@/lib/agent/surface";
+import { onAgentOpenRequest, requestComposerFocus, useAgentWorkspaceOpen } from "@/lib/agent/surface";
 import { AgentSheetFrame, SheetClose } from "./AgentSheetFrame";
 import { matchShortcut, OPEN_SHORTCUT } from "./shortcuts";
 
@@ -53,10 +53,12 @@ export default function AskA4aiLauncher() {
   const btn = useRef<HTMLButtonElement>(null);
   const historyBtn = useRef<HTMLButtonElement>(null);
   const workspaceOpen = useAgentWorkspaceOpen();
-  const staffRoute = AGENT_DASHBOARD_ROUTES.test(pathname) && !!access?.primary_role && !["none", "student"].includes(access.primary_role);
-  const visible = !workspaceOpen && showAskA4ai(pathname, access?.primary_role, search);
+  const effectiveRole = access?.primary_role || (user?.user_metadata as any)?.role || (pathname.startsWith("/institute") ? "admin" : pathname.startsWith("/hod") ? "hod" : "teacher");
+  const staffRoute = AGENT_DASHBOARD_ROUTES.test(pathname) && !!effectiveRole && !["none", "student"].includes(effectiveRole);
+  const visible = !workspaceOpen && showAskA4ai(pathname, effectiveRole, search);
 
   useEffect(() => { if (!open) setHistory(false); }, [open]);
+  useEffect(() => onAgentOpenRequest(() => { setOpen(true); setHistory(false); }), []);
 
   // phones: the system back gesture closes the sheet (one history entry while it is open, removed on close)
   useEffect(() => {
@@ -103,7 +105,7 @@ export default function AskA4aiLauncher() {
       <LazyFloatingMic uid={user?.id ?? null} onOpen={() => { setOpen(true); setHistory(false); }} />
       <button ref={btn} type="button" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} data-testid="ask-a4ai"
         title={`Ask a4ai (${OPEN_SHORTCUT})`}
-        className="fixed bottom-20 right-4 z-[105] inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 font-halenoir text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:bottom-24 sm:right-6">
+        className="fixed bottom-20 right-4 z-[105] hidden sm:inline-flex h-11 items-center gap-2 rounded-full bg-primary px-4 font-halenoir text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:bottom-24 sm:right-6">
         <Sparkles aria-hidden="true" className="h-4 w-4" /> Ask a4ai
       </button>
       <AgentSheetFrame open={open} onOpenChange={setOpen} side="right" title={L.title} description={L.desc}
