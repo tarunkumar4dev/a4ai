@@ -618,6 +618,21 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   Migration numbers: 39/40 are these; the checker's AI_UNREADABLE migration is 41+ (35-38 = wip/maths-analytics). Design: docs/design/class_subject_batch.md.
 - [ ] Run the apply file in the Supabase SQL editor (see its header), then merge + deploy.
 
+- [x] Teacher Analytics = real data only (24 Nov, branch feat/DB_fixes, uncommitted; frontend only, no migration).
+  Old tab filled every gap with sample data (fake names, "+3.4% vs last term", 76 % avg, 85 % weekdays, fake defaulters
+  when there were none), counted generated papers as tests with invented scores, ignored Supabase errors, counted every
+  attempt, cut reads at 1000 rows. Now: maths `src/lib/teacherAnalytics.ts` (unit-tested), reads
+  `src/lib/teacherAnalyticsData.ts` (paged by 1000 = live max rows, every error shown). Attendance = get_monthly_attendance
+  rule (conducted only, present + late attended, leave in total). Marks = submissions.grade (out of check_sheets.max_marks,
+  else assignments.max_marks; one attempt per student by count_policy, like my_submissions; guests by submitter_key) +
+  approved Check Copies sheets with submission_id NULL (no-class sessions only under "All my classes"). Cross-checked on
+  live with SQL (attendance + marks numbers identical). `/dashboard?tab=analytics` deep link now opens the tab.
+  Institute "Enrollment by Batch" counts student_batches members (was students.batch_id). e2e `tests/e2e/teacher-analytics.spec.ts`.
+- Known after Teacher Analytics: `/dashboard/analytics` (AnalyticsPage) is still the old Excel page with sample data and no DB;
+  the agent registry key `analytics.page` ("detailed analytics", "full report") opens it. Fix = change/remove that key in
+  RAG-BACKEND agent/routes/registry.json, `npm run agent:routes`, then redirect the route to `/dashboard?tab=analytics`.
+  Not verified with a real teacher login (no test account) — check one teacher with marked attendance + a checked copy.
+
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
 Each must see only its row of the access matrix. Also try direct Supabase queries from browser console (`supabase.from('students').select('*')`) — RLS must return only scoped rows.
