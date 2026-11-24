@@ -632,6 +632,20 @@ Existing attendance RPCs (keep, already scoped server-side): get_my_proctor_sect
   the agent registry key `analytics.page` ("detailed analytics", "full report") opens it. Fix = change/remove that key in
   RAG-BACKEND agent/routes/registry.json, `npm run agent:routes`, then redirect the route to `/dashboard?tab=analytics`.
   Not verified with a real teacher login (no test account) — check one teacher with marked attendance + a checked copy.
+- [x] Teacher Analytics v2 look (24 Nov, feat/DB_fixes after 3ae1a373, uncommitted; frontend only, no migration). The plain
+  real-data tab looked empty → rebuilt colourful, still DB-only: Overview · Marks · Attendance · Students
+  (`src/components/teacher/analytics/`: kit.tsx = components, theme.ts = colours/helpers, model.ts `buildModel` = the ONLY
+  place numbers are derived, one file per view). Reads now cover TWO periods (`rangeStartDate(range, today, 2)`) and
+  buildModel splits them → "vs previous N days" from real older rows (none for all time; delta = shown rounded values).
+  New maths in teacherAnalytics.ts: absence streaks (leave / late / present end a run), attendance bands, per batch,
+  perfect attendance, per-student trend/delta (improving / slipping ±5 pts), `trackAssignments` (submitted / late /
+  stages from 18's statuses / not submitted), `summarizeQuestions` (check_sheets.per_question marks + concepts from
+  ai_result.graded_questions — loaded only for the picked assessment, ~20 KB a copy), `combineStudents` risk, pearson,
+  `buildInsights`. WhatsApp-the-parent buttons use students.parent_phone (61 of 292 live students have one). Student
+  drawer is portaled into `.dashboard-root` at z-[250] (dashboard header z-150, sidebar z-200). Tests: +27 unit
+  (teacherAnalytics.insights.test.ts, analytics/model.test.ts), 8 e2e. Screens checked at 1366 / 390, light + dark, empty.
+- Known after v2: question-wise data isn't refetched by Refresh (re-open the tab); Students list renders 50 rows at a
+  time; still not checked with a real teacher login.
 
 ## Test matrix (after every step)
 5 logins: admin · HOD ECE · proctor ECE-2 · subject teacher (ECE-2 only) · subject teacher of another dept · + 1 student access code.
