@@ -1,16 +1,14 @@
 // src/components/voice/FloatingMic.tsx
 // Zomato-inspired floating AI voice agent button for a4ai.
 // Features:
-// - Zomato purple-to-lavender jewel gradient (#D8B4FE -> #8B35E8 -> #581C87)
-// - 68px circular button with subtle outer glow and translucent border
-// - Docked at the bottom navigation center overlapping the bar like Zomato
-// - Full pointer/touch drag interaction with 6px threshold to prevent accidental drags
-// - Magnetic snapping to nearest screen edge or bottom dock on release
+// - Jewel purple gradient (#D8B4FE -> #8B35E8 -> #581C87) with a subtle warm-gold halo behind it
+// - 68px circular button, docked at the bottom navigation center overlapping the bar like Zomato
+// - Long-press (380ms) to pick up and drag; a plain tap always opens the agent sheet
+// - Magnetic snapping to the nearest screen edge or back to the bottom dock on release
 // - Audio-reactive animation rings and state indicators (idle, listening, processing, speaking)
-// - Architectural obstruction hiding: smoothly vanishes when mobile sidebar/drawer opens (Phase 2)
-// - Always visible on mobile dashboards; tapping opens the agent sheet and activates voice if supported
+// - Architectural obstruction hiding: smoothly vanishes when the mobile sidebar / drawer opens
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Mic, Volume2, Sparkles, Loader2 } from "lucide-react";
+import { Mic, Volume2, Loader2 } from "lucide-react";
 import { useVoiceConfig } from "@/lib/voice/useVoiceConfig";
 import { recordingSupported } from "@/lib/voice/ptt";
 import {
@@ -26,7 +24,12 @@ interface FloatingMicProps {
 }
 
 const BUTTON_SIZE = 68; // px
-const DRAG_THRESHOLD = 6; // px to distinguish tap vs drag
+// A short, deliberate press before the mic can be dragged. A tap never moves it; a scroll never
+// moves it; only a hold. Matches the Zomato / Material "pick up" gesture.
+const LONG_PRESS_MS = 380;
+// If the finger moves more than this before the long-press timer fires, cancel the pick-up and
+// let the browser treat the gesture as a scroll instead.
+const PRE_HOLD_SLOP = 10;
 const SAFE_MARGIN_X = 14;
 const SAFE_TOP = 64; // below mobile sticky header
 // Space the docked mic reserves at the bottom of the viewport. Institute + HOD have a 5-slot
@@ -47,7 +50,10 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
   const startPointerRef = useRef<{ x: number; y: number } | null>(null);
   const startPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const hasDraggedRef = useRef(false);
+  const holdArmedRef = useRef(false); // true after the long-press timer fires = pickup engaged
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [heldDown, setHeldDown] = useState(false); // drives the pre-pickup "swell" animation
 
   // Clamp any (x, y) to safe viewport bounds. The bottom bound reserves room for the mobile
   // bottom nav on Institute/HOD so a dragged mic never gets dropped under it.
@@ -79,7 +85,15 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
     };
   }, [clampPosition]);
 
-  // Pointer Down: Start tracking drag
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current !== undefined) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = undefined;
+    }
+  };
+
+  // Pointer Down: start the long-press timer. Dragging only engages once the timer fires —
+  // a plain tap (release before LONG_PRESS_MS) always opens the sheet.
   const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return; // primary button only
     let current = pos;
@@ -94,66 +108,100 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
     startPointerRef.current = { x: e.clientX, y: e.clientY };
     startPosRef.current = { ...safeCurrent };
     hasDraggedRef.current = false;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    holdArmedRef.current = false;
+    setHeldDown(true);
+    clearHoldTimer();
+    const pointerId = e.pointerId;
+    const target = e.currentTarget;
+    holdTimerRef.current = setTimeout(() => {
+      if (!startPointerRef.current) return;
+      holdArmedRef.current = true;
+      // Capture only once the gesture has committed to drag — a tap never captures the pointer,
+      // so taps don't block scrolling or get swallowed by iOS's touch delays.
+      try { target.setPointerCapture(pointerId); } catch { /* noop */ }
+      try { navigator.vibrate?.(10); } catch { /* noop */ }
+    }, LONG_PRESS_MS);
   };
 
-  // Pointer Move: Update position if threshold passed
+  // Pointer Move: before pickup, cancel on any real movement (= it's a scroll, not a drag).
+  // After pickup, follow the finger.
   const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (!startPointerRef.current) return;
     const dx = e.clientX - startPointerRef.current.x;
     const dy = e.clientY - startPointerRef.current.y;
 
-    if (!hasDraggedRef.current && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+    if (!holdArmedRef.current) {
+      // Still waiting for the long press to fire. If the finger moves, the user is scrolling —
+      // bail out of the pickup attempt entirely.
+      if (Math.hypot(dx, dy) > PRE_HOLD_SLOP) {
+        clearHoldTimer();
+        startPointerRef.current = null;
+        setHeldDown(false);
+      }
+      return;
+    }
+
+    if (!hasDraggedRef.current) {
       hasDraggedRef.current = true;
       setIsDragging(true);
     }
 
-    if (hasDraggedRef.current) {
-      const targetX = startPosRef.current.x + dx;
-      const targetY = startPosRef.current.y + dy;
-      setPos(clampPosition(targetX, targetY));
-    }
+    const targetX = startPosRef.current.x + dx;
+    const targetY = startPosRef.current.y + dy;
+    setPos(clampPosition(targetX, targetY));
   };
 
-  // Pointer Up / Cancel: Snap to nearest edge or bottom dock
+  // Pointer Up / Cancel: snap to nearest edge or bottom dock; a release before the long-press
+  // timer fires is treated as a tap and opens the sheet.
   const handlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!startPointerRef.current) return;
+    const wasTracking = !!startPointerRef.current;
+    const wasDragging = hasDraggedRef.current;
+    const wasArmed = holdArmedRef.current;
+
+    clearHoldTimer();
+    setHeldDown(false);
+
     try {
       if (e.currentTarget.hasPointerCapture(e.pointerId)) {
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
-    } catch {
-      /* noop */
-    }
+    } catch { /* noop */ }
 
-    if (hasDraggedRef.current && pos) {
-      // Snapping logic:
-      // If dropped in the bottom 160px and near center horizontal (within 90px of center), snap to default dock
+    startPointerRef.current = null;
+    hasDraggedRef.current = false;
+    holdArmedRef.current = false;
+    setIsDragging(false);
+
+    if (!wasTracking) return;
+
+    if (wasDragging && pos) {
+      // Snapping: dropped in the bottom 160px AND near horizontal centre → back to the dock,
+      // else snap to the nearest side edge.
       const centerX = (window.innerWidth - BUTTON_SIZE) / 2;
       const distFromCenter = Math.abs(pos.x - centerX);
       const isNearBottom = pos.y > window.innerHeight - 160;
-
       if (isNearBottom && distFromCenter < 90) {
-        setPos(null); // snaps back to bottom dock center
+        setPos(null);
       } else {
-        // Snap to nearest screen edge (left or right)
         const snapLeft = SAFE_MARGIN_X;
         const snapRight = window.innerWidth - BUTTON_SIZE - SAFE_MARGIN_X;
         const snappedX = pos.x < window.innerWidth / 2 ? snapLeft : snapRight;
         setPos(clampPosition(snappedX, pos.y));
       }
-    } else {
-      // It was a tap/click! Trigger open sheet and start voice if enabled
-      onOpen();
-      if (canRecord && config?.enabled !== false) {
-        requestVoiceStart();
-      }
+      return;
     }
 
-    startPointerRef.current = null;
-    hasDraggedRef.current = false;
-    setIsDragging(false);
+    // Not dragged. If the long-press pickup had already armed, the user picked it up and let go
+    // in place — don't open the sheet. Otherwise this was a tap → open the sheet.
+    if (wasArmed) return;
+    onOpen();
+    if (canRecord && config?.enabled !== false) {
+      requestVoiceStart();
+    }
   };
+
+  // Tidy up the timer if the component unmounts mid-press.
+  useEffect(() => clearHoldTimer, []);
 
   const isListening = voiceStatus === "listening";
   const isProcessing = voiceStatus === "processing";
@@ -203,9 +251,25 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
         </>
       )}
 
-      {/* Ambient breathing glow when idle */}
+      {/* Warm gold halo behind the mic — the soft, premium glow the designer asked for.
+          Sits behind everything (-z-10), scaled slightly larger than the button, very low opacity.
+          Not animated; it's a static ambient wash, not an "AI-generated" shimmer. */}
+      {!isObstructed && (
+        <span
+          className="absolute inset-0 rounded-full pointer-events-none -z-10"
+          aria-hidden="true"
+          style={{
+            transform: "scale(1.35)",
+            background:
+              "radial-gradient(circle at 50% 55%, rgba(253, 224, 71, 0.38) 0%, rgba(251, 191, 36, 0.18) 45%, rgba(251, 191, 36, 0) 72%)",
+            filter: "blur(2px)",
+          }}
+        />
+      )}
+
+      {/* Ambient purple breathing glow when idle (subtle, behind the gold halo) */}
       {!isListening && !isObstructed && (
-        <span className="absolute inset-0 rounded-full bg-purple-600/25 anim-agent-glow pointer-events-none -z-10" />
+        <span className="absolute inset-0 rounded-full bg-purple-600/20 anim-agent-glow pointer-events-none -z-10" />
       )}
 
       {/* Main Zomato-inspired Jewel Circular Button */}
@@ -220,7 +284,7 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         className={`group relative flex h-full w-full items-center justify-center rounded-full text-white cursor-pointer touch-none active:scale-95 ${
-          isDragging ? "scale-105 shadow-2xl cursor-grabbing" : ""
+          isDragging ? "scale-110 shadow-2xl cursor-grabbing" : heldDown ? "scale-[1.04]" : ""
         }`}
         style={{
           background: isListening
@@ -254,13 +318,6 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
           )}
         </div>
 
-        {/* Mini AI sparkle badge indicator on top right */}
-        <span
-          className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-yellow-200 text-[#581C87] shadow-sm border border-white/60 pointer-events-none"
-          aria-hidden="true"
-        >
-          <Sparkles className="h-3 w-3 fill-current" />
-        </span>
       </button>
     </div>
   );
