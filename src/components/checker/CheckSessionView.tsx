@@ -279,7 +279,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
           </p>
         </div>
         {/* title on a wrapper: disabled buttons get no hover tooltip in some browsers */}
-        <span title={hasResults ? "Download results as Excel" : "Pehle kam se kam ek copy check karein"}>
+        <span title={hasResults ? "Download results as Excel" : "Check at least one copy first"}>
           <button onClick={exportResults} disabled={!hasResults}
             className="text-xs font-bold text-gray-700 px-2 py-2 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"><Download size={14} /> Export Results</button>
         </span>
@@ -406,7 +406,7 @@ export default function CheckSessionView({ sessionId, startWithPicker, onBack }:
       {/* Add students — institute teachers pick from their own classes */}
       {noClassAssigned && (
         <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900">
-          Aapko abhi koi class assign nahi hui hai. Apne admin/HOD se class assign karwayein.
+          No class is assigned to you yet. Ask your admin to assign one.
         </div>
       )}
       {usePicker && (

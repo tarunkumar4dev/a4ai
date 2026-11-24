@@ -939,7 +939,7 @@ export default function TeacherStudentsTab({
           </div>
           <h4 className="text-lg font-bold text-slate-800 dark:text-white mb-1">
             {noScope
-              ? (HOD_ENABLED ? "No batch is assigned to you yet — contact your HOD" : "Aapko abhi koi batch assign nahi hua — admin se contact karein")
+              ? (HOD_ENABLED ? "No batch is assigned to you yet — contact your HOD" : "No batch is assigned to you yet — contact your admin")
               : students.length === 0
               ? "No students enrolled yet"
               : "No students match your filter"}
@@ -948,11 +948,11 @@ export default function TeacherStudentsTab({
             {noScope
               ? (HOD_ENABLED
                   ? "When your HOD assigns you as a subject or class teacher for a section, its students will appear here."
-                  : "Jab admin aapko kisi batch me assign karega, us batch ke students yahan dikhenge.")
+                  : "When your admin assigns you to a batch, its students will appear here.")
               : students.length === 0
               ? (HOD_ENABLED
                   ? "Your assigned batches currently have no enrolled students. Ask your HOD or institute administrator to add them."
-                  : "Is batch me abhi koi student nahi. Admin se students add karwayein.")
+                  : "This batch has no students yet. Ask your admin to add them.")
               : "Try adjusting your search query, batch filter, or attendance status to find who you're looking for."}
           </p>
           {students.length === 0 ? (
@@ -1401,7 +1401,7 @@ export default function TeacherStudentsTab({
                         type="text"
                         value={guardianForm.parent_name}
                         onChange={(e) => setGuardianForm((f) => ({ ...f, parent_name: e.target.value }))}
-                        placeholder="Parent / Guardian ka naam"
+                        placeholder="Parent / Guardian name"
                         className="mt-1 w-full min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-800 dark:border-white/10 dark:bg-slate-900 dark:text-white"
                       />
                     </div>

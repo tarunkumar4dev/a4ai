@@ -833,11 +833,12 @@ export default function InstituteDashboardPage() {
     return m;
   }, [students, memberships]);
 
+  // members via student_batches (main + lab + extra batches) — students.batch_id alone misses extra-batch members
   const batchChart = useMemo(() =>
     batches.slice(0, 12).map((b) => ({
-      label: b.class_level ? `C${b.class_level}` : b.name.slice(0, 5),
-      value: students.filter(s => s.batch_id === b.id).length,
-    })), [batches, students]);
+      label: b.name,
+      value: batchCounts.get(b.id) ?? 0,
+    })), [batches, batchCounts]);
 
   const sectionsOfDept = (deptId: string) => sections.filter(s => s.department_id === deptId);
   const teachersOfDept = (deptId: string) => teachers.filter(t => t.department_id === deptId);

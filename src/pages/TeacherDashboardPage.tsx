@@ -1268,7 +1268,7 @@ export default function TeacherDashboardPage() {
   // deep link: /dashboard?tab=assignments&assignment=<id>&view=copies (Checking Link → "Submissions dekho")
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get("tab");
-    if (tab === "assignments" || tab === "modules" || tab === "agent") setActiveTab(tab);
+    if (tab === "assignments" || tab === "modules" || tab === "agent" || tab === "analytics") setActiveTab(tab);
   }, [location.search]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -2128,7 +2128,6 @@ export default function TeacherDashboardPage() {
             {activeTab === "analytics" && (
               <TeacherAnalyticsTab
                 user={user}
-                allTests={allTests}
                 onNavigateTab={(tab) => {
                   if (tab === "dashboard") navigate("/dashboard");
                   setActiveTab(tab);

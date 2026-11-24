@@ -811,7 +811,7 @@ export default function TeacherAttendanceView() {
                 <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">Students are added by your HOD or admin.</p>
               </>
             ) : (
-              <p className="text-sm font-semibold">Is batch me abhi koi student nahi. Admin se students add karwayein.</p>
+              <p className="text-sm font-semibold">This batch has no students yet. Ask your admin to add them.</p>
             )}
           </div>
         ) : (
