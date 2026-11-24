@@ -1582,39 +1582,48 @@ export default function InstituteDashboardPage() {
                           if (window.getSelection()?.toString()) return;
                           toggleStudent(s.id);
                         }}
-                        className={`bg-white rounded-2xl p-4 flex flex-wrap items-center gap-3 card-shadow border-2 anim-row cursor-pointer transition-colors ${selected ? "border-[#FF7043]/60" : "border-transparent hover:border-slate-200"}`}
+                        className={`bg-white rounded-2xl p-3 sm:p-4 card-shadow border-2 anim-row cursor-pointer transition-colors ${selected ? "border-[#FF7043]/60" : "border-transparent hover:border-slate-200"}`}
                       >
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${s.name}`}
-                          className="w-5 h-5 accent-[#FF7043] shrink-0 cursor-pointer"
-                          checked={selected}
-                          onChange={() => toggleStudent(s.id)}
-                        />
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${selected ? "bg-[#FF7043] text-white" : "bg-[#FFF5F2] text-[#FF7043]"}`}>
-                          {selected ? <Icons.Check /> : getInitials(s.name)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-[13px] font-bold text-slate-800 truncate">{s.name}</p>
-                            {s.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600">{deptName(s.department_id)}</span>}
-                            {s.section_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600">{sectionName(s.section_id)}</span>}
+                        {/* Row 1: checkbox · avatar · name + dept/section pills · (desktop-only) class pill */}
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${s.name}`}
+                            className="w-5 h-5 accent-[#FF7043] shrink-0 cursor-pointer mt-1"
+                            checked={selected}
+                            onChange={() => toggleStudent(s.id)}
+                          />
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${selected ? "bg-[#FF7043] text-white" : "bg-[#FFF5F2] text-[#FF7043]"}`}>
+                            {selected ? <Icons.Check /> : getInitials(s.name)}
                           </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-[13px] font-bold text-slate-800 truncate max-w-full">{s.name}</p>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Class {s.class_level || "—"}</span>
+                              {s.department_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-600 truncate max-w-[9rem]">{deptName(s.department_id)}</span>}
+                              {s.section_id && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-600 truncate max-w-[9rem]">{sectionName(s.section_id)}</span>}
+                            </div>
+                            <p className="mt-1 text-[11px] font-medium text-slate-400 truncate">Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}{code ? ` · 🔑 ${code}` : ""}</p>
+                          </div>
+                        </div>
+
+                        {/* Row 2: batch chips (own line, wraps freely without squeezing the name column) */}
+                        <div className="mt-2 pl-[52px] sm:pl-[60px]">
                           {named.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 my-1">
+                            <div className="flex flex-wrap gap-1">
                               {named.map(b => (
-                                <span key={b.id} className="subj-chip inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style={subjectVars(batchSubjectColor(b))}
+                                <span key={b.id} className="subj-chip inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full max-w-full truncate" style={subjectVars(batchSubjectColor(b))}
                                   title={b.id === s.batch_id ? `${b.name} — main batch (attendance)` : b.name}>
-                                  {b.id === s.batch_id && <span aria-hidden className="subj-dot w-1.5 h-1.5 rounded-full" />}
-                                  {b.name}
+                                  {b.id === s.batch_id && <span aria-hidden className="subj-dot w-1.5 h-1.5 rounded-full shrink-0" />}
+                                  <span className="truncate">{b.name}</span>
                                 </span>
                               ))}
                             </div>
                           ) : <span className="text-[10px] font-bold text-slate-400">No batch</span>}
-                          <p className="text-[11px] font-medium text-slate-400 truncate">Roll {s.roll_no || "N/A"}{s.parent_phone ? ` · ${s.parent_phone}` : ""}{code ? ` · 🔑 ${code}` : ""}</p>
                         </div>
-                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">Class {s.class_level || "—"}</span>
-                        <div className="flex items-center gap-1 shrink-0">
+
+                        {/* Row 3: action icons, right-aligned; the same four as before, just a dedicated row */}
+                        <div className="mt-2 pl-[52px] sm:pl-[60px] flex items-center justify-end gap-1">
                           <button onClick={() => setEditStudentId(s.id)} onPointerEnter={loadStudentEdit} onFocus={loadStudentEdit}
                             title="Edit details and batches" aria-label={`Edit ${s.name}`}
                             className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[12px] font-bold text-slate-500 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors">
@@ -1624,8 +1633,8 @@ export default function InstituteDashboardPage() {
                             className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[12px] font-bold text-slate-500 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors">
                             <Icons.Profile /> <span className="hidden sm:inline">Profile</span>
                           </Link>
-                          <button onClick={() => contactParent(s)} title="Message parent" aria-label={`Message parent of ${s.name}`} className="p-2 rounded-lg text-slate-300 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Phone /></button>
-                          <button onClick={() => removeStudent(s.id)} title="Remove student" aria-label={`Remove ${s.name}`} className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
+                          <button onClick={() => contactParent(s)} title="Message parent" aria-label={`Message parent of ${s.name}`} className="p-2 rounded-lg text-slate-400 hover:text-[#FF7043] hover:bg-[#FFF5F2] transition-colors"><Icons.Phone /></button>
+                          <button onClick={() => removeStudent(s.id)} title="Remove student" aria-label={`Remove ${s.name}`} className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Icons.Trash /></button>
                         </div>
                       </div>
                     );
