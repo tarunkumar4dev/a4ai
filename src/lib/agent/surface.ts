@@ -22,3 +22,8 @@ export function useMarkAgentWorkspace() {
 const focusListeners = new Set<() => void>();
 export function onComposerFocusRequest(fn: () => void) { focusListeners.add(fn); return () => { focusListeners.delete(fn); }; }
 export function requestComposerFocus() { focusListeners.forEach((l) => l()); }
+
+// ---- "open the agent sheet" requests (e.g. from the mobile bottom dock) ----------------
+const openListeners = new Set<() => void>();
+export function onAgentOpenRequest(fn: () => void) { openListeners.add(fn); return () => { openListeners.delete(fn); }; }
+export function requestAgentOpen() { openListeners.forEach((l) => l()); }

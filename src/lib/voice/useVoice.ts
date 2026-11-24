@@ -19,7 +19,7 @@ import { MAX_BYTES, liteVoice, recordingSupported } from "./ptt";
 import { hasConsent, loadPrefs, savePrefs, withConsent, type VoicePrefs } from "./prefs";
 import { MicDenied, MicUnsupported, startBargeInMonitor, startRecording, type Recording } from "./recorder";
 import { initialSession, liveText, sessionReducer, type VoiceSession } from "./session";
-import { onVoiceStartRequest } from "./surface";
+import { onVoiceStartRequest, setVoiceStatus } from "./surface";
 
 export interface Voice {
   session: VoiceSession;
@@ -67,6 +67,12 @@ export function useVoice(uid: string | null): Voice {
   const lite = net === "slow" || liteVoice(connection());
 
   useEffect(() => { setPrefsState(loadPrefs(uid)); }, [uid]);
+  useEffect(() => {
+    if (session.state === "listening") setVoiceStatus("listening");
+    else if (session.state === "transcribing" || session.state === "clarifying") setVoiceStatus("processing");
+    else if (session.state === "speaking") setVoiceStatus("speaking");
+    else setVoiceStatus("idle");
+  }, [session.state]);
   // refetched when the agent becomes reachable again and on tab focus while voice is off (./useVoiceConfig)
   const config: VoiceConfig | null = useVoiceConfig(uid, store.metaStatus === "ok");
   const stopHotMic = useCallback(() => { hotMic.current?.(); hotMic.current = null; }, []);

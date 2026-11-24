@@ -21,6 +21,7 @@ import { useAccess } from "@/context/AccessProvider";
 import { customStyles, Icons } from "@/pages/institute/dashboardTheme";
 import HODAttendanceDashboard from "@/components/attendance/HODAttendanceDashboard";
 import ProctorSectionView from "@/components/attendance/ProctorSectionView";
+import { useSetVoiceAgentObstructed } from "@/lib/voice/surface";
 
 // ============================================================
 // TYPES
@@ -183,6 +184,7 @@ export default function HODDashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useSetVoiceAgentObstructed(mobileMenuOpen);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -707,7 +709,7 @@ export default function HODDashboardPage() {
   );
 
   return (
-    <div className={`${rootClass} h-screen w-full flex overflow-hidden text-slate-800`}>
+    <div className={`${rootClass} h-[100dvh] min-h-[100dvh] w-full flex overflow-hidden text-slate-800`}>
       <style dangerouslySetInnerHTML={{ __html: customStyles }} />
 
       {mobileMenuOpen && (
@@ -827,13 +829,40 @@ export default function HODDashboardPage() {
 
       {/* ═══════════ MAIN ═══════════ */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <div className={`px-4 sm:px-6 lg:px-8 py-6 sm:py-8 mx-auto w-full ${activeTab === "attendance" ? "max-w-7xl" : "max-w-5xl"}`}>
-
-          <div className="flex items-center gap-2 mb-4 lg:hidden">
-            <button className="p-2 -ml-2 text-slate-500 touch-target" onClick={() => setMobileMenuOpen(true)}><Icons.Menu /></button>
-            <button onClick={goHome} title="Back to home" className="p-2 rounded-lg bg-[#FFF5F2] text-[#FF7043]"><Icons.Home /></button>
-            <span className="text-lg font-black text-slate-900 truncate">{deptName}</span>
+        {/* ── Sticky Mobile Top Header ── */}
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-3 bg-white/95 dark:bg-[#171D2B]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 lg:hidden shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              className="p-2 -ml-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 touch-target transition-colors"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open menu"
+            >
+              <Icons.Menu />
+            </button>
+            <button onClick={goHome} title="Back to home" className="w-8 h-8 rounded-lg bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center shrink-0">
+              <Icons.Home />
+            </button>
+            <div className="min-w-0">
+              <span className="block text-sm font-extrabold text-slate-900 dark:text-white truncate">{deptName}</span>
+              <span className="block text-[10px] font-semibold text-slate-400 capitalize">{activeTab}</span>
+            </div>
           </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              aria-label="Toggle dark mode"
+              className="p-2 text-slate-500 dark:text-slate-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              {isDarkMode ? <Icons.Sun /> : <Icons.Moon />}
+            </button>
+            <div className="w-8 h-8 rounded-xl bg-[#FFF5F2] text-[#FF7043] flex items-center justify-center font-bold text-xs">
+              {getInitials(displayName)}
+            </div>
+          </div>
+        </header>
+
+        <div className={`px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 lg:pb-8 mx-auto w-full ${activeTab === "attendance" ? "max-w-7xl" : "max-w-5xl"}`}>
 
           {isAdmin && (
             <div className="mb-4 text-[12px] font-bold px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
@@ -1322,6 +1351,69 @@ export default function HODDashboardPage() {
           )}
         </div>
       </main>
+
+      {/* ── 5-Slot Mobile Bottom Navigation Dock (Zomato-integrated) ── */}
+      <nav
+        aria-label="Mobile navigation"
+        className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-[#171D2B]/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 px-2 py-1.5 flex items-center justify-around lg:hidden shadow-[0_-4px_20px_rgba(0,0,0,0.05)] safe-area-bottom"
+      >
+        {/* Slot 1: Overview */}
+        <button
+          type="button"
+          onClick={() => setActiveTab("overview")}
+          className={`flex flex-1 flex-col items-center justify-center py-1 transition-colors min-w-0 ${
+            activeTab === "overview" ? "text-[#FF7043] font-bold" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          <Icons.Grid />
+          <span className="text-[10px] mt-1 font-medium truncate">Home</span>
+        </button>
+
+        {/* Slot 2: Sections */}
+        <button
+          type="button"
+          onClick={() => setActiveTab("sections")}
+          className={`flex flex-1 flex-col items-center justify-center py-1 transition-colors min-w-0 ${
+            activeTab === "sections" ? "text-[#FF7043] font-bold" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          <Icons.Layers />
+          <span className="text-[10px] mt-1 font-medium truncate">Sections</span>
+        </button>
+
+        {/* Slot 3: Center dock pedestal. The Zomato-style FloatingMic docks above this slot and
+            handles the tap; this spacer only reserves the layout column (no overlapping label). */}
+        <div
+          className="flex flex-1 flex-col items-center justify-end h-12 pointer-events-none"
+          aria-hidden="true"
+        >
+          <span className="text-[10px] font-bold tracking-tight text-[#8B35E8] mt-auto pb-0.5">
+            Ask a4ai
+          </span>
+        </div>
+
+        {/* Slot 4: Teachers */}
+        <button
+          type="button"
+          onClick={() => setActiveTab("teachers")}
+          className={`flex flex-1 flex-col items-center justify-center py-1 transition-colors min-w-0 ${
+            activeTab === "teachers" ? "text-[#FF7043] font-bold" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          <Icons.Users />
+          <span className="text-[10px] mt-1 font-medium truncate">Teachers</span>
+        </button>
+
+        {/* Slot 5: More / Drawer */}
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="flex flex-1 flex-col items-center justify-center py-1 text-slate-400 hover:text-slate-600 transition-colors min-w-0"
+        >
+          <Icons.Menu />
+          <span className="text-[10px] mt-1 font-medium truncate">More</span>
+        </button>
+      </nav>
 
       {/* ═══════════ MODALS ═══════════ */}
       {modal === "section" && (

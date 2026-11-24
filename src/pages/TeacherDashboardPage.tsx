@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { type TestLinkInfo, testLinks } from "@/lib/uploadLink/testLink";
 import { DELIVERED_TESTS_FILTER } from "@/lib/paperQuality";
 import { effectiveHomeRoute, PROCTOR_UI_ENABLED } from "@/config/features";
+import { useSetVoiceAgentObstructed } from "@/lib/voice/surface";
 
 // Each tab is its own chunk: opening the dashboard downloads only what the
 // first screen needs; a tab's code is fetched the first time it is opened.
@@ -1272,6 +1273,7 @@ export default function TeacherDashboardPage() {
   }, [location.search]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useSetVoiceAgentObstructed(mobileMenuOpen);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
