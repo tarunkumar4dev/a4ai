@@ -21,6 +21,13 @@ import {
 interface FloatingMicProps {
   uid: string | null;
   onOpen: () => void;
+  /**
+   * Where the docked mic sits.
+   * - "center" (default): bottom-center, above the 5-slot mobile nav on Institute / HOD.
+   * - "right": bottom-right, tucked to the left of the help bot on Teacher dashboard where
+   *   there is no bottom nav and a center-docked mic would overlap page CTAs like "Create Test".
+   */
+  dockVariant?: "center" | "right";
 }
 
 const BUTTON_SIZE = 68; // px
@@ -37,7 +44,7 @@ const SAFE_TOP = 64; // below mobile sticky header
 // Teacher dashboard has no bottom nav → the mic just floats a bit higher than before.
 const DOCK_BOTTOM_PX = 32;
 
-export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
+export default function FloatingMic({ uid, onOpen, dockVariant = "center" }: FloatingMicProps) {
   const canRecord = recordingSupported();
   const config = useVoiceConfig(canRecord ? uid : null);
   const isObstructed = useVoiceAgentObstructed();
@@ -101,10 +108,16 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
       const rect = buttonRef.current.getBoundingClientRect();
       current = { x: rect.left, y: rect.top };
     }
-    const safeCurrent = current || {
-      x: Math.round((window.innerWidth - BUTTON_SIZE) / 2),
-      y: Math.round(window.innerHeight - BUTTON_SIZE - DOCK_BOTTOM_PX),
-    };
+    const safeCurrent = current || (dockVariant === "right"
+      ? {
+          // bottom-right dock: 78 px from the right edge leaves room for the help-bot bubble
+          x: Math.round(window.innerWidth - BUTTON_SIZE - 78),
+          y: Math.round(window.innerHeight - BUTTON_SIZE - 16),
+        }
+      : {
+          x: Math.round((window.innerWidth - BUTTON_SIZE) / 2),
+          y: Math.round(window.innerHeight - BUTTON_SIZE - DOCK_BOTTOM_PX),
+        });
     startPointerRef.current = { x: e.clientX, y: e.clientY };
     startPosRef.current = { ...safeCurrent };
     hasDraggedRef.current = false;
@@ -175,12 +188,15 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
     if (!wasTracking) return;
 
     if (wasDragging && pos) {
-      // Snapping: dropped in the bottom 160px AND near horizontal centre → back to the dock,
-      // else snap to the nearest side edge.
-      const centerX = (window.innerWidth - BUTTON_SIZE) / 2;
-      const distFromCenter = Math.abs(pos.x - centerX);
+      // Snapping: dropped in the bottom 160 px AND close to the dock anchor → back to the
+      // default dock; else snap to the nearest side edge. The dock anchor's x depends on
+      // the variant (centre vs. right-side next to the help bot).
+      const anchorX = dockVariant === "right"
+        ? window.innerWidth - BUTTON_SIZE - 78
+        : (window.innerWidth - BUTTON_SIZE) / 2;
+      const distFromAnchor = Math.abs(pos.x - anchorX);
       const isNearBottom = pos.y > window.innerHeight - 160;
-      if (isNearBottom && distFromCenter < 90) {
+      if (isNearBottom && distFromAnchor < 90) {
         setPos(null);
       } else {
         const snapLeft = SAFE_MARGIN_X;
@@ -223,10 +239,20 @@ export default function FloatingMic({ uid, onOpen }: FloatingMicProps) {
                 ? "transform 0.1s ease-out, opacity 0.2s ease-out"
                 : "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
             }
+          : dockVariant === "right"
+          ? {
+              // Teacher dashboard: no bottom nav, so sit at the bottom-right, tucked to the
+              // left of the help-bot bubble (bubble is w-12 h-12 at right-4/bottom-4; w-14/h-14
+              // from sm+). Same vertical as the bubble so they read as a pair.
+              right: `calc(16px + 48px + 14px + env(safe-area-inset-right, 0px))`,
+              bottom: `calc(16px + env(safe-area-inset-bottom, 0px))`,
+              width: `${BUTTON_SIZE}px`,
+              height: `${BUTTON_SIZE}px`,
+              transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+            }
           : {
-              // Zomato-style notch: the mic sits on top of the mobile bottom nav (Institute + HOD)
-              // without colliding with its center slot. On Teacher dashboard (no bottom nav) it
-              // simply floats slightly higher than before.
+              // Zomato-style notch: the mic sits on top of the Institute / HOD 5-slot mobile
+              // nav without colliding with its centre slot.
               bottom: `calc(${DOCK_BOTTOM_PX}px + env(safe-area-inset-bottom, 0px))`,
               left: "50%",
               transform: "translateX(-50%)",
