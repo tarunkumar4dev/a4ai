@@ -46,8 +46,10 @@ const loadStudentEdit = () => import("@/components/institute/StudentEditModal");
 const StudentEditModal = lazy(loadStudentEdit);
 const loadBatchStudents = () => import("@/components/institute/BatchStudentsModal");
 const BatchStudentsModal = lazy(loadBatchStudents);
-// keyed by nav tab id; Batch settings sits in the Analytics tab
-const PRELOAD: Record<string, () => Promise<unknown>> = { attendance: loadAttendance, analytics: loadBatchSettings };
+const loadInstituteAnalytics = () => import("@/components/institute/InstituteAnalyticsTab");
+const InstituteAnalyticsTab = lazy(loadInstituteAnalytics);
+// keyed by nav tab id; preload the analytics tab (heavy — Recharts + the sub-views)
+const PRELOAD: Record<string, () => Promise<unknown>> = { attendance: loadAttendance, analytics: loadInstituteAnalytics };
 
 
 
@@ -1731,20 +1733,13 @@ export default function InstituteDashboardPage() {
           {/* ── ANALYTICS TAB ── */}
           {activeTab === "analytics" && (
             <div className="anim-entrance space-y-6" style={{ animationDelay: "0.05s" }}>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                {[
-                  { l: "Departments", v: totalDepartments },
-                  { l: "Sections", v: totalSections },
-                  { l: "Teachers", v: totalTeachersAll },
-                  { l: "Batches", v: totalBatches },
-                  { l: "Students", v: totalStudents },
-                ].map((s, i) => (
-                  <div key={i} className="bg-white rounded-2xl p-4 sm:p-5 card-shadow border border-slate-50">
-                    <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase mb-1">{s.l}</p>
-                    <p className="text-xl sm:text-2xl font-black text-slate-800 stat-number">{s.v}</p>
-                  </div>
-                ))}
-              </div>
+              <LazySection label="Institute analytics">
+                <InstituteAnalyticsTab
+                  instituteId={institute.id}
+                  batches={batches.map(b => ({ id: b.id, name: b.name }))}
+                  onNavigateTab={(tab) => setActiveTab(tab)}
+                />
+              </LazySection>
 
               <div className="bg-white rounded-2xl p-4 sm:p-6 card-shadow border border-slate-50">
                 <h3 className="text-[16px] font-bold text-slate-800 mb-6">Enrollment by Batch</h3>
