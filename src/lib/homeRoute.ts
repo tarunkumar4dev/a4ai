@@ -3,6 +3,9 @@
 // That role is UX only (the user can change it); RLS / backend JWT checks guard the data.
 import type { AccessData } from "@/context/AccessProvider";
 import { effectiveHomeRoute } from "@/config/features";
+import { supabase } from "@/lib/supabaseClient";
+import { takeRedirectAfterLogin } from "@/lib/authHelpers";
+import type { NavigateFunction } from "react-router-dom";
 
 type AccessLike = Pick<AccessData, "primary_role" | "home_route"> | null | undefined;
 
@@ -19,3 +22,18 @@ export function resolveHomeRoute(access: AccessLike, signupRole: string | null |
 /** A signed-up student with no institute role: never the teacher dashboard. */
 export const isStudentOnly = (access: AccessLike, signupRole: string | null | undefined) =>
   !!access && access.primary_role === "none" && (signupRole || "").toLowerCase().trim() === "student";
+
+/**
+ * Single entry point for every post-auth redirect. Checks for a stored "go back" path first,
+ * then calls get_my_access + resolveHomeRoute. Every login / signup / callback / gate MUST use this.
+ */
+export async function redirectToHome(navigate: NavigateFunction, signupRole: string | null | undefined): Promise<void> {
+  const back = takeRedirectAfterLogin();
+  if (back) { navigate(back, { replace: true }); return; }
+  try {
+    const { data } = await supabase.rpc("get_my_access");
+    navigate(resolveHomeRoute(data?.[0], signupRole), { replace: true });
+  } catch {
+    navigate(resolveHomeRoute(null, signupRole), { replace: true });
+  }
+}

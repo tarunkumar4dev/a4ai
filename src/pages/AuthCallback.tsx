@@ -1,12 +1,12 @@
 // src/pages/AuthCallback.tsx
-// Replace BOTH old files with this single one
-// Delete: src/pages/auth/callback.tsx (old one)
+// OAuth + email-confirmation callback. Determines role and redirects to the right dashboard.
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
-import { takeRedirectAfterLogin } from "@/lib/authHelpers";
-import { resolveHomeRoute } from "@/lib/homeRoute";
+import { redirectToHome } from "@/lib/homeRoute";
+
+const VALID_ROLES = ["student", "teacher", "institute"];
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -29,9 +29,7 @@ export default function AuthCallback() {
             : url.searchParams.get("error_description") || oauthError);
         }
 
-        // 2. Exchange code for session (PKCE). The client (detectSessionInUrl) usually exchanges it already —
-        //    a second exchange fails ("code verifier not found"), which used to show "Sign-in failed" after a
-        //    successful login. Only exchange when there's no session yet, and ignore an error if one appears.
+        // 2. Exchange code for session (PKCE)
         const code = url.searchParams.get("code");
         if (code) {
           const { data: { session: existing } } = await supabase.auth.getSession();
@@ -41,7 +39,7 @@ export default function AuthCallback() {
           }
         }
 
-        // 3. Get user with retry (OAuth can be slow sometimes)
+        // 3. Get user with retry
         let user = (await supabase.auth.getUser()).data?.user;
         if (!user) {
           await new Promise((r) => setTimeout(r, 300));
@@ -49,26 +47,29 @@ export default function AuthCallback() {
         }
         if (!user) throw new Error("No user after OAuth");
 
-        // 4. Determine role: metadata > localStorage pending > null
+        // 4. Determine role: URL param > localStorage > existing metadata > /select-role
         const existingRole = user.user_metadata?.role;
+        const urlRole = url.searchParams.get("signup_role");
         const pendingRole = localStorage.getItem("a4ai_pending_role");
+
         let finalRole = existingRole;
 
-        if (!finalRole && pendingRole && ["student", "teacher", "institute"].includes(pendingRole)) {
-          // Save pending role to user_metadata (Google sign-up from the Signup page)
+        if (!finalRole && urlRole && VALID_ROLES.includes(urlRole)) {
+          await supabase.auth.updateUser({ data: { role: urlRole } });
+          finalRole = urlRole;
+        } else if (!finalRole && pendingRole && VALID_ROLES.includes(pendingRole)) {
           await supabase.auth.updateUser({ data: { role: pendingRole } });
           finalRole = pendingRole;
         } else if (!finalRole) {
-          // Google sign-in from the Login page / modal for a brand-new account: the app treats a user without
-          // a role as a teacher (AuthProvider default) — store that, instead of the old "student" fallback below.
-          await supabase.auth.updateUser({ data: { role: "teacher" } });
-          finalRole = "teacher";
+          // No role from any source — send to role selection instead of guessing
+          localStorage.removeItem("a4ai_pending_role");
+          window.history.replaceState({}, "", `${window.location.origin}/auth/callback`);
+          navigate("/select-role", { replace: true });
+          return;
         }
         localStorage.removeItem("a4ai_pending_role");
 
-        // 5. Ensure profile row. Role only on a NEW row — the DB rejects role changes from the app
-        //    (13_role_hardening a4_guard_profile_role), which would fail the whole upsert. A profile created
-        //    by handle_new_user without a role gets finalRole from the updateUser above (a4_sync_profile_role).
+        // 5. Ensure profile row
         try {
           const fullName =
             (user.user_metadata?.full_name as string) ||
@@ -84,28 +85,51 @@ export default function AuthCallback() {
             updated_at: new Date().toISOString(),
           }).eq("id", user.id);
         } catch (profileErr) {
-          // Non-fatal — profile might already exist or table might not exist yet
           console.debug("Profile upsert skipped:", (profileErr as any)?.message);
         }
 
-        // 6. Clean URL
-        window.history.replaceState({}, "", `${window.location.origin}/auth/callback`);
+        // 6. If institute signup, try creating the institute (idempotent)
+        if (finalRole === "institute") {
+          const instName =
+            (user.user_metadata?.institute_name as string) ||
+            localStorage.getItem("a4ai_pending_institute_name") ||
+            null;
+          localStorage.removeItem("a4ai_pending_institute_name");
 
-        // 7. Check for redirect URL after successful auth
-        const redirectUrl = takeRedirectAfterLogin(); // same-site app paths only
+          if (instName) {
+            // Skip if user already owns an institute (double-click / refresh safety)
+            let alreadyHasInstitute = false;
+            try {
+              const { data: acc } = await supabase.rpc("get_my_access");
+              if (acc?.[0]?.institute_id) alreadyHasInstitute = true;
+            } catch { /* can't check — try creating anyway */ }
 
-        if (redirectUrl) {
-          navigate(redirectUrl, { replace: true });
+            if (!alreadyHasInstitute) {
+              try {
+                const { error: rpcErr } = await supabase.rpc("create_institute", { p_name: instName });
+                if (rpcErr) {
+                  const msg = (rpcErr.message || "").toLowerCase();
+                  if (!msg.includes("duplicate") && !msg.includes("unique")) {
+                    toast({ title: "Could not create institute", description: "You can create it from the dashboard.", variant: "destructive" });
+                  }
+                }
+              } catch {
+                toast({ title: "Could not create institute", description: "You can create it from the dashboard.", variant: "destructive" });
+              }
+            }
+            // Clear the metadata field so it doesn't trigger again
+            await supabase.auth.updateUser({ data: { institute_name: null } }).catch(() => {});
+          }
+          window.history.replaceState({}, "", `${window.location.origin}/auth/callback`);
+          window.location.assign("/institute");
           return;
         }
 
-        // 8. Redirect: institute staff → get_my_access home_route; everyone else → their signup role's dashboard
-        try {
-          const { data: accessData } = await supabase.rpc('get_my_access');
-          navigate(resolveHomeRoute(accessData?.[0], finalRole), { replace: true });
-        } catch {
-          navigate(resolveHomeRoute(null, finalRole), { replace: true });
-        }
+        // 7. Clean URL
+        window.history.replaceState({}, "", `${window.location.origin}/auth/callback`);
+
+        // 8. Redirect via the single shared helper
+        await redirectToHome(navigate, finalRole);
       } catch (error: any) {
         console.error("OAuth callback error:", error);
         toast({

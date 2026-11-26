@@ -22,7 +22,6 @@ interface AuthContextType {
   phone: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
-  updateRole: (newRole: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -32,7 +31,6 @@ const AuthContext = createContext<AuthContextType>({
   phone: null,
   loading: true,
   signOut: async () => {},
-  updateRole: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -144,14 +142,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateRole = async (newRole: string) => {
-    const { error } = await supabase.auth.updateUser({
-      data: { role: newRole },
-    });
-    if (error) throw error;
-    setRole(newRole);
-  };
-
   const signOut = async () => {
     await supabase.auth.signOut();
     setSession(null);
@@ -161,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, role, phone, loading, signOut, updateRole }}>
+    <AuthContext.Provider value={{ session, user, role, phone, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -452,7 +452,7 @@ export default function StudentPortalPage() {
             <p className="mt-1 text-[13.5px] text-[#5D6570]">Use your own a4ai student account for contests, practice, flashcards and notes.</p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
               <Link to="/login" className="inline-flex min-h-[44px] items-center rounded-xl border border-[#E5E7EB] px-4 text-[14px] font-bold text-[#1B1B1B] hover:bg-[#F7F8FA]">Sign in</Link>
-              <Link to="/signup" state={{ role: "student" }} className="inline-flex min-h-[44px] items-center rounded-xl bg-[#111111] px-4 text-[14px] font-bold text-white hover:bg-[#222222]">Create a student account</Link>
+              <Link to="/signup?role=student" className="inline-flex min-h-[44px] items-center rounded-xl bg-[#111111] px-4 text-[14px] font-bold text-white hover:bg-[#222222]">Create a student account</Link>
             </div>
           </div>
         </div>

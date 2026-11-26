@@ -20,7 +20,8 @@ import PrivateRoute from "@/components/PrivateRoute";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { CoinProvider } from "@/context/CoinContext";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
-import { AccessProvider } from "@/context/AccessProvider";
+import { AccessProvider, useAccess } from "@/context/AccessProvider";
+import { resolveHomeRoute } from "@/lib/homeRoute";
 import { RoleRoute } from "@/components/routing/RoleRoute";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { toast } from "sonner";
@@ -234,29 +235,25 @@ const NotFound = () => (
 /** Blocks auth pages (login/signup) if already logged in — redirects to role dashboard */
 function AuthGateForAuthPages({ children }: { children: ReactNode }) {
   const { loading, session, role } = useAuth();
-  if (loading) return <LoadingScreen />;
-  if (session) {
-    const targetRole = (role || "teacher").toLowerCase().trim();
-    return <Navigate to={`/${targetRole}/dashboard`} replace />;
-  }
+  const { access, loading: accessLoading } = useAccess();
+  if (loading || (session && accessLoading)) return <LoadingScreen />;
+  if (session) return <Navigate to={resolveHomeRoute(access, role)} replace />;
   return <>{children}</>;
 }
 
 /** Role-based gate — checks if user has the right role */
 function RoleAuthGate({ children, allowedRoles }: { children: ReactNode; allowedRoles: string[] }) {
   const { loading, session, role } = useAuth();
+  const { access, loading: accessLoading } = useAccess();
 
-  if (loading) return <LoadingScreen />;
+  if (loading || (session && accessLoading)) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
 
-  // `role` is the self-chosen signup role (user_metadata) — the user can change it, so this gate is UX only
-  // (keeps students out of teacher pages). Never let it unlock anything: no "admin" bypass here; institute
-  // roles come from get_my_access() via RoleRoute, data access from RLS / backend JWT.
   const userRole = (role || "teacher").toLowerCase().trim();
   const normalizedAllowed = allowedRoles.map((r) => r.toLowerCase().trim());
   if (!normalizedAllowed.includes(userRole)) {
     toast.error(`Access denied. You are registered as a ${role || "teacher"}.`);
-    return <Navigate to={`/${userRole}/dashboard`} replace />;
+    return <Navigate to={resolveHomeRoute(access, role)} replace />;
   }
 
   return <>{children}</>;

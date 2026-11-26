@@ -117,8 +117,7 @@ export default function LoginModal({ isOpen, onClose, action = "download", onLog
     setError("");
     setIsLoading(true);
     try {
-      localStorage.setItem("a4ai_pending_role", "teacher");
-      // Store current URL only if not the home page so OAuth directs to dashboard
+      // Store current URL only if not the home page so OAuth redirects back
       if (window.location.pathname && window.location.pathname !== "/") {
         localStorage.setItem("a4ai_redirect_after_login", window.location.pathname + window.location.search);
       } else {
