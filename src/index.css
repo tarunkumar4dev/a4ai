@@ -355,6 +355,16 @@ body:has(.att-sheet) .a4-help { display: none; }
   text-transform: none;
 }
 [data-agent-root][lang="hi"] h3 { letter-spacing: 0; line-height: 1.4; }
+
+/* ---- Test Builder: Hindi questions (lang="hi", src/pages/TestBuilderPage.tsx) --------------------------------
+   The Devanagari faces go first: their unicode-range limits them to Devanagari glyphs, so Latin text, numbers and
+   tables keep the app's system sans. Taller lines for matras; no letter-spacing. */
+.a4-deva {
+  font-family: 'Noto Sans Devanagari a4ai', 'Devanagari Fallback a4ai', -apple-system, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0;
+}
+.a4-deva .leading-relaxed,
+.a4-deva .leading-snug { line-height: 1.7; }
 @media (prefers-reduced-motion: reduce) {
   [data-agent-root] *, [data-agent-root] *::before, [data-agent-root] *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
