@@ -69,10 +69,42 @@ import {
   FileKey,
   Shield,
   Loader2,
+  ArrowUpDown,
 } from "lucide-react";
 import { getBackendApiBase } from "@/lib/apiBase";
 import { contentHash } from "@/lib/ncert/contentHash";
 import { parseOptions } from "@/lib/ncert/optionLabel";
+import {
+  DEFAULT_LANGUAGE,
+  DEFAULT_SORT,
+  DEFAULT_SOURCE,
+  DIFFICULTY_OPTIONS,
+  facetCount,
+  groupByChapter,
+  isPyq,
+  loadLanguagePref,
+  marksLabel,
+  paperMixesLanguages,
+  parseFacets,
+  pyqBadgeText,
+  pyqNumberLabel,
+  pyqPapersTitle,
+  questionQueryString,
+  rowLanguage,
+  saveLanguagePref,
+  sortOptions,
+  statsQueryString,
+  typeLabel,
+  typeOptions,
+  type DifficultyFilter,
+  type FigureFilter,
+  type LanguageFilter,
+  type PyqRowFields,
+  type QuestionQuery,
+  type SortKey,
+  type SourceFilter,
+  type StatsFacets,
+} from "@/lib/ncert/builderQuery";
 import { CheckingLinkButton } from "@/components/teacher/copySubmissions/CheckingLink";
 
 // ── Config ──────────────────────────────────────────────────────
@@ -85,7 +117,8 @@ const SELECTION_STORAGE_KEY = "ncert_builder_selection_v2";
 const MAX_PAPER_QUESTIONS = 200;
 
 // ── Types ───────────────────────────────────────────────────────
-interface NCERTQuestion {
+/** PYQ rows live in the same table: source / language / pyq_* come from PyqRowFields (absent on an older backend). */
+interface NCERTQuestion extends PyqRowFields {
   id: number;
   class_grade: string;
   subject: string;
@@ -134,9 +167,30 @@ interface ChapterStat {
   chapter_no?: number | null;
   sections: { name: string; count: number }[];
   types: { name: string; count: number }[];
+  /** PYQ rows in this chapter, chosen language (newer backend only). */
+  pyq?: number;
 }
 
-type FigureFilter = "all" | "hide" | "missing";
+interface StatsResponse {
+  ok?: boolean;
+  chapters?: ChapterStat[];
+  facets?: unknown;
+}
+
+interface StatsResult {
+  chapters: ChapterStat[];
+  /** null = the backend sent no facets (older backend): every PYQ / language / difficulty / marks / sort control stays hidden */
+  facets: StatsFacets | null;
+}
+
+/** What the backend has for a class + subject (whole subject, any slice). Only grows, so the controls never flicker. */
+interface SubjectAvailability {
+  pyq: number;
+  hi: number;
+}
+
+/** "All chapters" in the chapter list: the request goes without a chapter param. */
+const ALL_CHAPTERS = "\u0000all-chapters";
 
 // ── Constants ───────────────────────────────────────────────────
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
@@ -151,18 +205,11 @@ const SUBJECTS_BY_CLASS: Record<string, string[]> = {
   "12": ["Accountancy", "Physics", "Chemistry", "Biology", "Mathematics", "Economics", "English", "History", "Political Science"],
 };
 
-const TYPE_LABELS: Record<string, string> = {
-  all: "All Types",
-  exercise: "Exercise",
-  example: "Examples",
-  intext: "In-Text",
-  activity: "Activities",
-  hots: "HOTS",
-  diagram: "Diagrams",
-};
-
 // ── In-Memory Cache for Instant Loads ────────────────────────────
-const statsCache: Record<string, ChapterStat[]> = {};
+/** By class + subject + source + language. */
+const statsCache: Record<string, StatsResult> = {};
+/** By class + subject; kept for the session so a revisit shows the new controls at once. */
+const subjectAvailabilityCache: Record<string, SubjectAvailability> = {};
 
 interface QuestionPage {
   questions: NCERTQuestion[];
@@ -172,26 +219,9 @@ interface QuestionPage {
 const questionPageCache = new Map<string, QuestionPage>();
 const questionPageInflight = new Map<string, Promise<QuestionPage>>();
 
-function questionsUrl(
-  subject: string,
-  classGrade: string,
-  chapter: string,
-  questionType: string,
-  search: string,
-  offset: number,
-  figure: FigureFilter = "all"
-): string {
-  const params = new URLSearchParams({
-    subject,
-    class_grade: classGrade,
-    chapter,
-    limit: String(PAGE_SIZE),
-    offset: String(offset),
-  });
-  if (questionType !== "all") params.set("question_type", questionType);
-  if (search) params.set("search", search);
-  if (figure !== "all") params.set("figure", figure);
-  return `${API_BASE}/test-generator/ncert-questions?${params}`;
+/** New params only when they differ from the backend default (see @/lib/ncert/builderQuery). */
+function questionsUrl(query: QuestionQuery, offset: number): string {
+  return `${API_BASE}/test-generator/ncert-questions?${questionQueryString(query, offset, PAGE_SIZE)}`;
 }
 
 function loadQuestionPage(url: string): Promise<QuestionPage> {
@@ -267,7 +297,57 @@ function isFigureMissing(q: NCERTQuestion): boolean {
 }
 
 function questionWhat(q: NCERTQuestion): string {
-  return q.question_number || TYPE_LABELS[q.question_type] || q.question_type;
+  // PYQs keep the paper's own numbering: "Q7(a)"
+  if (isPyq(q)) return pyqNumberLabel(q.question_number) || typeLabel(q.question_type);
+  return q.question_number || typeLabel(q.question_type);
+}
+
+/** "PYQ · CBSE 2026"; the Q.P. codes it appeared in are the tooltip. */
+function PyqBadge({ q }: { q: NCERTQuestion }) {
+  if (!isPyq(q)) return null;
+  const papers = pyqPapersTitle(q);
+  const text = pyqBadgeText(q);
+  return (
+    <span
+      title={papers}
+      aria-label={papers ? `${text}, ${papers}` : text}
+      className="inline-flex items-center whitespace-nowrap text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200/80 px-2 py-0.5 rounded-md"
+    >
+      {text}
+    </span>
+  );
+}
+
+/** Two or three options as one pill row (class chips style). */
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: { value: T; label: React.ReactNode; lang?: string }[];
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex items-center bg-gray-100 p-0.5 rounded-xl border border-gray-200/70">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          lang={o.lang}
+          className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all whitespace-nowrap ${
+            o.lang === "hi" ? "a4-deva " : ""
+          }${value === o.value ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** "Circles · Example 1" — a bare "Example 1" repeats in every chapter. A long chapter name ends in "…" (CSS). */
@@ -450,9 +530,11 @@ function QuestionContent({ question, truncateAt }: { question: NCERTQuestion; tr
     [isAccountancy, question.question_text, question.question_table, question.structured_segments]
   );
   const showAccTables = !!accSegments && hasTable(accSegments);
+  // Hindi rows: lang="hi" (screen readers, hyphenation) + the self-hosted Devanagari face (.a4-deva, index.css)
+  const isHindi = rowLanguage(question) === "hi";
 
   return (
-    <div className="space-y-2">
+    <div className={isHindi ? "space-y-2 a4-deva" : "space-y-2"} lang={isHindi ? "hi" : undefined}>
       {showAccTables ? (
         <AccountancySegments
           segments={accSegments!}
@@ -552,6 +634,8 @@ function DraggableQuestion({
             <span className="max-w-full min-w-0 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md">
               <QuestionLabel q={question} />
             </span>
+
+            <PyqBadge q={question} />
 
             {question.section && (
               <span className="text-[10px] font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-md">
@@ -665,6 +749,7 @@ function SortableTestQuestion({
                 <QuestionLabel q={question} />
               </span>
               <span>•</span>
+              <PyqBadge q={question} />
               <DifficultyBadge difficulty={question.difficulty} />
               {!question.image_url && isFigureMissing(question) && (
                 <DiagramBadge figRef={question.figure_ref} hasImage={false} />
@@ -760,15 +845,22 @@ function ChapterBottomSheet({
   statsLoading,
   subject,
   classGrade,
+  showAllChapters,
+  showPyqChips,
 }: {
   open: boolean;
   onClose: () => void;
   chapterStats: ChapterStat[];
   selectedChapter: string | null;
+  /** a chapter name, or ALL_CHAPTERS */
   onSelect: (chapter: string) => void;
   statsLoading: boolean;
   subject: string;
   classGrade: string;
+  /** the "All chapters" row (newer backend only) */
+  showAllChapters: boolean;
+  /** "PYQ n" on chapters that have PYQs (source = All) */
+  showPyqChips: boolean;
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(
@@ -837,27 +929,57 @@ function ChapterBottomSheet({
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-xs">No chapters found.</div>
           ) : (
-            filtered.map((ch) => {
-              const isSelected = selectedChapter === ch.chapter;
-              return (
+            <>
+              {showAllChapters && !search && (
                 <button
-                  key={ch.chapter}
                   onClick={() => {
-                    onSelect(ch.chapter);
+                    onSelect(ALL_CHAPTERS);
                     onClose();
                   }}
                   className={`w-full flex items-center justify-between p-3.5 text-left rounded-xl transition-colors ${
-                    isSelected ? "bg-blue-50/80 text-blue-700 font-semibold" : "hover:bg-gray-50 text-gray-800"
+                    selectedChapter === ALL_CHAPTERS
+                      ? "bg-blue-50/80 text-blue-700 font-semibold"
+                      : "hover:bg-gray-50 text-gray-800"
                   }`}
                 >
                   <div>
-                    <div className="text-sm font-medium leading-snug">{ch.chapter}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">{ch.total} questions</div>
+                    <div className="text-sm font-medium leading-snug">All chapters</div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {chapterStats.reduce((sum, c) => sum + (Number(c.total) || 0), 0)} questions
+                    </div>
                   </div>
-                  {isSelected && <Check className="w-4 h-4 text-blue-600 ml-2" />}
+                  {selectedChapter === ALL_CHAPTERS && <Check className="w-4 h-4 text-blue-600 ml-2" />}
                 </button>
-              );
-            })
+              )}
+              {filtered.map((ch) => {
+                const isSelected = selectedChapter === ch.chapter;
+                return (
+                  <button
+                    key={ch.chapter}
+                    onClick={() => {
+                      onSelect(ch.chapter);
+                      onClose();
+                    }}
+                    className={`w-full flex items-center justify-between p-3.5 text-left rounded-xl transition-colors ${
+                      isSelected ? "bg-blue-50/80 text-blue-700 font-semibold" : "hover:bg-gray-50 text-gray-800"
+                    }`}
+                  >
+                    <div>
+                      <div className="text-sm font-medium leading-snug">{ch.chapter}</div>
+                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5">
+                        {ch.total} questions
+                        {showPyqChips && (ch.pyq ?? 0) > 0 && (
+                          <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200/80 px-1.5 py-px rounded">
+                            PYQ {ch.pyq}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-blue-600 ml-2" />}
+                  </button>
+                );
+              })}
+            </>
           )}
         </div>
       </div>
@@ -939,12 +1061,38 @@ export default function TestBuilderPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebounce(searchQuery, 250);
 
+  // PYQ / language / difficulty / marks / sort. What is actually sent is the "effective" value further down: a
+  // control the backend gives no reason to show (no facets, no PYQs, no Hindi) counts as its default.
+  const [source, setSource] = useState<SourceFilter>(DEFAULT_SOURCE);
+  const [language, setLanguageState] = useState<LanguageFilter>(loadLanguagePref);
+  const setLanguage = useCallback((value: LanguageFilter) => {
+    setLanguageState(value);
+    saveLanguagePref(value);
+  }, []);
+  const [year, setYear] = useState<number | null>(null);
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>("all");
+  const [marksFilter, setMarksFilter] = useState<number | null>(null);
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  /** Filters that depend on what one class + subject has; cleared when the class or subject changes. */
+  const resetSubjectFilters = () => {
+    setSource(DEFAULT_SOURCE);
+    setYear(null);
+    setMarksFilter(null);
+  };
+
   // Mobile state
   const [mobileScreen, setMobileScreen] = useState<"library" | "paper">("library");
   const [showChapterSheet, setShowChapterSheet] = useState(false);
 
   // Data
   const [chapterStats, setChapterStats] = useState<ChapterStat[]>([]);
+  /** The stats response currently shown: its cache key and facets (null = older backend). */
+  const [statsMeta, setStatsMeta] = useState<{ key: string; subjectKey: string; facets: StatsFacets | null } | null>(
+    null
+  );
+  const [availability, setAvailability] = useState<Record<string, SubjectAvailability>>(() => ({
+    ...subjectAvailabilityCache,
+  }));
   const [libraryQuestions, setLibraryQuestions] = useState<NCERTQuestion[]>([]);
   const [testQuestions, setTestQuestions] = useState<TestQuestion[]>([]);
   // The paper survives a reload on this device: ids are restored through /ncert-questions/by-ids, so a question
@@ -1106,18 +1254,61 @@ export default function TestBuilderPage() {
     useSensor(KeyboardSensor)
   );
 
+  // ── Effective filters (what the requests carry) ───────────────
+  // An older backend sends no facets → no availability → every new value is its default and every request is the
+  // one the builder sent before PYQs. Source / language only count when the subject has PYQs / Hindi rows.
+  const subjectKey = `${subject}_${classGrade}`;
+  const avail = availability[subjectKey];
+  const newControls = !!avail;
+  const showSource = (avail?.pyq ?? 0) > 0;
+  const showLanguage = (avail?.hi ?? 0) > 0;
+  const effSource: SourceFilter = showSource ? source : DEFAULT_SOURCE;
+  const effLanguage: LanguageFilter = showLanguage ? language : DEFAULT_LANGUAGE;
+  const statsKey = `${subjectKey}_${effSource}_${effLanguage}`;
+  /** Years / marks of the current source + language slice (the last response for this subject while one loads). */
+  const listFacets: StatsFacets | null = statsMeta?.subjectKey === subjectKey ? statsMeta.facets : null;
+  const pyqInView = showSource && effSource !== "ncert";
+  const yearFacets = listFacets?.years ?? [];
+  const showYear = pyqInView && (yearFacets.length > 0 || year !== null);
+  const effYear = pyqInView ? year : null;
+  const effDifficulty: DifficultyFilter = newControls ? difficulty : "all";
+  const marksFacets = listFacets?.marks ?? [];
+  const effMarks = newControls ? marksFilter : null;
+  const effSort: SortKey = !newControls || (sort === "year_desc" && !pyqInView) ? DEFAULT_SORT : sort;
+  const isAllChapters = selectedChapter === ALL_CHAPTERS;
+  /** The chapter's name for labels and exports (null for "All chapters"). */
+  const chapterName = isAllChapters ? null : selectedChapter;
+  const statsReady = statsMeta?.key === statsKey;
+
   // ── Fetch Chapter Stats with In-Memory Cache ──────────────────
   useEffect(() => {
     let cancelled = false;
-    const cacheKey = `${subject}_${classGrade}`;
+    const cacheKey = statsKey;
+
+    const apply = (result: StatsResult) => {
+      setChapterStats(result.chapters);
+      setStatsMeta({ key: cacheKey, subjectKey, facets: result.facets });
+      if (result.facets) {
+        // Whole-subject counts; only ever raised, so source / language can't flip between two cached slices.
+        const prev = subjectAvailabilityCache[subjectKey];
+        const next: SubjectAvailability = {
+          pyq: Math.max(prev?.pyq ?? 0, facetCount(result.facets.sources, "pyq")),
+          hi: Math.max(prev?.hi ?? 0, facetCount(result.facets.languages, "hi")),
+        };
+        if (!prev || prev.pyq !== next.pyq || prev.hi !== next.hi) {
+          subjectAvailabilityCache[subjectKey] = next;
+          setAvailability((all) => ({ ...all, [subjectKey]: next }));
+        }
+      }
+      setSelectedChapter((prev) => {
+        if (prev === ALL_CHAPTERS && result.facets) return prev;
+        if (prev && result.chapters.some((c) => c.chapter === prev)) return prev;
+        return result.chapters.length > 0 ? result.chapters[0].chapter : null;
+      });
+    };
 
     if (statsCache[cacheKey]) {
-      const cached = statsCache[cacheKey];
-      setChapterStats(cached);
-      setSelectedChapter((prev) => {
-        if (prev && cached.some((c) => c.chapter === prev)) return prev;
-        return cached.length > 0 ? cached[0].chapter : null;
-      });
+      apply(statsCache[cacheKey]);
       return;
     }
 
@@ -1126,21 +1317,18 @@ export default function TestBuilderPage() {
       setError(null);
       try {
         const res = await fetch(
-          `${API_BASE}/test-generator/ncert-question-stats?subject=${encodeURIComponent(
-            subject
-          )}&class_grade=${classGrade}`,
+          `${API_BASE}/test-generator/ncert-question-stats?${statsQueryString(subject, classGrade, effSource, effLanguage)}`,
           { headers: getAuthHeaders() }
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = (await res.json()) as StatsResponse;
         if (!cancelled && data.ok) {
-          const chs = data.chapters || [];
-          statsCache[cacheKey] = chs;
-          setChapterStats(chs);
-          setSelectedChapter((prev) => {
-            if (prev && chs.some((c: ChapterStat) => c.chapter === prev)) return prev;
-            return chs.length > 0 ? chs[0].chapter : null;
-          });
+          const result: StatsResult = {
+            chapters: Array.isArray(data.chapters) ? data.chapters : [],
+            facets: parseFacets(data.facets),
+          };
+          statsCache[cacheKey] = result;
+          apply(result);
           setLibraryQuestions([]);
           setOffset(0);
         }
@@ -1154,16 +1342,53 @@ export default function TestBuilderPage() {
     return () => {
       cancelled = true;
     };
-  }, [classGrade, subject]);
+  }, [statsKey, subjectKey, classGrade, subject, effSource, effLanguage]);
 
   // ── Fetch Questions (cached + prefetched) ─────────────────────
   const latestRequest = useRef(0);
 
+  /** Everything the list request carries; null until a chapter (or "All chapters") is picked. */
+  const query = useMemo<QuestionQuery | null>(
+    () =>
+      selectedChapter
+        ? {
+            subject,
+            classGrade,
+            chapter: selectedChapter === ALL_CHAPTERS ? null : selectedChapter,
+            questionType,
+            search: debouncedSearch,
+            figure: figureFilter,
+            source: effSource,
+            language: effLanguage,
+            year: effYear,
+            difficulty: effDifficulty,
+            marks: effMarks,
+            sort: effSort,
+          }
+        : null,
+    [
+      selectedChapter,
+      subject,
+      classGrade,
+      questionType,
+      debouncedSearch,
+      figureFilter,
+      effSource,
+      effLanguage,
+      effYear,
+      effDifficulty,
+      effMarks,
+      effSort,
+    ]
+  );
+  /** The first page's query string: any filter / sort / chapter change → a new key → page 0 again. */
+  const queryKey = query ? questionQueryString(query, 0, PAGE_SIZE) : "";
+
   const fetchQuestions = useCallback(
     async (append = false) => {
-      if (!selectedChapter) return;
+      if (!query) return;
       const currentOffset = append ? offset : 0;
-      const url = questionsUrl(subject, classGrade, selectedChapter, questionType, debouncedSearch, currentOffset, figureFilter);
+      const url = questionsUrl(query, currentOffset);
       const requestId = ++latestRequest.current;
 
       // Instant render from cache (chapter revisits, prefetched chapters).
@@ -1198,31 +1423,82 @@ export default function TestBuilderPage() {
         setLoadingMore(false);
       }
     },
-    [selectedChapter, questionType, debouncedSearch, classGrade, subject, offset, figureFilter]
+    [query, offset]
   );
 
-  /** Warms the cache for a chapter's first page (hover / idle), so opening it is instant. */
+  /**
+   * Warms the cache for a chapter's first page (hover / idle), so opening it is instant. Same request a click sends
+   * (type / search / figure reset, the PYQ filters kept).
+   */
   const prefetchChapter = useCallback(
     (chapter: string) => {
-      const url = questionsUrl(subject, classGrade, chapter, "all", "", 0);
+      const all = chapter === ALL_CHAPTERS;
+      const url = questionsUrl(
+        {
+          subject,
+          classGrade,
+          chapter: all ? null : chapter,
+          questionType: "all",
+          search: "",
+          figure: "all",
+          source: effSource,
+          language: effLanguage,
+          year: effYear,
+          difficulty: effDifficulty,
+          marks: effMarks,
+          sort: all ? (newControls ? "chapter" : DEFAULT_SORT) : effSort === "chapter" ? DEFAULT_SORT : effSort,
+        },
+        0
+      );
       if (!questionPageCache.has(url)) loadQuestionPage(url).catch(() => undefined);
     },
-    [subject, classGrade]
+    [subject, classGrade, effSource, effLanguage, effYear, effDifficulty, effMarks, effSort, newControls]
   );
 
+  // Idle prefetch of the first chapters: once per chapter list (a ref, so a filter change doesn't prefetch again).
+  const prefetchRef = useRef(prefetchChapter);
+  prefetchRef.current = prefetchChapter;
   useEffect(() => {
     if (!chapterStats.length) return;
-    const timer = setTimeout(() => chapterStats.slice(0, 3).forEach((c) => prefetchChapter(c.chapter)), 300);
+    const timer = setTimeout(() => chapterStats.slice(0, 3).forEach((c) => prefetchRef.current(c.chapter)), 300);
     return () => clearTimeout(timer);
-  }, [chapterStats, prefetchChapter]);
+  }, [chapterStats]);
 
+  // Waits for the stats of the current source + language, so a chapter that slice doesn't have is never requested.
   useEffect(() => {
-    if (selectedChapter) {
-      setOffset(0);
-      setLibraryQuestions([]);
-      fetchQuestions(false);
+    if (!queryKey || !statsReady) return;
+    setOffset(0);
+    setLibraryQuestions([]);
+    fetchQuestions(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs only when the query itself (or stats) changes
+  }, [queryKey, statsReady]);
+
+  /** A chapter from the list: type / search reset as before; "Chapter" order means nothing inside one chapter. */
+  const selectChapter = (chapter: string) => {
+    if (chapter === ALL_CHAPTERS) {
+      setSelectedChapter(ALL_CHAPTERS);
+      setSort("chapter");
+    } else {
+      setSelectedChapter(chapter);
+      if (sort === "chapter") setSort(DEFAULT_SORT);
     }
-  }, [selectedChapter, questionType, debouncedSearch, figureFilter]);
+    setQuestionType("all");
+    setSearchQuery("");
+    setOffset(0);
+  };
+
+  // Type dropdown: the usual list + types the backend reports for this chapter (PYQ types: assertion_reason, …).
+  const extraTypes = useMemo(() => {
+    if (!newControls) return [];
+    const names = new Set<string>();
+    for (const c of chapterStats) {
+      if (!isAllChapters && c.chapter !== selectedChapter) continue;
+      for (const t of c.types ?? []) if (t?.name && t.count > 0) names.add(t.name);
+    }
+    return [...names];
+  }, [newControls, chapterStats, isAllChapters, selectedChapter]);
+  const typeOpts = useMemo(() => typeOptions(extraTypes, questionType), [extraTypes, questionType]);
+  const mixesLanguages = useMemo(() => paperMixesLanguages(testQuestions), [testQuestions]);
 
   // ── Paper Mutation Callbacks ──────────────────────────────────
   // Stable callback (reads the latest paper from refs) so memoised cards don't all re-render on add.
@@ -1346,7 +1622,7 @@ export default function TestBuilderPage() {
           explanation: (q as any).solution || (q as any).explanation || "",
           marks: q.marks || 1,
           difficulty: q.difficulty || "medium",
-          chapter: q.chapter || selectedChapter || "",
+          chapter: q.chapter || chapterName || "",
           topic: (q as any).topic || "",
           format: (q as any).format || (q.options && q.options.length > 0 ? "mcq" : "short_answer"),
           position: idx + 1,
@@ -1418,7 +1694,7 @@ export default function TestBuilderPage() {
         teacher_name: teacherName || undefined,
         institute_name: instituteName || undefined,
         duration: duration || undefined,
-        topic: topic || selectedChapter || testQuestions[0]?.chapter || undefined,
+        topic: topic || chapterName || testQuestions[0]?.chapter || undefined,
         paperDate: new Date().toLocaleDateString("en-GB"),
         questions: buildQuestionsPayload(false),
         ...brandingPayload(),
@@ -1503,7 +1779,7 @@ export default function TestBuilderPage() {
         teacher_name: teacherName || undefined,
         institute_name: instituteName || undefined,
         duration: duration || undefined,
-        topic: topic || selectedChapter || testQuestions[0]?.chapter || undefined,
+        topic: topic || chapterName || testQuestions[0]?.chapter || undefined,
         paperDate: new Date().toLocaleDateString("en-GB"),
         questions: buildQuestionsPayload(true),
         ...brandingPayload(),
@@ -1585,6 +1861,133 @@ export default function TestBuilderPage() {
     </select>
   );
 
+  const renderTypeOptions = () =>
+    typeOpts.map((o) => (
+      <option key={o.value} value={o.value}>
+        {o.label}
+      </option>
+    ));
+
+  // Source (All · NCERT · PYQ), language and year: shown only when this class + subject has PYQs / Hindi rows.
+  const renderSourceControls = (className: string) =>
+    showSource || showLanguage ? (
+      <div className={className}>
+        {showSource && (
+          <Segmented
+            label="Question source"
+            value={effSource}
+            onChange={(v) => {
+              setSource(v);
+              if (v === "ncert") setYear(null);
+            }}
+            options={[
+              { value: "all", label: "All" },
+              { value: "ncert", label: "NCERT" },
+              { value: "pyq", label: "PYQ" },
+            ]}
+          />
+        )}
+        {showLanguage && (
+          <Segmented
+            label="Question language"
+            value={effLanguage}
+            onChange={setLanguage}
+            options={[
+              { value: "en", label: "English" },
+              { value: "hi", label: "हिंदी", lang: "hi" },
+              { value: "all", label: "Both" },
+            ]}
+          />
+        )}
+        {showYear && (
+          <select
+            value={year ?? ""}
+            onChange={(e) => setYear(e.target.value ? Number(e.target.value) : null)}
+            aria-label="PYQ year"
+            className="bg-white border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:ring-1 focus:ring-gray-900 cursor-pointer shadow-sm"
+          >
+            <option value="">All years</option>
+            {yearFacets.map((y) => (
+              <option key={y.name} value={y.name}>
+                {y.name}
+              </option>
+            ))}
+            {year !== null && !yearFacets.some((y) => y.name === year) && <option value={year}>{year}</option>}
+          </select>
+        )}
+      </div>
+    ) : null;
+
+  // Difficulty, marks and sort (next to type / figures): newer backend only.
+  const renderExtraFilters = (selectClass: string) =>
+    newControls ? (
+      <>
+        <select
+          value={difficulty}
+          onChange={(e) => setDifficulty(e.target.value as DifficultyFilter)}
+          aria-label="Difficulty"
+          className={selectClass}
+        >
+          {DIFFICULTY_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        {(marksFacets.length > 0 || marksFilter !== null) && (
+          <select
+            value={marksFilter ?? ""}
+            onChange={(e) => setMarksFilter(e.target.value ? Number(e.target.value) : null)}
+            aria-label="Marks"
+            className={selectClass}
+          >
+            <option value="">All marks</option>
+            {marksFacets.map((m) => (
+              <option key={m.name} value={m.name}>
+                {marksLabel(m.name)}
+              </option>
+            ))}
+            {marksFilter !== null && !marksFacets.some((m) => m.name === marksFilter) && (
+              <option value={marksFilter}>{marksLabel(marksFilter)}</option>
+            )}
+          </select>
+        )}
+
+        <label className="flex items-center gap-1 text-gray-400" title="Sort">
+          <ArrowUpDown className="w-3.5 h-3.5 flex-shrink-0" aria-hidden />
+          <select
+            value={effSort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            aria-label="Sort"
+            className={selectClass}
+          >
+            {sortOptions(pyqInView).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </>
+    ) : null;
+
+  const renderLibraryCard = (q: NCERTQuestion) => (
+    <MemoDraggableQuestion
+      key={q.id}
+      question={q}
+      onAdd={addToTest}
+      isAdded={addedIds.has(q.id)}
+      isMobile={isMobile}
+    />
+  );
+
+  const mixedLanguageNote = mixesLanguages ? (
+    <p className="mt-1.5 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-1 rounded-lg">
+      This paper mixes English and Hindi questions
+    </p>
+  ) : null;
+
   // ── Render Library Question Stream ────────────────────────────
   const renderLibraryList = () => (
     <div>
@@ -1604,15 +2007,16 @@ export default function TestBuilderPage() {
             items={libraryQuestions.map((q) => `lib-${q.id}`)}
             strategy={verticalListSortingStrategy}
           >
-            {libraryQuestions.map((q) => (
-              <MemoDraggableQuestion
-                key={q.id}
-                question={q}
-                onAdd={addToTest}
-                isAdded={addedIds.has(q.id)}
-                isMobile={isMobile}
-              />
-            ))}
+            {isAllChapters && effSort === "chapter"
+              ? groupByChapter(libraryQuestions).map((g, gi) => (
+                  <section key={`${gi}-${g.chapter}`} aria-label={g.chapter}>
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mt-3 mb-1.5 first:mt-0 truncate">
+                      {g.chapter}
+                    </h3>
+                    {g.rows.map(renderLibraryCard)}
+                  </section>
+                ))
+              : libraryQuestions.map(renderLibraryCard)}
           </SortableContext>
 
           {hasMore && (
@@ -1646,7 +2050,7 @@ export default function TestBuilderPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md">
-                    NCERT Repository
+                    {effSource === "pyq" ? "CBSE PYQ" : "NCERT Repository"}
                   </span>
                   <span className="text-xs text-gray-400 font-medium">• 1,00,000+ Questions</span>
                 </div>
@@ -1662,7 +2066,10 @@ export default function TestBuilderPage() {
                   {CLASS_OPTIONS.map((c) => (
                     <button
                       key={c}
-                      onClick={() => setClassGrade(c)}
+                      onClick={() => {
+                        if (c !== classGrade) resetSubjectFilters();
+                        setClassGrade(c);
+                      }}
                       className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-all ${
                         classGrade === c
                           ? "bg-white text-gray-900 shadow-sm"
@@ -1677,7 +2084,10 @@ export default function TestBuilderPage() {
                 {/* Subject Dropdown */}
                 <select
                   value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
+                  onChange={(e) => {
+                    resetSubjectFilters();
+                    setSubject(e.target.value);
+                  }}
                   className="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-gray-800 outline-none focus:ring-1 focus:ring-gray-900 cursor-pointer shadow-sm"
                 >
                   {availableSubjects.map((s) => (
@@ -1763,7 +2173,7 @@ export default function TestBuilderPage() {
                   <input
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
-                    placeholder={selectedChapter || "Chapter or Topic name"}
+                    placeholder={chapterName || "Chapter or Topic name"}
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
                   />
                 </div>
@@ -1953,6 +2363,7 @@ export default function TestBuilderPage() {
                     {chapterStats.length} Chapters
                   </span>
                 </div>
+                {renderSourceControls("px-4 py-2.5 border-b border-gray-100 flex flex-wrap items-center gap-2")}
 
                 {/* Chapter Split Pane */}
                 <div className="grid grid-cols-12 min-h-[580px]">
@@ -1963,35 +2374,64 @@ export default function TestBuilderPage() {
                     ) : chapterStats.length === 0 ? (
                       <div className="p-4 text-center text-xs text-gray-400">No chapters found.</div>
                     ) : (
-                      chapterStats.map((ch) => {
-                        const isSelected = selectedChapter === ch.chapter;
-                        return (
+                      <>
+                        {newControls && (
                           <button
-                            key={ch.chapter}
-                            onMouseEnter={() => prefetchChapter(ch.chapter)}
-                            onClick={() => {
-                              setSelectedChapter(ch.chapter);
-                              setQuestionType("all");
-                              setSearchQuery("");
-                              setOffset(0);
-                            }}
+                            onMouseEnter={() => prefetchChapter(ALL_CHAPTERS)}
+                            onClick={() => selectChapter(ALL_CHAPTERS)}
                             className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors flex items-center justify-between gap-1 ${
-                              isSelected
+                              isAllChapters
                                 ? "bg-gray-900 text-white font-semibold shadow-sm"
-                                : "text-gray-700 hover:bg-gray-100/80"
+                                : "text-gray-700 hover:bg-gray-100/80 font-semibold"
                             }`}
                           >
-                            <span className="truncate leading-tight">{ch.chapter}</span>
+                            <span className="truncate leading-tight">All chapters</span>
                             <span
                               className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${
-                                isSelected ? "bg-white/20 text-white" : "bg-gray-200/70 text-gray-600"
+                                isAllChapters ? "bg-white/20 text-white" : "bg-gray-200/70 text-gray-600"
                               }`}
                             >
-                              {ch.total}
+                              {chapterStats.reduce((sum, c) => sum + (Number(c.total) || 0), 0)}
                             </span>
                           </button>
-                        );
-                      })
+                        )}
+                        {chapterStats.map((ch) => {
+                          const isSelected = selectedChapter === ch.chapter;
+                          const pyqCount = effSource === "all" ? ch.pyq ?? 0 : 0;
+                          return (
+                            <button
+                              key={ch.chapter}
+                              onMouseEnter={() => prefetchChapter(ch.chapter)}
+                              onClick={() => selectChapter(ch.chapter)}
+                              className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors flex items-center justify-between gap-1 ${
+                                isSelected
+                                  ? "bg-gray-900 text-white font-semibold shadow-sm"
+                                  : "text-gray-700 hover:bg-gray-100/80"
+                              }`}
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate leading-tight">{ch.chapter}</span>
+                                {pyqCount > 0 && (
+                                  <span
+                                    className={`mt-1 inline-block text-[9px] font-bold px-1.5 py-px rounded ${
+                                      isSelected ? "bg-white/20 text-white" : "bg-violet-50 text-violet-700 border border-violet-200/80"
+                                    }`}
+                                  >
+                                    PYQ {pyqCount}
+                                  </span>
+                                )}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0 ${
+                                  isSelected ? "bg-white/20 text-white" : "bg-gray-200/70 text-gray-600"
+                                }`}
+                              >
+                                {ch.total}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
 
@@ -2004,7 +2444,7 @@ export default function TestBuilderPage() {
                         <input
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search questions in chapter..."
+                          placeholder={isAllChapters ? "Search questions in all chapters..." : "Search questions in chapter..."}
                           className="w-full pl-8 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-gray-900"
                         />
                       </div>
@@ -2014,15 +2454,18 @@ export default function TestBuilderPage() {
                         onChange={(e) => setQuestionType(e.target.value)}
                         className="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:ring-1 focus:ring-gray-900 cursor-pointer"
                       >
-                        {Object.entries(TYPE_LABELS).map(([val, label]) => (
-                          <option key={val} value={val}>
-                            {label}
-                          </option>
-                        ))}
+                        {renderTypeOptions()}
                       </select>
 
                       {renderFigureFilter("bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:ring-1 focus:ring-gray-900 cursor-pointer")}
                     </div>
+                    {newControls && (
+                      <div className="flex flex-wrap items-center justify-end gap-2 mb-3 -mt-1">
+                        {renderExtraFilters(
+                          "bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-gray-700 outline-none focus:ring-1 focus:ring-gray-900 cursor-pointer"
+                        )}
+                      </div>
+                    )}
 
                     {renderLibraryList()}
                   </div>
@@ -2042,6 +2485,7 @@ export default function TestBuilderPage() {
                       <span>•</span>
                       <span className="text-gray-400">~{Math.max(15, totalMarks * 1.5)} mins</span>
                     </div>
+                    {mixedLanguageNote}
                   </div>
 
                   {testQuestions.length > 0 && (
@@ -2160,20 +2604,22 @@ export default function TestBuilderPage() {
             <div>
               {mobileScreen === "library" ? (
                 <div>
+                  {renderSourceControls("flex flex-wrap items-center gap-2 mb-3")}
+
                   {/* Chapter Select Button */}
                   <button
                     onClick={() => setShowChapterSheet(true)}
-                    className="w-full p-3.5 bg-white border border-gray-200/80 rounded-2xl mb-3 flex items-center justify-between text-left shadow-sm active:bg-gray-50"
+                    className="w-full p-3.5 bg-white border border-gray-200/80 rounded-2xl mb-3 flex items-center justify-between gap-2 text-left shadow-sm active:bg-gray-50"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
                         Chapter
                       </span>
                       <span className="text-sm font-semibold text-gray-900 block truncate mt-0.5">
-                        {selectedChapter || "Select a chapter..."}
+                        {isAllChapters ? "All chapters" : selectedChapter || "Select a chapter..."}
                       </span>
                     </div>
-                    <span className="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
+                    <span className="flex-shrink-0 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">
                       Change ▾
                     </span>
                   </button>
@@ -2193,17 +2639,16 @@ export default function TestBuilderPage() {
                     <select
                       value={questionType}
                       onChange={(e) => setQuestionType(e.target.value)}
-                      className="bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 outline-none shadow-sm"
+                      className="bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 outline-none shadow-sm max-w-[9.5rem]"
                     >
-                      {Object.entries(TYPE_LABELS).map(([val, label]) => (
-                        <option key={val} value={val}>
-                          {label}
-                        </option>
-                      ))}
+                      {renderTypeOptions()}
                     </select>
                   </div>
-                  <div className="flex justify-end mb-3 -mt-1">
+                  <div className="flex flex-wrap items-center justify-end gap-2 mb-3 -mt-1">
                     {renderFigureFilter("bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 outline-none shadow-sm")}
+                    {renderExtraFilters(
+                      "bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 outline-none shadow-sm"
+                    )}
                   </div>
 
                   {renderLibraryList()}
@@ -2216,6 +2661,7 @@ export default function TestBuilderPage() {
                       <h2 className="text-sm font-bold text-gray-900">
                         {testQuestions.length} Questions • {totalMarks} Marks
                       </h2>
+                      {mixedLanguageNote}
                     </div>
                     {testQuestions.length > 0 && (
                       <button
@@ -2315,15 +2761,12 @@ export default function TestBuilderPage() {
           onClose={() => setShowChapterSheet(false)}
           chapterStats={chapterStats}
           selectedChapter={selectedChapter}
-          onSelect={(chapter) => {
-            setSelectedChapter(chapter);
-            setQuestionType("all");
-            setSearchQuery("");
-            setOffset(0);
-          }}
+          onSelect={selectChapter}
           statsLoading={statsLoading}
           subject={subject}
           classGrade={classGrade}
+          showAllChapters={newControls}
+          showPyqChips={effSource === "all"}
         />
 
         {/* Drag Overlay (Smooth Ghost Preview) */}
