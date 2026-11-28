@@ -1873,7 +1873,7 @@ export default function TestBuilderPage() {
     showSource || showLanguage ? (
       <div className={className}>
         {showSource && (
-          <Segmented<SourceFilter>
+          <Segmented
             label="Question source"
             value={effSource}
             onChange={(v) => {
@@ -1888,7 +1888,7 @@ export default function TestBuilderPage() {
           />
         )}
         {showLanguage && (
-          <Segmented<LanguageFilter>
+          <Segmented
             label="Question language"
             value={effLanguage}
             onChange={setLanguage}

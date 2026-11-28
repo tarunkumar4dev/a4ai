@@ -3,6 +3,8 @@
 //   GET /test-generator/ncert-question-stats?subject&class_grade  → chapters with totals + question types
 //   GET /test-generator/ncert-questions?class_grade&subject&chapter&question_type&limit&offset → one page
 // No new API. The backend hides rows marked duplicate/junk and merges subject spellings (Physics-I/II …).
+// Practice is textbook-only (source=ncert): the table also holds CBSE PYQs in English and Hindi, whose answer keys
+// are not reviewed for students yet.
 // When the backend can't answer (local dev without it, a cold start timing out, an outage) the same data is read
 // straight from ncert_questions (RLS: readable by everyone), with the same visibility filter and subject spellings.
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
@@ -26,6 +28,7 @@ export const hasQuestions = (cls: string) => (SUBJECTS_BY_CLASS[cls] ?? []).leng
 export const TYPE_LABEL: Record<string, string> = {
   exercise: "Exercise", intext: "In-text", example: "Solved example", activity: "Activity", mcq: "MCQ",
   fillblank: "Fill in the blank", diagram: "Diagram", hots: "HOTS",
+  short_answer: "Short answer", long_answer: "Long answer", case_study: "Case study",
 };
 export const typeLabel = (t: string | null | undefined) => (t && TYPE_LABEL[t]) || (t ? t[0].toUpperCase() + t.slice(1) : "Question");
 
@@ -131,6 +134,19 @@ const SUBJECT_SPELLINGS: Record<string, string[]> = {
 };
 const spellings = (subject: string) => SUBJECT_SPELLINGS[subject.trim().toLowerCase()] ?? [subject];
 const VISIBLE = "quality_status.is.null,quality_status.not.in.(duplicate,junk)";
+/** false once the table turns out not to have the `source` column yet (before backend migration 37). */
+let hasSourceColumn = true;
+const isMissingColumn = (e: unknown) => (e as { code?: string })?.code === "42703";
+
+/** Runs a direct read limited to textbook rows; without the `source` column every row is a textbook row. */
+async function textbookOnly<R extends { error: unknown }>(run: (onlyNcert: boolean) => PromiseLike<R>): Promise<R> {
+  if (hasSourceColumn) {
+    const r = await run(true);
+    if (!isMissingColumn(r.error)) return r;
+    hasSourceColumn = false;
+  }
+  return run(false);
+}
 const isAbort = (e: unknown) => (e as Error)?.name === "AbortError" || /AbortError/.test(String((e as Error)?.message ?? ""));
 const dbFail = (e: unknown): never => {
   if (isAbort(e)) { const a = new Error("aborted"); a.name = "AbortError"; throw a; }
@@ -141,10 +157,14 @@ const dbFail = (e: unknown): never => {
 export async function statsFromDb(cls: string, subject: string, signal?: AbortSignal): Promise<ChapterStat[]> {
   const chapters = new Map<string, Map<string, number>>();
   for (let from = 0; from < 30_000; from += 1000) {
-    let q = supabase.from("ncert_questions").select("chapter, question_type")
-      .eq("class_grade", cls).in("subject", spellings(subject)).or(VISIBLE).order("id").range(from, from + 999);
-    if (signal) q = q.abortSignal(signal);
-    const { data, error } = await q;
+    const { data, error } = await textbookOnly((onlyNcert) => {
+      let q = supabase.from("ncert_questions").select("chapter, question_type")
+        .eq("class_grade", cls).in("subject", spellings(subject)).or(VISIBLE);
+      if (onlyNcert) q = q.eq("source", "ncert");
+      let r = q.order("id").range(from, from + 999);
+      if (signal) r = r.abortSignal(signal);
+      return r;
+    });
     if (error) dbFail(error);
     for (const r of data ?? []) {
       const ch = str((r as { chapter?: unknown }).chapter);
@@ -169,13 +189,16 @@ export async function questionsFromDb(
   p: { cls: string; subject: string; chapter: string; type?: string | null; page: number }, signal?: AbortSignal,
 ): Promise<QuestionPage> {
   const from = p.page * SET_SIZE;
-  let q = supabase.from("ncert_questions")
-    .select("id, question_number, question_text, question_type, difficulty, answer, options, image_url, question_table, section", { count: "exact" })
-    .eq("class_grade", p.cls).in("subject", spellings(p.subject)).eq("chapter", p.chapter).or(VISIBLE);
-  if (p.type) q = q.eq("question_type", p.type);
-  let r = q.order("id").range(from, from + SET_SIZE - 1);
-  if (signal) r = r.abortSignal(signal);
-  const { data, error, count } = await r;
+  const { data, error, count } = await textbookOnly((onlyNcert) => {
+    let q = supabase.from("ncert_questions")
+      .select("id, question_number, question_text, question_type, difficulty, answer, options, image_url, question_table, section", { count: "exact" })
+      .eq("class_grade", p.cls).in("subject", spellings(p.subject)).eq("chapter", p.chapter).or(VISIBLE);
+    if (onlyNcert) q = q.eq("source", "ncert");
+    if (p.type) q = q.eq("question_type", p.type);
+    let r = q.order("id").range(from, from + SET_SIZE - 1);
+    if (signal) r = r.abortSignal(signal);
+    return r;
+  });
   if (error) dbFail(error);
   const total = count ?? 0;
   return parseQuestions({ questions: data ?? [], total, hasMore: from + SET_SIZE < total });
@@ -192,7 +215,7 @@ async function withFallback<T>(primary: () => Promise<T>, fallback: () => Promis
 }
 
 export async function fetchChapterStats(cls: string, subject: string, signal?: AbortSignal): Promise<ChapterStat[]> {
-  const q = new URLSearchParams({ subject, class_grade: cls });
+  const q = new URLSearchParams({ subject, class_grade: cls, source: "ncert" });
   return withFallback(
     async () => parseStats(await getJson(`${base()}/ncert-question-stats?${q}`, signal, 20_000)),
     () => statsFromDb(cls, subject, signal),
@@ -215,6 +238,7 @@ export async function fetchQuestionPage(
 ): Promise<QuestionPage> {
   const q = new URLSearchParams({
     class_grade: p.cls, subject: p.subject, chapter: p.chapter, limit: String(SET_SIZE), offset: String(p.page * SET_SIZE),
+    source: "ncert",
   });
   if (p.type) q.set("question_type", p.type);
   return withFallback(
